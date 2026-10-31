@@ -3,73 +3,75 @@ package circlewindow;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-public final class CircleCreatorWindow extends JFrame implements ActionListener, KeyListener {
+public final class CircleCreatorWindow extends JFrame implements ActionListener {
    private JPanel panel = new JPanel();
    private JButton createButton = new JButton("Create a circle with that diameter");
    private JTextField diameterField = new JTextField("100");
+   private List<CircleSliceWindow> slices = new ArrayList<>();
 
    public CircleCreatorWindow() {
       this.setTitle("Circle Creator");
       this.setSize(250, 110);
       this.add(this.panel);
-      this.setVisible(true);
-      this.addKeyListener(this);
       this.setDefaultCloseOperation(3);
-      this.createButton.setVisible(true);
       this.createButton.addActionListener(this);
       this.diameterField.setColumns(10);
       this.panel.add(this.diameterField);
       this.panel.add(this.createButton);
+      this.setVisible(true);
    }
 
    @Override
    public final void actionPerformed(ActionEvent event) {
       if (event.getSource() == this.createButton) {
-         int diameter = Integer.parseInt(this.diameterField.getText());
          int screenWidth = Toolkit.getDefaultToolkit().getScreenSize().width;
          int screenHeight = Toolkit.getDefaultToolkit().getScreenSize().height;
-         double[] sliceWidths = new double[diameter];
-         double[] sliceHeights = new double[diameter];
-         int radius = diameter / 2;
-
-         for (int i = 0; i < diameter; i++) {
-            sliceWidths[i] = (double)(2 * i);
-            sliceHeights[i] = 2.0 * Math.sqrt(Math.pow((double)radius, 2.0) - Math.pow((double)i, 2.0));
+         int maxDiameter = Math.min(screenWidth, screenHeight);
+         int diameter;
+         try {
+            diameter = Integer.parseInt(this.diameterField.getText().trim());
+         } catch (NumberFormatException e) {
+            diameter = -1;
          }
+         if (diameter < 2 || diameter > maxDiameter) {
+            this.setTitle("Use 2 to " + maxDiameter);
+            return;
+         }
+         this.setTitle("Circle Creator");
 
-         for (int sliceIndex = 0; sliceIndex < diameter; sliceIndex++) {
-            if (sliceIndex < diameter) {
-               new CircleSliceWindow(
-                  (int)((double)(screenWidth / 2) - sliceWidths[sliceIndex] / 2.0),
-                  (int)((double)(screenHeight / 2) + ((double)(diameter / 2) - sliceHeights[sliceIndex]) / 2.0),
-                  sliceWidths[sliceIndex],
-                  sliceHeights[sliceIndex],
-                  String.valueOf(sliceIndex),
-                  sliceIndex % 10 == 0
-               );
+         // Replace the previous circle instead of stacking a new one on top.
+         for (CircleSliceWindow slice : this.slices) {
+            slice.dispose();
+         }
+         this.slices.clear();
+
+         double radius = diameter / 2.0;
+         int centerX = screenWidth / 2;
+         int centerY = screenHeight / 2;
+
+         // Slice i is a rectangle whose corners sit on the circle: half-width i, half-height sqrt(r^2 - i^2).
+         for (int sliceIndex = 1; sliceIndex <= (int)radius; sliceIndex++) {
+            double sliceWidth = 2.0 * sliceIndex;
+            double sliceHeight = 2.0 * Math.sqrt(radius * radius - (double)sliceIndex * sliceIndex);
+            if (sliceHeight < 1.0) {
+               continue;
             }
+            this.slices.add(new CircleSliceWindow(
+               (int)(centerX - sliceWidth / 2.0),
+               (int)(centerY - sliceHeight / 2.0),
+               sliceWidth,
+               sliceHeight,
+               String.valueOf(sliceIndex),
+               sliceIndex % 10 == 0
+            ));
          }
-
-         System.out.printf("%d, %d", this.getWidth(), this.getHeight());
       }
-   }
-
-   @Override
-   public final void keyTyped(KeyEvent event) {
-   }
-
-   @Override
-   public final void keyPressed(KeyEvent event) {
-   }
-
-   @Override
-   public final void keyReleased(KeyEvent event) {
    }
 }
