@@ -1,1 +1,3 @@
 out/
+web/target/
+web/*/target/
