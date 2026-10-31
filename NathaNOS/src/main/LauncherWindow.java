@@ -6,8 +6,8 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyVetoException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.List;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -18,24 +18,9 @@ import javax.swing.plaf.basic.BasicInternalFrameUI;
 public class LauncherWindow extends JInternalFrame implements ActionListener {
    private Main screen;
    public JPanel panel = new JPanel();
-   private ArrayList<JButton> buttons = new ArrayList<>();
+   private List<JButton> buttons = new ArrayList<>();
    private FileGatherer fileGatherer;
-   private Class[] myApplications;
-   private String[] applicationNames = new String[]{
-      "START", "Minesweeper", "UltimateTickTackToe", "AWTPong", "StockChecker", "Clock", "Piano", "Calculator", "NumberGuesser", "Rubik's Cube"
-   };
-   private String[] iconPaths = new String[]{
-      "assets/NathaNOS.png",
-      "assets/mine.png",
-      "assets/tickTackToe.png",
-      "assets/pingPong.png",
-      "assets/stockGraph.png",
-      "assets/clock.png",
-      "assets/piano.png",
-      "assets/calculator.png",
-      "assets/numberGuesser.png",
-      "assets/cube.png"
-   };
+   private Class<?>[] myApplications;
 
    public LauncherWindow(Main screen) {
       super("Launcher", false, false, false);
@@ -89,6 +74,8 @@ public class LauncherWindow extends JInternalFrame implements ActionListener {
       appWindow.setSize(window.getWidth(), window.getHeight());
       appWindow.setPosition(this.screen.getWidth() / 2 - window.getWidth() / 2, this.screen.getHeight() / 2 - window.getHeight() / 2);
       this.screen.desktopPane.add(appWindow);
+      // The app's own frame was only a hidden donor for its content pane.
+      window.dispose();
 
       try {
          this.screen.desktopPane.getAllFrames()[this.screen.desktopPane.getAllFrames().length - 1].setSelected(true);
@@ -105,7 +92,10 @@ public class LauncherWindow extends JInternalFrame implements ActionListener {
 
       for (int i = 1; i < this.buttons.size(); i++) {
          if (e.getSource() == this.buttons.get(i)) {
-            System.out.println("buttonPressed");
+            if (this.myApplications[i - 1] == null) {
+               System.err.println(this.buttons.get(i).getText() + " could not be loaded.");
+               return;
+            }
 
             try {
                this.createNewWindow(
@@ -113,9 +103,8 @@ public class LauncherWindow extends JInternalFrame implements ActionListener {
                   false,
                   new ImageIcon(this.fileGatherer.iconPaths.get(i)).getImage()
                );
-            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException | InstantiationException exception) {
-               System.out.println("FFFFAAAAIIIILLL");
-               exception.printStackTrace();
+            } catch (ReflectiveOperationException | RuntimeException exception) {
+               System.err.println(this.buttons.get(i).getText() + " has no public (Boolean) constructor or failed to start: " + exception);
             }
          }
       }
