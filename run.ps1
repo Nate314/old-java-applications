@@ -28,6 +28,12 @@ $apps = [ordered]@{
     SynthesizerKeyboard = @{ Main = 'synthesizer.Main';        WorkDir = 'SynthesizerKeyboard' }
     Windows           = @{ Main = 'test.Test';                 WorkDir = 'Windows' }
     WindowsE          = @{ Main = 'windowse.WindowsEMain';     WorkDir = 'WindowsE' }
+    BibleDownloader   = @{ Main = 'audiobibledownloader.Main'; WorkDir = 'BibleDownloader' }
+    GroupCreator      = @{ Main = 'groupcreator.Main';         WorkDir = 'GroupCreator' }
+    MusicTheoryExpert = @{ Main = 'musictheoryexpert.Main';    WorkDir = 'MusicTheoryExpert' }
+    NumberGuess       = @{ Main = 'numberguess.Main';          WorkDir = 'NumberGuess' }
+    SimpleAlgorithms  = @{ Main = 'simplealgorithms.Main';     WorkDir = 'SimpleAlgorithms' }
+    TankGame          = @{ Main = 'tankgame.Main';             WorkDir = 'TankGame' }
 }
 $names = @($apps.Keys)
 
@@ -52,6 +58,13 @@ $sources = @(Get-ChildItem -Recurse -Filter *.java $src | ForEach-Object FullNam
 & javac -nowarn -encoding UTF-8 -d $classes @sources
 if ($LASTEXITCODE -ne 0) { throw "javac failed for $App" }
 
+# Put non-Java files from src (images, etc.) on the classpath next to the classes, like the original jars.
+Get-ChildItem -Recurse -File $src | Where-Object { $_.Extension -ne '.java' -and $_.FullName -notmatch '[\\/]META-INF[\\/]' } | ForEach-Object {
+    $dest = Join-Path $classes $_.FullName.Substring($src.Length + 1)
+    New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+    Copy-Item $_.FullName $dest
+}
+
 $workDir = Join-Path $root $cfg.WorkDir
 $appArgs = @($cfg.Args | Where-Object { $_ })
 
@@ -63,13 +76,6 @@ if ($Build) {
         $jarTool = Join-Path $javaHome 'bin/jar.exe'
     }
     if (-not (Test-Path $jarTool)) { throw 'Could not find the jar tool. Install a JDK or put jar on PATH.' }
-
-    # Bundle non-Java files from src (images, etc.) alongside the classes, like the original jars.
-    Get-ChildItem -Recurse -File $src | Where-Object { $_.Extension -ne '.java' -and $_.FullName -notmatch '[\\/]META-INF[\\/]' } | ForEach-Object {
-        $dest = Join-Path $classes $_.FullName.Substring($src.Length + 1)
-        New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
-        Copy-Item $_.FullName $dest
-    }
 
     $jarPath = Join-Path $root "out/$App.jar"
     & $jarTool --create --file $jarPath --main-class $cfg.Main -C $classes .
