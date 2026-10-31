@@ -3,18 +3,21 @@ package stockchecker;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.ComponentEvent;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SpringLayout;
+import javax.swing.SwingUtilities;
 
 public class Window extends JFrame implements ActionListener {
    private static final long serialVersionUID = 1L;
@@ -28,7 +31,6 @@ public class Window extends JFrame implements ActionListener {
    private JTextField[] textBoxes = new JTextField[100];
    private JLabel[] labels = new JLabel[100];
    private JButton center = new JButton();
-   private EventQueue events = Toolkit.getDefaultToolkit().getSystemEventQueue();
    private int width = 330;
    private int height = 0;
    private int screenHeight = (int)Toolkit.getDefaultToolkit().getScreenSize().getHeight();
@@ -53,6 +55,8 @@ public class Window extends JFrame implements ActionListener {
 
       for (int i = 0; i < 100; i++) {
          this.textBoxes[i] = new JTextField("");
+         // Enter in a ticker field saves the list and refreshes the prices.
+         this.textBoxes[i].addActionListener(this);
          this.labels[i] = new JLabel("");
          this.labels[i].setFont(font);
          this.labels[i].setForeground(new Color(0, 255, 255));
@@ -85,11 +89,6 @@ public class Window extends JFrame implements ActionListener {
       this.layout.putConstraint("East", this.refreshStockPriceBtn, -5, "HorizontalCenter", this.panel);
       this.layout.putConstraint("West", this.refreshStockPriceBtn, 5, "West", this.panel);
       this.getFromMyStocks();
-      System.out.printf("numberOfStocks: %d\n", this.numberOfStocks);
-
-      for (int i = 0; i < 100; i++) {
-         this.resize();
-      }
    }
 
    private void putConstraint(Component component, Component north, Component east, Component south, Component west, int pad) {
@@ -101,14 +100,13 @@ public class Window extends JFrame implements ActionListener {
 
    private void getFromMyStocks() {
       String stocks = new TextReader("myStocks").ReturnFileString();
-      String[] myStocks = stocks.split(",");
-      this.numberOfStocks = myStocks.length;
-      System.out.println(this.numberOfStocks);
+      String[] myStocks = stocks.trim().split(",");
+      this.numberOfStocks = Math.min(myStocks.length, this.textBoxes.length);
       if (this.numberOfStocks != 0) {
          for (int i = 0; i < this.numberOfStocks; i++) {
             JTextField textfield = this.textBoxes[i];
             textfield.setColumns(10);
-            textfield.setText(myStocks[i]);
+            textfield.setText(myStocks[i].trim());
             textfield.setVisible(true);
             this.panel.add(textfield);
             JLabel label = this.labels[i];
@@ -127,7 +125,6 @@ public class Window extends JFrame implements ActionListener {
                this.layout.putConstraint("East", label, -10, "East", this.panel);
             }
 
-            this.events.postEvent(new ComponentEvent(this, 101));
          }
       }
 
@@ -148,15 +145,14 @@ public class Window extends JFrame implements ActionListener {
          this.makeItColorful();
       }
 
-      if (e.getSource() == this.refreshStockPriceBtn) {
+      if (e.getSource() == this.refreshStockPriceBtn || e.getSource() instanceof JTextField) {
          this.refreshStockPrice();
       }
    }
 
    private void addStock() {
-      System.out.println("addStockBtn pressed");
       Dimension dim = new Dimension(330, 60 + this.numberOfStocks * (this.textBoxes[0].getHeight() + 5) + 2 * (this.textBoxes[0].getHeight() + 5));
-      if (dim.getHeight() <= (double)(this.screenHeight - 50)) {
+      if (this.numberOfStocks < this.textBoxes.length && dim.getHeight() <= (double)(this.screenHeight - 50)) {
          JTextField textfield = this.textBoxes[this.numberOfStocks];
          textfield.setColumns(10);
          textfield.setVisible(true);
@@ -177,9 +173,9 @@ public class Window extends JFrame implements ActionListener {
             this.layout.putConstraint("East", label, -10, "East", this.panel);
          }
 
-         this.events.postEvent(new ComponentEvent(this, 101));
          this.numberOfStocks++;
          this.resize();
+         this.saveMyStocks();
       }
    }
 
@@ -190,10 +186,10 @@ public class Window extends JFrame implements ActionListener {
          this.textBoxes[this.numberOfStocks].setVisible(false);
          this.labels[this.numberOfStocks].setText("");
          this.labels[this.numberOfStocks].setVisible(false);
-         this.events.postEvent(new ComponentEvent(this, 101));
       }
 
       this.resize();
+      this.saveMyStocks();
    }
 
    private void makeItColorful() {
@@ -204,68 +200,51 @@ public class Window extends JFrame implements ActionListener {
       }
    }
 
-   private void refreshStockPrice() {
-      System.out.println("refreshStockPriceBtn pressed");
-
+   /** The trimmed, non-empty tickers in list order. */
+   private List<String> tickers() {
+      List<String> tickers = new ArrayList<>();
       for (int i = 0; i < this.numberOfStocks; i++) {
-         if (this.textBoxes[i].getText().length() > 5) {
-            this.textBoxes[i].setText("MORETHAN5");
+         String ticker = this.textBoxes[i].getText().trim();
+         if (!ticker.isEmpty()) {
+            tickers.add(ticker);
          }
       }
+      return tickers;
+   }
 
-      String[] textBoxValues = new String[100];
-
-      for (int ix = 0; ix < 100; ix++) {
-         textBoxValues[ix] = "";
+   /** Writes the current tickers back to myStocks.txt, comma separated like the original file. */
+   private void saveMyStocks() {
+      try (FileWriter writer = new FileWriter("myStocks.txt")) {
+         writer.write(String.join(",", this.tickers()));
+      } catch (IOException e) {
+         System.err.println("Could not save myStocks.txt: " + e.getMessage());
       }
+   }
 
-      int[] indexes = new int[100];
-
-      for (int ix = 0; ix < this.numberOfStocks; ix++) {
-         if (this.textBoxes[ix].getText() != "") {
-            indexes[ix] = ix;
-         }
-
-         textBoxValues[ix] = this.textBoxes[ix].getText();
-      }
-
-      String[] stockSymbol = new String[100];
-      int counter = 0;
-
-      for (String s : textBoxValues) {
-         if (s.length() > 0) {
-            stockSymbol[counter] = s;
-         }
-
-         counter++;
-      }
-
-      String[][] stockPrices = this.stockchecker.getStockPrice(stockSymbol);
-
-      for (int ix = 0; ix < this.numberOfStocks; ix++) {
-         this.labels[indexes[ix]].setText("$" + stockPrices[ix][1]);
-      }
-
-      System.out.println(this.getWidth() + "," + this.getHeight());
-      this.resize();
+   /** Saves the list, then downloads quotes on a background thread and fills the labels back on the event thread. */
+   private void refreshStockPrice() {
+      this.saveMyStocks();
+      List<String> tickers = this.tickers();
+      this.refreshStockPriceBtn.setEnabled(false);
+      this.refreshStockPriceBtn.setText("loading...");
+      new Thread(() -> {
+         List<String[]> rows = this.stockchecker.getStockPrice(tickers);
+         SwingUtilities.invokeLater(() -> {
+            for (int i = 0; i < this.numberOfStocks; i++) {
+               String ticker = this.textBoxes[i].getText().trim();
+               this.labels[i].setText(ticker.isEmpty() ? "$--" : "$" + StockChecker.priceFor(rows, ticker));
+            }
+            this.refreshStockPriceBtn.setText("refresh");
+            this.refreshStockPriceBtn.setEnabled(true);
+         });
+      }).start();
    }
 
    private void resize() {
-      System.out.printf("numberOfStocks: %d\n", this.numberOfStocks);
       this.width = 330;
       this.height = 60 + this.numberOfStocks * 25 + 50;
       this.setSize(this.width, this.height);
-      System.out
-         .printf(
-            "330, %d + %d + %d + %d ~ %d\n",
-            this.labels[0].getHeight(),
-            this.labels[this.numberOfStocks].getY(),
-            this.addStockBtn.getHeight(),
-            this.deleteStockBtn.getHeight(),
-            this.numberOfStocks
-         );
-      System.out.printf("RESIZED: %d, %d\n", this.getWidth(), this.getHeight());
-      System.out.printf("numberOfStocks: %d\n", this.numberOfStocks);
-      System.out.printf("window size: %d, %d\nlabelHeight: %d\n", this.getWidth(), this.getWidth(), this.textBoxes[0].getHeight());
+      this.panel.revalidate();
+      this.panel.repaint();
    }
 }

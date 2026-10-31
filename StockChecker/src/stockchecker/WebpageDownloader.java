@@ -4,7 +4,8 @@ import java.io.BufferedInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URLConnection;
 
 public class WebpageDownloader {
    public void DownloadWebpage(String filename, String urlString) throws MalformedURLException, IOException {
@@ -12,7 +13,10 @@ public class WebpageDownloader {
       FileOutputStream fout = null;
 
       try {
-         in = new BufferedInputStream(new URL(urlString).openStream());
+         URLConnection connection = URI.create(urlString).toURL().openConnection();
+         connection.setConnectTimeout(10000);
+         connection.setReadTimeout(10000);
+         in = new BufferedInputStream(connection.getInputStream());
          fout = new FileOutputStream(filename);
          byte[] data = new byte[1024];
 
