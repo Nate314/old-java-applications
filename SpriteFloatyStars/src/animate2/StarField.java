@@ -4,182 +4,186 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.util.Arrays;
+import javax.swing.Timer;
 
 public final class StarField extends Component {
-   public int starCount = 1000;
+   /** Movement per star per step was tuned for an uncapped repaint loop; this many steps per second keeps a similar pace. */
+   private static final double STEPS_PER_SECOND = 200.0;
+   public int starCount;
    private int starSize = 20;
    private int fieldWidth;
    private int fieldHeight;
-   private double[] x = new double[this.starCount];
-   private double[] y = new double[this.starCount];
-   private double[] velocityX = new double[this.starCount];
-   private double[] velocityY = new double[this.starCount];
-   private int[] randomColorValues = new int[this.starCount * 3];
+   private Dimension startSize;
+   private double[] x;
+   private double[] y;
+   private double[] velocityX;
+   private double[] velocityY;
+   private int[] randomColorValues;
    private int mode = 2;
+   private long lastTickNanos = System.nanoTime();
 
    public StarField(int mode, Dimension size, int starCount, int starSize) {
       this.mode = mode;
       this.starCount = starCount;
       this.starSize = starSize;
+      this.startSize = size;
+      this.fieldWidth = size.width;
+      this.fieldHeight = size.height;
+      this.x = new double[starCount];
+      this.y = new double[starCount];
+      this.velocityX = new double[starCount];
+      this.velocityY = new double[starCount];
+      this.randomColorValues = new int[starCount * 3];
+
+      for (int star = 0; star < this.starCount; star++) {
+         this.initStar(star);
+      }
+
+      new Timer(15, event -> this.tick()).start();
+   }
+
+   private void initStar(int star) {
+      if (this.mode == 0 || this.mode == 3 || this.mode == 4) {
+         this.x[star] = Math.random() * this.startSize.getWidth();
+         this.y[star] = Math.random() * this.startSize.getHeight();
+         if (this.mode == 3) {
+            this.velocityX[star] = 2.0 * (Math.random() - 0.5);
+            this.velocityY[star] = 2.0 * (Math.random() - 0.5);
+         } else {
+            this.velocityX[star] = Math.random();
+            this.velocityY[star] = Math.random();
+         }
+      } else if (this.mode == 1 || this.mode == 2) {
+         this.x[star] = this.startSize.getWidth() / 2.0 - (double)(this.starSize / 2);
+         this.y[star] = this.startSize.getHeight() / 2.0 - (double)(this.starSize / 2);
+         this.velocityX[star] = 2.0 * (Math.random() - 0.5);
+         this.velocityY[star] = 2.0 * (Math.random() - 0.5);
+      }
+
+      for (int channel = 0; channel < 3; channel++) {
+         this.randomColorValues[star * 3 + channel] = (int)(Math.random() * 255.0);
+      }
+   }
+
+   /** Up arrow: adds a star, growing the arrays when needed. */
+   public final void addStar() {
+      if (this.starCount == this.x.length) {
+         int capacity = Math.max(16, this.x.length * 2);
+         this.x = Arrays.copyOf(this.x, capacity);
+         this.y = Arrays.copyOf(this.y, capacity);
+         this.velocityX = Arrays.copyOf(this.velocityX, capacity);
+         this.velocityY = Arrays.copyOf(this.velocityY, capacity);
+         this.randomColorValues = Arrays.copyOf(this.randomColorValues, capacity * 3);
+      }
+      this.initStar(this.starCount);
+      this.starCount++;
+   }
+
+   /** Down arrow: removes the last star. */
+   public final void removeStar() {
+      if (this.starCount > 0) {
+         this.starCount--;
+      }
+   }
+
+   private void tick() {
+      long now = System.nanoTime();
+      // Cap the step so a stall (dragging the window, a GC pause) does not teleport the stars.
+      double steps = Math.min(50.0, (now - this.lastTickNanos) / 1.0E9 * STEPS_PER_SECOND);
+      this.lastTickNanos = now;
+      if (this.getWidth() > 0) {
+         this.fieldWidth = this.getWidth();
+         this.fieldHeight = this.getHeight();
+      }
+      this.move(steps);
+      this.repaint();
+   }
+
+   private void move(double steps) {
+      if (this.mode == 4) {
+         this.flock();
+      }
 
       for (int star = 0; star < this.starCount; star++) {
          if (this.mode == 0 || this.mode == 4) {
-            this.x[star] = Math.random() * size.getWidth();
-            this.y[star] = Math.random() * size.getHeight();
-            this.velocityX[star] = Math.random();
-            this.velocityY[star] = Math.random();
-         } else if (this.mode == 1 || this.mode == 2) {
-            this.x[star] = size.getWidth() / 2.0 - (double)(this.starSize / 2);
-            this.y[star] = size.getHeight() / 2.0 - (double)(this.starSize / 2);
-            this.velocityX[star] = 2.0 * (Math.random() - 0.5);
-            this.velocityY[star] = 2.0 * (Math.random() - 0.5);
+            this.x[star] = this.x[star] - this.velocityX[star] * steps;
+            this.y[star] = this.y[star] + this.velocityY[star] * steps;
+            if (this.x[star] < (double)(0 - this.starSize)) {
+               this.x[star] = this.x[star] + (double)(this.fieldWidth + 2 * this.starSize);
+            } else if (this.y[star] > (double)(this.fieldHeight + this.starSize)) {
+               this.y[star] = this.y[star] - (double)(this.fieldHeight + 2 * this.starSize);
+            }
+         } else {
+            this.x[star] = this.x[star] - this.velocityX[star] * steps;
+            this.y[star] = this.y[star] - this.velocityY[star] * steps;
+            // Bounce by heading back inside, so a star never sticks to an edge by flipping every frame.
+            if (this.x[star] < 0) {
+               this.velocityX[star] = Math.abs(this.velocityX[star]) * -1.0;
+            } else if (this.x[star] > this.fieldWidth - this.starSize) {
+               this.velocityX[star] = Math.abs(this.velocityX[star]);
+            }
+            if (this.y[star] > this.fieldHeight - this.starSize) {
+               this.velocityY[star] = Math.abs(this.velocityY[star]);
+            } else if (this.y[star] < 0) {
+               this.velocityY[star] = Math.abs(this.velocityY[star]) * -1.0;
+            }
          }
       }
+   }
 
-      for (int colorIndex = 0; colorIndex < this.starCount * 3; colorIndex++) {
-         this.randomColorValues[colorIndex] = (int)(Math.random() * 255.0);
+   /** Mode 5: overlapping stars average their velocities so they drift together. */
+   private void flock() {
+      for (int star = 0; star < this.starCount; star++) {
+         for (int other = 0; other < this.starCount; other++) {
+            if (this.x[star] < this.x[other]
+               && this.x[star] + (double)this.starSize > this.x[other]
+               && this.y[star] < this.y[other]
+               && this.y[star] + (double)this.starSize > this.y[other]) {
+               double averageVelocityX = (this.velocityX[star] + this.velocityX[other]) / 2.0;
+               double averageVelocityY = (this.velocityY[star] + this.velocityY[other]) / 2.0;
+               this.velocityX[star] = averageVelocityX;
+               this.velocityX[other] = averageVelocityX;
+               this.velocityY[star] = averageVelocityY;
+               this.velocityY[other] = averageVelocityY;
+            }
+         }
       }
    }
 
    @Override
    public final void paint(Graphics g) {
       super.paint(g);
-      this.fieldWidth = this.getWidth();
-      this.fieldHeight = this.getHeight();
-      g.setColor(Color.blue);
-      g.fillRect(0, 0, this.fieldWidth, this.fieldHeight);
-      if (this.mode == 0) {
-         Graphics driftGraphics = g;
-         StarField driftField = this;
+      Graphics2D g2 = (Graphics2D)g;
+      g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+      g2.setColor(Color.blue);
+      g2.fillRect(0, 0, this.getWidth(), this.getHeight());
 
-         for (int star = 0; star < driftField.starCount; star++) {
-            driftField.setStarColor(driftGraphics, star);
-            driftField.x[star] = driftField.x[star] - driftField.velocityX[star];
-            driftField.y[star] = driftField.y[star] + driftField.velocityY[star];
-            if (driftField.x[star] < (double)(0 - driftField.starSize)) {
-               driftField.x[star] = driftField.x[star] + (double)(driftField.fieldWidth + 2 * driftField.starSize);
-            } else if (driftField.y[star] > (double)(driftField.fieldHeight + driftField.starSize)) {
-               driftField.y[star] = driftField.y[star] - (double)(driftField.fieldHeight + 2 * driftField.starSize);
-            }
-
-            driftGraphics.fillOval((int)driftField.x[star], (int)driftField.y[star], driftField.starSize, driftField.starSize);
-         }
-      } else if (this.mode == 1) {
-         this.paintBouncingStars(g);
-      } else if (this.mode == 2) {
-         this.paintBouncingStars(g);
-      } else if (this.mode == 3) {
-         Graphics bounceGraphics = g;
-         StarField bounceField = this;
-
-         for (int star = 0; star < bounceField.starCount; star++) {
-            bounceField.setStarColor(bounceGraphics, star);
-            bounceField.x[star] = bounceField.x[star] - bounceField.velocityX[star];
-            bounceField.y[star] = bounceField.y[star] - bounceField.velocityY[star];
-            int starX = (int)bounceField.x[star];
-            int starY = (int)bounceField.y[star];
-            if (starX < 0) {
-               bounceField.velocityX[star] = -bounceField.velocityX[star];
-            } else if (starX > bounceField.fieldWidth - bounceField.starSize) {
-               bounceField.velocityX[star] = -bounceField.velocityX[star];
-            } else if (starY > bounceField.fieldHeight - bounceField.starSize) {
-               bounceField.velocityY[star] = -bounceField.velocityY[star];
-            } else if (starY < 0) {
-               bounceField.velocityY[star] = -bounceField.velocityY[star];
-            }
-
-            bounceGraphics.fillOval(starX, starY, bounceField.starSize, bounceField.starSize);
-         }
-      } else if (this.mode == 4) {
-         Graphics flockGraphics = g;
-         StarField flockField = this;
-
-         for (int star = 0; star < flockField.starCount; star++) {
-            flockField.setStarColor(flockGraphics, star);
-
-            for (int other = 0; other < flockField.starCount; other++) {
-               if (flockField.x[star] < flockField.x[other]
-                  && flockField.x[star] + (double)flockField.starSize > flockField.x[other]
-                  && flockField.y[star] < flockField.y[other]
-                  && flockField.y[star] + (double)flockField.starSize > flockField.y[other]) {
-                  double averageVelocityX = (flockField.velocityX[star] + flockField.velocityX[other]) / 2.0;
-                  double averageVelocityY = (flockField.velocityY[star] + flockField.velocityY[other]) / 2.0;
-                  flockField.velocityX[star] = averageVelocityX;
-                  flockField.velocityX[other] = averageVelocityX;
-                  flockField.velocityY[star] = averageVelocityY;
-                  flockField.velocityY[other] = averageVelocityY;
-               }
-            }
-
-            flockField.x[star] = flockField.x[star] - flockField.velocityX[star];
-            flockField.y[star] = flockField.y[star] + flockField.velocityY[star];
-            if (flockField.x[star] < (double)(0 - flockField.starSize)) {
-               flockField.x[star] = flockField.x[star] + (double)(flockField.fieldWidth + 2 * flockField.starSize);
-            } else if (flockField.y[star] > (double)(flockField.fieldHeight + flockField.starSize)) {
-               flockField.y[star] = flockField.y[star] - (double)(flockField.fieldHeight + 2 * flockField.starSize);
-            }
-
-            flockGraphics.fillOval((int)flockField.x[star], (int)flockField.y[star], flockField.starSize, flockField.starSize);
-         }
-      }
-
-      this.repaint();
-   }
-
-   private void paintBouncingStars(Graphics g) {
       for (int star = 0; star < this.starCount; star++) {
-         this.setStarColor(g, star);
-         this.x[star] = this.x[star] - this.velocityX[star];
-         this.y[star] = this.y[star] - this.velocityY[star];
-         int starX = (int)this.x[star];
-         int starY = (int)this.y[star];
-         if (starX < 0) {
-            this.velocityX[star] = -this.velocityX[star];
-         } else if (starX > this.fieldWidth - this.starSize) {
-            this.velocityX[star] = -this.velocityX[star];
-         } else if (starY > this.fieldHeight - this.starSize) {
-            this.velocityY[star] = -this.velocityY[star];
-         } else if (starY < 0) {
-            this.velocityY[star] = -this.velocityY[star];
-         }
-
-         g.fillOval(starX, starY, this.starSize, this.starSize);
+         this.setStarColor(g2, star);
+         g2.fillOval((int)this.x[star], (int)this.y[star], this.starSize, this.starSize);
       }
    }
 
    private void setStarColor(Graphics g, int star) {
-      if (this.mode == 0) {
+      if (this.mode == 0 || this.mode == 4) {
          g.setColor(Color.white);
       } else if (this.mode == 1) {
-         int red = (int)(this.x[star] / (double)this.fieldWidth * 250.0);
-         star = (int)(this.y[star] / (double)this.fieldWidth * 250.0);
-         g.setColor(new Color(red, star, star));
-      } else {
-         if (this.mode == 2) {
-            int directionX = (int)(this.velocityX[star] / Math.abs(this.velocityX[star]));
-            star = (int)(this.velocityY[star] / Math.abs(this.velocityY[star]));
-            if (directionX == 1 && star == 1) {
-               g.setColor(new Color(255, 0, 0));
-               return;
-            }
-
-            if (directionX == 1 && star == -1) {
-               g.setColor(new Color(0, 255, 0));
-               return;
-            }
-
-            if (directionX == -1 && star == -1) {
-               g.setColor(new Color(255, 0, 255));
-               return;
-            }
-
-            if (directionX == -1 && star == 1) {
-               g.setColor(new Color(0, 255, 255));
-               return;
-            }
-         } else if (this.mode != 3 && this.mode == 4) {
-            g.setColor(Color.white);
-         }
+         int red = clampColor(this.x[star] / (double)this.fieldWidth * 250.0);
+         int greenBlue = clampColor(this.y[star] / (double)this.fieldHeight * 250.0);
+         g.setColor(new Color(red, greenBlue, greenBlue));
+      } else if (this.mode == 2) {
+         boolean right = this.velocityX[star] > 0;
+         boolean up = this.velocityY[star] > 0;
+         g.setColor(right && up ? new Color(255, 0, 0) : right ? new Color(0, 255, 0) : up ? new Color(0, 255, 255) : new Color(255, 0, 255));
+      } else if (this.mode == 3) {
+         g.setColor(new Color(this.randomColorValues[star * 3], this.randomColorValues[star * 3 + 1], this.randomColorValues[star * 3 + 2]));
       }
+   }
+
+   private static int clampColor(double value) {
+      return Math.max(0, Math.min(255, (int)value));
    }
 }

@@ -13,7 +13,7 @@ import javax.swing.JTextField;
 public final class SettingsFrame extends JFrame implements ActionListener {
    private JPanel panel = new JPanel();
    private String[] modeNames = new String[]{"Mode 1", "Mode 2", "Mode 3", "Mode 4", "Mode 5"};
-   private JComboBox modeComboBox = new JComboBox<>(this.modeNames);
+   private JComboBox<String> modeComboBox = new JComboBox<>(this.modeNames);
    private JLabel[] labels = new JLabel[]{new JLabel("Mode:"), new JLabel("X/Y:"), new JLabel("Number:"), new JLabel("Size:")};
    private JTextField[] textFields = new JTextField[]{new JTextField("0"), new JTextField("800"), new JTextField("800"), new JTextField("1000"), new JTextField("20")};
    private JButton okButton = new JButton("OK");
@@ -44,13 +44,20 @@ public final class SettingsFrame extends JFrame implements ActionListener {
    public final void actionPerformed(ActionEvent e) {
       if (e.getSource() == this.okButton) {
          this.textFields[0].setText("" + this.modeComboBox.getSelectedIndex());
-         System.out.printf("%d, %d", this.getWidth(), this.getHeight());
-         int mode = Integer.parseInt(this.textFields[0].getText());
-         int width = Integer.parseInt(this.textFields[1].getText());
-         int height = Integer.parseInt(this.textFields[2].getText());
-         int starCount = Integer.parseInt(this.textFields[3].getText());
-         int starSize = Integer.parseInt(this.textFields[4].getText());
-         new AnimationFrame(mode, new Dimension(width, height), starCount, starSize).setVisible(true);
+         try {
+            int mode = Integer.parseInt(this.textFields[0].getText());
+            int width = Integer.parseInt(this.textFields[1].getText().trim());
+            int height = Integer.parseInt(this.textFields[2].getText().trim());
+            int starCount = Integer.parseInt(this.textFields[3].getText().trim());
+            int starSize = Integer.parseInt(this.textFields[4].getText().trim());
+            if (width <= 0 || height <= 0 || starCount < 0 || starSize <= 0) {
+               throw new NumberFormatException();
+            }
+            this.setTitle("Animation Test");
+            new AnimationFrame(mode, new Dimension(width, height), starCount, starSize).setVisible(true);
+         } catch (NumberFormatException exception) {
+            this.setTitle("Use positive whole numbers");
+         }
       }
    }
 }

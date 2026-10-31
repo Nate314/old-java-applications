@@ -13,23 +13,21 @@ public final class AnimationFrame extends JFrame implements KeyListener {
       this.setSize(size);
       this.setDefaultCloseOperation(3);
       this.add(this.starField = new StarField(mode, size, starCount, starSize));
+      this.starField.setFocusable(false);
       this.addKeyListener(this);
    }
 
    @Override
    public final void keyTyped(KeyEvent e) {
-      if (e.getKeyCode() == 38) {
-         this.starField.starCount++;
-         System.out.println("test");
-      } else {
-         if (e.getKeyCode() == 40) {
-            this.starField.starCount--;
-         }
-      }
    }
 
    @Override
    public final void keyPressed(KeyEvent e) {
+      if (e.getKeyCode() == KeyEvent.VK_UP) {
+         this.starField.addStar();
+      } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+         this.starField.removeStar();
+      }
    }
 
    @Override
