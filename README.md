@@ -25,7 +25,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 | [Windows](Windows/README.md) | Presses the Windows key once |
 | [WindowsE](WindowsE/README.md) | Opens N File Explorer windows with Win+E |
 | [BibleDownloader](BibleDownloader/README.md) | Downloads NIV Bible chapters from bible.com as MP3 audio or as text saved to HTML |
-| [GroupCreator](GroupCreator/README.md) | Shuffles a comma-separated list of names into random groups and writes them to `output.txt` |
+| [GroupCreator](GroupCreator/README.md) | Shuffles a comma-separated list of names into random groups, shows them and writes them to `output.txt` |
 | [MusicTheoryExpert](MusicTheoryExpert/README.md) | Unfinished music theory tool that builds scales and triads and plays a I-IV-V-I progression |
 | [NumberGuess](NumberGuess/README.md) | Guess-the-number game |
 | [SimpleAlgorithms](SimpleAlgorithms/README.md) | Console program printing hand-written estimates of square root, sine, cosine and more |
