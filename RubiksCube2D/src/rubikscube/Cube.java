@@ -33,6 +33,20 @@ public final class Cube {
       this.leftFace = new Face(this, this.white, faceButtons[5], rotatedClockwiseLayout, cellWidth, cellHeight);
    }
 
+   public final Face[] faces() {
+      return new Face[]{this.topFace, this.frontFace, this.rightFace, this.bottomFace, this.backFace, this.leftFace};
+   }
+
+   /** True when every face is a single color. */
+   public final boolean isSolved() {
+      for (Face face : this.faces()) {
+         if (!face.isSolid()) {
+            return false;
+         }
+      }
+      return true;
+   }
+
    public final void refresh() {
       this.topFace.refresh();
       this.frontFace.refresh();

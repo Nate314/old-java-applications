@@ -1,9 +1,7 @@
 package rubikscube;
 
-import java.awt.AWTException;
 import java.awt.Color;
 import java.awt.KeyboardFocusManager;
-import java.awt.Robot;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JButton;
@@ -93,15 +91,17 @@ public final class CubeFrame extends JFrame implements ActionListener {
    private int cellWidth = 0;
    private int cellHeight = 0;
    protected Cube cube = null;
+   private int moveCount = 0;
+   private Scrambler scrambler = null;
 
    public CubeFrame() {
-      this.setTitle("Rubik's Cube");
       this.setSize(550, 700);
       this.frameWidth = this.getWidth();
       this.frameHeight = this.getHeight();
       this.cellWidth = this.frameWidth / 11;
       this.cellHeight = this.frameHeight / 14;
       this.cube = new Cube(this, this.stickerButtons, this.cellWidth, this.cellHeight);
+      this.updateTitle();
       this.setLocationRelativeTo(null);
       this.setDefaultCloseOperation(3);
       this.setResizable(true);
@@ -155,50 +155,50 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.panel.add(this.cube.leftFace.panel);
    }
 
+   /** Applies a W/A/S/D move to the selected square, counts it and checks for a solve. */
+   final void applyUserMove(String key) {
+      if (this.selectedCubie < 1 || this.selectedCubie > 9 || this.cube.selectedFaceColor.isEmpty() || this.scrambler != null) {
+         return;
+      }
+      new Move(this.cube.selectedFaceColor, key, this.selectedCubie, this.cube);
+      this.cube.refresh();
+      this.moveCount++;
+      this.updateTitle();
+   }
+
+   private void updateTitle() {
+      if (this.cube.isSolved() && this.moveCount > 0) {
+         this.setTitle("Rubik's Cube: solved in " + this.moveCount + " moves!");
+      } else {
+         this.setTitle("Rubik's Cube: " + this.moveCount + " moves");
+      }
+   }
+
    @Override
    public final void actionPerformed(ActionEvent event) {
-      if (event.getSource() == this.moveButtons[0]) {
-         try {
-            Robot robot;
-            (robot = new Robot()).keyPress(87);
-            robot.keyRelease(87);
-         } catch (AWTException e) {
-            e.printStackTrace();
+      for (int index = 0; index < this.moveButtons.length; index++) {
+         if (event.getSource() == this.moveButtons[index]) {
+            this.applyUserMove(this.moveButtons[index].getText());
          }
       }
 
-      if (event.getSource() == this.moveButtons[1]) {
+      if (event.getSource() == this.mixButton && this.scrambler == null) {
+         int moves;
+         double seconds;
          try {
-            Robot robot;
-            (robot = new Robot()).keyPress(65);
-            robot.keyRelease(65);
-         } catch (AWTException e) {
-            e.printStackTrace();
+            moves = Integer.parseInt(this.mixFields[0].getText().trim());
+            seconds = Double.parseDouble(this.mixFields[1].getText().trim());
+         } catch (NumberFormatException e) {
+            this.setTitle("Rubik's Cube: Moves and Secs must be numbers");
+            return;
          }
-      }
-
-      if (event.getSource() == this.moveButtons[2]) {
-         try {
-            Robot robot;
-            (robot = new Robot()).keyPress(83);
-            robot.keyRelease(83);
-         } catch (AWTException e) {
-            e.printStackTrace();
-         }
-      }
-
-      if (event.getSource() == this.moveButtons[3]) {
-         try {
-            Robot robot;
-            (robot = new Robot()).keyPress(68);
-            robot.keyRelease(68);
-         } catch (AWTException e) {
-            e.printStackTrace();
-         }
-      }
-
-      if (event.getSource() == this.mixButton) {
-         new Scrambler(Integer.parseInt(this.mixFields[0].getText()), Double.parseDouble(this.mixFields[1].getText()), this.cube);
+         this.scrambler = new Scrambler(Math.max(0, moves), seconds, this.cube, () -> {
+            this.scrambler = null;
+            this.moveCount = 0;
+            this.updateTitle();
+         });
+         this.setTitle("Rubik's Cube: mixing...");
+         this.scrambler.start();
       }
    }
 }

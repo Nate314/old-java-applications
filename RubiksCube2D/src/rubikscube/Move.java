@@ -14,105 +14,105 @@ public final class Move {
 
    public Move(String faceColor, String key, int cubie, Cube cube) {
       this.cube = cube;
-      if (faceColor == this.blue) {
-         if (key == "w") {
+      if (this.blue.equals(faceColor)) {
+         if ("w".equals(key)) {
             this.shiftColumnUpFromTopFace(cubie);
          }
 
-         if (key == "a") {
+         if ("a".equals(key)) {
             this.rotateRingAroundFrontCounterClockwise(cubie);
          }
 
-         if (key == "s") {
+         if ("s".equals(key)) {
             this.shiftColumnDownFromTopFace(cubie);
          }
 
-         if (key == "d") {
+         if ("d".equals(key)) {
             this.rotateRingAroundFrontClockwise(cubie);
             return;
          }
-      } else if (faceColor == this.red) {
-         if (key == "w") {
+      } else if (this.red.equals(faceColor)) {
+         if ("w".equals(key)) {
             this.shiftColumnUp(cubie);
          }
 
-         if (key == "a") {
+         if ("a".equals(key)) {
             this.shiftRowLeft(cubie, true);
          }
 
-         if (key == "s") {
+         if ("s".equals(key)) {
             this.shiftColumnDown(cubie);
          }
 
-         if (key == "d") {
+         if ("d".equals(key)) {
             this.shiftRowRight(cubie, true);
             return;
          }
-      } else if (faceColor == this.yellow) {
-         if (key == "w") {
+      } else if (this.yellow.equals(faceColor)) {
+         if ("w".equals(key)) {
             this.rotateRingAroundFrontCounterClockwise(cubie);
          }
 
-         if (key == "a") {
+         if ("a".equals(key)) {
             this.shiftSideColumnLeft(cubie, true);
          }
 
-         if (key == "s") {
+         if ("s".equals(key)) {
             this.rotateRingAroundFrontClockwise(cubie);
          }
 
-         if (key == "d") {
+         if ("d".equals(key)) {
             this.shiftSideColumnRight(cubie, true);
             return;
          }
-      } else if (faceColor == this.green) {
-         if (key == "w") {
+      } else if (this.green.equals(faceColor)) {
+         if ("w".equals(key)) {
             this.shiftColumnUp(cubie);
          }
 
-         if (key == "a") {
+         if ("a".equals(key)) {
             this.rotateRingAroundFrontClockwise(cubie);
          }
 
-         if (key == "s") {
+         if ("s".equals(key)) {
             this.shiftColumnDown(cubie);
          }
 
-         if (key == "d") {
+         if ("d".equals(key)) {
             this.rotateRingAroundFrontCounterClockwise(cubie);
             return;
          }
-      } else if (faceColor == this.orange) {
-         if (key == "w") {
+      } else if (this.orange.equals(faceColor)) {
+         if ("w".equals(key)) {
             this.shiftColumnUp(cubie);
          }
 
-         if (key == "a") {
+         if ("a".equals(key)) {
             this.shiftRowLeft(cubie, false);
          }
 
-         if (key == "s") {
+         if ("s".equals(key)) {
             this.shiftColumnDown(cubie);
          }
 
-         if (key == "d") {
+         if ("d".equals(key)) {
             this.shiftRowRight(cubie, false);
             return;
          }
-      } else if (faceColor == this.white) {
-         if (key == "w") {
+      } else if (this.white.equals(faceColor)) {
+         if ("w".equals(key)) {
             this.rotateRingAroundFrontClockwise(cubie);
          }
 
-         if (key == "a") {
+         if ("a".equals(key)) {
             this.shiftSideColumnLeft(cubie, false);
          }
 
-         if (key == "s") {
+         if ("s".equals(key)) {
             this.rotateRingAroundFrontCounterClockwise(cubie);
          }
 
-         if (key == "d") {
+         if ("d".equals(key)) {
             this.shiftSideColumnRight(cubie, false);
          }
       }
@@ -423,11 +423,12 @@ public final class Move {
          this.cube.refresh();
       }
 
+      // The reverse of shiftSideColumnLeft, so the top and bottom faces turn the other way too.
       if (cubie == 0) {
-         this.rotateFaceClockwise(this.cube.topFace);
+         this.rotateFaceCounterClockwise(this.cube.topFace);
       } else {
          if (cubie == 2) {
-            this.rotateFaceCounterClockwise(this.cube.bottomFace);
+            this.rotateFaceClockwise(this.cube.bottomFace);
          }
       }
    }

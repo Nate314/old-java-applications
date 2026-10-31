@@ -1,77 +1,56 @@
 package rubikscube;
 
-import java.awt.AWTException;
-import java.awt.Robot;
+import java.util.Random;
+import javax.swing.Timer;
 
+/** The Mix feature: applies random moves directly to the cube, spread over the requested time on a Swing timer. */
 public final class Scrambler {
-   private String[] colorNames = new String[]{"blue", "red", "yellow", "green", "orange", "white"};
-   private String[] moveKeys = new String[]{"w", "a", "s", "d"};
+   private static final String[] COLOR_NAMES = new String[]{"blue", "red", "yellow", "green", "orange", "white"};
+   private static final String[] MOVE_KEYS = new String[]{"w", "a", "s", "d"};
+   private final Random random = new Random();
+   private final Cube cube;
+   private final int moveCount;
+   private final long durationMillis;
+   private final Runnable onDone;
+   private Timer timer;
+   private long startMillis;
+   private int movesDone = 0;
 
-   Scrambler(int moveCount, double delay, Cube cube) {
-      System.out.println("Mix");
-      delay = (double)((int)(delay * 1000.0) / moveCount);
-      int[] faceIndices = new int[moveCount];
-      int[] cubies = new int[moveCount];
-      int[] keyIndices = new int[moveCount];
+   Scrambler(int moveCount, double seconds, Cube cube, Runnable onDone) {
+      this.moveCount = moveCount;
+      this.durationMillis = Math.max(0L, (long)(seconds * 1000.0));
+      this.cube = cube;
+      this.onDone = onDone;
+   }
 
-      for (int i = 0; i < moveCount; i++) {
-         faceIndices[i] = (int)(Math.random() * 6.0);
-         cubies[i] = (int)(Math.random() * 8.0);
-         keyIndices[i] = (int)(Math.random() * 3.0);
+   /** Applies one random move: any face, any of the nine squares, any of the four keys. */
+   static void randomMove(Cube cube, Random random) {
+      new Move(COLOR_NAMES[random.nextInt(6)], MOVE_KEYS[random.nextInt(4)], random.nextInt(9) + 1, cube);
+   }
+
+   void start() {
+      this.startMillis = System.currentTimeMillis();
+      this.timer = new Timer(15, event -> this.tick());
+      this.timer.start();
+   }
+
+   void stop() {
+      if (this.timer != null) {
+         this.timer.stop();
       }
+   }
 
-      String[] faceColors = new String[moveCount];
-      String[] keys = new String[moveCount];
-
-      for (int i = 0; i < moveCount; i++) {
-         faceColors[i] = this.colorNames[faceIndices[i]];
-         keys[i] = this.moveKeys[keyIndices[i]];
+   private void tick() {
+      long elapsed = System.currentTimeMillis() - this.startMillis;
+      int due = elapsed >= this.durationMillis ? this.moveCount : (int)((long)this.moveCount * elapsed / this.durationMillis);
+      while (this.movesDone < due) {
+         randomMove(this.cube, this.random);
+         this.movesDone++;
       }
-
-      for (int i = 0; i < moveCount; i++) {
-         cube.refresh();
-         System.out.printf("color: %s, cubie: %s, letter: %s\n", faceColors[i], cubies[i], keys[i]);
-         cube.selectedFaceColor = faceColors[i];
-         cube.frame.selectedCubie = cubies[i];
-         if (keys[i] == "w") {
-            try {
-               Robot robot;
-               (robot = new Robot()).keyPress(87);
-               robot.keyRelease(87);
-            } catch (AWTException e) {
-               e.printStackTrace();
-            }
-         } else if (keys[i] == "a") {
-            try {
-               Robot robot;
-               (robot = new Robot()).keyPress(65);
-               robot.keyRelease(65);
-            } catch (AWTException e) {
-               e.printStackTrace();
-            }
-         } else if (keys[i] == "s") {
-            try {
-               Robot robot;
-               (robot = new Robot()).keyPress(83);
-               robot.keyRelease(83);
-            } catch (AWTException e) {
-               e.printStackTrace();
-            }
-         } else if (keys[i] == "d") {
-            try {
-               Robot robot;
-               (robot = new Robot()).keyPress(68);
-               robot.keyRelease(68);
-            } catch (AWTException e) {
-               e.printStackTrace();
-            }
-         }
-
-         try {
-            Thread.sleep((long)delay);
-         } catch (InterruptedException e) {
-            e.printStackTrace();
-         }
+      this.cube.refresh();
+      if (this.movesDone >= this.moveCount) {
+         this.timer.stop();
+         this.onDone.run();
       }
    }
 }
