@@ -1,7 +1,7 @@
 package rubikscube;
 
 public class Main {
-   public static void main(String[] var0) {
-      new g().setVisible(true);
+   public static void main(String[] args) {
+      new CubeFrame().setVisible(true);
    }
 }
