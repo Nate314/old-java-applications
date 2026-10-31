@@ -7,6 +7,7 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 
@@ -22,23 +23,22 @@ public class Main extends JFrame implements ActionListener{
 	private JButton button = new JButton("test");
 
 	public Main(Boolean visibility) {
-		byte a = 0;
-		this.setVisible(visibility);
 		this.setDefaultCloseOperation(EXIT_ON_CLOSE);
-		this.setTitle("Misic Theory Expert");
-		setLookAndFeel();
+		this.setTitle("Music Theory Expert");
 		tpane.addTab("Notes", notesPanel);
 		notesPanel.add(button);
 		button.addActionListener(this);
 		this.add(tpane);
 		this.setSize(500, 200);
+		this.setVisible(visibility);
 //		synth.playNotes(synthesizer.Notes.A4, 300, 0, 127, 0, 0);
 //		synth.playNotes(synthesizer.Notes.B4, 300, 0, 127, 0, 0);
 //		synth.playNotes(synthesizer.Notes.C4, 300, 0, 127, 0, 0);
 		new Notes(synth);
 	}
 	
-	private void setLookAndFeel() {
+	// Set before any component is created, so the window really uses the system look.
+	private static void setLookAndFeel() {
 		try {
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 		} catch (ClassNotFoundException e) {
@@ -57,7 +57,10 @@ public class Main extends JFrame implements ActionListener{
 	}
 
 	public static void main(String[] args) {
-		new Main(true);
+		SwingUtilities.invokeLater(() -> {
+			setLookAndFeel();
+			new Main(true);
+		});
 	}
 
 	@Override

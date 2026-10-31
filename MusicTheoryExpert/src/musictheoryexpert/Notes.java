@@ -26,7 +26,7 @@ public class Notes {
 		int getIndex(String note) {
 			int result = -1;
 			for(int i = 0; i < noteNames.length; i++) {
-				if(noteNames[i] == note) result = i;
+				if(noteNames[i].equals(note)) result = i;
 			}
 			return result;
 		}
@@ -38,7 +38,6 @@ public class Notes {
 		String getNameRelativeTo(String note) {
 			int noteIndex = getIndex(note);
 			int difference = index - noteIndex;
-			System.out.println(difference);
 			String extra = "";
 			String sharpOrFlat = difference < 0 ? "f" : "s";
 			for(int i = 0; i < Math.abs(difference); i++) {
@@ -60,12 +59,11 @@ public class Notes {
 	public static int[] naturalMinorSteps = { 2, 1, 2, 2, 1, 2, 2 };
 	public static int[] harmonicMinorSteps = { 2, 1, 2, 2, 1, 3, 1 };
 	public static int[] melodicMinorSteps = { 2, 1, 2, 2, 2, 2, 1 };
+	// Separate MIDI channels, so a note off in one demo thread never cuts the other's note.
+	private static final int CHORD_CHANNEL = 0;
+	private static final int MELODY_CHANNEL = 1;
 
 	public Notes(MySynthesizer synth) {
-		System.out.println("Testing 123");
-		for (int i = -20; i < 70; i++) {
-			System.out.println("ID " + i + ": " + getNoteID(getNoteName(i, MusicalTerms.SHARP)));
-		}
 //		playScale(getScale("A", MusicalTerms.MAJOR), synth);
 //		playScale(getScale("A", MusicalTerms.NATURAL_MINOR), synth);
 //		playScale(getScale("A", MusicalTerms.HARMONIC_MINOR), synth);
@@ -73,16 +71,16 @@ public class Notes {
 		Thread a = new Thread(new Runnable() {
 			@Override
 			public void run() {
-				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 1), 1000, synth);
-				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 4), 1000, synth);
-				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 5), 1000, synth);
-				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 1), 1000, synth);
+				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 1), 1000, synth, CHORD_CHANNEL);
+				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 4), 1000, synth, CHORD_CHANNEL);
+				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 5), 1000, synth, CHORD_CHANNEL);
+				playChord(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 1), 1000, synth, CHORD_CHANNEL);
 			}
 		});
 		Thread b = new Thread(new Runnable() {
 			@Override
 			public void run() {
-				playScale(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 1), 1000, synth);
+				playScale(getTriadByRomanNumeral(getScale("G", MusicalTerms.MAJOR), 1), 1000, synth, MELODY_CHANNEL);
 			}
 		});
 		a.start();
@@ -91,27 +89,27 @@ public class Notes {
 //		System.out.println(NoteNames.C.getIndex("D"));
 	}
 
-	public void playScale(int[] scale, int length, MySynthesizer synth) {
+	public void playScale(int[] scale, int length, MySynthesizer synth, int channel) {
 		for (int i = 0; i < scale.length; i++) {
 			System.out.println(getNoteName(scale[i], MusicalTerms.SHARP));
-			playNote(scale[i], length, synth);
+			playNote(scale[i], length, synth, channel);
 		}
-		playNote(moveToOctave(scale[0], 5), length, synth);
+		playNote(moveToOctave(scale[0], 5), length, synth, channel);
 	}
 	
-	public void playNote(int note, int length, MySynthesizer synth) {
-		synth.playNotes(note, length, 0, 127, 0, 0);
+	public void playNote(int note, int length, MySynthesizer synth, int channel) {
+		synth.playNotes(note, length, 0, 127, 0, channel);
 	}
 
-	public void playChord(int[] chord, int length, MySynthesizer synth) {
-		ArrayList<Integer> chordAL = new ArrayList<Integer>();
+	public void playChord(int[] chord, int length, MySynthesizer synth, int channel) {
+		ArrayList<Integer> chordAL = new ArrayList<>();
 		for(int i = 0; i < chord.length; i++) {
 			chordAL.add(chord[i]);
 		}
-		synth.playChords(chordAL, length, 0, 127, 0, 0);
+		synth.playChords(chordAL, length, 0, 127, 0, channel);
 	}
 
-	public int[] getScale(String key, MusicalTerms scaleType) {
+	public static int[] getScale(String key, MusicalTerms scaleType) {
 		int[] scale = new int[7];
 		int index = 0;
 		if (scaleType == MusicalTerms.MAJOR) {
@@ -146,17 +144,18 @@ public class Notes {
 		return scale;
 	}
 
-	public int getNoteID(String noteName) {
+	/** 0 (C) to 11 (B) for a sharp or flat name such as "Cs" or "Df", or 400 for an unknown name. */
+	public static int getNoteID(String noteName) {
 		int noteID = 400;
 		for (int i = 0; i < notesSharpBias.length; i++) {
-			if (noteName == notesSharpBias[i]) {
+			if (notesSharpBias[i].equals(noteName)) {
 				noteID = i;
 				break;
 			}
 		}
-		if (noteID != 400)
+		if (noteID == 400)
 			for (int i = 0; i < notesFlatBias.length; i++) {
-				if (noteName == notesFlatBias[i]) {
+				if (notesFlatBias[i].equals(noteName)) {
 					noteID = i;
 					break;
 				}
@@ -164,26 +163,28 @@ public class Notes {
 		return noteID;
 	}
 
-	public int transpose(int note, int interval) {
+	public static int transpose(int note, int interval) {
 		return note + interval;
 	}
 
-	public int moveToOctave(int note, int octave) {
+	public static int moveToOctave(int note, int octave) {
 		return (note % 12) + (12 * (octave + 1));
 	}
 
-	public String getNoteName(int noteID, MusicalTerms bias) {
-		int myNoteID = (noteID < 0) ? 11 - ((-1 * noteID) % 12) : noteID % 12;
+	public static String getNoteName(int noteID, MusicalTerms bias) {
+		int myNoteID = Math.floorMod(noteID, 12);
 		return (bias == MusicalTerms.SHARP) ? notesSharpBias[myNoteID]
 				: ((bias == MusicalTerms.FLAT) ? notesFlatBias[myNoteID] : "ERR");
 	}
 
-	public int[] getTriadByRomanNumeral(int[] scale, int romanNumeral) {
+	/** Root position triad on the given degree (1 to 7); tones past the 7th degree move up an octave. */
+	public static int[] getTriadByRomanNumeral(int[] scale, int romanNumeral) {
 		int[] chord = new int[3];
 		romanNumeral--;
-		chord[0] = scale[romanNumeral % 7];
-		chord[1] = scale[(romanNumeral + 2) % 7];
-		chord[2] = scale[(romanNumeral + 4) % 7];
+		for (int i = 0; i < chord.length; i++) {
+			int degree = romanNumeral + 2 * i;
+			chord[i] = scale[degree % 7] + 12 * (degree / 7);
+		}
 		return chord;
 	}
 //	
