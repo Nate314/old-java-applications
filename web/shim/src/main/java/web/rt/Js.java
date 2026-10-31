@@ -50,6 +50,10 @@ public final class Js {
     @JSBody(params = { "el", "text" }, script = "el.textContent = text;")
     public static native void setText(JSObject el, String text);
 
+    /** Swing renders label text that starts with html as HTML. One span keeps it a single item in the flex label. */
+    @JSBody(params = { "el", "html" }, script = "el.innerHTML = '<span>' + html + '</span>';")
+    public static native void setHtml(JSObject el, String html);
+
     @JSBody(params = { "el", "name", "value" }, script = "el.setAttribute(name, value);")
     public static native void setAttr(JSObject el, String name, String value);
 
@@ -225,6 +229,15 @@ public final class Js {
             "var _c = window.__measureCtx || (window.__measureCtx = document.createElement('canvas').getContext('2d'));"
             + "_c.font = cssFont; return _c.measureText(str).width;")
     public static native double measure(String font, String text);
+
+    /** Width (vertical false) or height of HTML text in a hidden element styled like a label. */
+    @JSBody(params = { "cssFont", "html", "vertical" }, script =
+            "var _d = window.__measureDiv; if (!_d) { _d = window.__measureDiv = document.createElement('div');"
+            + " _d.style.cssText = 'position:absolute;left:-10000px;top:0;visibility:hidden;white-space:pre';"
+            + " document.body.appendChild(_d); }"
+            + "_d.style.font = cssFont; _d.innerHTML = html; var _r = _d.getBoundingClientRect();"
+            + "return vertical ? _r.height : _r.width;")
+    public static native double measureHtml(String font, String html, boolean vertical);
 
     // ---- preloaded files (filled by boot.js before main runs) ----
 

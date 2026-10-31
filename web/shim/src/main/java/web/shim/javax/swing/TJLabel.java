@@ -34,9 +34,21 @@ public class TJLabel extends TJComponent implements TSwingConstants {
     @Override
     protected void syncAll() {
         super.syncAll();
-        Js.setText(element(), text);
+        syncText();
         Js.style(element(), "justify-content", horizontalAlignment == CENTER ? "center"
                 : horizontalAlignment == RIGHT || horizontalAlignment == TRAILING ? "flex-end" : "flex-start");
+    }
+
+    private boolean isHtml() {
+        return text.regionMatches(true, 0, "<html>", 0, 6);
+    }
+
+    private void syncText() {
+        if (isHtml()) {
+            Js.setHtml(element(), text);
+        } else {
+            Js.setText(element(), text);
+        }
     }
 
     @Override
@@ -51,6 +63,11 @@ public class TJLabel extends TJComponent implements TSwingConstants {
 
     @Override
     protected TDimension computePreferredSize() {
+        if (isHtml()) {
+            String css = getFont().css();
+            return new TDimension((int) Math.ceil(Js.measureHtml(css, text, false)),
+                    (int) Math.ceil(Js.measureHtml(css, text, true)));
+        }
         TFontMetrics fm = getFontMetrics(getFont());
         return new TDimension(fm.stringWidth(text), text.isEmpty() ? 0 : fm.getHeight());
     }
@@ -67,7 +84,7 @@ public class TJLabel extends TJComponent implements TSwingConstants {
     public void setText(String text) {
         this.text = text == null ? "" : text;
         if (hasElement()) {
-            Js.setText(element(), this.text);
+            syncText();
         }
         invalidate();
     }

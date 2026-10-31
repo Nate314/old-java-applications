@@ -231,8 +231,9 @@ public class TComponent implements TImageObserver {
             Js.style(canvas, "top", canvasY() + "px");
             Js.sizeCanvas(canvas, canvasWidth(), canvasHeight());
             Js.append(canvasParent(), canvas);
-            if (isOpaque() && !canvasOnTop() && !backgroundPainted) {
-                // Swing paints opaque components into a back buffer that starts out black.
+            // Swing paints opaque components into a back buffer that starts out black. Not for a fully transparent
+            // background: TankGame's two overlapping tanks share Swing's buffer, and black would hide the lower one.
+            if (isOpaque() && !canvasOnTop() && !backgroundPainted && (background == null || background.getAlpha() > 0)) {
                 Js.fillCanvas(canvas, "#000");
             }
         }
