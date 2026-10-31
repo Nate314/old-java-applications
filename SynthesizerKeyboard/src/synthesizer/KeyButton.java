@@ -2,5 +2,5 @@ package synthesizer;
 
 import javax.swing.JButton;
 
-public final class a extends JButton {
+public final class KeyButton extends JButton {
 }

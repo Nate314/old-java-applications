@@ -22,10 +22,10 @@ public class StockChecker {
 
       try {
          this.URLToFile.DownloadWebpage("stockCheck.csv", "http://finance.yahoo.com/d/quotes.csv?s=" + stockSymbols + "&f=sl1d1t1c1ohgv&e=.csv");
-      } catch (MalformedURLException var4) {
-         var4.printStackTrace();
-      } catch (IOException var5) {
-         var5.printStackTrace();
+      } catch (MalformedURLException e) {
+         e.printStackTrace();
+      } catch (IOException e) {
+         e.printStackTrace();
       }
 
       return this.stringToCSV.CSVToDoubleStringArray("stockCheck");

@@ -9,55 +9,55 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 public class DinosaurGamePlayer {
-   private DinosaurGamePlayer(Robot var1) {
-      int var2 = (int)((double)Toolkit.getDefaultToolkit().getScreenSize().width / 2.44);
-      int var3 = (int)((double)Toolkit.getDefaultToolkit().getScreenSize().height / 4.5);
-      int var4 = (int)((double)Toolkit.getDefaultToolkit().getScreenSize().height / 5.35);
+   private DinosaurGamePlayer(Robot robot) {
+      int sensorX = (int)((double)Toolkit.getDefaultToolkit().getScreenSize().width / 2.44);
+      int lowerSensorY = (int)((double)Toolkit.getDefaultToolkit().getScreenSize().height / 4.5);
+      int upperSensorY = (int)((double)Toolkit.getDefaultToolkit().getScreenSize().height / 5.35);
 
       try {
          Thread.sleep(2500L);
-      } catch (InterruptedException var7) {
-         var7.printStackTrace();
+      } catch (InterruptedException e) {
+         e.printStackTrace();
       }
 
-      JFrame var5;
-      (var5 = new JFrame("Player1")).setDefaultCloseOperation(3);
-      var5.setAlwaysOnTop(true);
-      var5.setUndecorated(true);
-      var5.setVisible(true);
-      var5.setBounds(var2, var3, 10, 10);
-      JPanel var6;
-      (var6 = new JPanel()).setBackground(new Color(255, 0, 0));
-      var5.add(var6);
-      (var5 = new JFrame("Player2")).setDefaultCloseOperation(3);
-      var5.setAlwaysOnTop(true);
-      var5.setUndecorated(true);
-      var5.setVisible(true);
-      var5.setBounds(var2, var4, 10, 10);
-      JPanel var9;
-      (var9 = new JPanel()).setBackground(new Color(0, 255, 0));
-      var5.add(var9);
-      var1.keyPress(32);
-      a(70);
-      var1.keyRelease(32);
-      Timer var8;
-      (var8 = new Timer(1, new a(this, var1, var2, var3))).setRepeats(true);
-      var8.start();
+      JFrame markerFrame;
+      (markerFrame = new JFrame("Player1")).setDefaultCloseOperation(3);
+      markerFrame.setAlwaysOnTop(true);
+      markerFrame.setUndecorated(true);
+      markerFrame.setVisible(true);
+      markerFrame.setBounds(sensorX, lowerSensorY, 10, 10);
+      JPanel lowerMarkerPanel;
+      (lowerMarkerPanel = new JPanel()).setBackground(new Color(255, 0, 0));
+      markerFrame.add(lowerMarkerPanel);
+      (markerFrame = new JFrame("Player2")).setDefaultCloseOperation(3);
+      markerFrame.setAlwaysOnTop(true);
+      markerFrame.setUndecorated(true);
+      markerFrame.setVisible(true);
+      markerFrame.setBounds(sensorX, upperSensorY, 10, 10);
+      JPanel upperMarkerPanel;
+      (upperMarkerPanel = new JPanel()).setBackground(new Color(0, 255, 0));
+      markerFrame.add(upperMarkerPanel);
+      robot.keyPress(32);
+      pause(70);
+      robot.keyRelease(32);
+      Timer timer;
+      (timer = new Timer(1, new ObstacleDetector(this, robot, sensorX, lowerSensorY))).setRepeats(true);
+      timer.start();
    }
 
-   static void a(int var0) {
+   static void pause(int millis) {
       try {
-         Thread.sleep((long)var0);
-      } catch (InterruptedException var1) {
-         var1.printStackTrace();
+         Thread.sleep((long)millis);
+      } catch (InterruptedException e) {
+         e.printStackTrace();
       }
    }
 
-   public static void main(String[] var0) {
+   public static void main(String[] args) {
       try {
          new DinosaurGamePlayer(new Robot());
-      } catch (AWTException var1) {
-         var1.printStackTrace();
+      } catch (AWTException e) {
+         e.printStackTrace();
       }
    }
 }

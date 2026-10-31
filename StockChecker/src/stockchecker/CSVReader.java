@@ -20,10 +20,10 @@ public class CSVReader {
          }
 
          br.close();
-      } catch (FileNotFoundException var6) {
-         var6.printStackTrace();
-      } catch (IOException var7) {
-         var7.printStackTrace();
+      } catch (FileNotFoundException e) {
+         e.printStackTrace();
+      } catch (IOException e) {
+         e.printStackTrace();
       }
 
       return CSVString;

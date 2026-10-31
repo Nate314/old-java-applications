@@ -21,8 +21,8 @@ public class TextReader {
 
          fileReader.close();
          this.fileText = stringBuffer.toString();
-      } catch (IOException var7) {
-         var7.printStackTrace();
+      } catch (IOException e) {
+         e.printStackTrace();
       }
    }
 
