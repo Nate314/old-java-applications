@@ -6,64 +6,112 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.RenderingHints;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-import java.awt.geom.AffineTransform;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import javax.swing.ImageIcon;
 import javax.swing.JPanel;
+import javax.swing.Timer;
 
 public final class GamePanel extends JPanel implements KeyListener {
+   private static final int READY = 0;
+   private static final int PLAYING = 1;
+   private static final int GAME_OVER = 2;
+   private static final File HIGH_SCORE_FILE = new File(System.getProperty("user.home", "."), ".flappybird-highscore.txt");
    private boolean debugMode = false;
-   boolean running = false;
+   private boolean paused = false;
+   private int state = READY;
    private boolean collided = false;
    private int consoleFontSize = 25;
-   private int launchArgument;
    private float redPhase;
    private float greenPhase;
    private float bluePhase;
-   private ArrayList images = new ArrayList();
-   private AffineTransform identityTransform = new AffineTransform();
-   private AffineTransform transform = new AffineTransform();
+   private List<Image> images = new ArrayList<>();
    private Background background;
    private Pipes pipes;
    private Bird bird;
+   private int highScore = loadHighScore();
+   /** Game steps per second; the game logic moves a fixed amount per step. */
+   private final double stepsPerSecond;
+   private double pendingSteps = 0.0;
+   private long lastTickNanos = System.nanoTime();
 
-   public GamePanel(Main frame, int launchArgument) {
-      this.launchArgument = launchArgument;
+   public GamePanel(int stepsPerSecond) {
+      this.stepsPerSecond = stepsPerSecond;
       this.images.add(new ImageIcon("bg.jpg").getImage().getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT, 4));
       this.images.add(new ImageIcon("ground.jpg").getImage().getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8, 4));
       this.images.add(new ImageIcon("topPipe.png").getImage().getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
       this.images.add(new ImageIcon("bottomPipe.png").getImage().getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
       this.images.add(new ImageIcon("bird.png").getImage().getScaledInstance(Bird.WIDTH, Bird.HEIGHT, 4));
-      this.background = new Background((Image)this.images.get(0), (Image)this.images.get(1));
-      this.pipes = new Pipes((Image)this.images.get(2), (Image)this.images.get(3));
-      this.bird = new Bird((Image)this.images.get(4));
-      this.transform.setTransform(this.identityTransform);
-      new Thread(new RenderLoop(this)).start();
+      this.reset();
+      new Timer(10, event -> this.tick()).start();
+   }
+
+   /** Runs as many fixed game steps as the elapsed time calls for, then repaints. */
+   private void tick() {
+      long now = System.nanoTime();
+      this.pendingSteps += (now - this.lastTickNanos) / 1.0E9 * this.stepsPerSecond;
+      this.lastTickNanos = now;
+      // Drop the backlog after a stall (window drag, sleep) instead of fast-forwarding.
+      this.pendingSteps = Math.min(this.pendingSteps, 10.0);
+      while (this.pendingSteps >= 1.0) {
+         this.pendingSteps--;
+         this.step();
+      }
+      this.repaint();
+   }
+
+   private void step() {
+      if (this.paused || this.state == GAME_OVER) {
+         return;
+      }
+
+      this.background.scroll();
+      if (this.state == READY) {
+         return;
+      }
+
+      this.bird.update();
+      this.pipes.scroll();
+      this.collided = this.hitsPipe() || this.bird.position.collisionY + (float)Bird.HEIGHT > (float)Background.groundY;
+      if (this.collided && !this.debugMode) {
+         this.state = GAME_OVER;
+         if (this.score() > this.highScore) {
+            this.highScore = this.score();
+            saveHighScore(this.highScore);
+         }
+      }
+   }
+
+   private int score() {
+      return this.pipes.passed;
    }
 
    private boolean hitsPipe() {
-      for (int pipeIndex = Pipes.currentPipeIndex - 3; pipeIndex < Pipes.currentPipeIndex; pipeIndex++) {
+      for (int pipeIndex = 0; pipeIndex < this.pipes.positions.size(); pipeIndex++) {
+         Position pipe = this.pipes.positions.get(pipeIndex);
+         int pipeLeft = (int)pipe.collisionX;
+         int pipeRight = pipeLeft + Pipes.PIPE_WIDTH;
+         int birdLeft = (int)this.bird.position.collisionX;
+         int birdRight = birdLeft + Bird.WIDTH;
+         boolean overlapsX = pipeLeft < birdRight && birdRight < pipeRight || pipeLeft < birdLeft && birdLeft < pipeRight;
          if (pipeIndex % 2 == 0) {
-            int pipeLeft;
-            int pipeRight = (pipeLeft = (int)((Position)this.pipes.positions.get(pipeIndex)).collisionX) + Pipes.PIPE_WIDTH;
-            int pipeBottom = (int)((Position)this.pipes.positions.get(pipeIndex)).collisionY + Pipes.PIPE_HEIGHT;
-            int birdLeft;
-            int birdRight = (birdLeft = (int)this.bird.position.collisionX) + Bird.WIDTH;
+            int pipeBottom = (int)pipe.collisionY + Pipes.PIPE_HEIGHT;
             int birdTop = (int)this.bird.position.collisionY;
-            if (pipeLeft < birdRight && birdRight < pipeRight && pipeBottom > birdTop || pipeLeft < birdLeft && birdLeft < pipeRight && pipeBottom > birdTop) {
+            if (overlapsX && pipeBottom > birdTop) {
                return true;
             }
          } else {
-            int pipeLeft;
-            int pipeRight = (pipeLeft = (int)((Position)this.pipes.positions.get(pipeIndex)).collisionX) + Pipes.PIPE_WIDTH;
-            int pipeTop = (int)((Position)this.pipes.positions.get(pipeIndex)).collisionY;
-            int birdLeft;
-            int birdRight = (birdLeft = (int)this.bird.position.collisionX) + Bird.WIDTH;
-            int birdBottom;
-            birdBottom = (birdBottom = (int)this.bird.position.collisionY) + Bird.HEIGHT;
-            if (pipeLeft < birdRight && birdRight < pipeRight && pipeTop < birdBottom || pipeLeft < birdLeft && birdLeft < pipeRight && pipeTop < birdBottom) {
+            int pipeTop = (int)pipe.collisionY;
+            int birdBottom = (int)this.bird.position.collisionY + Bird.HEIGHT;
+            if (overlapsX && pipeTop < birdBottom) {
                return true;
             }
          }
@@ -74,54 +122,36 @@ public final class GamePanel extends JPanel implements KeyListener {
 
    @Override
    public final void paint(Graphics graphics) {
-      if (this.running) {
-         this.background.scroll();
-         this.bird.update();
-         this.pipes.scroll();
-      }
-
-      Graphics2D g2;
-      (g2 = (Graphics2D)graphics)
-         .setColor(
-            new Color(
-               (int)(127.0 * (Math.cos((double)(this.redPhase += 0.02F)) + 1.0)),
-               (int)(127.0 * (Math.cos((double)(this.greenPhase += 0.02F)) + 1.0)),
-               (int)(127.0 * (Math.sin((double)(this.bluePhase += 0.02F)) + 1.0))
-            )
-         );
+      Graphics2D g2 = (Graphics2D)graphics;
+      g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+      g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+      g2.setColor(
+         new Color(
+            (int)(127.0 * (Math.cos((double)(this.redPhase += 0.02F)) + 1.0)),
+            (int)(127.0 * (Math.cos((double)(this.greenPhase += 0.02F)) + 1.0)),
+            (int)(127.0 * (Math.sin((double)(this.bluePhase += 0.02F)) + 1.0))
+         )
+      );
       g2.setStroke(new BasicStroke((float)(Main.FRAME_WIDTH / 250)));
 
-      for (int i = 0; i < ((ArrayList)this.background.layers.get(0)).size(); i++) {
-         g2.drawImage(this.background.backgroundImage, (int)((Position)((ArrayList)this.background.layers.get(0)).get(i)).x, (int)((Position)((ArrayList)this.background.layers.get(0)).get(i)).y, null);
+      for (Position tile : this.background.layers.get(0)) {
+         g2.drawImage(this.background.backgroundImage, (int)tile.x, (int)tile.y, null);
          if (this.debugMode) {
-            g2.drawRect(
-               (int)((Position)((ArrayList)this.background.layers.get(0)).get(i)).x,
-               (int)((Position)((ArrayList)this.background.layers.get(0)).get(i)).y,
-               this.background.backgroundImage.getWidth(null),
-               this.background.backgroundImage.getHeight(null)
-            );
+            g2.drawRect((int)tile.x, (int)tile.y, this.background.backgroundImage.getWidth(null), this.background.backgroundImage.getHeight(null));
          }
       }
 
-      int firstRenderedPipe = Pipes.currentPipeIndex < 2 ? Pipes.currentPipeIndex - 1 : (Pipes.currentPipeIndex < 4 ? Pipes.currentPipeIndex - 3 : Pipes.currentPipeIndex - 5);
-      int lastRenderedPipe = Pipes.currentPipeIndex + 5;
-
-      for (int pipeIndex = firstRenderedPipe; pipeIndex < lastRenderedPipe; pipeIndex++) {
-         if (pipeIndex % 2 == 0) {
-            g2.drawImage(this.pipes.topPipeImage, (int)((Position)this.pipes.positions.get(pipeIndex)).x, (int)((Position)this.pipes.positions.get(pipeIndex)).y, null);
-            if (this.debugMode) {
-               g2.drawRect((int)((Position)this.pipes.positions.get(pipeIndex)).x, (int)((Position)this.pipes.positions.get(pipeIndex)).y, this.pipes.topPipeImage.getWidth(null), this.pipes.topPipeImage.getHeight(null));
-            }
-         } else {
-            g2.drawImage(this.pipes.bottomPipeImage, (int)((Position)this.pipes.positions.get(pipeIndex)).x, (int)((Position)this.pipes.positions.get(pipeIndex)).y, null);
-            if (this.debugMode) {
-               g2.drawRect((int)((Position)this.pipes.positions.get(pipeIndex)).x, (int)((Position)this.pipes.positions.get(pipeIndex)).y, this.pipes.bottomPipeImage.getWidth(null), this.pipes.bottomPipeImage.getHeight(null));
-            }
+      for (int pipeIndex = 0; pipeIndex < this.pipes.positions.size(); pipeIndex++) {
+         Position pipe = this.pipes.positions.get(pipeIndex);
+         Image image = pipeIndex % 2 == 0 ? this.pipes.topPipeImage : this.pipes.bottomPipeImage;
+         g2.drawImage(image, (int)pipe.x, (int)pipe.y, null);
+         if (this.debugMode) {
+            g2.drawRect((int)pipe.x, (int)pipe.y, image.getWidth(null), image.getHeight(null));
          }
       }
 
-      for (int i = 0; i < ((ArrayList)this.background.layers.get(1)).size(); i++) {
-         g2.drawImage(this.background.groundImage, (int)((Position)((ArrayList)this.background.layers.get(1)).get(i)).x, (int)((Position)((ArrayList)this.background.layers.get(1)).get(i)).y, null);
+      for (Position tile : this.background.layers.get(1)) {
+         g2.drawImage(this.background.groundImage, (int)tile.x, (int)tile.y, null);
          if (this.debugMode) {
             g2.drawRect(0, Main.FRAME_HEIGHT * 7 / 8, Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8);
          }
@@ -132,38 +162,37 @@ public final class GamePanel extends JPanel implements KeyListener {
          g2.drawRect((int)this.bird.position.collisionX, (int)this.bird.position.collisionY, this.bird.image.getWidth(null), this.bird.image.getHeight(null));
       }
 
-      if (!this.hitsPipe() && !(this.bird.position.collisionY + (float)Bird.HEIGHT > (float)Background.groundY)) {
-         this.collided = false;
-      } else {
-         this.collided = true;
-      }
-
-      if (this.collided) {
-         if (this.debugMode) {
-            g2.setColor(new Color(255, 0, 0));
-            g2.setFont(new Font("Times New Roman", 1, Main.FRAME_HEIGHT / 10));
-            g2.drawString("COLISION", Main.FRAME_WIDTH / 2, (Main.FRAME_HEIGHT << 1) / 10);
-         } else {
-            this.reset();
-         }
+      if (this.collided && this.debugMode) {
+         g2.setColor(new Color(255, 0, 0));
+         g2.setFont(new Font("Times New Roman", 1, Main.FRAME_HEIGHT / 10));
+         g2.drawString("COLISION", Main.FRAME_WIDTH / 2, (Main.FRAME_HEIGHT << 1) / 10);
       }
 
       g2.setColor(new Color(0, 0, 255));
       g2.setFont(new Font("Times New Roman", 1, Main.FRAME_HEIGHT / 10));
-      int score = (Pipes.currentPipeIndex - 1) / 2 - 1;
-      g2.drawString(String.valueOf(score), Main.FRAME_WIDTH / 2, Main.FRAME_HEIGHT / 10);
+      g2.drawString(String.valueOf(this.score()), Main.FRAME_WIDTH / 2, Main.FRAME_HEIGHT / 10);
+
+      if (this.state == READY) {
+         this.drawBanner(g2, "Flappy Bird", "Press Space to start", "Best: " + this.highScore);
+      } else if (this.state == GAME_OVER) {
+         this.drawBanner(g2, "Game Over", "Score: " + this.score() + "   Best: " + this.highScore, "Press Space to play again");
+      } else if (this.paused) {
+         this.drawBanner(g2, "Paused", "Press P to resume", "");
+      }
+
       if (this.debugMode) {
          g2.setColor(new Color(0, 0, 0));
          g2.setFont(new Font("Times New Roman", 1, this.consoleFontSize));
+         Position nextPipe = this.pipes.positions.get(0);
          String[] debugLines = new String[]{
             "bird x: " + this.bird.position.collisionX,
             "bird y: " + this.bird.position.collisionY,
-            "current pipe x: " + ((Position)this.pipes.positions.get(Pipes.currentPipeIndex)).collisionX,
-            "current pipe y: " + ((Position)this.pipes.positions.get(Pipes.currentPipeIndex)).collisionY,
-            "paused: " + !this.running,
+            "next pipe x: " + nextPipe.collisionX,
+            "next pipe y: " + nextPipe.collisionY,
+            "paused: " + this.paused,
             "colision: " + this.collided,
             "consoleFontSize: " + this.consoleFontSize,
-            "rendered pipes: " + firstRenderedPipe + " - " + lastRenderedPipe,
+            "rendered pipes: " + this.pipes.positions.size(),
             ""
          };
 
@@ -173,10 +202,45 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
    }
 
+   /** A title and two lines of text centered on the screen. */
+   private void drawBanner(Graphics2D g2, String title, String line1, String line2) {
+      int big = Main.FRAME_HEIGHT / 8;
+      int small = Main.FRAME_HEIGHT / 20;
+      int centerY = Main.FRAME_HEIGHT * 2 / 5;
+      g2.setColor(new Color(0, 0, 0, 120));
+      g2.fillRect(0, centerY - big - small, Main.FRAME_WIDTH, big + small * 4);
+      g2.setColor(new Color(255, 255, 255));
+      g2.setFont(new Font("Times New Roman", 1, big));
+      g2.drawString(title, (Main.FRAME_WIDTH - g2.getFontMetrics().stringWidth(title)) / 2, centerY);
+      g2.setFont(new Font("Times New Roman", 1, small));
+      g2.drawString(line1, (Main.FRAME_WIDTH - g2.getFontMetrics().stringWidth(line1)) / 2, centerY + small * 3 / 2);
+      g2.drawString(line2, (Main.FRAME_WIDTH - g2.getFontMetrics().stringWidth(line2)) / 2, centerY + small * 3);
+   }
+
    private void reset() {
-      this.background = new Background((Image)this.images.get(0), (Image)this.images.get(1));
-      this.pipes = new Pipes((Image)this.images.get(2), (Image)this.images.get(3));
-      this.bird = new Bird((Image)this.images.get(4));
+      this.background = new Background(this.images.get(0), this.images.get(1));
+      this.pipes = new Pipes(this.images.get(2), this.images.get(3));
+      this.bird = new Bird(this.images.get(4));
+      this.bird.position.set(new Position(this.bird.position.collisionX, (float)(Main.FRAME_HEIGHT / 3)));
+      this.collided = false;
+      this.paused = false;
+      this.state = READY;
+   }
+
+   private static int loadHighScore() {
+      try (BufferedReader reader = new BufferedReader(new FileReader(HIGH_SCORE_FILE))) {
+         return Integer.parseInt(reader.readLine().trim());
+      } catch (IOException | RuntimeException e) {
+         return 0;
+      }
+   }
+
+   private static void saveHighScore(int score) {
+      try (FileWriter writer = new FileWriter(HIGH_SCORE_FILE)) {
+         writer.write(String.valueOf(score));
+      } catch (IOException e) {
+         System.err.println("Could not save the high score: " + e.getMessage());
+      }
    }
 
    @Override
@@ -186,41 +250,40 @@ public final class GamePanel extends JPanel implements KeyListener {
    @Override
    public final void keyPressed(KeyEvent event) {
       switch (event.getKeyCode()) {
-         case 32:
-            this.bird.flap();
+         case KeyEvent.VK_SPACE:
+            if (this.state == GAME_OVER) {
+               this.reset();
+            } else if (!this.paused) {
+               this.state = PLAYING;
+               this.bird.flap();
+            }
             return;
-         case 38:
+         case KeyEvent.VK_UP:
             this.consoleFontSize += 5;
             return;
-         case 40:
-            this.consoleFontSize -= 5;
+         case KeyEvent.VK_DOWN:
+            this.consoleFontSize = Math.max(5, this.consoleFontSize - 5);
             return;
-         case 68:
+         case KeyEvent.VK_D:
             this.debugMode = !this.debugMode;
             return;
-         case 80:
-            this.running = !this.running;
+         case KeyEvent.VK_P:
+            if (this.state == PLAYING) {
+               this.paused = !this.paused;
+            }
             return;
-         case 82:
+         case KeyEvent.VK_R:
             this.reset();
             return;
-         case 84:
-            GamePanel panel = this;
-            Image firstImage = (Image)this.images.get(0);
+         case KeyEvent.VK_T:
+            Image firstImage = this.images.get(0);
 
-            for (int i = 0; i < panel.images.size() - 1; i++) {
-               panel.images
-                  .set(
-                     i,
-                     ((Image)panel.images.get(i + 1)).getScaledInstance(((Image)panel.images.get(i)).getWidth(null), ((Image)panel.images.get(i)).getHeight(null), 4)
-                  );
+            for (int i = 0; i < this.images.size() - 1; i++) {
+               this.images.set(i, this.images.get(i + 1).getScaledInstance(this.images.get(i).getWidth(null), this.images.get(i).getHeight(null), 4));
             }
 
-            panel.images
-               .set(
-                  panel.images.size() - 1,
-                  firstImage.getScaledInstance(((Image)panel.images.get(panel.images.size() - 1)).getWidth(null), ((Image)panel.images.get(panel.images.size() - 1)).getHeight(null), 4)
-               );
+            int last = this.images.size() - 1;
+            this.images.set(last, firstImage.getScaledInstance(this.images.get(last).getWidth(null), this.images.get(last).getHeight(null), 4));
             System.out.println("test");
       }
    }

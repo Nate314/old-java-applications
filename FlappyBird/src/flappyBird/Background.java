@@ -2,19 +2,20 @@ package flappyBird;
 
 import java.awt.Image;
 import java.util.ArrayList;
+import java.util.List;
 
 public final class Background {
    public static int groundY = Main.FRAME_HEIGHT * 7 / 8;
    public Image backgroundImage;
    public Image groundImage;
-   public ArrayList layers = new ArrayList();
-   private float backgroundSpeed = (float)(Main.FRAME_WIDTH / 1000);
+   public List<List<Position>> layers = new ArrayList<>();
+   private float backgroundSpeed = Main.FRAME_WIDTH / 1000.0F;
 
    public Background(Image backgroundImage, Image groundImage) {
       this.backgroundImage = backgroundImage;
       this.groundImage = groundImage;
-      ArrayList backgroundTiles = new ArrayList();
-      ArrayList groundTiles = new ArrayList();
+      List<Position> backgroundTiles = new ArrayList<>();
+      List<Position> groundTiles = new ArrayList<>();
       backgroundTiles.add(new Position(0.0F, 0.0F));
       backgroundTiles.add(new Position((float)Main.FRAME_WIDTH, 0.0F));
       groundTiles.add(new Position(0.0F, (float)groundY));
@@ -25,18 +26,18 @@ public final class Background {
    }
 
    public final void scroll() {
-      for (int i = 0; i < ((ArrayList)this.layers.get(0)).size(); i++) {
-         ((Position)((ArrayList)this.layers.get(0)).get(i)).set(new Position(((Position)((ArrayList)this.layers.get(0)).get(i)).x - this.backgroundSpeed, ((Position)((ArrayList)this.layers.get(0)).get(i)).y));
-         if (((Position)((ArrayList)this.layers.get(0)).get(i)).x + (float)Main.FRAME_WIDTH == 0.0F) {
-            ((Position)((ArrayList)this.layers.get(0)).get(i)).set(new Position((float)Main.FRAME_WIDTH, 0.0F));
-         }
-      }
+      scrollLayer(this.layers.get(0), this.backgroundSpeed);
+      scrollLayer(this.layers.get(1), Pipes.scrollSpeed);
+   }
 
-      for (int i = 0; i < ((ArrayList)this.layers.get(1)).size(); i++) {
-         ((Position)((ArrayList)this.layers.get(1)).get(i)).set(new Position(((Position)((ArrayList)this.layers.get(1)).get(i)).x - Pipes.scrollSpeed, ((Position)((ArrayList)this.layers.get(1)).get(i)).y));
-         if (((Position)((ArrayList)this.layers.get(1)).get(i)).x + (float)Main.FRAME_WIDTH == 0.0F) {
-            ((Position)((ArrayList)this.layers.get(1)).get(i)).set(new Position((float)Main.FRAME_WIDTH, (float)groundY));
+   /** Moves each tile left; a tile that has fully left the screen jumps behind the other one. */
+   private static void scrollLayer(List<Position> tiles, float speed) {
+      for (Position tile : tiles) {
+         float x = tile.x - speed;
+         if (x <= (float)(-Main.FRAME_WIDTH)) {
+            x += (float)(Main.FRAME_WIDTH * tiles.size());
          }
+         tile.set(new Position(x, tile.y));
       }
    }
 }
