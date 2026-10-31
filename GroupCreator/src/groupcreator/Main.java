@@ -1,5 +1,9 @@
 package groupcreator;
 
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedWriter;
@@ -8,16 +12,22 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 
 public class Main extends JFrame {
+   private static final int FRAME_WIDTH = 375;
+   private static final int FRAME_HEIGHT = 140;
+   private static final int LINE_HEIGHT = 18;
+
    public Main(Boolean visibility) {
-      this.setVisible(visibility);
       this.setDefaultCloseOperation(3);
       this.setTitle("Group Creator");
       this.setResizable(false);
@@ -35,20 +45,28 @@ public class Main extends JFrame {
       final JTextField maxTextField = new JTextField("3");
       maxTextField.setColumns(6);
       JButton button = new JButton("OK");
-      final JFrame frame = this;
+      final ResultsPanel results = new ResultsPanel();
       button.addActionListener(
          new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-               System.out.println(frame.getWidth() + ", " + frame.getHeight());
-
-               try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("output.txt"), "utf-8"))) {
-                  writer.write(
-                     Main.this.generateString(textField.getText(), Integer.parseInt(minTextField.getText()), Integer.parseInt(maxTextField.getText()))
-                  );
+               List<String> lines;
+               try {
+                  int min = Integer.parseInt(minTextField.getText().trim());
+                  int max = Integer.parseInt(maxTextField.getText().trim());
+                  lines = GroupMaker.describe(GroupMaker.makeGroups(textField.getText(), min, max, new Random()));
+                  Main.writeOutput(lines);
+               } catch (NumberFormatException ex) {
+                  lines = Collections.singletonList("min and max must be whole numbers.");
+               } catch (IllegalArgumentException ex) {
+                  lines = Collections.singletonList(ex.getMessage());
                } catch (IOException ex) {
-                  ex.printStackTrace();
+                  lines = Collections.singletonList("Could not write output.txt: " + ex.getMessage());
                }
+               results.setLines(lines);
+               Main.this.setSize(FRAME_WIDTH, FRAME_HEIGHT + 4 + lines.size() * LINE_HEIGHT);
+               Main.this.revalidate();
+               Main.this.repaint();
             }
          }
       );
@@ -60,55 +78,44 @@ public class Main extends JFrame {
       panel.add(maxLabel);
       panel.add(maxTextField);
       panel.add(button);
+      panel.add(results);
       this.add(panel);
-      this.setSize(375, 130);
+      this.setSize(FRAME_WIDTH, FRAME_HEIGHT);
+      this.setVisible(visibility);
    }
 
-   private String[] shuffle(String[] array) {
-      for (int i = 0; i < array.length; i++) {
-         int index = (int)(Math.random() * (double)array.length);
-         index = index == array.length ? array.length - 1 : index;
-         String temp = array[i];
-         array[i] = array[index];
-         array[index] = temp;
+   private static void writeOutput(List<String> lines) throws IOException {
+      try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("output.txt"), "utf-8"))) {
+         writer.write(String.join("\r\n", lines) + "\r\n");
+      }
+   }
+
+   /** Paints one line per group under the inputs. */
+   private static class ResultsPanel extends JPanel {
+      private List<String> lines = new ArrayList<>();
+
+      ResultsPanel() {
+         this.setPreferredSize(new Dimension(FRAME_WIDTH - 25, 0));
       }
 
-      return array;
-   }
+      void setLines(List<String> lines) {
+         this.lines = lines;
+         this.setPreferredSize(new Dimension(FRAME_WIDTH - 25, lines.size() * LINE_HEIGHT));
+      }
 
-   private String generateString(String list, int min, int max) {
-      String[] names = list.split(",");
-      names = this.shuffle(names);
-      int range = max - min;
-      int accounted = 0;
-      ArrayList<Integer> numbers = new ArrayList<>();
-
-      while (true) {
-         int randomInt = (int)(new Random().nextDouble() * (double)range) + min;
-         if (accounted + randomInt > names.length) {
-            numbers.add(names.length - accounted);
-            randomInt = 0;
-            String resault = "";
-
-            for (int i = 0; i < numbers.size(); i++) {
-               resault = resault + "\r\nGroup" + i + " --- ";
-
-               for (int j = 0; j < numbers.get(i); j++) {
-                  resault = resault + names[randomInt] + ", ";
-                  randomInt++;
-               }
-            }
-
-            System.out.println(resault);
-            return resault;
+      @Override
+      protected void paintComponent(Graphics g) {
+         super.paintComponent(g);
+         Graphics2D g2 = (Graphics2D)g;
+         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+         // shortcut: lines wider than the window are cut off, wrap them if long groups become common.
+         for (int i = 0; i < this.lines.size(); i++) {
+            g2.drawString(this.lines.get(i), 0, (i + 1) * LINE_HEIGHT - 5);
          }
-
-         numbers.add(randomInt);
-         accounted += randomInt;
       }
    }
 
    public static void main(String[] args) {
-      new Main(true);
+      SwingUtilities.invokeLater(() -> new Main(true));
    }
 }
