@@ -1,67 +1,32 @@
 package audiobibledownloader;
 
-import java.io.BufferedInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
 import java.net.URLConnection;
-import javax.swing.JOptionPane;
+import java.nio.charset.StandardCharsets;
 
 public class WebpageDownloader {
-   public String readHtmlPage(String urlString) {
-      StringBuilder parsedContentFromUrl = new StringBuilder();
-
-      try {
-         try {
-            URL url = new URL(urlString);
-            URLConnection uc = url.openConnection();
-            uc.connect();
-            uc = url.openConnection();
-            uc.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");
-            uc.getInputStream();
-            BufferedInputStream in = new BufferedInputStream(uc.getInputStream());
-
-            int ch;
-            while ((ch = in.read()) != -1) {
-               parsedContentFromUrl.append((char)ch);
-            }
-         } catch (FileNotFoundException ex) {
-            JOptionPane.showConfirmDialog(null, DownloadManager.book + " " + DownloadManager.currentChapter + " does not exist!\nTry again", "Press OK", 2, 1);
-            Main.percentage = 100;
-            Main.progressBar.repaint();
-         }
-      } catch (MalformedURLException ex) {
-         ex.printStackTrace();
-      } catch (IOException ex) {
-         ex.printStackTrace();
+   /** Reads a page as UTF-8. A missing page (404) throws FileNotFoundException. */
+   public String readHtmlPage(String urlString) throws IOException {
+      try (InputStream in = open(urlString)) {
+         return new String(in.readAllBytes(), StandardCharsets.UTF_8);
       }
-
-      return parsedContentFromUrl.toString();
    }
 
-   public void downloadWebpage(String filename, String urlString) throws MalformedURLException, IOException {
-      BufferedInputStream in = null;
-      FileOutputStream fout = null;
-
-      try {
-         in = new BufferedInputStream(new URL(urlString).openStream());
-         fout = new FileOutputStream(filename);
-         byte[] data = new byte[1024];
-
-         int count;
-         while ((count = in.read(data, 0, 1024)) != -1) {
-            fout.write(data, 0, count);
-         }
-      } finally {
-         if (in != null) {
-            in.close();
-         }
-
-         if (fout != null) {
-            fout.close();
-         }
+   public void downloadWebpage(String filename, String urlString) throws IOException {
+      try (InputStream in = open(urlString); OutputStream fout = new FileOutputStream(filename)) {
+         in.transferTo(fout);
       }
+   }
+
+   private static InputStream open(String urlString) throws IOException {
+      URLConnection connection = URI.create(urlString).toURL().openConnection();
+      connection.setConnectTimeout(10000);
+      connection.setReadTimeout(30000);
+      connection.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");
+      return connection.getInputStream();
    }
 }
