@@ -6,29 +6,29 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 public class Main extends JFrame {
-   JPanel i = new a(this);
-   public int a;
-   public int b;
-   public int c;
-   public int d;
-   public int e;
-   public int f;
-   public int g;
-   public String h;
-   String[] j = new String[]{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+   JPanel clockPanel = new ClockPanel(this);
+   public int month;
+   public int dayOfMonth;
+   public int dayOfWeek;
+   public int year;
+   public int hours;
+   public int minutes;
+   public int seconds;
+   public String timeText;
+   String[] dayNames = new String[]{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
-   private Main(Boolean var1) {
+   private Main(Boolean visible) {
       this.setDefaultCloseOperation(3);
-      this.setVisible(var1);
+      this.setVisible(visible);
       this.setTitle("Clock");
-      Timer var2;
-      (var2 = new Timer(1000, new b(this))).setRepeats(true);
-      var2.start();
-      this.add(this.i);
+      Timer timer;
+      (timer = new Timer(1000, new ClockTicker(this))).setRepeats(true);
+      timer.start();
+      this.add(this.clockPanel);
       this.setSize(Toolkit.getDefaultToolkit().getScreenSize().width / 4, Toolkit.getDefaultToolkit().getScreenSize().width / 4);
    }
 
-   public static void main(String[] var0) {
+   public static void main(String[] args) {
       new Main(true);
    }
 }

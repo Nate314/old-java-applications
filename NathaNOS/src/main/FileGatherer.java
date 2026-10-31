@@ -39,8 +39,8 @@ public class FileGatherer {
       try {
          URL[] urls = new URL[]{new URL("file:///" + new File("").getAbsolutePath() + "/assets/Clock1.0.jar")};
          return (JFrame)URLClassLoader.newInstance(urls).loadClass("clock.Main").getConstructor(Boolean.class).newInstance(false);
-      } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException | ClassNotFoundException | IOException | InstantiationException var3) {
-         var3.printStackTrace();
+      } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException | ClassNotFoundException | IOException | InstantiationException exception) {
+         exception.printStackTrace();
          return null;
       }
    }
@@ -56,8 +56,8 @@ public class FileGatherer {
          }
 
          return frameArray;
-      } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException | ClassNotFoundException | IOException | InstantiationException var4) {
-         var4.printStackTrace();
+      } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException | ClassNotFoundException | IOException | InstantiationException exception) {
+         exception.printStackTrace();
          return null;
       }
    }
@@ -73,8 +73,8 @@ public class FileGatherer {
          }
 
          return frameArray;
-      } catch (SecurityException | ClassNotFoundException | IOException | IllegalArgumentException var4) {
-         var4.printStackTrace();
+      } catch (SecurityException | ClassNotFoundException | IOException | IllegalArgumentException exception) {
+         exception.printStackTrace();
          return null;
       }
    }

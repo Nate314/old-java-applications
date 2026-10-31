@@ -38,8 +38,8 @@ public class Main extends JFrame {
 
       try {
          this.desktopPane.getAllFrames()[0].setSelected(true);
-      } catch (PropertyVetoException var3) {
-         var3.printStackTrace();
+      } catch (PropertyVetoException exception) {
+         exception.printStackTrace();
       }
    }
 

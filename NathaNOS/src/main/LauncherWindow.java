@@ -92,8 +92,8 @@ public class LauncherWindow extends JInternalFrame implements ActionListener {
 
       try {
          this.screen.desktopPane.getAllFrames()[this.screen.desktopPane.getAllFrames().length - 1].setSelected(true);
-      } catch (PropertyVetoException var6) {
-         var6.printStackTrace();
+      } catch (PropertyVetoException exception) {
+         exception.printStackTrace();
       }
    }
 
@@ -113,9 +113,9 @@ public class LauncherWindow extends JInternalFrame implements ActionListener {
                   false,
                   new ImageIcon(this.fileGatherer.iconPaths.get(i)).getImage()
                );
-            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException | InstantiationException var4) {
+            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException | InstantiationException exception) {
                System.out.println("FFFFAAAAIIIILLL");
-               var4.printStackTrace();
+               exception.printStackTrace();
             }
          }
       }
