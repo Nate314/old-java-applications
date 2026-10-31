@@ -15,7 +15,3 @@ Presses and releases the Windows key once, then exits. It has no window. Recover
 From the repo root: `./run.ps1 Windows` (or `./run.ps1 Windows -Build` to build a jar).
 
 It presses the Windows key via `java.awt.Robot` immediately on start, then exits.
-
-## Known quirks
-
-- Creates an extra `Robot` it never uses, and an unused `windowsKeyCode` variable.
