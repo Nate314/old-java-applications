@@ -5,28 +5,28 @@ An UltimateTicTacToe game written in Java for two players on one screen. Nine sm
 ## Controls / usage
 
 - **Click a cell** to place a mark. X moves first, then players alternate.
-- The first move can be on any board. After that you must play on the board matching the cell your opponent just picked; it is highlighted yellow.
-- A small board won by X turns cyan; one won by O turns pink.
+- The first move can be on any board. After that you must play on the board matching the cell your opponent just picked. The boards you may play on are highlighted yellow.
+- A small board won by X turns cyan; one won by O turns pink; a drawn (full) board turns gray. Finished boards are closed. If you are sent to a finished board, you may play on any open board.
+- Win three small boards in a row to win the game. The title bar shows whose turn it is and the result; click any cell after the game ends to start a new one.
 - No keyboard controls or command-line arguments. The window is about 3/4 of the screen height square and not resizable.
 
 ## Code layout
 
 - `src/ultimateticktacktoe/Main.java`: entry point; creates the `GameFrame`.
-- `src/ultimateticktacktoe/GameFrame.java`: the window; holds the nine boards, whose turn it is and the active board.
-- `src/ultimateticktacktoe/SmallBoard.java`: one 3x3 board; lays out its cells and checks for a win or draw.
-- `src/ultimateticktacktoe/CellButton.java`: one cell; enforces the active board, places X or O, moves the highlight and colors won boards.
+- `src/ultimateticktacktoe/GameFrame.java`: the window; holds the nine boards and the game state, and recolors the cells after each move.
+- `src/ultimateticktacktoe/GameState.java`: the rules: marks, small board results, the active board, whose turn it is and the overall winner.
+- `src/ultimateticktacktoe/SmallBoard.java`: one 3x3 board; lays out its cells.
+- `src/ultimateticktacktoe/CellButton.java`: one cell; forwards clicks to the game and shows its mark.
 
 ## Running
 
 From the repo root: `./run.ps1 UltimateTicTacToe` (or `./run.ps1 UltimateTicTacToe -Build` to build a jar).
 
-## Known quirks
+## Self-check
 
-- There is no overall winner. `GameFrame.checkWinner()` checks only the top-left cell of each small board, and its result is ignored.
-- Only the first move is free. If you are sent to a full board there is no legal move and the game is stuck.
-- Won boards can still be played on.
-- A small board draw is detected but not acted on.
-- `SmallBoard.checkWinner()` resets its stored winner to "none" on the call after a win, so it does not remember a result.
-- `backgroundColor != new Color(0, 255, 0)` in `CellButton` compares object references, so it is always true.
-- Unused: `SmallBoard.unusedFlag`, and the initial `activeBoard = 2` (overridden by the free first move).
-- The window title is "AWT Ultimate Tick Tack Toe" although it uses Swing.
+`test/ultimateticktacktoe/GameStateCheck.java` checks small board wins and draws, the send-to-board rule and the overall winner. From `UltimateTicTacToe/`:
+
+```
+javac -d ../out/check/UltimateTicTacToe src/ultimateticktacktoe/*.java test/ultimateticktacktoe/*.java
+java -ea -cp ../out/check/UltimateTicTacToe ultimateticktacktoe.GameStateCheck
+```
