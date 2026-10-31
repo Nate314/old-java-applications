@@ -1,178 +1,111 @@
 package minesweeper;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+/** Builds a board of "b" (mine), " " (blank) or a neighbor count, and computes flood reveals. */
 public final class MineFieldGenerator {
-   private int mineCount;
-   private String[][] grid;
+   private final int mineCount;
+   private final String[][] grid;
 
-   public MineFieldGenerator(int rows, int columns) {
-      this.mineCount = (int)((double)columns * 1.25);
+   /** Places mines at random, keeping the safe cell and its neighbors mine-free so the first click opens an area. */
+   public MineFieldGenerator(int rows, int columns, int mineCount, int safeRow, int safeColumn, Random random) {
       this.grid = new String[rows][columns];
-      String[][] cells = new String[rows][columns];
-      int[] minePositions = new int[this.mineCount];
-      int lastRow = rows - 1;
-      int lastColumn = columns - 1;
-
-      for (int mineIndex = 0; mineIndex < this.mineCount; mineIndex++) {
-         System.out.println(rows);
-         minePositions[mineIndex] = (int)(Math.random() * (double)(rows * columns));
-      }
-
-      for (int cellIndex = 0; cellIndex < rows * columns - 1; cellIndex++) {
-         for (int mineIndex = 0; mineIndex < this.mineCount; mineIndex++) {
-            if (cellIndex == minePositions[mineIndex]) {
-               cells[cellIndex / rows][cellIndex % rows] = "b";
+      List<Integer> candidates = new ArrayList<>();
+      for (int row = 0; row < rows; row++) {
+         for (int column = 0; column < columns; column++) {
+            this.grid[row][column] = " ";
+            if (Math.abs(row - safeRow) > 1 || Math.abs(column - safeColumn) > 1) {
+               candidates.add(row * columns + column);
             }
          }
+      }
 
-         if (cells[cellIndex / rows][cellIndex % rows] != "b") {
-            cells[cellIndex / rows][cellIndex % rows] = " ";
-         }
+      this.mineCount = Math.min(mineCount, candidates.size());
+      for (int mineIndex = 0; mineIndex < this.mineCount; mineIndex++) {
+         int cell = candidates.remove(random.nextInt(candidates.size()));
+         this.grid[cell / columns][cell % columns] = "b";
       }
 
       for (int row = 0; row < rows; row++) {
          for (int column = 0; column < columns; column++) {
-            if (cells[row][column] == "b") {
-               cells[row][column] = "b";
-               if (row == 0 && column == 0) {
-                  cells[row][column + 1] = cells[row][column + 1] == " "
-                     ? "1"
-                     : (cells[row][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column + 1]) + 1));
-                  cells[row + 1][column + 1] = cells[row + 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column + 1]) + 1));
-                  cells[row + 1][column] = cells[row + 1][column] == " "
-                     ? "1"
-                     : (cells[row + 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column]) + 1));
-               } else if (row == 0 && column == lastColumn) {
-                  cells[row + 1][column] = cells[row + 1][column] == " "
-                     ? "1"
-                     : (cells[row + 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column]) + 1));
-                  cells[row + 1][column - 1] = cells[row + 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column - 1]) + 1));
-                  cells[row][column - 1] = cells[row][column - 1] == " "
-                     ? "1"
-                     : (cells[row][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column - 1]) + 1));
-               } else if (row == lastRow && column == lastColumn) {
-                  cells[row - 1][column] = cells[row - 1][column] == " "
-                     ? "1"
-                     : (cells[row - 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column]) + 1));
-                  cells[row][column - 1] = cells[row][column - 1] == " "
-                     ? "1"
-                     : (cells[row][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column - 1]) + 1));
-                  cells[row - 1][column - 1] = cells[row - 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column - 1]) + 1));
-               } else if (row == lastRow && column == 0) {
-                  cells[row - 1][column] = cells[row - 1][column] == " "
-                     ? "1"
-                     : (cells[row - 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column]) + 1));
-                  cells[row - 1][column + 1] = cells[row - 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column + 1]) + 1));
-                  cells[row][column + 1] = cells[row][column + 1] == " "
-                     ? "1"
-                     : (cells[row][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column + 1]) + 1));
-               } else if (row == 0 && column != 0 && column != lastColumn) {
-                  cells[row][column + 1] = cells[row][column + 1] == " "
-                     ? "1"
-                     : (cells[row][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column + 1]) + 1));
-                  cells[row + 1][column + 1] = cells[row + 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column + 1]) + 1));
-                  cells[row + 1][column] = cells[row + 1][column] == " "
-                     ? "1"
-                     : (cells[row + 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column]) + 1));
-                  cells[row + 1][column - 1] = cells[row + 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column - 1]) + 1));
-                  cells[row][column - 1] = cells[row][column - 1] == " "
-                     ? "1"
-                     : (cells[row][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column - 1]) + 1));
-               } else if (column == lastColumn && row != 0 && row != lastRow) {
-                  cells[row - 1][column] = cells[row - 1][column] == " "
-                     ? "1"
-                     : (cells[row - 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column]) + 1));
-                  cells[row + 1][column] = cells[row + 1][column] == " "
-                     ? "1"
-                     : (cells[row + 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column]) + 1));
-                  cells[row + 1][column - 1] = cells[row + 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column - 1]) + 1));
-                  cells[row][column - 1] = cells[row][column - 1] == " "
-                     ? "1"
-                     : (cells[row][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column - 1]) + 1));
-                  cells[row - 1][column - 1] = cells[row - 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column - 1]) + 1));
-               } else if (row == lastRow && column != 0 && column != lastColumn) {
-                  cells[row - 1][column] = cells[row - 1][column] == " "
-                     ? "1"
-                     : (cells[row - 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column]) + 1));
-                  cells[row - 1][column + 1] = cells[row - 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column + 1]) + 1));
-                  cells[row][column + 1] = cells[row][column + 1] == " "
-                     ? "1"
-                     : (cells[row][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column + 1]) + 1));
-                  cells[row][column - 1] = cells[row][column - 1] == " "
-                     ? "1"
-                     : (cells[row][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column - 1]) + 1));
-                  cells[row - 1][column - 1] = cells[row - 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column - 1]) + 1));
-               } else if (column == 0 && row != 0 && row != lastRow) {
-                  cells[row - 1][column] = cells[row - 1][column] == " "
-                     ? "1"
-                     : (cells[row - 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column]) + 1));
-                  cells[row - 1][column + 1] = cells[row - 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column + 1]) + 1));
-                  cells[row][column + 1] = cells[row][column + 1] == " "
-                     ? "1"
-                     : (cells[row][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column + 1]) + 1));
-                  cells[row + 1][column + 1] = cells[row + 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column + 1]) + 1));
-                  cells[row + 1][column] = cells[row + 1][column] == " "
-                     ? "1"
-                     : (cells[row + 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column]) + 1));
-               } else {
-                  cells[row - 1][column] = cells[row - 1][column] == " "
-                     ? "1"
-                     : (cells[row - 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column]) + 1));
-                  cells[row - 1][column + 1] = cells[row - 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column + 1]) + 1));
-                  cells[row][column + 1] = cells[row][column + 1] == " "
-                     ? "1"
-                     : (cells[row][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column + 1]) + 1));
-                  cells[row + 1][column + 1] = cells[row + 1][column + 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column + 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column + 1]) + 1));
-                  cells[row + 1][column] = cells[row + 1][column] == " "
-                     ? "1"
-                     : (cells[row + 1][column] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column]) + 1));
-                  cells[row + 1][column - 1] = cells[row + 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row + 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row + 1][column - 1]) + 1));
-                  cells[row][column - 1] = cells[row][column - 1] == " "
-                     ? "1"
-                     : (cells[row][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row][column - 1]) + 1));
-                  cells[row - 1][column - 1] = cells[row - 1][column - 1] == " "
-                     ? "1"
-                     : (cells[row - 1][column - 1] == "b" ? "b" : "" + (Integer.parseInt(cells[row - 1][column - 1]) + 1));
+            if (!isMine(this.grid, row, column)) {
+               int nearby = 0;
+               for (int[] neighbor : neighbors(rows, columns, row, column)) {
+                  if (isMine(this.grid, neighbor[0], neighbor[1])) {
+                     nearby++;
+                  }
                }
-            } else if (cells[row][column] == " ") {
-               cells[row][column] = " ";
+               this.grid[row][column] = nearby == 0 ? " " : String.valueOf(nearby);
             }
          }
       }
-
-      this.grid = cells;
    }
 
    public final String[][] getGrid() {
       return this.grid;
+   }
+
+   public final int getMineCount() {
+      return this.mineCount;
+   }
+
+   public static boolean isMine(String[][] grid, int row, int column) {
+      return "b".equals(grid[row][column]);
+   }
+
+   /** The up to 8 in-bounds cells around (row, column), not including the cell itself. */
+   public static List<int[]> neighbors(int rows, int columns, int row, int column) {
+      List<int[]> result = new ArrayList<>();
+      for (int dr = -1; dr <= 1; dr++) {
+         for (int dc = -1; dc <= 1; dc++) {
+            int r = row + dr;
+            int c = column + dc;
+            if ((dr != 0 || dc != 0) && r >= 0 && r < rows && c >= 0 && c < columns) {
+               result.add(new int[]{r, c});
+            }
+         }
+      }
+      return result;
+   }
+
+   /**
+    * Marks (row, column) revealed and, if it is blank, every connected blank cell and the numbered cells bordering them.
+    * Cells in {@code blocked} (flagged tiles) are skipped. Returns the newly revealed cells in reveal order.
+    */
+   public static List<int[]> reveal(String[][] grid, boolean[][] revealed, boolean[][] blocked, int row, int column) {
+      List<int[]> newlyRevealed = new ArrayList<>();
+      ArrayDeque<int[]> queue = new ArrayDeque<>();
+      if (!revealed[row][column]) {
+         revealed[row][column] = true;
+         queue.add(new int[]{row, column});
+      }
+      while (!queue.isEmpty()) {
+         int[] cell = queue.poll();
+         newlyRevealed.add(cell);
+         if (" ".equals(grid[cell[0]][cell[1]])) {
+            for (int[] neighbor : neighbors(grid.length, grid[0].length, cell[0], cell[1])) {
+               if (!revealed[neighbor[0]][neighbor[1]] && !blocked[neighbor[0]][neighbor[1]]) {
+                  revealed[neighbor[0]][neighbor[1]] = true;
+                  queue.add(neighbor);
+               }
+            }
+         }
+      }
+      return newlyRevealed;
+   }
+
+   /** True when every non-mine cell is revealed. */
+   public static boolean isWon(String[][] grid, boolean[][] revealed) {
+      for (int row = 0; row < grid.length; row++) {
+         for (int column = 0; column < grid[row].length; column++) {
+            if (!isMine(grid, row, column) && !revealed[row][column]) {
+               return false;
+            }
+         }
+      }
+      return true;
    }
 }
