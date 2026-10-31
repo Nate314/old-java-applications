@@ -37,8 +37,8 @@ public class DownloadManager {
    private static void dowloadThisFile(String url, String filename) {
       try {
          new WebpageDownloader().downloadWebpage(filename, "http:" + url);
-      } catch (IOException var3) {
-         var3.printStackTrace();
+      } catch (IOException ex) {
+         ex.printStackTrace();
       }
    }
 
@@ -134,14 +134,14 @@ public class DownloadManager {
          if (!allInOne) {
             try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(book + chapter + ".html"), "utf-8"))) {
                writer.write("<html>" + text + "</html>");
-            } catch (IOException var39) {
-               var39.printStackTrace();
+            } catch (IOException ex) {
+               ex.printStackTrace();
             }
          } else if (chapter == chapter2) {
             try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(book + ".html"), "utf-8"))) {
                writer.write("<html>" + text + "</html>");
-            } catch (IOException var36) {
-               var36.printStackTrace();
+            } catch (IOException ex) {
+               ex.printStackTrace();
             }
          }
       }

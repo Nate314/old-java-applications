@@ -27,15 +27,15 @@ public class WebpageDownloader {
             while ((ch = in.read()) != -1) {
                parsedContentFromUrl.append((char)ch);
             }
-         } catch (FileNotFoundException var7) {
+         } catch (FileNotFoundException ex) {
             JOptionPane.showConfirmDialog(null, DownloadManager.book + " " + DownloadManager.currentChapter + " does not exist!\nTry again", "Press OK", 2, 1);
             Main.percentage = 100;
             Main.progressBar.repaint();
          }
-      } catch (MalformedURLException var8) {
-         var8.printStackTrace();
-      } catch (IOException var9) {
-         var9.printStackTrace();
+      } catch (MalformedURLException ex) {
+         ex.printStackTrace();
+      } catch (IOException ex) {
+         ex.printStackTrace();
       }
 
       return parsedContentFromUrl.toString();

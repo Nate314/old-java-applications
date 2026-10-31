@@ -46,8 +46,8 @@ public class Main extends JFrame {
                   writer.write(
                      Main.this.generateString(textField.getText(), Integer.parseInt(minTextField.getText()), Integer.parseInt(maxTextField.getText()))
                   );
-               } catch (IOException var13) {
-                  var13.printStackTrace();
+               } catch (IOException ex) {
+                  ex.printStackTrace();
                }
             }
          }
