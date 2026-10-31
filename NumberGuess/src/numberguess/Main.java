@@ -8,19 +8,21 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 
 @SuppressWarnings("serial")
 public class Main extends JFrame implements ActionListener {
 
+	private static final String PROMPT = "Guess a number btwn 1 and 100";
+
 	private Game game;
 	private JPanel panel = new JPanel();
 	private JButton button = new JButton("SUBMIT");
-	private JLabel label = new JLabel("Guess a number btwn 1 and 100");
+	private JLabel label = new JLabel(PROMPT);
 	private JTextField textField = new JTextField();
 
 	public Main() {
 		game = new Game();
-		this.setVisible(true);
 		this.setSize(300, 200);
 		this.setTitle("Number Guess");
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -30,16 +32,34 @@ public class Main extends JFrame implements ActionListener {
 		this.add(panel);
 		textField.setColumns(10);
 		button.addActionListener(this);
+		// Enter in the text field submits too.
+		textField.addActionListener(this);
+		this.setVisible(true);
+		textField.requestFocus();
 	}
 
 	@Override
 	public void actionPerformed(ActionEvent arg0) {
-		if (arg0.getSource() == button) {
-			label.setText(game.guess(Integer.parseInt(textField.getText())));
+		int guess;
+		try {
+			guess = Integer.parseInt(textField.getText().trim());
+		} catch (NumberFormatException e) {
+			label.setText("type a whole number from 1 to 100");
+			return;
 		}
+		String result = game.guess(guess);
+		int guesses = game.getGuesses();
+		if (result.equals("correct")) {
+			label.setText("correct in " + guesses + (guesses == 1 ? " guess" : " guesses") + "! New number picked.");
+			game = new Game();
+		} else {
+			label.setText(guess + " is " + result + " (guess " + guesses + ")");
+		}
+		textField.setText("");
+		textField.requestFocus();
 	}
 
 	public static void main(String args[]) {
-		new Main();
+		SwingUtilities.invokeLater(Main::new);
 	}
 }

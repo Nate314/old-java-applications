@@ -3,14 +3,16 @@ package numberguess;
 import java.util.Random;
 
 public class Game {
-	
+
 	private int number;
-	
+	private int guesses;
+
 	public Game() {
-		number = new Random().nextInt(100);
+		number = new Random().nextInt(100) + 1;
 	}
-	
+
 	public String guess(int guess) {
+		guesses++;
 		String result ="";
 		if(guess < number) {
 			result = "too low";
@@ -22,5 +24,9 @@ public class Game {
 			result = "correct";
 		}
 		return result;
+	}
+
+	public int getGuesses() {
+		return guesses;
 	}
 }
