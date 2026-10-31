@@ -3,6 +3,7 @@
  * - Applies the saved skin before first paint and adds the skin toggle.
  * - On an app page: preloads the files listed in <body data-files>, then calls the TeaVM main().
  * - Provides window.__shimSynth, the Web Audio voices behind javax.sound.midi.
+ * - Routes System.out to the console by line, and on pages with <body data-console> also to an output panel.
  */
 (function () {
   'use strict';
@@ -86,6 +87,20 @@
     });
   }
 
+  // ---- System.out ----
+  // TeaVM calls $rt_putStdoutCustom with raw chunks when it is defined before classes.js loads.
+  var outLine = '';
+  var outPanel = null;
+  window.$rt_putStdoutCustom = function (chunk) {
+    if (outPanel) {
+      outPanel.appendChild(document.createTextNode(chunk));
+      outPanel.scrollTop = outPanel.scrollHeight;
+    }
+    var lines = (outLine + chunk).split('\n');
+    outLine = lines.pop();
+    lines.forEach(function (line) { console.info(line); });
+  };
+
   // ---- javax.sound.midi voices ----
   var audio = null;
   var voices = {};
@@ -160,6 +175,11 @@
     var desktop = document.createElement('div');
     desktop.id = 'desktop';
     body.insertBefore(desktop, body.firstChild);
+    if (body.hasAttribute('data-console')) {
+      outPanel = document.createElement('pre');
+      outPanel.className = 'shim-console';
+      body.appendChild(outPanel);
+    }
 
     var files = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
     var args = (body.getAttribute('data-args') || '').split(/\s+/).filter(Boolean);

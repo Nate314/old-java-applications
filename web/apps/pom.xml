@@ -49,6 +49,11 @@
                 <source>${repo.dir}/StockChecker/src</source>
                 <source>${repo.dir}/SynthesizerKeyboard/src</source>
                 <source>${repo.dir}/UltimateTicTacToe/src</source>
+                <source>${repo.dir}/GroupCreator/src</source>
+                <source>${repo.dir}/MusicTheoryExpert/src</source>
+                <source>${repo.dir}/NumberGuess/src</source>
+                <source>${repo.dir}/SimpleAlgorithms/src</source>
+                <source>${repo.dir}/TankGame/src</source>
               </sources>
             </configuration>
           </execution>
@@ -179,6 +184,46 @@
             <configuration>
               <mainClass>ultimateticktacktoe.Main</mainClass>
               <targetDirectory>${site.dir}/UltimateTicTacToe</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>GroupCreator</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>groupcreator.Main</mainClass>
+              <targetDirectory>${site.dir}/GroupCreator</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>MusicTheoryExpert</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>musictheoryexpert.Main</mainClass>
+              <targetDirectory>${site.dir}/MusicTheoryExpert</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>NumberGuess</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>numberguess.Main</mainClass>
+              <targetDirectory>${site.dir}/NumberGuess</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>SimpleAlgorithms</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>simplealgorithms.Main</mainClass>
+              <targetDirectory>${site.dir}/SimpleAlgorithms</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>TankGame</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>tankgame.Main</mainClass>
+              <targetDirectory>${site.dir}/TankGame</targetDirectory>
             </configuration>
           </execution>
         </executions>
