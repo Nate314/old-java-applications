@@ -297,6 +297,7 @@ canvas.paint.top {
 }
 
 .label {
+  color: var(--on-bg-text, var(--control-text));
   display: flex;
   align-items: center;
   white-space: pre;

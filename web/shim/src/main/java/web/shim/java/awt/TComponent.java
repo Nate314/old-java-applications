@@ -113,6 +113,16 @@ public class TComponent implements TImageObserver {
         } else {
             Js.unstyle(element, "color");
         }
+        // The skin's label color assumes the skin's background. Labels read --on-bg-text, so on an app-chosen
+        // background they get a readable color; an opaque skin-colored container resets it to the skin default.
+        if (customBackground) {
+            int brightness = (background.getRed() * 299 + background.getGreen() * 587 + background.getBlue() * 114) / 1000;
+            Js.style(element, "--on-bg-text", brightness > 140 ? "#000000" : "#ffffff");
+        } else if (isOpaque()) {
+            Js.style(element, "--on-bg-text", "initial");
+        } else {
+            Js.unstyle(element, "--on-bg-text");
+        }
     }
 
     protected void syncFont() {
