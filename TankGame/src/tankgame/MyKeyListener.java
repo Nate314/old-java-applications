@@ -7,7 +7,8 @@ public class MyKeyListener implements KeyListener
 {
     private int    key;
     public boolean keyPressed = false;
-    public boolean keyTyped = false;
+    /** Set once when the key goes down (not on auto-repeat); the reader clears it. */
+    public boolean newPress   = false;
 
     public MyKeyListener(int key)
     {
@@ -17,21 +18,21 @@ public class MyKeyListener implements KeyListener
     @Override
     public void keyTyped(KeyEvent e)
     {
-        // System.out.printf("%dor%d typed\n", key1, key2);
-        if (e.getKeyCode() == key) keyTyped = true;
     }
 
     @Override
     public void keyPressed(KeyEvent e)
     {
-        System.out.printf("%d pressed\n", key);
-        if (e.getKeyCode() == key) keyPressed = true;
+        if (e.getKeyCode() == key)
+        {
+            if (!keyPressed) newPress = true;
+            keyPressed = true;
+        }
     }
 
     @Override
     public void keyReleased(KeyEvent e)
     {
-        System.out.printf("%d released\n", key);
         if (e.getKeyCode() == key) keyPressed = false;
     }
 }

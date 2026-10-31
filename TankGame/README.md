@@ -1,22 +1,25 @@
 # TankGame
 
-An unfinished two-player tank game. Each player drives a square tank with a barrel over a blue background; firing and any game rules were never written. Original Eclipse source from the author's own files (only `src/` was kept).
+An unfinished two-player tank game. Each player drives a square tank with a barrel over a blue background and can fire shells; hits, damage and any other game rules were never written. Original Eclipse source from the author's own files (only `src/` was kept).
 
 ## Controls / usage
 
 - **Red tank**: `W` forward, `S` back, `A` rotate counterclockwise, `D` rotate clockwise, `Q` fire.
 - **Green tank**: `Up` forward, `Down` back, `Left` rotate counterclockwise, `Right` rotate clockwise, `M` fire.
-- Each held key moves 5 px or turns 5 degrees per repaint. Both tanks start centered on the top-left corner (0, 0), facing right.
-- Each tank draws its X, Y and rotation as text at (50, 50).
+- Each held key moves 5 px or turns 5 degrees per game tick (about 60 per second). Tanks stay inside the window.
+- Each fire key press shoots one shell from the end of the barrel; holding the key does not repeat. Shells fly straight until they leave the window and pass through tanks.
+- The red tank starts on the left facing right, the green tank on the right facing left.
+- Each tank's X, Y and rotation are shown at the top, red on the left and green on the right.
 - The window is 500x500 px. Title "TankGame".
 - No command-line arguments.
 
 ## Code layout
 
-- `src/tankgame/Main.java`: entry point and window; adds the background panel and the two tanks with their keys.
-- `src/tankgame/GamePanel.java`: fills the background blue and repaints itself in a loop.
-- `src/tankgame/Tank.java`: one tank; reads its key states on each paint, moves or rotates, draws itself and repaints in a loop.
-- `src/tankgame/MyKeyListener.java`: tracks whether one key is held; one is added to the frame per key.
+- `src/tankgame/Main.java`: entry point and window; adds the game panel and the two tanks with their keys.
+- `src/tankgame/GamePanel.java`: runs the game tick on a Swing timer, and paints the blue background, the tanks and the shells.
+- `src/tankgame/Tank.java`: one tank; reads its key states each tick, moves, rotates or fires, and draws itself.
+- `src/tankgame/Shell.java`: a fired shell.
+- `src/tankgame/MyKeyListener.java`: tracks whether one key is held and whether it was just pressed; one is added to the frame per key.
 
 ## Running
 
@@ -24,10 +27,4 @@ From the repo root: `./run.ps1 TankGame` (or `./run.ps1 TankGame -Build` to buil
 
 ## Known quirks
 
-- Fire does nothing: `fireTank` only calls `repaint()`. It is also never reached, because the fire flag is set in `keyTyped`, where `getKeyCode()` is always `VK_UNDEFINED`.
-- Speed depends on paint rate: movement happens inside `paint`, which sleeps 10 ms and calls `repaint()` on the Swing event thread, in both tanks and the background panel.
-- `Tank.paint` does not clear first (the `clearRect` call is commented out), so earlier frames are not erased.
-- The background panel and both tanks are all added to the frame's default `BorderLayout` center, and both tanks get the same 1000x500 bounds, so the three panels overlap.
-- The status text uses `\n`, which `drawString` does not break on, so it is drawn on one line.
-- Heavy stdout output: every key listener prints every key press and release (ten lines per event), and each tank prints a line per paint. That line's format string, `"d, %d @%ddegreed"`, prints the Y position after `@` and drops the rotation.
-- Tanks are not kept inside the window.
+- The clamp keeps the tank's unrotated square inside the window, so the corners of a turned tank can poke past the edge.
