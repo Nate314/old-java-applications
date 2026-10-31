@@ -34,6 +34,12 @@ mvn -f web/pom.xml package "-Drepo.dir=C:/path/to/other/checkout" "-Dsite.dir=C:
 | CircleSpawner | Works | Each slice is a borderless window on the page. |
 | StockChecker | Works with limitations | The Yahoo quote API is retired, so refresh fails (a network error is logged) and the labels are filled from the bundled `stockCheck.csv`, as on the desktop. Files the app writes stay in memory until the page is reloaded. |
 | SynthesizerKeyboard | Works | Play with the keyboard. On `master` sources, clicking a key starts a note that never stops and freezes the app (its documented bug: it waits for a timer that runs on the same event thread), as on the desktop; the modernized sources fix that. |
+| GroupCreator | Works | `output.txt` goes to the in-memory file system, so the page also shows standard output (where the app prints the groups) in a panel at the bottom. The window itself shows no result, as on the desktop. Its long HTML label is wider than the fixed 375 px window, so it is cut off on both sides. |
+| MusicTheoryExpert | Works | The demo that plays on start is silent because browsers start audio only after a click or key press; the test button plays it. |
+| NumberGuess | Works | |
+| SimpleAlgorithms | Works | A console program: the page shows its standard output in a panel. |
+| TankGame | Works with limitations | Movement, rotation and the trails left by the uncleared paint work as in the source. The tanks are drawn over the content pane's gray, not blue: the blue background panel gets no space in the layout. Every key event and paint prints to the browser console, as on the desktop. |
+| BibleDownloader | Not built | It reads chapter pages from bible.com, which sends no CORS headers, so the browser blocks the request. Its 2016 page addresses also return 404 today. |
 | DinoGame, Windows, WindowsE | Not built | They drive the real operating system with `java.awt.Robot` (Windows key, Win+E, reading screen pixels of another program). A web page cannot do that. |
 
 Both the current sources and the `modernize-apps` branch sources build and run.
@@ -64,7 +70,9 @@ Also substituted: `java.beans.PropertyVetoException`, `java.net.URLClassLoader` 
 Every component owns an absolutely positioned DOM element; Java keeps the real state (bounds, colors, text) because apps compare colors and strings by identity. Layout is done in Java by the shim's `FlowLayout`, `BorderLayout`, `SpringLayout` and null layout, the same way Swing does it, with preferred sizes measured using the same CSS font the DOM uses.
 
 - `JFrame` and `JInternalFrame` are boxes with a title bar (drag to move, close button runs the default close operation). Insets are 28 px on top and 4 px elsewhere, close to Swing's decorations, since apps size their content from the window size.
-- `JButton`, `JTextField`, `JComboBox` and `JLabel` are real `<button>`, `<input>`, `<select>` and `<div>` elements.
+- `JButton`, `JTextField`, `JComboBox` and `JLabel` are real `<button>`, `<input>`, `<select>` and `<div>` elements. A label whose text starts with `<html>` is rendered as HTML, as in Swing, and measured in a hidden element.
+- `JTabbedPane` draws its tabs as DOM buttons and hides the components of the other tabs, as Swing does. `UIManager.setLookAndFeel` does nothing; the page skin is the look and feel.
+- `Graphics2D.draw(Shape)` and `fill(Shape)` accept only `Rectangle`, the one shape an app uses.
 - Custom painting (`paint`, `paintComponent`) goes to a `<canvas>` inside the component, created the first time `paint` draws, through a `Graphics2D` over `CanvasRenderingContext2D`. The backing store is scaled by `devicePixelRatio`. A `JFrame.paint` override draws over the window's content, as in Swing.
 - Components are stacked with `z-index` so the first child is on top, as in AWT.
 - The page desktop is the browser viewport, which is also what `Toolkit.getScreenSize()` returns. A window placed above or left of the page edge is drawn at the edge, so its title bar stays reachable.
@@ -77,6 +85,10 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 - `javax.swing.Timer` runs on `setTimeout`; `SwingUtilities.invokeLater` and `EventQueue.invokeLater` queue on the EDT.
 - Mouse events go to the deepest component with mouse listeners; key events go through `KeyboardFocusManager` dispatchers, then to the focus owner (the first focusable widget of the active window, or the window itself). DOM key codes are mapped to AWT `VK_` codes.
 - `java.awt.Robot` can only reach the page: `keyPress`/`keyRelease` queue key events for the focused component, and `getPixelColor` samples the canvas or widget color at that viewport point.
+
+### Standard output
+
+`boot.js` defines `$rt_putStdoutCustom` before `classes.js` loads, so TeaVM hands it `System.out` text. Every page logs it to the browser console line by line. Pages with `<body data-console>` (SimpleAlgorithms, GroupCreator) also show it in a panel docked at the bottom of the page.
 
 ### Images, files and sound
 
