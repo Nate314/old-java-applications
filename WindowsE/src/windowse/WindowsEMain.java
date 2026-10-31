@@ -1,7 +1,9 @@
 package windowse;
 
+import javax.swing.SwingUtilities;
+
 public class WindowsEMain {
    public static void main(String[] args) {
-      new WindowsEWindow().setVisible(true);
+      SwingUtilities.invokeLater(() -> new WindowsEWindow().setVisible(true));
    }
 }

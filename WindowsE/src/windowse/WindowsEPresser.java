@@ -2,27 +2,38 @@ package windowse;
 
 import java.awt.AWTException;
 import java.awt.Robot;
+import java.awt.event.KeyEvent;
+import javax.swing.Timer;
 
+/** Holds the Windows key and taps E the given number of times, 100 ms apart, on a Swing timer. */
 public final class WindowsEPresser {
-   public WindowsEPresser(int count) {
-      try {
-         Robot robot;
-         (robot = new Robot()).keyPress(524);
+   private final Robot robot;
+   private final Runnable onDone;
+   private int remaining;
+   private Timer timer;
 
-         for (int i = 0; i < count; i++) {
-            robot.keyPress(69);
-            robot.keyRelease(69);
+   public WindowsEPresser(int count, Runnable onDone) throws AWTException {
+      this.robot = new Robot();
+      this.remaining = count;
+      this.onDone = onDone;
+   }
 
-            try {
-               Thread.sleep(100L);
-            } catch (InterruptedException e) {
-               e.printStackTrace();
-            }
-         }
+   public void start() {
+      this.robot.keyPress(KeyEvent.VK_WINDOWS);
+      this.timer = new Timer(100, event -> this.tap());
+      this.tap();
+      this.timer.start();
+   }
 
-         robot.keyRelease(524);
-      } catch (AWTException e) {
-         e.printStackTrace();
+   private void tap() {
+      if (this.remaining <= 0) {
+         this.timer.stop();
+         this.robot.keyRelease(KeyEvent.VK_WINDOWS);
+         this.onDone.run();
+         return;
       }
+      this.robot.keyPress(KeyEvent.VK_E);
+      this.robot.keyRelease(KeyEvent.VK_E);
+      this.remaining--;
    }
 }
