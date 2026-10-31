@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Old Java Applications</title>
+  <link rel="stylesheet" href="shim.css">
+  <script src="boot.js"></script>
+  <style>
+    body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 860px; margin: 0 auto; padding: 48px 16px 64px; }
+    h1 { margin: 0 0 4px; font-size: 28px; }
+    h2 { margin: 36px 0 12px; font-size: 18px; }
+    p.lead { margin: 0 0 8px; opacity: 0.8; }
+    ul.apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
+              grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+    ul.apps li { padding: 12px 14px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-bg);
+                 display: flex; flex-direction: column; gap: 6px; }
+    ul.apps strong { font-size: 16px; }
+    ul.apps span { opacity: 0.8; font-size: 14px; flex: 1; }
+    ul.apps a.play { align-self: flex-start; padding: 3px 12px; border-radius: 6px; background: var(--accent);
+                     color: #fff; text-decoration: none; font-weight: 600; font-size: 14px; }
+    ul.apps a.play:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    ul.desktop-only li { opacity: 0.85; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Old Java Applications</h1>
+  <p class="lead">Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM.
+    Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page.</p>
+
+  <h2>Play in the browser</h2>
+  <ul class="apps">
+    <li><strong>Clock</strong><span>Analog or digital clock. Click to switch.</span><a class="play" href="Clock/index.html">Play</a></li>
+    <li><strong>Flappy Bird</strong><span>Space to flap, P to pause, R to reset, D for debug view.</span><a class="play" href="FlappyBird/index.html">Play</a></li>
+    <li><strong>Minesweeper</strong><span>15 x 15 board with MIDI sound. Right-click to flag. Arrow keys move the window.</span><a class="play" href="Minesweeper/index.html">Play</a></li>
+    <li><strong>NathaNOS</strong><span>A fake desktop with a taskbar and start menu that launches the old Clock build.</span><a class="play" href="NathaNOS/index.html">Play</a></li>
+    <li><strong>Rubik's Cube 2D</strong><span>Click a square, then W A S D to turn. Mix scrambles the cube.</span><a class="play" href="RubiksCube2D/index.html">Play</a></li>
+    <li><strong>Screen Saver</strong><span>Green circles fill the screen. Moving the mouse closes it.</span><a class="play" href="ScreenSaver/index.html">Play</a></li>
+    <li><strong>Sprite Floaty Stars</strong><span>Animated stars with five modes. Pick settings and press OK.</span><a class="play" href="SpriteFloatyStars/index.html">Play</a></li>
+    <li><strong>Ultimate Tic-Tac-Toe</strong><span>Nine boards; your cell picks your opponent's next board.</span><a class="play" href="UltimateTicTacToe/index.html">Play</a></li>
+    <li><strong>Circle Spawner</strong><span>Builds a disk out of many borderless blue windows.</span><a class="play" href="CircleSpawner/index.html">Play</a></li>
+    <li><strong>Stock Checker</strong><span>Editable ticker list. The quote API is retired, so refresh shows the saved 2016 prices.</span><a class="play" href="StockChecker/index.html">Play</a></li>
+    <li><strong>Synthesizer Keyboard</strong><span>One-octave piano: Z X C V B N M , and S D G H J. Arrows change octave and instrument.</span><a class="play" href="SynthesizerKeyboard/index.html">Play</a></li>
+  </ul>
+
+  <h2>Desktop only</h2>
+  <ul class="apps desktop-only">
+    <li><strong>DinoGame</strong><span>Plays the Chrome dino game by reading screen pixels and pressing Space with java.awt.Robot; a page cannot see or control other windows.</span></li>
+    <li><strong>Windows</strong><span>Presses the real Windows key with java.awt.Robot, which a web page cannot do.</span></li>
+    <li><strong>WindowsE</strong><span>Opens File Explorer windows by pressing Win+E with java.awt.Robot, which a web page cannot do.</span></li>
+  </ul>
+</main>
+</body>
+</html>

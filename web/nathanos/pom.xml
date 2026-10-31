@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>web</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>nathanos</artifactId>
+  <name>NathaNOS compiled to JavaScript</name>
+
+  <!--
+    A separate module because NathaNOS launches the classes inside NathaNOS/assets/Clock.jar (an older Clock build,
+    whose clock.Main clashes with the Clock app's sources). TeaVM compiles that jar's bytecode along with NathaNOS.
+  -->
+  <dependencies>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>shim</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-classlib</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-jso-apis</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>nathanos-clock-jar</artifactId>
+      <version>2016</version>
+      <scope>system</scope>
+      <systemPath>${repo.dir}/NathaNOS/assets/Clock.jar</systemPath>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>app-sources</id>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources><source>${repo.dir}/NathaNOS/src</source></sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>assets</id>
+            <phase>process-resources</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${site.dir}/NathaNOS/assets</outputDirectory>
+              <resources><resource><directory>${repo.dir}/NathaNOS/assets</directory></resource></resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.teavm</groupId>
+        <artifactId>teavm-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>NathaNOS</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>main.Main</mainClass>
+              <!-- Only named in assets/Clock.jar's manifest, so TeaVM would not compile it otherwise. -->
+              <classesToPreserve><param>clock.Main</param></classesToPreserve>
+              <targetDirectory>${site.dir}/NathaNOS</targetDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
