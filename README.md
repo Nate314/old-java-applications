@@ -4,7 +4,24 @@ Sources recovered from the jars published at https://nathangawith.com/applicatio
 
 CircleSpawner, DinoGame, StockChecker, SynthesizerKeyboard, Windows and WindowsE are no longer on the site. They were recovered from the git history of https://github.com/Nate314/site (`assets/javaApplications/`).
 
-Each project has its sources in `src/` along with the original `META-INF/MANIFEST.MF`.
+Each project has its sources in `src/` along with the original `META-INF/MANIFEST.MF`, and its own README.
+
+| App | Description |
+|---|---|
+| [Clock](Clock/README.md) | Analog/text clock |
+| [FlappyBird](FlappyBird/README.md) | Flappy Bird style game |
+| [Minesweeper](Minesweeper/README.md) | Minesweeper game |
+| [NathaNOS](NathaNOS/README.md) | Desktop-style app launcher |
+| [RubiksCube2D](RubiksCube2D/README.md) | 2D Rubik's Cube |
+| [ScreenSaver](ScreenSaver/README.md) | Screen saver that closes when the mouse moves |
+| [SpriteFloatyStars](SpriteFloatyStars/README.md) | Animated stars with several modes |
+| [UltimateTicTacToe](UltimateTicTacToe/README.md) | Ultimate Tic-Tac-Toe |
+| [CircleSpawner](CircleSpawner/README.md) | Draws a filled circle of a chosen diameter out of overlapping borderless windows |
+| [DinoGame](DinoGame/README.md) | Bot that plays the Chrome dino game by watching a screen pixel |
+| [StockChecker](StockChecker/README.md) | Editable ticker list (seeded from `myStocks.txt`) that fetched quotes from the retired Yahoo Finance CSV API |
+| [SynthesizerKeyboard](SynthesizerKeyboard/README.md) | One-octave MIDI piano keyboard played with the computer keyboard |
+| [Windows](Windows/README.md) | Presses the Windows key once |
+| [WindowsE](WindowsE/README.md) | Opens N File Explorer windows with Win+E |
 
 ## Notes
 
@@ -24,8 +41,12 @@ Each project has its sources in `src/` along with the original `META-INF/MANIFES
 
 ## Build and run
 
-```sh
-cd Minesweeper
-javac -d out $(find src -name '*.java')
-java -cp out minesweeper.Main
+Requires a JDK (`java` and `javac` on PATH). From the repo root in PowerShell:
+
+```powershell
+./run.ps1                      # prompts for an app, then compiles and runs it
+./run.ps1 Minesweeper          # compiles and runs Minesweeper
+./run.ps1 Minesweeper -Build   # builds out/Minesweeper.jar instead of running
 ```
+
+Run mode launches each app from the folder it expects (for example `FlappyBird/src` with argument `120`). Build mode prints the matching `java -jar` command. Build output goes to `out/`, which is git-ignored.
