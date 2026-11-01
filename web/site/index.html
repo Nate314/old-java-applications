@@ -388,6 +388,7 @@
       frame.parentNode.replaceChild(next, frame);
       frame = next;
       if (focus) {
+        window.oldjavaSound.play('start');
         frame.addEventListener('load', function () { frame.focus(); });
         if (!isBig()) player.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -731,6 +732,7 @@
         .then(function () {
           saveButton.disabled = false;
           meter.hidden = true;
+          window.oldjavaSound.play(failed ? 'offline' : 'saved');
           if (failed) {
             text.textContent = 'Could not save ' + failed + ' file' + (failed === 1 ? '' : 's') +
               '. Check the connection and try again (' + countSaved() + ' of ' + total + ' apps are saved).';
@@ -743,7 +745,7 @@
     });
 
     addEventListener('online', check);   // the cache may have changed since (apps played meanwhile)
-    addEventListener('offline', check);
+    addEventListener('offline', function () { window.oldjavaSound.play('offline'); check(); });
     check();
   })();
 </script>
