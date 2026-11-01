@@ -18,6 +18,16 @@ public final class WindowMoveKeyListener implements KeyListener {
          return;
       }
 
+      if (event.getKeyCode() >= KeyEvent.VK_1 && event.getKeyCode() < KeyEvent.VK_1 + Level.values().length) {
+         this.frame.play(Level.values()[event.getKeyCode() - KeyEvent.VK_1]);
+         return;
+      }
+
+      if (event.getKeyCode() == KeyEvent.VK_F2) {
+         this.frame.restart();
+         return;
+      }
+
       if (event.getKeyCode() == KeyEvent.VK_UP) {
          this.frame.setLocation(this.frame.getX(), this.frame.getY() - 30);
       } else if (event.getKeyCode() == KeyEvent.VK_RIGHT) {
