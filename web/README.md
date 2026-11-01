@@ -38,7 +38,7 @@ mvn -f web/pom.xml package "-Drepo.dir=C:/path/to/other/checkout" "-Dsite.dir=C:
 | MusicTheoryExpert | Works | Browsers start audio only after a click or key press. On its own page the app starts from the title screen's Play, which counts, so the demo that plays on start can be heard; in the home page's player it may be silent, and the test button plays it. |
 | NumberGuess | Works | |
 | SimpleAlgorithms | Works | A console program: the page shows its standard output in a panel. |
-| TankGame | Works with limitations | Movement, rotation and the trails left by the uncleared paint work as in the source. The tanks are drawn over the content pane's gray, not blue: the blue background panel gets no space in the layout. Every key event and paint prints to the browser console, as on the desktop. |
+| TankGame | Works | A match against the computer (Q) or for two players (M), with your record against the computer kept in the browser (see Saved files). The window is as wide as the page when the page is narrower than 500 px, so it fits a phone held upright. |
 | BibleDownloader | Not built | It reads chapter pages from bible.com, which sends no CORS headers, so the browser blocks the request. Its 2016 page addresses also return 404 today. |
 | DinoGame, Windows, WindowsE | Not built | They drive the real operating system with `java.awt.Robot` (Windows key, Win+E, reading screen pixels of another program). A web page cannot do that. |
 
@@ -102,10 +102,10 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 TeaVM's file system lives in memory, so on its own everything an app saves is gone on the next page load. `web.rt.Saves` keeps it, with no change to the apps:
 
 - Every second, and when the page is hidden or closed, it walks the in-memory file system and copies each file written since the last look (TeaVM updates a file's last-modified time on every write) into `localStorage` under `oldjava.saves.<App>` (the page's `data-app`), as a JSON object of absolute path to contents, one character per byte. A file the app deletes is dropped.
-- On the next load, right after the page's own files are copied in (`Files.install`, when the first component is created), the saved files are written back over them. So FlappyBird's best score (`/.flappybird-highscore.txt`: `user.home` is `/` here), Minesweeper's best times and last level (`/.minesweeper-best.txt`), Ultimate Tic-Tac-Toe's record against the computer and last mode (`/.ultimatetictactoe-record.txt`) and StockChecker's edited `myStocks.txt` come back as they would from a desktop disk.
+- On the next load, right after the page's own files are copied in (`Files.install`, when the first component is created), the saved files are written back over them. So FlappyBird's best score (`/.flappybird-highscore.txt`: `user.home` is `/` here), Minesweeper's best times and last level (`/.minesweeper-best.txt`), Ultimate Tic-Tac-Toe's record against the computer and last mode (`/.ultimatetictactoe-record.txt`), TankGame's matches won and lost against the computer (`/.tankgame-record.txt`) and StockChecker's edited `myStocks.txt` come back as they would from a desktop disk.
 - Code that reads a saved file before the app creates its first component sees the page's own copy. Minesweeper and Ultimate Tic-Tac-Toe read their files after `JFrame`'s constructor for that reason.
 - The app's own page and the home page's player (`<App>/index.html?embed`) share one store. NathaNOS has its own, so an app opened inside NathaNOS keeps separate saves.
-- The title screen reads the store: FlappyBird shows "Your best: N pipes", Minesweeper "Your best times: Beginner 0:53.6, ...", Ultimate Tic-Tac-Toe "Your record vs the computer: Easy 3 wins, 1 loss, 0 draws; ...", and any other app with saves names the files ("Saved here from last time: myStocks.txt"). Forget on that line (click twice) deletes the app's saves, so it starts again from its bundled files. The formats are the `RECORDS` table in `boot.js`.
+- The title screen reads the store: FlappyBird shows "Your best: N pipes", Minesweeper "Your best times: Beginner 0:53.6, ...", Ultimate Tic-Tac-Toe "Your record vs the computer: Easy 3 wins, 1 loss, 0 draws; ...", TankGame "Your matches vs the computer: 2 wins, 1 loss", and any other app with saves names the files ("Saved here from last time: myStocks.txt"). Forget on that line (click twice) deletes the app's saves, so it starts again from its bundled files. The formats are the `RECORDS` table in `boot.js`.
 - A full `localStorage` logs an error and keeps the previous copy. Thumbnail mode (`?embed&shot`) is not special-cased, so take thumbnails in a fresh browser profile (as `shots.ps1` does).
 
 ### NathaNOS and reflection
@@ -158,7 +158,7 @@ Each app page (`<App>/index.html`) is built to lead to the next app as well as r
 An app page opens on a title screen instead of a bare "Loading..." box, the way an arcade cabinet shows its attract screen before a game:
 
 - The app's thumbnail, category, name and hint, and its passport line: "New: playing it adds stamp N of 16 to your passport", or the date it was first played.
-- The visitor's record from earlier visits, with a star: FlappyBird's best score, Minesweeper's best times, Ultimate Tic-Tac-Toe's record against the computer, or the files any other app saved, with Forget (see Saved files).
+- The visitor's record from earlier visits, with a star: FlappyBird's best score, Minesweeper's best times, Ultimate Tic-Tac-Toe's and TankGame's records against the computer, or the files any other app saved, with Forget (see Saved files).
 - A boot log of what the page loads, with real names and sizes: `classes.js` (the app compiled by TeaVM, its size read from the browser's resource timing) and then each file from `data-files` as it arrives, with a progress bar. NathaNOS lists all 40 of its files. A file that fails shows "missing".
 - Play (focused once everything has loaded) starts the app, as does a click anywhere on the screen or any key ("or press any key"). The key that starts it, and its release, never reach the app. Keys typed in the toolbar or the Switch app panel do not start it, and those still work over the title screen, so the skin and the sound can be set first.
 - `main()` runs only on that click or key press. Browsers allow sound only after one, so the site's start sound (Arcade's power-on included, timed with the skin's power-on animation) and an app's own first notes can play.
@@ -224,7 +224,7 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 | App | Controller |
 |---|---|
 | FlappyBird | Flap (Space), Pause (P), Reset (R) |
-| TankGame | Two players on one screen: a cross (W A S D) and Fire (Q) for the red tank, a cross (arrow keys) and Fire (M) for the green tank |
+| TankGame | A cross (W A S D) and Fire (Q) for the red tank, a cross (arrow keys) and Fire (M) for the green tank. On the game's title, red's Fire starts a match against the computer and green's Fire a match for two players on one screen |
 | SynthesizerKeyboard | One octave of piano keys (Z S X D C V G B H N J M ,), each held for as long as it is touched, plus Octave and Sound buttons (arrow keys) |
 | SpriteFloatyStars | Add star (Up), Remove star (Down) |
 
