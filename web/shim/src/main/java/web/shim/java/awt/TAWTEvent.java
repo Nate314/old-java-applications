@@ -3,6 +3,8 @@ package web.shim.java.awt;
 import java.util.EventObject;
 
 public abstract class TAWTEvent extends EventObject {
+    public static final long WINDOW_EVENT_MASK = 0x40;
+
     protected int id;
     protected boolean consumed;
 

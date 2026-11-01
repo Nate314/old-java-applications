@@ -2,7 +2,9 @@ package web.shim.java.awt;
 
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.web.TDesktop;
+import web.rt.Edt;
 import web.rt.Js;
+import web.shim.java.awt.event.TWindowEvent;
 import web.shim.java.awt.web.TTitleBar;
 
 /**
@@ -11,7 +13,9 @@ import web.shim.java.awt.web.TTitleBar;
  */
 public class TWindow extends TContainer {
     private boolean displayed;
+    private boolean opened;
     private boolean alwaysOnTop;
+    private boolean focusableWindowState = true;
     private TComponent focusOwner;
     private TTitleBar titleBar;
 
@@ -165,6 +169,11 @@ public class TWindow extends TContainer {
                 validate();
                 markTreeDirty();
             }
+            if (!opened) {
+                opened = true;
+                TWindowEvent event = new TWindowEvent(this, TWindowEvent.WINDOW_OPENED);
+                Edt.post(() -> TToolkit.getDefaultToolkit().notifyAWTEventListeners(event, TAWTEvent.WINDOW_EVENT_MASK));
+            }
         } else {
             super.setVisible(false);
             TDesktop.hide(this);
@@ -205,6 +214,24 @@ public class TWindow extends TContainer {
 
     public boolean isAlwaysOnTop() {
         return alwaysOnTop;
+    }
+
+    /** A window that cannot take focus is not raised when clicked (NathaNOS keeps its apps in front this way). */
+    public void setFocusableWindowState(boolean b) {
+        focusableWindowState = b;
+    }
+
+    public boolean getFocusableWindowState() {
+        return focusableWindowState;
+    }
+
+    @Override
+    protected void processEvent(TAWTEvent e) {
+        if (e instanceof TWindowEvent && e.getID() == TWindowEvent.WINDOW_CLOSING) {
+            closeRequested();
+        } else {
+            super.processEvent(e);
+        }
     }
 
     public void setLocationRelativeTo(TComponent c) {

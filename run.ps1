@@ -17,7 +17,11 @@ $apps = [ordered]@{
     Clock             = @{ Main = 'clock.Main';                WorkDir = 'Clock' }
     FlappyBird        = @{ Main = 'flappyBird.Main';           WorkDir = 'FlappyBird/src'; Args = @('120') }
     Minesweeper       = @{ Main = 'minesweeper.Main';          WorkDir = 'Minesweeper' }
-    NathaNOS          = @{ Main = 'main.Main';                 WorkDir = 'NathaNOS' }
+    # Apps: built into NathaNOS's taskbar (assets/Clock.jar already ships; the Robot apps would drive the real desktop).
+    NathaNOS          = @{ Main = 'main.Main';                 WorkDir = 'NathaNOS'
+                           Apps = @('Minesweeper', 'UltimateTicTacToe', 'RubiksCube2D', 'FlappyBird', 'SpriteFloatyStars',
+                                    'ScreenSaver', 'CircleSpawner', 'StockChecker', 'SynthesizerKeyboard', 'BibleDownloader',
+                                    'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame') }
     RubiksCube2D      = @{ Main = 'rubikscube.Main';           WorkDir = 'RubiksCube2D' }
     ScreenSaver       = @{ Main = 'screensaver.Main';          WorkDir = 'ScreenSaver' }
     SpriteFloatyStars = @{ Main = 'animate2.Animate2Main';     WorkDir = 'SpriteFloatyStars' }
@@ -67,6 +71,22 @@ Get-ChildItem -Recurse -File $src | Where-Object { $_.Extension -ne '.java' -and
 
 $workDir = Join-Path $root $cfg.WorkDir
 $appArgs = @($cfg.Args | Where-Object { $_ })
+
+# NathaNOS shows one taskbar button per jar in assets/. Stage a copy of its folder with a jar of each listed app,
+# plus the files those apps read from their own working folder (images, data), and run it from there.
+if ($cfg.Apps) {
+    $stage = Join-Path $root "out/$App/desktop"
+    if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+    New-Item -ItemType Directory -Force $stage | Out-Null
+    Copy-Item -Recurse (Join-Path $workDir 'assets') $stage
+    foreach ($name in $cfg.Apps) {
+        & $PSCommandPath $name -Build 6>$null
+        Copy-Item (Join-Path $root "out/$name.jar") (Join-Path $stage 'assets')
+        Get-ChildItem -File (Join-Path $root $apps[$name].WorkDir) | Where-Object Extension -ne '.md' | Copy-Item -Destination $stage
+    }
+    Write-Host "Staged $App with $($cfg.Apps.Count) more apps in $stage"
+    $workDir = $stage
+}
 
 if ($Build) {
     # Locate the JDK's jar tool from the running java, since only java/javac are usually on PATH.

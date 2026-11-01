@@ -2,6 +2,7 @@ package minesweeper;
 
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.event.WindowEvent;
 
 public final class WindowMoveKeyListener implements KeyListener {
    private GameFrame frame;
@@ -12,7 +13,9 @@ public final class WindowMoveKeyListener implements KeyListener {
 
    private void handleKey(KeyEvent event) {
       if (event.getKeyCode() == KeyEvent.VK_ESCAPE) {
-         System.exit(0);
+         // Same as the close button, so inside NathaNOS it closes only this window.
+         this.frame.dispatchEvent(new WindowEvent(this.frame, WindowEvent.WINDOW_CLOSING));
+         return;
       }
 
       if (event.getKeyCode() == KeyEvent.VK_UP) {

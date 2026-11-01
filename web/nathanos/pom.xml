@@ -13,7 +13,12 @@
 
   <!--
     A separate module because NathaNOS launches the classes inside NathaNOS/assets/Clock.jar (an older Clock build,
-    whose clock.Main clashes with the Clock app's sources). TeaVM compiles that jar's bytecode along with NathaNOS.
+    whose clock.Main clashes with the Clock app's sources). TeaVM compiles that jar's bytecode along with NathaNOS
+    and every other browser app, since nothing can be loaded at run time.
+
+    Adding an app to the web NathaNOS: its sources (app-sources) and a jar naming its Main-Class (app-jars) below,
+    its Main-Class in src/main/java/web/nathanos/Boot.java, and its jar plus any files it reads in data-files in
+    site/NathaNOS/index.html.
   -->
   <dependencies>
     <dependency>
@@ -47,7 +52,23 @@
             <id>app-sources</id>
             <goals><goal>add-source</goal></goals>
             <configuration>
-              <sources><source>${repo.dir}/NathaNOS/src</source></sources>
+              <sources>
+                <source>${repo.dir}/NathaNOS/src</source>
+                <source>${repo.dir}/CircleSpawner/src</source>
+                <source>${repo.dir}/FlappyBird/src</source>
+                <source>${repo.dir}/Minesweeper/src</source>
+                <source>${repo.dir}/RubiksCube2D/src</source>
+                <source>${repo.dir}/ScreenSaver/src</source>
+                <source>${repo.dir}/SpriteFloatyStars/src</source>
+                <source>${repo.dir}/StockChecker/src</source>
+                <source>${repo.dir}/SynthesizerKeyboard/src</source>
+                <source>${repo.dir}/UltimateTicTacToe/src</source>
+                <source>${repo.dir}/GroupCreator/src</source>
+                <source>${repo.dir}/MusicTheoryExpert/src</source>
+                <source>${repo.dir}/NumberGuess/src</source>
+                <source>${repo.dir}/SimpleAlgorithms/src</source>
+                <source>${repo.dir}/TankGame/src</source>
+              </sources>
             </configuration>
           </execution>
         </executions>
@@ -65,6 +86,68 @@
               <resources><resource><directory>${repo.dir}/NathaNOS/assets</directory></resource></resources>
             </configuration>
           </execution>
+          <!-- Files the apps read from their working folder, which inside NathaNOS is NathaNOS's own. -->
+          <execution>
+            <id>app-files</id>
+            <phase>process-resources</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${site.dir}/NathaNOS</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${repo.dir}/FlappyBird/src</directory>
+                  <includes><include>*.jpg</include><include>*.png</include></includes>
+                </resource>
+                <resource>
+                  <directory>${repo.dir}/StockChecker</directory>
+                  <includes><include>myStocks.txt</include><include>stockCheck.csv</include></includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!--
+        NathaNOS shows one taskbar button per jar in assets/ and reads only the jar's manifest; the classes are
+        already compiled into the page. So each app gets a jar holding just a manifest naming its Main-Class.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>app-jars</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <macrodef name="appjar">
+                  <attribute name="app"/>
+                  <attribute name="main"/>
+                  <sequential>
+                    <jar destfile="${site.dir}/NathaNOS/assets/@{app}.jar" whenmanifestonly="create">
+                      <manifest><attribute name="Main-Class" value="@{main}"/></manifest>
+                    </jar>
+                  </sequential>
+                </macrodef>
+                <appjar app="CircleSpawner" main="circlewindow.Main"/>
+                <appjar app="FlappyBird" main="flappyBird.Main"/>
+                <appjar app="Minesweeper" main="minesweeper.Main"/>
+                <appjar app="RubiksCube2D" main="rubikscube.Main"/>
+                <appjar app="ScreenSaver" main="screensaver.Main"/>
+                <appjar app="SpriteFloatyStars" main="animate2.Animate2Main"/>
+                <appjar app="StockChecker" main="stockchecker.Main"/>
+                <appjar app="SynthesizerKeyboard" main="synthesizer.Main"/>
+                <appjar app="UltimateTicTacToe" main="ultimateticktacktoe.Main"/>
+                <appjar app="GroupCreator" main="groupcreator.Main"/>
+                <appjar app="MusicTheoryExpert" main="musictheoryexpert.Main"/>
+                <appjar app="NumberGuess" main="numberguess.Main"/>
+                <appjar app="SimpleAlgorithms" main="simplealgorithms.Main"/>
+                <appjar app="TankGame" main="tankgame.Main"/>
+              </target>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -75,9 +158,8 @@
             <id>NathaNOS</id>
             <goals><goal>compile</goal></goals>
             <configuration>
-              <mainClass>main.Main</mainClass>
-              <!-- Only named in assets/Clock.jar's manifest, so TeaVM would not compile it otherwise. -->
-              <classesToPreserve><param>clock.Main</param></classesToPreserve>
+              <!-- Names every app class (they are otherwise only named in jar manifests), then runs main.Main. -->
+              <mainClass>web.nathanos.Boot</mainClass>
               <targetDirectory>${site.dir}/NathaNOS</targetDirectory>
             </configuration>
           </execution>

@@ -11,6 +11,7 @@ import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -84,8 +85,10 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       this.adding = true;
    }
 
+   /** Closes the window as its close button would: exits when run alone, and only closes itself inside NathaNOS. */
    private void kill() {
-      System.exit(0);
+      this.timer.stop();
+      this.dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
    }
 
    public int GCF(int a, int b) {
@@ -135,7 +138,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    public void keyReleased(KeyEvent e) {
       int keyCode = e.getKeyCode();
       if (keyCode == KeyEvent.VK_ESCAPE) {
-         System.exit(0);
+         this.kill();
       } else if (keyCode == KeyEvent.VK_LEFT) {
          this.timeToWait = Math.min(5000.0, Math.max(this.timeToWait + 1.0, this.timeToWait * 1.1));
          this.timer.setDelay((int)this.timeToWait);

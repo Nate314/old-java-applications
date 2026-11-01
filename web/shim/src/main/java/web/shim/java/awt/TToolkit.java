@@ -1,10 +1,15 @@
 package web.shim.java.awt;
 
+import java.util.ArrayList;
+import java.util.List;
+import web.shim.java.awt.event.TAWTEventListener;
 import web.shim.java.awt.web.TDesktop;
 
 public class TToolkit {
     private static final TToolkit INSTANCE = new TToolkit();
     private final TEventQueue eventQueue = new TEventQueue();
+    private final List<TAWTEventListener> awtListeners = new ArrayList<>();
+    private final List<Long> awtListenerMasks = new ArrayList<>();
 
     protected TToolkit() {
     }
@@ -40,6 +45,20 @@ public class TToolkit {
 
     public TEventQueue getSystemEventQueue() {
         return eventQueue;
+    }
+
+    public void addAWTEventListener(TAWTEventListener listener, long eventMask) {
+        awtListeners.add(listener);
+        awtListenerMasks.add(eventMask);
+    }
+
+    /** Hands an event to the AWTEventListeners registered for its mask, as AWT does before dispatching it. */
+    public void notifyAWTEventListeners(TAWTEvent event, long eventMask) {
+        for (int i = 0; i < awtListeners.size(); i++) {
+            if ((awtListenerMasks.get(i) & eventMask) != 0) {
+                awtListeners.get(i).eventDispatched(event);
+            }
+        }
     }
 
     public void beep() {

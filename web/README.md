@@ -26,7 +26,7 @@ mvn -f web/pom.xml package "-Drepo.dir=C:/path/to/other/checkout" "-Dsite.dir=C:
 | Clock | Works | |
 | FlappyBird | Works | Runs one game step per animation frame (60 per second on most screens), so its speed differs from the desktop, where it ran as fast as the machine could repaint. |
 | Minesweeper | Works | Sound uses simple Web Audio tones. The game-over chord bends its pitch with about 800 one-millisecond sleeps, which take longer in a browser (timers have a minimum delay), so the board waits a few seconds before the next click. Esc closes the app. |
-| NathaNOS | Works | Launches the old Clock build from `assets/Clock.jar` (compiled in ahead of time, see below). |
+| NathaNOS | Works | The taskbar launches the old Clock build from `assets/Clock.jar` and the 14 other browser apps (compiled in ahead of time, see below). Apps open as their own windows over the desktop; closing one leaves NathaNOS and the others running. SimpleAlgorithms prints only to the browser's developer console here, since the page has no output panel (the old Clock prints the time every second). |
 | RubiksCube2D | Works | The w/a/s/d buttons and Mix send key events through the page-level `Robot`. |
 | ScreenSaver | Works with limitations | The "screen" is the browser viewport, and the circle size is the greatest common factor of its width and height, which is often tiny for arbitrary window sizes. Its repaint thread busy-waits, so the tab is sluggish while it runs, as the desktop app kept a CPU core busy. Moving the mouse exits. |
 | SpriteFloatyStars | Works | Settings window and all modes. |
@@ -99,14 +99,21 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 
 ### NathaNOS and reflection
 
-NathaNOS loads the `Main-Class` of each jar in `assets/` with `URLClassLoader` and calls its `(Boolean)` constructor by reflection. In the browser nothing can be loaded at run time, so the `nathanos` module compiles `assets/Clock.jar` in with NathaNOS (`classesToPreserve` keeps `clock.Main`), and `web.teavm.ShimReflectionPolicy` keeps its name and constructors for reflection. A different jar dropped into `assets/` would need the same two entries.
+NathaNOS loads the `Main-Class` of each jar in `assets/` with `URLClassLoader`, then calls its `(Boolean)` constructor or its `main` method by reflection. In the browser nothing can be loaded at run time, so the `nathanos` module compiles `assets/Clock.jar` and the other browser apps' sources in with NathaNOS:
+
+- Its entry point, `web.nathanos.Boot`, registers each app's main class in `web.rt.Classes` and then starts NathaNOS. That makes TeaVM compile the classes, and lets the shim's `URLClassLoader` find them by name. TeaVM's own `Class.forName` only finds classes the program creates instances of, which leaves out most apps' `Main` (just a static `main`).
+- `web.teavm.ShimReflectionPolicy` keeps the constructors and `main` method of every app class that declares a `main`.
+- Each app gets a jar in `assets/` holding only a manifest that names its `Main-Class` (built with Ant's `jar` task), since NathaNOS lists jars to build its taskbar and reads only their manifests. The page preloads those jars, plus FlappyBird's images and StockChecker's files.
+- NathaNOS's desktop window is not focusable, so `TDesktop` does not raise it when it is clicked, and apps stay in front. It also switches every app window to `DISPOSE_ON_CLOSE` through `Toolkit.addAWTEventListener` (`WINDOW_OPENED`), so closing an app does not run `System.exit`.
+
+Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in `Boot`, and its jar and files in `data-files` in `site/NathaNOS/index.html`.
 
 ## Layout
 
 - `pom.xml`: parent build (TeaVM version, shared plugin settings).
 - `shim/`: the compatibility layer and the TeaVM compiler extensions (`web.teavm`).
 - `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files.
-- `nathanos/`: NathaNOS plus `assets/Clock.jar` (its `clock.Main` clashes with the Clock app's).
+- `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
 - `site/`: `index.html`, one `<App>/index.html` per app, `boot.js` and `shim.css` (the Classic and Modern skins).
 
 ## Skins
