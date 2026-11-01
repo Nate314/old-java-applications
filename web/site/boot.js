@@ -362,6 +362,7 @@
     ],
     SynthesizerKeyboard: [
       { piano: ['Z', 'S', 'X', 'D', 'C', 'V', 'G', 'B', 'H', 'N', 'J', 'M', ','] },
+      { buttons: [{ k: 'T', label: 'Song' }, { k: 'L', label: 'Listen' }, { k: 'R', label: 'Restart' }] },
       { buttons: [{ k: 'ArrowLeft', label: 'Octave −' }, { k: 'ArrowRight', label: 'Octave +' },
                   { k: 'ArrowDown', label: 'Sound −' }, { k: 'ArrowUp', label: 'Sound +' }] }
     ],
@@ -1349,6 +1350,16 @@
         return names[kv[0]] + ' ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss, ' : ' losses, ') + n[2] + (n[2] === 1 ? ' draw' : ' draws');
       }).filter(Boolean);
       return rows.length ? 'Your record vs the computer: ' + rows.join('; ') : '';
+    } },
+    SynthesizerKeyboard: { file: '.synthesizer-songs.txt', show: function (text) {
+      var names = { MARY: 'Mary\'s Lamb', TWINKLE: 'Twinkle', ODE: 'Ode to Joy', ROW: 'Row Your Boat', JINGLE: 'Jingle Bells' };
+      var rows = text.split('\n').map(function (row) {
+        var kv = row.split('=');
+        var stars = parseInt(kv[1], 10);
+        if (!names[kv[0]] || !(stars > 0)) return '';
+        return names[kv[0]] + ' ' + stars + (stars === 1 ? ' star' : ' stars');
+      }).filter(Boolean);
+      return rows.length ? 'Your songs: ' + rows.join(', ') : '';
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split(',').map(Number);
