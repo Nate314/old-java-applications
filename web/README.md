@@ -111,7 +111,7 @@ NathaNOS loads the `Main-Class` of each jar in `assets/` with `URLClassLoader` a
 
 ## Skins
 
-The toggle in the top-right corner switches between Classic (close to Swing's default Metal look) and Modern (flatter, rounded, follows the system dark mode). It is remembered in `localStorage`. Skins only change colors and decoration; sizes and fonts come from Java, so the layout is the same in both. Colors an app sets itself (Minesweeper's green tiles, for example) are kept in both skins.
+The toggle in the top-right corner switches between Modern (the default: flatter, rounded, follows the system dark mode) and Classic (close to Swing's default Metal look). The choice is remembered in `localStorage`. Skins only change colors and decoration; sizes and fonts come from Java, so the layout is the same in both. Colors an app sets itself (Minesweeper's green tiles, for example) are kept in both skins.
 
 ## Limitations
 

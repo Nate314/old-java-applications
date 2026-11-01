@@ -9,11 +9,11 @@
   'use strict';
 
   var SKIN_KEY = 'oldjava.skin';
-  var skin = 'classic';
+  var skin = 'modern';
   try {
-    skin = localStorage.getItem(SKIN_KEY) || 'classic';
+    skin = localStorage.getItem(SKIN_KEY) || 'modern';
   } catch (e) { /* storage blocked: use the default */ }
-  if (skin !== 'classic' && skin !== 'modern') skin = 'classic';
+  if (skin !== 'classic' && skin !== 'modern') skin = 'modern';
   document.documentElement.setAttribute('data-skin', skin);
 
   function setSkin(value) {
@@ -33,7 +33,7 @@
     var label = document.createElement('label');
     label.textContent = 'Skin ';
     var select = document.createElement('select');
-    [['classic', 'Classic'], ['modern', 'Modern']].forEach(function (o) {
+    [['modern', 'Modern'], ['classic', 'Classic']].forEach(function (o) {
       var opt = document.createElement('option');
       opt.value = o[0];
       opt.textContent = o[1];
