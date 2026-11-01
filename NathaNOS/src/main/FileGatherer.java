@@ -4,22 +4,26 @@ import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.jar.JarFile;
 
+/** Finds the apps NathaNOS can launch: one per .jar in assets/, with its icon and Main-Class. */
 public class FileGatherer {
    private List<String> jarFileNames = new ArrayList<>();
    public List<String> applicationNames = new ArrayList<>();
+   /** assets/<name>.png for each app, or null when the app has no icon file. */
    public List<String> iconPaths = new ArrayList<>();
 
    public FileGatherer() {
-      this.iconPaths.add("assets/NathaNOS.png");
-      this.applicationNames.add("MENU");
       File[] listOfFiles = new File("assets").listFiles();
       if (listOfFiles == null) {
          System.err.println("No assets folder; run NathaNOS from its own folder.");
          return;
       }
+      // Alphabetical, so the desktop and start menu list the apps in the same order on every file system.
+      Arrays.sort(listOfFiles, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
 
       for (File file : listOfFiles) {
          if (file.isFile() && file.getName().endsWith(".jar")) {
@@ -38,7 +42,7 @@ public class FileGatherer {
             return "assets/" + file.getName();
          }
       }
-      return "assets/" + name + ".png";
+      return null;
    }
 
    /** Each jar's Main-Class, or null for a jar that fails to load (the other apps still work). */
