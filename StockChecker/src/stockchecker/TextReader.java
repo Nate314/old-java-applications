@@ -5,13 +5,13 @@ import java.io.FileReader;
 import java.io.IOException;
 
 public class TextReader {
-   private String fileText = new String();
+   private String fileText = "";
 
    public TextReader(String fileName) {
       try {
          File file = new File(fileName + ".txt");
          FileReader fileReader = new FileReader(file);
-         StringBuffer stringBuffer = new StringBuffer();
+         StringBuilder stringBuffer = new StringBuilder();
          char[] charArray = new char[1024];
 
          int numCharsRead;
@@ -22,7 +22,7 @@ public class TextReader {
          fileReader.close();
          this.fileText = stringBuffer.toString();
       } catch (IOException e) {
-         e.printStackTrace();
+         System.err.println("Could not read " + fileName + ".txt: " + e.getMessage());
       }
    }
 

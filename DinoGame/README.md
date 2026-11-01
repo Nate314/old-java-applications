@@ -8,13 +8,13 @@ A bot for a dinosaur jumping game. It watches one screen pixel and presses Space
 - **Red marker**: the sensor, at (`screenWidth / 2.44`, `screenHeight / 4.5`). The pixel it reads is one to the left of the marker, so the marker does not cover it.
 - **Green marker**: at (`screenWidth / 2.44`, `screenHeight / 5.35`). It is only drawn; nothing reads that position.
 - When the sensor pixel's blue value is exactly 83, it holds Space for 65 ms.
-- There is no stop control and the markers have no title bar. Stop the process (for example Ctrl+C in the terminal that launched it).
+- **Click either marker** to stop the bot. The markers have no title bar. Stopping the process (for example Ctrl+C in the terminal that launched it) also works.
 - No command-line arguments.
 
 ## Code layout
 
-- `src/dinosaurgameplayer/DinosaurGamePlayer.java`: entry point; computes the sensor positions, waits 2.5 s, shows the markers, presses Space and starts the timer.
-- `src/dinosaurgameplayer/ObstacleDetector.java`: the timer action; reads the sensor pixel with `java.awt.Robot` and presses Space.
+- `src/dinosaurgameplayer/DinosaurGamePlayer.java`: entry point; computes the sensor positions, waits 2.5 s on the main thread, then on the Swing event thread shows the markers, presses Space and starts the timer.
+- `src/dinosaurgameplayer/ObstacleDetector.java`: the timer action; reads the sensor pixel with `java.awt.Robot` and holds Space, released by a one-shot timer. The pixel is not checked while Space is held.
 
 ## Running
 
@@ -26,4 +26,3 @@ It sends real Space key presses via `java.awt.Robot` to whatever window has focu
 
 - Sensor positions are fixed fractions of the full screen size, so they only line up if the game sits at the matching spot on screen. The original jar name suggests it was set up for a 1920x1080 screen.
 - Only the blue channel is checked, so any color with blue 83 triggers a jump.
-- The 65 ms key hold runs on the Swing event thread, so the pixel is not checked during a jump.

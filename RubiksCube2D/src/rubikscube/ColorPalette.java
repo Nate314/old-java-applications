@@ -11,18 +11,14 @@ public final class ColorPalette {
    private Color white = new Color(255, 255, 255);
 
    public final Color colorFor(String colorName) {
-      String blueName = "blue";
-      String redName = "red";
-      String yellowName = "yellow";
-      String greenName = "green";
-      String orangeName = "orange";
-      String whiteName = "white";
-      return colorName == blueName
-         ? this.blue
-         : (
-            colorName == redName
-               ? this.red
-               : (colorName == redName ? this.red : (colorName == yellowName ? this.yellow : (colorName == greenName ? this.green : (colorName == orangeName ? this.orange : (colorName == whiteName ? this.white : null)))))
-         );
+      switch (colorName) {
+         case "blue": return this.blue;
+         case "red": return this.red;
+         case "yellow": return this.yellow;
+         case "green": return this.green;
+         case "orange": return this.orange;
+         case "white": return this.white;
+         default: return null;
+      }
    }
 }

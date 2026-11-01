@@ -1,7 +1,9 @@
 package rubikscube;
 
+import javax.swing.SwingUtilities;
+
 public class Main {
    public static void main(String[] args) {
-      new CubeFrame().setVisible(true);
+      SwingUtilities.invokeLater(() -> new CubeFrame().setVisible(true));
    }
 }

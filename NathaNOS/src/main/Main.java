@@ -8,6 +8,7 @@ import java.beans.PropertyVetoException;
 import javax.swing.ImageIcon;
 import javax.swing.JDesktopPane;
 import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
 
 public class Main extends JFrame {
    public JDesktopPane desktopPane = new JDesktopPane() {
@@ -44,6 +45,6 @@ public class Main extends JFrame {
    }
 
    public static void main(String[] args) {
-      new Main(true);
+      SwingUtilities.invokeLater(() -> new Main(true));
    }
 }

@@ -6,10 +6,10 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 
 - **MENU button** (left end of the taskbar): show / hide the start menu.
 - **Shut Down** (in the start menu): exit.
-- **App buttons**: one per `assets/*.jar`, labeled with the file name minus `.jar`, with icon `assets/<name>.png`. Clicking loads the jar's `Main-Class`, calls its public `(Boolean)` constructor with `false`, and moves that frame's content pane into a centered internal window. Each click opens another window.
+- **App buttons**: one per `assets/*.jar`, labeled with the file name minus `.jar`, with icon `assets/<name>.png` (matched ignoring case). Clicking loads the jar's `Main-Class`, calls its public `(Boolean)` constructor with `false`, moves that frame's content pane into a centered internal window and disposes the hidden frame. Each click opens another window. A jar that fails to load only disables its own button (the error is printed).
 - Internal app windows can be closed but not resized or maximized.
 - No keyboard controls or command-line arguments. The window is undecorated and fills the screen.
-- The shipped `assets/` has one jar, `Clock.jar`, an older Clock build.
+- The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. The Clock source in this repo also has a public `Main(Boolean)` constructor, so a jar built from it (`./run.ps1 Clock -Build`, then copy `out/Clock.jar` into `assets/`) launches here too.
 
 ## Code layout
 
@@ -25,12 +25,3 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 From the repo root: `./run.ps1 NathaNOS` (or `./run.ps1 NathaNOS -Build` to build a jar).
 
 Run with `NathaNOS/` as the working directory so `assets/` resolves.
-
-## Known quirks
-
-- Launching uses `getConstructor(Boolean.class)`, which only finds public constructors. The Clock source in this repo declares `Main(Boolean)` private, so a jar built from it would not launch here.
-- The icon path for `Clock.jar` is `assets/Clock.png`, but the file is `clock.png`; this only matches on a case-insensitive file system.
-- If any jar's main class fails to load, `getAllJFrameClasses()` returns `null` and every app button then fails.
-- The launched app's own `JFrame` is created hidden and never disposed.
-- Unused: `LauncherWindow.applicationNames` and `iconPaths` (they point at images that are not in `assets/`), `FileGatherer.getAJFrame()` (loads a nonexistent `assets/Clock1.0.jar`) and `getAllJFrames()` (hard-codes `clock.Main`).
-- `FileGatherer` prints every file in `assets/` to stdout.

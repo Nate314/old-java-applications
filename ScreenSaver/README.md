@@ -4,26 +4,20 @@ A screen saver written in Java. It fills the screen with black and adds randomly
 
 ## Controls / usage
 
-- **Mouse**: moving, dragging, clicking, pressing, releasing or leaving the window exits.
+- **Mouse**: moving or dragging more than a few pixels, clicking, pressing, releasing or leaving the window exits. The move event some systems send when the window first appears under the cursor is ignored, as is leaving the window in the first second.
 - **Esc**: exit.
-- **Left / Right**: slow down / speed up (multiplies or divides the 250 ms step delay by 1.1).
-- **Up / Down**: shrink / grow the circles by a factor of 1.1.
-- **0 to 9** (number row): set the mode. Only mode 0 draws anything.
+- **Left / Right**: slow down / speed up (multiplies or divides the 250 ms step delay by 1.1, between 1 ms and 5 s).
+- **Up / Down**: shrink / grow the circles by a factor of 1.1 (at least 10 px). The grid is rebuilt for the new size and the cycle starts over.
+- **0 / 1 / 2** (number row): set the mode. 0: green circles (the original). 1: green squares. 2: circles in random bright colors.
 - Keys act on key release. No command-line arguments.
 - The window is undecorated and fills the screen. The grid cell size is the greatest common factor of the screen width and height (120 px on 1920x1080).
 
 ## Code layout
 
-- `src/screensaver/Main.java`: the whole app: full-screen `JFrame`, input listeners, a repaint thread and the drawing code.
+- `src/screensaver/Main.java`: the whole app: full-screen `JFrame`, input listeners, a Swing timer that adds or removes one tile per step, and the drawing code.
+
+The original jar set a custom cursor from `cursor.png`, which did not ship. The cursor is now only changed if a `cursor.png` is present in the working directory.
 
 ## Running
 
 From the repo root: `./run.ps1 ScreenSaver` (or `./run.ps1 ScreenSaver -Build` to build a jar).
-
-## Known quirks
-
-- It loads a custom cursor from `cursor.png` in the working directory, but no `cursor.png` ships in `ScreenSaver/`.
-- Modes 1 to 9 have no drawing code, so switching to them stops all drawing.
-- Up / Down change the circle size but not the grid positions or tile count, so circles overlap or leave gaps.
-- The speed and size steps truncate to `int`, so once the delay or size gets small enough, Left / Down no longer change it.
-- The repaint thread busy-waits instead of sleeping.

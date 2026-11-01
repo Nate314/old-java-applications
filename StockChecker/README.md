@@ -8,8 +8,9 @@ An editable list of ticker symbols with a price label beside each. The list star
 - **addStock**: adds an empty field at the bottom, as long as the window still fits on screen.
 - **deleteStock**: removes the last field.
 - **COLOR!**: random background color and random label colors.
-- **refresh**: fetches quotes for all fields and sets each label to `$` plus the last price. Any ticker longer than 5 characters is replaced with `MORETHAN5` first.
-- Edits to the list are not saved back to `myStocks.txt`.
+- **refresh** (or **Enter** in a ticker field): fetches quotes for the non-empty fields in the background and sets each label to `$` plus the last price, matched by symbol, or `$--` if there is no quote for it. The button reads "loading..." while the request runs.
+- The list is saved back to `myStocks.txt` on add, delete and refresh.
+- If `myStocks.txt` is missing, the list starts with one empty field.
 - The window is 330 px wide, not resizable, and grows 25 px taller per field.
 - No command-line arguments.
 
@@ -17,22 +18,22 @@ An editable list of ticker symbols with a price label beside each. The list star
 
 - `src/stockchecker/Main.java`: entry point; creates the `StockChecker` and the `Window`.
 - `src/stockchecker/Window.java`: the UI; builds the fields and buttons with a `SpringLayout` and handles the buttons.
-- `src/stockchecker/StockChecker.java`: builds the Yahoo URL, downloads it to `stockCheck.csv` and parses it.
-- `src/stockchecker/WebpageDownloader.java`: copies a URL's response into a file.
-- `src/stockchecker/CSVReader.java`: reads the first 100 lines of a CSV into a `String[][]`.
+- `src/stockchecker/StockChecker.java`: builds the Yahoo URL, downloads it to `stockCheck.csv`, parses it and looks up a symbol's price.
+- `src/stockchecker/WebpageDownloader.java`: copies a URL's response into a file (10 second timeouts).
+- `src/stockchecker/CSVReader.java`: reads every line of a CSV into a list of rows.
 - `src/stockchecker/TextReader.java`: reads a whole `.txt` file into a string.
 
 ## Running
 
 From the repo root: `./run.ps1 StockChecker` (or `./run.ps1 StockChecker -Build` to build a jar).
 
-The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCheck.csv` are opened by relative path. A successful download overwrites `stockCheck.csv`. If the request throws (for example on an HTTP error status), the exception is printed, `stockCheck.csv` is left as it was, and the labels are filled from it anyway. The committed file holds quotes dated 5/13/2016.
+The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCheck.csv` are opened by relative path. A successful download overwrites `stockCheck.csv`. If the request fails (for example on an HTTP error status), the error is printed, `stockCheck.csv` is left as it was, and the labels are filled from it anyway. The committed file holds quotes dated 5/13/2016. The request now uses `https://`; the API is retired either way.
 
-## Known quirks
+## Self-check
 
-- The symbol list sent to Yahoo always has 100 entries: unused slots are `null`, so the URL contains `null,null,...` and ends with a comma. The committed `stockCheck.csv` shows the resulting `"null",N/A,...` rows.
-- `CSVReader` reads exactly 100 lines. A file with fewer lines throws `NullPointerException` and the labels are not updated.
-- If `myStocks.txt` is missing, the error is printed and the list starts with one empty field.
-- The request uses plain `http://` and runs on the Swing event thread, so the window freezes until it finishes.
-- Lots of debug output on stdout (sizes, counts, every CSV line).
-- The empty-field check compares strings with `!=`, so it never skips anything.
+`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. From `StockChecker/`:
+
+```
+javac -d ../out/check/StockChecker src/stockchecker/*.java test/stockchecker/*.java
+java -ea -cp ../out/check/StockChecker stockchecker.StockCheckerCheck
+```

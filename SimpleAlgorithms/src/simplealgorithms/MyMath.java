@@ -21,18 +21,24 @@ public class MyMath {
 	 */
 	public static double estimateSine(double num, int accuracy)
 	{
-		double result = 0;
-		for(int i = 0; i < accuracy; i++)
-		{
-			result += (2 * (i % 2) - 1) * (pow(num, (2 * i) + 1) / factorial((2 * i) + 1));
-			result += (multiply(2, i % 2) - 1) * (pow(num, (2 * i) + 1) / factorial(multiply(2, i) + 1));
-		}
-		return result;
+		return taylorSeries(num, accuracy, 1);
 	}
 	
 	public static double estimateCosine(double num, int accuracy)
 	{
-		return estimateSine(num - (Math.PI / 2), accuracy);
+		return taylorSeries(num, accuracy, 0);
+	}
+	
+	/** Sum of (-1)^i x^(2i+firstPower) / (2i+firstPower)!: sine for firstPower 1, cosine for 0. */
+	private static double taylorSeries(double num, int accuracy, int firstPower)
+	{
+		double result = 0;
+		for(int i = 0; i < accuracy; i++)
+		{
+			int power = multiply(2, i) + firstPower;
+			result += (i % 2 == 0 ? 1 : -1) * (pow(num, power) / factorial(power));
+		}
+		return result;
 	}
 	
 	public static double pow(double num, int pow)
@@ -45,13 +51,13 @@ public class MyMath {
 		return result;
 	}
 	
-	public static int factorial(int num)
+	/** Exact up to 20!; larger values overflow a long. */
+	public static long factorial(int num)
 	{
-		int result = 1;
+		long result = 1;
 		for(int i = num; i > 1; i--)
 		{
-//			result *= i;
-			result = multiply(result, i);
+			result *= i;
 		}
 		return result;
 	}

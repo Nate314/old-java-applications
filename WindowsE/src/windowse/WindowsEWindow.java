@@ -1,5 +1,6 @@
 package windowse;
 
+import java.awt.AWTException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JButton;
@@ -27,7 +28,21 @@ public final class WindowsEWindow extends JFrame implements ActionListener {
    @Override
    public final void actionPerformed(ActionEvent event) {
       if (event.getSource() == this.doItButton) {
-         new WindowsEPresser(Integer.parseInt(this.countField.getText()));
+         int count;
+         try {
+            count = Integer.parseInt(this.countField.getText().trim());
+         } catch (NumberFormatException e) {
+            this.setTitle("Windows+E: enter a whole number");
+            return;
+         }
+         this.setTitle("Windows+E");
+         this.doItButton.setEnabled(false);
+         try {
+            new WindowsEPresser(count, () -> this.doItButton.setEnabled(true)).start();
+         } catch (AWTException e) {
+            e.printStackTrace();
+            this.doItButton.setEnabled(true);
+         }
       }
    }
 }

@@ -9,6 +9,6 @@ public class Main {
 		System.out.println("cos(pi/4) ~= " + MyMath.estimateCosine(Math.PI / 4, 4));
 		System.out.println("5! = " + MyMath.factorial(5));
 		System.out.println("5^3 = " + MyMath.pow(5, 3));
-		System.out.println("4/2 = " + MyMath.divide(5, 3));
+		System.out.println("4/2 = " + MyMath.divide(4, 2));
 	}
 }
