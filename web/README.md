@@ -114,7 +114,7 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `shim/`: the compatibility layer and the TeaVM compiler extensions (`web.teavm`).
 - `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
-- `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `shim.css` (the Classic and Modern skins) and `shots/` (the home page thumbnails).
+- `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `shim.css` (the Modern, Classic and Arcade skins) and `shots/` (the home page thumbnails).
 - `shots.ps1`: recaptures `site/shots/` from a built site (see Home page).
 
 ## Home page
@@ -170,11 +170,19 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 - On an app page it floats at the bottom, and Controls in the toolbar hides or shows it. It starts shown where the main pointer is a finger (`pointer: coarse`) and hidden elsewhere. On pages narrower than 560 px the How to play card moves above it.
 - The choice made with either Controls button is remembered in `localStorage` (`oldjava.pad`).
 - Buttons never take keyboard focus, so the app keeps the keyboard. A press counts as playing for the arcade passport.
-- The keys are synthetic `KeyboardEvent`s dispatched on the page, with `keyCode` set the way the shim reads it, so the apps and the shim are unchanged. The layouts are the `PADS` table in `boot.js`. Both skins style it: a dark glass console in Modern, a Metal panel in Classic.
+- The keys are synthetic `KeyboardEvent`s dispatched on the page, with `keyCode` set the way the shim reads it, so the apps and the shim are unchanged. The layouts are the `PADS` table in `boot.js`. Every skin styles it: a dark glass console in Modern, a Metal panel in Classic, neon buttons that light up magenta in Arcade.
 
 ## Skins
 
-The toggle in the top-right corner switches between Modern (the default: flatter, rounded, follows the system dark mode) and Classic (close to Swing's default Metal look). The choice is remembered in `localStorage`. Skins only change colors and decoration; sizes and fonts come from Java, so the layout is the same in both. Colors an app sets itself (Minesweeper's green tiles, for example) are kept in both skins.
+The picker in the top-right corner switches between three skins:
+
+- Modern (the default): flatter, rounded, follows the system dark mode.
+- Classic: close to Swing's default Metal look.
+- Arcade: every app as if on a CRT arcade cabinet. Windows get neon magenta frames with a glow, cyan title text and buttons, and phosphor-green text fields and output panels, on a dark purple desk with a faint grid. Fine scanlines and a vignette cover the page, and a faint bright band rolls down it. When an app starts, its windows open from a bright line like a tube warming up, so every app swapped into the home page's player powers on too. The home page turns into a neon cabinet as well (glowing title, player and buttons).
+
+The home page's player bar has an Arcade mode button that switches every open page of the site to Arcade and back to the skin from before. The choice is remembered in `localStorage` (`oldjava.skin`). Skins only change colors and decoration; sizes and widget fonts come from Java, so the layout is the same in all three. Colors an app sets itself (Minesweeper's green tiles, for example) are kept in every skin.
+
+In Arcade the scanlines and the rolling band are pseudo-elements of the page's `body` that never take pointer events. Pages in the home page's player leave them out (the home page draws them once over the player), and so does thumbnail mode. The power-on animates the CSS `scale` property of `#desktop`, so it does not disturb the `transform` that centers the windows in the player. The rolling band and the power-on are left out when the system asks for reduced motion. The thumbnails stay Modern screenshots in every skin.
 
 ## Limitations
 

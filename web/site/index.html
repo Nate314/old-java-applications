@@ -94,7 +94,7 @@
     .passport-head h2 { margin: 0; }
     .passport-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
     .passport-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .passport-head .btn[hidden] { display: none; }
+    .passport-head .btn[hidden], .player-bar .btn[hidden] { display: none; }
     /* 16 stamps: two even rows of 8, or four rows of 4 on narrow pages. */
     .stamps { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px 10px;
               margin: 16px 0 0; padding: 0; list-style: none; }
@@ -123,6 +123,25 @@
     ul.apps .badge { position: absolute; top: 8px; left: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
                      font-size: 12px; font-weight: 700; background: #f59e0b; color: #1f2937; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
     ul.apps li.played .badge { background: #16a34a; color: #fff; }
+
+    /* ---- arcade skin (shim.css draws the scanlines): the page as a neon cabinet ---- */
+    .btn.arcade[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    :root[data-skin="arcade"] h1 { color: #fff; letter-spacing: 0.02em;
+      text-shadow: 0 0 6px #ff2bd6, 0 0 18px rgba(255, 43, 214, 0.75), 0 0 42px rgba(0, 229, 255, 0.45); }
+    :root[data-skin="arcade"] h2 { color: #7df9ff; text-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
+    :root[data-skin="arcade"] .player { border-color: #ff2bd6;
+      box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.5), 0 0 32px rgba(255, 43, 214, 0.35), 0 0 90px rgba(0, 229, 255, 0.15); }
+    :root[data-skin="arcade"] .player-bar .live { color: #7df9ff; text-shadow: 0 0 6px rgba(0, 229, 255, 0.8); }
+    :root[data-skin="arcade"] .player-bar .live::before { background: #ff2bd6; box-shadow: 0 0 8px 2px rgba(255, 43, 214, 0.8); }
+    :root[data-skin="arcade"] .btn { border-color: #00e5ff; box-shadow: 0 0 6px rgba(0, 229, 255, 0.3); }
+    :root[data-skin="arcade"] .btn.primary, :root[data-skin="arcade"] .btn[aria-pressed="true"] {
+      border-color: #ff2bd6; box-shadow: 0 0 10px rgba(255, 43, 214, 0.6); }
+    :root[data-skin="arcade"] ul.apps li { border-color: #35205c; }
+    @media (hover: hover) {
+      :root[data-skin="arcade"] ul.apps li:not(.text):hover { border-color: #ff2bd6;
+        box-shadow: 0 0 0 1px #ff2bd6, 0 0 24px rgba(255, 43, 214, 0.45); }
+    }
+    :root[data-skin="arcade"] .rail li button[aria-current="true"] { box-shadow: 0 0 12px rgba(255, 43, 214, 0.6); }
   </style>
 </head>
 <body>
@@ -138,6 +157,7 @@
       <h3 id="player-name">Minesweeper</h3>
       <span class="hint" id="player-hint">15 x 15 board with MIDI sound. Right-click to flag. Arrow keys move the window.</span>
       <div class="actions">
+        <button class="btn arcade" type="button" id="player-arcade" aria-pressed="false" title="Neon CRT arcade look for every app (the Arcade skin)">Arcade mode</button>
         <button class="btn" type="button" id="player-shuffle" title="Play a random app">Shuffle</button>
         <button class="btn" type="button" id="player-pad-toggle" aria-pressed="true" title="Show or hide the on-screen controller" hidden>Controls</button>
         <button class="btn" type="button" id="player-restart">Restart</button>
@@ -297,7 +317,7 @@
       var name = li.querySelector('strong').textContent;
       var page = app + '/index.html';
       document.getElementById('player-name').textContent = name;
-      document.getElementById('player-hint').textContent = li.querySelector('span').textContent;
+      document.getElementById('player-hint').textContent = li.querySelector('.body > span').textContent;
       document.getElementById('player-full').href = page;
       frame.title = name;
       showPad(app);
@@ -469,6 +489,23 @@
       }
       resetButton.textContent = 'Clear all stamps?';
       resetTimer = setTimeout(function () { resetTimer = null; resetButton.textContent = 'Reset'; }, 4000);
+    });
+
+    // Arcade mode: the Arcade skin on this page, its player and every other open page, and back to the
+    // skin from before. The button follows the skin however it changes (the picker, another tab).
+    var arcadeButton = document.getElementById('player-arcade');
+    var skinBefore = 'modern';
+    function syncArcade() {
+      var on = window.oldjavaSkin.get() === 'arcade';
+      arcadeButton.setAttribute('aria-pressed', String(on));
+      if (!on) skinBefore = window.oldjavaSkin.get();
+    }
+    new MutationObserver(syncArcade).observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+    syncArcade();
+    arcadeButton.addEventListener('click', function () {
+      window.oldjavaSkin.set(window.oldjavaSkin.get() === 'arcade' ? skinBefore : 'arcade');
+      arcadeButton.blur();
+      frame.focus();
     });
 
     window.addEventListener('resize', fit);
