@@ -1,6 +1,10 @@
 /*
  * Page bootstrap shared by the app index and every app page.
- * - Applies the saved skin before first paint and adds the skin toggle.
+ * - Applies the saved skin before first paint and adds the skin toggle. A skin change in one page
+ *   (the home page, say) reaches every other open page of the site through the storage event.
+ * - An app page opened with ?embed (the home page's player) leaves out the toolbar and centers the app's
+ *   windows, which most apps put at the top-left corner of the screen. ?embed&shot is the
+ *   thumbnail mode web/shots.ps1 uses: square, shadowless windows on a flat magenta desktop.
  * - On an app page: preloads the files listed in <body data-files>, then calls the TeaVM main().
  * - Provides window.__shimSynth, the Web Audio voices behind javax.sound.midi.
  * - Routes System.out to the console by line, and on pages with <body data-console> also to an output panel.
@@ -15,6 +19,19 @@
   } catch (e) { /* storage blocked: use the default */ }
   if (skin !== 'classic' && skin !== 'modern') skin = 'modern';
   document.documentElement.setAttribute('data-skin', skin);
+
+  // Fires in every other same-origin page, including the player iframe on the home page.
+  window.addEventListener('storage', function (e) {
+    if (e.key === SKIN_KEY && (e.newValue === 'classic' || e.newValue === 'modern')) {
+      document.documentElement.setAttribute('data-skin', e.newValue);
+      var select = document.querySelector('.shim-toolbar select');
+      if (select) select.value = e.newValue;
+    }
+  });
+
+  var embedded = /[?&]embed(=|&|$)/.test(location.search);
+  if (embedded) document.documentElement.setAttribute('data-embed', '');
+  if (embedded && /[?&]shot(=|&|$)/.test(location.search)) document.documentElement.setAttribute('data-shot', '');
 
   function setSkin(value) {
     document.documentElement.setAttribute('data-skin', value);
@@ -44,6 +61,28 @@
     label.appendChild(select);
     bar.appendChild(label);
     document.body.appendChild(bar);
+  }
+
+  // Embedded pages: keep the windows, as a group, centered in the viewport. Only a change in which windows
+  // are open, their sizes or the viewport size recenters them, so dragging a window or moving it with keys
+  // works as usual.
+  function centerWindows(desktop) {
+    var key = '';
+    setInterval(function () {
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, k = desktop.clientWidth + 'x' + desktop.clientHeight + ':';
+      for (var c = desktop.firstElementChild; c; c = c.nextElementSibling) {
+        if (!c.offsetWidth) continue;
+        k += c.offsetWidth + 'x' + c.offsetHeight + ',';
+        x0 = Math.min(x0, c.offsetLeft); y0 = Math.min(y0, c.offsetTop);
+        x1 = Math.max(x1, c.offsetLeft + c.offsetWidth); y1 = Math.max(y1, c.offsetTop + c.offsetHeight);
+      }
+      if (k === key) return;
+      key = k;
+      if (x1 < x0) return;
+      var dx = Math.max(-x0, (desktop.clientWidth - (x1 - x0)) / 2 - x0);
+      var dy = Math.max(-y0, (desktop.clientHeight - (y1 - y0)) / 2 - y0);
+      desktop.style.transform = 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)';
+    }, 250);
   }
 
   function overlay(text, button) {
@@ -169,12 +208,13 @@
   document.addEventListener('DOMContentLoaded', function () {
     var body = document.body;
     var isApp = body.hasAttribute('data-app');
-    toolbar(isApp);
+    if (!embedded) toolbar(isApp);
     if (!isApp) return;
 
     var desktop = document.createElement('div');
     desktop.id = 'desktop';
     body.insertBefore(desktop, body.firstChild);
+    if (embedded && !document.documentElement.hasAttribute('data-shot')) centerWindows(desktop);
     if (body.hasAttribute('data-console')) {
       outPanel = document.createElement('pre');
       outPanel.className = 'shim-console';

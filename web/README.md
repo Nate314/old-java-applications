@@ -114,7 +114,18 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `shim/`: the compatibility layer and the TeaVM compiler extensions (`web.teavm`).
 - `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
-- `site/`: `index.html`, one `<App>/index.html` per app, `boot.js` and `shim.css` (the Classic and Modern skins).
+- `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `shim.css` (the Classic and Modern skins) and `shots/` (the home page thumbnails).
+- `shots.ps1`: recaptures `site/shots/` from a built site (see Home page).
+
+## Home page
+
+The home page opens with a player: Minesweeper is already running in it, and every card's Play button (or thumbnail) swaps that app into the player without leaving the page. Full page opens the app's own page, as do Ctrl-, Shift- and middle-clicks on Play. Selecting an app puts it in the address (`index.html#FlappyBird`), and loading that address starts the page with that app in the player. The filter buttons narrow the cards to games, music, toys or tools.
+
+- The player is an iframe of `<App>/index.html?embed`. In embed mode `boot.js` leaves out the toolbar and keeps the app's windows centered as a group, since most apps open their window at the top-left corner of the screen. It recenters only when a window opens, closes or changes size, or the viewport does, so dragging a window or moving it with the arrow keys (Minesweeper) works as usual.
+- The iframe's viewport is at least 900 x 520 (720 tall for Rubik's Cube, whose window is 700 px tall) and is scaled down to the width of the page, so apps that size their window from the screen get a desktop-sized screen on a phone too. The player is never taller than the browser window minus room for its title bar.
+- Each new app gets a new iframe, so the previous app's timers and sound stop. Restart reloads the current one.
+- A skin change on any page reaches every other open page of the site, the player included, through the `storage` event.
+- The thumbnails in `site/shots/` are screenshots of the apps in the Modern skin, taken with the system's color scheme. To retake them after a visual change, build the site, then run `./web/shots.ps1` from the repo root (`-Apps Minesweeper,Clock` for some apps only). It serves the built site on port 8101 with Python, opens each app page in headless Chrome in thumbnail mode (`?embed&shot`: square, shadowless windows on a magenta desktop, without the output panel unless it is all the app shows), crops each image to the windows, makes the remaining magenta transparent and scales it down to at most 480 px wide.
 
 ## Skins
 
