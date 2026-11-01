@@ -154,6 +154,24 @@ The site keeps a stamp for every app the visitor has played, to give them a reas
 
 The stamps are `{ "AppId": time of first play }` under `oldjava.played` in `localStorage` (only in that browser), kept by `boot.js` as `window.oldjavaPassport`. Every open page of the site hears new stamps through the `storage` event, as with the skin.
 
+## Touch controller
+
+The keyboard games get an on-screen controller, so they can be played on a phone or tablet. Its buttons press and release the same keys the app listens for, taken from each app's sources:
+
+| App | Controller |
+|---|---|
+| FlappyBird | Flap (Space), Pause (P), Reset (R) |
+| TankGame | Two players on one screen: a cross (W A S D) and Fire (Q) for the red tank, a cross (arrow keys) and Fire (M) for the green tank |
+| SynthesizerKeyboard | One octave of piano keys (Z S X D C V G B H N J M ,), each held for as long as it is touched, plus Octave and Sound buttons (arrow keys) |
+| SpriteFloatyStars | Add star (Up), Remove star (Down) |
+
+- Each button shows its key, and lights up when that key is pressed on a real keyboard, so the controller doubles as a key chart.
+- On the home page the controller is docked under the player's screen (and goes with it to Big screen) whenever one of these apps is playing. Its presses reach the player's iframe through `postMessage`, and the iframe reports real key presses back to light the buttons. Controls in the player bar hides or shows it.
+- On an app page it floats at the bottom, and Controls in the toolbar hides or shows it. It starts shown where the main pointer is a finger (`pointer: coarse`) and hidden elsewhere. On pages narrower than 560 px the How to play card moves above it.
+- The choice made with either Controls button is remembered in `localStorage` (`oldjava.pad`).
+- Buttons never take keyboard focus, so the app keeps the keyboard. A press counts as playing for the arcade passport.
+- The keys are synthetic `KeyboardEvent`s dispatched on the page, with `keyCode` set the way the shim reads it, so the apps and the shim are unchanged. The layouts are the `PADS` table in `boot.js`. Both skins style it: a dark glass console in Modern, a Metal panel in Classic.
+
 ## Skins
 
 The toggle in the top-right corner switches between Modern (the default: flatter, rounded, follows the system dark mode) and Classic (close to Swing's default Metal look). The choice is remembered in `localStorage`. Skins only change colors and decoration; sizes and fonts come from Java, so the layout is the same in both. Colors an app sets itself (Minesweeper's green tiles, for example) are kept in both skins.

@@ -139,6 +139,7 @@
       <span class="hint" id="player-hint">15 x 15 board with MIDI sound. Right-click to flag. Arrow keys move the window.</span>
       <div class="actions">
         <button class="btn" type="button" id="player-shuffle" title="Play a random app">Shuffle</button>
+        <button class="btn" type="button" id="player-pad-toggle" aria-pressed="true" title="Show or hide the on-screen controller" hidden>Controls</button>
         <button class="btn" type="button" id="player-restart">Restart</button>
         <button class="btn" type="button" id="player-big" aria-pressed="false" title="Fill the screen with the player">Big screen</button>
         <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
@@ -147,6 +148,7 @@
     <div class="screen" id="screen">
       <iframe id="player-frame" title="Minesweeper" src="Minesweeper/index.html?embed" allow="autoplay"></iframe>
     </div>
+    <div class="docked" id="player-pad" hidden></div>
     <nav class="rail" aria-label="Switch app">
       <button class="btn step" type="button" id="player-prev" aria-label="Previous app" title="Previous app">&lsaquo;</button>
       <ol id="rail"></ol>
@@ -298,6 +300,7 @@
       document.getElementById('player-hint').textContent = li.querySelector('span').textContent;
       document.getElementById('player-full').href = page;
       frame.title = name;
+      showPad(app);
       fit();
       // A new iframe each time, so the old app's timers and audio stop with it.
       var next = frame.cloneNode(false);
@@ -360,9 +363,34 @@
       });
     });
 
+    // The keyboard games get a controller docked under the screen (boot.js builds it). Its presses go into
+    // the player's iframe; real key presses there come back to light its buttons. Shown unless turned off.
+    var padBox = document.getElementById('player-pad');
+    var padToggle = document.getElementById('player-pad-toggle');
+    var padLight = null;
+    function showPad(app) {
+      var pad = window.oldjavaPad;
+      var has = pad.has(app);
+      padToggle.hidden = !has;
+      padLight = has ? pad.render(padBox, app, function (type, key) {
+        frame.contentWindow.postMessage({ oldjavaKey: { type: type, name: key } }, location.origin);
+      }) : null;
+      padBox.hidden = !has || !pad.wanted(true);
+      padToggle.setAttribute('aria-pressed', String(!padBox.hidden));
+    }
+    padToggle.addEventListener('click', function () {
+      padBox.hidden = !padBox.hidden;
+      padToggle.setAttribute('aria-pressed', String(!padBox.hidden));
+      window.oldjavaPad.remember(!padBox.hidden);
+      fit();
+      frame.focus();
+    });
+
     // An app's exit screen in the player suggests other apps; picking one asks this page to swap it in.
     window.addEventListener('message', function (e) {
       if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data) return;
+      var lit = e.data.oldjavaKeyLit;
+      if (lit) { if (padLight) padLight(lit.which, !!lit.down); return; }
       var li = card(e.data.oldjavaPlay);
       if (li) choose(li);
     });
