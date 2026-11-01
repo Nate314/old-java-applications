@@ -103,11 +103,16 @@ public final class Js {
     public static native JSObject document();
 
 
-    @JSBody(script = "return window.innerWidth;")
+    /** The page desktop's size: on an app page, the stage between the toolbar and the controller. */
+    @JSBody(script = "var _d = document.getElementById('desktop'); return _d && _d.clientWidth ? _d.clientWidth : window.innerWidth;")
     public static native int viewportWidth();
 
-    @JSBody(script = "return window.innerHeight;")
+    @JSBody(script = "var _d = document.getElementById('desktop'); return _d && _d.clientHeight ? _d.clientHeight : window.innerHeight;")
     public static native int viewportHeight();
+
+    /** How far boot.js has scaled the page desktop down to fit the windows on the stage (1 = not scaled). */
+    @JSBody(script = "return window.__shimScale || 1;")
+    public static native double desktopScale();
 
     @JSBody(script = "return window.devicePixelRatio || 1;")
     public static native double pixelRatio();

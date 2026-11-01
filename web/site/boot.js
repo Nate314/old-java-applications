@@ -5,6 +5,9 @@
  * - An app page opened with ?embed (the home page's player) leaves out the toolbar and centers the app's
  *   windows, which most apps put at the top-left corner of the screen. ?embed&shot is the
  *   thumbnail mode web/shots.ps1 uses: square, shadowless windows on a flat magenta desktop.
+ * - Any other app page is a stage: a toolbar band across the top with the app's name, and the app's windows
+ *   centered in the space left between it and the controller (or output panel) at the bottom, which the shim
+ *   reports to Java as the screen, so neither the toolbar nor the controller covers an app window.
  * - On an app page: preloads the files listed in <body data-files>, then calls the TeaVM main().
  * - Provides window.__shimSynth, the Web Audio voices behind javax.sound.midi.
  * - Routes System.out to the console by line, and on pages with <body data-console> also to an output panel.
@@ -96,6 +99,10 @@
     var bar = document.createElement('div');
     bar.className = 'shim-toolbar';
     if (isApp) {
+      var name = document.createElement('strong');
+      name.className = 'shim-bar-name';
+      name.textContent = document.title;
+      bar.appendChild(name);
       var back = document.createElement('a');
       back.href = '../index.html';
       back.textContent = 'All apps';
@@ -161,13 +168,26 @@
     label.appendChild(select);
     bar.appendChild(label);
     document.body.appendChild(bar);
+    if (isApp) stageEdge(bar, '--bar-h');
     showSound();
     if (controls) padOnPage(controls);
   }
 
-  // Embedded pages: keep the windows, as a group, centered in the viewport. Only a change in which windows
-  // are open, their sizes or the viewport size recenters them, so dragging a window or moving it with keys
-  // works as usual.
+  // An app page's stage: #desktop fills the space between the toolbar band at the top and the controller and
+  // the output panel at the bottom, so no app window sits under them. The shim reports the stage as the
+  // screen, so apps that size or center their windows from the screen fit it, and centerWindows keeps the
+  // windows centered on it. stageEdge keeps a CSS variable at an element's height.
+  function stageEdge(el, name) {
+    function set() { document.documentElement.style.setProperty(name, (el.isConnected && !el.hidden ? el.offsetHeight : 0) + 'px'); }
+    set();
+    if (window.ResizeObserver) new ResizeObserver(set).observe(el);
+    else addEventListener('resize', set);
+  }
+
+  // Embedded pages and app pages: keep the windows, as a group, centered on the desktop, scaled down to fit it
+  // when they are bigger (window.__shimScale, which the shim divides mouse positions by). Only a change in
+  // which windows are open, their sizes or the desktop's size recenters them, so dragging a window or moving
+  // it with keys works as usual.
   function centerWindows(desktop) {
     var key = '';
     setInterval(function () {
@@ -181,9 +201,15 @@
       if (k === key) return;
       key = k;
       if (x1 < x0) return;
-      var dx = Math.max(-x0, (desktop.clientWidth - (x1 - x0)) / 2 - x0);
-      var dy = Math.max(-y0, (desktop.clientHeight - (y1 - y0)) / 2 - y0);
-      desktop.style.transform = 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)';
+      var w = desktop.clientWidth, h = desktop.clientHeight;
+      var s = Math.min(1, w / (x1 - x0), h / (y1 - y0));
+      // About the desktop's center (the default transform origin, which the Arcade power-on's scale shares).
+      var dx = s * (w - x0 - x1) / 2;
+      var dy = s * (h - y0 - y1) / 2;
+      window.__shimScale = s;
+      // Whole pixels keep unscaled windows crisp; a scaled group keeps the exact fit instead.
+      desktop.style.transform = s < 1 ? 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')'
+        : 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)';
     }, 250);
   }
 
@@ -502,7 +528,8 @@
     function show(on) {
       el.hidden = !on;
       toggle.setAttribute('aria-pressed', String(on));
-      document.body.style.setProperty('--pad-h', on ? el.offsetHeight + 'px' : '0px');
+      // From its top edge to the bottom of the page, so the gap under it is kept off the stage too.
+      document.documentElement.style.setProperty('--pad-h', on ? Math.ceil(innerHeight - el.getBoundingClientRect().top) + 'px' : '0px');
     }
     show(pad.wanted(!!(window.matchMedia && matchMedia('(pointer: coarse)').matches)));
     toggle.addEventListener('click', function () {
@@ -1849,6 +1876,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     var body = document.body;
     var isApp = body.hasAttribute('data-app');
+    if (isApp && !embedded) document.documentElement.setAttribute('data-stage', '');
     if (!embedded) toolbar(isApp);
     // The player's iframe leaves the toast to the home page around it, which hears the stamp too. An app page
     // shows only its own stamp; the home page shows any.
@@ -1859,14 +1887,13 @@
     var desktop = document.createElement('div');
     desktop.id = 'desktop';
     body.insertBefore(desktop, body.firstChild);
-    if (embedded && !document.documentElement.hasAttribute('data-shot')) {
-      centerWindows(desktop);
-      if (window.parent !== window) padInPlayer();
-    }
+    if (!document.documentElement.hasAttribute('data-shot')) centerWindows(desktop);
+    if (embedded && window.parent !== window) padInPlayer();
     if (body.hasAttribute('data-console')) {
       outPanel = document.createElement('pre');
       outPanel.className = 'shim-console';
       body.appendChild(outPanel);
+      if (!embedded) stageEdge(outPanel, '--out-h');
     }
 
     var files = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
