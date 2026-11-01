@@ -1395,3 +1395,414 @@ canvas.paint.top {
     display: none;
   }
 }
+
+/* ---- title screen: an app page opens on it while its files load, and the app starts on Play ----
+   Below the toolbar (so Switch app, Sound and the skin picker work on it), above everything else. */
+
+.shim-title {
+  position: fixed;
+  inset: 0;
+  z-index: 1999999998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 56px 16px 16px;
+  overflow: auto;
+  background: var(--desk);
+  color: var(--page-text);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: default;
+  transition: opacity 0.35s ease-out;
+}
+
+.shim-title.ready {
+  cursor: pointer;
+}
+
+.shim-title-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-areas: "art text" "meter meter" "log log";
+  gap: 18px 24px;
+  width: min(880px, 100%);
+  margin: auto;
+  box-sizing: border-box;
+  padding: 22px;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  background: var(--card-bg);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  transition: scale 0.35s ease-out, filter 0.35s ease-out;
+}
+
+.shim-title-art {
+  grid-area: art;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  max-height: 46vh;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--desk);
+  overflow: hidden;
+}
+
+.shim-title-art img {
+  max-width: 100%;
+  max-height: calc(46vh - 36px);
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.3));
+}
+
+.shim-title-text {
+  grid-area: text;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shim-title-cat {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shim-title-cat:empty {
+  display: none;
+}
+
+.shim-title h1 {
+  margin: 0;
+  font-size: clamp(28px, 4.6vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.shim-title-hint {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.85;
+}
+
+.shim-title-stamp {
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px dashed currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.shim-title-stamp:empty {
+  display: none;
+}
+
+.shim-title-stamp.played {
+  border-style: solid;
+  border-color: #22c55e;
+  color: #16a34a;
+}
+
+.shim-title-play {
+  margin-top: 6px;
+  padding: 10px 30px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: 700 18px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
+}
+
+.shim-title-play:disabled {
+  cursor: progress;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.shim-title.ready .shim-title-play {
+  animation: title-pulse 1.8s ease-in-out infinite;
+}
+
+.shim-title-play:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.shim-title-press {
+  font-size: 12px;
+  opacity: 0.6;
+  visibility: hidden;
+}
+
+.shim-title.ready .shim-title-press {
+  visibility: visible;
+}
+
+.shim-title-meter {
+  grid-area: meter;
+}
+
+.shim-title-log {
+  grid-area: log;
+  display: flex;
+  flex-direction: column;
+  height: 7.5em;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #cbd5e1;
+  font: 12px/1.5 ui-monospace, Consolas, "Courier New", monospace;
+  scrollbar-width: thin;
+}
+
+.shim-title-log .row {
+  display: flex;
+  gap: 12px;
+}
+
+.shim-title-log .row > :first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shim-title-log .row > :first-child::before {
+  content: "load ";
+  opacity: 0.5;
+}
+
+.shim-title-log .row > :last-child {
+  flex: none;
+  color: #86efac;
+}
+
+.shim-title-log .row.bad > :last-child {
+  color: #fca5a5;
+}
+
+.shim-title-log .row.ready > :first-child::before {
+  content: "";
+}
+
+.shim-title-log .row.ready {
+  color: #86efac;
+  font-weight: 700;
+}
+
+.shim-title.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shim-title.leaving .shim-title-card {
+  scale: 1.04;
+}
+
+/* While it shows, the controller and the Arcade power-on wait for the app to start. */
+:root[data-title] .shim-pad {
+  visibility: hidden;
+}
+
+:root[data-skin][data-title] #desktop {
+  animation: none;
+}
+
+@keyframes title-pulse {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.05; }
+}
+
+@keyframes title-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+
+@media (max-width: 680px) {
+  .shim-title-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "art" "text" "meter" "log";
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .shim-title-art {
+    min-height: 0;
+    max-height: 30vh;
+    padding: 12px;
+  }
+
+  .shim-title-art img {
+    max-height: calc(30vh - 24px);
+  }
+
+  .shim-title-log {
+    height: 4.5em;
+  }
+}
+
+@media (max-height: 560px) {
+  .shim-title-log {
+    height: 4.5em;
+  }
+}
+
+/* Classic: a Metal dialog, like a Java splash screen. */
+:root[data-skin="classic"] .shim-title-card {
+  border: 1px solid var(--frame-border);
+  border-top: 22px solid #b8cfe5;
+  border-radius: 0;
+  background: var(--frame-bg);
+  box-shadow: var(--window-shadow);
+}
+
+:root[data-skin="classic"] .shim-title-art {
+  border: 1px solid var(--field-border);
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-title-play {
+  border: 1px solid var(--button-border);
+  border-radius: 0;
+  background: var(--button-bg);
+  color: var(--control-text);
+  font-family: Dialog, Tahoma, sans-serif;
+  box-shadow: none;
+}
+
+:root[data-skin="classic"] .shim-title.ready .shim-title-play {
+  animation: none;
+}
+
+:root[data-skin="classic"] .shim-title-meter,
+:root[data-skin="classic"] .shim-title-meter::before {
+  height: 14px;
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-title-meter {
+  border: 1px solid var(--field-border);
+  background: #ffffff;
+}
+
+:root[data-skin="classic"] .shim-title-meter::before {
+  background: repeating-linear-gradient(90deg, #6382bf 0 10px, transparent 10px 12px);
+}
+
+:root[data-skin="classic"] .shim-title-log {
+  border: 1px solid var(--field-border);
+  border-radius: 0;
+  background: #ffffff;
+  color: #333333;
+}
+
+:root[data-skin="classic"] .shim-title-log .row > :last-child,
+:root[data-skin="classic"] .shim-title-log .row.ready {
+  color: #2c5b9a;
+}
+
+/* Arcade: a cabinet's attract screen, with a blinking PRESS ANY KEY. */
+:root[data-skin="arcade"] .shim-title-card {
+  border: 1px solid #ff2bd6;
+  border-radius: 8px;
+  background: rgba(14, 8, 32, 0.92);
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 40px rgba(255, 43, 214, 0.35), 0 0 90px rgba(0, 229, 255, 0.12);
+}
+
+:root[data-skin="arcade"] .shim-title-art {
+  border: 1px solid #35205c;
+  background: radial-gradient(circle at 50% 40%, #2a1552, #07040f 75%);
+}
+
+:root[data-skin="arcade"] .shim-title-art img {
+  filter: drop-shadow(0 0 16px rgba(255, 43, 214, 0.45));
+}
+
+:root[data-skin="arcade"] .shim-title h1 {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #ffd6fa;
+  text-shadow: 0 0 6px #ff2bd6, 0 0 18px #ff2bd6, 0 0 40px rgba(255, 43, 214, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-title-cat {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-title-stamp.played {
+  border-color: #39ff88;
+  color: #39ff88;
+}
+
+:root[data-skin="arcade"] .shim-title-play {
+  border: 2px solid #00e5ff;
+  border-radius: 4px;
+  background: linear-gradient(#2a1552, #170b33);
+  color: #7df9ff;
+  font-family: "Courier New", ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.8);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-title.ready .shim-title-press {
+  font: 700 14px "Courier New", ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff35c;
+  opacity: 1;
+  text-shadow: 0 0 8px rgba(255, 243, 92, 0.8);
+  animation: title-blink 1s steps(1) infinite;
+}
+
+:root[data-skin="arcade"] .shim-title-meter::before {
+  background: linear-gradient(90deg, #ff2bd6, #00e5ff);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-title-log {
+  border: 1px solid #1f8f5a;
+  background: #020a06;
+  color: #39ff88;
+  text-shadow: 0 0 5px rgba(57, 255, 136, 0.55);
+}
+
+:root[data-skin="arcade"] .shim-title-log .row > :last-child {
+  color: #7df9ff;
+}
+
+/* The tube switches off: the card collapses to a bright line as the app powers on behind it. */
+:root[data-skin="arcade"] .shim-title.leaving .shim-title-card {
+  scale: 1 0.004;
+  filter: brightness(4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-title,
+  .shim-title-card {
+    transition: none;
+  }
+
+  .shim-title.ready .shim-title-play,
+  :root[data-skin="arcade"] .shim-title.ready .shim-title-press {
+    animation: none;
+  }
+}

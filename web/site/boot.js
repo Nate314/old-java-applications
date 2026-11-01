@@ -8,6 +8,8 @@
  * - On an app page: preloads the files listed in <body data-files>, then calls the TeaVM main().
  * - Provides window.__shimSynth, the Web Audio voices behind javax.sound.midi.
  * - Routes System.out to the console by line, and on pages with <body data-console> also to an output panel.
+ * - Opens an app page on a title screen (thumbnail, hint, passport stamp and a live boot log of the files
+ *   loading); the app starts on the visitor's Play click or key press, so its first sounds can play.
  * - Keeps visitors moving between apps: an app page's toolbar has a Switch app drawer and a Next link, a
  *   How to play card shows the app's hint, and when the app exits the Run again box suggests three apps to
  *   play next. The list of apps is read from the home page's gallery (../index.html), so it lives in one place.
@@ -303,7 +305,7 @@
   // An app page is stamped by the first click or key press in the app itself (not in the site's own panels),
   // so the home page's player does not stamp Minesweeper just by loading it. A console program
   // (<body data-console>) has nothing to press: running it counts.
-  var CHROME = '.shim-toolbar, .shim-drawer, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast, .shim-pad';
+  var CHROME = '.shim-toolbar, .shim-drawer, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast, .shim-pad, .shim-title';
   function stampOnPlay() {
     var id = appId();
     if (document.body.hasAttribute('data-console')) { passport.stamp(id); return; }
@@ -742,6 +744,144 @@
     });
   }
 
+  // ---- title screen ----
+  // An app page opens on a title screen while its files load: the app's thumbnail, name, category, hint and
+  // passport stamp, a boot log of the files as they arrive (real names and sizes) and a Play button. The app
+  // starts on the visitor's click or key press, so its first sounds (MusicTheoryExpert's demo, the site's
+  // start sound) are allowed to play. Run again skips it (see overlay). Returns { loaded(file), ready(start) }.
+  var AGAIN_KEY = 'oldjava.again';
+  var CATS = { game: 'Game', music: 'Music', toy: 'Toy', tool: 'Tool' };
+  function size(bytes) {
+    return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
+  }
+  function titleScreen(files) {
+    var html = document.documentElement;
+    html.setAttribute('data-title', '');
+    var screen = document.createElement('div');
+    screen.className = 'shim-title';
+    screen.setAttribute('role', 'dialog');
+    screen.setAttribute('data-sound', 'none');   // starting plays the start sound
+    var card = document.createElement('div');
+    card.className = 'shim-title-card';
+    var art = document.createElement('div');
+    art.className = 'shim-title-art';
+    var img = document.createElement('img');
+    img.alt = '';
+    img.hidden = true;
+    img.addEventListener('load', function () { img.hidden = false; });
+    art.appendChild(img);
+    var text = document.createElement('div');
+    text.className = 'shim-title-text';
+    var cat = document.createElement('span');
+    cat.className = 'shim-title-cat';
+    var name = document.createElement('h1');
+    name.textContent = document.title;
+    screen.setAttribute('aria-label', document.title);
+    var hint = document.createElement('p');
+    hint.className = 'shim-title-hint';
+    var stamp = document.createElement('p');
+    stamp.className = 'shim-title-stamp';
+    var play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'shim-title-play';
+    play.disabled = true;
+    play.textContent = 'Loading…';
+    var press = document.createElement('span');
+    press.className = 'shim-title-press';
+    press.textContent = 'or press any key';
+    var meter = document.createElement('span');
+    meter.className = 'shim-meter shim-title-meter';
+    var log = document.createElement('pre');
+    log.className = 'shim-title-log';
+    log.setAttribute('aria-hidden', 'true');
+    [cat, name, hint, stamp, play, press].forEach(function (el) { text.appendChild(el); });
+    card.appendChild(art);
+    card.appendChild(text);
+    card.appendChild(meter);
+    card.appendChild(log);
+    screen.appendChild(card);
+    document.body.appendChild(screen);
+
+    function line(label, value, cls) {
+      var row = document.createElement('span');
+      row.className = 'row' + (cls ? ' ' + cls : '');
+      var l = document.createElement('span');
+      l.textContent = label;
+      var v = document.createElement('span');
+      v.textContent = value;
+      row.appendChild(l);
+      row.appendChild(v);
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    }
+    // classes.js has loaded by now (a blocking script in <head>): the app, compiled to JavaScript by TeaVM.
+    var entry = window.performance && performance.getEntriesByName &&
+      performance.getEntriesByName(new URL('classes.js', location.href).href)[0];
+    line('classes.js', entry && entry.decodedBodySize ? size(entry.decodedBodySize) : 'ok');
+    var total = files.length + 1;
+    var done = 1;
+    function progress() { meter.style.setProperty('--p', String(done / total)); }
+    progress();
+
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, appId())];
+      if (!app) return;
+      img.src = app.shot;
+      cat.textContent = CATS[app.cat] || '';
+      name.textContent = app.name;
+      hint.textContent = app.hint;
+      var count = apps.filter(function (a) { return played[a.id]; }).length;
+      stamp.textContent = played[app.id]
+        ? '✓ In your passport since ' + new Date(played[app.id]).toLocaleDateString()
+        : 'New: playing it adds stamp ' + (count + 1) + ' of ' + apps.length + ' to your passport';
+      stamp.classList.toggle('played', !!played[app.id]);
+    });
+
+    var started = null;
+    function go(e) {
+      if (!started || screen.classList.contains('leaving')) return;
+      if (e && e.type === 'keydown') {
+        if (e.key === 'Tab' || e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer')) return;   // keys for those panels
+        e.preventDefault();
+        e.stopPropagation();
+        // Its release must not reach the app either: it never saw the press.
+        var code = e.code;
+        document.addEventListener('keyup', function swallow(u) {
+          if (u.code !== code) return;
+          u.stopPropagation();
+          document.removeEventListener('keyup', swallow, true);
+        }, true);
+      }
+      document.removeEventListener('keydown', go, true);
+      screen.classList.add('leaving');
+      html.removeAttribute('data-title');
+      var start = started;
+      started = null;
+      start();
+      setTimeout(function () { screen.remove(); }, 400);
+    }
+    screen.addEventListener('click', function (e) { if (!e.target.closest('a')) go(e); });
+
+    return {
+      loaded: function (file) {
+        var bytes = window.__shimFiles && window.__shimFiles[file];
+        done++;
+        progress();
+        line(file, bytes ? size(bytes.byteLength) : 'missing', bytes ? '' : 'bad');
+      },
+      ready: function (start) {
+        started = start;
+        line('Ready.', '', 'ready');
+        screen.classList.add('ready');
+        play.disabled = false;
+        play.textContent = '▶ Play';
+        play.focus({ preventScroll: true });
+        document.addEventListener('keydown', go, true);
+      }
+    };
+  }
+
   function overlay(text, button) {
     var o = document.createElement('div');
     o.className = 'shim-overlay';
@@ -753,7 +893,11 @@
     if (button) {
       var b = document.createElement('button');
       b.textContent = button;
-      b.addEventListener('click', function () { location.reload(); });
+      b.addEventListener('click', function () {
+        // The visitor already pressed start once: the reloaded page skips the title screen.
+        try { sessionStorage.setItem(AGAIN_KEY, appId()); } catch (e) { /* the title screen shows again */ }
+        location.reload();
+      });
       box.appendChild(b);
     }
     o.appendChild(box);
@@ -1060,20 +1204,32 @@
 
     var files = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
     var args = (body.getAttribute('data-args') || '').split(/\s+/).filter(Boolean);
-    var loading = files.length ? overlay('Loading...') : null;
     var extras = !document.documentElement.hasAttribute('data-shot');
+    var again = null;
+    try {
+      again = sessionStorage.getItem(AGAIN_KEY);
+      sessionStorage.removeItem(AGAIN_KEY);
+    } catch (e) { /* no Run again shortcut */ }
+    // The player's iframe starts at once (the visitor's click on the home page started it).
+    var title = extras && !embedded && again !== appId() && typeof main === 'function' ? titleScreen(files) : null;
+    var loading = !title && files.length ? overlay('Loading...') : null;
     window.__shimExited = function (msg) { if (extras) exitScreen(msg); else overlay(msg, 'Run again'); };
 
-    Promise.all(files.map(preload)).then(function () {
+    function start() {
+      main(args);
+      if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
+      if (extras && !embedded) howToPlay();
+      if (extras) stampOnPlay();   // after the hint, so a stamp's toast replaces it rather than sitting under it
+    }
+    Promise.all(files.map(function (f) {
+      return title ? preload(f).then(function () { title.loaded(f); }) : preload(f);
+    })).then(function () {
       if (loading) loading.remove();
       if (typeof main !== 'function') {
         overlay('classes.js is missing. Build the site with Maven first (see web/README.md).');
         return;
       }
-      main(args);
-      if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
-      if (extras && !embedded) howToPlay();
-      if (extras) stampOnPlay();   // after the hint, so a stamp's toast replaces it rather than sitting under it
+      if (title) title.ready(start); else start();
     });
   });
 })();
