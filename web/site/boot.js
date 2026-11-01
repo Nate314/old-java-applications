@@ -1331,6 +1331,16 @@
         return names[kv[0]] + ' ' + Math.floor(secs / 60) + ':' + (secs % 60 < 10 ? '0' : '') + secs % 60 + '.' + tenths % 10;
       }).filter(Boolean);
       return times.length ? 'Your best times: ' + times.join(', ') : '';
+    } },
+    UltimateTicTacToe: { file: '.ultimatetictactoe-record.txt', show: function (text) {
+      var names = { EASY: 'Easy', HARD: 'Hard' };
+      var rows = text.split('\n').map(function (row) {
+        var kv = row.split('=');
+        var n = (kv[1] || '').split(',').map(Number);
+        if (!names[kv[0]] || n.length !== 3) return '';
+        return names[kv[0]] + ' ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss, ' : ' losses, ') + n[2] + (n[2] === 1 ? ' draw' : ' draws');
+      }).filter(Boolean);
+      return rows.length ? 'Your record vs the computer: ' + rows.join('; ') : '';
     } }
   };
 
