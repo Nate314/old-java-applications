@@ -182,7 +182,7 @@ public final class TDesktop {
             return;
         }
         TWindow window = c.windowAncestor();
-        if (window != null) {
+        if (window != null && window.getFocusableWindowState()) {
             activate(window);
         }
         for (TComponent p = c; p != null; p = p.getParent()) {

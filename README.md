@@ -47,7 +47,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 - StockChecker downloads quotes from the retired Yahoo Finance CSV API into `stockCheck.csv`, using the tickers in `myStocks.txt`, and saves list edits back to `myStocks.txt`.
 - FlappyBird and NathaNOS load images by relative path, so run them from the folder holding the images:
   - FlappyBird: run from `FlappyBird/src` with a numeric argument, e.g. `java flappyBird.Main 120` (the original `run.bat` used 120).
-  - NathaNOS: run from `NathaNOS/` so `assets/` resolves. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset.
+  - NathaNOS: run from a folder holding its `assets/`. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset. `./run.ps1 NathaNOS` stages a copy in `out/NathaNOS/desktop/` with every other app except the three `Robot` apps on its taskbar.
 
 ## Build and run
 

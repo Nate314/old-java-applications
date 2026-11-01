@@ -9,7 +9,7 @@ A 15x15 Minesweeper game with 18 mines and MIDI sound. Revealing a safe tile pla
 - The title bar shows how many mines are left (mines minus flags), and says when you win or hit a mine.
 - **Any click after the game ends**: start a new game.
 - **Arrow keys**: move the window by 30 px per press.
-- **Esc**: exit.
+- **Esc**: close the window, like its close button. Run alone that exits; inside NathaNOS it closes only Minesweeper.
 - No command-line arguments. The window is about 3/4 of the screen height square.
 
 ## Code layout

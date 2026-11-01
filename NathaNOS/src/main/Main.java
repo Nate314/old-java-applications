@@ -28,6 +28,9 @@ public class Main extends JFrame {
    public Main(Boolean visibility) {
       this.setUndecorated(true);
       this.setDefaultCloseOperation(3);
+      // A window that cannot take focus is not raised when clicked, so the taskbar never covers the apps it opened.
+      this.setFocusableWindowState(false);
+      AppLauncher.keepDesktopOpenWhenAppsClose(this);
       this.setSize(Toolkit.getDefaultToolkit().getScreenSize().width, Toolkit.getDefaultToolkit().getScreenSize().height);
       this.setVisible(visibility);
       this.setCursor(this.getToolkit().createCustomCursor(new ImageIcon("assets/cursor.png").getImage(), new Point(), "defaultCursor"));

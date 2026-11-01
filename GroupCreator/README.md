@@ -4,7 +4,7 @@ Shuffles a comma-separated list of names into random groups with a size between 
 
 ## Controls / usage
 
-- **Names field**: names separated by commas, for example `Steve Jobs,Bill Gates,Stephen Hawking,Morgan Freeman`. Spaces around names and empty entries are ignored.
+- **Names field**: names separated by commas, for example `Alice,Bob,Carol,Dave`. Spaces around names and empty entries are ignored.
 - **min / max**: group size limits, default `1` and `3`. Every group, including the last, has between min and max names.
 - **OK**: shuffles the names, splits them into groups, lists the groups under the inputs (the window grows to fit) and overwrites `output.txt`.
 - If the names cannot be split that way (for example 5 names in groups of 3 to 4), or min/max are not whole numbers, a message is shown instead and `output.txt` is left alone.

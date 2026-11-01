@@ -4,8 +4,9 @@ A screen saver written in Java. It fills the screen with black and adds randomly
 
 ## Controls / usage
 
-- **Mouse**: moving or dragging more than a few pixels, clicking, pressing, releasing or leaving the window exits. The move event some systems send when the window first appears under the cursor is ignored, as is leaving the window in the first second.
-- **Esc**: exit.
+- **Mouse**: moving or dragging more than a few pixels, clicking, pressing, releasing or leaving the window closes it. The move event some systems send when the window first appears under the cursor is ignored, as is leaving the window in the first second.
+- **Esc**: close.
+- Closing works like the window's close button would: run alone it exits, and inside NathaNOS only the screen saver closes.
 - **Left / Right**: slow down / speed up (multiplies or divides the 250 ms step delay by 1.1, between 1 ms and 5 s).
 - **Up / Down**: shrink / grow the circles by a factor of 1.1 (at least 10 px). The grid is rebuilt for the new size and the cycle starts over.
 - **0 / 1 / 2** (number row): set the mode. 0: green circles (the original). 1: green squares. 2: circles in random bright colors.

@@ -6,6 +6,7 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyVetoException;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.ImageIcon;
@@ -92,19 +93,25 @@ public class LauncherWindow extends JInternalFrame implements ActionListener {
 
       for (int i = 1; i < this.buttons.size(); i++) {
          if (e.getSource() == this.buttons.get(i)) {
-            if (this.myApplications[i - 1] == null) {
-               System.err.println(this.buttons.get(i).getText() + " could not be loaded.");
+            Class<?> app = this.myApplications[i - 1];
+            String name = this.buttons.get(i).getText();
+            if (app == null) {
+               System.err.println(name + " could not be loaded.");
                return;
             }
 
             try {
-               this.createNewWindow(
-                  (JFrame)this.myApplications[i - 1].getConstructor(Boolean.class).newInstance(false),
-                  false,
-                  new ImageIcon(this.fileGatherer.iconPaths.get(i)).getImage()
-               );
+               Constructor<?> embeddable;
+               try {
+                  embeddable = app.getConstructor(Boolean.class);
+               } catch (NoSuchMethodException notEmbeddable) {
+                  // Any other app runs as it would on its own, in its own windows.
+                  AppLauncher.runMain(app, name);
+                  return;
+               }
+               this.createNewWindow((JFrame)embeddable.newInstance(false), false, new ImageIcon(this.fileGatherer.iconPaths.get(i)).getImage());
             } catch (ReflectiveOperationException | RuntimeException exception) {
-               System.err.println(this.buttons.get(i).getText() + " has no public (Boolean) constructor or failed to start: " + exception);
+               System.err.println(name + " failed to start: " + exception);
             }
          }
       }
