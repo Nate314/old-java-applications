@@ -100,6 +100,28 @@
   }
 }
 
+/* Embedded in the home page's player: boot.js moves #desktop to center the windows, so the desk is painted
+   behind it on the page instead. */
+:root[data-embed] {
+  min-height: 100%;
+  background: var(--desk);
+}
+
+:root[data-embed] body {
+  background: none;
+}
+
+:root[data-embed] #desktop {
+  background: none;
+}
+
+/* Thumbnail mode (web/shots.ps1 crops the windows out of a flat magenta desktop). */
+:root[data-skin][data-shot] {
+  --desk: #ff00ff;
+  --window-radius: 0;
+  --window-shadow: none;
+}
+
 /* ---- page ---- */
 
 html, body {
@@ -482,4 +504,9 @@ canvas.paint.top {
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+}
+
+/* Leave out the output panel unless it is all the app shows (SimpleAlgorithms). */
+:root[data-shot] #desktop:has(.c) ~ .shim-console {
+  display: none;
 }

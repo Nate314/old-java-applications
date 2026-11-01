@@ -8,55 +8,194 @@
   <script src="boot.js"></script>
   <style>
     body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-    main { max-width: 860px; margin: 0 auto; padding: 48px 16px 64px; }
-    h1 { margin: 0 0 4px; font-size: 28px; }
-    h2 { margin: 36px 0 12px; font-size: 18px; }
-    p.lead { margin: 0 0 8px; opacity: 0.8; }
-    ul.apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
-              grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
-    ul.apps li { padding: 12px 14px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-bg);
-                 display: flex; flex-direction: column; gap: 6px; }
+    main { max-width: 1080px; margin: 0 auto; padding: 40px 16px 64px; }
+    h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: -0.01em; }
+    h2 { margin: 40px 0 12px; font-size: 18px; }
+    p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
+
+    /* ---- the player: a live app on the page ---- */
+    .player { border: 1px solid var(--card-border); border-radius: 14px; background: var(--card-bg); overflow: hidden;
+              box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18); scroll-margin-top: 12px; }
+    .player-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px;
+                  border-bottom: 1px solid var(--card-border); }
+    .player-bar .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+                        letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .player-bar .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+                                box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
+    .player-bar h3 { margin: 0; font-size: 17px; }
+    .player-bar .hint { flex: 1 1 260px; min-width: 0; font-size: 14px; opacity: 0.75; }
+    .player-bar .actions { display: flex; gap: 8px; margin-left: auto; }
+    .btn { display: inline-block; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--card-border);
+           background: transparent; color: inherit; font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1.5;
+           text-decoration: none; cursor: pointer; white-space: nowrap; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .screen { position: relative; overflow: hidden; background: var(--desk); }
+    /* The iframe keeps a desktop-sized viewport (the apps size their windows from it) and is scaled to fit. */
+    .screen iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+
+    /* ---- gallery ---- */
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    .filters button { padding: 4px 14px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-bg);
+                      color: inherit; font: 600 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer; }
+    .filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    ul.apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px;
+              grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    ul.apps li { border: 1px solid var(--card-border); border-radius: 12px; background: var(--card-bg); overflow: hidden;
+                 display: flex; flex-direction: column; transition: transform 0.15s, box-shadow 0.15s; }
+    ul.apps li[hidden] { display: none; }
+    ul.apps li.playing { outline: 2px solid var(--accent); outline-offset: -2px; }
+    ul.apps a.thumb { position: relative; display: block; aspect-ratio: 16 / 10; background: var(--desk); }
+    ul.apps a.thumb img { position: absolute; inset: 0; margin: auto; max-width: calc(100% - 24px); max-height: calc(100% - 24px);
+                          border-radius: var(--window-radius); box-shadow: var(--window-shadow); }
+    ul.apps .body { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px 14px; flex: 1; }
     ul.apps strong { font-size: 16px; }
     ul.apps span { opacity: 0.8; font-size: 14px; flex: 1; }
-    ul.apps a.play { align-self: flex-start; padding: 3px 12px; border-radius: 6px; background: var(--accent);
-                     color: #fff; text-decoration: none; font-weight: 600; font-size: 14px; }
-    ul.apps a.play:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    ul.desktop-only li { opacity: 0.85; }
+    ul.apps .actions { display: flex; gap: 8px; }
+    @media (hover: hover) {
+      ul.apps li:not(.text):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); }
+    }
+    ul.desktop-only li { opacity: 0.85; padding: 12px 14px; gap: 6px; }
   </style>
 </head>
 <body>
 <main>
   <h1>Old Java Applications</h1>
   <p class="lead">Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM.
-    Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page.</p>
+    Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page.
+    One is already running below: pick any other to swap it in.</p>
+
+  <section class="player" id="player" aria-label="Now playing">
+    <div class="player-bar">
+      <span class="live">Live</span>
+      <h3 id="player-name">Minesweeper</h3>
+      <span class="hint" id="player-hint">15 x 15 board with MIDI sound. Right-click to flag. Arrow keys move the window.</span>
+      <div class="actions">
+        <button class="btn" type="button" id="player-restart">Restart</button>
+        <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
+      </div>
+    </div>
+    <div class="screen" id="screen">
+      <iframe id="player-frame" title="Minesweeper" src="Minesweeper/index.html?embed" allow="autoplay"></iframe>
+    </div>
+  </section>
 
   <h2>Play in the browser</h2>
-  <ul class="apps">
-    <li><strong>Clock</strong><span>Analog or digital clock. Click to switch.</span><a class="play" href="Clock/index.html">Play</a></li>
-    <li><strong>Flappy Bird</strong><span>Space to flap, P to pause, R to reset, D for debug view.</span><a class="play" href="FlappyBird/index.html">Play</a></li>
-    <li><strong>Minesweeper</strong><span>15 x 15 board with MIDI sound. Right-click to flag. Arrow keys move the window.</span><a class="play" href="Minesweeper/index.html">Play</a></li>
-    <li><strong>NathaNOS</strong><span>A fake desktop with a taskbar and start menu that launches the old Clock build.</span><a class="play" href="NathaNOS/index.html">Play</a></li>
-    <li><strong>Rubik's Cube 2D</strong><span>Click a square, then W A S D to turn. Mix scrambles the cube.</span><a class="play" href="RubiksCube2D/index.html">Play</a></li>
-    <li><strong>Screen Saver</strong><span>Green circles fill the screen. Moving the mouse closes it.</span><a class="play" href="ScreenSaver/index.html">Play</a></li>
-    <li><strong>Sprite Floaty Stars</strong><span>Animated stars with five modes. Pick settings and press OK.</span><a class="play" href="SpriteFloatyStars/index.html">Play</a></li>
-    <li><strong>Ultimate Tic-Tac-Toe</strong><span>Nine boards; your cell picks your opponent's next board.</span><a class="play" href="UltimateTicTacToe/index.html">Play</a></li>
-    <li><strong>Circle Spawner</strong><span>Builds a disk out of many borderless blue windows.</span><a class="play" href="CircleSpawner/index.html">Play</a></li>
-    <li><strong>Stock Checker</strong><span>Editable ticker list. The quote API is retired, so refresh shows the saved 2016 prices.</span><a class="play" href="StockChecker/index.html">Play</a></li>
-    <li><strong>Synthesizer Keyboard</strong><span>One-octave piano: Z X C V B N M , and S D G H J. Arrows change octave and instrument.</span><a class="play" href="SynthesizerKeyboard/index.html">Play</a></li>
-    <li><strong>Group Creator</strong><span>Shuffles a comma-separated list of names into random groups. The groups appear in the output panel.</span><a class="play" href="GroupCreator/index.html">Play</a></li>
-    <li><strong>Music Theory Expert</strong><span>Plays a I-IV-V-I progression in G major. Press test to hear it.</span><a class="play" href="MusicTheoryExpert/index.html">Play</a></li>
-    <li><strong>Number Guess</strong><span>Type a guess and press SUBMIT: too low, too high or correct.</span><a class="play" href="NumberGuess/index.html">Play</a></li>
-    <li><strong>Simple Algorithms</strong><span>Console program: hand-written square root, sine, factorial and division, printed to an output panel.</span><a class="play" href="SimpleAlgorithms/index.html">Play</a></li>
-    <li><strong>Tank Game</strong><span>Unfinished two-player tank game. W A S D drives red, arrow keys drive green.</span><a class="play" href="TankGame/index.html">Play</a></li>
+  <div class="filters" role="group" aria-label="Filter apps">
+    <button type="button" data-filter="all" aria-pressed="true">All</button>
+    <button type="button" data-filter="game" aria-pressed="false">Games</button>
+    <button type="button" data-filter="music" aria-pressed="false">Music</button>
+    <button type="button" data-filter="toy" aria-pressed="false">Toys</button>
+    <button type="button" data-filter="tool" aria-pressed="false">Tools</button>
+  </div>
+  <ul class="apps" id="apps">
+    <li data-app="Minesweeper" data-cat="game"><a class="thumb" href="Minesweeper/index.html"><img src="shots/Minesweeper.png" alt="Minesweeper window" loading="lazy"></a><div class="body"><strong>Minesweeper</strong><span>15 x 15 board with MIDI sound. Right-click to flag. Arrow keys move the window.</span><div class="actions"><a class="btn primary play" href="Minesweeper/index.html">Play</a><a class="btn" href="Minesweeper/index.html">Full page</a></div></div></li>
+    <li data-app="FlappyBird" data-cat="game"><a class="thumb" href="FlappyBird/index.html"><img src="shots/FlappyBird.png" alt="Flappy Bird window" loading="lazy"></a><div class="body"><strong>Flappy Bird</strong><span>Space to flap, P to pause, R to reset, D for debug view.</span><div class="actions"><a class="btn primary play" href="FlappyBird/index.html">Play</a><a class="btn" href="FlappyBird/index.html">Full page</a></div></div></li>
+    <li data-app="NathaNOS" data-cat="toy"><a class="thumb" href="NathaNOS/index.html"><img src="shots/NathaNOS.png" alt="NathaNOS desktop" loading="lazy"></a><div class="body"><strong>NathaNOS</strong><span>A fake desktop with a taskbar and start menu that launches the other apps.</span><div class="actions"><a class="btn primary play" href="NathaNOS/index.html">Play</a><a class="btn" href="NathaNOS/index.html">Full page</a></div></div></li>
+    <li data-app="UltimateTicTacToe" data-cat="game"><a class="thumb" href="UltimateTicTacToe/index.html"><img src="shots/UltimateTicTacToe.png" alt="Ultimate Tic-Tac-Toe window" loading="lazy"></a><div class="body"><strong>Ultimate Tic-Tac-Toe</strong><span>Nine boards; your cell picks your opponent's next board.</span><div class="actions"><a class="btn primary play" href="UltimateTicTacToe/index.html">Play</a><a class="btn" href="UltimateTicTacToe/index.html">Full page</a></div></div></li>
+    <li data-app="RubiksCube2D" data-cat="game" data-min-height="720"><a class="thumb" href="RubiksCube2D/index.html"><img src="shots/RubiksCube2D.png" alt="Rubik's Cube 2D window" loading="lazy"></a><div class="body"><strong>Rubik's Cube 2D</strong><span>Click a square, then W A S D to turn. Mix scrambles the cube.</span><div class="actions"><a class="btn primary play" href="RubiksCube2D/index.html">Play</a><a class="btn" href="RubiksCube2D/index.html">Full page</a></div></div></li>
+    <li data-app="SynthesizerKeyboard" data-cat="music"><a class="thumb" href="SynthesizerKeyboard/index.html"><img src="shots/SynthesizerKeyboard.png" alt="Synthesizer Keyboard window" loading="lazy"></a><div class="body"><strong>Synthesizer Keyboard</strong><span>One-octave piano: Z X C V B N M , and S D G H J. Arrows change octave and instrument.</span><div class="actions"><a class="btn primary play" href="SynthesizerKeyboard/index.html">Play</a><a class="btn" href="SynthesizerKeyboard/index.html">Full page</a></div></div></li>
+    <li data-app="Clock" data-cat="toy"><a class="thumb" href="Clock/index.html"><img src="shots/Clock.png" alt="Clock window" loading="lazy"></a><div class="body"><strong>Clock</strong><span>Analog or digital clock. Click to switch.</span><div class="actions"><a class="btn primary play" href="Clock/index.html">Play</a><a class="btn" href="Clock/index.html">Full page</a></div></div></li>
+    <li data-app="SpriteFloatyStars" data-cat="toy"><a class="thumb" href="SpriteFloatyStars/index.html"><img src="shots/SpriteFloatyStars.png" alt="Sprite Floaty Stars settings window" loading="lazy"></a><div class="body"><strong>Sprite Floaty Stars</strong><span>Animated stars with five modes. Pick settings and press OK.</span><div class="actions"><a class="btn primary play" href="SpriteFloatyStars/index.html">Play</a><a class="btn" href="SpriteFloatyStars/index.html">Full page</a></div></div></li>
+    <li data-app="NumberGuess" data-cat="game"><a class="thumb" href="NumberGuess/index.html"><img src="shots/NumberGuess.png" alt="Number Guess window" loading="lazy"></a><div class="body"><strong>Number Guess</strong><span>Type a guess and press SUBMIT: too low, too high or correct.</span><div class="actions"><a class="btn primary play" href="NumberGuess/index.html">Play</a><a class="btn" href="NumberGuess/index.html">Full page</a></div></div></li>
+    <li data-app="TankGame" data-cat="game"><a class="thumb" href="TankGame/index.html"><img src="shots/TankGame.png" alt="Tank Game window" loading="lazy"></a><div class="body"><strong>Tank Game</strong><span>Unfinished two-player tank game. W A S D drives red, arrow keys drive green.</span><div class="actions"><a class="btn primary play" href="TankGame/index.html">Play</a><a class="btn" href="TankGame/index.html">Full page</a></div></div></li>
+    <li data-app="MusicTheoryExpert" data-cat="music"><a class="thumb" href="MusicTheoryExpert/index.html"><img src="shots/MusicTheoryExpert.png" alt="Music Theory Expert window" loading="lazy"></a><div class="body"><strong>Music Theory Expert</strong><span>Plays a I-IV-V-I progression in G major. Press test to hear it.</span><div class="actions"><a class="btn primary play" href="MusicTheoryExpert/index.html">Play</a><a class="btn" href="MusicTheoryExpert/index.html">Full page</a></div></div></li>
+    <li data-app="CircleSpawner" data-cat="toy"><a class="thumb" href="CircleSpawner/index.html"><img src="shots/CircleSpawner.png" alt="Circle Creator window" loading="lazy"></a><div class="body"><strong>Circle Spawner</strong><span>Builds a disk out of many borderless blue windows.</span><div class="actions"><a class="btn primary play" href="CircleSpawner/index.html">Play</a><a class="btn" href="CircleSpawner/index.html">Full page</a></div></div></li>
+    <li data-app="ScreenSaver" data-cat="toy"><a class="thumb" href="ScreenSaver/index.html"><img src="shots/ScreenSaver.png" alt="Screen Saver" loading="lazy"></a><div class="body"><strong>Screen Saver</strong><span>Green circles fill the screen. Moving the mouse closes it.</span><div class="actions"><a class="btn primary play" href="ScreenSaver/index.html">Play</a><a class="btn" href="ScreenSaver/index.html">Full page</a></div></div></li>
+    <li data-app="StockChecker" data-cat="tool"><a class="thumb" href="StockChecker/index.html"><img src="shots/StockChecker.png" alt="Stock Checker window" loading="lazy"></a><div class="body"><strong>Stock Checker</strong><span>Editable ticker list. The quote API is retired, so refresh shows the saved 2016 prices.</span><div class="actions"><a class="btn primary play" href="StockChecker/index.html">Play</a><a class="btn" href="StockChecker/index.html">Full page</a></div></div></li>
+    <li data-app="GroupCreator" data-cat="tool"><a class="thumb" href="GroupCreator/index.html"><img src="shots/GroupCreator.png" alt="Group Creator window" loading="lazy"></a><div class="body"><strong>Group Creator</strong><span>Shuffles a comma-separated list of names into random groups. The groups appear in the output panel.</span><div class="actions"><a class="btn primary play" href="GroupCreator/index.html">Play</a><a class="btn" href="GroupCreator/index.html">Full page</a></div></div></li>
+    <li data-app="SimpleAlgorithms" data-cat="tool"><a class="thumb" href="SimpleAlgorithms/index.html"><img src="shots/SimpleAlgorithms.png" alt="Simple Algorithms output" loading="lazy"></a><div class="body"><strong>Simple Algorithms</strong><span>Console program: hand-written square root, sine, factorial and division, printed to an output panel.</span><div class="actions"><a class="btn primary play" href="SimpleAlgorithms/index.html">Play</a><a class="btn" href="SimpleAlgorithms/index.html">Full page</a></div></div></li>
   </ul>
 
   <h2>Desktop only</h2>
   <ul class="apps desktop-only">
-    <li><strong>BibleDownloader</strong><span>Downloads chapters from bible.com, which a page on another site is not allowed to read (no CORS headers); the 2016 page addresses it uses also return 404 now.</span></li>
-    <li><strong>DinoGame</strong><span>Plays the Chrome dino game by reading screen pixels and pressing Space with java.awt.Robot; a page cannot see or control other windows.</span></li>
-    <li><strong>Windows</strong><span>Presses the real Windows key with java.awt.Robot, which a web page cannot do.</span></li>
-    <li><strong>WindowsE</strong><span>Opens File Explorer windows by pressing Win+E with java.awt.Robot, which a web page cannot do.</span></li>
+    <li class="text"><strong>BibleDownloader</strong><span>Downloads chapters from bible.com, which a page on another site is not allowed to read (no CORS headers); the 2016 page addresses it uses also return 404 now.</span></li>
+    <li class="text"><strong>DinoGame</strong><span>Plays the Chrome dino game by reading screen pixels and pressing Space with java.awt.Robot; a page cannot see or control other windows.</span></li>
+    <li class="text"><strong>Windows</strong><span>Presses the real Windows key with java.awt.Robot, which a web page cannot do.</span></li>
+    <li class="text"><strong>WindowsE</strong><span>Opens File Explorer windows by pressing Win+E with java.awt.Robot, which a web page cannot do.</span></li>
   </ul>
 </main>
+<script>
+  // The player: "Play" swaps the app in the iframe instead of leaving the page. #<App> in the address picks
+  // the app on load, so a link can point straight at one. Ctrl/Shift/middle clicks still open the full page.
+  (function () {
+    'use strict';
+    var MIN_WIDTH = 900;
+    var MIN_HEIGHT = 520;
+    var MIN_SCREEN = 320;   // shortest the screen gets on a short browser window, in page pixels
+    var ASPECT = 1.6;
+    var screen = document.getElementById('screen');
+    var frame = document.getElementById('player-frame');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('#apps li[data-app]'));
+    var current = null;
+
+    function card(app) {
+      for (var i = 0; i < cards.length; i++) if (cards[i].getAttribute('data-app') === app) return cards[i];
+      return null;
+    }
+
+    // The screen is 16:10 but no taller than the browser window leaves room for (so the whole app is in view
+    // under the player bar). The iframe gets a viewport of at least MIN_WIDTH x MIN_HEIGHT (more for apps
+    // with data-min-height, like Rubik's Cube's 700 px window) and is scaled down to the screen.
+    function fit() {
+      var minHeight = Math.max(MIN_HEIGHT, current ? +(current.getAttribute('data-min-height') || 0) : 0);
+      var width = screen.clientWidth;
+      var height = Math.round(Math.min(width / ASPECT, Math.max(MIN_SCREEN, window.innerHeight - 140)));
+      var scale = Math.min(1, width / MIN_WIDTH, height / minHeight);
+      frame.style.width = Math.round(width / scale) + 'px';
+      frame.style.height = Math.round(height / scale) + 'px';
+      frame.style.transform = scale < 1 ? 'scale(' + scale + ')' : '';
+      screen.style.height = height + 'px';
+    }
+
+    function play(li, focus) {
+      if (current) current.classList.remove('playing');
+      current = li;
+      li.classList.add('playing');
+      var app = li.getAttribute('data-app');
+      var name = li.querySelector('strong').textContent;
+      var page = app + '/index.html';
+      document.getElementById('player-name').textContent = name;
+      document.getElementById('player-hint').textContent = li.querySelector('span').textContent;
+      document.getElementById('player-full').href = page;
+      frame.title = name;
+      fit();
+      // A new iframe each time, so the old app's timers and audio stop with it.
+      var next = frame.cloneNode(false);
+      next.src = page + '?embed';
+      frame.parentNode.replaceChild(next, frame);
+      frame = next;
+      if (focus) {
+        frame.addEventListener('load', function () { frame.focus(); });
+        document.getElementById('player').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    document.getElementById('apps').addEventListener('click', function (e) {
+      var a = e.target.closest('a.play, a.thumb');
+      if (!a || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      var li = a.closest('li');
+      history.replaceState(null, '', '#' + li.getAttribute('data-app'));
+      play(li, true);
+    });
+
+    document.getElementById('player-restart').addEventListener('click', function () { play(current, true); });
+
+    var filters = Array.prototype.slice.call(document.querySelectorAll('.filters button'));
+    filters.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = b.getAttribute('data-filter');
+        filters.forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+        cards.forEach(function (li) { li.hidden = f !== 'all' && li.getAttribute('data-cat') !== f; });
+      });
+    });
+
+    window.addEventListener('resize', fit);
+    var start = card(decodeURIComponent(location.hash.slice(1)));
+    if (start) play(start, false);
+    else { current = card('Minesweeper'); current.classList.add('playing'); fit(); }
+  })();
+</script>
 </body>
 </html>
