@@ -1,0 +1,93 @@
+<!doctype html>
+<!-- The link preview card template web/cards.ps1 renders to site/cards/<App>.jpg (1200 x 630, the Open Graph
+     size). The script copies it into the built site and opens it in headless Chrome with the app's gallery
+     entry in the query: ?app=&name=&hint=&cat=&origin= (no app: the home page's card). It is not part of the site. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>card</title>
+  <style>
+    html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+    body { position: relative; color: #fff; font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+           background: radial-gradient(ellipse at 78% 40%, #3b1d7a 0%, #1d0d3d 45%, #0b0618 100%); }
+    body::before { content: ""; position: absolute; inset: 0;
+                   background: linear-gradient(rgba(255, 43, 214, 0.07) 1px, transparent 1px) 0 0 / 40px 40px,
+                               linear-gradient(90deg, rgba(0, 229, 255, 0.06) 1px, transparent 1px) 0 0 / 40px 40px; }
+    .text { position: absolute; left: 64px; top: 56px; bottom: 56px; width: 560px; display: flex; flex-direction: column; }
+    .brand { display: flex; align-items: center; gap: 14px; font-size: 24px; font-weight: 600; opacity: 0.9; }
+    .brand img { width: 46px; height: 46px; }
+    .chips { display: flex; gap: 10px; margin-top: 40px; }
+    .chip { padding: 4px 14px; border-radius: 999px; font-size: 19px; font-weight: 700; letter-spacing: 0.06em;
+            text-transform: uppercase; border: 2px solid #00e5ff; color: #7df9ff; }
+    .chip.origin { border-color: rgba(255, 255, 255, 0.35); color: rgba(255, 255, 255, 0.8); }
+    h1 { margin: 18px 0 0; font-size: 78px; line-height: 1.02; letter-spacing: -0.02em; font-weight: 800;
+         text-shadow: 0 0 28px rgba(255, 43, 214, 0.55); }
+    h1.long { font-size: 62px; }
+    p { max-width: 520px; margin: 18px 0 0; font-size: 27px; line-height: 1.35; color: rgba(255, 255, 255, 0.82);
+        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .cta { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+    .play { flex: none; white-space: nowrap; padding: 14px 30px; border-radius: 999px; font-size: 28px; font-weight: 800;
+            background: linear-gradient(90deg, #ff2bd6, #7c3aed); box-shadow: 0 0 30px rgba(255, 43, 214, 0.55); }
+    .cta small { font-size: 19px; line-height: 1.3; color: rgba(255, 255, 255, 0.65); }
+    .desk { position: absolute; right: 56px; top: 70px; width: 500px; height: 490px; border-radius: 26px;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #dfe7f3, #f6f8fb);
+            box-shadow: 0 0 0 3px rgba(255, 43, 214, 0.75), 0 0 60px rgba(255, 43, 214, 0.45), 0 30px 60px rgba(0, 0, 0, 0.5);
+            transform: rotate(2.5deg); }
+    .desk img { max-width: 440px; max-height: 430px; filter: drop-shadow(0 14px 22px rgba(15, 23, 42, 0.35)); }
+    /* the home page's card: a fan of thumbnails */
+    .fan { position: absolute; right: 30px; top: 40px; width: 560px; height: 550px; }
+    .fan .tile { position: absolute; width: 250px; height: 170px; border-radius: 16px; display: flex; align-items: center;
+                 justify-content: center; background: linear-gradient(135deg, #dfe7f3, #f6f8fb);
+                 box-shadow: 0 0 0 2px rgba(255, 43, 214, 0.7), 0 0 30px rgba(255, 43, 214, 0.35), 0 18px 36px rgba(0, 0, 0, 0.45); }
+    .fan .tile img { max-width: 226px; max-height: 150px; }
+  </style>
+</head>
+<body>
+  <div class="text">
+    <div class="brand"><img src="icons/icon.svg" alt=""><span>Old Java Applications</span></div>
+    <div class="chips" id="chips"></div>
+    <h1 id="name"></h1>
+    <p id="hint"></p>
+    <div class="cta"><span class="play">&#9654; Play in your browser</span><small id="tag"></small></div>
+  </div>
+  <script>
+    var q = new URLSearchParams(location.search);
+    var app = q.get('app');
+    function el(tag, cls, text) { var e = document.createElement(tag); e.className = cls; e.textContent = text; return e; }
+    if (app) {
+      var CATS = { game: 'Game', music: 'Music', toy: 'Toy', tool: 'Tool' };
+      document.getElementById('chips').appendChild(el('span', 'chip', CATS[q.get('cat')] || 'App'));
+      document.getElementById('chips').appendChild(el('span', 'chip origin',
+        q.get('origin') === 'original' ? 'Original source' : 'Decompiled jar'));
+      document.getElementById('name').textContent = q.get('name').replace(/-/g, '‑');   // no break at a hyphen
+      if (q.get('name').length > 13) document.getElementById('name').className = 'long';
+      document.getElementById('hint').textContent = q.get('hint');
+      document.getElementById('tag').textContent = 'Java, compiled to JavaScript with TeaVM';
+      var desk = el('div', 'desk', '');
+      var img = document.createElement('img');
+      img.src = 'shots/' + app + '.png';
+      desk.appendChild(img);
+      document.body.appendChild(desk);
+    } else {
+      document.getElementById('chips').appendChild(el('span', 'chip', '16 apps and games'));
+      document.getElementById('name').textContent = 'Old Java Applications';
+      document.getElementById('hint').textContent = 'Java Swing and AWT programs recovered from old jars, playable in the browser.';
+      document.getElementById('tag').textContent = 'No account, no ads';
+      var fan = el('div', 'fan', '');
+      [['Minesweeper', 10, 20, -6], ['FlappyBird', 300, 0, 5], ['UltimateTicTacToe', 0, 200, 4],
+       ['SynthesizerKeyboard', 290, 190, -4], ['NathaNOS', 20, 370, -3], ['RubiksCube2D', 300, 370, 6]].forEach(function (t) {
+        var tile = el('div', 'tile', '');
+        tile.style.left = t[1] + 'px';
+        tile.style.top = t[2] + 'px';
+        tile.style.transform = 'rotate(' + t[3] + 'deg)';
+        var img = document.createElement('img');
+        img.src = 'shots/' + t[0] + '.png';
+        tile.appendChild(img);
+        fan.appendChild(tile);
+      });
+      document.body.appendChild(fan);
+    }
+  </script>
+</body>
+</html>

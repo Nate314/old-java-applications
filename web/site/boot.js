@@ -19,6 +19,9 @@
  *   localStorage and shared by every open page. A new stamp shows a toast pointing at an app not played yet.
  * - Links the web app manifest and icons and registers the service worker (sw.js), so the site can be
  *   installed and saved apps play offline. The home page's Take it with you panel uses both.
+ * - Share (toolbar, exit screen, arcade-complete toast; the home page's player bar and passport) opens a panel
+ *   with the page's link preview card (cards/, made by web/cards.ps1), a message with the passport count, the
+ *   link and ways to send it. A shared app link (?shared=N) says so on its title screen.
  * - Gives the site's own controls and moments short synthesized sounds in the skin's voice
  *   (window.oldjavaSound), with a Sound button in the toolbar to mute them on every open page.
  */
@@ -109,6 +112,14 @@
       source.setAttribute('data-sound', 'none');   // the panel plays its own open sound
       source.innerHTML = '&lt;/&gt;<span> Source</span>';
       bar.appendChild(source);
+      var share = document.createElement('button');
+      share.type = 'button';
+      share.className = 'shim-share-open';
+      share.title = 'Share this app: its link, with a preview card';
+      share.setAttribute('data-sound', 'none');   // the panel plays its own open sound
+      share.innerHTML = '↗<span> Share</span>';
+      share.addEventListener('click', function () { openShare(appId(), share); });
+      bar.appendChild(share);
       var controls = null;
       if (pad.has(appId())) {
         controls = document.createElement('button');
@@ -259,6 +270,15 @@
       toast.appendChild(seal);
       toast.appendChild(text);
       var next = passport.unplayed(apps, id)[0];
+      if (done) {
+        var brag = document.createElement('button');
+        brag.type = 'button';
+        brag.className = 'shim-toast-go';
+        brag.setAttribute('data-sound', 'none');
+        brag.textContent = 'Share it ›';
+        brag.addEventListener('click', function () { toast.remove(); openShare(null); });
+        toast.appendChild(brag);
+      }
       if (next) {
         var go = document.createElement('a');
         go.className = 'shim-toast-go';
@@ -312,7 +332,7 @@
   // An app page is stamped by the first click or key press in the app itself (not in the site's own panels),
   // so the home page's player does not stamp Minesweeper just by loading it. A console program
   // (<body data-console>) has nothing to press: running it counts.
-  var CHROME = '.shim-toolbar, .shim-drawer, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast, .shim-pad, .shim-title, .shim-source';
+  var CHROME = '.shim-toolbar, .shim-drawer, .shim-share, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast, .shim-pad, .shim-title, .shim-source';
   function stampOnPlay() {
     var id = appId();
     if (document.body.hasAttribute('data-console')) { passport.stamp(id); return; }
@@ -517,6 +537,7 @@
   function root() { return document.body.hasAttribute('data-app') ? '../' : ''; }
 
   var catalogPromise = null;
+  var catalogDoc = null;   // the home page, for its own share tags
   function catalog() {
     if (!catalogPromise) {
       var source = root() ? fetch('../index.html').then(function (r) {
@@ -526,13 +547,14 @@
         return new DOMParser().parseFromString(html, 'text/html');
       }) : Promise.resolve(document);
       catalogPromise = source.then(function (doc) {
+        catalogDoc = doc;
         return Array.prototype.map.call(doc.querySelectorAll('#apps li[data-app]'), function (li) {
           return {
             id: li.getAttribute('data-app'),
             cat: li.getAttribute('data-cat'),
             origin: li.getAttribute('data-origin') || 'decompiled',
             name: li.querySelector('strong').textContent,
-            hint: li.querySelector('span').textContent,
+            hint: li.querySelector('.body > span').textContent,   // not the home page's New/Played badge
             shot: root() + li.querySelector('img').getAttribute('src')
           };
         });
@@ -691,6 +713,169 @@
       (list.querySelector('.shim-app:not(.current)') || close).focus();
     });
   }
+
+  // ---- share ----
+  // Share opens a panel with the link preview the page gets when it is posted (its card from cards/ with the
+  // title and description of its share tags, both written by web/cards.ps1), a message with the visitor's
+  // passport count, the link, and ways to send it: the system share sheet where there is one, X, Bluesky,
+  // Reddit, email, or Copy. id is an app (its page is shared) or null (the arcade: the home page). A shared
+  // app link carries ?shared=N, the sender's stamp count, and the title screen it opens on says so.
+  var shareBox = null;
+  var SHARED = /[?&]shared=(\d{1,3})(?:&|$)/.exec(location.search);
+  function openShare(id, opener) {
+    if (embedded && window.parent !== window) {   // the home page shows it over its player, at full size
+      window.parent.postMessage({ oldjavaShare: id || '' }, location.origin);
+      return;
+    }
+    if (shareBox) return;
+    // The panel belongs to the page, which a fullscreen player (Big screen) would cover.
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+    var scrim = document.createElement('div');
+    scrim.className = 'shim-scrim';
+    var panel = document.createElement('div');
+    panel.className = 'shim-share';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    var head = document.createElement('div');
+    head.className = 'shim-drawer-head';
+    var title = document.createElement('strong');
+    function shut() {
+      playSound('close');
+      scrim.remove();
+      panel.remove();
+      shareBox = null;
+      if (opener && opener.isConnected) opener.focus();
+    }
+    head.appendChild(title);
+    head.appendChild(closeButton(shut));
+    panel.appendChild(head);
+    var body = document.createElement('div');
+    body.className = 'shim-share-body';
+    panel.appendChild(body);
+    scrim.addEventListener('click', shut);
+    ownKeys(panel, shut);
+    document.body.appendChild(scrim);
+    document.body.appendChild(panel);
+    shareBox = panel;
+    playSound('open');
+
+    catalog().then(function (apps) {
+      var app = id ? apps[indexOf(apps, id)] : null;
+      var count = apps.filter(function (a) { return played[a.id]; }).length;
+      var n = apps.length;
+      var url = siteRoot + (app ? app.id + '/' : '') + 'index.html' + (app && count ? '?shared=' + count : '');
+      var name = app ? app.name : 'the arcade';
+      title.textContent = 'Share ' + name;
+      panel.setAttribute('aria-label', 'Share ' + name);
+      var message = app
+        ? 'Play ' + app.name + ' in your browser: an old Java app, running on TeaVM.' +
+          (count ? ' I have played ' + count + ' of ' + n + ' apps in this arcade.' : '')
+        : count >= n ? 'I played all ' + n + ' old Java apps in this browser arcade. Arcade complete!'
+        : count ? 'I have played ' + count + ' of ' + n + ' old Java apps in this browser arcade. How many can you play?'
+        : n + ' old Java Swing apps and games, playable in the browser.';
+      var homeTag = catalogDoc && catalogDoc.querySelector('meta[property="og:description"]');
+
+      // The preview: what a chat or a feed shows for the link.
+      var label = document.createElement('p');
+      label.className = 'shim-share-label';
+      label.textContent = 'How the link looks when it is posted';
+      var preview = document.createElement('a');
+      preview.className = 'shim-share-preview';
+      preview.href = url;
+      preview.target = '_blank';
+      preview.rel = 'noopener';
+      var img = document.createElement('img');
+      img.src = root() + 'cards/' + (app ? app.id : 'index') + '.jpg';
+      img.alt = '';
+      img.width = 1200;
+      img.height = 630;
+      var cap = document.createElement('span');
+      cap.className = 'shim-share-cap';
+      var host = document.createElement('small');
+      host.textContent = location.host;
+      var t = document.createElement('strong');
+      t.textContent = app ? app.name + ' | Old Java Applications' : 'Old Java Applications';
+      var d = document.createElement('span');
+      d.textContent = app ? app.hint : homeTag ? homeTag.content : '';
+      cap.appendChild(host);
+      cap.appendChild(t);
+      cap.appendChild(d);
+      preview.appendChild(img);
+      preview.appendChild(cap);
+
+      var msgLabel = document.createElement('label');
+      msgLabel.className = 'shim-share-msg';
+      msgLabel.textContent = 'Message';
+      var text = document.createElement('textarea');
+      text.rows = 3;
+      text.value = message;
+      msgLabel.appendChild(text);
+
+      var linkRow = document.createElement('div');
+      linkRow.className = 'shim-share-link';
+      var link = document.createElement('input');
+      link.readOnly = true;
+      link.value = url;
+      link.setAttribute('aria-label', 'Link');
+      link.addEventListener('focus', function () { link.select(); });
+      var copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'shim-share-copy';
+      copy.textContent = 'Copy link';
+      copy.setAttribute('data-sound', 'none');
+      copy.addEventListener('click', function () {
+        function done(ok) {
+          copy.textContent = ok ? 'Copied ✓' : 'Press Ctrl+C';
+          playSound(ok ? 'saved' : 'tap');
+          setTimeout(function () { copy.textContent = 'Copy link'; }, 2000);
+        }
+        link.select();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
+        } else {
+          var ok = false;
+          try { ok = document.execCommand('copy'); } catch (e) { /* select it by hand */ }
+          done(ok);
+        }
+      });
+      linkRow.appendChild(link);
+      linkRow.appendChild(copy);
+
+      var ways = document.createElement('div');
+      ways.className = 'shim-share-ways';
+      function way(label, href, cls) {
+        var a = document.createElement('a');
+        a.className = 'shim-share-way' + (cls ? ' ' + cls : '');
+        a.textContent = label;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.addEventListener('click', function () { a.href = href(text.value.trim()); });
+        a.href = href(message);
+        ways.appendChild(a);
+        return a;
+      }
+      var e = encodeURIComponent;
+      var subject = app ? app.name + ', an old Java app in your browser' : 'Old Java Applications';
+      if (navigator.share) {
+        var native = document.createElement('button');
+        native.type = 'button';
+        native.className = 'shim-share-way primary';
+        native.textContent = 'Share…';
+        native.addEventListener('click', function () {
+          navigator.share({ title: subject, text: text.value.trim(), url: url }).catch(function () { /* closed */ });
+        });
+        ways.appendChild(native);
+      }
+      way('X', function (m) { return 'https://x.com/intent/tweet?text=' + e(m) + '&url=' + e(url); });
+      way('Bluesky', function (m) { return 'https://bsky.app/intent/compose?text=' + e(m + ' ' + url); });
+      way('Reddit', function (m) { return 'https://www.reddit.com/submit?url=' + e(url) + '&title=' + e(m); });
+      way('Email', function (m) { return 'mailto:?subject=' + e(subject) + '&body=' + e(m + '\n\n' + url); }).removeAttribute('target');
+
+      [label, preview, msgLabel, linkRow, ways].forEach(function (el) { body.appendChild(el); });
+      ((navigator.share && ways.firstChild) || copy).focus();
+    });
+  }
+  window.oldjavaShare = { open: openShare };
 
   // ---- source viewer ----
   // The Java this page runs, next to it: Source (toolbar or title screen) docks a panel on the right with the
@@ -1091,6 +1276,13 @@
       home.textContent = 'All apps';
       box.appendChild(home);
     }
+    var tell = document.createElement('button');
+    tell.type = 'button';
+    tell.className = 'shim-exit-share';
+    tell.setAttribute('data-sound', 'none');
+    tell.textContent = '↗ Share';
+    tell.addEventListener('click', function () { openShare(appId(), tell); });
+    box.appendChild(tell);
     box.querySelector('button').focus();
     catalog().then(function (apps) {
       var app = apps[indexOf(apps, appId())];
@@ -1208,6 +1400,14 @@
         ? '✓ In your passport since ' + new Date(played[app.id]).toLocaleDateString()
         : 'New: playing it adds stamp ' + (count + 1) + ' of ' + apps.length + ' to your passport';
       stamp.classList.toggle('played', !!played[app.id]);
+      if (SHARED) {
+        var theirs = Math.min(+SHARED[1], apps.length);
+        var gift = document.createElement('p');
+        gift.className = 'shim-title-shared';
+        gift.textContent = 'Shared with you by a player with ' + theirs + ' of ' + apps.length + ' stamps. ' +
+          (count ? 'You have ' + count + '.' : 'Play to start your own passport.');
+        text.insertBefore(gift, cat);
+      }
     });
 
     var started = null;
@@ -1215,7 +1415,7 @@
       if (!started || screen.classList.contains('leaving')) return;
       if (e && e.type === 'keydown') {
         if (e.key === 'Tab' || e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
-        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer, .shim-source')) return;   // keys for those panels
+        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source')) return;   // keys for those panels
         e.preventDefault();
         e.stopPropagation();
         // Its release must not reach the app either: it never saw the press.

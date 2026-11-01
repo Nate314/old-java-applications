@@ -2222,3 +2222,283 @@ a.tk-t:hover {
   color: #7df9ff;
   box-shadow: inset 0 0 0 1px #00e5ff, 0 0 10px rgba(0, 229, 255, 0.45);
 }
+
+/* ---- share (boot.js openShare): the link preview card, a message, the link and ways to send it ----
+   A dialog in the middle of the page over a scrim, above the toolbar and the title screen. */
+
+.shim-toolbar .shim-share-open {
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-share-open span {
+    display: none;
+  }
+}
+
+.shim-share {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 2000000002;
+  display: flex;
+  flex-direction: column;
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  animation: shim-share-in 0.18s ease-out;
+}
+
+@keyframes shim-share-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)); }
+}
+
+.shim-share-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+}
+
+.shim-share-label {
+  margin: 0 0 -6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.shim-share-preview {
+  display: block;
+  flex: none;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+}
+
+.shim-share-preview:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-share-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  background: #1d0d3d;
+}
+
+.shim-share-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--card-border);
+  font-size: 13px;
+}
+
+.shim-share-cap small {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+.shim-share-cap span {
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shim-share-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shim-share-msg textarea,
+.shim-share-link input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  resize: vertical;
+}
+
+.shim-share-link {
+  display: flex;
+  gap: 8px;
+}
+
+.shim-share-link input {
+  flex: 1;
+  font-size: 13px;
+}
+
+.shim-share-copy,
+.shim-share-way {
+  flex: none;
+  padding: 6px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 600 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shim-share-copy,
+.shim-share-way.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.shim-share-way:hover {
+  border-color: var(--accent);
+}
+
+.shim-share-copy:focus-visible,
+.shim-share-way:focus-visible,
+.shim-share-msg textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.shim-share-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shim-share-ways .shim-share-way {
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+/* On the exit screen, next to All apps. */
+.shim-exit .shim-exit-share {
+  margin-left: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* The arcade-complete toast's Share it is a button styled as its link. */
+button.shim-toast-go {
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* A shared link's title screen: who sent it. */
+.shim-title-shared {
+  margin: 0 0 4px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+:root[data-skin="classic"] .shim-share {
+  border: 1px solid var(--frame-border);
+  border-radius: 0;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-skin="classic"] .shim-share .shim-drawer-head {
+  background: var(--title-bg);
+  font-size: 14px;
+}
+
+:root[data-skin="classic"] .shim-share-preview,
+:root[data-skin="classic"] .shim-share-copy,
+:root[data-skin="classic"] .shim-share-way,
+:root[data-skin="classic"] .shim-share-msg textarea,
+:root[data-skin="classic"] .shim-share-link input,
+:root[data-skin="classic"] .shim-title-shared {
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-share-way:not(.primary) {
+  background: var(--button-bg);
+  border-color: var(--button-border);
+  color: var(--control-text);
+}
+
+:root[data-skin="arcade"] .shim-share {
+  border: 1px solid #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 36px rgba(255, 43, 214, 0.4);
+}
+
+:root[data-skin="arcade"] .shim-share .shim-drawer-head strong {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-share-preview {
+  border-color: #00e5ff;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-share-msg textarea,
+:root[data-skin="arcade"] .shim-share-link input {
+  background: #020a06;
+  color: #39ff88;
+  border-color: #39ff88;
+}
+
+:root[data-skin="arcade"] .shim-share-way:not(.primary) {
+  border-color: #00e5ff;
+  color: #7df9ff;
+}
+
+:root[data-skin="arcade"] .shim-share-way:not(.primary):hover {
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-share-copy,
+:root[data-skin="arcade"] .shim-share-way.primary {
+  border-color: #ff2bd6;
+  background: #ff2bd6;
+  box-shadow: 0 0 12px rgba(255, 43, 214, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-title-shared {
+  border-color: #ff2bd6;
+  background: rgba(255, 43, 214, 0.14);
+  color: #ffd6f7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-share {
+    animation: none;
+  }
+}
