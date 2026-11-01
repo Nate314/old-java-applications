@@ -1,7 +1,7 @@
 /*
  * Page bootstrap shared by the app index and every app page.
- * - Applies the saved skin before first paint and adds the skin toggle. A skin change in one page
- *   (the home page, say) reaches every other open page of the site through the storage event.
+ * - Applies the saved skin (Modern, Classic or Arcade) before first paint and adds the skin picker. A skin
+ *   change in one page (the home page, say) reaches every other open page of the site through the storage event.
  * - An app page opened with ?embed (the home page's player) leaves out the toolbar and centers the app's
  *   windows, which most apps put at the top-left corner of the screen. ?embed&shot is the
  *   thumbnail mode web/shots.ps1 uses: square, shadowless windows on a flat magenta desktop.
@@ -20,20 +20,24 @@
   'use strict';
 
   var SKIN_KEY = 'oldjava.skin';
+  var SKINS = [['modern', 'Modern'], ['classic', 'Classic'], ['arcade', 'Arcade']];
+  function isSkin(v) { return SKINS.some(function (o) { return o[0] === v; }); }
   var skin = 'modern';
   try {
     skin = localStorage.getItem(SKIN_KEY) || 'modern';
   } catch (e) { /* storage blocked: use the default */ }
-  if (skin !== 'classic' && skin !== 'modern') skin = 'modern';
+  if (!isSkin(skin)) skin = 'modern';
   document.documentElement.setAttribute('data-skin', skin);
+
+  function showSkin(value) {
+    document.documentElement.setAttribute('data-skin', value);
+    var select = document.querySelector('.shim-toolbar select');
+    if (select) select.value = value;
+  }
 
   // Fires in every other same-origin page, including the player iframe on the home page.
   window.addEventListener('storage', function (e) {
-    if (e.key === SKIN_KEY && (e.newValue === 'classic' || e.newValue === 'modern')) {
-      document.documentElement.setAttribute('data-skin', e.newValue);
-      var select = document.querySelector('.shim-toolbar select');
-      if (select) select.value = e.newValue;
-    }
+    if (e.key === SKIN_KEY && isSkin(e.newValue)) showSkin(e.newValue);
   });
 
   var embedded = /[?&]embed(=|&|$)/.test(location.search);
@@ -41,9 +45,12 @@
   if (embedded && /[?&]shot(=|&|$)/.test(location.search)) document.documentElement.setAttribute('data-shot', '');
 
   function setSkin(value) {
-    document.documentElement.setAttribute('data-skin', value);
+    if (!isSkin(value)) return;
+    showSkin(value);
     try { localStorage.setItem(SKIN_KEY, value); } catch (e) { /* not remembered */ }
   }
+  // The home page's Arcade mode button switches skins through this.
+  window.oldjavaSkin = { set: setSkin, get: function () { return document.documentElement.getAttribute('data-skin'); } };
 
   function toolbar(isApp) {
     var bar = document.createElement('div');
@@ -82,7 +89,7 @@
     var label = document.createElement('label');
     label.textContent = 'Skin ';
     var select = document.createElement('select');
-    [['modern', 'Modern'], ['classic', 'Classic']].forEach(function (o) {
+    SKINS.forEach(function (o) {
       var opt = document.createElement('option');
       opt.value = o[0];
       opt.textContent = o[1];

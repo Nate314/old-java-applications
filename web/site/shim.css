@@ -3,6 +3,8 @@
  * colors, gradients, radii and shadows, never sizes or fonts.
  *   Classic: approximates Swing's default Metal (Ocean) look.
  *   Modern:  same layout, flatter colors, rounded corners, follows the system dark mode.
+ *   Arcade:  a CRT arcade cabinet: neon window chrome on a dark grid, scanlines over the page and a power-on
+ *            animation when an app starts (see "arcade skin" at the end).
  */
 
 :root,
@@ -98,6 +100,42 @@
     --accent: #60a5fa;
     color-scheme: dark;
   }
+}
+
+:root[data-skin="arcade"] {
+  --desk:
+    linear-gradient(rgba(0, 229, 255, 0.07) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(0, 229, 255, 0.07) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(ellipse at 50% 115%, #4a0f6e 0%, #150828 55%, #06030f 100%);
+  --control: #140b2a;
+  --control-text: #ece9ff;
+  --frame-bg: #0e0820;
+  --frame-border: #ff2bd6;
+  --frame-border-inactive: #4b2a6b;
+  --title-bg: linear-gradient(90deg, #3a0f5e, #120a2a);
+  --title-bg-inactive: #120a24;
+  --title-text: #7df9ff;
+  --window-radius: 6px;
+  --window-shadow: 0 0 0 1px rgba(255, 43, 214, 0.55), 0 0 22px rgba(255, 43, 214, 0.35), 0 0 60px rgba(0, 229, 255, 0.12);
+  --button-bg: linear-gradient(#2a1552, #170b33);
+  --button-border: #00e5ff;
+  --button-radius: 4px;
+  --button-pressed: #0b5566;
+  --field-bg: #03110a;
+  --field-text: #39ff88;
+  --field-border: #1f8f5a;
+  --field-focus: #39ff88;
+  --field-radius: 3px;
+  --desktop-pane: #170b33;
+  --focus-ring: #00e5ff;
+  --close-bg: transparent;
+  --close-border: #ff2bd6;
+  --page-bg: #07040f;
+  --page-text: #ece9ff;
+  --card-bg: #110a22;
+  --card-border: #35205c;
+  --accent: #ff2bd6;
+  color-scheme: dark;
 }
 
 /* Embedded in the home page's player: boot.js moves #desktop to center the windows, so the desk is painted
@@ -1217,5 +1255,130 @@ canvas.paint.top {
   .shim-pad {
     gap: 8px 12px;
     padding: 8px 10px 10px;
+  }
+}
+
+/* ---- arcade skin: neon chrome, scanlines and a CRT power-on ----
+   Only colors, shadows and overlays, like the other skins: sizes and widget fonts still come from Java. */
+
+:root[data-skin="arcade"] .titlebar {
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.8);
+  letter-spacing: 0.04em;
+}
+
+:root[data-skin="arcade"] .window:not(.active):not(.selected) > .titlebar {
+  color: #9b8cc4;
+  text-shadow: none;
+}
+
+:root[data-skin="arcade"] .titlebar .close {
+  color: #ff2bd6;
+  text-shadow: 0 0 6px rgba(255, 43, 214, 0.9);
+}
+
+:root[data-skin="arcade"] .titlebar .close:hover {
+  background: #ff2bd6;
+  color: #0e0820;
+  text-shadow: none;
+}
+
+:root[data-skin="arcade"] .button.opaque:not(.custom-bg) {
+  text-shadow: 0 0 5px rgba(125, 249, 255, 0.55);
+}
+
+:root[data-skin="arcade"] .button:hover:not(:disabled),
+:root[data-skin="arcade"] .combo:hover {
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.65), inset 0 0 6px rgba(0, 229, 255, 0.25);
+}
+
+:root[data-skin="arcade"] .textfield {
+  text-shadow: 0 0 5px rgba(57, 255, 136, 0.6);
+  caret-color: #39ff88;
+}
+
+:root[data-skin="arcade"] .textfield:focus {
+  box-shadow: 0 0 0 1px var(--field-focus), 0 0 10px rgba(57, 255, 136, 0.45);
+}
+
+:root[data-skin="arcade"] .tabbedpane > .tabs .tab.selected {
+  color: #7df9ff;
+  border-color: #00e5ff;
+}
+
+:root[data-skin="arcade"] .shim-console {
+  background: #020a06;
+  color: #39ff88;
+  text-shadow: 0 0 5px rgba(57, 255, 136, 0.55);
+}
+
+:root[data-skin="arcade"] .shim-overlay-box {
+  border: 1px solid #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 30px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-pad {
+  --pad-bg: rgba(10, 5, 25, 0.9);
+  --pad-text: #ece9ff;
+  --pad-btn: radial-gradient(circle at 35% 30%, #4a2a80, #1a0d38 70%);
+  --pad-btn-border: rgba(0, 229, 255, 0.55);
+  --pad-btn-on: radial-gradient(circle at 50% 50%, #ff8af0, #ff2bd6 75%);
+  --pad-glow: 0 0 14px rgba(255, 43, 214, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.55), 0 0 26px rgba(255, 43, 214, 0.3);
+}
+
+/* The screen: fine scanlines and a dark vignette over the whole page (not in the home page's player, whose
+   page draws them once over the player; not in thumbnail mode). The overlay never takes pointer events. */
+:root[data-skin="arcade"]:not([data-shot]):not([data-embed]) body::after,
+:root[data-skin="arcade"] .player:fullscreen::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.16) 2px 3px),
+    radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* A faint bright band rolls down the screen, as on an old tube. */
+:root[data-skin="arcade"]:not([data-shot]):not([data-embed]) body::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: -30vh;
+  height: 30vh;
+  z-index: 2147483000;
+  pointer-events: none;
+  background: linear-gradient(transparent, rgba(125, 249, 255, 0.045), transparent);
+  animation: arcade-roll 9s linear infinite;
+}
+
+@keyframes arcade-roll {
+  to { transform: translateY(160vh); }
+}
+
+/* Power-on: the app's windows open from a bright line, like a tube warming up. Every new app in the home
+   page's player gets one too. It animates the scale property, so it composes with the transform boot.js
+   uses to center the windows in the player. */
+:root[data-skin="arcade"]:not([data-shot]) #desktop {
+  animation: arcade-on 0.75s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+@keyframes arcade-on {
+  0% { scale: 0.02 0.004; filter: brightness(5) saturate(0); opacity: 0.2; }
+  35% { scale: 1 0.004; filter: brightness(4) saturate(0); opacity: 1; }
+  70% { scale: 1 1.03; filter: brightness(1.6); }
+  100% { scale: 1 1; filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin="arcade"] #desktop,
+  :root[data-skin="arcade"] body::before {
+    animation: none;
+  }
+
+  :root[data-skin="arcade"] body::before {
+    display: none;
   }
 }
