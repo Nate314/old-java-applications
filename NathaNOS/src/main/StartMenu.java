@@ -1,84 +1,95 @@
 package main;
 
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Image;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.image.BufferedImage;
-import java.awt.image.WritableRaster;
 import javax.swing.ImageIcon;
-import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JInternalFrame;
 import javax.swing.JPanel;
+import javax.swing.plaf.basic.BasicInternalFrameUI;
 
-public class StartMenu extends JInternalFrame implements ActionListener {
-   private Main screen;
-   private JPanel panel;
-   private JButton shutDown = new JButton("Shut Down");
+/** The start menu: the NathaNOS logo, every app in assets/, and Shut Down. Opens above the MENU button. */
+public class StartMenu extends JInternalFrame {
+   private static final Color BACKGROUND = new Color(26, 35, 54);
+   private static final int HEADER = 56;
+   private static final int ROW = 34;
+   private static final int MAX_COLUMN = 220;
+   private static final int FOOTER = ROW + 9;
 
-   public StartMenu(Main screen) {
+   public StartMenu(Main screen, Launcher launcher) {
       super("Start Menu", false, false, false);
       this.setVisible(false);
       this.setBorder(null);
-      this.setFrameIcon(new ImageIcon(this.createSolidColoredImage(0, 150, 255)));
-      this.setSize(screen.getWidth() / 4, screen.getHeight() / 2);
-      this.setLocation(0, this.getHeight() - screen.launcherWindow.getHeight());
       this.setCursor(screen.getCursor());
-      this.screen = screen;
-      this.panel = new JPanel() {
-         ImageIcon icon = new ImageIcon("assets/NathaNOS.png");
-         Image image = this.icon.getImage();
-         int dimension;
-         Image newimage;
+      ((BasicInternalFrameUI)this.getUI()).setNorthPane(null);
 
-         {
-            this.dimension = screen.getWidth() / 4 < screen.getHeight() / 2 ? screen.getWidth() / 4 : screen.getHeight() / 2;
-            this.newimage = this.image.getScaledInstance(this.dimension, this.dimension, 4);
-         }
+      int room = screen.getHeight() - screen.launcherWindow.getHeight() - HEADER - FOOTER - 8;
+      int rows = Math.max(1, Math.min(launcher.count(), room / ROW));
+      int columns = Math.max(1, (launcher.count() + rows - 1) / rows);
+      // Columns narrow to fit a small screen; long names are then cut with "...".
+      int column = Math.min(MAX_COLUMN, (screen.getWidth() - 8) / columns);
+      int width = columns * column + 8;
+      int height = HEADER + rows * ROW + FOOTER + 4;
+      this.setSize(width, height);
+      this.setLocation(0, screen.getHeight() - screen.launcherWindow.getHeight() - height);
 
+      JPanel panel = new JPanel();
+      panel.setLayout(null);
+      panel.setBackground(BACKGROUND);
+      this.add(panel);
+
+      Image logo = new ImageIcon("assets/NathaNOS.png").getImage();
+      JComponent header = new JComponent() {
          @Override
          protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            g.drawImage(this.newimage, 0, 0, this);
+            AppIcon.smooth(g);
+            g.setColor(new Color(0, 120, 215));
+            g.fillRect(0, 0, this.getWidth(), this.getHeight());
+            AppIcon.paint(g, logo, "NathaNOS", 12, 8, HEADER - 16);
+            g.setColor(Color.WHITE);
+            g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
+            g.drawString("NathaNOS", HEADER + 4, HEADER / 2 + 2);
+            g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+            g.drawString(launcher.count() + " apps", HEADER + 4, HEADER / 2 + 18);
          }
       };
-      this.panel.setBackground(new Color(0, 150, 255));
-      this.add(this.panel);
-      this.shutDown.addActionListener(this);
-      this.panel.add(this.shutDown);
-   }
+      header.setBounds(0, 0, width, HEADER);
+      panel.add(header);
 
-   private Image createSolidColoredImage(int r, int g, int b) {
-      int width = 483;
-      int height = 483;
-      BufferedImage image = new BufferedImage(width, height, 1);
-      WritableRaster raster = image.getRaster();
-      int[] myColor = new int[]{r, g, b};
-
-      for (int h = 0; h < height; h++) {
-         for (int w = 0; w < width; w++) {
-            raster.setPixel(w, h, myColor);
-         }
+      for (int i = 0; i < launcher.count(); i++) {
+         int app = i;
+         FlatButton row = new FlatButton(launcher.icon(i), launcher.name(i), launcher.name(i), null, LauncherWindow.HOVER, null, () -> {
+            this.hideMenu();
+            launcher.launch(app);
+         });
+         row.setBounds(4 + i / rows * column, HEADER + 4 + i % rows * ROW, column, ROW);
+         panel.add(row);
       }
 
-      return image;
+      JComponent divider = new JComponent() {
+         @Override
+         protected void paintComponent(Graphics g) {
+            g.setColor(LauncherWindow.HOVER);
+            g.fillRect(0, 0, this.getWidth(), this.getHeight());
+         }
+      };
+      divider.setBounds(8, height - FOOTER, width - 16, 1);
+      panel.add(divider);
+      FlatButton shutDown = new FlatButton(null, null, "Shut Down", null, new Color(160, 40, 50), null, () -> System.exit(0));
+      shutDown.setBounds(4, height - ROW - 4, column, ROW);
+      panel.add(shutDown);
    }
 
    public void toggleVisibility() {
+      this.setVisible(!this.isVisible());
       if (this.isVisible()) {
-         this.setVisible(false);
-         this.setSize(this.screen.getWidth() / 4, this.screen.getHeight() / 2);
-         this.setLocation(0, this.getHeight() - this.screen.launcherWindow.getHeight());
-      } else {
-         this.setVisible(true);
+         this.moveToFront();
       }
    }
 
-   @Override
-   public void actionPerformed(ActionEvent e) {
-      if (e.getSource() == this.shutDown) {
-         System.exit(0);
-      }
+   public void hideMenu() {
+      this.setVisible(false);
    }
 }

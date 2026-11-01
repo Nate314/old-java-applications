@@ -1,118 +1,116 @@
 package main;
 
 import java.awt.Color;
-import java.awt.Image;
-import java.awt.Toolkit;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.beans.PropertyVetoException;
-import java.lang.reflect.Constructor;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JFrame;
+import javax.swing.JComponent;
 import javax.swing.JInternalFrame;
 import javax.swing.JPanel;
+import javax.swing.Timer;
 import javax.swing.plaf.basic.BasicInternalFrameUI;
 
-public class LauncherWindow extends JInternalFrame implements ActionListener {
-   private Main screen;
-   public JPanel panel = new JPanel();
-   private List<JButton> buttons = new ArrayList<>();
-   private FileGatherer fileGatherer;
-   private Class<?>[] myApplications;
+/** The taskbar: the MENU button, a button for each open app window, and a clock. */
+public class LauncherWindow extends JInternalFrame {
+   static final Color BAR = new Color(18, 26, 42);
+   static final Color HOVER = new Color(44, 58, 84);
+   static final Color ON = new Color(56, 74, 106);
+   private static final int START_WIDTH = 116;
+   private static final int CLOCK_WIDTH = 96;
+   private static final int MAX_TASK_WIDTH = 190;
+   private static final String[] MONTHS = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-   public LauncherWindow(Main screen) {
+   public JPanel panel = new JPanel();
+   private final TaskList tasks;
+   private final List<TaskList.Task> shown = new ArrayList<>();
+   private final List<FlatButton> taskButtons = new ArrayList<>();
+   private final TrayClock clock = new TrayClock();
+
+   public LauncherWindow(Main screen, TaskList tasks) {
       super("Launcher", false, false, false);
-      this.screen = screen;
-      this.setResizable(true);
-      this.setDefaultCloseOperation(3);
+      this.tasks = tasks;
       this.setBorder(null);
-      this.setSize(screen.getWidth(), screen.getHeight() / 20);
+      this.setSize(screen.getWidth(), Math.max(36, screen.getHeight() / 20));
       this.setLocation(0, screen.getHeight() - this.getHeight());
       this.setVisible(true);
       this.setCursor(screen.getCursor());
       ((BasicInternalFrameUI)this.getUI()).setNorthPane(null);
       this.add(this.panel);
-      this.fileGatherer = new FileGatherer();
-      this.panel.setBackground(new Color(0, 150, 255));
+      this.panel.setBackground(BAR);
       this.panel.setLayout(null);
 
-      for (int i = 0; i < this.fileGatherer.applicationNames.size(); i++) {
-         this.buttons.add(new JButton(this.fileGatherer.applicationNames.get(i)));
-      }
+      FlatButton start = new FlatButton(
+         new ImageIcon("assets/NathaNOS.png").getImage(), "NathaNOS", "MENU", new Color(0, 120, 215), new Color(0, 150, 255), null,
+         () -> screen.startMenu.toggleVisibility()
+      );
+      start.setBounds(4, 0, START_WIDTH, this.getHeight());
+      this.panel.add(start);
+      this.clock.setBounds(this.getWidth() - CLOCK_WIDTH, 0, CLOCK_WIDTH, this.getHeight());
+      this.panel.add(this.clock);
 
-      int startButtonWidth = Toolkit.getDefaultToolkit().getScreenSize().width / 8;
-      int buttonWidth = (this.getWidth() - startButtonWidth) / this.buttons.size();
-      this.buttons.get(0).setBounds(0, 0, startButtonWidth, this.getHeight());
-      this.buttons.get(0).addActionListener(this);
-      this.buttons
-         .get(0)
-         .setIcon(
-            new ImageIcon(new ImageIcon(this.fileGatherer.iconPaths.get(0)).getImage().getScaledInstance(this.getHeight() - 20, this.getHeight() - 20, 4))
-         );
-      this.panel.add(this.buttons.get(0));
-      this.buttons.get(0).setBackground(new Color(0, 150, 255));
-
-      for (int i = 1; i < this.buttons.size(); i++) {
-         this.buttons.get(i).setBounds(startButtonWidth + (i - 1) * buttonWidth, 0, buttonWidth, this.getHeight());
-         this.buttons.get(i).addActionListener(this);
-         this.buttons
-            .get(i)
-            .setIcon(
-               new ImageIcon(new ImageIcon(this.fileGatherer.iconPaths.get(i)).getImage().getScaledInstance(this.getHeight() - 20, this.getHeight() - 20, 4))
-            );
-         this.buttons.get(i).setBackground(new Color(0, 255, 255));
-         this.panel.add(this.buttons.get(i));
-      }
-
-      this.myApplications = this.fileGatherer.getAllJFrameClasses();
+      Timer timer = new Timer(500, e -> this.refresh());
+      timer.start();
    }
 
-   private void createNewWindow(JFrame window, boolean resizable, Image iconImage) {
-      GenericAppFrame appWindow = new GenericAppFrame(window.getTitle(), window.getContentPane(), resizable, iconImage, this.screen);
-      appWindow.setSize(window.getWidth(), window.getHeight());
-      appWindow.setPosition(this.screen.getWidth() / 2 - window.getWidth() / 2, this.screen.getHeight() / 2 - window.getHeight() / 2);
-      this.screen.desktopPane.add(appWindow);
-      // The app's own frame was only a hidden donor for its content pane.
-      window.dispose();
-
-      try {
-         this.screen.desktopPane.getAllFrames()[this.screen.desktopPane.getAllFrames().length - 1].setSelected(true);
-      } catch (PropertyVetoException exception) {
-         exception.printStackTrace();
+   /** Follows windows opening and closing, which window is active, and the time. */
+   private void refresh() {
+      List<TaskList.Task> showing = this.tasks.showing();
+      if (!showing.equals(this.shown)) {
+         this.shown.clear();
+         this.shown.addAll(showing);
+         this.layoutTasks();
       }
+      for (int i = 0; i < this.shown.size(); i++) {
+         this.taskButtons.get(i).setOn(this.shown.get(i).isActive());
+      }
+      this.clock.repaint();
    }
 
-   @Override
-   public void actionPerformed(ActionEvent e) {
-      if (e.getSource() == this.buttons.get(0)) {
-         this.screen.startMenu.toggleVisibility();
+   private void layoutTasks() {
+      for (FlatButton button : this.taskButtons) {
+         this.panel.remove(button);
       }
+      this.taskButtons.clear();
+      int left = START_WIDTH + 12;
+      int room = this.getWidth() - CLOCK_WIDTH - 8 - left;
+      int width = this.shown.isEmpty() ? 0 : Math.min(MAX_TASK_WIDTH, room / this.shown.size());
+      for (int i = 0; i < this.shown.size(); i++) {
+         TaskList.Task task = this.shown.get(i);
+         FlatButton button = new FlatButton(task.icon, task.name, task.name, null, HOVER, ON, task::activate);
+         button.setBounds(left + i * width, 0, width, this.getHeight());
+         this.taskButtons.add(button);
+         this.panel.add(button);
+      }
+      this.panel.repaint();
+   }
 
-      for (int i = 1; i < this.buttons.size(); i++) {
-         if (e.getSource() == this.buttons.get(i)) {
-            Class<?> app = this.myApplications[i - 1];
-            String name = this.buttons.get(i).getText();
-            if (app == null) {
-               System.err.println(name + " could not be loaded.");
-               return;
-            }
-
-            try {
-               Constructor<?> embeddable;
-               try {
-                  embeddable = app.getConstructor(Boolean.class);
-               } catch (NoSuchMethodException notEmbeddable) {
-                  // Any other app runs as it would on its own, in its own windows.
-                  AppLauncher.runMain(app, name);
-                  return;
-               }
-               this.createNewWindow((JFrame)embeddable.newInstance(false), false, new ImageIcon(this.fileGatherer.iconPaths.get(i)).getImage());
-            } catch (ReflectiveOperationException | RuntimeException exception) {
-               System.err.println(name + " failed to start: " + exception);
-            }
+   /** The time and date at the right end of the taskbar. */
+   private static final class TrayClock extends JComponent {
+      @Override
+      @SuppressWarnings("deprecation")
+      protected void paintComponent(Graphics g) {
+         super.paintComponent(g);
+         AppIcon.smooth(g);
+         // Date's local-time getters, not Calendar: in the browser (TeaVM) Calendar's default time zone is UTC.
+         Date now = new Date();
+         int hour = now.getHours() % 12 == 0 ? 12 : now.getHours() % 12;
+         int minute = now.getMinutes();
+         String time = hour + ":" + (minute < 10 ? "0" : "") + minute + (now.getHours() < 12 ? " AM" : " PM");
+         String date = MONTHS[now.getMonth()] + " " + now.getDate() + ", " + (1900 + now.getYear());
+         boolean twoLines = this.getHeight() >= 34;
+         g.setColor(FlatButton.TEXT);
+         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+         FontMetrics metrics = g.getFontMetrics();
+         int timeY = twoLines ? this.getHeight() / 2 - 2 : (this.getHeight() + metrics.getAscent() - metrics.getDescent()) / 2;
+         g.drawString(time, (this.getWidth() - metrics.stringWidth(time)) / 2, timeY);
+         if (twoLines) {
+            g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+            metrics = g.getFontMetrics();
+            g.drawString(date, (this.getWidth() - metrics.stringWidth(date)) / 2, this.getHeight() / 2 + metrics.getAscent());
          }
       }
    }

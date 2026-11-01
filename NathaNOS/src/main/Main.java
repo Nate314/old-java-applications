@@ -4,10 +4,10 @@ import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.Toolkit;
-import java.beans.PropertyVetoException;
 import javax.swing.ImageIcon;
 import javax.swing.JDesktopPane;
 import javax.swing.JFrame;
+import javax.swing.JLayeredPane;
 import javax.swing.SwingUtilities;
 
 public class Main extends JFrame {
@@ -35,16 +35,14 @@ public class Main extends JFrame {
       this.setVisible(visibility);
       this.setCursor(this.getToolkit().createCustomCursor(new ImageIcon("assets/cursor.png").getImage(), new Point(), "defaultCursor"));
       this.add(this.desktopPane);
-      this.launcherWindow = new LauncherWindow(this);
-      this.startMenu = new StartMenu(this);
-      this.desktopPane.add(this.launcherWindow);
-      this.desktopPane.add(this.startMenu);
-
-      try {
-         this.desktopPane.getAllFrames()[0].setSelected(true);
-      } catch (PropertyVetoException exception) {
-         exception.printStackTrace();
-      }
+      TaskList tasks = new TaskList(this);
+      Launcher launcher = new Launcher(this, tasks);
+      this.launcherWindow = new LauncherWindow(this, tasks);
+      this.startMenu = new StartMenu(this, launcher);
+      // The taskbar and its menu stay above internal app windows (Clock), as on a real desktop.
+      this.desktopPane.add(this.launcherWindow, JLayeredPane.PALETTE_LAYER);
+      this.desktopPane.add(this.startMenu, JLayeredPane.POPUP_LAYER);
+      new DesktopShortcuts(this, launcher);
    }
 
    public static void main(String[] args) {

@@ -12,7 +12,9 @@ public class GenericAppFrame extends JInternalFrame {
       this.setDefaultCloseOperation(2);
       this.setVisible(true);
       this.add(panel);
-      this.setFrameIcon(new ImageIcon(iconImage.getScaledInstance(20, 20, 4)));
+      if (iconImage != null) {
+         this.setFrameIcon(new ImageIcon(iconImage.getScaledInstance(20, 20, 4)));
+      }
       this.setCursor(screen.getCursor());
    }
 

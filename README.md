@@ -13,7 +13,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 | [Clock](Clock/README.md) | Analog/text clock |
 | [FlappyBird](FlappyBird/README.md) | Flappy Bird style game |
 | [Minesweeper](Minesweeper/README.md) | Minesweeper game |
-| [NathaNOS](NathaNOS/README.md) | Desktop-style app launcher |
+| [NathaNOS](NathaNOS/README.md) | Desktop-style app launcher with icons, a start menu and a taskbar |
 | [RubiksCube2D](RubiksCube2D/README.md) | 2D Rubik's Cube |
 | [ScreenSaver](ScreenSaver/README.md) | Screen saver that closes when the mouse moves |
 | [SpriteFloatyStars](SpriteFloatyStars/README.md) | Animated stars with several modes |
@@ -47,7 +47,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 - StockChecker downloads quotes from the retired Yahoo Finance CSV API into `stockCheck.csv`, using the tickers in `myStocks.txt`, and saves list edits back to `myStocks.txt`.
 - FlappyBird and NathaNOS load images by relative path, so run them from the folder holding the images:
   - FlappyBird: run from `FlappyBird/src` with a numeric argument, e.g. `java flappyBird.Main 120` (the original `run.bat` used 120).
-  - NathaNOS: run from a folder holding its `assets/`. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset. `./run.ps1 NathaNOS` stages a copy in `out/NathaNOS/desktop/` with every other app except the three `Robot` apps on its taskbar.
+  - NathaNOS: run from a folder holding its `assets/`. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset. `./run.ps1 NathaNOS` stages a copy in `out/NathaNOS/desktop/` with every other app except the three `Robot` apps on its desktop.
 
 ## Build and run
 
