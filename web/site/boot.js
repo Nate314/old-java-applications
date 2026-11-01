@@ -17,6 +17,8 @@
  *   localStorage and shared by every open page. A new stamp shows a toast pointing at an app not played yet.
  * - Links the web app manifest and icons and registers the service worker (sw.js), so the site can be
  *   installed and saved apps play offline. The home page's Take it with you panel uses both.
+ * - Gives the site's own controls and moments short synthesized sounds in the skin's voice
+ *   (window.oldjavaSound), with a Sound button in the toolbar to mute them on every open page.
  */
 (function () {
   'use strict';
@@ -50,6 +52,7 @@
     if (!isSkin(value)) return;
     showSkin(value);
     try { localStorage.setItem(SKIN_KEY, value); } catch (e) { /* not remembered */ }
+    playSound('skin');   // in the new skin's voice
   }
   // The home page's Arcade mode button switches skins through this.
   window.oldjavaSkin = { set: setSkin, get: function () { return document.documentElement.getAttribute('data-skin'); } };
@@ -118,6 +121,12 @@
         next.hidden = false;
       });
     }
+    var sound = document.createElement('button');
+    sound.type = 'button';
+    sound.className = 'shim-sound';
+    sound.setAttribute('data-sound', 'none');
+    sound.addEventListener('click', function () { setSoundOn(!soundOn()); sound.blur(); });
+    bar.appendChild(sound);
     var label = document.createElement('label');
     label.textContent = 'Skin ';
     var select = document.createElement('select');
@@ -132,6 +141,7 @@
     label.appendChild(select);
     bar.appendChild(label);
     document.body.appendChild(bar);
+    showSound();
     if (controls) padOnPage(controls);
   }
 
@@ -260,6 +270,7 @@
         toast.classList.add('gone');
         setTimeout(function () { toast.remove(); }, 600);
       }, 9000);
+      playSound(done ? 'complete' : 'stamp');
       if (done) confetti();
     });
   }
@@ -610,6 +621,7 @@
     a.appendChild(pic);
     a.appendChild(text);
     if (embedded && window.parent !== window) {
+      a.setAttribute('data-sound', 'none');   // the home page plays the new app's start
       a.addEventListener('click', function (e) {
         if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
         e.preventDefault();
@@ -644,6 +656,7 @@
     var list = document.createElement('div');
     list.className = 'shim-drawer-list';
     function shut() {
+      playSound('close');
       scrim.remove();
       panel.remove();
       drawer = null;
@@ -659,6 +672,7 @@
     document.body.appendChild(scrim);
     document.body.appendChild(panel);
     drawer = panel;
+    playSound('open');
     catalog().then(function (apps) {
       if (apps.length) panel.insertBefore(passportLine(apps), list);
       apps.forEach(function (app) { list.appendChild(appCard(app, app.id === appId())); });
@@ -699,6 +713,7 @@
     var box = overlay(msg, 'Run again').firstChild;
     box.classList.add('shim-exit');
     ownKeys(box);
+    playSound('exit');
     if (!embedded) {
       var home = document.createElement('a');
       home.className = 'shim-exit-home';
@@ -847,6 +862,180 @@
     document.addEventListener(type, function () { if (audio && audio.state === 'suspended') audio.resume(); }, true);
   });
 
+  // ---- site sounds (window.oldjavaSound) ----
+  // The site's own controls and moments (not the apps, which keep their own sound) get short synthesized
+  // sounds, in a voice that follows the skin: soft glassy bells in Modern, a PC-speaker beep in Classic,
+  // chiptune blips in Arcade, where a new app powers on with a tube thump and a rising whine. Every tune is a
+  // list of semitones above the voice's root note (the last note is held longer); 'thump' and 'power' are the
+  // two non-note sounds.
+  // No file is downloaded. Sound plays only after the visitor has clicked or pressed a key on the page.
+  var SOUND_KEY = 'oldjava.sound';
+  var VOICES = {
+    modern: { wave: 'sine', root: 523.25, step: 0.075, len: 0.32, hold: 1.8, vol: 0.2, bell: true },
+    classic: { wave: 'square', root: 440, step: 0.1, len: 0.085, hold: 2, vol: 0.045, lowpass: 2200 },
+    arcade: { wave: 'square', root: 659.25, step: 0.055, len: 0.07, hold: 4, vol: 0.055, blip: true }
+  };
+  var TUNES = {
+    tap: [12],
+    open: [7, 12],
+    close: [12, 7],
+    start: [0, 4, 7, 12],
+    stamp: ['thump', 7, 16],
+    complete: ['thump', 0, 4, 7, 12, 7, 12, 16, 19, 24],
+    exit: [7, 3, 0],
+    skin: [0, 5, 9, 12],
+    saved: [0, 7, 12, 19],
+    offline: [0, -6]
+  };
+  // Arcade's own tunes: a power-on for a new app and a coin for a stamp (B5 then E6, held).
+  var ARCADE_TUNES = { start: ['power', 7, 12], stamp: ['thump', 7, 12] };
+
+  function soundOn() {
+    try { return localStorage.getItem(SOUND_KEY) !== 'off'; } catch (e) { return true; }
+  }
+
+  var sfxOut = null;   // the site sounds' master gain, on the same AudioContext as the app voices
+  var noiseBuffer = null;
+  var tapPending = false;
+
+  function tone(a, v, semi, at, len, vol) {
+    var f = v.root * Math.pow(2, semi / 12);
+    var gain = a.createGain();
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(vol, at + 0.004);
+    if (v.bell) gain.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    else {
+      gain.gain.setValueAtTime(vol, at + len - 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    }
+    var sink = gain;
+    if (v.lowpass) {
+      var lp = a.createBiquadFilter();
+      lp.frequency.value = v.lowpass;
+      gain.connect(lp);
+      sink = lp;
+    }
+    sink.connect(sfxOut);
+    // A bell is the note plus a quieter partial two octaves up; a blip drops onto its note from a fifth above.
+    (v.bell ? [[1, 1], [4, 0.18]] : [[1, 1]]).forEach(function (p) {
+      var o = a.createOscillator();
+      o.type = v.wave;
+      o.frequency.setValueAtTime(f * p[0] * (v.blip ? 1.5 : 1), at);
+      if (v.blip) o.frequency.exponentialRampToValueAtTime(f, at + 0.018);
+      var g = gain;
+      if (p[1] !== 1) {
+        g = a.createGain();
+        g.gain.value = p[1];
+        g.connect(gain);
+      }
+      o.connect(g);
+      o.start(at);
+      o.stop(at + len + 0.02);
+    });
+  }
+
+  // A low, filtered knock: the stamp pressed down (and the tube switching on).
+  function thump(a, at, vol) {
+    if (!noiseBuffer) {
+      noiseBuffer = a.createBuffer(1, Math.round(a.sampleRate * 0.15), a.sampleRate);
+      var d = noiseBuffer.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    var n = a.createBufferSource();
+    n.buffer = noiseBuffer;
+    var lp = a.createBiquadFilter();
+    lp.frequency.value = 380;
+    var g = a.createGain();
+    g.gain.setValueAtTime(vol, at);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.14);
+    n.connect(lp).connect(g).connect(sfxOut);
+    n.start(at);
+    var o = a.createOscillator();
+    o.frequency.setValueAtTime(140, at);
+    o.frequency.exponentialRampToValueAtTime(45, at + 0.12);
+    var og = a.createGain();
+    og.gain.setValueAtTime(vol * 0.9, at);
+    og.gain.exponentialRampToValueAtTime(0.0001, at + 0.13);
+    o.connect(og).connect(sfxOut);
+    o.start(at);
+    o.stop(at + 0.15);
+  }
+
+  // The tube warming up, timed with the Arcade skin's power-on animation (shim.css, arcade-on).
+  function power(a, at) {
+    thump(a, at, 0.35);
+    var o = a.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, at);
+    o.frequency.exponentialRampToValueAtTime(1800, at + 0.28);
+    var lp = a.createBiquadFilter();
+    lp.frequency.value = 2600;
+    var g = a.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.05, at + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+    o.connect(lp).connect(g).connect(sfxOut);
+    o.start(at);
+    o.stop(at + 0.32);
+    return 0.34;   // the notes after it wait for the line to open up
+  }
+
+  function playSound(name) {
+    if (name !== 'tap') tapPending = false;   // the click that caused this needs no tap of its own
+    if (!soundOn() || document.documentElement.hasAttribute('data-shot')) return;
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;   // it could not start yet
+    var skinName = document.documentElement.getAttribute('data-skin');
+    var v = VOICES[skinName] || VOICES.modern;
+    var tune = (skinName === 'arcade' && ARCADE_TUNES[name]) || TUNES[name];
+    var a = ctx();
+    if (!a || !tune) return;
+    if (!sfxOut) {
+      sfxOut = a.createGain();
+      sfxOut.gain.value = 0.7;
+      sfxOut.connect(a.destination);
+    }
+    var at = a.currentTime + 0.01;
+    var quiet = name === 'tap' ? 0.45 : 1;
+    tune.forEach(function (semi, i) {
+      if (semi === 'thump') { thump(a, at, 0.3); at += 0.07; return; }
+      if (semi === 'power') { at += power(a, at); return; }
+      var last = i === tune.length - 1;
+      tone(a, v, semi, at, v.len * (name === 'tap' ? 0.5 : last ? v.hold : 1), v.vol * quiet);
+      at += v.step;
+    });
+  }
+
+  function setSoundOn(on) {
+    try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch (e) { /* this page only */ }
+    showSound();
+    if (on) playSound('open');
+  }
+
+  function showSound() {
+    var b = document.querySelector('.shim-toolbar .shim-sound');
+    if (!b) return;
+    var on = soundOn();
+    b.setAttribute('aria-pressed', String(on));
+    b.innerHTML = '♪ <span>' + (on ? 'Sound' : 'Muted') + '</span>';   // the word is hidden on narrow pages
+    b.setAttribute('aria-label', 'Site sounds');
+    b.title = on ? 'Site sounds are on (the apps keep their own sound). Click to mute.' : 'Site sounds are muted. Click to turn them on.';
+  }
+  window.addEventListener('storage', function (e) { if (e.key === SOUND_KEY || e.key === null) showSound(); });
+
+  window.oldjavaSound = { play: playSound, on: soundOn, set: setSoundOn };
+
+  // Any click on a site control (not in the app's windows or the controller, whose keys belong to the app)
+  // taps, unless what it did made a sound of its own. data-sound="none" keeps a control silent.
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest && e.target.closest('button, a[href], summary');
+    if (!t || t.closest('#desktop, .shim-pad, [data-sound="none"]')) return;
+    tapPending = true;
+    setTimeout(function () {
+      if (tapPending) playSound('tap');
+      tapPending = false;
+    }, 0);
+  }, true);
+
   document.addEventListener('DOMContentLoaded', function () {
     var body = document.body;
     var isApp = body.hasAttribute('data-app');
@@ -882,6 +1071,7 @@
         return;
       }
       main(args);
+      if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
       if (extras && !embedded) howToPlay();
       if (extras) stampOnPlay();   // after the hint, so a stamp's toast replaces it rather than sitting under it
     });

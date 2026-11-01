@@ -195,9 +195,20 @@ The site is a progressive web app: it can be installed as an app with its own wi
 - Service workers need a secure context: `localhost`, `127.0.0.1` or HTTPS. Elsewhere the panel stays hidden and the site works as before.
 - The icons in `icons/` are PNG renders of `icons/icon.svg` (192 and 512 px, a 512 px maskable one with the art inside the safe zone, and a 180 px `apple-touch-icon.png`). To change the icon, edit the SVG and render the PNGs again, for example with headless Chrome (`--screenshot` with a matching `--window-size`).
 
+## Sound
+
+The site's own controls and moments make short sounds, synthesized with the Web Audio API in `boot.js` (`window.oldjavaSound`), so no sound file is downloaded. The apps keep their own sound and get none of these.
+
+- Each skin has its own voice: soft bell tones (a sine with a quiet partial two octaves up) in Modern, a filtered square-wave beep like a PC speaker in Classic, and chiptune blips that drop onto their note from a fifth above in Arcade.
+- Sounds: a tap for any button or link of the site (not the app's windows or the touch controller, whose presses belong to the app), a rising arpeggio when an app is swapped into the home page's player or an app page starts, open and close notes for the Switch app panel, a jingle in the new skin's voice when the skin changes, a stamp knock and two notes for a new passport stamp (a longer fanfare for the 16th), a falling line when an app exits, and a chime when Save all for offline finishes (a low two-note warning when it fails or the connection drops).
+- Arcade has two of its own: a new app powers on with a low thump and a rising whine, timed with the skin's power-on animation, then two notes; a stamp sounds like a coin (B5 then a held E6).
+- Each tune is a list of semitones above the voice's root note (`TUNES` and `ARCADE_TUNES` in `boot.js`), so a voice and a tune can be changed separately.
+- The Sound button in the toolbar (a note, with the word on pages 1000 px wide or more) mutes or unmutes them. The choice is remembered in `localStorage` (`oldjava.sound`) and reaches every open page of the site through the `storage` event.
+- Browsers start audio only after a click or key press, so nothing plays before the visitor's first one on that page. An app page opened from a link is a new page, so its start sound is usually silent; the home page's player plays it on every swap.
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".
 - Windows cannot be resized by dragging their edges, and there are no minimize or maximize buttons.
 - `Robot` cannot see or control anything outside the page.
-- Nothing an app saves is kept across page loads (only the skin and the passport stamps are). Saving for offline keeps the apps' files, not their data.
+- Nothing an app saves is kept across page loads (only the skin, the sound setting and the passport stamps are). Saving for offline keeps the apps' files, not their data.

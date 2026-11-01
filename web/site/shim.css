@@ -568,6 +568,19 @@ canvas.paint.top {
   display: none;
 }
 
+/* Sound (boot.js, window.oldjavaSound): muted reads as struck through. Below 1000 px only the note shows,
+   to keep the toolbar off the app windows. */
+.shim-toolbar .shim-sound[aria-pressed="false"] {
+  opacity: 0.65;
+  text-decoration: line-through;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-sound span {
+    display: none;
+  }
+}
+
 .shim-close {
   flex: none;
   width: 28px;
