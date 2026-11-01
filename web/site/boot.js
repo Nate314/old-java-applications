@@ -354,7 +354,7 @@
   var PADS = {
     FlappyBird: [
       { buttons: [{ k: 'Space', label: 'Flap', big: true }] },
-      { buttons: [{ k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
+      { buttons: [{ k: 'C', label: 'Course' }, { k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
     ],
     TankGame: [
       { title: 'Red tank', tint: 'red', dpad: ['W', 'A', 'S', 'D'], fire: 'Q' },
@@ -1317,9 +1317,17 @@
   // What an app saved on earlier visits: web.rt.Saves keeps the files it writes under oldjava.saves.<App>, each byte
   // one character. Apps with a score file get their record read out; any other saves are named.
   var RECORDS = {
-    FlappyBird: { file: '.flappybird-highscore.txt', show: function (text) {
+    // Today's course (.flappybird-today.txt) counts only on the day it was flown.
+    FlappyBird: { file: '.flappybird-highscore.txt', show: function (text, saved) {
       var best = parseInt(text, 10);
-      return best > 0 ? 'Your best: ' + best + (best === 1 ? ' pipe' : ' pipes') : '';
+      if (!(best > 0)) return '';
+      var line = 'Your best: ' + best + (best === 1 ? ' pipe' : ' pipes');
+      var today = /date=(\d+)\s+best=(\d+)/.exec(saved('.flappybird-today.txt') || '');
+      var now = new Date();
+      if (today && +today[1] === now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate() && +today[2] > 0) {
+        line += '; today\'s course: ' + today[2];
+      }
+      return line;
     } },
     Minesweeper: { file: '.minesweeper-best.txt', show: function (text) {
       var names = { BEGINNER: 'Beginner', CLASSIC: 'Classic', EXPERT: 'Expert' };
@@ -1354,11 +1362,16 @@
     try { saves = JSON.parse(localStorage.getItem('oldjava.saves.' + id) || '{}'); } catch (e) { return ''; }
     var paths = Object.keys(saves);
     var rule = RECORDS[id];
-    if (rule) {
+    // The text of a saved file by its name, or null.
+    function saved(name) {
       for (var i = 0; i < paths.length; i++) {
-        if (paths[i].split('/').pop() === rule.file) return rule.show(saves[paths[i]]);
+        if (paths[i].split('/').pop() === name) return saves[paths[i]];
       }
-      return '';
+      return null;
+    }
+    if (rule) {
+      var text = saved(rule.file);
+      return text === null ? '' : rule.show(text, saved);
     }
     return paths.length ? 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ') : '';
   }

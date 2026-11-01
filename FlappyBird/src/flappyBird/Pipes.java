@@ -19,9 +19,11 @@ public final class Pipes {
    private int dropped = 0;
    private int gapHeight = 2 * PIPE_WIDTH;
    private int pipeSpacing = (int)((double)Main.FRAME_WIDTH / 3.5);
-   private Random random = new Random();
+   private final Random random;
 
-   public Pipes(Image topPipeImage, Image bottomPipeImage) {
+   /** Pipes from {@code random}: a seeded one gives the same pipes every run (today's course). */
+   public Pipes(Image topPipeImage, Image bottomPipeImage, Random random) {
+      this.random = random;
       this.topPipeImage = topPipeImage;
       this.bottomPipeImage = bottomPipeImage;
       this.addPair(Main.FRAME_WIDTH);
@@ -29,7 +31,7 @@ public final class Pipes {
    }
 
    private void addPair(float x) {
-      int gapTop = this.random.nextInt(PIPE_HEIGHT - this.gapHeight - (Main.FRAME_HEIGHT - Background.groundY));
+      int gapTop = (int)(this.random.nextDouble() * (PIPE_HEIGHT - this.gapHeight - (Main.FRAME_HEIGHT - Background.groundY)));
       this.positions.add(new Position(x, (float)(gapTop - PIPE_HEIGHT)));
       this.positions.add(new Position(x, (float)(gapTop + this.gapHeight)));
    }

@@ -24,7 +24,7 @@ mvn -f web/pom.xml package "-Drepo.dir=C:/path/to/other/checkout" "-Dsite.dir=C:
 | App | Status | Notes |
 |---|---|---|
 | Clock | Works | |
-| FlappyBird | Works | The best score is kept in the browser (see Saved files). Runs one game step per animation frame (60 per second on most screens), so its speed differs from the desktop, where it ran as fast as the machine could repaint. |
+| FlappyBird | Works | The best score and today's best run are kept in the browser (see Saved files). Today's course has the same pipes at any window size, and the ghost is stored as heights relative to the window, so it replays at any size too. Runs one game step per animation frame (60 per second on most screens), so its speed differs from the desktop, where it ran as fast as the machine could repaint. |
 | Minesweeper | Works | Best times and the last level are kept in the browser (see Saved files). Sound uses simple Web Audio tones. The game-over chord bends its pitch with about 800 one-millisecond sleeps, which take longer in a browser (timers have a minimum delay), so the board waits a few seconds before the next click. Esc closes the app. |
 | NathaNOS | Works | The desktop icons and the start menu open the old Clock build from `assets/Clock.jar` and the 14 other browser apps (compiled in ahead of time, see below), and the taskbar lists the open windows. Apps open as their own windows over the desktop; closing one leaves NathaNOS and the others running. SimpleAlgorithms prints only to the browser's developer console here, since the page has no output panel (the old Clock prints the time every second). The taskbar clock reads the time with `Date`'s local-time getters, because `Calendar` uses UTC in TeaVM. |
 | RubiksCube2D | Works | The w/a/s/d buttons and Mix send key events through the page-level `Robot`. |
@@ -102,10 +102,10 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 TeaVM's file system lives in memory, so on its own everything an app saves is gone on the next page load. `web.rt.Saves` keeps it, with no change to the apps:
 
 - Every second, and when the page is hidden or closed, it walks the in-memory file system and copies each file written since the last look (TeaVM updates a file's last-modified time on every write) into `localStorage` under `oldjava.saves.<App>` (the page's `data-app`), as a JSON object of absolute path to contents, one character per byte. A file the app deletes is dropped.
-- On the next load, right after the page's own files are copied in (`Files.install`, when the first component is created), the saved files are written back over them. So FlappyBird's best score (`/.flappybird-highscore.txt`: `user.home` is `/` here), Minesweeper's best times and last level (`/.minesweeper-best.txt`), Ultimate Tic-Tac-Toe's record against the computer and last mode (`/.ultimatetictactoe-record.txt`), TankGame's matches won and lost against the computer (`/.tankgame-record.txt`) and StockChecker's edited `myStocks.txt` come back as they would from a desktop disk.
+- On the next load, right after the page's own files are copied in (`Files.install`, when the first component is created), the saved files are written back over them. So FlappyBird's best score (`/.flappybird-highscore.txt`: `user.home` is `/` here) and today's best run (`/.flappybird-today.txt`), Minesweeper's best times and last level (`/.minesweeper-best.txt`), Ultimate Tic-Tac-Toe's record against the computer and last mode (`/.ultimatetictactoe-record.txt`), TankGame's matches won and lost against the computer (`/.tankgame-record.txt`) and StockChecker's edited `myStocks.txt` come back as they would from a desktop disk.
 - Code that reads a saved file before the app creates its first component sees the page's own copy. Minesweeper and Ultimate Tic-Tac-Toe read their files after `JFrame`'s constructor for that reason.
 - The app's own page and the home page's player (`<App>/index.html?embed`) share one store. NathaNOS has its own, so an app opened inside NathaNOS keeps separate saves.
-- The title screen reads the store: FlappyBird shows "Your best: N pipes", Minesweeper "Your best times: Beginner 0:53.6, ...", Ultimate Tic-Tac-Toe "Your record vs the computer: Easy 3 wins, 1 loss, 0 draws; ...", TankGame "Your matches vs the computer: 2 wins, 1 loss", and any other app with saves names the files ("Saved here from last time: myStocks.txt"). Forget on that line (click twice) deletes the app's saves, so it starts again from its bundled files. The formats are the `RECORDS` table in `boot.js`.
+- The title screen reads the store: FlappyBird shows "Your best: N pipes; today's course: N" (the second part only on the day it was flown), Minesweeper "Your best times: Beginner 0:53.6, ...", Ultimate Tic-Tac-Toe "Your record vs the computer: Easy 3 wins, 1 loss, 0 draws; ...", TankGame "Your matches vs the computer: 2 wins, 1 loss", and any other app with saves names the files ("Saved here from last time: myStocks.txt"). Forget on that line (click twice) deletes the app's saves, so it starts again from its bundled files. The formats are the `RECORDS` table in `boot.js`.
 - A full `localStorage` logs an error and keeps the previous copy. Thumbnail mode (`?embed&shot`) is not special-cased, so take thumbnails in a fresh browser profile (as `shots.ps1` does).
 
 ### NathaNOS and reflection
@@ -223,7 +223,7 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 
 | App | Controller |
 |---|---|
-| FlappyBird | Flap (Space), Pause (P), Reset (R) |
+| FlappyBird | Flap (Space), Course (C: endless pipes or today's course, on the game's title), Pause (P), Reset (R) |
 | TankGame | A cross (W A S D) and Fire (Q) for the red tank, a cross (arrow keys) and Fire (M) for the green tank. On the game's title, red's Fire starts a match against the computer and green's Fire a match for two players on one screen |
 | SynthesizerKeyboard | One octave of piano keys (Z S X D C V G B H N J M ,), each held for as long as it is touched, plus Octave and Sound buttons (arrow keys) |
 | SpriteFloatyStars | Add star (Up), Remove star (Down) |
