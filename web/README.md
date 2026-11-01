@@ -35,7 +35,7 @@ mvn -f web/pom.xml package "-Drepo.dir=C:/path/to/other/checkout" "-Dsite.dir=C:
 | StockChecker | Works with limitations | The Yahoo quote API is retired, so refresh fails (a network error is logged) and the labels are filled from the bundled `stockCheck.csv`, as on the desktop. Files the app writes stay in memory until the page is reloaded. |
 | SynthesizerKeyboard | Works | Play with the keyboard. On `master` sources, clicking a key starts a note that never stops and freezes the app (its documented bug: it waits for a timer that runs on the same event thread), as on the desktop; the modernized sources fix that. |
 | GroupCreator | Works | `output.txt` goes to the in-memory file system, so the page also shows standard output (where the app prints the groups) in a panel at the bottom. The window itself shows no result, as on the desktop. Its long HTML label is wider than the fixed 375 px window, so it is cut off on both sides. |
-| MusicTheoryExpert | Works | The demo that plays on start is silent because browsers start audio only after a click or key press; the test button plays it. |
+| MusicTheoryExpert | Works | Browsers start audio only after a click or key press. On its own page the app starts from the title screen's Play, which counts, so the demo that plays on start can be heard; in the home page's player it may be silent, and the test button plays it. |
 | NumberGuess | Works | |
 | SimpleAlgorithms | Works | A console program: the page shows its standard output in a panel. |
 | TankGame | Works with limitations | Movement, rotation and the trails left by the uncleared paint work as in the source. The tanks are drawn over the content pane's gray, not blue: the blue background panel gets no space in the layout. Every key event and paint prints to the browser console, as on the desktop. |
@@ -141,6 +141,17 @@ Each app page (`<App>/index.html`) is built to lead to the next app as well as r
 - A How to play card with the app's hint shows under the toolbar when the app starts (at the bottom on narrow pages) and fades after 12 seconds.
 - When the app exits (for most apps, when its window is closed), the Run again box names the app, keeps Run again and All apps, and suggests three other apps with their thumbnails: apps not played yet first (see Arcade passport), and within that, apps of the same category first, then the others, each group in random order. The box ends with the passport count. In the home page's player the box has no All apps link, and picking a suggestion asks the home page (with `postMessage`) to swap that app into the player, so its title, rail and address follow.
 
+## Title screen
+
+An app page opens on a title screen instead of a bare "Loading..." box, the way an arcade cabinet shows its attract screen before a game:
+
+- The app's thumbnail, category, name and hint, and its passport line: "New: playing it adds stamp N of 16 to your passport", or the date it was first played.
+- A boot log of what the page loads, with real names and sizes: `classes.js` (the app compiled by TeaVM, its size read from the browser's resource timing) and then each file from `data-files` as it arrives, with a progress bar. NathaNOS lists all 40 of its files. A file that fails shows "missing".
+- Play (focused once everything has loaded) starts the app, as does a click anywhere on the screen or any key ("or press any key"). The key that starts it, and its release, never reach the app. Keys typed in the toolbar or the Switch app panel do not start it, and those still work over the title screen, so the skin and the sound can be set first.
+- `main()` runs only on that click or key press. Browsers allow sound only after one, so the site's start sound (Arcade's power-on included, timed with the skin's power-on animation) and an app's own first notes can play.
+- Each skin draws it its own way: a rounded card on the desk in Modern, a Metal dialog with a striped progress bar like a Java splash screen in Classic, and a neon marquee with a blinking PRESS ANY KEY and a phosphor-green log in Arcade, where the card collapses into a bright line as the app powers on behind it. The touch controller waits under it until the app starts. Animations are left out when the system asks for reduced motion.
+- Run again (after the app exits) reloads straight into the app, without the title screen. The home page's player (`?embed`) and thumbnail mode never show it: the visitor's click on the home page already started the app.
+
 `boot.js` reads the list of apps (name, hint, category, thumbnail, order) from the gallery in `../index.html`, so the home page stays the one place to add or describe an app. Keys typed in these panels are kept from the app, since the shim listens for keys on the whole document. Thumbnail mode (`?embed&shot`) leaves all of this out.
 
 ## Arcade passport
@@ -204,7 +215,7 @@ The site's own controls and moments make short sounds, synthesized with the Web 
 - Arcade has two of its own: a new app powers on with a low thump and a rising whine, timed with the skin's power-on animation, then two notes; a stamp sounds like a coin (B5 then a held E6).
 - Each tune is a list of semitones above the voice's root note (`TUNES` and `ARCADE_TUNES` in `boot.js`), so a voice and a tune can be changed separately.
 - The Sound button in the toolbar (a note, with the word on pages 1000 px wide or more) mutes or unmutes them. The choice is remembered in `localStorage` (`oldjava.sound`) and reaches every open page of the site through the `storage` event.
-- Browsers start audio only after a click or key press, so nothing plays before the visitor's first one on that page. An app page opened from a link is a new page, so its start sound is usually silent; the home page's player plays it on every swap.
+- Browsers start audio only after a click or key press, so nothing plays before the visitor's first one on that page. An app page plays its start sound when the visitor presses Play on its title screen; the home page's player plays it on every swap.
 
 ## Limitations
 
