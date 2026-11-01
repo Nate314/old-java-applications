@@ -1344,6 +1344,15 @@
   }
   // What an app saved on earlier visits: web.rt.Saves keeps the files it writes under oldjava.saves.<App>, each byte
   // one character. Apps with a score file get their record read out; any other saves are named.
+  // NAME=stars,score rows (MusicTheoryExpert's drills, NumberGuess's ranges): how many have a star, and the stars.
+  function starRows(text) {
+    var won = 0, stars = 0;
+    text.split('\n').forEach(function (row) {
+      var n = parseInt((row.split('=')[1] || '').split(',')[0], 10);
+      if (/^[A-Z_]+=/.test(row) && n >= 0 && n <= 3) { won += n > 0 ? 1 : 0; stars += n; }
+    });
+    return { won: won, stars: stars };
+  }
   var RECORDS = {
     // Today's course (.flappybird-today.txt) counts only on the day it was flown.
     FlappyBird: { file: '.flappybird-highscore.txt', show: function (text, saved) {
@@ -1398,12 +1407,12 @@
       return solved ? 'Your levels: ' + solved + ' of 20 solved, ' + stars + ' of 60 stars' : '';
     } },
     MusicTheoryExpert: { file: '.musictheory-drills.txt', show: function (text) {
-      var passed = 0, stars = 0;
-      text.split('\n').forEach(function (row) {
-        var n = parseInt((row.split('=')[1] || '').split(',')[0], 10);
-        if (/^[A-Z_]+=/.test(row) && n >= 0 && n <= 3) { passed += n > 0 ? 1 : 0; stars += n; }
-      });
-      return passed ? 'Your ear training: ' + passed + ' of 6 drills passed, ' + stars + ' of 18 stars' : '';
+      var r = starRows(text);
+      return r.won ? 'Your ear training: ' + r.won + ' of 6 drills passed, ' + r.stars + ' of 18 stars' : '';
+    } },
+    NumberGuess: { file: '.numberguess-record.txt', show: function (text) {
+      var r = starRows(text);
+      return r.won ? 'Your ranges: ' + r.won + ' of 5 won, ' + r.stars + ' of 15 stars' : '';
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split(',').map(Number);
