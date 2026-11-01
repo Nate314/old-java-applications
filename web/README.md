@@ -112,7 +112,7 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 
 - `pom.xml`: parent build (TeaVM version, shared plugin settings).
 - `shim/`: the compatibility layer and the TeaVM compiler extensions (`web.teavm`).
-- `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files.
+- `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files, plus every browser app's README and Java sources (NathaNOS included) into `<App>/source/` for the source viewer.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
 - `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
 - `shots.ps1`: recaptures `site/shots/` from a built site (see Home page).
@@ -136,7 +136,7 @@ The player is built to keep a visitor playing without scrolling back to the gall
 
 Each app page (`<App>/index.html`) is built to lead to the next app as well as run its own:
 
-- The toolbar in the top-right corner has All apps, Switch app, a Next link (the following app in gallery order, wrapping around; hidden on pages narrower than 560 px) and the skin picker.
+- The toolbar in the top-right corner has All apps, Switch app, Source (see Source viewer), a Next link (the following app in gallery order, wrapping around; hidden on pages narrower than 560 px) and the skin picker.
 - Switch app opens a panel on the right with every app's thumbnail, name and hint, the current app marked "Now playing". Esc, the close button or a click outside the panel closes it.
 - A How to play card with the app's hint shows under the toolbar when the app starts (at the bottom on narrow pages) and fades after 12 seconds.
 - When the app exits (for most apps, when its window is closed), the Run again box names the app, keeps Run again and All apps, and suggests three other apps with their thumbnails: apps not played yet first (see Arcade passport), and within that, apps of the same category first, then the others, each group in random order. The box ends with the passport count. In the home page's player the box has no All apps link, and picking a suggestion asks the home page (with `postMessage`) to swap that app into the player, so its title, rail and address follow.
@@ -153,6 +153,20 @@ An app page opens on a title screen instead of a bare "Loading..." box, the way 
 - Run again (after the app exits) reloads straight into the app, without the title screen. The home page's player (`?embed`) and thumbnail mode never show it: the visitor's click on the home page already started the app.
 
 `boot.js` reads the list of apps (name, hint, category, thumbnail, order) from the gallery in `../index.html`, so the home page stays the one place to add or describe an app. Keys typed in these panels are kept from the app, since the shim listens for keys on the whole document. Thumbnail mode (`?embed&shot`) leaves all of this out.
+
+## Source viewer
+
+Every app page can show the Java it runs, next to it. The sources are the reason this project exists (recovered from decompiled jars or the author's own Eclipse projects), and the browser build compiles them unchanged, so the code in the panel is the code running beside it.
+
+- Source in the toolbar (`</>`, with the word on pages 1000 px wide or more), Read the source on the title screen, and `</> Source` in the home page's player bar (which opens the app's page with the panel) all open it.
+- The panel docks on the right and has no scrim, so the app keeps running and stays playable on the left. Under 900 px it covers the page, and under 640 px its file list becomes a strip of tabs above the code.
+- The header names the app with a Decompiled or Original source badge (from `data-origin` on the gallery card; MusicTheoryExpert, NumberGuess, SimpleAlgorithms and TankGame are original source) and counts the Java files and lines.
+- The file list starts with the app's README, rendered (headings, lists, code), then the `.java` files grouped by package. Java is highlighted with line numbers: keywords, strings, comments, numbers, annotations and class names. A class name that is a file of the app links to that file (the one in the same package first), and so do the file paths in the README's Code layout.
+- Clicking a line number marks the line. The address follows the open file and line (`index.html#source:src/minesweeper/GameFrame.java:42`), so that link opens the page with the panel at that line. Raw opens the plain file.
+- Each skin draws it its own way: a light or dark editor in Modern (following the system), Metal chrome with Eclipse's Java colors in Classic, and a phosphor-green terminal with neon keywords in Arcade.
+- Keys typed in the panel do not reach the app or start it from the title screen; Esc or the close button closes it. The home page's player (`?embed`) and thumbnail mode leave it out.
+
+The build (`apps/pom.xml`, an Ant `appsource` macro) copies `<App>/README.md` and `<App>/src/**/*.java` into `<App>/source/` and lists them in `<App>/source/files.txt`. The viewer reads that list, then fetches each file when it is opened. Save all for offline does not include these files; a file read once is cached by the service worker like any other.
 
 ## Arcade passport
 
