@@ -4,9 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Old Java Applications</title>
+  <!-- share: written by web/cards.ps1 from the gallery in index.html -->
   <meta name="description" content="Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play 16 of them in the browser, installed as an app or offline.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Old Java Applications">
   <meta property="og:title" content="Old Java Applications">
-  <meta property="og:description" content="16 old Java Swing apps and games, playable in the browser.">
+  <meta property="og:description" content="Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play 16 of them in the browser, installed as an app or offline.">
+  <meta property="og:url" content="index.html">
+  <meta property="og:image" content="cards/index.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Thumbnails of six of the 16 apps">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- /share -->
   <link rel="stylesheet" href="shim.css">
   <script src="boot.js"></script>
   <style>
@@ -201,6 +211,7 @@
         <button class="btn" type="button" id="player-pad-toggle" aria-pressed="true" title="Show or hide the on-screen controller" hidden>Controls</button>
         <button class="btn" type="button" id="player-restart">Restart</button>
         <button class="btn" type="button" id="player-big" aria-pressed="false" title="Fill the screen with the player">Big screen</button>
+        <button class="btn" type="button" id="player-share" data-sound="none" title="Share this app: its link, with a preview card">&#8599; Share</button>
         <a class="btn" id="player-source" href="Minesweeper/index.html#source" title="Open the app's page with its Java source beside it">&lt;/&gt; Source</a>
         <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
       </div>
@@ -225,6 +236,7 @@
       </div>
       <div class="actions">
         <button class="btn primary" type="button" id="passport-new">Play one you haven't</button>
+        <button class="btn" type="button" id="passport-share" data-sound="none" title="Share the arcade, with your stamp count">&#8599; Share</button>
         <button class="btn" type="button" id="passport-reset">Reset</button>
       </div>
     </div>
@@ -474,9 +486,16 @@
       if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data) return;
       var lit = e.data.oldjavaKeyLit;
       if (lit) { if (padLight) padLight(lit.which, !!lit.down); return; }
+      if (typeof e.data.oldjavaShare === 'string') { window.oldjavaShare.open(e.data.oldjavaShare || null, frame); return; }
       var li = card(e.data.oldjavaPlay);
       if (li) choose(li);
     });
+    var shareButton = document.getElementById('player-share');
+    shareButton.addEventListener('click', function () {
+      window.oldjavaShare.open(current.getAttribute('data-app'), shareButton);
+    });
+    var passportShare = document.getElementById('passport-share');
+    passportShare.addEventListener('click', function () { window.oldjavaShare.open(null, passportShare); });
 
     // The arcade passport: a stamp per app played, here, in the player or on an app page (boot.js keeps them).
     // Unplayed apps are gray stamps and New badges on the cards; played ones get a check here and in the rail.

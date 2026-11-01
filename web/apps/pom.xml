@@ -149,6 +149,22 @@
               </target>
             </configuration>
           </execution>
+          <!-- Link previews: the share tags web/cards.ps1 writes into every page point at the page and its card
+               with relative addresses. Built with -Dsite.url=https://host/path, they become absolute, which
+               most link preview services need. -->
+          <execution>
+            <id>absolute-share-tags</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target xmlns:if="ant:if">
+                <condition property="share.absolute"><length string="${site.url}" when="greater" length="0" trim="true"/></condition>
+                <replaceregexp if:set="share.absolute" match="(&lt;meta (?:property=&quot;og:(?:url|image)&quot;) content=&quot;)(?:\.\./)?" replace="\1${site.url}/" flags="g" encoding="UTF-8">
+                  <fileset dir="${site.dir}" includes="index.html */index.html"/>
+                </replaceregexp>
+              </target>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
