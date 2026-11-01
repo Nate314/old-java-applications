@@ -30,7 +30,7 @@ mvn -f web/pom.xml package "-Drepo.dir=C:/path/to/other/checkout" "-Dsite.dir=C:
 | RubiksCube2D | Works | The w/a/s/d buttons and Mix send key events through the page-level `Robot`. |
 | ScreenSaver | Works with limitations | The "screen" is the browser viewport, and the circle size is the greatest common factor of its width and height, which is often tiny for arbitrary window sizes. Its repaint thread busy-waits, so the tab is sluggish while it runs, as the desktop app kept a CPU core busy. Moving the mouse exits. |
 | SpriteFloatyStars | Works | Settings window and all modes. |
-| UltimateTicTacToe | Works | |
+| UltimateTicTacToe | Works | The record against the computer and the last mode are kept in the browser (see Saved files). Hard's search runs on the page's only thread, so the page does not respond for its 0.7 s of thinking. |
 | CircleSpawner | Works | Each slice is a borderless window on the page. |
 | StockChecker | Works with limitations | The Yahoo quote API is retired, so refresh fails (a network error is logged) and the labels are filled from the bundled `stockCheck.csv`, as on the desktop. Edits to the ticker list are kept in the browser (see Saved files). |
 | SynthesizerKeyboard | Works | Play with the keyboard. On `master` sources, clicking a key starts a note that never stops and freezes the app (its documented bug: it waits for a timer that runs on the same event thread), as on the desktop; the modernized sources fix that. |
@@ -102,10 +102,10 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 TeaVM's file system lives in memory, so on its own everything an app saves is gone on the next page load. `web.rt.Saves` keeps it, with no change to the apps:
 
 - Every second, and when the page is hidden or closed, it walks the in-memory file system and copies each file written since the last look (TeaVM updates a file's last-modified time on every write) into `localStorage` under `oldjava.saves.<App>` (the page's `data-app`), as a JSON object of absolute path to contents, one character per byte. A file the app deletes is dropped.
-- On the next load, right after the page's own files are copied in (`Files.install`, when the first component is created), the saved files are written back over them. So FlappyBird's best score (`/.flappybird-highscore.txt`: `user.home` is `/` here), Minesweeper's best times and last level (`/.minesweeper-best.txt`) and StockChecker's edited `myStocks.txt` come back as they would from a desktop disk.
-- Code that reads a saved file before the app creates its first component sees the page's own copy. Minesweeper reads its best times after `JFrame`'s constructor for that reason.
+- On the next load, right after the page's own files are copied in (`Files.install`, when the first component is created), the saved files are written back over them. So FlappyBird's best score (`/.flappybird-highscore.txt`: `user.home` is `/` here), Minesweeper's best times and last level (`/.minesweeper-best.txt`), Ultimate Tic-Tac-Toe's record against the computer and last mode (`/.ultimatetictactoe-record.txt`) and StockChecker's edited `myStocks.txt` come back as they would from a desktop disk.
+- Code that reads a saved file before the app creates its first component sees the page's own copy. Minesweeper and Ultimate Tic-Tac-Toe read their files after `JFrame`'s constructor for that reason.
 - The app's own page and the home page's player (`<App>/index.html?embed`) share one store. NathaNOS has its own, so an app opened inside NathaNOS keeps separate saves.
-- The title screen reads the store: FlappyBird shows "Your best: N pipes", Minesweeper "Your best times: Beginner 0:53.6, ...", and any other app with saves names the files ("Saved here from last time: myStocks.txt"). Forget on that line (click twice) deletes the app's saves, so it starts again from its bundled files. The formats are the `RECORDS` table in `boot.js`.
+- The title screen reads the store: FlappyBird shows "Your best: N pipes", Minesweeper "Your best times: Beginner 0:53.6, ...", Ultimate Tic-Tac-Toe "Your record vs the computer: Easy 3 wins, 1 loss, 0 draws; ...", and any other app with saves names the files ("Saved here from last time: myStocks.txt"). Forget on that line (click twice) deletes the app's saves, so it starts again from its bundled files. The formats are the `RECORDS` table in `boot.js`.
 - A full `localStorage` logs an error and keeps the previous copy. Thumbnail mode (`?embed&shot`) is not special-cased, so take thumbnails in a fresh browser profile (as `shots.ps1` does).
 
 ### NathaNOS and reflection
@@ -158,7 +158,7 @@ Each app page (`<App>/index.html`) is built to lead to the next app as well as r
 An app page opens on a title screen instead of a bare "Loading..." box, the way an arcade cabinet shows its attract screen before a game:
 
 - The app's thumbnail, category, name and hint, and its passport line: "New: playing it adds stamp N of 16 to your passport", or the date it was first played.
-- The visitor's record from earlier visits, with a star: FlappyBird's best score, Minesweeper's best times, or the files any other app saved, with Forget (see Saved files).
+- The visitor's record from earlier visits, with a star: FlappyBird's best score, Minesweeper's best times, Ultimate Tic-Tac-Toe's record against the computer, or the files any other app saved, with Forget (see Saved files).
 - A boot log of what the page loads, with real names and sizes: `classes.js` (the app compiled by TeaVM, its size read from the browser's resource timing) and then each file from `data-files` as it arrives, with a progress bar. NathaNOS lists all 40 of its files. A file that fails shows "missing".
 - Play (focused once everything has loaded) starts the app, as does a click anywhere on the screen or any key ("or press any key"). The key that starts it, and its release, never reach the app. Keys typed in the toolbar or the Switch app panel do not start it, and those still work over the title screen, so the skin and the sound can be set first.
 - `main()` runs only on that click or key press. Browsers allow sound only after one, so the site's start sound (Arcade's power-on included, timed with the skin's power-on animation) and an app's own first notes can play.

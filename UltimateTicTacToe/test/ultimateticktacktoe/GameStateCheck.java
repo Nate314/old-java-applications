@@ -1,5 +1,7 @@
 package ultimateticktacktoe;
 
+import java.util.Random;
+
 /** Self-check for the Ultimate Tic-Tac-Toe rules. Run with java -ea. */
 public class GameStateCheck {
    public static void main(String[] args) {
@@ -36,7 +38,45 @@ public class GameStateCheck {
       check("X".equals(game.winner), "X wins the game, got " + game.winner);
       check(!game.canPlay(8, 8), "no moves after the game ends");
 
-      System.out.println("GameStateCheck passed");
+      // Copies are independent, and legal moves follow the active board.
+      game = new GameState();
+      game.play(4, 0);
+      GameState copy = game.copy();
+      copy.play(0, 4);
+      check(game.marks[0][4].isEmpty() && "O".equals(copy.marks[0][4]), "copy is independent");
+      check(game.legalMoves().length == 9 && game.legalMoves()[0] == 0, "nine moves on board 0");
+      check(game.lastMove == 4 * 9 && copy.lastMove == 4, "last move");
+      check(new GameState().legalMoves().length == 81, "81 first moves");
+
+      // Both computer levels take a game-winning move: X owns boards 0 and 1 and is sent to board 2 with 0 and 1 taken.
+      game = new GameState();
+      play(game,
+         0, 3, 3, 0, 0, 4, 4, 0, 0, 5, 5, 0,
+         1, 3, 3, 1, 1, 4, 4, 1, 1, 5,
+         5, 2, 2, 3, 3, 2, 2, 4, 4, 2);
+      check(game.xTurn && game.activeBoard == 2 && game.winner == null, "set up for the winning move");
+      Random random = new Random(1);
+      check(Computer.easyMove(game, random) == 2 * 9 + 5, "easy takes the win");
+      check(Computer.hardMove(game, random, 50) == 2 * 9 + 5, "hard takes the win");
+
+      // Full games: every computer move is legal, and Hard (a short search) beats Easy far more often than not.
+      int hardWins = 0;
+      int games = 10;
+      for (int round = 0; round < games; round++) {
+         game = new GameState();
+         boolean hardIsX = round % 2 == 0;
+         while (game.winner == null) {
+            boolean hardMoves = game.xTurn == hardIsX;
+            int move = hardMoves ? Computer.hardMove(game, random, 30) : Computer.easyMove(game, random);
+            check(game.play(move / 9, move % 9), "computer played an illegal move " + move);
+         }
+         if (game.winner.equals(hardIsX ? "X" : "O")) {
+            hardWins++;
+         }
+      }
+      check(hardWins >= 7, "hard won only " + hardWins + " of " + games + " games against easy");
+
+      System.out.println("GameStateCheck passed (hard beat easy " + hardWins + " of " + games + ")");
    }
 
    /** Plays (board, cell) pairs, failing if any is illegal. */
