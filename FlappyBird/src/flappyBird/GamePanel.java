@@ -16,6 +16,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import javax.swing.ImageIcon;
 import javax.swing.JPanel;
 import javax.swing.Timer;
@@ -38,6 +39,17 @@ public final class GamePanel extends JPanel implements KeyListener {
    private Pipes pipes;
    private Bird bird;
    private int highScore = loadHighScore();
+   /** Today's course (same pipes all day, with a ghost of the day's best run) instead of endless random pipes. */
+   private boolean daily = false;
+   private DailyCourse course = DailyCourse.load(DailyCourse.FILE, DailyCourse.today());
+   /** Game steps played this run; the ghost is drawn where it was after as many steps. */
+   private int steps = 0;
+   /** This run's ghost samples (see DailyCourse), kept if it becomes today's best. */
+   private final List<Integer> samples = new ArrayList<>();
+   /** The score this run has to beat for a notice: the best overall, or today's best on today's course. */
+   private int target;
+   private String notice = "";
+   private int noticeSteps = 0;
    /** Game steps per second; the game logic moves a fixed amount per step. */
    private final double stepsPerSecond;
    private double pendingSteps = 0.0;
@@ -80,6 +92,18 @@ public final class GamePanel extends JPanel implements KeyListener {
 
       this.bird.update();
       this.pipes.scroll();
+      this.steps++;
+      if (this.daily && this.steps % DailyCourse.SAMPLE_STEPS == 0) {
+         this.samples.add(this.sample());
+      }
+      if (this.noticeSteps > 0) {
+         this.noticeSteps--;
+      }
+      if (this.target > 0 && this.score() > this.target) {
+         this.target = 0;
+         this.notice = this.daily ? "You passed your ghost!" : "New best!";
+         this.noticeSteps = (int)this.stepsPerSecond * 2;
+      }
       this.collided = this.hitsPipe() || this.bird.position.collisionY + (float)Bird.HEIGHT > (float)Background.groundY;
       if (this.collided && !this.debugMode) {
          this.state = GAME_OVER;
@@ -87,7 +111,15 @@ public final class GamePanel extends JPanel implements KeyListener {
             this.highScore = this.score();
             saveHighScore(this.highScore);
          }
+         if (this.daily && this.course.offer(this.score(), this.samples)) {
+            this.course.save(DailyCourse.FILE);
+         }
       }
+   }
+
+   /** The bird's height in thousandths of the window height. */
+   private int sample() {
+      return Math.round(this.bird.position.collisionY * 1000.0F / Main.FRAME_HEIGHT);
    }
 
    private int score() {
@@ -157,6 +189,13 @@ public final class GamePanel extends JPanel implements KeyListener {
          }
       }
 
+      if (this.daily && this.state != GAME_OVER && this.course.hasGhost()) {
+         float ghostY = this.course.ghostY(this.steps);
+         if (ghostY >= 0.0F) {
+            this.drawGhost(g2, (int)this.bird.position.collisionX, (int)(ghostY * Main.FRAME_HEIGHT));
+         }
+      }
+
       g2.drawImage(this.bird.image, (int)this.bird.position.collisionX, (int)this.bird.position.collisionY, null);
       if (this.debugMode) {
          g2.drawRect((int)this.bird.position.collisionX, (int)this.bird.position.collisionY, this.bird.image.getWidth(null), this.bird.image.getHeight(null));
@@ -172,12 +211,30 @@ public final class GamePanel extends JPanel implements KeyListener {
       g2.setFont(new Font("Times New Roman", 1, Main.FRAME_HEIGHT / 10));
       g2.drawString(String.valueOf(this.score()), Main.FRAME_WIDTH / 2, Main.FRAME_HEIGHT / 10);
 
+      if (this.state == PLAYING && this.noticeSteps > 0) {
+         int noticeX = (Main.FRAME_WIDTH - fitFont(g2, this.notice, Main.FRAME_HEIGHT / 18, Main.FRAME_WIDTH * 19 / 20)) / 2;
+         g2.setColor(new Color(0, 0, 0, 140));
+         g2.drawString(this.notice, noticeX + 2, Main.FRAME_HEIGHT / 6 + 2);
+         g2.setColor(new Color(255, 220, 60));
+         g2.drawString(this.notice, noticeX, Main.FRAME_HEIGHT / 6);
+      }
+
+      String records = "Best " + this.highScore + (this.daily || this.course.bestScore() > 0 ? "     Today " + this.course.bestScore() : "");
       if (this.state == READY) {
-         this.drawBanner(g2, "Flappy Bird", "Press Space to start", "Best: " + this.highScore);
+         if (this.daily) {
+            this.drawBanner(g2, "Today's Course", "The same pipes all day. Race your best run's ghost.", "Space to start, C for endless pipes", records);
+         } else {
+            this.drawBanner(g2, "Flappy Bird", "Endless: new pipes every run", "Space to start, C for today's course", records);
+         }
       } else if (this.state == GAME_OVER) {
-         this.drawBanner(g2, "Game Over", "Score: " + this.score() + "   Best: " + this.highScore, "Press Space to play again");
+         String scores = "Score " + this.score() + "     " + records;
+         int titleWidth = this.drawBanner(g2, "Game Over", scores, medalLine(this.score()), "Space for the title screen");
+         Color medal = medalColor(this.score());
+         if (medal != null) {
+            this.drawMedal(g2, medal, titleWidth);
+         }
       } else if (this.paused) {
-         this.drawBanner(g2, "Paused", "Press P to resume", "");
+         this.drawBanner(g2, "Paused", "Press P to resume");
       }
 
       if (this.debugMode) {
@@ -202,29 +259,117 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
    }
 
-   /** A title and two lines of text centered on the screen. */
-   private void drawBanner(Graphics2D g2, String title, String line1, String line2) {
+   /** A title and lines of text centered on the screen. Returns the title's width. */
+   private int drawBanner(Graphics2D g2, String title, String... lines) {
       int big = Main.FRAME_HEIGHT / 8;
       int small = Main.FRAME_HEIGHT / 20;
       int centerY = Main.FRAME_HEIGHT * 2 / 5;
       g2.setColor(new Color(0, 0, 0, 120));
-      g2.fillRect(0, centerY - big - small, Main.FRAME_WIDTH, big + small * 4);
+      g2.fillRect(0, centerY - big - small, Main.FRAME_WIDTH, big + small * (lines.length * 3 / 2 + 2));
       g2.setColor(new Color(255, 255, 255));
-      g2.setFont(new Font("Times New Roman", 1, big));
-      g2.drawString(title, (Main.FRAME_WIDTH - g2.getFontMetrics().stringWidth(title)) / 2, centerY);
-      g2.setFont(new Font("Times New Roman", 1, small));
-      g2.drawString(line1, (Main.FRAME_WIDTH - g2.getFontMetrics().stringWidth(line1)) / 2, centerY + small * 3 / 2);
-      g2.drawString(line2, (Main.FRAME_WIDTH - g2.getFontMetrics().stringWidth(line2)) / 2, centerY + small * 3);
+      // The title keeps room beside it for the game over medal; the lines may use nearly the whole width.
+      int titleWidth = fitFont(g2, title, big, Main.FRAME_WIDTH * 3 / 5);
+      g2.drawString(title, (Main.FRAME_WIDTH - titleWidth) / 2, centerY);
+      for (int line = 0; line < lines.length; line++) {
+         int width = fitFont(g2, lines[line], small, Main.FRAME_WIDTH * 19 / 20);
+         g2.drawString(lines[line], (Main.FRAME_WIDTH - width) / 2, centerY + small * 3 / 2 * (line + 1));
+      }
+      return titleWidth;
+   }
+
+   /** Sets a bold font of the given size, shrunk if the text is wider than maxWidth (a narrow browser page). Returns the text's width. */
+   private static int fitFont(Graphics2D g2, String text, int size, int maxWidth) {
+      g2.setFont(new Font("Times New Roman", 1, size));
+      int width = g2.getFontMetrics().stringWidth(text);
+      if (width > maxWidth) {
+         g2.setFont(new Font("Times New Roman", 1, Math.max(8, size * maxWidth / width)));
+         width = g2.getFontMetrics().stringWidth(text);
+      }
+      return width;
+   }
+
+   /** A medal beside the game over title. */
+   private void drawMedal(Graphics2D g2, Color color, int titleWidth) {
+      int size = Main.FRAME_HEIGHT / 10;
+      int x = Math.max(4, (Main.FRAME_WIDTH - titleWidth) / 2 - size * 3 / 2);
+      int y = Main.FRAME_HEIGHT * 2 / 5 - size;
+      g2.setColor(new Color(0, 0, 0, 90));
+      g2.fillOval(x + 3, y + 3, size, size);
+      g2.setColor(color);
+      g2.fillOval(x, y, size, size);
+      g2.setColor(color.darker());
+      g2.fillOval(x + size / 5, y + size / 5, size * 3 / 5, size * 3 / 5);
+      g2.setColor(new Color(255, 255, 255, 170));
+      g2.fillOval(x + size / 4, y + size / 4, size / 5, size / 5);
+   }
+
+   /** Medals at 10, 20, 30 and 40 pipes, as in the original Flappy Bird. Null below 10. */
+   static String medalName(int score) {
+      return score >= 40 ? "Platinum" : score >= 30 ? "Gold" : score >= 20 ? "Silver" : score >= 10 ? "Bronze" : null;
+   }
+
+   private static Color medalColor(int score) {
+      String name = medalName(score);
+      if (name == null) {
+         return null;
+      }
+      switch (name) {
+         case "Platinum":
+            return new Color(214, 228, 236);
+         case "Gold":
+            return new Color(240, 190, 40);
+         case "Silver":
+            return new Color(190, 194, 204);
+         default:
+            return new Color(200, 120, 50);
+      }
+   }
+
+   /** The medal won, and how far the next one is. */
+   static String medalLine(int score) {
+      if (score >= 40) {
+         return "Platinum medal!";
+      }
+      String name = medalName(score);
+      int next = (score / 10 + 1) * 10;
+      int more = next - score;
+      String goal = more + (more == 1 ? " more pipe for " : " more pipes for ") + medalName(next);
+      return name == null ? "No medal yet: " + goal : name + " medal: " + goal;
+   }
+
+   /** Today's best run as a see-through bird with its score above it. */
+   private void drawGhost(Graphics2D g2, int x, int y) {
+      int size = Bird.WIDTH;
+      g2.setColor(new Color(255, 255, 255, 100));
+      g2.fillOval(x, y, size, size);
+      g2.setColor(new Color(255, 255, 255, 200));
+      g2.drawOval(x, y, size, size);
+      g2.setColor(new Color(40, 40, 70, 170));
+      g2.fillOval(x + size * 3 / 5, y + size / 4, size / 6 + 1, size / 6 + 1);
+      g2.setColor(new Color(255, 160, 40, 180));
+      g2.fillPolygon(new int[]{x + size - 2, x + size + size / 4, x + size - 2}, new int[]{y + size * 2 / 5, y + size / 2, y + size * 3 / 5}, 3);
+      String label = "Today's best " + this.course.bestScore();
+      g2.setFont(new Font("Times New Roman", 1, Math.max(10, Main.FRAME_HEIGHT / 40)));
+      g2.setColor(new Color(255, 255, 255, 220));
+      g2.drawString(label, x + (size - g2.getFontMetrics().stringWidth(label)) / 2, y - 4);
    }
 
    private void reset() {
+      if (this.course.date != DailyCourse.today()) {
+         this.course = DailyCourse.load(DailyCourse.FILE, DailyCourse.today());
+      }
       this.background = new Background(this.images.get(0), this.images.get(1));
-      this.pipes = new Pipes(this.images.get(2), this.images.get(3));
+      this.pipes = new Pipes(this.images.get(2), this.images.get(3), this.daily ? this.course.pipeRandom() : new Random());
       this.bird = new Bird(this.images.get(4));
       this.bird.position.set(new Position(this.bird.position.collisionX, (float)(Main.FRAME_HEIGHT / 3)));
       this.collided = false;
       this.paused = false;
       this.state = READY;
+      this.steps = 0;
+      this.samples.clear();
+      this.samples.add(this.sample());
+      this.target = this.daily ? this.course.bestScore() : this.highScore;
+      this.noticeSteps = 0;
    }
 
    private static int loadHighScore() {
@@ -263,6 +408,12 @@ public final class GamePanel extends JPanel implements KeyListener {
             return;
          case KeyEvent.VK_DOWN:
             this.consoleFontSize = Math.max(5, this.consoleFontSize - 5);
+            return;
+         case KeyEvent.VK_C:
+            if (this.state == READY) {
+               this.daily = !this.daily;
+               this.reset();
+            }
             return;
          case KeyEvent.VK_D:
             this.debugMode = !this.debugMode;
