@@ -33,7 +33,7 @@ public class Main extends JFrame {
       this.setResizable(false);
       JPanel panel = new JPanel();
       JLabel label = new JLabel(
-         "<html>Please enter a list of Names separated by commas:<br>(ex: <b>Steve Jobs,Bill Gates,Stephen Hawking,Morgan Freeman</b>)<html>"
+         "<html>Please enter a list of Names separated by commas:<br>(ex: <b>Alice,Bob,Carol,Dave</b>)<html>"
       );
       final JTextField textField = new JTextField();
       textField.setColumns(30);
