@@ -60,3 +60,14 @@ Requires a JDK (`java` and `javac` on PATH). From the repo root in PowerShell:
 ```
 
 Run mode launches each app from the folder it expects (for example `FlappyBird/src` with argument `120`), with any non-Java files in `src/` on the classpath. Build mode prints the matching `java -jar` command. Build output goes to `out/`, which is git-ignored.
+
+## Web (TeaVM)
+
+Every app except DinoGame, Windows and WindowsE also runs in a browser, compiled to JavaScript with TeaVM on a small AWT/Swing compatibility layer. Requires Maven 3.9. From the repo root:
+
+```powershell
+mvn -f web/pom.xml package                               # builds the static site into web/target/site
+python -m http.server 8000 --directory web/target/site   # then open http://localhost:8000/
+```
+
+See [web/README.md](web/README.md) for how it works, per-app status and limitations.

@@ -1,0 +1,485 @@
+/*
+ * Skins for the AWT/Swing shim. Geometry comes from Java (absolute px bounds), so a skin may only change
+ * colors, gradients, radii and shadows, never sizes or fonts.
+ *   Classic: approximates Swing's default Metal (Ocean) look.
+ *   Modern:  same layout, flatter colors, rounded corners, follows the system dark mode.
+ */
+
+:root,
+:root[data-skin="classic"] {
+  --desk: #3a6ea5;
+  --control: #eeeeee;
+  --control-text: #333333;
+  --frame-bg: #eeeeee;
+  --frame-border: #8da5c9;
+  --frame-border-inactive: #b8c4d6;
+  --title-bg: linear-gradient(#dde8f3, #b8cfe5);
+  --title-bg-inactive: linear-gradient(#f2f2f2, #e0e0e0);
+  --title-text: #333333;
+  --window-radius: 0;
+  --window-shadow: 2px 2px 6px rgba(0, 0, 0, 0.35);
+  --button-bg: linear-gradient(#dde8f3 0%, #ffffff 30%, #b8cfe5 100%);
+  --button-border: #7a8a99;
+  --button-radius: 0;
+  --button-pressed: #b8cfe5;
+  --field-bg: #ffffff;
+  --field-text: #000000;
+  --field-border: #7a8a99;
+  --field-focus: #6382bf;
+  --field-radius: 0;
+  --desktop-pane: #b8cfe5;
+  --focus-ring: #6382bf;
+  --close-bg: linear-gradient(#ffffff, #c5d5e8);
+  --close-border: #6382bf;
+  --page-bg: #e8eef6;
+  --page-text: #222;
+  --card-bg: #ffffff;
+  --card-border: #b8c4d6;
+  --accent: #2c5b9a;
+  color-scheme: light;
+}
+
+:root[data-skin="modern"] {
+  --desk: linear-gradient(135deg, #dfe7f3, #f6f8fb);
+  --control: #f3f4f6;
+  --control-text: #1f2937;
+  --frame-bg: #ffffff;
+  --frame-border: #ffffff;
+  --frame-border-inactive: #ffffff;
+  --title-bg: #ffffff;
+  --title-bg-inactive: #ffffff;
+  --title-text: #111827;
+  --window-radius: 10px;
+  --window-shadow: 0 12px 32px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.08);
+  --button-bg: #ffffff;
+  --button-border: #cbd5e1;
+  --button-radius: 6px;
+  --button-pressed: #e2e8f0;
+  --field-bg: #ffffff;
+  --field-text: #111827;
+  --field-border: #cbd5e1;
+  --field-focus: #3b82f6;
+  --field-radius: 6px;
+  --desktop-pane: #e2e8f0;
+  --focus-ring: #3b82f6;
+  --close-bg: transparent;
+  --close-border: transparent;
+  --page-bg: #f6f8fb;
+  --page-text: #111827;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --accent: #2563eb;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="modern"] {
+    --desk: linear-gradient(135deg, #0b1220, #1e293b);
+    --control: #1f2937;
+    --control-text: #e5e7eb;
+    --frame-bg: #111827;
+    --frame-border: #111827;
+    --frame-border-inactive: #111827;
+    --title-bg: #111827;
+    --title-bg-inactive: #111827;
+    --title-text: #e5e7eb;
+    --window-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --button-bg: #374151;
+    --button-border: #4b5563;
+    --button-pressed: #4b5563;
+    --field-bg: #0f172a;
+    --field-text: #e5e7eb;
+    --field-border: #4b5563;
+    --desktop-pane: #334155;
+    --page-bg: #0f172a;
+    --page-text: #e5e7eb;
+    --card-bg: #111827;
+    --card-border: #1f2937;
+    --accent: #60a5fa;
+    color-scheme: dark;
+  }
+}
+
+/* ---- page ---- */
+
+html, body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--page-text);
+}
+
+body[data-app] {
+  overflow: hidden;
+}
+
+#desktop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--desk);
+}
+
+/* ---- components ---- */
+
+.c {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  z-index: 0; /* each component is a stacking context, so its paint canvas (z-index -1) sits above its own background */
+  overflow: hidden;
+  color: var(--control-text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+canvas.paint {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+
+canvas.paint.top {
+  z-index: 100000;
+}
+
+.panel.opaque {
+  background-color: var(--control);
+}
+
+.desktoppane.opaque {
+  background-color: var(--desktop-pane);
+}
+
+/* ---- windows ---- */
+
+.window {
+  background: var(--frame-bg);
+  overflow: hidden;
+}
+
+.window.decorated {
+  border-radius: var(--window-radius);
+  box-shadow: inset 0 0 0 4px var(--frame-border-inactive), var(--window-shadow);
+}
+
+.window.decorated.active,
+.window.internal.decorated.selected {
+  box-shadow: inset 0 0 0 4px var(--frame-border), var(--window-shadow);
+}
+
+.window.internal:not(.decorated) {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.titlebar {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 4px;
+  height: 24px;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px 0 4px;
+  box-sizing: border-box;
+  background: var(--title-bg-inactive);
+  color: var(--title-text);
+  font: bold 12px Arial, Helvetica, sans-serif;
+  cursor: default;
+  border-radius: calc(var(--window-radius) - 4px) calc(var(--window-radius) - 4px) 0 0;
+}
+
+.window.internal:not(.decorated) > .titlebar {
+  left: 0;
+  right: 0;
+  top: 0;
+}
+
+.window.active > .titlebar,
+.window.internal.selected > .titlebar {
+  background: var(--title-bg);
+}
+
+.titlebar .icon:empty {
+  display: none;
+}
+
+.titlebar .icon canvas {
+  display: block;
+}
+
+.titlebar .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar .close {
+  flex: none;
+  width: 18px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--close-border);
+  border-radius: calc(var(--button-radius) / 2);
+  background: var(--close-bg);
+  color: var(--title-text);
+  font: bold 11px Arial, Helvetica, sans-serif;
+  line-height: 14px;
+  cursor: pointer;
+}
+
+.titlebar .close::before {
+  content: "\2715";
+}
+
+.titlebar .close:hover {
+  background: #e81123;
+  border-color: #e81123;
+  color: #fff;
+}
+
+.titlebar.no-close .close {
+  display: none;
+}
+
+/* ---- widgets ---- */
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: pre;
+  border: 1px solid var(--button-border);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
+  color: var(--control-text);
+  cursor: default;
+  outline: none;
+}
+
+.button.custom-bg {
+  background-image: none;
+}
+
+.button:not(.opaque) {
+  background: transparent;
+}
+
+.button:active:not(:disabled) {
+  background: var(--button-pressed) !important; /* Metal shows its select color even on colored buttons */
+}
+
+.button:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+
+.button:disabled {
+  color: #8e8f91;
+}
+
+.button .icon.empty {
+  display: none;
+}
+
+.button .icon canvas {
+  display: block;
+}
+
+.button .text {
+  overflow: hidden;
+}
+
+.label {
+  color: var(--on-bg-text, var(--control-text));
+  display: flex;
+  align-items: center;
+  white-space: pre;
+  overflow: hidden;
+  background: transparent;
+}
+
+.textfield {
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-bg);
+  color: var(--field-text);
+  padding: 0 2px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.textfield:focus {
+  border-color: var(--field-focus);
+  box-shadow: 0 0 0 1px var(--field-focus);
+}
+
+.combo {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--button-border);
+  border-radius: var(--button-radius);
+  padding: 0 22px 0 4px;
+  background: var(--button-bg);
+  color: var(--control-text);
+  outline: none;
+}
+
+.combo:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+
+.c.no-border {
+  border: none;
+  box-shadow: none;
+}
+
+/* Down arrow drawn over the select, like Metal's combo button. */
+.combo {
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%),
+    var(--button-bg);
+  background-position:
+    calc(100% - 12px) 50%,
+    calc(100% - 8px) 50%,
+    0 0;
+  background-size: 4px 4px, 4px 4px, 100% 100%;
+  background-repeat: no-repeat;
+}
+
+.tabbedpane.opaque {
+  background-color: var(--control);
+}
+
+.tabbedpane > .tabs {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 2px;
+  display: flex;
+  gap: 2px;
+  z-index: 100000;
+}
+
+.tabbedpane > .tabs .tab {
+  font: inherit;
+  padding: 0 9px;
+  border: 1px solid var(--button-border);
+  border-bottom: none;
+  border-radius: var(--button-radius) var(--button-radius) 0 0;
+  background: var(--control);
+  color: var(--control-text);
+  cursor: default;
+  outline: none;
+}
+
+.tabbedpane > .tabs .tab.selected {
+  background: var(--button-bg);
+}
+
+.tabbedpane > .tabs .tab:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+
+/* ---- page chrome ---- */
+
+/* Standard output of console programs (pages with data-console), docked at the bottom of the page. */
+.shim-console {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1999999998;
+  max-height: 45vh;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  box-sizing: border-box;
+  background: #0f172a;
+  color: #e5e7eb;
+  font: 13px/1.4 Consolas, "Courier New", monospace;
+  white-space: pre-wrap;
+  border-top: 1px solid var(--card-border);
+}
+
+.shim-console::before {
+  content: "Standard output";
+  display: block;
+  margin-bottom: 4px;
+  font: bold 12px system-ui, -apple-system, "Segoe UI", sans-serif;
+  opacity: 0.7;
+}
+
+.shim-toolbar {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 2000000000;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.72);
+  color: #fff;
+  font: 12px system-ui, -apple-system, "Segoe UI", sans-serif;
+  backdrop-filter: blur(6px);
+  opacity: 0.6; /* it floats over the app windows */
+}
+
+.shim-toolbar:hover,
+.shim-toolbar:focus-within {
+  opacity: 1;
+}
+
+.shim-toolbar a {
+  color: #fff;
+}
+
+.shim-toolbar select {
+  font: inherit;
+  border-radius: 6px;
+  border: 0;
+  padding: 1px 4px;
+}
+
+.shim-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1999999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.shim-overlay-box {
+  min-width: 220px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 16px 20px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.shim-overlay-box button {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
