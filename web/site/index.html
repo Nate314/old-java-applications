@@ -24,15 +24,40 @@
                                 box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
     .player-bar h3 { margin: 0; font-size: 17px; }
     .player-bar .hint { flex: 1 1 260px; min-width: 0; font-size: 14px; opacity: 0.75; }
-    .player-bar .actions { display: flex; gap: 8px; margin-left: auto; }
+    .player-bar .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
     .btn { display: inline-block; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--card-border);
            background: transparent; color: inherit; font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1.5;
            text-decoration: none; cursor: pointer; white-space: nowrap; }
+    .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
     .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .screen { position: relative; overflow: hidden; background: var(--desk); }
     /* The iframe keeps a desktop-sized viewport (the apps size their windows from it) and is scaled to fit. */
     .screen iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+
+    /* ---- the channel rail: every app one click away, without leaving the player ---- */
+    .rail { display: flex; align-items: stretch; gap: 6px; padding: 8px; border-top: 1px solid var(--card-border); }
+    .rail .step { flex: none; width: 34px; padding: 0; font-size: 22px; line-height: 1; }
+    .rail ol { flex: 1; min-width: 0; display: flex; gap: 8px; margin: 0; padding: 2px; list-style: none;
+               overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
+    .rail li { flex: none; scroll-snap-align: start; }
+    .rail li button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 112px; padding: 4px;
+                      border: 2px solid transparent; border-radius: 8px; background: transparent; color: inherit;
+                      font: 600 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer; }
+    .rail li button:hover { border-color: var(--card-border); }
+    .rail li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .rail li button[aria-current="true"] { border-color: var(--accent); }
+    .rail .pic { display: flex; align-items: center; justify-content: center; width: 100%; height: 62px;
+                 border-radius: 5px; background: var(--desk); overflow: hidden; }
+    .rail .pic img { max-width: calc(100% - 10px); max-height: calc(100% - 10px); }
+    .rail .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ---- big screen: the player fills the monitor (Fullscreen API) or, where that is missing, the window ---- */
+    .player:fullscreen, .player.big { display: flex; flex-direction: column; width: 100%; height: 100%;
+                                      border: 0; border-radius: 0; box-shadow: none; }
+    .player.big { position: fixed; inset: 0; z-index: 2000000001; }
+    .player:fullscreen .screen, .player.big .screen { flex: 1; }
+    body.locked { overflow: hidden; }
 
     /* ---- gallery ---- */
     .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
@@ -71,13 +96,20 @@
       <h3 id="player-name">Minesweeper</h3>
       <span class="hint" id="player-hint">15 x 15 board with MIDI sound. Right-click to flag. Arrow keys move the window.</span>
       <div class="actions">
+        <button class="btn" type="button" id="player-shuffle" title="Play a random app">Shuffle</button>
         <button class="btn" type="button" id="player-restart">Restart</button>
+        <button class="btn" type="button" id="player-big" aria-pressed="false" title="Fill the screen with the player">Big screen</button>
         <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
       </div>
     </div>
     <div class="screen" id="screen">
       <iframe id="player-frame" title="Minesweeper" src="Minesweeper/index.html?embed" allow="autoplay"></iframe>
     </div>
+    <nav class="rail" aria-label="Switch app">
+      <button class="btn step" type="button" id="player-prev" aria-label="Previous app" title="Previous app">&lsaquo;</button>
+      <ol id="rail"></ol>
+      <button class="btn step" type="button" id="player-next" aria-label="Next app" title="Next app">&rsaquo;</button>
+    </nav>
   </section>
 
   <h2>Play in the browser</h2>
@@ -124,7 +156,10 @@
     var MIN_HEIGHT = 520;
     var MIN_SCREEN = 320;   // shortest the screen gets on a short browser window, in page pixels
     var ASPECT = 1.6;
+    var player = document.getElementById('player');
     var screen = document.getElementById('screen');
+    var rail = document.getElementById('rail');
+    var bigButton = document.getElementById('player-big');
     var frame = document.getElementById('player-frame');
     var cards = Array.prototype.slice.call(document.querySelectorAll('#apps li[data-app]'));
     var current = null;
@@ -137,10 +172,21 @@
     // The screen is 16:10 but no taller than the browser window leaves room for (so the whole app is in view
     // under the player bar). The iframe gets a viewport of at least MIN_WIDTH x MIN_HEIGHT (more for apps
     // with data-min-height, like Rubik's Cube's 700 px window) and is scaled down to the screen.
+    // On the big screen it takes whatever room the bar and the rail leave.
+    function isBig() { return document.fullscreenElement === player || player.classList.contains('big'); }
+
     function fit() {
       var minHeight = Math.max(MIN_HEIGHT, current ? +(current.getAttribute('data-min-height') || 0) : 0);
       var width = screen.clientWidth;
-      var height = Math.round(Math.min(width / ASPECT, Math.max(MIN_SCREEN, window.innerHeight - 140)));
+      var height;
+      if (isBig()) {
+        screen.style.height = '';
+        height = screen.clientHeight;
+      } else {
+        // Room for the bar and the rail too, so the whole player fits in the window.
+        var around = player.offsetHeight - screen.offsetHeight + 24;
+        height = Math.round(Math.min(width / ASPECT, Math.max(MIN_SCREEN, window.innerHeight - around)));
+      }
       var scale = Math.min(1, width / MIN_WIDTH, height / minHeight);
       frame.style.width = Math.round(width / scale) + 'px';
       frame.style.height = Math.round(height / scale) + 'px';
@@ -148,10 +194,46 @@
       screen.style.height = height + 'px';
     }
 
-    function play(li, focus) {
+    // The rail repeats the gallery as small buttons, so switching apps never needs a scroll down to the cards.
+    var railButtons = cards.map(function (li) {
+      var item = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.title = li.querySelector('span').textContent;
+      var pic = document.createElement('span');
+      pic.className = 'pic';
+      var img = document.createElement('img');
+      img.src = li.querySelector('img').getAttribute('src');
+      img.alt = '';
+      img.loading = 'lazy';
+      pic.appendChild(img);
+      var name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = li.querySelector('strong').textContent;
+      b.appendChild(pic);
+      b.appendChild(name);
+      b.addEventListener('click', function () { choose(li); });
+      item.appendChild(b);
+      rail.appendChild(item);
+      return b;
+    });
+
+    function mark(li) {
       if (current) current.classList.remove('playing');
       current = li;
       li.classList.add('playing');
+      var i = cards.indexOf(li);
+      railButtons.forEach(function (b, j) { b.setAttribute('aria-current', String(j === i)); });
+      // Scroll only the rail (scrollIntoView would also scroll the page).
+      var b = railButtons[i];
+      var left = b.offsetLeft - rail.offsetLeft;
+      if (left < rail.scrollLeft || left + b.offsetWidth > rail.scrollLeft + rail.clientWidth) {
+        rail.scrollTo({ left: left - (rail.clientWidth - b.offsetWidth) / 2, behavior: 'smooth' });
+      }
+    }
+
+    function play(li, focus) {
+      mark(li);
       var app = li.getAttribute('data-app');
       var name = li.querySelector('strong').textContent;
       var page = app + '/index.html';
@@ -167,17 +249,47 @@
       frame = next;
       if (focus) {
         frame.addEventListener('load', function () { frame.focus(); });
-        document.getElementById('player').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!isBig()) player.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
+
+    function choose(li) {
+      history.replaceState(null, '', '#' + li.getAttribute('data-app'));
+      play(li, true);
+    }
+
+    function step(by) { choose(cards[(cards.indexOf(current) + by + cards.length) % cards.length]); }
 
     document.getElementById('apps').addEventListener('click', function (e) {
       var a = e.target.closest('a.play, a.thumb');
       if (!a || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
       e.preventDefault();
-      var li = a.closest('li');
-      history.replaceState(null, '', '#' + li.getAttribute('data-app'));
-      play(li, true);
+      choose(a.closest('li'));
+    });
+
+    document.getElementById('player-prev').addEventListener('click', function () { step(-1); });
+    document.getElementById('player-next').addEventListener('click', function () { step(1); });
+    document.getElementById('player-shuffle').addEventListener('click', function () {
+      step(1 + Math.floor(Math.random() * (cards.length - 1)));   // any app but the current one
+    });
+
+    // Big screen: real fullscreen where the browser allows it, else the player covers the window.
+    function setBig(on) {
+      player.classList.toggle('big', on);
+      document.body.classList.toggle('locked', on);
+      bigButton.setAttribute('aria-pressed', String(isBig()));
+      bigButton.textContent = isBig() ? 'Exit big screen' : 'Big screen';
+      fit();
+    }
+    bigButton.addEventListener('click', function () {
+      if (document.fullscreenElement) { document.exitFullscreen(); return; }
+      if (player.classList.contains('big')) { setBig(false); return; }
+      if (player.requestFullscreen) player.requestFullscreen().catch(function () { setBig(true); });
+      else setBig(true);
+    });
+    document.addEventListener('fullscreenchange', function () { setBig(false); frame.focus(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && player.classList.contains('big')) setBig(false);
     });
 
     document.getElementById('player-restart').addEventListener('click', function () { play(current, true); });
@@ -194,7 +306,7 @@
     window.addEventListener('resize', fit);
     var start = card(decodeURIComponent(location.hash.slice(1)));
     if (start) play(start, false);
-    else { current = card('Minesweeper'); current.classList.add('playing'); fit(); }
+    else { mark(card('Minesweeper')); fit(); }
   })();
 </script>
 </body>
