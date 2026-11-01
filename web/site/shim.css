@@ -957,3 +957,265 @@ canvas.paint.top {
     order: 2;
   }
 }
+
+/* ---- touch controller (boot.js PADS): a game pad for the keyboard games ----
+   Modern: a dark glass console with glossy buttons. Classic: a Metal panel with beveled buttons. */
+.shim-pad {
+  --pad-bg: rgba(15, 23, 42, 0.86);
+  --pad-text: #e5e7eb;
+  --pad-btn: radial-gradient(circle at 35% 30%, #475569, #1e293b 70%);
+  --pad-btn-border: rgba(255, 255, 255, 0.14);
+  --pad-btn-on: radial-gradient(circle at 50% 50%, #60a5fa, #2563eb 75%);
+  --pad-glow: 0 0 0 3px rgba(96, 165, 250, 0.45);
+  --pad-radius: 22px;
+  --pad-btn-radius: 14px;
+  --k: clamp(40px, 11vw, 52px);
+  position: fixed;
+  left: 50%;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 1999999998;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 10px 22px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: 10px 16px 12px;
+  border-radius: var(--pad-radius);
+  background: var(--pad-bg);
+  color: var(--pad-text);
+  font: 600 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+:root[data-skin="classic"] .shim-pad {
+  --pad-bg: linear-gradient(#eef3f9, #c9d8ea);
+  --pad-text: #333333;
+  --pad-btn: linear-gradient(#ffffff 0%, #eef3f9 40%, #b8cfe5 100%);
+  --pad-btn-border: #7a8a99;
+  --pad-btn-on: linear-gradient(#b8cfe5, #8da5c9);
+  --pad-glow: 0 0 0 2px #6382bf;
+  --pad-radius: 4px;
+  --pad-btn-radius: 3px;
+  border: 1px solid #8da5c9;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.shim-pad[hidden] {
+  display: none;
+}
+
+/* Docked under the home page's player, in the page flow instead of over the app. */
+.shim-pad.docked {
+  position: static;
+  transform: none;
+  width: auto;
+  max-width: none;
+  border: 0;
+  border-top: 1px solid var(--card-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.shim-pad-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.shim-pad-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.shim-pad-title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--tint, currentColor);
+}
+
+.tint-red { --tint: #ef4444; }
+.tint-green { --tint: #16a34a; }
+
+.shim-pad-body {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.shim-pad-btn {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: var(--k);
+  height: var(--k);
+  padding: 0 14px;
+  border: 1px solid var(--pad-btn-border);
+  border-radius: var(--pad-btn-radius);
+  background: var(--pad-btn);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: none;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 0.05s, box-shadow 0.05s;
+}
+
+.shim-pad-btn kbd {
+  font: 10px ui-monospace, "Cascadia Mono", Consolas, monospace;
+  opacity: 0.7;
+}
+
+.shim-pad-btn.on,
+.shim-pad-btn.lit {
+  background: var(--pad-btn-on);
+  color: #fff;
+  box-shadow: var(--pad-glow);
+  transform: translateY(2px);
+}
+
+:root[data-skin="classic"] .shim-pad-btn.on,
+:root[data-skin="classic"] .shim-pad-btn.lit {
+  color: #111;
+}
+
+.shim-pad-btn.big {
+  min-width: calc(var(--k) * 2.6);
+  height: calc(var(--k) * 1.35);
+  border-radius: calc(var(--k) * 0.7);
+  font-size: 18px;
+}
+
+:root[data-skin="classic"] .shim-pad-btn.big {
+  border-radius: var(--pad-btn-radius);
+}
+
+/* The cross: four buttons on a 3 x 3 grid around an empty hub. */
+/* Two crosses and two fire buttons stay on one row, sized down to fit narrow pages. */
+.shim-pad:has(.shim-dpad) {
+  --k: clamp(30px, calc((100vw - 110px) / 9), 52px);
+  flex-wrap: nowrap;
+}
+
+.shim-pad:has(.shim-dpad) .shim-pad-body {
+  flex-wrap: nowrap;
+}
+
+.shim-dpad {
+  display: grid;
+  grid-template: repeat(3, var(--k)) / repeat(3, var(--k));
+  gap: 2px;
+}
+
+.shim-dpad .shim-pad-btn {
+  min-width: 0;
+  padding: 0;
+}
+
+.shim-dpad .shim-pad-btn kbd {
+  font-size: 15px;
+  opacity: 0.95;
+}
+
+.shim-dpad .up { grid-area: 1 / 2; }
+.shim-dpad .left { grid-area: 2 / 1; }
+.shim-dpad .down { grid-area: 3 / 2; }
+.shim-dpad .right { grid-area: 2 / 3; }
+
+.shim-pad-btn.fire {
+  width: calc(var(--k) * 1.5);
+  height: calc(var(--k) * 1.5);
+  padding: 0;
+  border-radius: 50%;
+  border-color: rgba(0, 0, 0, 0.25);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tint) 55%, #fff), var(--tint) 70%);
+  color: #fff;
+  font-size: 15px;
+}
+
+.shim-pad-btn.fire kbd {
+  opacity: 0.9;
+}
+
+.shim-pad-btn.fire.on,
+.shim-pad-btn.fire.lit {
+  background: var(--tint);
+  color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tint) 45%, transparent);
+}
+
+/* One octave, C to C: eight white keys with the five black keys on the lines between them. */
+.shim-piano {
+  position: relative;
+  display: flex;
+  width: min(440px, calc(100vw - 48px));
+  height: calc(var(--k) * 2);
+}
+
+.shim-piano .white {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0 8px;
+  justify-content: flex-end;
+  border-color: #94a3b8;
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(#ffffff, #e5e7eb);
+  color: #334155;
+}
+
+.shim-piano .black {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 10%;
+  min-width: 0;
+  height: 60%;
+  padding: 0 0 6px;
+  justify-content: flex-end;
+  border-color: #000;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(#334155, #0f172a);
+  color: #e5e7eb;
+}
+
+.shim-piano .shim-pad-btn.on,
+.shim-piano .shim-pad-btn.lit {
+  background: var(--pad-btn-on);
+  color: #fff;
+}
+
+@media (max-width: 560px) {
+  /* The How to play card sits above a shown controller. */
+  body .shim-hint {
+    bottom: calc(var(--pad-h, 0px) + 16px);
+  }
+
+  .shim-pad {
+    gap: 8px 12px;
+    padding: 8px 10px 10px;
+  }
+}
