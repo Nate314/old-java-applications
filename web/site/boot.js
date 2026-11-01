@@ -1397,6 +1397,14 @@
       });
       return solved ? 'Your levels: ' + solved + ' of 20 solved, ' + stars + ' of 60 stars' : '';
     } },
+    MusicTheoryExpert: { file: '.musictheory-drills.txt', show: function (text) {
+      var passed = 0, stars = 0;
+      text.split('\n').forEach(function (row) {
+        var n = parseInt((row.split('=')[1] || '').split(',')[0], 10);
+        if (/^[A-Z_]+=/.test(row) && n >= 0 && n <= 3) { passed += n > 0 ? 1 : 0; stars += n; }
+      });
+      return passed ? 'Your ear training: ' + passed + ' of 6 drills passed, ' + stars + ' of 18 stars' : '';
+    } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split(',').map(Number);
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
