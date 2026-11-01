@@ -62,7 +62,7 @@ Also substituted: `java.beans.PropertyVetoException`, `java.net.URLClassLoader` 
 `web.teavm.ShimPlugin` rewrites a few JDK calls in app bytecode only, so app sources stay untouched:
 
 - `Thread.sleep` goes to `web.rt.Sleep`, which throws for negative values like the JDK. Minesweeper's sound helper only stops looping because of that exception.
-- `System.exit` goes to `web.rt.Exit`, which closes the app's windows, shows a "Run again" box and unwinds the calling thread.
+- `System.exit` goes to `web.rt.Exit`, which closes the app's windows, shows a "Run again" box (with suggestions of other apps, see App pages) and unwinds the calling thread.
 - `URL.openStream` and `URLConnection.getInputStream` go to `web.rt.Net`, which throws `IOException` when a request fails. TeaVM's XHR connection otherwise returns an empty response.
 
 ### Windows and widgets
@@ -131,6 +131,17 @@ The player is built to keep a visitor playing without scrolling back to the gall
 - Each new app gets a new iframe, so the previous app's timers and sound stop. Restart reloads the current one.
 - A skin change on any page reaches every other open page of the site, the player included, through the `storage` event.
 - The thumbnails in `site/shots/` are screenshots of the apps in the Modern skin, taken with the system's color scheme. To retake them after a visual change, build the site, then run `./web/shots.ps1` from the repo root (`-Apps Minesweeper,Clock` for some apps only). It serves the built site on port 8101 with Python, opens each app page in headless Chrome in thumbnail mode (`?embed&shot`: square, shadowless windows on a magenta desktop, without the output panel unless it is all the app shows), crops each image to the windows, makes the remaining magenta transparent and scales it down to at most 480 px wide.
+
+## App pages
+
+Each app page (`<App>/index.html`) is built to lead to the next app as well as run its own:
+
+- The toolbar in the top-right corner has All apps, Switch app, a Next link (the following app in gallery order, wrapping around; hidden on pages narrower than 560 px) and the skin picker.
+- Switch app opens a panel on the right with every app's thumbnail, name and hint, the current app marked "Now playing". Esc, the close button or a click outside the panel closes it.
+- A How to play card with the app's hint shows under the toolbar when the app starts (at the bottom on narrow pages) and fades after 12 seconds.
+- When the app exits (for most apps, when its window is closed), the Run again box names the app, keeps Run again and All apps, and suggests three other apps with their thumbnails: apps of the same category first, then the others, each group in random order. In the home page's player the box has no All apps link, and picking a suggestion asks the home page (with `postMessage`) to swap that app into the player, so its title, rail and address follow.
+
+`boot.js` reads the list of apps (name, hint, category, thumbnail, order) from the gallery in `../index.html`, so the home page stays the one place to add or describe an app. Keys typed in these panels are kept from the app, since the shim listens for keys on the whole document. Thumbnail mode (`?embed&shot`) leaves all of this out.
 
 ## Skins
 
