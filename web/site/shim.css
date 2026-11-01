@@ -2545,3 +2545,133 @@ button.shim-toast-go {
     animation: none;
   }
 }
+
+/* ---- app-page stage (boot.js stageEdge): the toolbar is a band across the top, and #desktop fills the space
+   between it and the controller and output panel at the bottom. The shim reports that space to Java as the
+   screen and boot.js centers the windows in it, so no window sits under the toolbar or the controller.
+   --bar-h, --pad-h and --out-h are those elements' heights, kept current by boot.js. */
+
+:root[data-stage] #desktop {
+  top: var(--bar-h, 0px);
+  bottom: calc(var(--pad-h, 0px) + var(--out-h, 0px));
+  background: none;   /* boot.js moves it to center the windows, so the desk is painted on the page */
+}
+
+/* A desktop scaled down to fit (boot.js centerWindows) would clip its windows at its unscaled size. The
+   toolbar and the controller sit above anything dragged past the stage's edges. */
+:root[data-stage] #desktop,
+:root[data-embed] #desktop {
+  overflow: visible;
+}
+
+:root[data-stage] {
+  min-height: 100%;
+  background: var(--desk);
+}
+
+:root[data-stage] body {
+  background: none;
+}
+
+:root[data-stage] .shim-toolbar {
+  top: 0;
+  left: 0;
+  right: 0;
+  max-width: none;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 0;
+  justify-content: flex-end;
+  row-gap: 6px;
+  opacity: 1;
+  background: rgba(17, 24, 39, 0.94);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* The app's name on the left; the controls keep to the right. */
+.shim-toolbar .shim-bar-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A power light: green while the app runs, amber while the title screen waits. */
+.shim-toolbar .shim-bar-name::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  vertical-align: 1px;
+}
+
+:root[data-title] .shim-toolbar .shim-bar-name::before {
+  background: #f59e0b;
+  box-shadow: none;
+}
+
+/* Cards that cleared the floating toolbar now clear the band. */
+:root[data-stage] .shim-hint,
+:root[data-stage] .shim-toast {
+  top: calc(var(--bar-h, 40px) + 8px);
+}
+
+:root[data-stage] .shim-title {
+  padding-top: calc(var(--bar-h, 40px) + 16px);
+}
+
+/* Where the source panel docks beside the app (wider pages), the stage ends at its left edge, so the windows
+   stay in view next to their code. */
+@media (min-width: 901px) {
+  :root[data-stage][data-source] #desktop {
+    right: min(860px, 58vw);
+  }
+}
+
+/* Narrow pages: the band wraps to a second row, kept short. */
+@media (max-width: 560px) {
+  :root[data-stage] .shim-toolbar {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  /* The picker keeps its name for screen readers (the select is inside the label) but not its room. */
+  :root[data-stage] .shim-toolbar label {
+    font-size: 0;
+  }
+
+  :root[data-stage] .shim-toolbar label select {
+    font-size: 12px;
+  }
+
+  :root[data-stage] .shim-hint {
+    top: auto;
+  }
+}
+
+:root[data-skin="classic"][data-stage] .shim-toolbar {
+  background: linear-gradient(#4f6f91, #34506e);
+  border-bottom: 1px solid #22384f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 4px rgba(0, 0, 0, 0.3);
+  backdrop-filter: none;
+}
+
+:root[data-skin="arcade"][data-stage] .shim-toolbar {
+  background: rgba(17, 10, 34, 0.96);
+  border-bottom: 1px solid #ff2bd6;
+  box-shadow: 0 0 14px rgba(255, 43, 214, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-bar-name {
+  color: #7df9ff;
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

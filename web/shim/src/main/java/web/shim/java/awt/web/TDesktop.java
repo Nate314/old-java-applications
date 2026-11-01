@@ -230,7 +230,9 @@ public final class TDesktop {
 
     private static void onMouseMove(JSObject e) {
         if (dragWindow != null) {
-            dragWindow.setLocation(dragStartX + (int) (Js.clientX(e) - dragMouseX), dragStartY + (int) (Js.clientY(e) - dragMouseY));
+            double scale = Js.desktopScale();
+            dragWindow.setLocation(dragStartX + (int) ((Js.clientX(e) - dragMouseX) / scale),
+                    dragStartY + (int) ((Js.clientY(e) - dragMouseY) / scale));
             return;
         }
         TComponent c = lookup(Js.target(e));
@@ -274,8 +276,9 @@ public final class TDesktop {
         if (target == null) {
             return;
         }
-        int x = (int) Math.floor(Js.clientX(e) - Js.clientLeft(target.element()));
-        int y = (int) Math.floor(Js.clientY(e) - Js.clientTop(target.element()));
+        double scale = Js.desktopScale();   // the page desktop may be scaled down to fit the stage
+        int x = (int) Math.floor((Js.clientX(e) - Js.clientLeft(target.element())) / scale);
+        int y = (int) Math.floor((Js.clientY(e) - Js.clientTop(target.element())) / scale);
         int button = id == TMouseEvent.MOUSE_MOVED || id == TMouseEvent.MOUSE_ENTERED || id == TMouseEvent.MOUSE_EXITED
                 ? 0 : Js.button(e) + 1;
         int clicks = id == TMouseEvent.MOUSE_CLICKED || id == TMouseEvent.MOUSE_PRESSED || id == TMouseEvent.MOUSE_RELEASED
