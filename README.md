@@ -70,4 +70,4 @@ mvn -f web/pom.xml package                               # builds the static sit
 python -m http.server 8000 --directory web/target/site   # then open http://localhost:8000/
 ```
 
-The home page runs Minesweeper in a player as soon as it opens, and swaps any other app into it from the gallery of thumbnails below. See [web/README.md](web/README.md) for how it works, per-app status and limitations.
+The home page runs Minesweeper in a player as soon as it opens, and swaps any other app into it from the rail of thumbnails under the player (with next, previous and shuffle buttons, and a Big screen mode that fills the monitor) or the gallery below. See [web/README.md](web/README.md) for how it works, per-app status and limitations.
