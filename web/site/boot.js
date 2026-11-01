@@ -15,6 +15,8 @@
  *   the app's own keys; the home page docks it under its player and passes the presses into the iframe.
  * - Keeps the arcade passport (window.oldjavaPassport): a stamp for every app the visitor has played, saved in
  *   localStorage and shared by every open page. A new stamp shows a toast pointing at an app not played yet.
+ * - Links the web app manifest and icons and registers the service worker (sw.js), so the site can be
+ *   installed and saved apps play offline. The home page's Take it with you panel uses both.
  */
 (function () {
   'use strict';
@@ -51,6 +53,36 @@
   }
   // The home page's Arcade mode button switches skins through this.
   window.oldjavaSkin = { set: setSkin, get: function () { return document.documentElement.getAttribute('data-skin'); } };
+
+  // ---- installable and offline: the web app manifest, icons and the service worker (sw.js) ----
+  // Every page links them, so the arcade can be installed from any page and every page can be kept offline.
+  var siteRoot = new URL('.', document.currentScript.src).href;
+  function headLink(rel, href, type) {
+    var link = document.createElement('link');
+    link.rel = rel;
+    link.href = siteRoot + href;
+    if (type) link.type = type;
+    document.head.appendChild(link);
+  }
+  headLink('manifest', 'manifest.webmanifest');
+  headLink('icon', 'icons/icon.svg', 'image/svg+xml');
+  headLink('apple-touch-icon', 'icons/apple-touch-icon.png');
+  var theme = document.createElement('meta');
+  theme.name = 'theme-color';
+  theme.content = '#170a2e';
+  document.head.appendChild(theme);
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register(siteRoot + 'sw.js').catch(function (e) {
+      console.warn('Offline play is not available: ' + e.message);
+    });
+  }
+  // The home page shows its own Install button, so it keeps the browser's install prompt for that button.
+  window.addEventListener('beforeinstallprompt', function (e) {
+    if (document.body && document.body.hasAttribute('data-app')) return;
+    e.preventDefault();
+    window.oldjavaInstall = e;
+    document.dispatchEvent(new Event('oldjava-installable'));
+  });
 
   function toolbar(isApp) {
     var bar = document.createElement('div');

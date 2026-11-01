@@ -114,7 +114,7 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `shim/`: the compatibility layer and the TeaVM compiler extensions (`web.teavm`).
 - `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
-- `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `shim.css` (the Modern, Classic and Arcade skins) and `shots/` (the home page thumbnails).
+- `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
 - `shots.ps1`: recaptures `site/shots/` from a built site (see Home page).
 
 ## Home page
@@ -184,9 +184,20 @@ The home page's player bar has an Arcade mode button that switches every open pa
 
 In Arcade the scanlines and the rolling band are pseudo-elements of the page's `body` that never take pointer events. Pages in the home page's player leave them out (the home page draws them once over the player), and so does thumbnail mode. The power-on animates the CSS `scale` property of `#desktop`, so it does not disturb the `transform` that centers the windows in the player. The rolling band and the power-on are left out when the system asks for reduced motion. The thumbnails stay Modern screenshots in every skin.
 
+## Install and offline
+
+The site is a progressive web app: it can be installed as an app with its own window and icon, and every app can be kept on the device to play with no connection.
+
+- `boot.js` links `manifest.webmanifest`, the icon (`icons/icon.svg`, plus PNG renders of it) and the theme color on every page, and registers the service worker `sw.js`. The manifest opens the home page in a standalone window and has shortcuts to Minesweeper, Flappy Bird, NathaNOS and Synthesizer Keyboard (`index.html#<App>`).
+- `sw.js` is network first: every request goes to the server as before, so a new build shows up on the next load, and each good answer is also kept in the `oldjava-v1` cache. When the network fails, the cached copy answers. Cache keys leave out the query string, so the player's `<App>/index.html?embed` and the app's own page share one entry. A page that is not cached gets a short "You are offline" page with a link home.
+- The home page's Take the arcade with you panel, under the passport, has Install app (the browser's own install prompt, which `boot.js` keeps for this button; where the browser offers none, a note points at its menu) and Save all for offline. Saving reads each app's file list from its page (`index.html`, `classes.js` and the `data-files`), adds the home page, `boot.js`, `shim.css`, the manifest, icons and thumbnails, and fetches them four at a time into the cache with a progress bar, then reports the size (9.1 MB for the current build). Apps played once are kept too, so the panel also says how many are saved already.
+- A gallery card whose files are all cached carries an Offline chip. When the browser reports no connection, a banner under the title says how many saved apps still play, and the cards of the others fade out and say Needs a connection.
+- Service workers need a secure context: `localhost`, `127.0.0.1` or HTTPS. Elsewhere the panel stays hidden and the site works as before.
+- The icons in `icons/` are PNG renders of `icons/icon.svg` (192 and 512 px, a 512 px maskable one with the art inside the safe zone, and a 180 px `apple-touch-icon.png`). To change the icon, edit the SVG and render the PNGs again, for example with headless Chrome (`--screenshot` with a matching `--window-size`).
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".
 - Windows cannot be resized by dragging their edges, and there are no minimize or maximize buttons.
 - `Robot` cannot see or control anything outside the page.
-- Nothing an app saves is kept across page loads (only the skin and the passport stamps are).
+- Nothing an app saves is kept across page loads (only the skin and the passport stamps are). Saving for offline keeps the apps' files, not their data.

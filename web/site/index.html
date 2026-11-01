@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Old Java Applications</title>
+  <meta name="description" content="Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play 16 of them in the browser, installed as an app or offline.">
+  <meta property="og:title" content="Old Java Applications">
+  <meta property="og:description" content="16 old Java Swing apps and games, playable in the browser.">
   <link rel="stylesheet" href="shim.css">
   <script src="boot.js"></script>
   <style>
@@ -124,7 +127,42 @@
                      font-size: 12px; font-weight: 700; background: #f59e0b; color: #1f2937; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
     ul.apps li.played .badge { background: #16a34a; color: #fff; }
 
+    /* ---- take it with you: install the site as an app and save every app for offline play (sw.js) ---- */
+    .takeaway { position: relative; margin-top: 28px; padding: 18px; border-radius: 14px; overflow: hidden; color: #e6e0ff;
+                background: radial-gradient(120% 140% at 0% 0%, #3b1670 0%, #170a2e 55%, #0b0620 100%);
+                border: 1px solid #35205c; box-shadow: 0 14px 40px rgba(23, 10, 46, 0.35); }
+    .takeaway[hidden] { display: none; }
+    .takeaway-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+    .takeaway .app-icon { flex: none; width: 76px; height: 76px; filter: drop-shadow(0 6px 16px rgba(255, 43, 214, 0.35)); }
+    .takeaway .text { flex: 1 1 260px; min-width: 0; }
+    .takeaway h2 { margin: 0; color: #fff; }
+    .takeaway p { margin: 2px 0 0; font-size: 14px; opacity: 0.9; }
+    .takeaway .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .takeaway .btn { border-color: #7df9ff; color: #7df9ff; }
+    .takeaway .btn.primary { background: #ff2bd6; border-color: #ff2bd6; color: #fff; }
+    .takeaway .btn[hidden] { display: none; }
+    .takeaway .btn:disabled { opacity: 0.6; cursor: progress; }
+    .takeaway .meter { height: 6px; margin-top: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+    .takeaway .meter[hidden] { display: none; }
+    .takeaway .meter span { display: block; height: 100%; width: 0; border-radius: inherit;
+                            background: linear-gradient(90deg, #ff2bd6, #7df9ff); transition: width 0.2s; }
+    .takeaway .perks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; padding: 0; list-style: none;
+                       font-size: 13px; opacity: 0.85; }
+    .takeaway .perks li::before { content: "\2713"; margin-right: 6px; color: #7df9ff; font-weight: 700; }
+    .takeaway .note { margin-top: 10px; font-size: 13px; opacity: 0.7; }
+    .takeaway .note[hidden] { display: none; }
+    ul.apps .saved { position: absolute; top: 8px; right: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
+                     font-size: 12px; font-weight: 700; background: #170a2e; color: #7df9ff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+    ul.apps .saved[hidden] { display: none; }
+    /* Offline: the apps that are not saved cannot load, so they step back. */
+    .offline-banner { margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: #170a2e; color: #e6e0ff;
+                      font-size: 14px; border-left: 4px solid #ff2bd6; }
+    .offline-banner[hidden] { display: none; }
+    ul.apps li.unavailable { opacity: 0.45; }
+    ul.apps li.unavailable .saved { color: #fca5a5; }
+
     /* ---- arcade skin (shim.css draws the scanlines): the page as a neon cabinet ---- */
+    :root[data-skin="arcade"] .takeaway { border-color: #ff2bd6; box-shadow: 0 0 0 1px #ff2bd6, 0 0 28px rgba(255, 43, 214, 0.35); }
     .btn.arcade[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
     :root[data-skin="arcade"] h1 { color: #fff; letter-spacing: 0.02em;
       text-shadow: 0 0 6px #ff2bd6, 0 0 18px rgba(255, 43, 214, 0.75), 0 0 42px rgba(0, 229, 255, 0.45); }
@@ -150,6 +188,7 @@
   <p class="lead">Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM.
     Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page.
     One is already running below: pick any other to swap it in.</p>
+  <p class="offline-banner" id="offline-banner" role="status" hidden></p>
 
   <section class="player" id="player" aria-label="Now playing">
     <div class="player-bar">
@@ -189,6 +228,27 @@
       </div>
     </div>
     <ol class="stamps" id="stamps"></ol>
+  </section>
+
+  <section class="takeaway" id="takeaway" aria-labelledby="takeaway-title" hidden>
+    <div class="takeaway-head">
+      <img class="app-icon" src="icons/icon.svg" alt="" width="76" height="76">
+      <div class="text">
+        <h2 id="takeaway-title">Take the arcade with you</h2>
+        <p id="takeaway-text" aria-live="polite">Install it as an app, and save all 16 to play with no connection.</p>
+        <div class="meter" id="takeaway-meter" hidden><span></span></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="button" id="takeaway-install" hidden>Install app</button>
+        <button class="btn" type="button" id="takeaway-save">Save all for offline</button>
+      </div>
+    </div>
+    <ul class="perks">
+      <li>Its own window and icon</li>
+      <li>Saved apps play with no connection</li>
+      <li>No account, no ads</li>
+    </ul>
+    <p class="note" id="takeaway-note" hidden>To install, use Install app or Add to Home Screen in your browser's menu.</p>
   </section>
 
   <h2>Play in the browser</h2>
@@ -512,6 +572,179 @@
     var start = card(decodeURIComponent(location.hash.slice(1)));
     if (start) play(start, false);
     else { mark(card('Minesweeper')); fit(); }
+  })();
+</script>
+<script>
+  // Take the arcade with you: Install app (the browser's install prompt, which boot.js keeps for this page)
+  // and Save all for offline, which puts every file of every app into the service worker's cache (sw.js).
+  // Saved cards get an Offline chip; with no connection the banner says so and unsaved cards step back.
+  (function () {
+    'use strict';
+    var CACHE = 'oldjava-v1';   // the cache sw.js serves from
+    var panel = document.getElementById('takeaway');
+    if (!('serviceWorker' in navigator) || !window.caches || !window.isSecureContext) return;
+    panel.hidden = false;
+
+    var text = document.getElementById('takeaway-text');
+    var meter = document.getElementById('takeaway-meter');
+    var installButton = document.getElementById('takeaway-install');
+    var saveButton = document.getElementById('takeaway-save');
+    var note = document.getElementById('takeaway-note');
+    var banner = document.getElementById('offline-banner');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('#apps li[data-app]'));
+    var total = cards.length;
+
+    // ---- install ----
+    function installed() {
+      return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    }
+    function showInstall() {
+      installButton.hidden = !window.oldjavaInstall || installed();
+      note.hidden = !installButton.hidden || installed();
+    }
+    document.addEventListener('oldjava-installable', showInstall);
+    installButton.addEventListener('click', function () {
+      var prompt = window.oldjavaInstall;
+      if (!prompt) return;
+      prompt.prompt();
+      prompt.userChoice.then(function () { window.oldjavaInstall = null; showInstall(); });
+    });
+    window.addEventListener('appinstalled', function () {
+      window.oldjavaInstall = null;
+      showInstall();
+      text.textContent = 'Installed. Open Old Java from your apps, or keep playing here.';
+    });
+    showInstall();
+
+    // ---- which files each app needs: its page, classes.js and the files its page preloads (data-files) ----
+    var abs = function (path) { return new URL(path, location.href).href; };
+    function shell() {
+      var files = ['./', 'index.html', 'boot.js', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
+                   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
+      cards.forEach(function (li) { files.push(li.querySelector('img').getAttribute('src')); });
+      return files.map(abs);
+    }
+    var lists = {};
+    function filesOf(id) {
+      if (!lists[id]) {
+        lists[id] = fetch(id + '/index.html').then(function (r) {
+          if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+          return r.text();
+        }).then(function (html) {
+          var body = new DOMParser().parseFromString(html, 'text/html').body;
+          var extra = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
+          return [id + '/index.html', id + '/classes.js'].concat(extra.map(function (f) { return id + '/' + f; })).map(abs);
+        });
+        lists[id].catch(function () { delete lists[id]; });
+      }
+      return lists[id];
+    }
+
+    // ---- saved state: an app counts as saved when every one of its files is in the cache ----
+    var saved = {};
+    var chips = cards.map(function (li) {
+      var chip = document.createElement('span');
+      chip.className = 'saved';
+      chip.hidden = true;
+      li.querySelector('a.thumb').appendChild(chip);
+      return chip;
+    });
+    function countSaved() { return cards.filter(function (li) { return saved[li.getAttribute('data-app')]; }).length; }
+    function render() {
+      var offline = !navigator.onLine;
+      var count = countSaved();
+      cards.forEach(function (li, i) {
+        var ok = !!saved[li.getAttribute('data-app')];
+        li.classList.toggle('unavailable', offline && !ok);
+        chips[i].hidden = !ok && !offline;
+        chips[i].textContent = ok ? 'Offline ✓' : 'Needs a connection';
+      });
+      banner.hidden = !offline;
+      banner.textContent = count === 0
+        ? 'You are offline. No apps are saved on this device yet, so they need a connection.'
+        : 'You are offline. ' + count + ' saved ' + (count === 1 ? 'app plays' : 'apps play') +
+          ' here as usual' + (count === total ? '.' : total - count === 1 ? '; the other one needs a connection.' : '; the others need a connection.');
+    }
+    function check() {
+      return caches.open(CACHE).then(function (cache) {
+        return Promise.all(cards.map(function (li) {
+          var id = li.getAttribute('data-app');
+          return filesOf(id).then(function (files) {
+            return Promise.all(files.map(function (f) { return cache.match(f); }));
+          }).then(function (hits) {
+            saved[id] = hits.every(Boolean);
+          }, function () { saved[id] = false; });
+        }));
+      }).then(function () {
+        render();
+        var count = countSaved();
+        if (count === total) {
+          text.textContent = 'All ' + total + ' apps are saved on this device. They play with no connection.';
+          saveButton.textContent = 'Update saved apps';
+        } else if (count > 0) {
+          text.textContent = count + ' of ' + total + ' apps are saved on this device (apps you play are kept). ' +
+            'Save the rest to play all of them offline.';
+        }
+      });
+    }
+
+    // ---- save all: fetch every file, four at a time, and put it in the cache ----
+    function megabytes(bytes) { return (bytes / 1048576).toFixed(1) + ' MB'; }
+    saveButton.addEventListener('click', function () {
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving...';
+      meter.hidden = false;
+      var bar = meter.firstElementChild;
+      bar.style.width = '0';
+      var failed = 0;
+      var bytes = 0;
+      Promise.all([caches.open(CACHE), Promise.all(cards.map(function (li) { return filesOf(li.getAttribute('data-app')); }))])
+        .then(function (both) {
+          var cache = both[0];
+          var queue = shell();
+          both[1].forEach(function (files) { queue = queue.concat(files); });
+          queue = queue.filter(function (f, i) { return queue.indexOf(f) === i; });
+          var pending = queue.slice();   // the four workers take files from its front until it is empty
+          var done = 0;
+          function progress() {
+            bar.style.width = (100 * done / queue.length) + '%';
+            text.textContent = 'Saving ' + done + ' of ' + queue.length + ' files (' + megabytes(bytes) + ')...';
+          }
+          function worker() {
+            var url = pending.shift();
+            if (!url) return Promise.resolve();
+            return fetch(url, { cache: 'no-cache' }).then(function (r) {
+              if (!r.ok) throw new Error(r.status);
+              return r.blob().then(function (blob) {
+                bytes += blob.size;
+                return cache.put(url, new Response(blob, { headers: r.headers }));
+              });
+            }).catch(function () { failed++; }).then(function () { done++; progress(); return worker(); });
+          }
+          var workers = [];
+          for (var i = 0; i < 4; i++) workers.push(worker());
+          progress();
+          return Promise.all(workers);
+        })
+        .catch(function () { failed++; })
+        .then(function () { return check(); })
+        .then(function () {
+          saveButton.disabled = false;
+          meter.hidden = true;
+          if (failed) {
+            text.textContent = 'Could not save ' + failed + ' file' + (failed === 1 ? '' : 's') +
+              '. Check the connection and try again (' + countSaved() + ' of ' + total + ' apps are saved).';
+            saveButton.textContent = 'Try again';
+          } else {
+            text.textContent = 'All ' + total + ' apps saved on this device (' + megabytes(bytes) + '). ' +
+              'They play with no connection' + (installed() ? '.' : ', in this browser or installed as an app.');
+          }
+        });
+    });
+
+    addEventListener('online', check);   // the cache may have changed since (apps played meanwhile)
+    addEventListener('offline', check);
+    check();
   })();
 </script>
 </body>
