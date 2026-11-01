@@ -780,3 +780,180 @@ canvas.paint.top {
 :root[data-shot] #desktop:has(.c) ~ .shim-console {
   display: none;
 }
+
+/* ---- arcade passport (boot.js): stamp toast, badges, progress meter ---- */
+
+.shim-meter {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--card-border);
+  overflow: hidden;
+}
+
+.shim-meter::before {
+  content: "";
+  display: block;
+  height: 100%;
+  width: calc(var(--p, 0) * 100%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #22c55e);
+  transition: width 0.6s ease-out;
+}
+
+.shim-passport {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shim-exit .shim-passport {
+  margin-top: 16px;
+  padding: 0;
+  border: 0;
+  text-align: left;
+}
+
+.shim-app-pic {
+  position: relative;
+}
+
+.shim-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font: 700 11px/18px system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.shim-badge.played {
+  width: 18px;
+  padding: 0;
+  text-align: center;
+  background: #16a34a;
+}
+
+.shim-badge.new {
+  background: #f59e0b;
+  color: #1f2937;
+}
+
+/* Top center, under the toolbar: the bottom has NathaNOS's taskbar, the output panel and (narrow pages)
+   the How to play card. */
+.shim-toast {
+  position: fixed;
+  left: 50%;
+  top: 48px;
+  z-index: 2000000003;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: 10px 8px 10px 10px;
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--card-border);
+  transform: translateX(-50%);
+  animation: shim-toast-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+  transition: opacity 0.5s;
+}
+
+.shim-toast.gone {
+  opacity: 0;
+}
+
+@keyframes shim-toast-in {
+  from { transform: translate(-50%, -30px) scale(0.9); opacity: 0; }
+}
+
+/* The thumbnail in a round seal, pressed in like a rubber stamp. */
+.shim-toast-seal {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid #16a34a;
+  background: var(--desk);
+  overflow: hidden;
+  animation: shim-stamp 0.6s 0.15s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+.shim-toast-seal img {
+  max-width: 80%;
+  max-height: 80%;
+}
+
+@keyframes shim-stamp {
+  from { transform: scale(1.8) rotate(-25deg); opacity: 0; }
+  to { transform: rotate(-8deg); }
+}
+
+.shim-toast-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
+
+.shim-toast-text strong {
+  font-size: 14px;
+}
+
+.shim-toast-text .shim-meter {
+  margin-top: 4px;
+}
+
+.shim-toast-go {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.shim-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 2000000004;
+  pointer-events: none;
+}
+
+/* Narrow pages: the toast's button wraps under the text. */
+@media (max-width: 560px) {
+  .shim-toast {
+    flex-wrap: wrap;
+    width: calc(100vw - 16px);
+  }
+
+  .shim-toast-text {
+    flex: 1;
+  }
+
+  .shim-toast-go {
+    order: 3;
+    flex: 1 1 100%;
+    text-align: center;
+  }
+
+  .shim-toast .shim-close {
+    order: 2;
+  }
+}

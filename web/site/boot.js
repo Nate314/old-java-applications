@@ -11,6 +11,8 @@
  * - Keeps visitors moving between apps: an app page's toolbar has a Switch app drawer and a Next link, a
  *   How to play card shows the app's hint, and when the app exits the Run again box suggests three apps to
  *   play next. The list of apps is read from the home page's gallery (../index.html), so it lives in one place.
+ * - Keeps the arcade passport (window.oldjavaPassport): a stamp for every app the visitor has played, saved in
+ *   localStorage and shared by every open page. A new stamp shows a toast pointing at an app not played yet.
  */
 (function () {
   'use strict';
@@ -105,23 +107,177 @@
     }, 250);
   }
 
+  // ---- arcade passport ----
+  // { AppId: time of the first play } in localStorage. Every page keeps a copy and hears about stamps made in
+  // other pages (the home page hears its player's iframe) through the storage event.
+  var PLAYED_KEY = 'oldjava.played';
+  function readPlayed() {
+    try {
+      var v = JSON.parse(localStorage.getItem(PLAYED_KEY) || '{}');
+      return v && typeof v === 'object' ? v : {};
+    } catch (e) { return {}; }
+  }
+  var played = readPlayed();
+  var passportListeners = [];
+  function passportChanged(id) { passportListeners.forEach(function (fn) { fn(id); }); }
+
+  window.addEventListener('storage', function (e) {
+    if (e.key !== PLAYED_KEY && e.key !== null) return;
+    var before = played;
+    played = readPlayed();
+    var fresh = Object.keys(played).filter(function (k) { return !before[k]; });
+    passportChanged(fresh[0] || null);
+  });
+
+  var passport = window.oldjavaPassport = {
+    has: function (id) { return !!played[id]; },
+    stamp: function (id) {
+      played = readPlayed();   // another page may have stamped meanwhile
+      if (played[id]) return;
+      played[id] = Date.now();
+      try { localStorage.setItem(PLAYED_KEY, JSON.stringify(played)); } catch (e) { /* kept for this page only */ }
+      passportChanged(id);
+    },
+    reset: function () {
+      played = {};
+      try { localStorage.removeItem(PLAYED_KEY); } catch (e) { /* nothing saved */ }
+      passportChanged(null);
+    },
+    // fn(id): id is the app just stamped, or null when the stamps changed some other way (a reset).
+    onChange: function (fn) { passportListeners.push(fn); },
+    // The home page sets this to swap an app into its player instead of following a link.
+    open: null,
+    catalog: function () { return catalog(); },
+    // Apps not played yet, others of the same category as `id` first (see picks).
+    unplayed: function (apps, id) {
+      return picks(apps, id, apps.length).filter(function (a) { return !played[a.id]; });
+    }
+  };
+
+  // A new stamp: a toast with the count and an app not played yet; the last one gets confetti.
+  function stampToast(id) {
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, id)];
+      if (!app) return;
+      var count = apps.filter(function (a) { return played[a.id]; }).length;
+      var old = document.querySelector('.shim-toast');
+      if (old) old.remove();
+      var hint = document.querySelector('.shim-hint');
+      if (hint) hint.remove();
+      var toast = document.createElement('div');
+      toast.className = 'shim-toast';
+      toast.setAttribute('role', 'status');
+      var seal = document.createElement('span');
+      seal.className = 'shim-toast-seal';
+      var img = document.createElement('img');
+      img.src = app.shot;
+      img.alt = '';
+      seal.appendChild(img);
+      var text = document.createElement('div');
+      text.className = 'shim-toast-text';
+      var title = document.createElement('strong');
+      var line = document.createElement('span');
+      var done = count >= apps.length;
+      title.textContent = done ? 'Arcade complete!' : 'Stamp collected: ' + app.name;
+      line.textContent = done ? 'You have played all ' + apps.length + ' apps.'
+        : count + ' of ' + apps.length + ' apps played.';
+      text.appendChild(title);
+      text.appendChild(line);
+      var meter = document.createElement('span');
+      meter.className = 'shim-meter';
+      meter.style.setProperty('--p', String(count / apps.length));
+      text.appendChild(meter);
+      toast.appendChild(seal);
+      toast.appendChild(text);
+      var next = passport.unplayed(apps, id)[0];
+      if (next) {
+        var go = document.createElement('a');
+        go.className = 'shim-toast-go';
+        go.href = pageOf(next);
+        go.textContent = 'Try ' + next.name + ' ›';
+        go.addEventListener('click', function (e) {
+          if (!passport.open || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          toast.remove();
+          passport.open(next.id);
+        });
+        toast.appendChild(go);
+      }
+      toast.appendChild(closeButton(function () { toast.remove(); }));
+      ownKeys(toast);
+      document.body.appendChild(toast);
+      setTimeout(function () {
+        toast.classList.add('gone');
+        setTimeout(function () { toast.remove(); }, 600);
+      }, 9000);
+      if (done) confetti();
+    });
+  }
+
+  function confetti() {
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var canvas = document.createElement('canvas');
+    canvas.className = 'shim-confetti';
+    var w = canvas.width = innerWidth, h = canvas.height = innerHeight;
+    document.body.appendChild(canvas);
+    var g = canvas.getContext('2d');
+    var colors = ['#2563eb', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4'];
+    var bits = [];
+    for (var i = 0; i < 160; i++) {
+      bits.push({ x: w / 2, y: h * 0.35, vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 12 - 4,
+                  r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4, c: colors[i % colors.length] });
+    }
+    var start = performance.now();
+    (function frame(t) {
+      g.clearRect(0, 0, w, h);
+      bits.forEach(function (b) {
+        b.vy += 0.35; b.x += b.vx; b.y += b.vy; b.r += b.vr;
+        g.save(); g.translate(b.x, b.y); g.rotate(b.r); g.fillStyle = b.c; g.fillRect(-5, -3, 10, 6); g.restore();
+      });
+      if (t - start < 3000) requestAnimationFrame(frame);
+      else canvas.remove();
+    })(start);
+  }
+
+  // An app page is stamped by the first click or key press in the app itself (not in the site's own panels),
+  // so the home page's player does not stamp Minesweeper just by loading it. A console program
+  // (<body data-console>) has nothing to press: running it counts.
+  var CHROME = '.shim-toolbar, .shim-drawer, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast';
+  function stampOnPlay() {
+    var id = appId();
+    if (document.body.hasAttribute('data-console')) { passport.stamp(id); return; }
+    function onInput(e) {
+      if (e.target && e.target.closest && e.target.closest(CHROME)) return;
+      document.removeEventListener('pointerdown', onInput, true);
+      document.removeEventListener('keydown', onInput, true);
+      passport.stamp(id);
+    }
+    document.addEventListener('pointerdown', onInput, true);
+    document.addEventListener('keydown', onInput, true);
+  }
+
   // ---- app catalog and the ways to the next app ----
   // The home page's gallery is the one list of apps (name, hint, category, thumbnail), in gallery order.
+  // App pages fetch it from ../index.html; the home page reads its own.
+  function root() { return document.body.hasAttribute('data-app') ? '../' : ''; }
+
   var catalogPromise = null;
   function catalog() {
     if (!catalogPromise) {
-      catalogPromise = fetch('../index.html').then(function (r) {
+      var source = root() ? fetch('../index.html').then(function (r) {
         if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
         return r.text();
       }).then(function (html) {
-        var doc = new DOMParser().parseFromString(html, 'text/html');
+        return new DOMParser().parseFromString(html, 'text/html');
+      }) : Promise.resolve(document);
+      catalogPromise = source.then(function (doc) {
         return Array.prototype.map.call(doc.querySelectorAll('#apps li[data-app]'), function (li) {
           return {
             id: li.getAttribute('data-app'),
             cat: li.getAttribute('data-cat'),
             name: li.querySelector('strong').textContent,
             hint: li.querySelector('span').textContent,
-            shot: '../' + li.querySelector('img').getAttribute('src')
+            shot: root() + li.querySelector('img').getAttribute('src')
           };
         });
       }).catch(function (e) {
@@ -139,10 +295,11 @@
     return -1;
   }
 
-  function pageOf(app) { return '../' + app.id + '/index.html' + (embedded ? '?embed' : ''); }
+  function pageOf(app) { return root() + app.id + '/index.html' + (embedded ? '?embed' : ''); }
 
-  // Three apps to try after this one: others of the same category first, each group shuffled.
-  function picks(apps, id) {
+  // Apps to try after this one (three unless `count` says otherwise): apps not played yet first, then the
+  // played ones; within each, others of the same category first, each group shuffled.
+  function picks(apps, id, count) {
     var self = apps[indexOf(apps, id)];
     function shuffled(list) {
       for (var i = list.length - 1; i > 0; i--) {
@@ -151,10 +308,29 @@
       }
       return list;
     }
-    var others = apps.filter(function (a) { return a.id !== id; });
-    var same = others.filter(function (a) { return self && a.cat === self.cat; });
-    var rest = others.filter(function (a) { return !self || a.cat !== self.cat; });
-    return shuffled(same).concat(shuffled(rest)).slice(0, 3);
+    var result = [];
+    [false, true].forEach(function (wasPlayed) {
+      var others = apps.filter(function (a) { return a.id !== id && !!played[a.id] === wasPlayed; });
+      var same = others.filter(function (a) { return self && a.cat === self.cat; });
+      var rest = others.filter(function (a) { return !self || a.cat !== self.cat; });
+      result = result.concat(shuffled(same), shuffled(rest));
+    });
+    return result.slice(0, count || 3);
+  }
+
+  // "4 of 16 apps played" and a bar, for the drawer and the exit screen.
+  function passportLine(apps) {
+    var count = apps.filter(function (a) { return played[a.id]; }).length;
+    var p = document.createElement('div');
+    p.className = 'shim-passport';
+    var text = document.createElement('span');
+    text.textContent = 'Passport: ' + count + ' of ' + apps.length + ' apps played';
+    var meter = document.createElement('span');
+    meter.className = 'shim-meter';
+    meter.style.setProperty('--p', String(count / apps.length));
+    p.appendChild(text);
+    p.appendChild(meter);
+    return p;
   }
 
   function closeButton(onClick) {
@@ -169,7 +345,8 @@
 
   // A link to an app's page. In the home page's player it asks the page to swap the app in instead,
   // so the player's title, rail and address stay in step.
-  function appCard(app, current) {
+  // Played apps get a check on their thumbnail; with showNew, the others get a New badge.
+  function appCard(app, current, showNew) {
     var a = document.createElement('a');
     a.className = 'shim-app' + (current ? ' current' : '');
     a.href = pageOf(app);
@@ -180,6 +357,13 @@
     img.src = app.shot;
     img.alt = '';
     pic.appendChild(img);
+    if (played[app.id] || showNew) {
+      var badge = document.createElement('span');
+      badge.className = 'shim-badge' + (played[app.id] ? ' played' : ' new');
+      badge.textContent = played[app.id] ? '✓' : 'New';
+      badge.title = played[app.id] ? 'Played' : 'Not played yet';
+      pic.appendChild(badge);
+    }
     var text = document.createElement('span');
     text.className = 'shim-app-text';
     var name = document.createElement('strong');
@@ -241,6 +425,7 @@
     document.body.appendChild(panel);
     drawer = panel;
     catalog().then(function (apps) {
+      if (apps.length) panel.insertBefore(passportLine(apps), list);
       apps.forEach(function (app) { list.appendChild(appCard(app, app.id === appId())); });
       var here = list.querySelector('.current');
       if (here) here.scrollIntoView({ block: 'nearest' });
@@ -297,12 +482,13 @@
       var next = picks(apps, appId());
       if (!next.length) return;
       var h3 = document.createElement('h3');
-      h3.textContent = 'Play something else';
+      h3.textContent = played[next[0].id] ? 'Play something else' : 'Play something new';
       var row = document.createElement('div');
       row.className = 'shim-picks';
-      next.forEach(function (a) { row.appendChild(appCard(a, false)); });
+      next.forEach(function (a) { row.appendChild(appCard(a, false, true)); });
       box.appendChild(h3);
       box.appendChild(row);
+      box.appendChild(passportLine(apps));
     });
   }
 
@@ -430,6 +616,9 @@
     var body = document.body;
     var isApp = body.hasAttribute('data-app');
     if (!embedded) toolbar(isApp);
+    // The player's iframe leaves the toast to the home page around it, which hears the stamp too. An app page
+    // shows only its own stamp; the home page shows any.
+    if (!embedded) passport.onChange(function (id) { if (id && (!isApp || id === appId())) stampToast(id); });
     if (!isApp) return;
 
     var desktop = document.createElement('div');
@@ -456,6 +645,7 @@
       }
       main(args);
       if (extras && !embedded) howToPlay();
+      if (extras) stampOnPlay();   // after the hint, so a stamp's toast replaces it rather than sitting under it
     });
   });
 })();

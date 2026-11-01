@@ -81,6 +81,48 @@
       ul.apps li:not(.text):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); }
     }
     ul.desktop-only li { opacity: 0.85; padding: 12px 14px; gap: 6px; }
+
+    /* ---- arcade passport: a stamp for every app played (boot.js keeps the stamps) ---- */
+    .passport { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
+                background: var(--card-bg); }
+    .passport-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+    .ring { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
+            background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--card-border) 0); }
+    .ring span { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: var(--card-bg);
+                 font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+    .passport-head .text { flex: 1 1 240px; min-width: 0; }
+    .passport-head h2 { margin: 0; }
+    .passport-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
+    .passport-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .passport-head .btn[hidden] { display: none; }
+    /* 16 stamps: two even rows of 8, or four rows of 4 on narrow pages. */
+    .stamps { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px 10px;
+              margin: 16px 0 0; padding: 0; list-style: none; }
+    @media (max-width: 640px) { .stamps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    .stamps button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 0;
+                     border: 0; background: none; color: inherit; cursor: pointer;
+                     font: 600 11px/1.25 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .stamps .seal { position: relative; display: grid; place-items: center; width: 58px; height: 58px; box-sizing: border-box;
+                    border-radius: 50%; border: 2px dashed var(--card-border); background: var(--desk);
+                    transition: transform 0.2s; }
+    .stamps .seal img { max-width: 70%; max-height: 70%; filter: grayscale(1); opacity: 0.55; transition: filter 0.3s, opacity 0.3s; }
+    .stamps .label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; }
+    .stamps button:hover .seal, .stamps button:focus-visible .seal { transform: scale(1.08); }
+    .stamps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+    .stamps .played .seal { border: 3px solid #16a34a; transform: rotate(-8deg); }
+    .stamps .played:hover .seal { transform: rotate(-8deg) scale(1.08); }
+    .stamps .played .seal img { filter: none; opacity: 1; }
+    .stamps .played .label { opacity: 1; }
+    .stamps .played .seal::after, .rail li button.played .pic::after { content: "\2713"; position: absolute; right: -4px; bottom: -2px;
+                    width: 20px; height: 20px; border-radius: 50%; background: #16a34a; color: #fff;
+                    font: 700 12px/20px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+    .stamps .fresh .seal { animation: press 0.6s cubic-bezier(0.3, 1.6, 0.5, 1); }
+    @keyframes press { from { transform: scale(1.7) rotate(-25deg); opacity: 0; } }
+    .rail .pic { position: relative; }
+    .rail li button.played .pic::after { right: 3px; bottom: 3px; width: 16px; height: 16px; font-size: 10px; line-height: 16px; }
+    ul.apps .badge { position: absolute; top: 8px; left: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
+                     font-size: 12px; font-weight: 700; background: #f59e0b; color: #1f2937; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+    ul.apps li.played .badge { background: #16a34a; color: #fff; }
   </style>
 </head>
 <body>
@@ -110,6 +152,21 @@
       <ol id="rail"></ol>
       <button class="btn step" type="button" id="player-next" aria-label="Next app" title="Next app">&rsaquo;</button>
     </nav>
+  </section>
+
+  <section class="passport" id="passport" aria-labelledby="passport-title">
+    <div class="passport-head">
+      <div class="ring" id="passport-ring"><span id="passport-count">0/16</span></div>
+      <div class="text">
+        <h2 id="passport-title">Arcade passport</h2>
+        <p id="passport-text" aria-live="polite">Play an app to collect its stamp.</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="button" id="passport-new">Play one you haven't</button>
+        <button class="btn" type="button" id="passport-reset">Reset</button>
+      </div>
+    </div>
+    <ol class="stamps" id="stamps"></ol>
   </section>
 
   <h2>Play in the browser</h2>
@@ -308,6 +365,82 @@
       if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data) return;
       var li = card(e.data.oldjavaPlay);
       if (li) choose(li);
+    });
+
+    // The arcade passport: a stamp per app played, here, in the player or on an app page (boot.js keeps them).
+    // Unplayed apps are gray stamps and New badges on the cards; played ones get a check here and in the rail.
+    var passport = window.oldjavaPassport;
+    var stampButtons = cards.map(function (li) {
+      var item = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      var seal = document.createElement('span');
+      seal.className = 'seal';
+      var img = document.createElement('img');
+      img.src = li.querySelector('img').getAttribute('src');
+      img.alt = '';
+      img.loading = 'lazy';
+      seal.appendChild(img);
+      var label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = li.querySelector('strong').textContent;
+      b.appendChild(seal);
+      b.appendChild(label);
+      b.addEventListener('click', function () { choose(li); });
+      item.appendChild(b);
+      document.getElementById('stamps').appendChild(item);
+      var badge = document.createElement('span');
+      badge.className = 'badge';
+      li.querySelector('a.thumb').appendChild(badge);
+      return b;
+    });
+
+    function renderPassport(fresh) {
+      var count = 0;
+      cards.forEach(function (li, i) {
+        var id = li.getAttribute('data-app');
+        var name = li.querySelector('strong').textContent;
+        var done = passport.has(id);
+        if (done) count++;
+        li.classList.toggle('played', done);
+        li.querySelector('.badge').textContent = done ? 'Played ✓' : 'New';
+        railButtons[i].classList.toggle('played', done);
+        stampButtons[i].classList.toggle('played', done);
+        stampButtons[i].classList.toggle('fresh', id === fresh);
+        stampButtons[i].title = done ? name + ': played' : name + ': not played yet';
+      });
+      var left = cards.length - count;
+      document.getElementById('passport-ring').style.setProperty('--p', String(count / cards.length));
+      document.getElementById('passport-count').textContent = count + '/' + cards.length;
+      document.getElementById('passport-text').textContent =
+        count === 0 ? 'Play an app to collect its stamp. ' + cards.length + ' to collect.'
+        : left === 0 ? 'Every app played. Arcade complete!'
+        : count + ' of ' + cards.length + ' apps played. ' + left + ' to go.';
+      document.getElementById('passport-new').hidden = left === 0;
+    }
+    passport.onChange(renderPassport);
+    passport.open = function (id) { var li = card(id); if (li) choose(li); };
+    renderPassport(null);
+
+    document.getElementById('passport-new').addEventListener('click', function () {
+      passport.catalog().then(function (apps) {
+        var next = passport.unplayed(apps, current && current.getAttribute('data-app'))[0];
+        if (next) choose(card(next.id));
+      });
+    });
+    // Reset asks once more on the button itself, for 4 seconds.
+    var resetButton = document.getElementById('passport-reset');
+    var resetTimer = null;
+    resetButton.addEventListener('click', function () {
+      if (resetTimer) {
+        clearTimeout(resetTimer);
+        resetTimer = null;
+        resetButton.textContent = 'Reset';
+        passport.reset();
+        return;
+      }
+      resetButton.textContent = 'Clear all stamps?';
+      resetTimer = setTimeout(function () { resetTimer = null; resetButton.textContent = 'Reset'; }, 4000);
     });
 
     window.addEventListener('resize', fit);

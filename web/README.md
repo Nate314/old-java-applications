@@ -139,9 +139,20 @@ Each app page (`<App>/index.html`) is built to lead to the next app as well as r
 - The toolbar in the top-right corner has All apps, Switch app, a Next link (the following app in gallery order, wrapping around; hidden on pages narrower than 560 px) and the skin picker.
 - Switch app opens a panel on the right with every app's thumbnail, name and hint, the current app marked "Now playing". Esc, the close button or a click outside the panel closes it.
 - A How to play card with the app's hint shows under the toolbar when the app starts (at the bottom on narrow pages) and fades after 12 seconds.
-- When the app exits (for most apps, when its window is closed), the Run again box names the app, keeps Run again and All apps, and suggests three other apps with their thumbnails: apps of the same category first, then the others, each group in random order. In the home page's player the box has no All apps link, and picking a suggestion asks the home page (with `postMessage`) to swap that app into the player, so its title, rail and address follow.
+- When the app exits (for most apps, when its window is closed), the Run again box names the app, keeps Run again and All apps, and suggests three other apps with their thumbnails: apps not played yet first (see Arcade passport), and within that, apps of the same category first, then the others, each group in random order. The box ends with the passport count. In the home page's player the box has no All apps link, and picking a suggestion asks the home page (with `postMessage`) to swap that app into the player, so its title, rail and address follow.
 
 `boot.js` reads the list of apps (name, hint, category, thumbnail, order) from the gallery in `../index.html`, so the home page stays the one place to add or describe an app. Keys typed in these panels are kept from the app, since the shim listens for keys on the whole document. Thumbnail mode (`?embed&shot`) leaves all of this out.
+
+## Arcade passport
+
+The site keeps a stamp for every app the visitor has played, to give them a reason to try all 16:
+
+- An app is stamped by the first click or key press in the app itself, on its page or in the home page's player (clicks and keys in the site's own panels do not count, so the Minesweeper that the home page starts with is not stamped just by loading). SimpleAlgorithms and GroupCreator (`<body data-console>`) are stamped once they run.
+- A new stamp shows a toast at the top of the page: the app's thumbnail pressed in as a stamp, "N of 16 apps played" with a bar, and a Try link to an app not played yet (same category first). In the player the toast is shown by the home page, and its Try link swaps that app into the player. The 16th stamp shows "Arcade complete!" with a short burst of confetti (left out when the system asks for reduced motion).
+- The home page has an Arcade passport panel under the player: a progress ring, the 16 stamps (gray and dashed until played; click one to play it), "Play one you haven't" (a random unplayed app) and Reset (click twice). Gallery cards carry a New or Played badge, and the player's rail puts a check on played apps.
+- The Switch app panel shows the count at the top and checks played apps; the exit screen's suggestions carry New badges.
+
+The stamps are `{ "AppId": time of first play }` under `oldjava.played` in `localStorage` (only in that browser), kept by `boot.js` as `window.oldjavaPassport`. Every open page of the site hears new stamps through the `storage` event, as with the skin.
 
 ## Skins
 
@@ -152,4 +163,4 @@ The toggle in the top-right corner switches between Modern (the default: flatter
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".
 - Windows cannot be resized by dragging their edges, and there are no minimize or maximize buttons.
 - `Robot` cannot see or control anything outside the page.
-- Nothing is saved across page loads.
+- Nothing an app saves is kept across page loads (only the skin and the passport stamps are).
