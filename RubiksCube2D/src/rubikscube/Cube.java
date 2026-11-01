@@ -47,6 +47,35 @@ public final class Cube {
       return true;
    }
 
+   /** Puts every sticker back on its own face: the solved cube the app starts with. */
+   public final void reset() {
+      for (Face face : this.faces()) {
+         face.reset();
+      }
+      this.refresh();
+   }
+
+   /** The face with that color name, or null. */
+   public final Face face(String colorName) {
+      for (Face face : this.faces()) {
+         if (face.colorName().equals(colorName)) {
+            return face;
+         }
+      }
+      return null;
+   }
+
+   /** All 54 stickers in one string, so two positions of the cube can be compared. */
+   public final String snapshot() {
+      StringBuilder all = new StringBuilder();
+      for (Face face : this.faces()) {
+         for (String sticker : face.stickers) {
+            all.append(sticker).append(',');
+         }
+      }
+      return all.toString();
+   }
+
    public final void refresh() {
       this.topFace.refresh();
       this.frontFace.refresh();
