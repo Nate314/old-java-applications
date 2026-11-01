@@ -1314,6 +1314,40 @@
   function size(bytes) {
     return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
   }
+  // What an app saved on earlier visits: web.rt.Saves keeps the files it writes under oldjava.saves.<App>, each byte
+  // one character. Apps with a score file get their record read out; any other saves are named.
+  var RECORDS = {
+    FlappyBird: { file: '.flappybird-highscore.txt', show: function (text) {
+      var best = parseInt(text, 10);
+      return best > 0 ? 'Your best: ' + best + (best === 1 ? ' pipe' : ' pipes') : '';
+    } },
+    Minesweeper: { file: '.minesweeper-best.txt', show: function (text) {
+      var names = { BEGINNER: 'Beginner', CLASSIC: 'Classic', EXPERT: 'Expert' };
+      var times = text.split('\n').map(function (row) {
+        var kv = row.split('=');
+        var ms = +kv[1];
+        if (!names[kv[0]] || !(ms > 0)) return '';
+        var tenths = Math.floor(ms / 100), secs = Math.floor(tenths / 10);
+        return names[kv[0]] + ' ' + Math.floor(secs / 60) + ':' + (secs % 60 < 10 ? '0' : '') + secs % 60 + '.' + tenths % 10;
+      }).filter(Boolean);
+      return times.length ? 'Your best times: ' + times.join(', ') : '';
+    } }
+  };
+
+  function savedRecord(id) {
+    var saves;
+    try { saves = JSON.parse(localStorage.getItem('oldjava.saves.' + id) || '{}'); } catch (e) { return ''; }
+    var paths = Object.keys(saves);
+    var rule = RECORDS[id];
+    if (rule) {
+      for (var i = 0; i < paths.length; i++) {
+        if (paths[i].split('/').pop() === rule.file) return rule.show(saves[paths[i]]);
+      }
+      return '';
+    }
+    return paths.length ? 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ') : '';
+  }
+
   function titleScreen(files) {
     var html = document.documentElement;
     html.setAttribute('data-title', '');
@@ -1341,6 +1375,26 @@
     hint.className = 'shim-title-hint';
     var stamp = document.createElement('p');
     stamp.className = 'shim-title-stamp';
+    var record = document.createElement('p');
+    record.className = 'shim-title-record';
+    var recordText = savedRecord(appId());
+    record.hidden = !recordText;
+    record.appendChild(document.createTextNode(recordText + ' '));
+    // Forget clears the app's saves (a second click confirms), so it starts again from its bundled files.
+    var forget = document.createElement('button');
+    forget.type = 'button';
+    forget.className = 'shim-title-forget';
+    forget.textContent = 'Forget';
+    forget.addEventListener('click', function () {
+      if (!forget.classList.contains('confirm')) {
+        forget.classList.add('confirm');
+        forget.textContent = 'Really forget?';
+        return;
+      }
+      try { localStorage.removeItem('oldjava.saves.' + appId()); } catch (e) { /* nothing was kept */ }
+      record.hidden = true;
+    });
+    record.appendChild(forget);
     var play = document.createElement('button');
     play.type = 'button';
     play.className = 'shim-title-play';
@@ -1359,7 +1413,7 @@
     read.href = '#source';
     read.setAttribute('data-sound', 'none');
     read.textContent = 'Read the source';
-    [cat, name, hint, stamp, play, press, read].forEach(function (el) { text.appendChild(el); });
+    [cat, name, hint, stamp, record, play, press, read].forEach(function (el) { text.appendChild(el); });
     card.appendChild(art);
     card.appendChild(text);
     card.appendChild(meter);
@@ -1415,7 +1469,7 @@
       if (!started || screen.classList.contains('leaving')) return;
       if (e && e.type === 'keydown') {
         if (e.key === 'Tab' || e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
-        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source')) return;   // keys for those panels
+        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget')) return;   // keys for those panels
         e.preventDefault();
         e.stopPropagation();
         // Its release must not reach the app either: it never saw the press.
@@ -1434,7 +1488,7 @@
       start();
       setTimeout(function () { screen.remove(); }, 400);
     }
-    screen.addEventListener('click', function (e) { if (!e.target.closest('a')) go(e); });
+    screen.addEventListener('click', function (e) { if (!e.target.closest('a, .shim-title-forget')) go(e); });
 
     return {
       loaded: function (file) {

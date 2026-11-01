@@ -46,6 +46,14 @@ public final class MineTile extends JButton implements MouseListener {
       this.setText("b");
    }
 
+   /** Shows a mine as flagged once the game is won. */
+   void showFlag() {
+      this.mark = FLAG;
+      this.setFont(new Font("Times New Roman", 1, this.getHeight() / 2));
+      this.setBackground(this.flagColor);
+      this.setText("f");
+   }
+
    @Override
    public final void mouseClicked(MouseEvent event) {
       if (this.game.gameOver) {

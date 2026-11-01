@@ -1512,6 +1512,43 @@ canvas.paint.top {
   color: #16a34a;
 }
 
+.shim-title-record {
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px solid #f59e0b;
+  border-radius: 999px;
+  color: #d97706;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shim-title-record::before {
+  content: "\2605  ";
+}
+
+.shim-title-record[hidden] {
+  display: none;
+}
+
+.shim-title-forget {
+  margin-left: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-left: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.shim-title-forget:hover,
+.shim-title-forget.confirm {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 .shim-title-play {
   margin-top: 6px;
   padding: 10px 30px;
@@ -1749,6 +1786,12 @@ canvas.paint.top {
 :root[data-skin="arcade"] .shim-title-stamp.played {
   border-color: #39ff88;
   color: #39ff88;
+}
+
+:root[data-skin="arcade"] .shim-title-record {
+  border-color: #ffe14d;
+  color: #ffe14d;
+  text-shadow: 0 0 8px rgba(255, 225, 77, 0.7);
 }
 
 :root[data-skin="arcade"] .shim-title-play {

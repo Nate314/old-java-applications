@@ -1,5 +1,6 @@
 package minesweeper;
 
+import java.io.File;
 import java.util.List;
 import java.util.Random;
 
@@ -64,7 +65,41 @@ public class MineFieldCheck {
       revealed[0][1] = revealed[1][0] = revealed[1][1] = true;
       check(MineFieldGenerator.isWon(tiny, revealed), "not won with all safe cells revealed");
 
+      // Every level fits its mines around a safe first click.
+      for (Level level : Level.values()) {
+         String[][] board = new MineFieldGenerator(level.size, level.size, level.mines, 0, 0, new Random(1)).getGrid();
+         int count = 0;
+         for (String[] line : board) {
+            for (String value : line) {
+               count += "b".equals(value) ? 1 : 0;
+            }
+         }
+         check(count == level.mines, level + " has " + count + " mines");
+      }
+
+      checkBestTimes();
       System.out.println("MineFieldCheck passed");
+   }
+
+   /** Best times: only faster wins count, and the times and last level survive a reload of the file. */
+   private static void checkBestTimes() {
+      try {
+         File file = File.createTempFile("minesweeper-best", ".txt");
+         file.delete();
+         BestTimes times = BestTimes.load(file);
+         check(times.lastLevel() == Level.CLASSIC && times.best(Level.EXPERT) == 0, "fresh file");
+         check(times.record(Level.EXPERT, 90000), "first win is a record");
+         check(!times.record(Level.EXPERT, 95000), "slower win is not a record");
+         check(times.record(Level.EXPERT, 61234), "faster win is a record");
+         times.setLastLevel(Level.BEGINNER);
+         BestTimes reloaded = BestTimes.load(file);
+         check(reloaded.best(Level.EXPERT) == 61234 && reloaded.best(Level.CLASSIC) == 0, "times reloaded");
+         check(reloaded.lastLevel() == Level.BEGINNER, "level reloaded");
+         check(BestTimes.format(61234).equals("1:01.2") && BestTimes.format(9900).equals("0:09.9"), "format");
+         file.delete();
+      } catch (java.io.IOException e) {
+         throw new AssertionError(e);
+      }
    }
 
    private static void check(boolean condition, String message) {

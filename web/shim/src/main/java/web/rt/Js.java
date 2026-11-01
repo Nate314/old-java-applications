@@ -269,6 +269,37 @@ public final class Js {
     public static native String src(JSObject img);
 
 
+    // ---- saved files (see Saves) ----
+
+    @JSBody(script = "return document.body ? document.body.getAttribute('data-app') : null;")
+    public static native String appId();
+
+    @JSBody(script = "try { return !!window.localStorage; } catch (e) { return false; }")
+    public static native boolean storageAvailable();
+
+    @JSBody(params = "key", script =
+            "try { var _s = JSON.parse(localStorage.getItem(key) || '{}'); window.__shimSaves = _s; return Object.keys(_s); }"
+            + " catch (e) { window.__shimSaves = {}; return []; }")
+    public static native String[] savedPaths(String key);
+
+    @JSBody(params = { "key", "path" }, script = "var _v = (window.__shimSaves || {})[path]; return typeof _v === 'string' ? _v : null;")
+    public static native String savedData(String key, String path);
+
+    /** Replaces the app's saved files. A full localStorage logs an error and keeps the previous copy. */
+    @JSBody(params = { "key", "paths", "data" }, script =
+            "var _s = {}; for (var _i = 0; _i < paths.length; _i++) _s[paths[_i]] = data[_i];"
+            + "try { if (paths.length) localStorage.setItem(key, JSON.stringify(_s)); else localStorage.removeItem(key); }"
+            + " catch (e) { console.error('Could not keep the saved files: ' + e); }")
+    public static native void storeSaves(String key, String[] paths, String[] data);
+
+    @JSBody(params = { "ms", "cb" }, script = "setInterval(cb, ms);")
+    public static native void every(int ms, Callback cb);
+
+    @JSBody(params = "cb", script =
+            "window.addEventListener('pagehide', function () { cb(); });"
+            + "document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') cb(); });")
+    public static native void onPageHide(Callback cb);
+
     @JSBody(params = "o", script = "return o == null;")
     public static native boolean isNull(JSObject o);
 
