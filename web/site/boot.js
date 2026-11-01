@@ -1341,6 +1341,11 @@
         return names[kv[0]] + ' ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss, ' : ' losses, ') + n[2] + (n[2] === 1 ? ' draw' : ' draws');
       }).filter(Boolean);
       return rows.length ? 'Your record vs the computer: ' + rows.join('; ') : '';
+    } },
+    TankGame: { file: '.tankgame-record.txt', show: function (text) {
+      var n = text.trim().split(',').map(Number);
+      if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
+      return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
     } }
   };
 
