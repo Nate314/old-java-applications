@@ -1388,6 +1388,15 @@
       }).filter(Boolean);
       return rows.length ? 'Your songs: ' + rows.join(', ') : '';
     } },
+    RubiksCube2D: { file: '.rubikscube-levels.txt', show: function (text) {
+      var solved = 0, stars = 0;
+      text.split('\n').forEach(function (row) {
+        var kv = row.split('=');
+        var n = parseInt(kv[1], 10);
+        if (/^\d+$/.test(kv[0]) && n >= 1 && n <= 3) { solved++; stars += n; }
+      });
+      return solved ? 'Your levels: ' + solved + ' of 20 solved, ' + stars + ' of 60 stars' : '';
+    } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split(',').map(Number);
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
