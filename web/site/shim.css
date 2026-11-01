@@ -1806,3 +1806,419 @@ canvas.paint.top {
     animation: none;
   }
 }
+
+/* ---- source viewer (boot.js): the app's README and Java sources in a panel docked on the right ----
+   No scrim: the app keeps running, and stays playable, on the left. Above the toolbar (the panel has its
+   own close button). Under 900 px the panel takes the whole page. */
+
+.shim-toolbar .shim-source-open {
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-source-open span {
+    display: none;
+  }
+}
+
+.shim-title-source {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.shim-source {
+  --src-bg: #ffffff;
+  --src-text: #1f2937;
+  --src-gutter: #94a3b8;
+  --src-line: rgba(37, 99, 235, 0.12);
+  --src-k: #7c3aed;
+  --src-s: #047857;
+  --src-c: #6b7280;
+  --src-n: #b45309;
+  --src-t: #0e7490;
+  --src-a: #9d174d;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000000002;
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 58vw);
+  box-sizing: border-box;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  border-left: 1px solid var(--card-border);
+  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.28);
+  animation: shim-slide-in 0.18s ease-out;
+}
+
+@media (max-width: 900px) {
+  .shim-source {
+    left: 0;
+    width: auto;
+    border-left: 0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="modern"] .shim-source {
+    --src-bg: #0b1220;
+    --src-text: #e5e7eb;
+    --src-gutter: #475569;
+    --src-line: rgba(96, 165, 250, 0.16);
+    --src-k: #c084fc;
+    --src-s: #86efac;
+    --src-c: #94a3b8;
+    --src-n: #fbbf24;
+    --src-t: #67e8f9;
+    --src-a: #f9a8d4;
+  }
+}
+
+.shim-source-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 4px 16px;
+}
+
+.shim-source-title {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.shim-source-title strong {
+  font-size: 17px;
+}
+
+.shim-source-origin {
+  padding: 1px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shim-source-origin[hidden] {
+  display: none;
+}
+
+.shim-source-origin.original {
+  color: #16a34a;
+}
+
+.shim-source-raw {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.shim-source-sub {
+  margin: 0;
+  padding: 0 16px 10px;
+  font-size: 12.5px;
+  opacity: 0.75;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shim-source-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.shim-source-files {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  width: 250px;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  border-right: 1px solid var(--card-border);
+}
+
+.shim-source-files .dir {
+  margin: 8px 6px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  overflow-wrap: anywhere;
+}
+
+.shim-source-files button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: 13px/1.3 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.shim-source-files button:hover {
+  background: var(--card-border);
+}
+
+.shim-source-files button[aria-current="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.shim-source-view {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--src-bg);
+  color: var(--src-text);
+  outline: none;
+}
+
+.shim-source-path {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  padding: 6px 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  border-bottom: 1px solid var(--card-border);
+  font: 12px ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+}
+
+.shim-source-code {
+  display: table;
+  min-width: 100%;
+  padding: 8px 0 24px;
+  font: 12.5px/1.55 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.shim-source-code .l {
+  display: table-row;
+}
+
+.shim-source-code .l.on {
+  background: var(--src-line);
+}
+
+.shim-source-code .t {
+  display: table-cell;
+  padding-right: 16px;
+}
+
+.shim-source-code .n {
+  display: table-cell;
+  width: 1%;
+  padding: 0 14px 0 12px;
+  color: var(--src-gutter);
+  text-align: right;
+  user-select: none;
+  cursor: pointer;
+}
+
+.shim-source-code .n:hover {
+  color: var(--src-text);
+}
+
+.shim-source-code .l.on .n {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tk-k { color: var(--src-k); font-weight: 600; }
+.tk-s { color: var(--src-s); }
+.tk-c { color: var(--src-c); font-style: italic; }
+.tk-n { color: var(--src-n); }
+.tk-t { color: var(--src-t); }
+.tk-a { color: var(--src-a); }
+
+a.tk-t {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+a.tk-t:hover {
+  text-decoration-style: solid;
+}
+
+.shim-source-md {
+  max-width: 72ch;
+  padding: 6px 22px 28px;
+}
+
+.shim-source-md h2 { font-size: 22px; margin: 14px 0 8px; }
+.shim-source-md h3 { font-size: 16px; margin: 20px 0 6px; }
+.shim-source-md p,
+.shim-source-md ul { margin: 0 0 10px; }
+.shim-source-md ul { padding-left: 22px; }
+.shim-source-md li { margin: 3px 0; }
+.shim-source-md li > ul { margin: 3px 0 0; }
+
+.shim-source-md code,
+.shim-source-md a.file,
+.shim-source-md pre {
+  font: 0.9em ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+}
+
+.shim-source-md code,
+.shim-source-md a.file {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--src-line);
+  overflow-wrap: anywhere;
+}
+
+.shim-source-md a.file {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.shim-source-md pre {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--src-line);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* Narrow pages: the file list becomes a strip of tabs above the code. */
+@media (max-width: 640px) {
+  .shim-source-body {
+    flex-direction: column;
+  }
+
+  .shim-source-files {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+    padding: 6px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .shim-source-files .dir {
+    display: none;
+  }
+
+  .shim-source-files button {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .shim-source-md {
+    padding: 4px 16px 24px;
+  }
+}
+
+/* Classic: Metal chrome, and Eclipse's own Java colors (the original sources are Eclipse projects). */
+:root[data-skin="classic"] .shim-source {
+  --src-bg: #ffffff;
+  --src-text: #000000;
+  --src-gutter: #787878;
+  --src-line: #e8f2fe;
+  --src-k: #7f0055;
+  --src-s: #2a00ff;
+  --src-c: #3f7f5f;
+  --src-n: #000000;
+  --src-t: #000000;
+  --src-a: #646464;
+  border-left: 1px solid #7a8a99;
+  box-shadow: -2px 0 6px rgba(0, 0, 0, 0.35);
+  font-family: Dialog, Tahoma, "Segoe UI", sans-serif;
+}
+
+:root[data-skin="classic"] .shim-source-head {
+  padding-bottom: 8px;
+  background: linear-gradient(#dde8f3, #b8cfe5);
+  border-bottom: 1px solid #8da5c9;
+}
+
+:root[data-skin="classic"] .shim-source-sub {
+  padding-top: 6px;
+}
+
+:root[data-skin="classic"] .shim-source-files {
+  background: #eeeeee;
+}
+
+:root[data-skin="classic"] .shim-source-files button {
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-source-files button[aria-current="true"] {
+  background: #b8cfe5;
+  color: #000;
+  outline: 1px solid #6382bf;
+}
+
+:root[data-skin="classic"] .shim-source-code .n {
+  background: #f0f0f0;
+  border-right: 1px solid #d0d0d0;
+}
+
+:root[data-skin="classic"] .tk-c {
+  font-style: normal;
+}
+
+/* Arcade: a phosphor terminal in a neon frame. */
+:root[data-skin="arcade"] .shim-source {
+  --src-bg: #020a06;
+  --src-text: #39ff88;
+  --src-gutter: #1f6f4a;
+  --src-line: rgba(255, 43, 214, 0.16);
+  --src-k: #ff2bd6;
+  --src-s: #7df9ff;
+  --src-c: #1f8f5a;
+  --src-n: #ffe66d;
+  --src-t: #ece9ff;
+  --src-a: #ffa4f0;
+  border-left: 1px solid #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.55), -8px 0 32px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-source-title strong {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-source-origin.original {
+  color: #39ff88;
+}
+
+:root[data-skin="arcade"] .shim-source-view {
+  text-shadow: 0 0 4px rgba(57, 255, 136, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-source-view .tk-k {
+  text-shadow: 0 0 6px rgba(255, 43, 214, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-source-path {
+  text-shadow: none;
+}
+
+:root[data-skin="arcade"] .shim-source-files button[aria-current="true"] {
+  background: transparent;
+  color: #7df9ff;
+  box-shadow: inset 0 0 0 1px #00e5ff, 0 0 10px rgba(0, 229, 255, 0.45);
+}

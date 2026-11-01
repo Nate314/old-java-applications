@@ -102,6 +102,55 @@
           </execution>
         </executions>
       </plugin>
+      <!-- The source viewer (boot.js): each app page gets its README and Java sources under source/, with
+           source/files.txt listing them. NathaNOS's page is built by the nathanos module, but its sources are
+           copied here with the others. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>app-sources-for-viewer</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <property name="repo" location="${repo.dir}"/>
+                <macrodef name="appsource">
+                  <attribute name="app"/>
+                  <sequential>
+                    <copy todir="${site.dir}/@{app}/source">
+                      <fileset dir="${repo}/@{app}" includes="README.md src/**/*.java"/>
+                    </copy>
+                    <pathconvert property="source.@{app}" pathsep="${line.separator}" dirsep="/">
+                      <fileset dir="${repo}/@{app}" includes="README.md src/**/*.java"/>
+                      <globmapper from="${repo}/@{app}/*" to="*" handledirsep="true"/>
+                    </pathconvert>
+                    <echo file="${site.dir}/@{app}/source/files.txt" message="${source.@{app}}${line.separator}"/>
+                  </sequential>
+                </macrodef>
+                <appsource app="CircleSpawner"/>
+                <appsource app="Clock"/>
+                <appsource app="FlappyBird"/>
+                <appsource app="Minesweeper"/>
+                <appsource app="NathaNOS"/>
+                <appsource app="RubiksCube2D"/>
+                <appsource app="ScreenSaver"/>
+                <appsource app="SpriteFloatyStars"/>
+                <appsource app="StockChecker"/>
+                <appsource app="SynthesizerKeyboard"/>
+                <appsource app="UltimateTicTacToe"/>
+                <appsource app="GroupCreator"/>
+                <appsource app="MusicTheoryExpert"/>
+                <appsource app="NumberGuess"/>
+                <appsource app="SimpleAlgorithms"/>
+                <appsource app="TankGame"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.teavm</groupId>
         <artifactId>teavm-maven-plugin</artifactId>

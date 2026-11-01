@@ -102,6 +102,13 @@
       switcher.textContent = 'Switch app';
       switcher.addEventListener('click', function () { openDrawer(switcher); });
       bar.appendChild(switcher);
+      var source = document.createElement('a');
+      source.href = '#source';
+      source.className = 'shim-source-open';
+      source.title = 'Read the Java source of this app while it runs';
+      source.setAttribute('data-sound', 'none');   // the panel plays its own open sound
+      source.innerHTML = '&lt;/&gt;<span> Source</span>';
+      bar.appendChild(source);
       var controls = null;
       if (pad.has(appId())) {
         controls = document.createElement('button');
@@ -305,7 +312,7 @@
   // An app page is stamped by the first click or key press in the app itself (not in the site's own panels),
   // so the home page's player does not stamp Minesweeper just by loading it. A console program
   // (<body data-console>) has nothing to press: running it counts.
-  var CHROME = '.shim-toolbar, .shim-drawer, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast, .shim-pad, .shim-title';
+  var CHROME = '.shim-toolbar, .shim-drawer, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast, .shim-pad, .shim-title, .shim-source';
   function stampOnPlay() {
     var id = appId();
     if (document.body.hasAttribute('data-console')) { passport.stamp(id); return; }
@@ -523,6 +530,7 @@
           return {
             id: li.getAttribute('data-app'),
             cat: li.getAttribute('data-cat'),
+            origin: li.getAttribute('data-origin') || 'decompiled',
             name: li.querySelector('strong').textContent,
             hint: li.querySelector('span').textContent,
             shot: root() + li.querySelector('img').getAttribute('src')
@@ -684,6 +692,366 @@
     });
   }
 
+  // ---- source viewer ----
+  // The Java this page runs, next to it: Source (toolbar or title screen) docks a panel on the right with the
+  // app's README and every source file it was compiled from (copied into <App>/source/ by the build, listed
+  // in source/files.txt), highlighted, with line numbers. The app keeps running beside it. Class names that
+  // are files of the app, and file paths in the README, open those files. The address follows the open file
+  // and line (#source:src/minesweeper/GameFrame.java:42), so a link opens the same place.
+  var JAVA_KEYWORDS = ('abstract assert boolean break byte case catch char class const continue default do double ' +
+    'else enum extends final finally float for goto if implements import instanceof int interface long native new ' +
+    'package private protected public return short static strictfp super switch synchronized this throw throws ' +
+    'transient try void volatile while true false null var').split(' ');
+  var JAVA_TOKEN = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|(@[A-Za-z_]\w*)|(\b0[xX][0-9a-fA-F_]+[lL]?\b|\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[lLfFdD]?\b)|([A-Za-z_$][\w$]*)/g;
+  var sourcePanel = null;
+  var sourceList = null;
+
+  function sourceFiles() {
+    if (!sourceList) {
+      sourceList = fetch('source/files.txt').then(function (r) {
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.text();
+      }).then(function (text) {
+        return text.split(/\r?\n/).filter(Boolean).sort(function (a, b) {
+          return (a === 'README.md' ? -1 : b === 'README.md' ? 1 : 0) || (a < b ? -1 : a > b ? 1 : 0);
+        });
+      });
+      sourceList.catch(function () { sourceList = null; });
+    }
+    return sourceList;
+  }
+
+  // Tokens as [class, text]; class '' is plain text.
+  function javaTokens(text) {
+    var out = [];
+    var last = 0;
+    var m;
+    JAVA_TOKEN.lastIndex = 0;
+    while ((m = JAVA_TOKEN.exec(text))) {
+      if (m.index > last) out.push(['', text.slice(last, m.index)]);
+      var cls = m[1] ? 'c' : m[2] ? 's' : m[3] ? 'a' : m[4] ? 'n'
+        : JAVA_KEYWORDS.indexOf(m[5]) >= 0 ? 'k' : /^[A-Z]/.test(m[5]) ? 't' : '';
+      out.push([cls, m[0]]);
+      last = JAVA_TOKEN.lastIndex;
+    }
+    if (last < text.length) out.push(['', text.slice(last)]);
+    return out;
+  }
+
+  // One element per line, with its number (tokens that span lines, like block comments, are split).
+  // A class name that is a file of the app links to it.
+  function codeLines(text, linkFor) {
+    var code = document.createElement('div');
+    code.className = 'shim-source-code';
+    var row = null;   // the current line's text cell
+    var n = 0;
+    function newLine() {
+      var line = document.createElement('div');
+      line.className = 'l';
+      line.id = 'L' + (++n);
+      var num = document.createElement('span');
+      num.className = 'n';
+      num.textContent = n;
+      row = document.createElement('span');
+      row.className = 't';
+      line.appendChild(num);
+      line.appendChild(row);
+      code.appendChild(line);
+    }
+    newLine();
+    javaTokens(text.replace(/\r\n?/g, '\n').replace(/\n$/, '')).forEach(function (t) {
+      t[1].split('\n').forEach(function (part, i) {
+        if (i) newLine();
+        if (!part) return;
+        var target = t[0] === 't' && linkFor(part);
+        if (!t[0]) { row.appendChild(document.createTextNode(part)); return; }
+        var el = document.createElement(target ? 'a' : 'span');
+        if (target) {
+          el.href = '#source:' + target;
+          el.setAttribute('data-file', target);
+          el.title = 'Open ' + target;
+        }
+        el.className = 'tk-' + t[0];
+        el.textContent = part;
+        row.appendChild(el);
+      });
+    });
+    return { el: code, lines: n };
+  }
+
+  // The app READMEs use headings, paragraphs, two levels of lists, code fences, **bold** and `code`.
+  // A `code` span naming one of the app's files opens it.
+  function markdown(text, files) {
+    var root = document.createElement('div');
+    root.className = 'shim-source-md';
+    function inline(el, s) {
+      s.split(/(`[^`]+`|\*\*[^*]+\*\*)/).forEach(function (part) {
+        if (!part) return;
+        var node;
+        if (part[0] === '`') {
+          var path = part.slice(1, -1);
+          var isFile = files.indexOf(path) >= 0;
+          node = document.createElement(isFile ? 'a' : 'code');
+          if (isFile) {
+            node.href = '#source:' + path;
+            node.setAttribute('data-file', path);
+            node.className = 'file';
+          }
+          node.textContent = path;
+        } else if (part.slice(0, 2) === '**') {
+          node = document.createElement('strong');
+          node.textContent = part.slice(2, -2);
+        } else {
+          node = document.createTextNode(part);
+        }
+        el.appendChild(node);
+      });
+    }
+    var lines = text.replace(/\r\n?/g, '\n').split('\n');
+    var para = null;
+    var lists = [];   // the open <ul> elements, one per indent level
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var m;
+      if (/^```/.test(line)) {
+        var pre = document.createElement('pre');
+        var body = [];
+        while (++i < lines.length && !/^```/.test(lines[i])) body.push(lines[i]);
+        pre.textContent = body.join('\n');
+        root.appendChild(pre);
+        para = null; lists = [];
+      } else if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) {
+        var h = document.createElement('h' + (m[1].length + 1));
+        inline(h, m[2]);
+        root.appendChild(h);
+        para = null; lists = [];
+      } else if ((m = /^(\s*)- (.*)$/.exec(line))) {
+        var depth = Math.min(m[1].length >> 1, lists.length);
+        lists.length = Math.min(lists.length, depth + 1);
+        if (lists.length === depth) {
+          var ul = document.createElement('ul');
+          (depth ? lists[depth - 1].lastChild : root).appendChild(ul);
+          lists.push(ul);
+        }
+        var li = document.createElement('li');
+        inline(li, m[2]);
+        lists[depth].appendChild(li);
+        para = null;
+      } else if (!line.trim()) {
+        para = null; lists = [];
+      } else if (lists.length) {
+        inline(lists[lists.length - 1].lastChild, ' ' + line.trim());
+      } else {
+        if (!para) { para = document.createElement('p'); root.appendChild(para); } else para.appendChild(document.createTextNode(' '));
+        inline(para, line);
+      }
+    }
+    return root;
+  }
+
+  function parseSourceHash() {
+    var m = /^#source(?::(.+?))?(?::(\d+))?$/.exec(decodeURIComponent(location.hash));
+    return m ? { file: m[1] || null, line: m[2] ? +m[2] : 0 } : null;
+  }
+
+  function sourceFromHash() {
+    var want = parseSourceHash();
+    if (want) openSource(want.file, want.line);
+  }
+  window.addEventListener('hashchange', function () {
+    if (document.body.hasAttribute('data-app') && !embedded) sourceFromHash();
+  });
+
+  function openSource(file, line) {
+    if (sourcePanel) { sourcePanel.show(file, line); return; }
+    var opener = document.activeElement;
+    var panel = document.createElement('aside');
+    panel.className = 'shim-source';
+    panel.setAttribute('aria-label', 'Source code');
+    var head = document.createElement('div');
+    head.className = 'shim-source-head';
+    var title = document.createElement('div');
+    title.className = 'shim-source-title';
+    var name = document.createElement('strong');
+    name.textContent = document.title;
+    var origin = document.createElement('span');
+    origin.className = 'shim-source-origin';
+    origin.hidden = true;
+    title.appendChild(name);
+    title.appendChild(origin);
+    var raw = document.createElement('a');
+    raw.className = 'shim-source-raw';
+    raw.target = '_blank';
+    raw.rel = 'noopener';
+    raw.textContent = 'Raw';
+    var sub = document.createElement('p');
+    sub.className = 'shim-source-sub';
+    sub.textContent = 'Loading the source…';
+    var body = document.createElement('div');
+    body.className = 'shim-source-body';
+    var nav = document.createElement('nav');
+    nav.className = 'shim-source-files';
+    nav.setAttribute('aria-label', 'Files');
+    var view = document.createElement('div');
+    view.className = 'shim-source-view';
+    view.tabIndex = -1;
+    var path = document.createElement('div');
+    path.className = 'shim-source-path';
+    var page = document.createElement('div');
+    page.className = 'shim-source-page';
+    view.appendChild(path);
+    view.appendChild(page);
+    body.appendChild(nav);
+    body.appendChild(view);
+
+    function shut() {
+      playSound('close');
+      panel.remove();
+      document.documentElement.removeAttribute('data-source');
+      sourcePanel = null;
+      history.replaceState(null, '', location.pathname + location.search);
+      if (opener && opener.focus && document.contains(opener)) opener.focus();
+    }
+    head.appendChild(title);
+    head.appendChild(raw);
+    head.appendChild(closeButton(shut));
+    panel.appendChild(head);
+    panel.appendChild(sub);
+    panel.appendChild(body);
+    ownKeys(panel, shut);
+    document.body.appendChild(panel);
+    document.documentElement.setAttribute('data-source', '');
+    playSound('open');
+
+    var files = [];
+    var texts = {};
+    var current = null;
+    function text(f) {
+      if (!texts[f]) {
+        texts[f] = fetch('source/' + f).then(function (r) {
+          if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+          return r.text();
+        });
+        texts[f].catch(function () { delete texts[f]; });
+      }
+      return texts[f];
+    }
+    // A class name in a file: the file of that class, preferring one in the same folder.
+    function linkFor(from) {
+      var dir = from.slice(0, from.lastIndexOf('/') + 1);
+      return function (word) {
+        var near = dir + word + '.java';
+        if (files.indexOf(near) >= 0) return near === from ? null : near;
+        for (var i = 0; i < files.length; i++) {
+          if (files[i].slice(files[i].lastIndexOf('/') + 1) === word + '.java') return files[i];
+        }
+        return null;
+      };
+    }
+    function mark(line) {
+      var old = page.querySelector('.l.on');
+      if (old) old.classList.remove('on');
+      var row = line && page.querySelector('#L' + line);
+      if (row) {
+        row.classList.add('on');
+        row.scrollIntoView({ block: 'center' });
+      }
+    }
+    function address(f, line) {
+      history.replaceState(null, '', location.pathname + location.search + '#source:' + f + (line ? ':' + line : ''));
+    }
+    function show(f, line) {
+      if (!files.length) return;
+      if (files.indexOf(f) < 0) f = files[0];
+      Array.prototype.forEach.call(nav.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-current', String(b.getAttribute('data-file') === f));
+      });
+      var tab = nav.querySelector('button[aria-current="true"]');
+      if (tab) nav.scrollTo({ left: tab.offsetLeft - nav.offsetLeft - 8, top: tab.offsetTop - nav.offsetTop - 40 });
+      raw.href = 'source/' + f;
+      address(f, line);
+      if (current === f) { mark(line); return; }
+      current = f;
+      path.textContent = f;
+      page.textContent = '';
+      text(f).then(function (t) {
+        if (current !== f) return;
+        if (/\.md$/.test(f)) {
+          page.appendChild(markdown(t, files));
+        } else {
+          var code = codeLines(t, linkFor(f));
+          page.appendChild(code.el);
+          path.textContent = f + ' · ' + code.lines + ' lines';
+        }
+        view.scrollTop = 0;
+        mark(line);
+      }, function (e) {
+        if (current !== f) return;
+        page.textContent = 'Could not load ' + f + ' (' + e.message + ').';
+        current = null;
+      });
+    }
+    panel.addEventListener('click', function (e) {
+      var link = e.target.closest('[data-file]');
+      if (link) {
+        if (e.button || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        e.preventDefault();
+        show(link.getAttribute('data-file'), 0);
+        if (link.tagName === 'A') view.focus({ preventScroll: true });
+        return;
+      }
+      var num = e.target.closest('.shim-source-code .n');
+      if (num) {
+        var n = +num.textContent;
+        mark(n);
+        address(current, n);
+      }
+    });
+    sourcePanel = { show: show };
+
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, appId())];
+      if (!app) return;
+      name.textContent = app.name;
+      var original = app.origin === 'original';
+      origin.textContent = original ? 'Original source' : 'Decompiled';
+      origin.title = original ? 'The author’s own Eclipse source' : 'Recovered by decompiling the app’s jar';
+      origin.classList.add(original ? 'original' : 'decompiled');
+      origin.hidden = false;
+    });
+    sourceFiles().then(function (list) {
+      files = list;
+      var java = files.filter(function (f) { return /\.java$/.test(f); });
+      var dir = '';
+      files.forEach(function (f) {
+        var folder = f.indexOf('/') >= 0 ? f.slice(0, f.lastIndexOf('/')).replace(/^src\/?/, '') : '';
+        if (folder && folder !== dir) {
+          var label = document.createElement('span');
+          label.className = 'dir';
+          label.textContent = folder.replace(/\//g, '.');
+          nav.appendChild(label);
+        }
+        dir = folder;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('data-file', f);
+        b.setAttribute('data-sound', 'none');
+        b.title = f;
+        b.textContent = f.slice(f.lastIndexOf('/') + 1);
+        nav.appendChild(b);
+      });
+      Promise.all(java.map(text)).then(function (all) {
+        var count = all.reduce(function (sum, t) { return sum + t.replace(/\r?\n$/, '').split('\n').length; }, 0);
+        sub.textContent = java.length + ' Java file' + (java.length === 1 ? '' : 's') + ', ' + count +
+          ' lines. This is the code running on this page: TeaVM compiled it to JavaScript.';
+      }, function () { sub.textContent = 'The Java this page was compiled from.'; });
+      show(file, line);
+      view.focus({ preventScroll: true });
+    }, function (e) {
+      sub.textContent = 'Could not load the source list (' + e.message + '). Build the site with Maven (see web/README.md), or go online.';
+    });
+  }
+
   // The app's hint from the gallery, top right under the toolbar, until it is closed or 12 seconds pass.
   function howToPlay() {
     catalog().then(function (apps) {
@@ -794,7 +1162,12 @@
     var log = document.createElement('pre');
     log.className = 'shim-title-log';
     log.setAttribute('aria-hidden', 'true');
-    [cat, name, hint, stamp, play, press].forEach(function (el) { text.appendChild(el); });
+    var read = document.createElement('a');
+    read.className = 'shim-title-source';
+    read.href = '#source';
+    read.setAttribute('data-sound', 'none');
+    read.textContent = 'Read the source';
+    [cat, name, hint, stamp, play, press, read].forEach(function (el) { text.appendChild(el); });
     card.appendChild(art);
     card.appendChild(text);
     card.appendChild(meter);
@@ -842,7 +1215,7 @@
       if (!started || screen.classList.contains('leaving')) return;
       if (e && e.type === 'keydown') {
         if (e.key === 'Tab' || e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
-        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer')) return;   // keys for those panels
+        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer, .shim-source')) return;   // keys for those panels
         e.preventDefault();
         e.stopPropagation();
         // Its release must not reach the app either: it never saw the press.
@@ -876,7 +1249,7 @@
         screen.classList.add('ready');
         play.disabled = false;
         play.textContent = '▶ Play';
-        play.focus({ preventScroll: true });
+        if (!sourcePanel) play.focus({ preventScroll: true });   // keep the keyboard in an open source panel
         document.addEventListener('keydown', go, true);
       }
     };
@@ -1188,6 +1561,7 @@
     // shows only its own stamp; the home page shows any.
     if (!embedded) passport.onChange(function (id) { if (id && (!isApp || id === appId())) stampToast(id); });
     if (!isApp) return;
+    if (!embedded) sourceFromHash();
 
     var desktop = document.createElement('div');
     desktop.id = 'desktop';
