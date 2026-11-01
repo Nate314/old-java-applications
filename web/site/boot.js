@@ -8,6 +8,9 @@
  * - On an app page: preloads the files listed in <body data-files>, then calls the TeaVM main().
  * - Provides window.__shimSynth, the Web Audio voices behind javax.sound.midi.
  * - Routes System.out to the console by line, and on pages with <body data-console> also to an output panel.
+ * - Keeps visitors moving between apps: an app page's toolbar has a Switch app drawer and a Next link, a
+ *   How to play card shows the app's hint, and when the app exits the Run again box suggests three apps to
+ *   play next. The list of apps is read from the home page's gallery (../index.html), so it lives in one place.
  */
 (function () {
   'use strict';
@@ -46,6 +49,23 @@
       back.href = '../index.html';
       back.textContent = 'All apps';
       bar.appendChild(back);
+      var switcher = document.createElement('button');
+      switcher.type = 'button';
+      switcher.textContent = 'Switch app';
+      switcher.addEventListener('click', function () { openDrawer(switcher); });
+      bar.appendChild(switcher);
+      var next = document.createElement('a');
+      next.className = 'shim-next';
+      next.hidden = true;
+      bar.appendChild(next);
+      catalog().then(function (apps) {
+        var i = indexOf(apps, appId());
+        if (i < 0) return;
+        var n = apps[(i + 1) % apps.length];
+        next.href = pageOf(n);
+        next.textContent = 'Next: ' + n.name + ' \u203a';
+        next.hidden = false;
+      });
     }
     var label = document.createElement('label');
     label.textContent = 'Skin ';
@@ -83,6 +103,207 @@
       var dy = Math.max(-y0, (desktop.clientHeight - (y1 - y0)) / 2 - y0);
       desktop.style.transform = 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)';
     }, 250);
+  }
+
+  // ---- app catalog and the ways to the next app ----
+  // The home page's gallery is the one list of apps (name, hint, category, thumbnail), in gallery order.
+  var catalogPromise = null;
+  function catalog() {
+    if (!catalogPromise) {
+      catalogPromise = fetch('../index.html').then(function (r) {
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.text();
+      }).then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        return Array.prototype.map.call(doc.querySelectorAll('#apps li[data-app]'), function (li) {
+          return {
+            id: li.getAttribute('data-app'),
+            cat: li.getAttribute('data-cat'),
+            name: li.querySelector('strong').textContent,
+            hint: li.querySelector('span').textContent,
+            shot: '../' + li.querySelector('img').getAttribute('src')
+          };
+        });
+      }).catch(function (e) {
+        console.warn('Could not read the app list from ../index.html: ' + e.message);
+        return [];
+      });
+    }
+    return catalogPromise;
+  }
+
+  function appId() { return document.body.getAttribute('data-app'); }
+
+  function indexOf(apps, id) {
+    for (var i = 0; i < apps.length; i++) if (apps[i].id === id) return i;
+    return -1;
+  }
+
+  function pageOf(app) { return '../' + app.id + '/index.html' + (embedded ? '?embed' : ''); }
+
+  // Three apps to try after this one: others of the same category first, each group shuffled.
+  function picks(apps, id) {
+    var self = apps[indexOf(apps, id)];
+    function shuffled(list) {
+      for (var i = list.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = list[i]; list[i] = list[j]; list[j] = t;
+      }
+      return list;
+    }
+    var others = apps.filter(function (a) { return a.id !== id; });
+    var same = others.filter(function (a) { return self && a.cat === self.cat; });
+    var rest = others.filter(function (a) { return !self || a.cat !== self.cat; });
+    return shuffled(same).concat(shuffled(rest)).slice(0, 3);
+  }
+
+  function closeButton(onClick) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'shim-close';
+    b.setAttribute('aria-label', 'Close');
+    b.textContent = '\u00d7';
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // A link to an app's page. In the home page's player it asks the page to swap the app in instead,
+  // so the player's title, rail and address stay in step.
+  function appCard(app, current) {
+    var a = document.createElement('a');
+    a.className = 'shim-app' + (current ? ' current' : '');
+    a.href = pageOf(app);
+    if (current) a.setAttribute('aria-current', 'page');
+    var pic = document.createElement('span');
+    pic.className = 'shim-app-pic';
+    var img = document.createElement('img');
+    img.src = app.shot;
+    img.alt = '';
+    pic.appendChild(img);
+    var text = document.createElement('span');
+    text.className = 'shim-app-text';
+    var name = document.createElement('strong');
+    name.textContent = app.name;
+    var hint = document.createElement('span');
+    hint.textContent = current ? 'Now playing' : app.hint;
+    text.appendChild(name);
+    text.appendChild(hint);
+    a.appendChild(pic);
+    a.appendChild(text);
+    if (embedded && window.parent !== window) {
+      a.addEventListener('click', function (e) {
+        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        window.parent.postMessage({ oldjavaPlay: app.id }, location.origin);
+      });
+    }
+    return a;
+  }
+
+  // Keys typed in the page chrome must not reach the app (the shim listens on the document).
+  function ownKeys(el, onEscape) {
+    el.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Escape' && onEscape) onEscape();
+    });
+    el.addEventListener('keyup', function (e) { e.stopPropagation(); });
+  }
+
+  // Switch app: every app in gallery order, in a panel on the right.
+  var drawer = null;
+  function openDrawer(opener) {
+    if (drawer) return;
+    var scrim = document.createElement('div');
+    scrim.className = 'shim-scrim';
+    var panel = document.createElement('aside');
+    panel.className = 'shim-drawer';
+    panel.setAttribute('aria-label', 'Switch app');
+    var head = document.createElement('div');
+    head.className = 'shim-drawer-head';
+    var title = document.createElement('strong');
+    title.textContent = 'Switch app';
+    var list = document.createElement('div');
+    list.className = 'shim-drawer-list';
+    function shut() {
+      scrim.remove();
+      panel.remove();
+      drawer = null;
+      opener.focus();
+    }
+    var close = closeButton(shut);
+    head.appendChild(title);
+    head.appendChild(close);
+    panel.appendChild(head);
+    panel.appendChild(list);
+    scrim.addEventListener('click', shut);
+    ownKeys(panel, shut);
+    document.body.appendChild(scrim);
+    document.body.appendChild(panel);
+    drawer = panel;
+    catalog().then(function (apps) {
+      apps.forEach(function (app) { list.appendChild(appCard(app, app.id === appId())); });
+      var here = list.querySelector('.current');
+      if (here) here.scrollIntoView({ block: 'nearest' });
+      (list.querySelector('.shim-app:not(.current)') || close).focus();
+    });
+  }
+
+  // The app's hint from the gallery, top right under the toolbar, until it is closed or 12 seconds pass.
+  function howToPlay() {
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, appId())];
+      if (!app) return;
+      var card = document.createElement('div');
+      card.className = 'shim-hint';
+      card.setAttribute('role', 'status');
+      var title = document.createElement('strong');
+      title.textContent = 'How to play ' + app.name;
+      var text = document.createElement('p');
+      text.textContent = app.hint;
+      card.appendChild(closeButton(function () { card.remove(); }));
+      card.appendChild(title);
+      card.appendChild(text);
+      ownKeys(card);
+      document.body.appendChild(card);
+      setTimeout(function () {
+        card.classList.add('gone');
+        setTimeout(function () { card.remove(); }, 600);
+      }, 12000);
+    });
+  }
+
+  // The app called System.exit (for most apps: its window was closed). Offer it again, and three others.
+  function exitScreen(msg) {
+    var hint = document.querySelector('.shim-hint');
+    if (hint) hint.remove();
+    var box = overlay(msg, 'Run again').firstChild;
+    box.classList.add('shim-exit');
+    ownKeys(box);
+    if (!embedded) {
+      var home = document.createElement('a');
+      home.className = 'shim-exit-home';
+      home.href = '../index.html';
+      home.textContent = 'All apps';
+      box.appendChild(home);
+    }
+    box.querySelector('button').focus();
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, appId())];
+      if (app) {
+        var h = document.createElement('h2');
+        h.textContent = app.name + ' has closed';
+        box.insertBefore(h, box.firstChild);
+      }
+      var next = picks(apps, appId());
+      if (!next.length) return;
+      var h3 = document.createElement('h3');
+      h3.textContent = 'Play something else';
+      var row = document.createElement('div');
+      row.className = 'shim-picks';
+      next.forEach(function (a) { row.appendChild(appCard(a, false)); });
+      box.appendChild(h3);
+      box.appendChild(row);
+    });
   }
 
   function overlay(text, button) {
@@ -224,7 +445,8 @@
     var files = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
     var args = (body.getAttribute('data-args') || '').split(/\s+/).filter(Boolean);
     var loading = files.length ? overlay('Loading...') : null;
-    window.__shimExited = function (msg) { overlay(msg, 'Run again'); };
+    var extras = !document.documentElement.hasAttribute('data-shot');
+    window.__shimExited = function (msg) { if (extras) exitScreen(msg); else overlay(msg, 'Run again'); };
 
     Promise.all(files.map(preload)).then(function () {
       if (loading) loading.remove();
@@ -233,6 +455,7 @@
         return;
       }
       main(args);
+      if (extras && !embedded) howToPlay();
     });
   });
 })();

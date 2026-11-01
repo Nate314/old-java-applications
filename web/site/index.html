@@ -303,6 +303,13 @@
       });
     });
 
+    // An app's exit screen in the player suggests other apps; picking one asks this page to swap it in.
+    window.addEventListener('message', function (e) {
+      if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data) return;
+      var li = card(e.data.oldjavaPlay);
+      if (li) choose(li);
+    });
+
     window.addEventListener('resize', fit);
     var start = card(decodeURIComponent(location.hash.slice(1)));
     if (start) play(start, false);
