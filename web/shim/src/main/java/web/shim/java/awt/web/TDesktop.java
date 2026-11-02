@@ -90,7 +90,8 @@ public final class TDesktop {
                 Js.setAttr(element, "id", "desktop");
                 Js.append(Js.body(), element);
             }
-            installListeners();
+            installListeners(Js.document());
+            Js.exportListen(TDesktop::installListeners);
         }
         return element;
     }
@@ -179,8 +180,7 @@ public final class TDesktop {
 
     // ---- input ----
 
-    private static void installListeners() {
-        JSObject doc = Js.document();
+    private static void installListeners(JSObject doc) {
         // The mouse arrives as mouse events. A browser also turns a tap into mouse events after the touch ones, so
         // those are ignored for a moment after a touch: fingers and pens arrive as pointer events (see onTouch*).
         Js.listen(doc, "mousedown", e -> {

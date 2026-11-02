@@ -99,21 +99,21 @@ public final class Js {
             + " addEventListener('keydown', function () { window.__shimKeyed.on = true; }, true);"
             + " addEventListener('pointerdown', function () { window.__shimKeyed.on = false; }, true); }"
             + " if (el.matches('button, input, select, textarea')) {"
-            + " if (document.activeElement !== el && el.isConnected)"
+            + " if (el.ownerDocument.activeElement !== el && el.isConnected)"
             + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
-            + " var _a = document.activeElement;"
+            + " var _a = el.ownerDocument.activeElement;"
             + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a)) _a.blur();")
     public static native void focusComponent(JSObject el);
 
     /** Says the text to a screen reader through a polite live region (unseen on the page). */
-    @JSBody(params = "text", script = "var _r = document.getElementById('shim-live');"
+    @JSBody(params = "text", script = "var _D = window.__shimDoc || document, _r = _D.getElementById('shim-live');"
             + " if (!_r) { _r = document.createElement('div'); _r.id = 'shim-live'; _r.className = 'shim-live';"
-            + " _r.setAttribute('aria-live', 'polite'); _r.setAttribute('role', 'status'); document.body.appendChild(_r); }"
+            + " _r.setAttribute('aria-live', 'polite'); _r.setAttribute('role', 'status'); _D.body.appendChild(_r); }"
             + " _r.textContent = text;")
     public static native void announce(String text);
 
     /** True when the event's target is the page itself or inside one of the app's windows, not the page's own controls. */
-    @JSBody(params = "e", script = "var _t = e.target; return !_t || _t === document.body || _t === document.documentElement"
+    @JSBody(params = "e", script = "var _t = e.target; if (!_t) return true; var _d = _t.ownerDocument || document; return _t === _d.body || _t === _d.documentElement"
             + " || !!(_t.closest && _t.closest('.window'));")
     public static native boolean targetIsAppOrPage(JSObject e);
 
@@ -128,7 +128,15 @@ public final class Js {
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb);")
     public static native void listen(JSObject el, String type, EventCallback cb);
 
-    @JSBody(script = "return document.getElementById('desktop');")
+    /**
+     * Pop out (boot.js) moves the page desktop into a Picture-in-Picture window and back. While it is there,
+     * window.__shimDoc is that window's document, where the desktop, points and the focus are looked up, and boot.js
+     * passes the document to window.__shimListen so the app hears its mouse, keys and touches.
+     */
+    @JSBody(params = "cb", script = "window.__shimListen = cb;")
+    public static native void exportListen(EventCallback cb);
+
+    @JSBody(script = "return (window.__shimDoc || document).getElementById('desktop');")
     public static native JSObject desktopElement();
 
     @JSBody(script = "return document.body;")
@@ -139,10 +147,12 @@ public final class Js {
 
 
     /** The page desktop's size: on an app page, the stage between the toolbar and the controller. */
-    @JSBody(script = "var _d = document.getElementById('desktop'); return _d && _d.clientWidth ? _d.clientWidth : window.innerWidth;")
+    @JSBody(script = "var _D = window.__shimDoc || document, _d = _D.getElementById('desktop');"
+            + " return _d && _d.clientWidth ? _d.clientWidth : _D.defaultView.innerWidth;")
     public static native int viewportWidth();
 
-    @JSBody(script = "var _d = document.getElementById('desktop'); return _d && _d.clientHeight ? _d.clientHeight : window.innerHeight;")
+    @JSBody(script = "var _D = window.__shimDoc || document, _d = _D.getElementById('desktop');"
+            + " return _d && _d.clientHeight ? _d.clientHeight : _D.defaultView.innerHeight;")
     public static native int viewportHeight();
 
     /** How far boot.js has scaled the page desktop down to fit the windows on the stage (1 = not scaled). */
@@ -185,7 +195,7 @@ public final class Js {
     public static native int pointerId(JSObject e);
 
     /** The element under a pointer event's point (a touch's own target stays the element it went down on). */
-    @JSBody(params = "e", script = "return document.elementFromPoint(e.clientX, e.clientY);")
+    @JSBody(params = "e", script = "return (window.__shimDoc || document).elementFromPoint(e.clientX, e.clientY);")
     public static native JSObject elementAt(JSObject e);
 
     @JSBody(script = "return performance.now();")
@@ -199,7 +209,7 @@ public final class Js {
 
     /** The ring that closes in on a finger held on something long-press opens like a right click. */
     @JSBody(params = "e", script = "var _r = document.createElement('div'); _r.className = 'shim-press';"
-            + "_r.style.left = e.clientX + 'px'; _r.style.top = e.clientY + 'px'; document.body.appendChild(_r); return _r;")
+            + "_r.style.left = e.clientX + 'px'; _r.style.top = e.clientY + 'px'; (window.__shimDoc || document).body.appendChild(_r); return _r;")
     public static native JSObject pressRing(JSObject e);
 
     @JSBody(params = "ring", script = "ring.classList.add('done'); setTimeout(function () { ring.remove(); }, 400);"
@@ -287,7 +297,7 @@ public final class Js {
             "var _px = function (_c, _px0, _py0) { var _r = _c.getBoundingClientRect(); if (_px0 < _r.left || _py0 < _r.top || _px0 >= _r.right || _py0 >= _r.bottom || !_c.width) return -1;"
             + "  var _d = _c.getContext('2d').getImageData(Math.floor((_px0 - _r.left) * _c.width / _r.width), Math.floor((_py0 - _r.top) * _c.height / _r.height), 1, 1).data;"
             + "  return _d[3] === 0 ? -1 : (_d[0] << 16) | (_d[1] << 8) | _d[2]; };"
-            + "var _els = document.elementsFromPoint(x, y);"
+            + "var _els = (window.__shimDoc || document).elementsFromPoint(x, y);"
             + "for (var _i = 0; _i < _els.length; _i++) { var _e = _els[_i], _v;"
             + "  var _top = _e.querySelector(':scope > canvas.paint.top'); if (_top && (_v = _px(_top, x, y)) >= 0) return _v; }"
             + "for (var _i = 0; _i < _els.length; _i++) { var _e = _els[_i], _v;"

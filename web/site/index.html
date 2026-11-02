@@ -222,6 +222,7 @@
         <button class="btn" type="button" id="player-restart">Restart</button>
         <button class="btn" type="button" id="player-zoom" aria-pressed="true">Fit</button>
         <button class="btn" type="button" id="player-big" aria-pressed="false" title="Fill the screen with the player">Big screen</button>
+        <button class="btn" type="button" id="player-pop" aria-pressed="false" data-sound="none" hidden>Pop out</button>
         <button class="btn" type="button" id="player-share" data-sound="none" title="Share this app: its link, with a preview card">&#8599; Share</button>
         <a class="btn" id="player-source" href="Minesweeper/index.html#source" title="Open the app's page with its Java source beside it">&lt;/&gt; Source</a>
         <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
@@ -431,17 +432,54 @@
       frame.title = name;
       showPad(app);
       fit();
-      // A new iframe each time, so the old app's timers and audio stop with it.
+      // A new iframe each time, so the old app's timers and audio stop with it. A popped out app comes back
+      // first, so its window closes with it.
+      var api = popApi();
+      if (api) api.back();
       var next = frame.cloneNode(false);
       next.src = page + '?embed';
       frame.parentNode.replaceChild(next, frame);
       frame = next;
+      frame.addEventListener('load', syncPop);
+      syncPop();
       if (focus) {
         window.oldjavaSound.play('start');
         frame.addEventListener('load', function () { frame.focus(); });
         if (!isBig()) player.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
+
+    // Pop out: the app in the player moves, still running, into a small window of its own that stays on top of
+    // the visitor's other windows (boot.js popOut). The player's iframe may not open that window, so this page
+    // opens it and hands it to the app's page.
+    var popButton = document.getElementById('player-pop');
+    function popApi() {
+      try { return frame.contentWindow.oldjavaPop || null; } catch (e) { return null; }
+    }
+    function syncPop() {
+      var api = popApi();
+      var on = !!api && api.popped();
+      popButton.hidden = !('documentPictureInPicture' in window) || window.top !== window || !api || !api.can();
+      popButton.setAttribute('aria-pressed', String(on));
+      popButton.textContent = on ? 'Bring back' : 'Pop out';
+      popButton.title = on ? 'Bring the app back into the player'
+        : 'Play this app in its own small window that stays on top of your other windows';
+    }
+    popButton.addEventListener('click', function () {
+      var api = popApi();
+      if (!api) return;
+      if (api.popped()) {
+        api.back();
+        syncPop();
+        return;
+      }
+      documentPictureInPicture.requestWindow(api.size()).then(function (win) {
+        win.addEventListener('pagehide', function () { setTimeout(syncPop, 0); });
+        api.into(win);
+        syncPop();
+      }, function (e) { console.warn('Pop out:', e); });
+    });
+    frame.addEventListener('load', syncPop);
 
     function choose(li, asThen) {
       history.replaceState(null, '', '#' + li.getAttribute('data-app') + (asThen ? ':then' : ''));
