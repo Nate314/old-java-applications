@@ -946,6 +946,8 @@
       try { localStorage.setItem(PLAYED_KEY, JSON.stringify(played)); } catch (e) { /* kept for this page only */ }
       passportChanged(id);
     },
+    // Stamps written to localStorage by this page (saves brought from another device): read them again.
+    reload: function () { played = readPlayed(); passportChanged(null); },
     reset: function () {
       played = {};
       try { localStorage.removeItem(PLAYED_KEY); } catch (e) { /* nothing saved */ }
@@ -2888,6 +2890,8 @@
     } }
   };
 
+  window.oldjavaRecords = { line: recordOf };
+
   // <body data-tab-title>: the browser tab shows the app's window title whenever it says more than the app's name
   // (Clock's "4:59 left - Clock"), so a running timer can be watched from another tab.
   function followTitle(desktop) {
@@ -2903,7 +2907,12 @@
   function savedRecord(id) {
     var saves;
     try { saves = JSON.parse(localStorage.getItem('oldjava.saves.' + id) || '{}'); } catch (e) { return ''; }
-    var paths = Object.keys(saves);
+    return recordOf(id, saves);
+  }
+  // The record line for an app's saved files ({ path: contents }), wherever they came from: this browser's store, or
+  // saves brought from another device (the home page's Your records, saves.js).
+  function recordOf(id, saves) {
+    var paths = Object.keys(saves || {});
     var rule = RECORDS[id];
     // The text of a saved file by its name, or null.
     function saved(name) {

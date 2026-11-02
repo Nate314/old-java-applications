@@ -18,6 +18,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -162,7 +163,16 @@ public final class LauncherWindow extends JFrame {
       pick.setMnemonic(KeyEvent.VK_K);
       pick.setToolTipText("Plays an app you have not launched yet (Alt+K)");
       pick.addActionListener(e -> pickForMe());
-      row.add(pick, BorderLayout.EAST);
+      Ui.FlatButton saves = new Ui.FlatButton("Saves", false);
+      saves.setMnemonic(KeyEvent.VK_S);
+      saves.setToolTipText("Move your records between these apps and the web site (Alt+S)");
+      saves.addActionListener(e -> SavesMenu.open(this, Paths.get(System.getProperty("user.home")), log,
+         id -> apps.stream().filter(a -> a.id.equals(id)).map(a -> a.name).findFirst().orElse(id), this::status));
+      JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+      buttons.setOpaque(false);
+      buttons.add(saves);
+      buttons.add(pick);
+      row.add(buttons, BorderLayout.EAST);
 
       JPanel header = new JPanel(new BorderLayout(0, 14));
       header.setBackground(Ui.DESK);
