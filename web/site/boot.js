@@ -393,7 +393,9 @@
                   { k: 'ArrowDown', label: 'Sound −' }, { k: 'ArrowUp', label: 'Sound +' }] }
     ],
     SpriteFloatyStars: [
-      { buttons: [{ k: 'ArrowUp', label: 'Add star', big: true }, { k: 'ArrowDown', label: 'Remove star' }] }
+      { title: 'Star Catcher', tint: 'gold', dpad: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'], fire: 'Space', fireLabel: 'Catch' },
+      { buttons: [{ k: 'N', label: 'Next' }, { k: 'R', label: 'Again' }, { k: 'M', label: 'Nights' },
+                  { k: 'ArrowUp', label: 'Add star' }, { k: 'ArrowDown', label: 'Remove star' }] }
     ]
   };
   var ARROWS = { ArrowUp: [38, '↑'], ArrowDown: [40, '↓'], ArrowLeft: [37, '←'], ArrowRight: [39, '→'] };
@@ -490,7 +492,7 @@
             cross.appendChild(button(g.dpad[i], 'shim-pad-btn ' + dir));
           });
           body.appendChild(cross);
-          if (g.fire) body.appendChild(button(g.fire, 'shim-pad-btn fire', 'Fire'));
+          if (g.fire) body.appendChild(button(g.fire, 'shim-pad-btn fire', g.fireLabel || 'Fire'));
         }
         if (g.piano) {
           var keys = document.createElement('div');
@@ -1344,7 +1346,8 @@
   }
   // What an app saved on earlier visits: web.rt.Saves keeps the files it writes under oldjava.saves.<App>, each byte
   // one character. Apps with a score file get their record read out; any other saves are named.
-  // NAME=stars,score rows (MusicTheoryExpert's drills, NumberGuess's ranges): how many have a star, and the stars.
+  // NAME=stars,score rows (MusicTheoryExpert's drills, NumberGuess's ranges, Star Catcher's nights): how many have a
+  // star, and the stars.
   function starRows(text) {
     var won = 0, stars = 0;
     text.split('\n').forEach(function (row) {
@@ -1413,6 +1416,10 @@
     NumberGuess: { file: '.numberguess-record.txt', show: function (text) {
       var r = starRows(text);
       return r.won ? 'Your ranges: ' + r.won + ' of 5 won, ' + r.stars + ' of 15 stars' : '';
+    } },
+    SpriteFloatyStars: { file: '.spritefloatystars-nights.txt', show: function (text) {
+      var r = starRows(text);
+      return r.won ? 'Your Star Catcher nights: ' + r.won + ' of 6 caught, ' + r.stars + ' of 18 stars' : '';
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split(',').map(Number);
