@@ -15,7 +15,7 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
- * The Algorithm Lab: a sheet of graph paper with a tab per page across the top (keys 1 to 4) and the page's
+ * The Algorithm Lab: a sheet of graph paper with a tab per page across the top (keys 1 to 5) and the page's
  * buttons along the bottom. It routes clicks, keys and a 30 ms tick to the page that shows.
  */
 @SuppressWarnings("serial")

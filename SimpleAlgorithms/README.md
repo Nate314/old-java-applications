@@ -13,8 +13,12 @@ On start, `main` prints the original output, in order:
 - `5! = 120` and `5^3 = 125.0`
 - each step of the division search, then `4/2 = ...`
 
-Then the Algorithm Lab window opens. Its tabs (click them, or press 1 to 4) are:
+Then the Algorithm Lab window opens. Its tabs (click them, or press 1 to 5) are:
 
+- **Sorting race**: six sorts (bubble, selection, insertion, merge, quicksort and heapsort) on the same numbers, side by side. The window opens on it, already racing. Each tick every sort gets the same number of steps: a compare or a write of one value is one step, a swap is two. Bars light orange for a compare and red for a swap or write. When a sort finishes, a green check runs along its bars and it gets its place (1st for the fewest steps; equal runs share a place). At the end the page says which sort won, in how many steps, and how many times as many the slowest took. Each sort shows its compares and writes, and how its work grows for random numbers (n² or n log n).
+  - Click a sort to listen to it (Quicksort at first): each tick plays a vibraphone note pitched by the value it just touched, and the green check plays a rising run. M: sound on or off.
+  - Space: Play or Pause (Again once all are done, on the same numbers). S or Right: one tick's step, paused. R: the same numbers again. N: new numbers. O: the order (Random, Nearly sorted, Reversed, Few values: four heights). B: 16, 32, 64 or 128 numbers. F: speed (Slow, Normal, Fast, Turbo; the speeds are for 32 numbers and scale with the count, so a race takes about as long).
+  - Some things it shows: insertion sort wins on nearly sorted numbers and bubble sort stops early there; quicksort here takes the last value as its pivot, so reversed or few-valued numbers make it slow; selection sort writes little (at most one swap per place) however many compares it makes.
 - **Tower of Hanoi**: plays the moves `Hanoi.moves` produces (the same list `Hanoi.solve` prints) on 1 to 8 disks. For each move it shows the move number in binary: the lowest 1 bit names the disk that moves, which is the idea the loop is built on, and the line `solve` prints for it (`Move 2 left`). Click a peg to lift its top disk and another to drop it; a disk can't go on a smaller one. After a hand move the page says how many moves are left at best and what the best next move is, and Step and Play finish the puzzle from there. When solved it says whether that took the fewest possible moves (2^n - 1).
   - Space: Play or Pause. S or Right: one move. R: reset. `-` and `+` (or `=`): fewer or more disks. F: speed (Slow, Normal, Fast, Turbo).
 - **Square root**: steps through `MyMath.squareRootSteps`, every guess `estimateSquareRoot` makes. Each guess a is drawn as an a by n / a rectangle, whose area is always n; averaging its two sides makes the next guess, so the rectangle turns into the green square of side sqrt(n). A table lists the guesses with their correct digits in green. Type a number (up to 12 characters) to change n; Backspace deletes.
@@ -31,9 +35,12 @@ On the Square root tab, the digit keys type the number, so switch tabs there by 
 - `src/simplealgorithms/MyMath.java`: square root (`squareRootSteps` lists every guess), sine and cosine (one shared Taylor series), power, factorial, and add/subtract/multiply/divide built from simpler operations. `divide` can hand its steps to a callback instead of printing them.
 - `src/simplealgorithms/Hanoi.java`: `moves` is the original move loop, collecting `Move`s (disk, right or left); `solve` prints them (`Move <disk> left/right`).
 - `src/simplealgorithms/HanoiTower.java`: the pegs, legal moves, and the shortest solution from any position (`nextMove`, `movesLeft`).
+- `src/simplealgorithms/Sorts.java`: the six sorts and the four orders of numbers. Each sort runs on its own copy and records every compare, swap and write as a step.
+- `src/simplealgorithms/SortRace.java`: plays the recorded steps of every sort against one step clock, and works out the places.
+- `src/simplealgorithms/SortPage.java` and `SortSound.java`: the Sorting race tab, and its notes on the MIDI synthesizer (opened on a background thread; silent without one).
 - `src/simplealgorithms/LabPanel.java`: the window's graph-paper panel: tabs, the button bar, and routing of clicks, keys and a 30 ms tick to the page showing.
-- `src/simplealgorithms/Page.java`: base class of the four pages, with the shared colors, fonts and number formatting.
-- `src/simplealgorithms/HanoiPage.java`, `RootPage.java`, `TaylorPage.java`, `PrintoutPage.java`: the four tabs.
+- `src/simplealgorithms/Page.java`: base class of the five pages, with the shared colors, fonts and number formatting.
+- `src/simplealgorithms/HanoiPage.java`, `RootPage.java`, `TaylorPage.java`, `PrintoutPage.java`: the other four tabs.
 - `src/simplealgorithms/Conversions.java`: empty class.
 
 ## Running
@@ -42,12 +49,13 @@ From the repo root: `./run.ps1 SimpleAlgorithms` (or `./run.ps1 SimpleAlgorithms
 
 ## Self-check
 
-`test/simplealgorithms/MyMathCheck.java` checks the sine, cosine, square root, factorial, power and division results against `java.lang.Math`. `test/simplealgorithms/HanoiCheck.java` plays `Hanoi.moves` for 1 to 10 disks and checks every move is legal, matches the shortest solution and ends with the tower on the right peg, and that from scrambled positions the solver finishes in exactly `movesLeft` moves. From `SimpleAlgorithms/`:
+`test/simplealgorithms/MyMathCheck.java` checks the sine, cosine, square root, factorial, power and division results against `java.lang.Math`. `test/simplealgorithms/HanoiCheck.java` plays `Hanoi.moves` for 1 to 10 disks and checks every move is legal, matches the shortest solution and ends with the tower on the right peg, and that from scrambled positions the solver finishes in exactly `movesLeft` moves. `test/simplealgorithms/SortCheck.java` plays back each sort's recorded steps for every order and several counts and checks they sort the numbers, checks the lessons above (insertion sort wins on nearly sorted numbers, merge sort beats bubble sort by far on random ones, quicksort is slow on reversed ones), and that the race gives every sort the same steps and places the cheapest first. From `SimpleAlgorithms/`:
 
 ```
 javac -d ../out/check/SimpleAlgorithms src/simplealgorithms/*.java test/simplealgorithms/*.java
 java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.MyMathCheck
 java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.HanoiCheck
+java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.SortCheck
 ```
 
 ## Fixed bugs
