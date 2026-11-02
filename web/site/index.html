@@ -177,6 +177,44 @@
                      font-size: 12px; font-weight: 700; background: #f59e0b; color: #1f2937; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
     ul.apps li.played .badge { background: #16a34a; color: #fff; }
 
+    /* ---- what's new (news.js): the repo's history, newest first, with what changed since you played ---- */
+    .news { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
+            background: var(--card-bg); }
+    .news[hidden] { display: none; }
+    .news.fresh { border-color: #f59e0b; box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.35); }
+    .news-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+    .news-head .text { flex: 1 1 260px; min-width: 0; }
+    .news-head h2 { margin: 0; }
+    .news-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
+    .news.fresh .news-head p { opacity: 1; font-weight: 600; }
+    .news-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .news .btn[hidden] { display: none; }
+    .news-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 10px;
+                 margin: 14px 0 0; padding: 0; list-style: none; }
+    .news-list li { display: flex; gap: 12px; padding: 10px; border: 1px solid var(--card-border); border-radius: 10px;
+                    background: rgba(127, 127, 127, 0.06); }
+    .news-list li.updated { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+    .news-list .pic { flex: none; display: grid; place-items: center; width: 84px; height: 60px; border-radius: 6px;
+                      background: var(--desk); overflow: hidden; }
+    .news-list .pic img { max-width: 92%; max-height: 92%; object-fit: contain; }
+    .news-list .body { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0;
+                       font-size: 13px; line-height: 1.35; }
+    .news-list .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+    .news-list time { opacity: 0.65; font-variant-numeric: tabular-nums; }
+    .news-list .tag { padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+                      background: #f59e0b; color: #1f2937; }
+    .news-list .tag.site { background: rgba(127, 127, 127, 0.2); color: inherit; }
+    .news-list strong { font-size: 14px; }
+    .news-list .more { opacity: 0.8; }
+    .news-list .plays { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .news-list .plays .btn { padding: 2px 10px; font-size: 12px; }
+    ul.apps li.updated a.thumb::after { content: "Updated"; position: absolute; top: 8px; right: 8px; z-index: 1;
+                     padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700;
+                     background: #f59e0b; color: #1f2937; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+    :root[data-skin="arcade"] .news.fresh { border-color: #ffe14d; box-shadow: 0 0 16px rgba(255, 225, 77, 0.35); }
+    :root[data-skin="arcade"] .news-list li.updated { border-color: #ffe14d; }
+    :root[data-skin="arcade"] .news-list .tag, :root[data-skin="arcade"] ul.apps li.updated a.thumb::after { background: #ffe14d; }
+
     /* ---- your records: what the apps saved here, and taking it to another browser or the desktop (saves.js) ---- */
     .records { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
                background: var(--card-bg); }
@@ -322,6 +360,20 @@
       <ol id="rail"></ol>
       <button class="btn step" type="button" id="player-next" aria-label="Next app" title="Next app">&rsaquo;</button>
     </nav>
+  </section>
+
+  <section class="news" id="news" aria-labelledby="news-title" hidden>
+    <div class="news-head">
+      <div class="text">
+        <h2 id="news-title">What&rsquo;s new</h2>
+        <p id="news-text" aria-live="polite"></p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="button" id="news-play" hidden>Play it</button>
+        <button class="btn" type="button" id="news-all" aria-expanded="false" aria-controls="news-list" hidden>Show all</button>
+      </div>
+    </div>
+    <ol class="news-list" id="news-list"></ol>
   </section>
 
   <section class="passport" id="passport" aria-labelledby="passport-title">
@@ -938,7 +990,7 @@
     // ---- which files each app needs: its page, classes.js and the files its page preloads (data-files) ----
     var abs = function (path) { return new URL(path, location.href).href; };
     function shell() {
-      var files = ['./', 'index.html', 'boot.js', 'qr.js', 'saves.js', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
+      var files = ['./', 'index.html', 'boot.js', 'qr.js', 'saves.js', 'news.js', 'history.txt', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
                    'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
       cards.forEach(function (li) { files.push(li.querySelector('img').getAttribute('src')); });
       return files.map(abs);
@@ -1069,5 +1121,6 @@
 </script>
 <script src="qr.js"></script>
 <script src="saves.js"></script>
+<script src="news.js"></script>
 </body>
 </html>

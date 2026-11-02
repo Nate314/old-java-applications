@@ -14,6 +14,8 @@
  * - Routes System.out to the console by line, and on pages with <body data-console> also to an output panel.
  * - Opens an app page on a title screen (thumbnail, hint, passport stamp and a live boot log of the files
  *   loading); the app starts on the visitor's Play click or key press, so its first sounds can play.
+ *   The title screen also shows the app's story from the repo's history (news.js, added when needed), and the
+ *   passport keeps when each app was last played (oldjava.lastPlayed) for the home page's What's new.
  * - Keeps visitors moving between apps: an app page's toolbar has a Switch app drawer and a Next link, a
  *   How to play line in the toolbar band (and its ? button) shows the app's hint, and when the app exits the Run again box suggests three apps to
  *   play next. The list of apps is read from the home page's gallery (../index.html), so it lives in one place.
@@ -981,6 +983,12 @@
   var passport = window.oldjavaPassport = {
     has: function (id) { return !!played[id]; },
     stamp: function (id) {
+      // When it was last played, for What's new (news.js): changes since then are news to this visitor.
+      if (!isThen()) try {
+        var last = JSON.parse(localStorage.getItem('oldjava.lastPlayed') || '{}') || {};
+        last[id] = Date.now();
+        localStorage.setItem('oldjava.lastPlayed', JSON.stringify(last));
+      } catch (e) { /* not kept */ }
       played = readPlayed();   // another page may have stamped meanwhile
       if (played[id]) return;
       played[id] = Date.now();
@@ -3241,6 +3249,20 @@
     return paths.length ? 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ') : '';
   }
 
+  // news.js (What's new), which the home page loads itself, added to an app page once.
+  var newsPromise = null;
+  function newsScript() {
+    if (!newsPromise) newsPromise = new Promise(function (resolve, reject) {
+      if (window.oldjavaNews) { resolve(window.oldjavaNews); return; }
+      var tag = document.createElement('script');
+      tag.src = root() + 'news.js';
+      tag.onload = function () { resolve(window.oldjavaNews); };
+      tag.onerror = function () { reject(new Error('news.js did not load')); };
+      document.head.appendChild(tag);
+    }).catch(function (e) { console.warn(e.message); return { story: function () {} }; });
+    return newsPromise;
+  }
+
   function titleScreen(files) {
     var html = document.documentElement;
     html.setAttribute('data-title', '');
@@ -3336,7 +3358,12 @@
     showSaverRow();
     saverRow.appendChild(saverText);
     saverRow.appendChild(saverToggle);
-    [cat, name, hint, stamp, record, saverRow, play, press, read, watchLink, era].forEach(function (el) { text.appendChild(el); });
+    // What's new: the app's story, every change to it from the repo's history (news.js, loaded when needed).
+    var story = document.createElement('details');
+    story.className = 'shim-title-story';
+    story.hidden = true;
+    if (!isThen()) newsScript().then(function (news) { news.story(appId(), story); });
+    [cat, name, hint, stamp, record, saverRow, play, press, read, watchLink, era, story].forEach(function (el) { text.appendChild(el); });
     card.appendChild(art);
     card.appendChild(text);
     card.appendChild(meter);
@@ -3423,7 +3450,7 @@
       if (!started || screen.classList.contains('leaving')) return;
       if (e && e.type === 'keydown') {
         if (e.key === 'Tab' || e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
-        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget')) return;   // keys for those panels
+        if (e.target.closest && e.target.closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story')) return;   // keys for those panels
         e.preventDefault();
         e.stopPropagation();
         // Its release must not reach the app either: it never saw the press.
@@ -3442,7 +3469,7 @@
       start();
       setTimeout(function () { screen.remove(); }, 400);
     }
-    screen.addEventListener('click', function (e) { if (!e.target.closest('a, .shim-title-forget')) go(e); });
+    screen.addEventListener('click', function (e) { if (!e.target.closest('a, .shim-title-forget, .shim-title-story')) go(e); });
 
     return {
       loaded: function (file) {

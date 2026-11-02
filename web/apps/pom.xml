@@ -157,6 +157,37 @@
               </target>
             </configuration>
           </execution>
+          <!-- What's new (site/news.js): the repo's history as history.txt, one "@@<commit time> <subject>" line
+               per commit, newest first, each followed by the top-level folders it changed (Clock, web, ...).
+               Squash merges' "(#N)" is left out of the subjects. -->
+          <execution>
+            <id>history</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <mkdir dir="${project.build.directory}"/>
+                <exec executable="git" dir="${repo.dir}" failonerror="true">
+                  <arg value="log"/>
+                  <arg value="--no-merges"/>
+                  <arg value="--format=@@%ct %s"/>
+                  <arg value="--name-only"/>
+                  <arg value="--output=${project.build.directory}/history-raw.txt"/>
+                </exec>
+                <copy file="${project.build.directory}/history-raw.txt" tofile="${site.dir}/history.txt"
+                      encoding="UTF-8" outputencoding="UTF-8" overwrite="true">
+                  <filterchain>
+                    <ignoreblank/>
+                    <tokenfilter>
+                      <replaceregex pattern="^([^@/][^/]*)/.*$" replace="\1"/>
+                      <replaceregex pattern="^(@@.*?)\s*\(#\d+\)$" replace="\1"/>
+                    </tokenfilter>
+                    <uniqfilter/>
+                  </filterchain>
+                </copy>
+              </target>
+            </configuration>
+          </execution>
           <!-- Link previews: the share tags web/cards.ps1 writes into every page point at the page and its card
                with relative addresses. Built with -Dsite.url=https://host/path, they become absolute, which
                most link preview services need. -->

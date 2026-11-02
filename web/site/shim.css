@@ -3774,3 +3774,87 @@ html[data-saver] * {
     animation: none;
   }
 }
+
+/* ---- What's new (news.js): the app's story on its title screen, every change to it from the repo's history ---- */
+
+.shim-title-story {
+  width: 100%;
+  font-size: 13px;
+  cursor: auto;
+}
+
+.shim-title-story[hidden] {
+  display: none;
+}
+
+.shim-title-story summary {
+  padding: 6px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.shim-title-story summary:hover {
+  border-color: var(--accent);
+}
+
+.shim-title-story summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-title-story .shim-story-label {
+  margin-right: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shim-title-story.fresh .shim-story-label {
+  color: #d97706;
+}
+
+.shim-title-story .shim-story-count {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.shim-title-story[open] .shim-story-count {
+  display: none;
+}
+
+.shim-title-story ol {
+  max-height: 11em;
+  margin: 6px 0 0;
+  padding: 0 4px 0 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.shim-title-story li {
+  display: grid;
+  grid-template-columns: 4.2em minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--card-border);
+}
+
+.shim-title-story time {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.shim-title-story li.fresh time {
+  color: #d97706;
+  opacity: 1;
+  font-weight: 700;
+}
+
+:root[data-skin="arcade"] .shim-title-story.fresh .shim-story-label,
+:root[data-skin="arcade"] .shim-title-story li.fresh time {
+  color: #ffe14d;
+}
