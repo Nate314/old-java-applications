@@ -14,12 +14,13 @@
  * - Opens an app page on a title screen (thumbnail, hint, passport stamp and a live boot log of the files
  *   loading); the app starts on the visitor's Play click or key press, so its first sounds can play.
  * - Keeps visitors moving between apps: an app page's toolbar has a Switch app drawer and a Next link, a
- *   How to play card shows the app's hint, and when the app exits the Run again box suggests three apps to
+ *   How to play line in the toolbar band (and its ? button) shows the app's hint, and when the app exits the Run again box suggests three apps to
  *   play next. The list of apps is read from the home page's gallery (../index.html), so it lives in one place.
  * - Gives the keyboard games an on-screen controller (window.oldjavaPad) for touch screens. Its buttons send
  *   the app's own keys; the home page docks it under its player and passes the presses into the iframe.
  * - Keeps the arcade passport (window.oldjavaPassport): a stamp for every app the visitor has played, saved in
- *   localStorage and shared by every open page. A new stamp shows a toast pointing at an app not played yet.
+ *   localStorage and shared by every open page. A new stamp shows a toast pointing at an app not played yet
+ *   (on an app page, in the toolbar band's news line, so nothing floats over the app).
  * - Links the web app manifest and icons and registers the service worker (sw.js), so the site can be
  *   installed and saved apps play offline. The home page's Take it with you panel uses both.
  * - Share (toolbar, exit screen, arcade-complete toast; the home page's player bar and passport) opens a panel
@@ -99,10 +100,28 @@
     var bar = document.createElement('div');
     bar.className = 'shim-toolbar';
     if (isApp) {
+      // The name's slot doubles as the band's news line (bandNews): How to play and new stamps show there.
+      var slot = document.createElement('div');
+      slot.className = 'shim-bar-slot';
       var name = document.createElement('strong');
       name.className = 'shim-bar-name';
       name.textContent = document.title;
-      bar.appendChild(name);
+      slot.appendChild(name);
+      bar.appendChild(slot);
+      news = bandNews(slot);
+      var help = document.createElement('button');
+      help.type = 'button';
+      help.className = 'shim-help';
+      help.title = 'How to play: show the hint in this band';
+      help.setAttribute('aria-label', 'How to play');
+      help.setAttribute('aria-pressed', 'false');
+      help.textContent = '?';
+      help.addEventListener('click', function () {
+        if (news.kind() === 'hint') news.clear(); else howToPlay();
+        help.blur();
+      });
+      news.onKind(function (kind) { help.setAttribute('aria-pressed', String(kind === 'hint')); });
+      bar.appendChild(help);
       var back = document.createElement('a');
       back.href = '../index.html';
       back.textContent = 'All apps';
@@ -173,6 +192,87 @@
     if (controls) padOnPage(controls);
   }
 
+  // ---- band news (app pages): nothing floats over the stage ----
+  // The toolbar band's name slot slides the app's name up and a news line in: How to play when the app starts
+  // (or on the band's ? button) and a new passport stamp. A line longer than the slot scrolls through like a
+  // marquee, twice, then the name comes back. Pointing at the line holds it; x or Escape closes it.
+  var news = null;
+  function bandNews(slot) {
+    var line = document.createElement('div');
+    line.className = 'shim-news';
+    line.setAttribute('role', 'status');
+    slot.appendChild(line);
+    var timer = 0, deadline = 0, anim = null, listeners = [];
+    function told() { var k = kind(); listeners.forEach(function (fn) { fn(k); }); }
+    function kind() { return slot.hasAttribute('data-news') ? line.getAttribute('data-kind') : null; }
+    function clear() {
+      clearTimeout(timer);
+      if (anim) anim.cancel();
+      anim = null;
+      if (!slot.hasAttribute('data-news')) return;
+      slot.removeAttribute('data-news');
+      told();
+    }
+    function wait(ms) {
+      clearTimeout(timer);
+      deadline = Date.now() + ms;
+      timer = setTimeout(clear, ms);
+    }
+    line.addEventListener('pointerenter', function () {
+      if (!kind()) return;
+      clearTimeout(timer);
+      deadline = Math.max(0, deadline - Date.now());   // now the time that was left
+      if (anim) anim.pause();
+    });
+    line.addEventListener('pointerleave', function () {
+      if (!kind()) return;
+      if (anim) anim.play();
+      wait(Math.max(deadline, 3000));
+    });
+    ownKeys(line, clear);
+    return {
+      // kind: 'hint' or 'stamp'; lead: nodes kept at the start; text: nodes that may scroll; actions: links or
+      // buttons kept in view after it.
+      show: function (k, lead, text, actions, ms) {
+        clear();
+        line.textContent = '';
+        line.setAttribute('data-kind', k);
+        lead.forEach(function (n) { line.appendChild(n); });
+        var box = document.createElement('span');
+        box.className = 'shim-news-text';
+        var track = document.createElement('span');
+        track.className = 'shim-news-track';
+        text.forEach(function (n) { track.appendChild(n); });
+        box.appendChild(track);
+        line.appendChild(box);
+        actions.forEach(function (n) { line.appendChild(n); });
+        line.appendChild(closeButton(clear));
+        slot.setAttribute('data-news', '');
+        told();
+        var over = track.scrollWidth - box.clientWidth;
+        if (over > 4 && track.animate && !reducedMotion()) {
+          var hold = 1500, ride = over / 45 * 1000, one = hold + ride + hold;
+          anim = track.animate([
+            { transform: 'translateX(0)', offset: 0 },
+            { transform: 'translateX(0)', offset: hold / one },
+            { transform: 'translateX(' + -over + 'px)', offset: (hold + ride) / one },
+            { transform: 'translateX(' + -over + 'px)', offset: 1 }
+          ], { duration: one, iterations: 2 });
+          ms = Math.max(ms, 2 * one + 1000);
+        } else if (over > 4) {
+          box.title = track.textContent;
+        }
+        wait(ms);
+      },
+      clear: clear,
+      kind: kind,
+      onKind: function (fn) { listeners.push(fn); }
+    };
+  }
+  function reducedMotion() {
+    return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
   // An app page's stage: #desktop fills the space between the toolbar band at the top and the controller and
   // the output panel at the bottom, so no app window sits under them. The shim reports the stage as the
   // screen, so apps that size or center their windows from the screen fit it, and centerWindows keeps the
@@ -186,21 +286,27 @@
 
   // Embedded pages and app pages: keep the windows, as a group, centered on the desktop, scaled down to fit it
   // when they are bigger (window.__shimScale, which the shim divides mouse positions by). Only a change in
-  // which windows are open, their sizes or the desktop's size recenters them, so dragging a window or moving
-  // it with keys works as usual.
+  // which windows are open or their sizes recenters them, so dragging a window or moving it with keys works as
+  // usual. A change in the desktop's size alone (the source panel docking, the controller shown, the browser
+  // resized) keeps the group's last centering and only moves and scales it, so a dragged window keeps its place
+  // beside the others instead of snapping back.
   function centerWindows(desktop) {
-    var key = '';
+    var key = '', size = '', box = null;
     setInterval(function () {
-      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, k = desktop.clientWidth + 'x' + desktop.clientHeight + ':';
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, k = '';
       for (var c = desktop.firstElementChild; c; c = c.nextElementSibling) {
         if (!c.offsetWidth) continue;
         k += c.offsetWidth + 'x' + c.offsetHeight + ',';
         x0 = Math.min(x0, c.offsetLeft); y0 = Math.min(y0, c.offsetTop);
         x1 = Math.max(x1, c.offsetLeft + c.offsetWidth); y1 = Math.max(y1, c.offsetTop + c.offsetHeight);
       }
-      if (k === key) return;
+      var z = desktop.clientWidth + 'x' + desktop.clientHeight;
+      if (k === key && z === size) return;
+      if (k !== key) box = x1 < x0 ? null : [x0, y0, x1, y1];
       key = k;
-      if (x1 < x0) return;
+      size = z;
+      if (!box) return;
+      x0 = box[0]; y0 = box[1]; x1 = box[2]; y1 = box[3];
       var w = desktop.clientWidth, h = desktop.clientHeight;
       var s = Math.min(1, w / (x1 - x0), h / (y1 - y0));
       // About the desktop's center (the default transform origin, which the Arcade power-on's scale shares).
@@ -266,10 +372,13 @@
       var app = apps[indexOf(apps, id)];
       if (!app) return;
       var count = apps.filter(function (a) { return played[a.id]; }).length;
+      var next = passport.unplayed(apps, id)[0];
+      var done = count >= apps.length;
+      playSound(done ? 'complete' : 'stamp');
+      if (done) confetti();
+      if (news) { stampNews(app, count, apps.length, next); return; }
       var old = document.querySelector('.shim-toast');
       if (old) old.remove();
-      var hint = document.querySelector('.shim-hint');
-      if (hint) hint.remove();
       var toast = document.createElement('div');
       toast.className = 'shim-toast';
       toast.setAttribute('role', 'status');
@@ -283,7 +392,6 @@
       text.className = 'shim-toast-text';
       var title = document.createElement('strong');
       var line = document.createElement('span');
-      var done = count >= apps.length;
       title.textContent = done ? 'Arcade complete!' : 'Stamp collected: ' + app.name;
       line.textContent = done ? 'You have played all ' + apps.length + ' apps.'
         : count + ' of ' + apps.length + ' apps played.';
@@ -295,7 +403,6 @@
       text.appendChild(meter);
       toast.appendChild(seal);
       toast.appendChild(text);
-      var next = passport.unplayed(apps, id)[0];
       if (done) {
         var brag = document.createElement('button');
         brag.type = 'button';
@@ -325,13 +432,47 @@
         toast.classList.add('gone');
         setTimeout(function () { toast.remove(); }, 600);
       }, 9000);
-      playSound(done ? 'complete' : 'stamp');
-      if (done) confetti();
     });
   }
 
+  // The same news on an app page, in the band: the thumbnail pressed in as a seal, the count, and where to go.
+  function stampNews(app, count, total, next) {
+    var done = count >= total;
+    var seal = document.createElement('span');
+    seal.className = 'shim-news-seal';
+    var img = document.createElement('img');
+    img.src = app.shot;
+    img.alt = '';
+    seal.appendChild(img);
+    var title = document.createElement('strong');
+    title.textContent = done ? 'Arcade complete! ' : 'Stamp collected: ' + app.name + ' ';
+    var line = document.createElement('span');
+    line.textContent = done ? 'You have played all ' + total + ' apps.' : count + ' of ' + total + ' apps played.';
+    var meter = document.createElement('span');
+    meter.className = 'shim-meter';
+    meter.style.setProperty('--p', String(count / total));
+    var actions = [];
+    if (done) {
+      var brag = document.createElement('button');
+      brag.type = 'button';
+      brag.className = 'shim-news-go';
+      brag.setAttribute('data-sound', 'none');
+      brag.textContent = 'Share it \u203a';
+      brag.addEventListener('click', function () { news.clear(); openShare(null, brag); });
+      actions.push(brag);
+    }
+    if (next) {
+      var go = document.createElement('a');
+      go.className = 'shim-news-go';
+      go.href = pageOf(next);
+      go.textContent = 'Try ' + next.name + ' \u203a';
+      actions.push(go);
+    }
+    news.show('stamp', [seal], [title, line, meter], actions, 9000);
+  }
+
   function confetti() {
-    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (reducedMotion()) return;
     var canvas = document.createElement('canvas');
     canvas.className = 'shim-confetti';
     var w = canvas.width = innerWidth, h = canvas.height = innerHeight;
@@ -358,7 +499,7 @@
   // An app page is stamped by the first click or key press in the app itself (not in the site's own panels),
   // so the home page's player does not stamp Minesweeper just by loading it. A console program
   // (<body data-console>) has nothing to press: running it counts.
-  var CHROME = '.shim-toolbar, .shim-drawer, .shim-share, .shim-scrim, .shim-hint, .shim-overlay, .shim-toast, .shim-pad, .shim-title, .shim-source';
+  var CHROME = '.shim-toolbar, .shim-drawer, .shim-share, .shim-scrim, .shim-overlay, .shim-toast, .shim-pad, .shim-title, .shim-source';
   function stampOnPlay() {
     var id = appId();
     if (document.body.hasAttribute('data-console')) { passport.stamp(id); return; }
@@ -1267,34 +1408,23 @@
     });
   }
 
-  // The app's hint from the gallery, top right under the toolbar, until it is closed or 12 seconds pass.
+  // The app's hint from the gallery, on the band's news line (the band's ? button shows it again).
   function howToPlay() {
     catalog().then(function (apps) {
       var app = apps[indexOf(apps, appId())];
-      if (!app) return;
-      var card = document.createElement('div');
-      card.className = 'shim-hint';
-      card.setAttribute('role', 'status');
-      var title = document.createElement('strong');
-      title.textContent = 'How to play ' + app.name;
-      var text = document.createElement('p');
+      if (!app || !news) return;
+      var tag = document.createElement('strong');
+      tag.className = 'shim-news-tag';
+      tag.textContent = 'How to play';
+      var text = document.createElement('span');
       text.textContent = app.hint;
-      card.appendChild(closeButton(function () { card.remove(); }));
-      card.appendChild(title);
-      card.appendChild(text);
-      ownKeys(card);
-      document.body.appendChild(card);
-      setTimeout(function () {
-        card.classList.add('gone');
-        setTimeout(function () { card.remove(); }, 600);
-      }, 12000);
+      news.show('hint', [tag], [text], [], 12000);
     });
   }
 
   // The app called System.exit (for most apps: its window was closed). Offer it again, and three others.
   function exitScreen(msg) {
-    var hint = document.querySelector('.shim-hint');
-    if (hint) hint.remove();
+    if (news && news.kind() === 'hint') news.clear();
     var box = overlay(msg, 'Run again').firstChild;
     box.classList.add('shim-exit');
     ownKeys(box);
@@ -1993,7 +2123,7 @@
       main(args);
       if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
       if (extras && !embedded) howToPlay();
-      if (extras) stampOnPlay();   // after the hint, so a stamp's toast replaces it rather than sitting under it
+      if (extras) stampOnPlay();
     }
     Promise.all(files.map(function (f) {
       return title ? preload(f).then(function () { title.loaded(f); }) : preload(f);
