@@ -280,6 +280,37 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 - Buttons never take keyboard focus, so the app keeps the keyboard. A press counts as playing for the arcade passport.
 - The keys are synthetic `KeyboardEvent`s dispatched on the page, with `keyCode` set the way the shim reads it, so the apps and the shim are unchanged. The layouts are the `PADS` table in `boot.js`. Every skin styles it: a dark glass console in Modern, a Metal panel in Classic, neon buttons that light up magenta in Arcade.
 
+## Game controllers
+
+Plug a game controller into the computer (or pair it with the phone), press any button, and it plays every app. Browsers report a controller to a page only after one of its buttons is pressed there, so that first press is when the controller chart appears. It uses the Gamepad API's standard layout (an Xbox or PlayStation style pad); `boot.js` polls it once per animation frame.
+
+- **The chart**: on an app page, the toolbar band's news line shows what each button does in that app (`Controller` A Flap, X Course, ...). On the home page it takes the place of the player's hint for 15 seconds. Back shows it again.
+- **Every app**: the left stick (and the D-pad, where the app does not use it) moves a pointer drawn on the page, A clicks (hold A and move to drag a window by its title bar, Clock's dial or a Hanoi disk) and B right-clicks (Minesweeper's flags). The right stick, RT and LT point, click and right-click in every app, even when its buttons are keys. The clicks are the same mouse events, in the same order, as a real mouse's, so the apps and the shim are unchanged. Moving the real mouse hides the pointer, and it hides itself after 5 seconds without use.
+- **LB / RB** play the previous / next app: in the home page's player they work its arrows (and show the new app's chart); on an app page they open the previous or next app's page, in the gallery's order.
+- **The title screen**: any button presses Play, and the app never sees that press.
+- **Keys**: in the apps that have keys, the buttons press them, as the touch controller's buttons do (synthetic key events, which light the touch controller's matching button). The maps are the `GAMEPADS` table in `boot.js`:
+
+| App | Buttons |
+|---|---|
+| FlappyBird | A or D-pad up: Flap (Space). X: Course (C), Y: Reset (R), Start: Pause (P) |
+| DinoGame | A or D-pad up: Jump (Space). B or D-pad down: Duck. X: Bot (B), Y: Reset eye (X) |
+| TankGame | The first controller drives the red tank (D-pad or left stick: W A S D, A: fire Q), a second controller the green tank (arrow keys, A: fire M). On the game's title, the first controller's A starts a match against the computer and the second's a match for two players |
+| SynthesizerKeyboard | The white keys C to high C, going round the D-pad (left, down, right, up: Z X C V) and then the face buttons (X, A, B, Y: B N M ,). Start: Record (Space) |
+| SpriteFloatyStars | D-pad or left stick: the arrow keys (Star Catcher's net). A: Catch (Space), B: Nights (M), X: Next (N), Y: Again (R) |
+| ScreenSaver | A / B: next / previous saver (N, P), X: cycle (C), Y: show the keys (H), D-pad or left stick: slower, faster, smaller and bigger tiles (arrow keys). The right stick moves the pointer, which closes the saver, as a mouse does |
+| RubiksCube2D | Point at a square and press A to pick it, then the D-pad turns it (W A S D). B: Undo (Z), X: Hint (H), Y: Retry (R), Start: Next level (N) |
+| MusicTheoryExpert | Point and A to answer. B: play / next (Space), D-pad up / down: previous / next drill, X: Restart (R), Y: Next drill (N) |
+| NumberGuess | D-pad up / down: higher / lower in You pick, B: Enter |
+| Clock | B: Start / pause (Space), X: Reset (R), Y: Lap (L), D-pad up / down: a minute more / less on the timer |
+| StockChecker | D-pad up / down: pick a stock, X: Buy 1 (B), Y: Sell 1 (S), B: Pause (Space) |
+| GroupCreator | X: New round (N), Y: Reshuffle (R) |
+| SimpleAlgorithms | B: Play / pause (Space), D-pad right: one move, X: Reset (R), Y: Speed (F) |
+
+The other apps (Minesweeper, UltimateTicTacToe, CircleSpawner, BibleDownloader, NathaNOS, Windows, WindowsE) are played with the pointer alone.
+
+- In the home page's player, the home page polls the controllers and passes each reading to the player's iframe (`postMessage`), which works its app from it as an app page does, so the pointer is drawn and clicks inside the player.
+- With the page hidden the readings stop, and every key held is released.
+
 ## Skins
 
 The picker in the top-right corner switches between three skins:
@@ -319,4 +350,5 @@ The site's own controls and moments make short sounds, synthesized with the Web 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".
 - Windows cannot be resized by dragging their edges, and there are no minimize or maximize buttons.
 - `Robot` cannot see or control anything outside the page. The Windows key and the shortcuts made with it go to the page's pretend Windows, which knows only the Windows key alone and Win+E.
+- Game controllers were tested with simulated ones (a page script standing in for `navigator.getGamepads`), not a physical controller. A browser may not count a controller button as the click or key press it waits for before a page may play sound, so an app's first sounds may need a click or key.
 - What an app saves is kept only in that browser, and only in `localStorage` (about 5 MB per site). Saving for offline keeps the apps' files; their saves are already local.
