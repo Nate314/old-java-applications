@@ -2,7 +2,7 @@
 .SYNOPSIS
     Compile and run one of the Java apps, or build it into a runnable jar.
 .EXAMPLE
-    ./run.ps1                  # prompts for an app, then runs it
+    ./run.ps1                  # opens the launcher: every app as a card, Enter plays one
     ./run.ps1 Minesweeper      # runs Minesweeper
     ./run.ps1 FlappyBird -Build  # builds out/FlappyBird.jar
 #>
@@ -14,6 +14,8 @@ $ErrorActionPreference = 'Stop'
 
 # WorkDir is where the app expects to be launched from, since some load files by relative path.
 $apps = [ordered]@{
+    # The launcher lists the others and runs each with this script, in the PowerShell running it now.
+    Launcher          = @{ Main = 'launcher.Main';             WorkDir = '.'; Args = @((Get-Process -Id $PID).Path) }
     Clock             = @{ Main = 'clock.Main';                WorkDir = 'Clock' }
     FlappyBird        = @{ Main = 'flappyBird.Main';           WorkDir = 'FlappyBird/src'; Args = @('120') }
     Minesweeper       = @{ Main = 'minesweeper.Main';          WorkDir = 'Minesweeper' }
@@ -41,11 +43,7 @@ $apps = [ordered]@{
 }
 $names = @($apps.Keys)
 
-if (-not $App) {
-    for ($i = 0; $i -lt $names.Count; $i++) { Write-Host "  $($i + 1)) $($names[$i])" }
-    $choice = Read-Host 'Pick an app (number or name)'
-    $App = if ($choice -match '^\d+$' -and [int]$choice -ge 1 -and [int]$choice -le $names.Count) { $names[[int]$choice - 1] } else { $choice }
-}
+if (-not $App) { $App = 'Launcher' }
 $match = $names | Where-Object { $_ -ieq $App }
 if (-not $match) { throw "Unknown app '$App'. Choose one of: $($names -join ', ')" }
 $App = $match
