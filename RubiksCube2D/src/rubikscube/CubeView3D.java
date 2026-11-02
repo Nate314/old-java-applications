@@ -46,6 +46,11 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private double pitch = DEFAULT_PITCH;
    private double targetYaw = DEFAULT_YAW;
    private double targetPitch = DEFAULT_PITCH;
+   /**
+    * A turn of the whole cube applied before yaw and pitch, as rows (world x, y and z of a point are its dot products
+    * with them): Teach me stands the cube yellow side up with it. It never changes what a drag or key does.
+    */
+   private int[][] basis = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
    private int marked = -1;
    private int hinted = -1;
    private String hintKey = null;
@@ -134,7 +139,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       int face = faceColor == null ? -1 : CubeGeometry.faceIndex(faceColor);
       this.hinted = face < 0 || key == null ? -1 : face * 9 + cubie - 1;
       this.hintKey = key;
-      if (this.hinted >= 0 && this.facing(CubeGeometry.NORMAL[this.hinted]) < 0.3) {
+      if (this.hinted >= 0 && this.facingOf(this.hinted) < 0.3) {
          this.lookAt(CubeGeometry.NORMAL[this.hinted]);
       }
       this.repaint();
@@ -147,7 +152,32 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.wake();
    }
 
-   private void lookAt(int[] normal) {
+   /**
+    * Teach me: shows the cube with {@code up} on top (standing it up at once if another side was up) and turns it
+    * to look at {@code front} and the side to its right from a little above.
+    */
+   void stand(int[] up, int[] front) {
+      int[] right = {up[1] * front[2] - up[2] * front[1], up[2] * front[0] - up[0] * front[2], up[0] * front[1] - up[1] * front[0]};
+      boolean jump = dot(this.basis[1], up) != 1;
+      if (jump) {
+         this.basis = new int[][]{right, up.clone(), front.clone()};
+      }
+      this.lookAt(front);
+      this.targetPitch = DEFAULT_PITCH;
+      if (jump) {
+         this.yaw = this.targetYaw;
+         this.pitch = this.targetPitch;
+      }
+      this.wake();
+   }
+
+   private static int dot(int[] a, int[] b) {
+      return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+   }
+
+   private void lookAt(int[] worldNormal) {
+      double[] n = this.based(new double[]{worldNormal[0], worldNormal[1], worldNormal[2]});
+      int[] normal = {(int) Math.round(n[0]), (int) Math.round(n[1]), (int) Math.round(n[2])};
       if (normal[1] != 0) {
          this.targetPitch = normal[1] * Math.abs(DEFAULT_PITCH);
       } else {
@@ -302,15 +332,28 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       return this.view(point);
    }
 
-   /** World to view coordinates: turned by yaw about y, then by pitch about x. */
+   /** World to view coordinates: turned by the basis, then by yaw about y, then by pitch about x. */
    private double[] view(double[] v) {
-      double cy = Math.cos(this.yaw);
-      double sy = Math.sin(this.yaw);
+      return this.view(v, this.yaw, this.pitch);
+   }
+
+   private double[] view(double[] world, double yaw, double pitch) {
+      double[] v = this.based(world);
+      double cy = Math.cos(yaw);
+      double sy = Math.sin(yaw);
       double x = v[0] * cy + v[2] * sy;
       double z = -v[0] * sy + v[2] * cy;
-      double cp = Math.cos(this.pitch);
-      double sp = Math.sin(this.pitch);
+      double cp = Math.cos(pitch);
+      double sp = Math.sin(pitch);
       return new double[]{x, v[1] * cp - z * sp, v[1] * sp + z * cp};
+   }
+
+   private double[] based(double[] v) {
+      double[] out = new double[3];
+      for (int i = 0; i < 3; i++) {
+         out[i] = this.basis[i][0] * v[0] + this.basis[i][1] * v[1] + this.basis[i][2] * v[2];
+      }
+      return out;
    }
 
    private double scale() {
@@ -321,6 +364,12 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private double[] screen(double[] v) {
       double k = this.scale() * CAMERA / (CAMERA - v[2]);
       return new double[]{this.getWidth() / 2.0 + v[0] * k, this.getHeight() / 2.0 - v[1] * k};
+   }
+
+   /** How squarely sticker s faces the viewer once the cube has turned to where it is going (1 head on). */
+   double facingOf(int s) {
+      int[] normal = CubeGeometry.NORMAL[s];
+      return this.view(new double[]{normal[0], normal[1], normal[2]}, this.targetYaw, this.targetPitch)[2];
    }
 
    /** How squarely a world normal faces the viewer (1 head on, below 0 facing away). */
@@ -399,7 +448,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       double z = -v[1] * sp + v[2] * cp;
       double cy = Math.cos(this.yaw);
       double sy = Math.sin(this.yaw);
-      return new double[]{v[0] * cy - z * sy, y, v[0] * sy + z * cy};
+      double[] b = {v[0] * cy - z * sy, y, v[0] * sy + z * cy};
+      // And the basis (its transpose turns it back).
+      double[] out = new double[3];
+      for (int i = 0; i < 3; i++) {
+         out[i] = this.basis[0][i] * b[0] + this.basis[1][i] * b[1] + this.basis[2][i] * b[2];
+      }
+      return out;
    }
 
    private static double dist(double[] a, double[] b) {
@@ -521,7 +576,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    }
 
    /** Rich cube colors for the 3D view (the net keeps the app's original pure colors). */
-   private static Color colorOf(String name) {
+   static Color colorOf(String name) {
       switch (name) {
          case "blue": return new Color(28, 92, 230);
          case "red": return new Color(214, 34, 44);
@@ -537,7 +592,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       return new Color(clamp(color.getRed() * light), clamp(color.getGreen() * light), clamp(color.getBlue() * light));
    }
 
-   private static Color mix(Color a, Color b, double t) {
+   static Color mix(Color a, Color b, double t) {
       return new Color(clamp(a.getRed() + (b.getRed() - a.getRed()) * t), clamp(a.getGreen() + (b.getGreen() - a.getGreen()) * t),
             clamp(a.getBlue() + (b.getBlue() - a.getBlue()) * t));
    }

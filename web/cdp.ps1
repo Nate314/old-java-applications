@@ -65,6 +65,8 @@ function Click([string]$text) { "js:[].slice.call(document.querySelectorAll('#de
 function Pick([string]$option) {
     "js:(function (s) { s.value = '$option'; s.dispatchEvent(new Event('change')); })([].slice.call(document.querySelectorAll('#desktop select')).filter(function (s) { return [].some.call(s.options, function (o) { return o.value === '$option'; }); })[0])"
 }
+# Rubik's Cube: makes the turn Teach me asks for next (presses the W/A/S/D key it lit).
+$CoachTurn = "js:(function () { var e = [].slice.call(document.querySelectorAll('#desktop span.text')).filter(function (e) { return /^[wasd]$/.test(e.textContent.trim()) && getComputedStyle(e.parentElement).backgroundColor === 'rgb(80, 220, 80)'; })[0]; if (!e) return; var k = e.textContent.trim(), c = k.toUpperCase().charCodeAt(0); ['keydown', 'keyup'].forEach(function (t) { (document.activeElement || document.body).dispatchEvent(new KeyboardEvent(t, { key: k, code: 'Key' + k.toUpperCase(), keyCode: c, which: c, bubbles: true })); }); })()"
 function Repeat([int]$n, [string[]]$steps) { $out = @(); for ($i = 0; $i -lt $n; $i++) { $out += $steps }; $out }
 
 function Invoke-Steps([string[]]$steps, [scriptblock]$Other) {

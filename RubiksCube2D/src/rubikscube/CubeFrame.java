@@ -47,13 +47,25 @@ public final class CubeFrame extends JFrame implements ActionListener {
          // Lines are broken by hand: the browser build's labels do not wrap.
          "<html>Click a square, then<br>press W A S D (or the<br>buttons) to turn its row,<br>column or ring.<br><br>"
                + "Each level mixes the cube<br>one move more while you<br>watch. Turn it back to<br>solved: at par for 3 stars.<br><br>"
-               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.</html>");
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>T: Teach me how.</html>");
    private static final String HELP_3D =
          "<html>Drag a square to turn<br>its row, column or ring.<br>Drag around the cube<br>(or press the arrow keys)<br>to look at other sides.<br>"
                + "Or click a square, then<br>press W A S D.<br><br>"
-               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: the flat net.</html>";
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: the flat net. T: Teach<br>me how to solve it.</html>";
    private final String helpNet;
    private final JButton viewButton = new JButton();
+   private final JButton teachButton = new JButton("Teach me");
+   private final CoachPanel coachPanel = new CoachPanel();
+   /** Teach me is on: the coach card replaces the message and help, and every move is shown before it is made. */
+   private boolean coaching = false;
+   /** The coach's steps from the cube as it is (null until worked out again), the step and the turn in it now. */
+   private List<Coach.Step> coachSteps = null;
+   private int coachStep = 0;
+   private int coachTurn = 0;
+   /** The step the 3D cube was last turned to show (its yellow side up, its front toward the player), or null. */
+   private Coach.Step coachShown = null;
+   /** The layer turn of the player's last move, to see whether it was the one the coach asked for; -1 for none. */
+   private int lastTurn = -1;
    private CubeView3D view = null;
    public int selectedCubie = 0;
    private JPanel panel = new JPanel();
@@ -129,6 +141,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.layoutLevelControls();
       this.viewButton.addActionListener(this);
       this.panel.add(this.viewButton);
+      this.teachButton.addActionListener(this);
+      this.panel.add(this.teachButton);
+      this.coachPanel.setVisible(false);
+      this.panel.add(this.coachPanel);
       // Last, so it lies under every other control.
       this.panel.add(this.view);
       this.showView(this.records.netView());
@@ -159,6 +175,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.messageLabel.setBounds(left, y, leftWidth, 90);
       this.helpLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
       this.helpLabel.setBounds(left, y + 92, leftWidth, 196);
+      this.coachPanel.setBounds(left, y - 4, leftWidth + 8, 294);
       for (JLabel label : new JLabel[]{this.levelLabel, this.goalLabel, this.movesLabel, this.bestLabel, this.totalLabel, this.messageLabel, this.helpLabel}) {
          this.panel.add(label);
       }
@@ -179,6 +196,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.view.reset();
       this.viewButton.setText(net ? "3D cube" : "Flat net");
       this.viewButton.setBounds(this.frameWidth - 112, 10, 92, 28);
+      this.teachButton.setBounds(12, 10, 116, 28);
       int keyWidth = (int)(2.75 * w / 3.0);
       int keyHeight = (int)(2.75 * h / 3.0);
       int keyX = net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
@@ -203,7 +221,9 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.mixButton.setBounds(x + 110, y + 18, (int)(3.3 * w) - 110, 26);
       }
       this.helpLabel.setText(net ? this.helpNet : HELP_3D);
-      if (this.hinted != null) {
+      if (this.coaching) {
+         this.coachShow();
+      } else if (this.hinted != null) {
          this.hintMessage();
       }
       this.records.setNetView(net);
@@ -247,6 +267,8 @@ public final class CubeFrame extends JFrame implements ActionListener {
          return;
       }
       String[] move = {this.cube.selectedFaceColor, key, String.valueOf(this.selectedCubie)};
+      CubeGeometry.Turn turn = CubeGeometry.turnOf(move[0], key, this.selectedCubie);
+      this.lastTurn = turn == null ? -1 : turn.id();
       Scrambler.apply(this.history, move);
       this.userMoves.add(move);
       this.afterUserMove();
@@ -258,6 +280,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
          return;
       }
       String[] last = this.userMoves.remove(this.userMoves.size() - 1);
+      this.lastTurn = -1;
       this.history.apply(last[0], MoveHistory.inverse(last[1]), Integer.parseInt(last[2]));
       this.select(last[0], Integer.parseInt(last[2]));
       this.afterUserMove();
@@ -276,6 +299,9 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.messageLabel.setText("");
       }
       this.updateStatus();
+      if (this.coaching) {
+         this.coachAfterMove();
+      }
    }
 
    /** The player turned the cube back to solved. */
@@ -317,6 +343,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.cube.reset();
       this.history.restart();
       this.message("Watch the mix...");
+      this.coachAgain();
       int interval = Math.max(60, Math.min(350, 2800 / this.par));
       String[][] previous = {null};
       int[] ticks = {0};
@@ -336,23 +363,29 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.markSquare(null, 0);
          this.message("Your turn:<br>turn it back.");
          this.updateStatus();
+         this.coachAgain();
       });
       this.playback.start();
       this.updateStatus();
    }
 
-   /** Solve: plays the way back to solved one move at a time. The level is not counted. */
+   /**
+    * Solve: plays the way back to solved one move at a time: back along the moves made, or layer by layer the
+    * coach's way when that is shorter (after a long Mix). The level is not counted.
+    */
    private void solveForPlayer() {
       if (this.busy() || this.history.depth() == 0) {
          return;
       }
+      List<Integer> layers = this.shorterThanHistory();
       this.clearHint();
       this.clock.stop();
       this.complete = true;
-      this.message("Watch the way back...");
-      int interval = Math.max(15, Math.min(300, 6000 / this.history.depth()));
+      this.message(layers == null ? "Watch the way back..." : "Watch it solved layer<br>by layer (Teach me<br>shows how).");
+      int[] next = {0};
+      int interval = Math.max(15, Math.min(300, 6000 / (layers == null ? this.history.depth() : layers.size())));
       this.playback = new Timer(interval, event -> {
-         String[] move = this.history.hint();
+         String[] move = layers == null ? this.history.hint() : next[0] < layers.size() ? this.appMove(layers.get(next[0]++)) : null;
          if (move != null) {
             Scrambler.apply(this.history, move);
             this.markSquare(move[0], Integer.parseInt(move[2]));
@@ -360,12 +393,16 @@ public final class CubeFrame extends JFrame implements ActionListener {
             return;
          }
          this.stopPlayback();
+         // Solved now, whichever way it went: nothing left to turn back.
+         this.history.restart();
          this.markSquare(null, 0);
          this.message("Solved by the computer.<br>Retry (R) to try it<br>yourself.");
          this.updateStatus();
+         this.coachAgain();
       });
       this.playback.start();
       this.updateStatus();
+      this.coachAgain();
    }
 
    /** Hint (H): selects the square of the next move back and lights its key. */
@@ -373,9 +410,14 @@ public final class CubeFrame extends JFrame implements ActionListener {
       if (this.busy()) {
          return;
       }
-      String[] move = this.history.hint();
+      if (this.coaching) {
+         this.coachShow();
+         return;
+      }
+      List<Integer> layers = this.shorterThanHistory();
+      String[] move = layers == null ? this.history.hint() : this.appMove(layers.get(0));
       if (move == null) {
-         this.message(this.cube.isSolved() ? "Already solved." : "No hint here: Retry<br>(R) or Mix.");
+         this.message(this.cube.isSolved() ? "Already solved." : "No hint here: try<br>Teach me (T).");
          return;
       }
       this.clearHint();
@@ -480,13 +522,199 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.undoButton.setEnabled(idle && !this.userMoves.isEmpty());
       this.hintButton.setEnabled(idle && this.history.depth() > 0);
       this.solveButton.setEnabled(idle && this.history.depth() > 0);
-      if (this.complete && !this.freePlay && this.playback == null && !this.usedHint && moves > 0) {
+      boolean playerSolved = this.solvedMillis != 0L && moves > 0;
+      if (playerSolved && !this.freePlay && !this.usedHint) {
          this.setTitle("Rubik's Cube: level " + this.level + " solved in " + moves + (moves == 1 ? " move!" : " moves!"));
-      } else if (this.complete && moves > 0) {
+      } else if (playerSolved) {
          this.setTitle("Rubik's Cube: solved in " + moves + (moves == 1 ? " move!" : " moves!"));
       } else {
          this.setTitle("Rubik's Cube: " + (this.freePlay ? "free play" : "level " + this.level) + ", " + moves + (moves == 1 ? " move" : " moves"));
       }
+   }
+
+   // ---- Teach me ----
+
+   /** T: turns Teach me on or off. */
+   final void toggleCoach() {
+      this.coaching = !this.coaching;
+      this.teachButton.setText(this.coaching ? "Stop teaching" : "Teach me");
+      this.coachPanel.setVisible(this.coaching);
+      this.helpLabel.setVisible(!this.coaching);
+      this.messageLabel.setVisible(!this.coaching);
+      this.coachSteps = null;
+      if (this.coaching) {
+         this.coachShow();
+      } else {
+         this.clearHint();
+      }
+      this.panel.repaint();
+   }
+
+   /** The cube changed in a way the coach did not ask for: work the steps out again and show them. */
+   private void coachAgain() {
+      this.coachSteps = null;
+      if (this.coaching) {
+         this.coachShow();
+      }
+   }
+
+   /** After a move: on to the next turn if it was the one asked for, otherwise a new plan from where the cube is. */
+   private void coachAfterMove() {
+      if (this.coachSteps != null && !this.coachSteps.isEmpty()
+            && this.lastTurn == this.coachSteps.get(this.coachStep).turns.get(this.coachTurn)) {
+         if (++this.coachTurn == this.coachSteps.get(this.coachStep).turns.size()) {
+            this.coachTurn = 0;
+            if (++this.coachStep == this.coachSteps.size()) {
+               this.coachSteps = null;
+            }
+         }
+      } else {
+         this.coachSteps = null;
+      }
+      this.coachShow();
+   }
+
+   /** Shows the coach card for where the cube is, and the next turn on the cube (ringed square, arrow, green key). */
+   private void coachShow() {
+      if (!this.coaching) {
+         return;
+      }
+      if (this.busy()) {
+         this.clearHint();
+         this.coachPanel.show(-1, this.complete ? "Watch it solved" : "Watch the mix", this.complete
+               ? "Solve is turning the cube back. Then Mix (or Retry) and solve one yourself, a layer at a time."
+               : "Then I will show you how to solve it the way people learn to: one layer at a time, starting with a"
+                     + " white cross.", "");
+         return;
+      }
+      if (this.coachSteps == null) {
+         this.coachSteps = this.plan();
+         this.coachStep = 0;
+         this.coachTurn = 0;
+         int back = this.history.depth();
+         if (this.coachSteps != null && back > 0 && back < Coach.turns(this.coachSteps).size()) {
+            // A short mix (a level): turning it back is far quicker than the whole method.
+            this.coachSteps = null;
+            this.coachBack(back);
+            return;
+         }
+      }
+      if (this.coachSteps == null) {
+         this.clearHint();
+         this.coachPanel.show(-1, "Teach me", "I cannot work this cube out. Mix it or Retry (R).", "");
+         return;
+      }
+      if (this.coachSteps.isEmpty()) {
+         this.clearHint();
+         int moves = this.userMoves.size();
+         this.coachPanel.show(7, "Solved!", moves > 0 && this.solvedMillis != 0L
+               ? "Solved in " + moves + (moves == 1 ? " move" : " moves") + ". That is the whole method: a white cross,"
+                     + " the white corners, the middle layer, then the yellow layer in four steps."
+               : "A solved cube. Mix it (or Retry) and I will take you through solving it, one layer at a time.",
+               this.freePlay ? "Mix for another go." : "Retry (R) or Next (N) for another go.");
+         return;
+      }
+      Coach.Step step = this.coachSteps.get(this.coachStep);
+      if (step != this.coachShown) {
+         // Once per step, so looking around between its turns is left alone.
+         this.coachShown = step;
+         this.view.stand(step.up, step.front);
+      }
+      int id = step.turns.get(this.coachTurn);
+      String[] move = this.appMove(id);
+      this.clearHint();
+      this.hinted = move;
+      if (!this.complete) {
+         this.usedHint = true;
+      }
+      this.select(move[0], Integer.parseInt(move[2]));
+      this.keyButton(move[1]).setBackground(HINT_KEY);
+      this.view.hint(move[0], Integer.parseInt(move[2]), move[1]);
+      List<String> colors = new ArrayList<>();
+      List<Boolean> clockwise = new ArrayList<>();
+      for (int turn : step.turns) {
+         colors.add(this.centerColor(Coach.faceOf(turn)));
+         clockwise.add(Coach.clockwise(turn));
+      }
+      String key = move[1].toUpperCase();
+      String how = this.view.isVisible() ? "Drag the ringed square along the arrow, or press " + key + "."
+            : "Press " + key + " on the ringed square.";
+      this.coachPanel.step(step.stage, step.text, colors, clockwise, this.coachTurn, "Turn " + (this.coachTurn + 1)
+            + " of " + step.turns.size() + ": " + this.centerColor(Coach.faceOf(id))
+            + (Coach.clockwise(id) ? " clockwise" : " back (counterclockwise)") + ". " + how);
+      this.updateStatus();
+   }
+
+   /** Teach me on a short mix: the way back along the moves made, one turn at a time. */
+   private void coachBack(int back) {
+      String[] move = this.history.hint();
+      this.clearHint();
+      this.hinted = move;
+      if (!this.complete) {
+         this.usedHint = true;
+      }
+      this.select(move[0], Integer.parseInt(move[2]));
+      this.keyButton(move[1]).setBackground(HINT_KEY);
+      this.view.hint(move[0], Integer.parseInt(move[2]), move[1]);
+      String key = move[1].toUpperCase();
+      this.coachPanel.show(-1, "Turn the mix back", "This cube is only " + back + (back == 1 ? " turn" : " turns")
+            + " from solved, so the quickest way is to undo the mix, one turn at a time. To learn the whole method,"
+            + " Mix it (any number of moves) with Teach me on.", (this.view.isVisible()
+            ? "Drag the ringed square along the arrow, or press " + key + "." : "Press " + key + " on the ringed square."));
+      this.updateStatus();
+   }
+
+   /** The coach's steps from the cube as it is, or null if it cannot solve it (it always should). */
+   private List<Coach.Step> plan() {
+      String[] colors = new String[54];
+      Face[] faces = this.cube.faces();
+      for (int s = 0; s < 54; s++) {
+         colors[s] = faces[s / 9].stickers[s % 9];
+      }
+      try {
+         return Coach.plan(colors);
+      } catch (RuntimeException e) {
+         System.out.println("Teach me: " + e.getMessage());
+         return null;
+      }
+   }
+
+   /** The coach's turns, when they are fewer than the way back along the moves made (a long Mix); else null. */
+   private List<Integer> shorterThanHistory() {
+      if (this.history.depth() <= 20) {
+         return null;
+      }
+      List<Coach.Step> steps = this.plan();
+      List<Integer> turns = steps == null ? null : Coach.turns(steps);
+      return turns != null && !turns.isEmpty() && turns.size() < this.history.depth() ? turns : null;
+   }
+
+   /** The color of the center facing that way. */
+   private String centerColor(int[] normal) {
+      int s = CubeGeometry.stickerAt(normal, normal);
+      return this.cube.faces()[s / 9].stickers[s % 9];
+   }
+
+   /** A layer turn as a W/A/S/D move {face, key, square}: on the square that faces the viewer most squarely. */
+   private String[] appMove(int turnId) {
+      String[] best = null;
+      double bestScore = -10;
+      for (int face = 0; face < 6; face++) {
+         for (int cubie = 1; cubie <= 9; cubie++) {
+            for (String key : CubeGeometry.KEYS) {
+               CubeGeometry.Turn turn = CubeGeometry.turnOf(CubeGeometry.FACE_COLORS[face], key, cubie);
+               if (turn != null && turn.id() == turnId) {
+                  // The middle square of an edge shows the arrow best.
+                  double score = this.view.facingOf(face * 9 + cubie - 1) + (cubie % 2 == 0 ? 0.1 : 0);
+                  if (score > bestScore) {
+                     bestScore = score;
+                     best = new String[]{CubeGeometry.FACE_COLORS[face], key, String.valueOf(cubie)};
+                  }
+               }
+            }
+         }
+      }
+      return best;
    }
 
    /** The level keys: Z undo, H hint, R retry, N next, P previous. */
@@ -517,6 +745,8 @@ public final class CubeFrame extends JFrame implements ActionListener {
       }
       if (source == this.viewButton) {
          this.toggleView();
+      } else if (source == this.teachButton) {
+         this.toggleCoach();
       } else if (source == this.undoButton) {
          this.levelKey('z');
       } else if (source == this.hintButton) {
@@ -547,12 +777,14 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.message("Mixing...");
          this.scrambler = new Scrambler(Math.max(0, moves), seconds, this.history, this.cube, () -> {
             this.scrambler = null;
-            this.message(this.cube.isSolved() ? "Still solved: mix more." : "Mixed. Solve it any<br>way you like.");
+            this.message(this.cube.isSolved() ? "Still solved: mix more." : "Mixed. Solve it any<br>way you like, or<br>Teach me (T) how.");
             this.updateStatus();
+            this.coachAgain();
          });
          this.setTitle("Rubik's Cube: mixing...");
          this.updateStatus();
          this.scrambler.start();
+         this.coachAgain();
       }
    }
 }

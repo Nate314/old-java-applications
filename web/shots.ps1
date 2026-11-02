@@ -33,7 +33,7 @@ $Recipes = [ordered]@{
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', 'wait:500', 'key:Space', 'wait:450', 'key:Space', 'wait:350') }
     Minesweeper         = @{ Steps = @('wait:800', 'key:W', 'wait:2200') }
     NathaNOS            = @{ Steps = @('wait:2500') }
-    RubiksCube2D        = @{ Steps = @('wait:1500') }
+    RubiksCube2D        = @{ Steps = @('wait:1500', (Click '^Mix$'), 'wait:1500', 'key:T', 'wait:600') + (Repeat 19 @($CoachTurn, 'wait:120')) + @('wait:1500') }
     ScreenSaver         = @{ Steps = @('wait:6000') }
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Click 'Star Catcher'), 'wait:800', 'key:1', 'wait:2500') }
     UltimateTicTacToe   = @{ Steps = @('wait:800', 'key:W', 'wait:7000') }

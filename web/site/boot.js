@@ -1661,7 +1661,7 @@
                     left: ['ArrowLeft', 'Slower'], right: ['ArrowRight', 'Faster'], up: ['ArrowUp', 'Smaller tiles'],
                     down: ['ArrowDown', 'Bigger tiles'] }],
     RubiksCube2D: [{ up: ['W', 'Turn'], left: ['A', 'Turn'], down: ['S', 'Turn'], right: ['D', 'Turn'], b: ['Z', 'Undo'],
-                     x: ['H', 'Hint'], y: ['R', 'Retry'], start: ['N', 'Next level'] }],
+                     x: ['T', 'Teach me'], y: ['R', 'Retry'], start: ['N', 'Next level'] }],
     MusicTheoryExpert: [{ b: ['Space', 'Play / next'], up: ['ArrowUp', 'Previous drill'], down: ['ArrowDown', 'Next drill'],
                           x: ['R', 'Restart'], y: ['N', 'Next drill'] }],
     NumberGuess: [{ up: ['ArrowUp', 'Higher / yes'], down: ['ArrowDown', 'Lower / no'], b: ['Enter', 'Enter'],

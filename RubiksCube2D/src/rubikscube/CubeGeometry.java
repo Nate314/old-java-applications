@@ -151,6 +151,11 @@ final class CubeGeometry {
       return new Turn(axis, POS[sticker][axis], dir);
    }
 
+   /** Where turn {@code id} takes each sticker (shared, do not change it). */
+   static int[] destinations(int id) {
+      return DEST[id];
+   }
+
    /** Turns the stickers of {@code faces} (in {@link Cube#faces()} order) by one layer turn. */
    static void apply(Turn turn, Face[] faces) {
       String[] before = new String[54];
