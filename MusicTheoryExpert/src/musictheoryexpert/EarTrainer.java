@@ -18,6 +18,8 @@ import java.util.Random;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
+import static musictheoryexpert.Look.*;
+
 import musictheoryexpert.Notes.MusicalTerms;
 import synthesizer.MySynthesizer;
 
@@ -31,24 +33,6 @@ public final class EarTrainer extends JPanel {
 	private static final String CHOICE_KEYS = "1234567890-=";
 	private static final int[] FANFARE = { 72, 76, 79, 84 };
 	private static final int RIGHT_PAUSE_MILLIS = 1000;
-	/** The keyboard runs from C3 to C7, which holds every note a question plays. */
-	private static final int LOW_NOTE = 48, HIGH_NOTE = 96;
-
-	private static final Color BACKGROUND = new Color(24, 26, 34);
-	private static final Color CARD = new Color(38, 41, 54);
-	private static final Color CARD_HOVER = new Color(52, 56, 72);
-	private static final Color SELECTED = new Color(62, 70, 104);
-	private static final Color TEXT = new Color(236, 237, 242);
-	private static final Color SOFT = new Color(150, 155, 172);
-	private static final Color DIM = new Color(92, 96, 112);
-	private static final Color GOLD = new Color(255, 196, 60);
-	private static final Color BLUE = new Color(86, 132, 255);
-	private static final Color BLUE_HOVER = new Color(116, 156, 255);
-	private static final Color RIGHT = new Color(64, 186, 108);
-	private static final Color WRONG = new Color(226, 86, 86);
-	private static final Color WHITE_KEY = new Color(246, 246, 242);
-	private static final Color BLACK_KEY = new Color(16, 16, 20);
-
 	private final DrillRecords records;
 	private final StepPlayer player;
 	private final Random random = new Random();
@@ -454,7 +438,7 @@ public final class EarTrainer extends JPanel {
 			g.fillRoundRect(box.x, box.y, box.width, box.height, 12, 12);
 			boolean live = started && !answered;
 			g.setColor(live || fill != CARD ? TEXT : SOFT);
-			g.setFont(fitFont(g, drill.choice(i), Font.BOLD, 16, box.width - 36));
+			g.setFont(Look.fitFont(g, drill.choice(i), Font.BOLD, 16, box.width - 36));
 			g.drawString(drill.choice(i), box.x + 14, box.y + 28);
 			g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 			g.setColor(live || fill != CARD ? SOFT : DIM);
@@ -485,11 +469,11 @@ public final class EarTrainer extends JPanel {
 			detail = "Notes: " + noteNames(question.steps());
 		}
 		g.setColor(color);
-		g.setFont(fitFont(g, line, Font.BOLD, 16, getWidth() - x - 18));
+		g.setFont(Look.fitFont(g, line, Font.BOLD, 16, getWidth() - x - 18));
 		g.drawString(line, x, y);
 		if (!detail.isEmpty()) {
 			g.setColor(SOFT);
-			g.setFont(fitFont(g, detail, Font.PLAIN, 14, getWidth() - x - 18));
+			g.setFont(Look.fitFont(g, detail, Font.PLAIN, 14, getWidth() - x - 18));
 			g.drawString(detail, x, y + 22);
 		}
 	}
@@ -516,9 +500,9 @@ public final class EarTrainer extends JPanel {
 		if (opened != null) {
 			extra += ".  Opened: " + opened.title() + ".";
 		}
-		g.drawString(fit(g, extra, getWidth() - x - 18), x, 256);
+		g.drawString(Look.fit(g, extra, getWidth() - x - 18), x, 256);
 		if (!notice.isEmpty()) {
-			g.drawString(fit(g, notice, getWidth() - x - 18), x, 360);
+			g.drawString(Look.fit(g, notice, getWidth() - x - 18), x, 360);
 		}
 		paintButton(g, againButton, "Again", "R", hover == againButton ? BLUE_HOVER : BLUE);
 		if (nextDrill() != null) {
@@ -541,57 +525,25 @@ public final class EarTrainer extends JPanel {
 	/** The keyboard: every key a question can use, with its notes lit once it has been answered. */
 	private void paintPiano(Graphics2D g, int x, int y, int width, int height) {
 		boolean reveal = started && round.answered() && !round.isOver() || round.isOver() && sounding != null;
-		boolean[] lit = new boolean[HIGH_NOTE + 1];
-		boolean[] heard = new boolean[HIGH_NOTE + 1];
-		if (reveal && sounding != null) {
-			for (int note : sounding) {
-				lit[Math.min(HIGH_NOTE, Math.max(LOW_NOTE, note))] = true;
-			}
-		}
+		Color[] colors = new Color[Look.HIGH_NOTE + 1];
 		if (reveal && !round.isOver()) {
 			for (int[] step : round.question().steps()) {
 				for (int note : step) {
-					heard[Math.min(HIGH_NOTE, Math.max(LOW_NOTE, note))] = true;
+					int key = clamp(note);
+					colors[key] = Look.isBlack(key) ? new Color(214, 160, 40) : new Color(255, 226, 150);
 				}
 			}
 		}
-		int whites = 0;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
-			whites += isBlack(note) ? 0 : 1;
-		}
-		int keyWidth = Math.max(4, width / whites);
-		int left = x + (width - keyWidth * whites) / 2;
-		int white = 0;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
-			if (isBlack(note)) {
-				continue;
+		if (reveal && sounding != null) {
+			for (int note : sounding) {
+				colors[clamp(note)] = GOLD;
 			}
-			int kx = left + white * keyWidth;
-			g.setColor(lit[note] ? GOLD : heard[note] ? new Color(255, 226, 150) : WHITE_KEY);
-			g.fillRoundRect(kx + 1, y, keyWidth - 2, height, 6, 6);
-			if (note % 12 == 0) {
-				g.setColor(DIM);
-				g.setFont(new Font("SansSerif", Font.PLAIN, 10));
-				g.drawString("C" + (note / 12 - 1), kx + 3, y + height - 6);
-			}
-			white++;
 		}
-		white = 0;
-		int blackWidth = keyWidth * 3 / 5;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
-			if (!isBlack(note)) {
-				white++;
-				continue;
-			}
-			int kx = left + white * keyWidth - blackWidth / 2;
-			g.setColor(lit[note] ? GOLD : heard[note] ? new Color(214, 160, 40) : BLACK_KEY);
-			g.fillRoundRect(kx, y, blackWidth, height * 3 / 5, 4, 4);
-		}
+		Look.paintKeyboard(g, x, y, width, height, colors);
 	}
 
-	static boolean isBlack(int note) {
-		int pitch = note % 12;
-		return pitch == 1 || pitch == 3 || pitch == 6 || pitch == 8 || pitch == 10;
+	private static int clamp(int note) {
+		return Math.min(Look.HIGH_NOTE, Math.max(Look.LOW_NOTE, note));
 	}
 
 	/** The distinct notes of a question in the order they first sound, as names such as "F#4". */
@@ -627,26 +579,5 @@ public final class EarTrainer extends JPanel {
 		g.setColor(DIM);
 		g.drawOval(x + 2, y - 2, 8, 10);
 		g.fillRoundRect(x, y + 3, 12, 10, 3, 3);
-	}
-
-	/** A SansSerif font of {@code style}, shrunk from {@code size} until {@code text} fits in {@code width}. */
-	private static Font fitFont(Graphics2D g, String text, int style, int size, int width) {
-		Font font = new Font("SansSerif", style, size);
-		while (size > 10 && g.getFontMetrics(font).stringWidth(text) > width) {
-			font = new Font("SansSerif", style, --size);
-		}
-		return font;
-	}
-
-	/** {@code text} cut short with "..." to fit in {@code width} at the current font. */
-	private static String fit(Graphics2D g, String text, int width) {
-		FontMetrics metrics = g.getFontMetrics();
-		if (metrics.stringWidth(text) <= width) {
-			return text;
-		}
-		while (text.length() > 1 && metrics.stringWidth(text + "...") > width) {
-			text = text.substring(0, text.length() - 1);
-		}
-		return text + "...";
 	}
 }

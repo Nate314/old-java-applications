@@ -23,6 +23,7 @@ public class Main extends JFrame implements ActionListener{
 	private MySynthesizer synth = new MySynthesizer(this);
 	private JTabbedPane tpane = new JTabbedPane();
 	private EarTrainer trainer;
+	private Songwriter songwriter;
 	private JPanel notesPanel = new JPanel();
 	private JButton button = new JButton("test");
 
@@ -31,15 +32,18 @@ public class Main extends JFrame implements ActionListener{
 		this.setTitle("Music Theory Expert");
 		trainer = new EarTrainer(synth,
 				DrillRecords.load(new File(System.getProperty("user.home"), ".musictheory-drills.txt")));
+		songwriter = new Songwriter(synth, new File(System.getProperty("user.home"), ".musictheory-songwriter.txt"));
 		tpane.addTab("Ear training", trainer);
+		tpane.addTab("Songwriter", songwriter);
 		tpane.addTab("Notes", notesPanel);
 		notesPanel.add(button);
 		button.addActionListener(this);
 		this.add(tpane);
 		this.setSize(780, 600);
-		// Keys reach the trainer whichever component has the focus, while its tab is showing.
+		// Keys reach the Ear training or Songwriter tab whichever component has the focus, while that tab is showing.
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(event -> event.getID() == KeyEvent.KEY_PRESSED
-				&& tpane.getSelectedComponent() == trainer && this.isActive() && trainer.keyPressed(event));
+				&& this.isActive() && (tpane.getSelectedComponent() == trainer && trainer.keyPressed(event)
+						|| tpane.getSelectedComponent() == songwriter && songwriter.keyPressed(event)));
 		this.setVisible(visibility);
 //		synth.playNotes(synthesizer.Notes.A4, 300, 0, 127, 0, 0);
 //		synth.playNotes(synthesizer.Notes.B4, 300, 0, 127, 0, 0);
