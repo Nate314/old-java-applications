@@ -79,6 +79,39 @@
     .player:fullscreen .screen, .player.big .screen { flex: 1; }
     body.locked { overflow: hidden; }
 
+    /* ---- pocket player: on a phone the app gets the screen, not a postage stamp ----
+       Up to 640 px wide the iframe keeps the screen's own size (fit() in the script below), so the app's page
+       zooms and centers its windows for a phone as it does on its own page, and the screen takes the height the
+       bar and the rail leave. The bar shrinks to the name, two lines of hint (tap for the rest) and one row of
+       buttons that scrolls sideways, so the whole player fits in one phone screen. */
+    @media (max-width: 640px) {
+      main { padding-top: 40px; }   /* under the Sound and Skin controls */
+      .shim-toolbar { position: absolute; }   /* scrolls away, not over the player's bar */
+      h1 { font-size: 23px; }
+      p.lead { margin-bottom: 12px; font-size: 14px; }
+      p.lead .tech { display: none; }
+      .player-bar { gap: 4px 10px; padding: 8px 10px 6px; }
+      .player-bar h3 { font-size: 16px; }
+      .player-bar .hint { flex: 1 1 100%; font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical;
+                          -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; cursor: pointer; }
+      .player-bar .hint.open { display: block; }
+      .player-bar .actions { flex: 1 1 100%; flex-wrap: nowrap; gap: 6px; margin: 2px -10px 0; padding: 2px 10px 4px;
+                             overflow-x: auto; scrollbar-width: none;
+                             -webkit-mask-image: linear-gradient(to right, #000 82%, transparent);
+                             mask-image: linear-gradient(to right, #000 82%, transparent); }
+      .player-bar .actions.end { -webkit-mask-image: none; mask-image: none; }
+      .player-bar .actions::-webkit-scrollbar { display: none; }
+      .player-bar .actions .btn { flex: none; padding: 5px 11px; }
+      /* What a phone wants first: the app's own page, another app, the whole screen. */
+      #player-full { order: -3; }
+      #player-shuffle { order: -2; }
+      #player-big { order: -1; }
+      .rail { padding: 6px 4px; gap: 4px; }
+      .rail .step { width: 28px; }
+      .rail li button { width: 84px; }
+      .rail .pic { height: 46px; }
+    }
+
     /* ---- gallery ---- */
     .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
     .filters button { padding: 4px 14px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-bg);
@@ -202,8 +235,8 @@
 <body>
 <main>
   <h1>Old Java Applications</h1>
-  <p class="lead">Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM.
-    Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page.
+  <p class="lead">Java Swing and AWT programs recovered from old jars<span class="tech">, compiled to JavaScript with TeaVM.
+    Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page</span>.
     One is already running below: pick any other to swap it in.</p>
   <p class="offline-banner" id="offline-banner" role="status" hidden></p>
 
@@ -298,7 +331,7 @@
     <li data-app="NumberGuess" data-then data-origin="original" data-cat="game"><a class="thumb" href="NumberGuess/index.html"><img src="shots/NumberGuess.png" alt="Number Guess window" loading="lazy"></a><div class="body"><strong>Number Guess</strong><span>Find the hidden number in five ranges, from 1-10 to 1-1,000,000. The number line lights what is still possible: type a guess or click it. Par or better is three stars. You pick turns it around: the computer guesses yours.</span><div class="actions"><a class="btn primary play" href="NumberGuess/index.html">Play</a><a class="btn" href="NumberGuess/index.html">Full page</a></div></div></li>
     <li data-app="TankGame" data-then data-origin="original" data-cat="game"><a class="thumb" href="TankGame/index.html"><img src="shots/TankGame.png" alt="Tank Game window" loading="lazy"></a><div class="body"><strong>Tank Game</strong><span>Tank duel against the computer or a friend, behind walls that change every round. W A S D and Q drive and fire red, arrow keys and M green. First to three rounds wins.</span><div class="actions"><a class="btn primary play" href="TankGame/index.html">Play</a><a class="btn" href="TankGame/index.html">Full page</a></div></div></li>
     <li data-app="MusicTheoryExpert" data-then data-origin="original" data-cat="music"><a class="thumb" href="MusicTheoryExpert/index.html"><img src="shots/MusicTheoryExpert.png" alt="Music Theory Expert window" loading="lazy"></a><div class="body"><strong>Music Theory Expert</strong><span>Ear training in six drills: hear a chord, an interval or a scale and name it. Six right out of ten wins a star and opens the next drill.</span><div class="actions"><a class="btn primary play" href="MusicTheoryExpert/index.html">Play</a><a class="btn" href="MusicTheoryExpert/index.html">Full page</a></div></div></li>
-    <li data-app="CircleSpawner" data-then data-cat="toy"><a class="thumb" href="CircleSpawner/index.html"><img src="shots/CircleSpawner.png" alt="A rainbow circle built out of windows under the Circle Creator window" loading="lazy"></a><div class="body"><strong>Circle Spawner</strong><span>Builds circles, hearts, stars and your words out of borderless windows. Click one to scatter it.</span><div class="actions"><a class="btn primary play" href="CircleSpawner/index.html">Play</a><a class="btn" href="CircleSpawner/index.html">Full page</a></div></div></li>
+    <li data-app="CircleSpawner" data-then data-cat="toy" data-min-width="400"><a class="thumb" href="CircleSpawner/index.html"><img src="shots/CircleSpawner.png" alt="A rainbow circle built out of windows under the Circle Creator window" loading="lazy"></a><div class="body"><strong>Circle Spawner</strong><span>Builds circles, hearts, stars and your words out of borderless windows. Click one to scatter it.</span><div class="actions"><a class="btn primary play" href="CircleSpawner/index.html">Play</a><a class="btn" href="CircleSpawner/index.html">Full page</a></div></div></li>
     <li data-app="ScreenSaver" data-then data-cat="toy"><a class="thumb" href="ScreenSaver/index.html"><img src="shots/ScreenSaver.png" alt="Screen Saver" loading="lazy"></a><div class="body"><strong>Screen Saver</strong><span>Eight screen savers: green circles, Starfield, Mystify, Pipes, a bouncing logo, a dot clock. N for the next.</span><div class="actions"><a class="btn primary play" href="ScreenSaver/index.html">Play</a><a class="btn" href="ScreenSaver/index.html">Full page</a></div></div></li>
     <li data-app="Windows" data-cat="toy"><a class="thumb" href="Windows/index.html"><img src="shots/Windows.png" alt="Windows: a Start menu of every app on the site, with a search box" loading="lazy"></a><div class="body"><strong>Windows</strong><span>Presses the Windows key once, then quits. On this page the key opens a pretend Start menu of every app here: type to search, Enter to play.</span><div class="actions"><a class="btn primary play" href="Windows/index.html">Play</a><a class="btn" href="Windows/index.html">Full page</a></div></div></li>
     <li data-app="WindowsE" data-then data-cat="toy"><a class="thumb" href="WindowsE/index.html"><img src="shots/WindowsE.png" alt="Windows+E: a cascade of File Explorer windows over its DO IT!!! window" loading="lazy"></a><div class="body"><strong>Windows+E</strong><span>Presses Win+E as many times as you ask, opening that many File Explorer windows. Here they are pretend ones over this site's app folders: double-click a folder to play it.</span><div class="actions"><a class="btn primary play" href="WindowsE/index.html">Play</a><a class="btn" href="WindowsE/index.html">Full page</a></div></div></li>
@@ -337,19 +370,35 @@
     // On the big screen it takes whatever room the bar and the rail leave.
     function isBig() { return document.fullscreenElement === player || player.classList.contains('big'); }
 
+    // A phone (the pocket player, see the style above) gives the iframe the screen's own size instead: scaled
+    // down from 900 px, its apps were a third of their size (Minesweeper's tiles 7 px wide), while the app's
+    // page fits its windows to a phone-sized screen itself, as it does when opened on a phone.
+    var pocket = matchMedia('(max-width: 640px)');
+    var fitted = [0, 0];   // the window's size at the last fit()
+    var firstView = true;  // no app picked yet
+
     function fit() {
       var minHeight = Math.max(MIN_HEIGHT, current ? +(current.getAttribute('data-min-height') || 0) : 0);
       var width = screen.clientWidth;
       var height;
+      fitted = [window.innerWidth, window.innerHeight];
       if (isBig()) {
         screen.style.height = '';
         height = screen.clientHeight;
       } else {
-        // Room for the bar and the rail too, so the whole player fits in the window.
-        var around = player.offsetHeight - screen.offsetHeight + 24;
-        height = Math.round(Math.min(width / ASPECT, Math.max(MIN_SCREEN, window.innerHeight - around)));
+        // Room for the bar and the rail too, so the whole player fits in the window. A phone's screen is as
+        // tall as that room, not 16:10, since the phone is taller than wide.
+        var around = player.offsetHeight - screen.offsetHeight + (pocket.matches ? 12 : 24);
+        var room = window.innerHeight - around;
+        // Until the visitor picks an app (which scrolls the player to the top), a phone's screen ends where the
+        // first view does, under the title, so the app that is already running is seen whole.
+        if (pocket.matches && firstView) room = Math.min(room, window.innerHeight - 12 - (screen.getBoundingClientRect().top + window.scrollY));
+        room = Math.max(MIN_SCREEN, room);
+        height = Math.round(pocket.matches ? room : Math.min(width / ASPECT, room));
       }
-      var scale = Math.min(1, width / MIN_WIDTH, height / minHeight);
+      // (CircleSpawner places its own 380 px window, so its card asks for a wider screen with data-min-width.)
+      var scale = pocket.matches ? Math.min(1, width / (current ? +(current.getAttribute('data-min-width') || 0) : 0))
+        : Math.min(1, width / MIN_WIDTH, height / minHeight);
       frame.style.width = Math.round(width / scale) + 'px';
       frame.style.height = Math.round(height / scale) + 'px';
       frame.style.transform = scale < 1 ? 'scale(' + scale + ')' : '';
@@ -412,7 +461,8 @@
       player.classList.toggle('then', then);
       document.getElementById('player-name').textContent = name;
       var hint = document.getElementById('player-hint');
-      hint.textContent = then ? 'As it was recovered, before any fixes: bugs and all.' : li.querySelector('.body > span').textContent;
+      hint.classList.remove('open');
+      hint.textContent = then ?'As it was recovered, before any fixes: bugs and all.' : li.querySelector('.body > span').textContent;
       // As recovered: its first known quirk, and a link to its page, whose title screen lists them all.
       if (then) window.oldjavaThen.quirks(app).then(function (items) {
         if (!then || current !== li || !items.length) return;
@@ -485,6 +535,7 @@
     frame.addEventListener('load', syncPop);
 
     function choose(li, asThen) {
+      firstView = false;
       history.replaceState(null, '', '#' + li.getAttribute('data-app') + (asThen ? ':then' : ''));
       play(li, true, asThen);
     }
@@ -692,7 +743,27 @@
       frame.focus();
     });
 
-    window.addEventListener('resize', fit);
+    // Phone browsers resize the window as their address bar slides in and out while the page scrolls; refitting
+    // then would resize the app under the visitor's finger, so a phone refits only for a real change.
+    window.addEventListener('resize', function () {
+      if (pocket.matches && !isBig() && window.innerWidth === fitted[0] && Math.abs(window.innerHeight - fitted[1]) < 160) return;
+      fit();
+    });
+
+    // The pocket bar: two lines of hint until tapped, and a row of buttons that fades out at the right edge
+    // while there are more to scroll to.
+    var hintLine = document.getElementById('player-hint');
+    hintLine.addEventListener('click', function (e) {
+      if (pocket.matches && !e.target.closest('a')) hintLine.classList.toggle('open');
+    });
+    var actionRow = player.querySelector('.player-bar .actions');
+    function edge() {
+      actionRow.classList.toggle('end', actionRow.scrollLeft + actionRow.clientWidth >= actionRow.scrollWidth - 4);
+    }
+    actionRow.addEventListener('scroll', edge, { passive: true });
+    window.addEventListener('resize', edge);
+    new MutationObserver(edge).observe(actionRow, { attributes: true, subtree: true, attributeFilter: ['hidden'] });
+    edge();
     var hash = /^#([^:]*)(:then)?$/.exec(decodeURIComponent(location.hash)) || [];
     var start = card(hash[1]);
     if (start) play(start, false, !!hash[2]);
