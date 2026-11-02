@@ -34,8 +34,11 @@ public final class BattleCheck
         shellsBounceOnce();
         tanksAreSolid();
         reloadLimitsFire();
+        wallsStopShellsAndTanks();
+        arenasFitTheField();
         matchRulesAndRecord();
         computerDestroysASittingTarget();
+        computerShootsRoundTheBunker();
         computerAgainstComputerFinishes();
         System.out.println("BattleCheck: all checks passed");
     }
@@ -113,6 +116,53 @@ public final class BattleCheck
         assert shells.size() == 2 : shells.size();
     }
 
+    private static void wallsStopShellsAndTanks()
+    {
+        Tank a = tank(new Script(), 100, 200, 90);
+        Arena bunker = Arena.build(Arena.LAYOUTS.get(1), W, H, a);
+        Arena.Wall wall = bunker.walls().get(0);
+        assert bunker.name().equals("The Bunker") && Math.abs(wall.left - 229) < 1e-9 && Math.abs(wall.right - 255) < 1e-9;
+        // A shell flying right bounces off the wall's left side, then bursts on the next wall it meets.
+        Shell s = new Shell(a, 200, 200, 1, 0);
+        assert s.move(W, H, bunker) && s.move(W, H, bunker) && s.move(W, H, bunker) && s.bounced() && s.dx() < 0;
+        assert s.x() <= wall.left - Shell.RADIUS + 1e-6 : s.x();
+        Shell twice = new Shell(a, 470, 200, 1, 0);   // off the edge, then into the wall
+        int ticks = 0;
+        while (twice.move(W, H, bunker) && ticks++ < 100) { }
+        assert twice.burst() && twice.x() >= wall.right && ticks < 100 : twice.x();
+        assert !bunker.clear(150, 230, 350, 230) && bunker.clear(150, 125, 350, 125);
+        // A tank cannot drive into the wall, but slides along it.
+        Script drive = new Script();
+        Tank t = tank(drive, 150, 200, 135);
+        Tank far = tank(new Script(), 420, 420, 0);
+        List<Shell> shells = new ArrayList<>();
+        drive.forward = true;
+        for (int i = 0; i < 40; i++) t.update(W, H, shells, far, bunker);
+        assert t.x() + Tank.SIZE <= wall.left && t.y() > 260 : t.x() + "," + t.y();
+        // A barrel poking through the wall fires into it (and the shell bounces back), not past it.
+        Script gun = new Script();
+        Tank close = tank(gun, (int) wall.left - Tank.SIZE - 1, 230, 90);
+        gun.fire = true;
+        close.update(W, H, shells, far, bunker);
+        Shell point = shells.get(0);
+        assert shells.size() == 1 && point.move(W, H, bunker) && point.bounced() && point.x() < wall.left;
+    }
+
+    private static void arenasFitTheField()
+    {
+        for (int width : new int[] { W, 344 })
+        {
+            Tank red = tank(new Script(), 100, 250, 90);
+            Tank green = tank(new Script(), width - 120, 250, 270);
+            for (Arena.Layout layout : Arena.LAYOUTS)
+            {
+                Arena arena = Arena.build(layout, width, H, red, green);
+                assert !arena.walls().isEmpty() : layout.name() + " lost every wall at width " + width;
+                assert !arena.blocks(red.x(), red.y(), Tank.SIZE) && !arena.blocks(green.x(), green.y(), Tank.SIZE);
+            }
+        }
+    }
+
     private static void matchRulesAndRecord() throws Exception
     {
         File file = File.createTempFile("tankgame-record", ".txt");
@@ -122,6 +172,7 @@ public final class BattleCheck
         Tank red = new Tank("Red", Color.RED, redKeys, 100, 250, 90);
         Tank green = new Tank("Green", Color.GREEN, greenKeys, 380, 250, 270);
         Battle battle = new Battle(red, green, new ComputerControls(new Random(1)), Record.load(file));
+        battle.setLayouts(Arena.OPEN);           // the rules on an open field; walls are checked on their own
         battle.tick(W, H);
         assert battle.phase() == Battle.Phase.TITLE;
         greenKeys.fire = true;                   // green's fire picks two players
@@ -153,6 +204,7 @@ public final class BattleCheck
         battle.tick(W, H);
         assert battle.phase() == Battle.Phase.MATCH_OVER;
         for (int i = 0; i < Battle.MATCH_OVER_TICKS; i++) battle.tick(W, H);
+        battle.setLayouts(Arena.LAYOUTS);        // the computer has to find red behind the walls
         redKeys.fire = true;                     // red's fire picks the computer
         battle.tick(W, H);
         assert battle.vsComputer() && green.controls() instanceof ComputerControls && green.name().equals("Computer");
@@ -189,6 +241,33 @@ public final class BattleCheck
         System.out.println("  computer destroyed a still target in " + ticks + " ticks");
     }
 
+    /** Red sits behind the bunker: the computer has no straight shot and must drive round the wall to get one. */
+    private static void computerShootsRoundTheBunker()
+    {
+        ComputerControls ai = new ComputerControls(new Random(4));
+        Tank self = tank(ai, 380, 230, 270);
+        Tank target = tank(new Script(), 100, 230, 90);
+        Arena bunker = Arena.build(Arena.LAYOUTS.get(1), W, H, self, target);
+        assert !bunker.clear(self.x(), self.y(), target.x(), target.y());
+        List<Shell> shells = new ArrayList<>();
+        int ticks = 0;
+        while (target.isAlive() && ticks++ < 60 * 30)
+        {
+            ai.plan(self, target, shells, W, H, bunker);
+            self.update(W, H, shells, target, bunker);
+            target.update(W, H, shells, self, bunker);
+            shells.removeIf(s -> {
+                if (!s.move(W, H, bunker)) return true;
+                if (!s.hits(target)) return false;
+                target.hit(s, W, H, bunker);
+                return true;
+            });
+            assert !bunker.blocks(self.x(), self.y(), Tank.SIZE);
+        }
+        assert !target.isAlive() : "the computer did not get round the bunker in 30 s";
+        System.out.println("  computer got round the bunker in " + ticks + " ticks");
+    }
+
     private static void computerAgainstComputerFinishes()
     {
         Random random = new Random(3);
@@ -204,7 +283,7 @@ public final class BattleCheck
             int ticks = 0;
             while (battle.phase() != Battle.Phase.MATCH_OVER && ticks++ < 60 * 60 * 10)
             {
-                left.plan(red, green, battle.shells(), W, H);
+                left.plan(red, green, battle.shells(), W, H, battle.arena());
                 battle.tick(W, H);
             }
             assert battle.phase() == Battle.Phase.MATCH_OVER : "a computer-vs-computer match did not end in 10 minutes";

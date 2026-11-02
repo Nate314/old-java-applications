@@ -1,12 +1,14 @@
 package tankgame;
 
+import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * The rules of a match, one tick at a time: three hits destroy a tank, destroying the other tank wins the round, and
  * the first to win three rounds wins the match. Red's fire key starts a match against the computer, green's fire key
- * a match for two players. Knows nothing about Swing, so the self-check can play whole matches.
+ * a match for two players. Each round is fought on the next battlefield of walls (see {@link Arena}). Knows nothing
+ * about Swing, so the self-check can play whole matches.
  */
 public class Battle
 {
@@ -35,6 +37,15 @@ public class Battle
     private final Record     record;
     private final List<Shell> shells            = new ArrayList<>();
     private final List<Spark> sparks            = new ArrayList<>();
+    /** Marks this tick's blasts left on the ground: x, y and radius. */
+    private final List<double[]> scorches       = new ArrayList<>();
+    private static final Color CHIPS            = new Color(170, 165, 155);
+    private List<Arena.Layout> layouts          = Arena.LAYOUTS;
+    private Arena            arena              = Arena.EMPTY;
+    /** The round, field width and height the arena was placed for, so it is placed again when one changes. */
+    private int              arenaRound         = -1;
+    private int              arenaWidth;
+    private int              arenaHeight;
     private Phase            phase              = Phase.TITLE;
     private int              phaseTicks;
     private boolean          vsComputer;
@@ -80,11 +91,36 @@ public class Battle
         phaseTicks = 0;
     }
 
+    /** The battlefields the rounds take turns on (a test can play on an open field). */
+    public void setLayouts(List<Arena.Layout> layouts)
+    {
+        this.layouts = layouts;
+        arenaRound = -1;
+    }
+
+    /** Places the round's battlefield; the title shows the first round's. */
+    private void placeArena(int width, int height)
+    {
+        int r = Math.max(round, 1);
+        if (r == arenaRound && width == arenaWidth && height == arenaHeight) return;
+        arena = Arena.build(layouts.get((r - 1) % layouts.size()), width, height, red, green);
+        arenaRound = r;
+        arenaWidth = width;
+        arenaHeight = height;
+    }
+
     public void tick(int width, int height)
     {
+        scorches.clear();
+        placeArena(width, height);
         sparks.removeIf(spark -> !spark.move());
         red.fadeFlash();
         green.fadeFlash();
+        if (phase != Phase.TITLE)
+        {
+            smoke(red);
+            smoke(green);
+        }
         phaseTicks++;
         switch (phase)
         {
@@ -106,7 +142,7 @@ public class Battle
                 fight(width, height);
                 break;
             case ROUND_OVER:
-                shells.removeIf(shell -> !shell.move(width, height));
+                shells.removeIf(shell -> !fly(shell, width, height));
                 if (phaseTicks >= ROUND_OVER_TICKS) finishRound();
                 break;
         }
@@ -114,10 +150,10 @@ public class Battle
 
     private void fight(int width, int height)
     {
-        if (vsComputer) computer.plan(green, red, shells, width, height);
-        red.update(width, height, shells, green);
-        green.update(width, height, shells, red);
-        shells.removeIf(shell -> !shell.move(width, height) || strike(shell, red, width, height)
+        if (vsComputer) computer.plan(green, red, shells, width, height, arena);
+        drive(red, green, width, height);
+        drive(green, red, width, height);
+        shells.removeIf(shell -> !fly(shell, width, height) || strike(shell, red, width, height)
                         || strike(shell, green, width, height));
         if (red.isAlive() && green.isAlive()) return;
         explodeIfDead(red);
@@ -128,18 +164,52 @@ public class Battle
         enter(Phase.ROUND_OVER);
     }
 
+    /** Moves a tank one tick, with a muzzle flash when it fires. */
+    private void drive(Tank tank, Tank other, int width, int height)
+    {
+        int fired = shells.size();
+        tank.update(width, height, shells, other, arena);
+        if (shells.size() > fired)
+        {
+            Shell shell = shells.get(fired);
+            Spark.burst(sparks, shell.x(), shell.y(), 8, 2.5, new Color(255, 160, 60));
+        }
+    }
+
+    /** Moves a shell one tick, chipping a wall it bounces off; returns false once it is gone. */
+    private boolean fly(Shell shell, int width, int height)
+    {
+        boolean flying = shell.move(width, height, arena);
+        if (shell.bounced()) Spark.burst(sparks, shell.x(), shell.y(), 5, 2, CHIPS);
+        if (shell.burst())
+        {
+            Spark.burst(sparks, shell.x(), shell.y(), 14, 3, CHIPS);
+            scorches.add(new double[] { shell.x(), shell.y(), 9 });
+        }
+        return flying;
+    }
+
     /** Applies a hit if the shell struck the tank; returns whether the shell is used up. */
     private boolean strike(Shell shell, Tank tank, int width, int height)
     {
         if (!shell.hits(tank)) return false;
-        tank.hit(shell, width, height);
+        tank.hit(shell, width, height, arena);
         Spark.burst(sparks, shell.x(), shell.y(), 12, 4, tank.color());
         return true;
     }
 
     private void explodeIfDead(Tank tank)
     {
-        if (!tank.isAlive()) Spark.burst(sparks, tank.x(), tank.y(), 70, 9, tank.color());
+        if (tank.isAlive()) return;
+        Spark.burst(sparks, tank.x(), tank.y(), 70, 9, tank.color());
+        scorches.add(new double[] { tank.x(), tank.y(), 62 });
+    }
+
+    /** A damaged tank smokes, more with each hit, and a wreck smokes most. */
+    private void smoke(Tank tank)
+    {
+        double chance = new double[] { 0.4, 0.22, 0.08, 0 }[tank.health()];
+        if (Math.random() < chance) Spark.smoke(sparks, tank.x(), tank.y());
     }
 
     private void finishRound()
@@ -212,5 +282,17 @@ public class Battle
     public List<Spark> sparks()
     {
         return sparks;
+    }
+
+    /** The battlefield of this round (or of the first round, on the title). */
+    public Arena arena()
+    {
+        return arena;
+    }
+
+    /** Blast marks this tick left on the ground: x, y and radius each. */
+    public List<double[]> scorches()
+    {
+        return scorches;
     }
 }

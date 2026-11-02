@@ -9,7 +9,8 @@ import java.util.Random;
  * Drives a tank against the player. It turns toward where the player will be when a shell gets there, keeps a middle
  * distance, backs or drives out of the way of shells it notices, and fires when its aim is close. It has the same
  * speed, turning rate and reload as a player, and a human-sized reaction time, aim error and trigger delay, and it
- * misses some shells, so it can be beaten.
+ * misses some shells, so it can be beaten. When a wall is in the way it does not fire, but drives round to a spot with
+ * a clear shot, and it backs out and turns when it finds itself stuck against a wall.
  */
 public class ComputerControls implements Controls
 {
@@ -23,6 +24,9 @@ public class ComputerControls implements Controls
     private static final int     DODGE_LOOKAHEAD = 40;
     private static final double  NEAR           = 170;
     private static final double  FAR            = 280;
+    /** Spacing of the spots it considers when looking for a clear shot round a wall. */
+    private static final int     SPOT_STEP      = 20;
+    private static final int     UNSTICK_TICKS  = 20;
     private final Random         random;
     /** Whether each incoming shell was noticed, decided once per shell. */
     private final Map<Shell, Boolean> noticed   = new HashMap<>();
@@ -35,14 +39,27 @@ public class ComputerControls implements Controls
     private double               aimX;
     private double               aimY;
     private double               aimError;
+    /** Whether a shell fired now could reach the player, seen at the last look. */
+    private boolean              clearShot      = true;
+    /** Where it is driving to get a clear shot, or null. */
+    private double[]             spot;
+    private double               lastX;
+    private double               lastY;
+    private int                  unstick;
 
     public ComputerControls(Random random)
     {
         this.random = random;
     }
 
-    /** Decides this tick's moves for {@code self} against {@code enemy}. */
+    /** Decides this tick's moves for {@code self} against {@code enemy} on a field with no walls. */
     public void plan(Tank self, Tank enemy, List<Shell> shells, int width, int height)
+    {
+        plan(self, enemy, shells, width, height, Arena.EMPTY);
+    }
+
+    /** Decides this tick's moves for {@code self} against {@code enemy}. */
+    public void plan(Tank self, Tank enemy, List<Shell> shells, int width, int height, Arena arena)
     {
         if (sinceLook++ >= REACTION_TICKS)
         {
@@ -52,17 +69,92 @@ public class ComputerControls implements Controls
             aimX = enemy.x() + enemy.velocityX() * ticks;
             aimY = enemy.y() + enemy.velocityY() * ticks;
             aimError = (random.nextDouble() * 2 - 1) * AIM_ERROR;
+            clearShot = arena.clear(self.x(), self.y(), enemy.x(), enemy.y())
+                            && arena.clear(self.x(), self.y(), aimX, aimY);
+            if (clearShot) spot = null;
+            else if (spot == null) spot = findSpot(self, enemy, width, height, arena);
+            // Wanted to move but did not: stuck on a wall (or the other tank), so back out and turn.
+            if ((forward || back) && Math.hypot(self.x() - lastX, self.y() - lastY) < 3) unstick = UNSTICK_TICKS;
+            lastX = self.x();
+            lastY = self.y();
         }
-        double wanted = Math.toDegrees(Math.atan2(aimX - self.x(), self.y() - aimY)) + aimError;
-        double turn = normalize(wanted - self.rotation());
-        left = turn < -Tank.SPEED / 2.0;
-        right = turn > Tank.SPEED / 2.0;
-        fire = Math.abs(turn) < FIRE_CONE && self.reload() == 0 && random.nextDouble() < TRIGGER_CHANCE;
+        noticed.keySet().retainAll(shells);
+        fire = false;
+        if (unstick > 0)
+        {
+            unstick--;
+            spot = null;
+            forward = left = false;
+            back = right = true;
+            return;
+        }
+        if (spot != null)
+        {
+            if (Math.hypot(spot[0] - self.x(), spot[1] - self.y()) < Tank.SPEED * 2) spot = null;
+            else
+            {
+                steer(self, spot[0], spot[1], 0);
+                forward = Math.abs(turnTo(self, spot[0], spot[1], 0)) < 40;
+                back = false;
+                dodgeShells(self, shells, width, height);
+                return;
+            }
+        }
+        double turn = steer(self, aimX, aimY, aimError);
+        fire = clearShot && Math.abs(turn) < FIRE_CONE && self.reload() == 0 && random.nextDouble() < TRIGGER_CHANCE;
 
         double distance = self.distanceTo(enemy);
         forward = distance > FAR && Math.abs(turn) < 60;
         back = distance < NEAR;
-        noticed.keySet().retainAll(shells);
+        dodgeShells(self, shells, width, height);
+    }
+
+    /** Turns toward a point; returns how far off it still is, in degrees. */
+    private double steer(Tank self, double x, double y, double error)
+    {
+        double turn = turnTo(self, x, y, error);
+        left = turn < -Tank.SPEED / 2.0;
+        right = turn > Tank.SPEED / 2.0;
+        return turn;
+    }
+
+    private static double turnTo(Tank self, double x, double y, double error)
+    {
+        double wanted = Math.toDegrees(Math.atan2(x - self.x(), self.y() - y)) + error;
+        return normalize(wanted - self.rotation());
+    }
+
+    /**
+     * The nearest spot at a middle distance from the enemy with a clear shot at it and room for the tank, preferring
+     * spots it can drive straight to; null if there is none.
+     */
+    private static double[] findSpot(Tank self, Tank enemy, int width, int height, Arena arena)
+    {
+        double[] best = null;
+        double bestCost = Double.MAX_VALUE;
+        for (int x = Tank.SIZE; x <= width - Tank.SIZE; x += SPOT_STEP)
+        {
+            for (int y = Tank.SIZE; y <= height - Tank.SIZE; y += SPOT_STEP)
+            {
+                double range = Math.hypot(x - enemy.x(), y - enemy.y());
+                if (range < NEAR || range > FAR + 60 || arena.blocks(x, y, Tank.SIZE + 2)) continue;
+                // A wide berth, so the shot is still clear from wherever near the spot the tank stops.
+                if (arena.firstHit(x, y, enemy.x(), enemy.y(), Shell.RADIUS + SPOT_STEP) != null) continue;
+                double cost = Math.hypot(x - self.x(), y - self.y());
+                if (arena.firstHit(self.x(), self.y(), x, y, Tank.SIZE * 0.6) != null) cost += 200;
+                if (cost < bestCost)
+                {
+                    bestCost = cost;
+                    best = new double[] { x, y };
+                }
+            }
+        }
+        return best;
+    }
+
+    /** Drives forward or back out of the way of a shell about to hit, if one is noticed. */
+    private void dodgeShells(Tank self, List<Shell> shells, int width, int height)
+    {
         int dodge = dodge(self, shells, width, height);
         if (dodge != 0)
         {
