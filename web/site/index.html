@@ -330,6 +330,41 @@
         box-shadow: 0 0 0 1px #ff2bd6, 0 0 24px rgba(255, 43, 214, 0.45); }
     }
     :root[data-skin="arcade"] .rail li button[aria-current="true"] { box-shadow: 0 0 12px rgba(255, 43, 214, 0.6); }
+
+    /* ---- your arcade: What's new, the passport, your records and Take it with you share one tabbed panel, so
+       the gallery starts right under it instead of four panels further down ---- */
+    .arcade { margin-top: 28px; }
+    .arcade-tabs { position: relative; display: flex; gap: 4px; padding: 0 10px; overflow-x: auto; scrollbar-width: none; }
+    .arcade-tabs::-webkit-scrollbar { display: none; }
+    .arcade-tabs [role="tab"] { flex: none; display: inline-flex; align-items: center; gap: 7px; margin-bottom: -1px;
+                                padding: 8px 16px; border: 1px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0;
+                                background: transparent; color: inherit; font: 700 15px/1.4 inherit; font-family: inherit;
+                                opacity: 0.7; cursor: pointer; white-space: nowrap; position: relative; z-index: 1; }
+    .arcade-tabs [role="tab"][hidden] { display: none; }
+    @media (max-width: 640px) {
+      .arcade-tabs { gap: 2px; padding: 0 4px; }
+      .arcade-tabs [role="tab"] { gap: 5px; padding: 8px 10px; font-size: 14px; }
+    }
+    .arcade-tabs [role="tab"]:hover { opacity: 1; }
+    .arcade-tabs [role="tab"][aria-selected="true"] { opacity: 1; border-color: var(--card-border); background: var(--card-bg);
+                                                      box-shadow: inset 0 3px 0 var(--accent); }
+    .arcade-tabs [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .arcade-tabs .badge { min-width: 8px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: #fff;
+                          font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+    .arcade-tabs .badge.new { background: #f59e0b; }
+    .arcade-tabs .badge[hidden] { display: none; }
+    /* The takeaway panel is dark in every skin, so its tab is too when chosen. */
+    .arcade-tabs #tab-takeaway[aria-selected="true"] { background: #2a1150; border-color: #35205c; color: #e6e0ff;
+                                                      box-shadow: inset 0 3px 0 #ff2bd6; }
+    .arcade:has(#news.fresh) #tab-news[aria-selected="true"] { border-color: #f59e0b; box-shadow: inset 0 3px 0 #f59e0b; }
+    :root[data-skin="arcade"] .arcade:has(#news.fresh) #tab-news[aria-selected="true"] { border-color: #ffe14d; box-shadow: inset 0 3px 0 #ffe14d; }
+    .arcade > [role="tabpanel"] { margin-top: 0; }
+    .arcade > [role="tabpanel"].off { display: none; }
+    /* The tabs name the panels; the headings stay for screen readers' heading lists. */
+    .arcade > [role="tabpanel"] h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+                                     white-space: nowrap; }
+    :root[data-skin="arcade"] .arcade-tabs .badge.new { background: #ffe14d; color: #170a2e; }
+    :root[data-skin="arcade"] .arcade-tabs [role="tab"][aria-selected="true"] { box-shadow: inset 0 3px 0 var(--accent), 0 -4px 14px rgba(255, 43, 214, 0.25); }
   </style>
 </head>
 <body>
@@ -373,63 +408,92 @@
     </nav>
   </section>
 
-  <section class="news" id="news" aria-labelledby="news-title" hidden>
-    <div class="news-head">
-      <div class="text">
-        <h2 id="news-title">What&rsquo;s new</h2>
-        <p id="news-text" aria-live="polite"></p>
-      </div>
-      <div class="actions">
-        <button class="btn primary" type="button" id="news-play" hidden>Play it</button>
-        <button class="btn" type="button" id="news-all" aria-expanded="false" aria-controls="news-list" hidden>Show all</button>
-      </div>
+  <section class="arcade" id="arcade" aria-label="Your arcade">
+    <div class="arcade-tabs" role="tablist" aria-label="Your arcade">
+      <button type="button" role="tab" id="tab-news" aria-controls="news" aria-selected="false" tabindex="-1" hidden>What&rsquo;s new<span class="badge" hidden></span></button>
+      <button type="button" role="tab" id="tab-passport" aria-controls="passport" aria-selected="false" tabindex="-1">Passport<span class="badge" hidden></span></button>
+      <button type="button" role="tab" id="tab-records" aria-controls="records" aria-selected="false" tabindex="-1">Records<span class="badge" hidden></span></button>
+      <button type="button" role="tab" id="tab-takeaway" aria-controls="takeaway" aria-selected="false" tabindex="-1" hidden>Take it with you</button>
     </div>
-    <ol class="news-list" id="news-list"></ol>
-  </section>
-
-  <section class="passport" id="passport" aria-labelledby="passport-title">
-    <div class="passport-head">
-      <div class="ring" id="passport-ring"><span id="passport-count">0/20</span></div>
-      <div class="text">
-        <h2 id="passport-title">Arcade passport</h2>
-        <p id="passport-text" aria-live="polite">Play an app to collect its stamp.</p>
-      </div>
-      <div class="actions">
-        <button class="btn primary" type="button" id="passport-new">Play one you haven't</button>
-        <button class="btn" type="button" id="passport-share" data-sound="none" title="Share the arcade, with your stamp count">&#8599; Share</button>
-        <button class="btn" type="button" id="passport-reset">Reset</button>
-      </div>
-    </div>
-    <ol class="stamps" id="stamps"></ol>
-  </section>
-
-  <section class="records" id="records" aria-labelledby="records-title">
-    <div class="records-head">
-      <div class="text">
-        <h2 id="records-title">Your records</h2>
-        <p><span class="count" id="records-count">Nothing saved yet</span>. Best times, scores, stars and progress the apps saved in this browser. Take them to your phone, another browser or the desktop apps.</p>
-      </div>
-      <div class="actions">
-        <button class="btn primary" type="button" id="records-send" aria-expanded="false" aria-controls="records-phone">Send to my phone</button>
-        <button class="btn" type="button" id="records-download">Download</button>
-        <button class="btn" type="button" id="records-load">Load</button>
-        <input type="file" id="records-file" accept=".json,application/json" hidden>
-      </div>
-    </div>
-    <p class="status" id="records-status" role="status" hidden></p>
-    <div class="phone" id="records-phone" hidden>
-      <div class="qr" id="records-qr" role="img" aria-label="QR code of the link that carries your saves"></div>
-      <div class="text">
-        <p id="records-qr-text"></p>
-        <div class="linkrow">
-          <input type="text" id="records-link" readonly aria-label="Link that carries your saves">
-          <button class="btn" type="button" id="records-copy" data-sound="none">Copy link</button>
+    <section class="news" id="news" role="tabpanel" aria-labelledby="tab-news" hidden>
+      <div class="news-head">
+        <div class="text">
+          <h2 id="news-title">What&rsquo;s new</h2>
+          <p id="news-text" aria-live="polite"></p>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="news-play" hidden>Play it</button>
+          <button class="btn" type="button" id="news-all" aria-expanded="false" aria-controls="news-list" hidden>Show all</button>
         </div>
       </div>
-    </div>
-    <p class="empty" id="records-empty">Play an app and what it keeps (Minesweeper's best times, your FlappyBird best, Rubik's Cube stars) shows up here.</p>
-    <ul class="record-list" id="records-list"></ul>
-    <p class="desktop">On the desktop: <code>./run.ps1</code> opens the launcher, whose Saves button loads a downloaded file into the desktop apps, or saves theirs as a file to Load here.</p>
+      <ol class="news-list" id="news-list"></ol>
+    </section>
+
+    <section class="passport" id="passport" role="tabpanel" aria-labelledby="tab-passport">
+      <div class="passport-head">
+        <div class="ring" id="passport-ring"><span id="passport-count">0/20</span></div>
+        <div class="text">
+          <h2 id="passport-title">Arcade passport</h2>
+          <p id="passport-text" aria-live="polite">Play an app to collect its stamp.</p>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="passport-new">Play one you haven't</button>
+          <button class="btn" type="button" id="passport-share" data-sound="none" title="Share the arcade, with your stamp count">&#8599; Share</button>
+          <button class="btn" type="button" id="passport-reset">Reset</button>
+        </div>
+      </div>
+      <ol class="stamps" id="stamps"></ol>
+    </section>
+
+    <section class="records" id="records" role="tabpanel" aria-labelledby="tab-records">
+      <div class="records-head">
+        <div class="text">
+          <h2 id="records-title">Your records</h2>
+          <p><span class="count" id="records-count">Nothing saved yet</span>. Best times, scores, stars and progress the apps saved in this browser. Take them to your phone, another browser or the desktop apps.</p>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="records-send" aria-expanded="false" aria-controls="records-phone">Send to my phone</button>
+          <button class="btn" type="button" id="records-download">Download</button>
+          <button class="btn" type="button" id="records-load">Load</button>
+          <input type="file" id="records-file" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <p class="status" id="records-status" role="status" hidden></p>
+      <div class="phone" id="records-phone" hidden>
+        <div class="qr" id="records-qr" role="img" aria-label="QR code of the link that carries your saves"></div>
+        <div class="text">
+          <p id="records-qr-text"></p>
+          <div class="linkrow">
+            <input type="text" id="records-link" readonly aria-label="Link that carries your saves">
+            <button class="btn" type="button" id="records-copy" data-sound="none">Copy link</button>
+          </div>
+        </div>
+      </div>
+      <p class="empty" id="records-empty">Play an app and what it keeps (Minesweeper's best times, your FlappyBird best, Rubik's Cube stars) shows up here.</p>
+      <ul class="record-list" id="records-list"></ul>
+      <p class="desktop">On the desktop: <code>./run.ps1</code> opens the launcher, whose Saves button loads a downloaded file into the desktop apps, or saves theirs as a file to Load here.</p>
+    </section>
+
+    <section class="takeaway" id="takeaway" role="tabpanel" aria-labelledby="tab-takeaway" hidden>
+      <div class="takeaway-head">
+        <img class="app-icon" src="icons/icon.svg" alt="" width="76" height="76">
+        <div class="text">
+          <h2 id="takeaway-title">Take the arcade with you</h2>
+          <p id="takeaway-text" aria-live="polite">Install it as an app, and save all 20 to play with no connection.</p>
+          <div class="meter" id="takeaway-meter" hidden><span></span></div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="takeaway-install" hidden>Install app</button>
+          <button class="btn" type="button" id="takeaway-save">Save all for offline</button>
+        </div>
+      </div>
+      <ul class="perks">
+        <li>Its own window and icon</li>
+        <li>Saved apps play with no connection</li>
+        <li>No account, no ads</li>
+      </ul>
+      <p class="note" id="takeaway-note" hidden>To install, use Install app or Add to Home Screen in your browser's menu.</p>
+    </section>
   </section>
 
   <dialog class="records-in" id="records-in" aria-labelledby="records-in-title">
@@ -445,26 +509,6 @@
     </form>
   </dialog>
 
-  <section class="takeaway" id="takeaway" aria-labelledby="takeaway-title" hidden>
-    <div class="takeaway-head">
-      <img class="app-icon" src="icons/icon.svg" alt="" width="76" height="76">
-      <div class="text">
-        <h2 id="takeaway-title">Take the arcade with you</h2>
-        <p id="takeaway-text" aria-live="polite">Install it as an app, and save all 20 to play with no connection.</p>
-        <div class="meter" id="takeaway-meter" hidden><span></span></div>
-      </div>
-      <div class="actions">
-        <button class="btn primary" type="button" id="takeaway-install" hidden>Install app</button>
-        <button class="btn" type="button" id="takeaway-save">Save all for offline</button>
-      </div>
-    </div>
-    <ul class="perks">
-      <li>Its own window and icon</li>
-      <li>Saved apps play with no connection</li>
-      <li>No account, no ads</li>
-    </ul>
-    <p class="note" id="takeaway-note" hidden>To install, use Install app or Add to Home Screen in your browser's menu.</p>
-  </section>
 
   <h2>Play in the browser</h2>
   <div class="filters" role="group" aria-label="Filter apps">
@@ -1210,6 +1254,97 @@
     document.addEventListener('click', function (e) {
       if (current && e.target.closest && e.target.closest('.filters') && current.hidden) stop(current);
     });
+  })();
+</script>
+<script>
+  // ---- your arcade: one panel, four tabs ----
+  // What's new (news.js), the passport, your records (saves.js) and Take it with you each keep their own code and
+  // still show or hide themselves with `hidden`; this only picks which one is on view (the others get .off), names
+  // each tab's news in a badge, and follows the ARIA tabs pattern (arrows, Home and End move between tabs).
+  // The tab chosen last is remembered; fresh news (an app you played has changed) takes the panel once per visit.
+  (function () {
+    'use strict';
+    var KEY = 'oldjava.arcadeTab';
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('#arcade [role="tab"]'));
+    var chosenByVisitor = false;
+    function panel(tab) { return document.getElementById(tab.getAttribute('aria-controls')); }
+    function tabFor(id) { return document.getElementById('tab-' + id); }
+    function visible() { return tabs.filter(function (t) { return !panel(t).hidden; }); }
+    function remembered() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+
+    function select(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        panel(t).classList.toggle('off', !on);
+      });
+      if (focus) tab.focus();
+      // On a narrow page the tabs scroll sideways: bring the chosen one into view (without scrolling the page).
+      var strip = tab.parentNode;
+      if (tab.offsetLeft < strip.scrollLeft) strip.scrollLeft = tab.offsetLeft;
+      else if (tab.offsetLeft + tab.offsetWidth > strip.scrollLeft + strip.clientWidth) {
+        strip.scrollLeft = tab.offsetLeft + tab.offsetWidth - strip.clientWidth;
+      }
+    }
+    function current() { return tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0]; }
+
+    function badge(tab, text, isNew) {
+      var b = tab.querySelector('.badge');
+      if (!b) return;
+      b.hidden = !text;
+      b.textContent = text || '';
+      b.classList.toggle('new', !!isNew);
+    }
+
+    // Keeps the tabs in step with the panels: a panel that hides itself takes its tab with it.
+    function sync() {
+      tabs.forEach(function (t) { t.hidden = panel(t).hidden; });
+      var news = document.getElementById('news');
+      var fresh = !news.hidden && news.classList.contains('fresh');
+      badge(tabFor('news'), fresh ? 'New' : '', true);
+      var stamps = parseInt(document.getElementById('passport-count').textContent, 10);
+      badge(tabFor('passport'), stamps > 0 ? document.getElementById('passport-count').textContent : '');
+      var saved = parseInt(document.getElementById('records-count').textContent, 10);
+      badge(tabFor('records'), saved > 0 ? String(saved) : '');
+
+      var on = current();
+      if (fresh && !chosenByVisitor) on = tabFor('news');
+      if (!on || on.hidden) {
+        var want = tabFor(remembered() || 'passport');
+        on = want && !want.hidden ? want : visible()[0];
+      }
+      if (on) select(on, false);
+    }
+
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () {
+        chosenByVisitor = true;
+        try { localStorage.setItem(KEY, t.getAttribute('aria-controls')); } catch (e) { /* not kept */ }
+        select(t, false);
+      });
+      t.addEventListener('keydown', function (e) {
+        var list = visible();
+        var i = list.indexOf(t);
+        var next = e.key === 'ArrowRight' ? list[(i + 1) % list.length]
+          : e.key === 'ArrowLeft' ? list[(i - 1 + list.length) % list.length]
+          : e.key === 'Home' ? list[0] : e.key === 'End' ? list[list.length - 1] : null;
+        if (!next) return;
+        e.preventDefault();
+        next.click();
+        next.focus();
+      });
+    });
+
+    var watch = new MutationObserver(sync);
+    tabs.forEach(function (t) { watch.observe(panel(t), { attributes: true, attributeFilter: ['hidden', 'class'] }); });
+    ['passport-count', 'records-count'].forEach(function (id) {
+      watch.observe(document.getElementById(id), { childList: true, characterData: true, subtree: true });
+    });
+    sync();
+
+    // For code that sends the visitor to a panel (saves.js, with saves from a link).
+    window.oldjavaArcade = { show: function (id) { var t = tabFor(id); if (t && !t.hidden) select(t, false); } };
   })();
 </script>
 <script src="qr.js"></script>

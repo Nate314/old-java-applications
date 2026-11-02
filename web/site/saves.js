@@ -296,6 +296,7 @@
     var rest = params.toString();
     history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
     decode(payload).then(function (bundle) {
+      if (window.oldjavaArcade) window.oldjavaArcade.show('records');
       section.scrollIntoView({ block: 'start' });
       incoming(bundle, 'a link');
     }).catch(function () { say('Could not read the saves in that link: it may have been cut short when it was copied.'); });
