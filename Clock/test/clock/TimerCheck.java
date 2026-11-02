@@ -61,6 +61,48 @@ public class TimerCheck {
       check(Ui.stopwatch(7_429).equals("0:07.42"), "stopwatch hundredths");
       check(Ui.stopwatch(3_723_040).equals("1:02:03.04"), "stopwatch hours");
 
+      // Focus sessions: 25 minutes, a 5-minute break that starts by itself, then the next session waits for Start.
+      long t0 = Focus.noon(System.currentTimeMillis()) - 6 * 60 * M; // 6 am today, so nothing crosses midnight
+      int today = Focus.day(t0);
+      Focus focus = new Focus();
+      check(!focus.isRunning() && focus.remaining(t0) == 25 * M && focus.phase() == Focus.FOCUS, "focus starts ready at 25");
+      focus.toggle(t0);
+      check(focus.update(t0 + 25 * M - 1) == Focus.NONE, "not done a millisecond early");
+      check(focus.update(t0 + 25 * M) == Focus.FOCUS_DONE && focus.eventAt() == t0 + 25 * M, "focus done on time");
+      check(focus.phase() == Focus.SHORT && focus.isRunning() && focus.remaining(t0 + 26 * M) == 4 * M, "the break starts by itself");
+      check(focus.minutesOn(today) == 25 && focus.sessionsOn(today) == 1 && focus.done() == 1, "the session is logged");
+      check(focus.update(t0 + 30 * M) == Focus.BREAK_DONE && focus.phase() == Focus.FOCUS && !focus.isRunning(),
+            "after the break the next session waits");
+      check(focus.update(t0 + 90 * M) == Focus.NONE, "nothing runs while waiting");
+      // Three more sessions, caught up in one late tick each (as if the window was closed): the fourth earns a long break.
+      for (int i = 0; i < 3; i++) {
+         long start = t0 + (40 + 40 * i) * M;
+         focus.toggle(start);
+         check(focus.update(start + 35 * M) == Focus.BREAK_DONE && focus.eventAt() == start + 30 * M || i == 2,
+               "a session and its break caught up together");
+      }
+      check(focus.phase() == Focus.LONG && focus.done() == 4 && focus.remaining(t0 + 145 * M) == 15 * M,
+            "the fourth session earns a 15-minute long break");
+      check(focus.sessionsOn(today) == 4 && focus.minutesOn(today) == 100, "four sessions logged");
+      focus.skip(t0 + 160 * M);
+      check(focus.phase() == Focus.FOCUS && focus.done() == 0 && focus.isRunning(), "skipping the long break starts a new set");
+      focus.skip(t0 + 170 * M);
+      check(focus.minutesOn(today) == 110 && focus.sessionsOn(today) == 4 && focus.phase() == Focus.SHORT,
+            "a skipped session logs its minutes but is not a session");
+      focus.reset();
+      focus.nextPlan();
+      check(focus.remaining(0) == 50 * M && focus.length(Focus.SHORT) == 10 * M && focus.length(Focus.LONG) == 30 * M,
+            "the next plan is 50 / 10");
+      focus.toggle(t0 + 200 * M);
+      focus.toggle(t0 + 210 * M);
+      check(focus.isPaused() && focus.remaining(t0 + 999 * M) == 40 * M, "a paused session keeps its time");
+      for (int d = 0; d < 20; d++) {
+         focus.restoreDay(20000101 + d, 5, 1);
+      }
+      check(focus.log().size() == Focus.DAYS, "two weeks of days are kept");
+      check(FocusView.amount(45).equals("45 min") && FocusView.amount(75).equals("1 h 15 min") && FocusView.amount(120).equals("2 h"),
+            "focus amounts");
+
       // The state file round-trips a running timer and a stopwatch with laps, and survives damage.
       File file = File.createTempFile("clock", ".txt");
       file.deleteOnExit();
@@ -72,6 +114,9 @@ public class TimerCheck {
       state.countdown.toggle(5000);
       state.stopwatch.toggle(1000);
       state.stopwatch.lap(4000);
+      state.focus.nextPlan();
+      state.focus.toggle(t0);
+      state.focus.restoreDay(today, 75, 3);
       state.save();
       ClockState back = ClockState.load(file);
       check(back.text().equals(state.text()), "state round-trips:\n" + state.text() + "\nvs\n" + back.text());
@@ -79,6 +124,9 @@ public class TimerCheck {
       check(back.countdown.update(5000 + 26 * M) && back.countdown.finishedAt() == 5000 + 25 * M,
             "a timer that ran out while closed rings at its own time");
       check(back.stopwatch.isRunning() && back.stopwatch.lapCount() == 1, "the stopwatch keeps running");
+      check(back.focus.isRunning() && back.focus.plan() == 1 && back.focus.minutesOn(today) == 75, "the focus session and log come back");
+      check(back.focus.update(t0 + 50 * M) == Focus.FOCUS_DONE && back.focus.minutesOn(today) == 125,
+            "a session that ended while closed is logged");
 
       java.nio.file.Files.write(file.toPath(), Arrays.asList("mode=nonsense", "timer=abc", "laps=1,x", "face=digital"));
       ClockState damaged = ClockState.load(file);

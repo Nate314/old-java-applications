@@ -1661,7 +1661,7 @@
     MusicTheoryExpert: [{ b: ['Space', 'Play / next'], up: ['ArrowUp', 'Previous drill'], down: ['ArrowDown', 'Next drill'],
                           x: ['R', 'Restart'], y: ['N', 'Next drill'] }],
     NumberGuess: [{ up: ['ArrowUp', 'Higher'], down: ['ArrowDown', 'Lower'], b: ['Enter', 'Enter'] }],
-    Clock: [{ b: ['Space', 'Start / pause'], x: ['R', 'Reset'], y: ['L', 'Lap'], up: ['ArrowUp', 'Minute +'],
+    Clock: [{ b: ['Space', 'Start / pause'], x: ['R', 'Reset'], y: ['L', 'Lap / lengths'], start: ['N', 'Skip (Focus)'], up: ['ArrowUp', 'Minute +'],
               down: ['ArrowDown', 'Minute −'] }],
     StockChecker: [{ up: ['ArrowUp', 'Pick'], down: ['ArrowDown', 'Pick'], x: ['B', 'Buy 1'], y: ['S', 'Sell 1'],
                      b: ['Space', 'Pause'] }],
@@ -3237,6 +3237,14 @@
       var laps = (v.laps || '').split(',').filter(Boolean).length;
       if (+v.watchStart > 0) parts.push('stopwatch running');
       if (laps) parts.push(laps + (laps === 1 ? ' lap' : ' laps') + ' on the stopwatch');
+      // Focus sessions: the one running, and today's log ("20261102:75:3" is a day, its minutes and its sessions).
+      var focusEnd = +v.focusEnd, focusLeft = Math.ceil((focusEnd - Date.now()) / 60000);
+      if (focusEnd > 0 && focusLeft > 0) parts.push((+v.focusPhase ? 'on a break, ' : 'focusing, ') + focusLeft + ' min left');
+      var d = new Date(), today = String(d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate());
+      (v.focusLog || '').split(',').forEach(function (day) {
+        var p = day.split(':');
+        if (p[0] === today && +p[2] > 0) parts.push(p[2] + (+p[2] === 1 ? ' focus session' : ' focus sessions') + ' today');
+      });
       return parts.length ? 'Your clock: ' + parts.join(', ') : '';
     } }
   };

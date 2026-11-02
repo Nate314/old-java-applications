@@ -12,13 +12,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * What the window remembers between runs, in {@code ~/.clock.txt}: the tab, the face, 12 or 24 hours, and the timer
- * and stopwatch as wall clock times, so a running timer is still running (or has rung) when the window opens again.
+ * What the window remembers between runs, in {@code ~/.clock.txt}: the tab, the face, 12 or 24 hours, the timer,
+ * stopwatch and focus session as wall clock times, so a running timer is still running (or has rung) when the window
+ * opens again, and the minutes focused on each of the last two weeks.
  */
 final class ClockState {
    static final String CLOCK = "clock";
    static final String TIMER = "timer";
    static final String STOPWATCH = "stopwatch";
+   static final String FOCUS = "focus";
 
    private final File file;
    String mode = CLOCK;
@@ -26,6 +28,7 @@ final class ClockState {
    boolean twentyFour = false;
    final Countdown countdown = new Countdown();
    final Stopwatch stopwatch = new Stopwatch();
+   final Focus focus = new Focus();
 
    ClockState(File file) {
       this.file = file;
@@ -46,6 +49,9 @@ final class ClockState {
       long watchStart = 0;
       long watchBanked = 0;
       List<Long> laps = new ArrayList<>();
+      int[] focus = {0, Focus.FOCUS, 0};
+      long focusEnd = 0;
+      long focusLeft = -1;
       try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), "utf-8"))) {
          for (String line; (line = reader.readLine()) != null;) {
             int split = line.indexOf('=');
@@ -55,7 +61,7 @@ final class ClockState {
             String key = line.substring(0, split);
             String value = line.substring(split + 1).trim();
             try {
-               if (key.equals("mode") && (value.equals(CLOCK) || value.equals(TIMER) || value.equals(STOPWATCH))) {
+               if (key.equals("mode") && (value.equals(CLOCK) || value.equals(TIMER) || value.equals(STOPWATCH) || value.equals(FOCUS))) {
                   this.mode = value;
                } else if (key.equals("face")) {
                   this.analog = !value.equals("digital");
@@ -73,6 +79,23 @@ final class ClockState {
                   watchStart = Long.parseLong(value);
                } else if (key.equals("watchBanked")) {
                   watchBanked = Long.parseLong(value);
+               } else if (key.equals("focusPlan")) {
+                  focus[0] = Integer.parseInt(value);
+               } else if (key.equals("focusPhase")) {
+                  focus[1] = Integer.parseInt(value);
+               } else if (key.equals("focusDone")) {
+                  focus[2] = Integer.parseInt(value);
+               } else if (key.equals("focusEnd")) {
+                  focusEnd = Long.parseLong(value);
+               } else if (key.equals("focusLeft")) {
+                  focusLeft = Long.parseLong(value);
+               } else if (key.equals("focusLog") && !value.isEmpty()) {
+                  for (String day : value.split(",")) {
+                     String[] parts = day.trim().split(":");
+                     if (parts.length == 3) {
+                        this.focus.restoreDay(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+                     }
+                  }
                } else if (key.equals("laps") && !value.isEmpty()) {
                   for (String lap : value.split(",")) {
                      laps.add(Long.parseLong(lap.trim()));
@@ -87,6 +110,7 @@ final class ClockState {
       }
       this.countdown.restore(length, endsAt, left < 0 ? length : left, finishedAt);
       this.stopwatch.restore(watchStart, watchBanked, laps);
+      this.focus.restore(focus[0], focus[1], focus[2], focusEnd, focusLeft);
    }
 
    void save() {
@@ -121,6 +145,19 @@ final class ClockState {
          laps.add(String.valueOf(this.stopwatch.lapEnd(i)));
       }
       text.append("laps=").append(String.join(",", laps)).append('\n');
+      text.append("focusPlan=").append(this.focus.plan()).append('\n');
+      text.append("focusPhase=").append(this.focus.phase()).append('\n');
+      text.append("focusDone=").append(this.focus.done()).append('\n');
+      if (this.focus.isRunning()) {
+         text.append("focusEnd=").append(this.focus.endsAt()).append('\n');
+      } else {
+         text.append("focusLeft=").append(this.focus.left()).append('\n');
+      }
+      List<String> days = new ArrayList<>();
+      for (java.util.Map.Entry<Integer, int[]> day : this.focus.log().entrySet()) {
+         days.add(day.getKey() + ":" + day.getValue()[0] + ":" + day.getValue()[1]);
+      }
+      text.append("focusLog=").append(String.join(",", days)).append('\n');
       return text.toString();
    }
 }

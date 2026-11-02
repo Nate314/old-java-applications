@@ -49,8 +49,10 @@ public class Main extends JFrame {
    void refresh() {
       long now = System.currentTimeMillis();
       Countdown countdown = this.state.countdown;
+      Focus focus = this.state.focus;
       String title = countdown.isDone() ? "Time's up! - Clock"
             : countdown.isRunning() ? Ui.countdown(countdown.remaining(now)) + " left - Clock"
+            : focus.isRunning() ? (focus.onBreak() ? "Break " : "Focus ") + Ui.countdown(focus.remaining(now)) + " - Clock"
             : "Clock";
       if (!title.equals(this.getTitle())) {
          this.setTitle(title);
@@ -62,6 +64,18 @@ public class Main extends JFrame {
    void timerFinished() {
       this.chime.ring();
       this.clockPanel.show(ClockState.TIMER);
+      this.state.save();
+   }
+
+   /**
+    * A focus session or a break ended. When that just happened (not long ago while the window was closed), ring and
+    * show the Focus tab.
+    */
+   void focusFinished(int event, long now) {
+      if (now - this.state.focus.eventAt() < Countdown.MINUTE) {
+         this.chime.ring(event == Focus.FOCUS_DONE ? Chime.BREAK_TIME : Chime.BACK_TO_WORK, 2);
+         this.clockPanel.show(ClockState.FOCUS);
+      }
       this.state.save();
    }
 

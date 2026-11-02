@@ -20,7 +20,7 @@ final class ClockFace implements Tab {
 
    @Override
    public String hint() {
-      return (this.clock.state.analog ? "Click: digital" : "Click: analog") + "   Right click: 12/24 h   1 2 3: tabs";
+      return (this.clock.state.analog ? "Click: digital" : "Click: analog") + "   Right click: 12/24 h   1-4: tabs";
    }
 
    @Override
@@ -39,6 +39,12 @@ final class ClockFace implements Tab {
          double hours = this.clock.hours % 12 + minutes / 60.0;
          g2.setColor(Ui.FACE);
          g2.fillOval(left, top, diameter, diameter);
+         // A focus session or break under way shows on the face: a band round the rim from now to when it ends.
+         Focus focus = this.clock.state.focus;
+         if (focus.isRunning()) {
+            g2.setColor(focus.onBreak() ? FocusView.BREAK : Ui.WEDGE);
+            Ui.band(g2, centerX, centerY, radius, radius * 88 / 100, minutes / 60.0, focus.remaining(now) / (60.0 * Countdown.MINUTE));
+         }
          g2.setColor(Ui.INK);
          g2.drawOval(left, top, diameter, diameter);
          drawHand(g2, centerX, centerY, radius / 2, (Math.PI / 2) - hours * (Math.PI / 6));

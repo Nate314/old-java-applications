@@ -6,10 +6,17 @@ import javax.sound.midi.MidiSystem;
 import javax.sound.midi.Synthesizer;
 import javax.swing.Timer;
 
-/** The timer's alarm: a falling-then-rising bell phrase on the MIDI synthesizer, repeated until stopped. */
+/**
+ * The timer's alarm: a falling-then-rising bell phrase on the MIDI synthesizer, repeated until stopped. Focus
+ * sessions ring shorter phrases on the same bell.
+ */
 final class Chime {
    private static final int TUBULAR_BELLS = 14;
    private static final int[] PHRASE = {84, 79, 76, 79, 84};
+   /** Focus is over: a falling phrase, rung twice. */
+   static final int[] BREAK_TIME = {84, 79, 76, 72};
+   /** The break is over: the same notes rising. */
+   static final int[] BACK_TO_WORK = {72, 76, 79, 84};
    private static final int NOTE_MILLIS = 220;
    private static final int PHRASE_MILLIS = 2400;
    private static final int REPEATS = 8;
@@ -18,6 +25,8 @@ final class Chime {
    private boolean noSynth;
    private final Timer noteTimer = new Timer(NOTE_MILLIS, event -> this.nextNote());
    private final Timer phraseTimer = new Timer(PHRASE_MILLIS, event -> this.nextPhrase());
+   private int[] phrase = PHRASE;
+   private int repeats = REPEATS;
    private int note;
    private int phrases;
    private int sounding = -1;
@@ -28,7 +37,14 @@ final class Chime {
 
    /** Rings the phrase now and then every few seconds, {@code REPEATS} times in all. */
    void ring() {
+      this.ring(PHRASE, REPEATS);
+   }
+
+   /** Rings {@code phrase} now and then every few seconds, {@code repeats} times in all. */
+   void ring(int[] phrase, int repeats) {
       this.stop();
+      this.phrase = phrase;
+      this.repeats = repeats;
       this.phrases = 0;
       this.nextPhrase();
       this.phraseTimer.start();
@@ -41,7 +57,7 @@ final class Chime {
    }
 
    private void nextPhrase() {
-      if (this.phrases++ >= REPEATS) {
+      if (this.phrases++ >= this.repeats) {
          this.stop();
          return;
       }
@@ -52,7 +68,7 @@ final class Chime {
 
    private void nextNote() {
       this.release();
-      if (this.note >= PHRASE.length) {
+      if (this.note >= this.phrase.length) {
          this.noteTimer.stop();
          return;
       }
@@ -62,7 +78,7 @@ final class Chime {
             Toolkit.getDefaultToolkit().beep();
          }
       } else {
-         this.sounding = PHRASE[this.note];
+         this.sounding = this.phrase[this.note];
          bell.noteOn(this.sounding, 110);
       }
       this.note++;

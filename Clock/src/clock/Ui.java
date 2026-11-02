@@ -63,6 +63,27 @@ final class Ui {
       line(g, label, LABELS, inner);
    }
 
+   /**
+    * Fills a ring band between two radii, from {@code start} turns clockwise from 12 o'clock, {@code sweep} turns
+    * long (one turn is the whole circle).
+    */
+   static void band(Graphics2D g, int cx, int cy, int outer, int inner, double start, double sweep) {
+      if (sweep <= 0) {
+         return;
+      }
+      int steps = Math.max(2, (int) Math.ceil(Math.min(1, sweep) * 120));
+      int[] xs = new int[2 * (steps + 1)];
+      int[] ys = new int[2 * (steps + 1)];
+      for (int i = 0; i <= steps; i++) {
+         double angle = 2 * Math.PI * (start + sweep * i / steps);
+         xs[i] = cx + (int) Math.round(outer * Math.sin(angle));
+         ys[i] = cy - (int) Math.round(outer * Math.cos(angle));
+         xs[xs.length - 1 - i] = cx + (int) Math.round(inner * Math.sin(angle));
+         ys[ys.length - 1 - i] = cy - (int) Math.round(inner * Math.cos(angle));
+      }
+      g.fillPolygon(xs, ys, xs.length);
+   }
+
    /** Splits {@code box} across into {@code count} equal parts with {@code gap} pixels between them. */
    static Rectangle[] row(Rectangle box, int count, int gap) {
       Rectangle[] parts = new Rectangle[count];

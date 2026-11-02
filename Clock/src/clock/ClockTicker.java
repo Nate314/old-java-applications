@@ -40,6 +40,10 @@ final class ClockTicker implements ActionListener {
       if (this.clock.state.countdown.update(millis)) {
          this.clock.timerFinished();
       }
+      int focusEvent = this.clock.state.focus.update(millis);
+      if (focusEvent != Focus.NONE) {
+         this.clock.focusFinished(focusEvent, millis);
+      }
       this.clock.refresh();
    }
 
