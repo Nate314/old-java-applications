@@ -292,7 +292,7 @@ public final class GameFrame extends JFrame {
             : OPEN_COLOR;
          for (int cell = 0; cell < 9; cell++) {
             boolean last = this.state.lastMove == board * 9 + cell;
-            this.boards[board].cells[cell].show(this.state.marks[board][cell], last ? LAST_MOVE_COLOR : color);
+            this.boards[board].cells[cell].show(this.state.marks[board][cell], last ? LAST_MOVE_COLOR : color, playable, last);
          }
       }
 

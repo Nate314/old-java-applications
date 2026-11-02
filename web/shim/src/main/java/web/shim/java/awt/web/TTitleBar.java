@@ -18,8 +18,10 @@ public final class TTitleBar {
     private final JSObject bar;
     private final JSObject icon;
     private final JSObject title;
+    private final JSObject window;
 
     public TTitleBar(JSObject parent, Runnable onClose) {
+        window = parent;
         bar = Js.create("div");
         Js.setClass(bar, "titlebar");
         icon = Js.create("span");
@@ -40,6 +42,15 @@ public final class TTitleBar {
     public void update(boolean shown, String text, boolean closable) {
         Js.style(bar, "display", shown ? "flex" : "none");
         Js.setText(title, text == null ? "" : text);
+        // A screen reader names a decorated window by its title, as on a desktop. Borderless ones (CircleSpawner's
+        // pieces, a screen saver) are just drawing.
+        if (!shown || text == null || text.isEmpty()) {
+            Js.removeAttr(window, "role");
+            Js.removeAttr(window, "aria-label");
+        } else {
+            Js.setAttr(window, "role", "dialog");
+            Js.setAttr(window, "aria-label", text);
+        }
         Js.toggleClass(bar, "no-close", !closable);
     }
 

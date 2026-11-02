@@ -24,11 +24,19 @@ public final class CellButton extends JButton implements ActionListener {
       this.addActionListener(this);
    }
 
-   /** Shows a mark ("", "X" or "O") on the given board color. */
-   final void show(String mark, Color background) {
+   /** Where a board sits in the big grid, or a square in its board, read out by screen readers. */
+   private static final String[] PLACES = {"top left", "top", "top right", "left", "middle", "right", "bottom left", "bottom", "bottom right"};
+
+   /**
+    * Shows a mark ("", "X" or "O") on the given board color. A screen reader reads the mark, whether the next move
+    * may go there, and where the square is ("empty, open, top left board, middle square"; "O, last move, ...").
+    */
+   final void show(String mark, Color background, boolean open, boolean last) {
       this.setText(mark);
       this.setForeground("X".equals(mark) ? this.xColor : this.oColor);
       this.setBackground(background);
+      this.getAccessibleContext().setAccessibleName((mark.isEmpty() ? "empty" + (open ? ", open" : "") : mark + (last ? ", last move" : ""))
+         + ", " + PLACES[this.boardIndex] + " board, " + PLACES[this.cellIndex] + " square");
    }
 
    @Override

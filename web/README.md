@@ -86,7 +86,7 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 
 - Repaints are coalesced into one paint pass per animation frame (with a timer fallback for hidden tabs). A thread other than the EDT that calls `repaint()` waits for that pass, so loops like FlappyBird's `while (true) panel.repaint();` run once per frame instead of hanging the tab.
 - `javax.swing.Timer` runs on `setTimeout`; `SwingUtilities.invokeLater` and `EventQueue.invokeLater` queue on the EDT.
-- Mouse events go to the deepest component with mouse listeners; key events go through `KeyboardFocusManager` dispatchers, then to the focus owner (the first focusable widget of the active window, or the window itself). DOM key codes are mapped to AWT `VK_` codes.
+- Mouse events go to the deepest component with mouse listeners; key events go through `KeyboardFocusManager` dispatchers, then to the focus owner (the first focusable widget of the active window, or the window itself) as it is when the key's turn on the EDT comes, as in Swing, so a key that moves the focus sends the next one to the new owner. DOM key codes are mapped to AWT `VK_` codes. Tab and Shift+Tab move the focus instead (see Keyboard and screen readers).
 - Touch and pens work the apps too (see Touch).
 - `java.awt.Robot` can only reach the page: `keyPress`/`keyRelease` queue key events for the focused component, and `getPixelColor` samples the canvas or widget color at that viewport point.
 
@@ -173,6 +173,20 @@ On a phone or tablet a finger is the left mouse button, so every app can be play
 - Holding still for 500 ms on a button that listens to the mouse itself is a right click: the left press ends without a click and a right press, release and click follow. That is Minesweeper's flag (long-press a tile to cycle flag, question mark and blank). A ring closes in on the finger while it is held and pops when the right click goes (with a short vibration where the phone allows it); a quick tap shows nothing. Other buttons and panels keep a long press as a long left press, so held keys and press-and-drag work as before. Clock's right click (12 or 24 hours) has no touch equivalent.
 - Windows have `touch-action: none`, so a finger on a window works the app instead of panning or zooming the page; a swipe outside the windows still scrolls the home page. They also turn off the long-press callout and the tap flash.
 - Only the first finger counts; a second one is ignored until the first lifts. A touch the browser cancels is released without a click.
+
+## Keyboard and screen readers
+
+The apps can be played without a mouse, and a screen reader can tell what is on them:
+
+- **Tab and Shift+Tab** move the focus through the active window's buttons, fields and lists, top to bottom and left to right, as Swing's focus traversal does (`TDesktop.traverseFocus`), and the page's keyboard focus moves with it, so the focus ring and a screen reader follow. Components an app made unfocusable (Minesweeper's level buttons) get `tabindex="-1"` and are skipped, as in Swing. Space presses the focused button, as in Swing.
+- **No keyboard trap.** Before, every key on an app page went to the app, Tab included, so the keyboard could never reach the page's toolbar. Now Tab past the last component (or Shift+Tab before the first) is left to the browser, which moves on to the toolbar or the window's close box, and Enter on the page's own links and buttons works them. Tab from the page itself (nothing focused) goes into the app where its focus is. Focus the browser moves onto an app's button some other way (its own Tab, a screen reader) becomes Swing's focus too.
+- **Focus follows the app.** When an app moves the focus (`requestFocus`), a button or field gets the page's keyboard focus; a painted panel takes it off the app's buttons, so Space does not press the button clicked last. A newly opened window's first focus does not take the page's focus, so the home page's player never grabs the keyboard.
+- **Names.** A window with a title bar is a `role="dialog"` named by its title. `getAccessibleContext().setAccessibleName` and `setAccessibleDescription`, Swing's own accessibility calls (`javax.accessibility.AccessibleContext`, substituted like `java.awt`), become the element's `aria-label` and `aria-description`. On the desktop the same names reach screen readers through the Java Access Bridge. Minesweeper names every tile ("3 mines near, row 2, column 5", "flag, row 7, column 4", "hidden, ...") and Ultimate Tic-Tac-Toe every square ("empty, open, top left board, middle square", "O, last move, ...").
+- **Announcements.** A window title that changes within 1.5 s of a key press or a click is read out through a polite live region (`Js.announce`, a visually hidden `role="status"`): a flag placed ("Minesweeper: 17 mines left"), a mine hit, a win, the computer's reply in Ultimate Tic-Tac-Toe ("X to move"). Titles that change on their own, like Clock's countdown, are not read, so they do not talk over everything.
+- The focus ring is a 3 px ring in the skin's `--focus-ring` color with a white edge inside it, so it shows on any color an app paints its buttons.
+- Minesweeper is played entirely from the keyboard: Tab into the board, the arrow keys move a cursor from tile to tile (shown darker, on the desktop too), Space or Enter reveals, F flags (or the menu key, or Shift+F10), and a new game keeps the cursor where it was. Shift+arrows move the window, which the plain arrows did before.
+
+Checked with Chrome's accessibility tree and real key presses; not yet with NVDA, JAWS or VoiceOver themselves.
 
 ## Then and now
 

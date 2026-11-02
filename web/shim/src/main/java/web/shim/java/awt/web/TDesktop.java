@@ -118,7 +118,7 @@ public final class TDesktop {
         TWindow shown = w;
         Edt.post(() -> {
             if (shown.isVisible() && shown.focusOwner() == null) {
-                shown.setFocusOwner(firstFocusable(shown));
+                shown.setFocusOwnerQuietly(firstFocusable(shown));
             }
         });
     }
@@ -215,6 +215,7 @@ public final class TDesktop {
                 Js.preventDefault(e);
             }
         });
+        Js.listen(doc, "focusin", TDesktop::onFocusIn);
         Js.listen(doc, "keydown", e -> onKey(e, TKeyEvent.KEY_PRESSED));
         Js.listen(doc, "keyup", e -> onKey(e, TKeyEvent.KEY_RELEASED));
     }
@@ -419,6 +420,9 @@ public final class TDesktop {
         if (target == null) {
             return;
         }
+        if (id != TMouseEvent.MOUSE_MOVED && id != TMouseEvent.MOUSE_ENTERED && id != TMouseEvent.MOUSE_EXITED) {
+            lastInput = System.currentTimeMillis();
+        }
         double scale = Js.desktopScale();   // the page desktop may be scaled down to fit the stage
         int x = (int) Math.floor((Js.clientX(e) - Js.clientLeft(target.element())) / scale);
         int y = (int) Math.floor((Js.clientY(e) - Js.clientTop(target.element())) / scale);
@@ -454,24 +458,143 @@ public final class TDesktop {
         int vk = Keys.toVk(Js.keyCode(e));
         String key = Js.key(e);
         int dom = Js.modifiers(e);
+        if (vk == 9 && (dom & (2 | 4 | 8)) == 0) {
+            // Swing's focus manager takes Tab and Shift+Tab before any key listener sees them
+            if (id == TKeyEvent.KEY_PRESSED) {
+                traverseFocus(e, w, (dom & 1) != 0);
+            }
+            return;
+        }
+        if (vk == 10 && (!Js.targetIsAppOrPage(e) || Js.targetIsWindowControl(e))) {
+            return; // Enter on the page's own links and buttons (the toolbar, a close box) works them, as on any page
+        }
+        lastInput = System.currentTimeMillis();
         boolean inText = Js.targetIsTextInput(e);
         boolean shortcut = (dom & (2 | 4)) != 0 || (vk >= 112 && vk <= 123);
         boolean nativeButtonPress = vk == 32 && Js.targetIsButton(e);
         if (!inText && !shortcut && !nativeButtonPress) {
             Js.preventDefault(e); // arrows, space, slash etc. would otherwise scroll or search the page
         }
-        TComponent owner = w.focusOwner();
-        TComponent source = owner != null && owner.isShowing() ? owner : w;
         int mods = awtModifiers(dom);
         long when = System.currentTimeMillis();
-        TKeyEvent event = new TKeyEvent(source, id, when, mods, vk, Keys.pressedChar(key, vk));
-        Edt.post(() -> dispatchKey(event));
-        if (id == TKeyEvent.KEY_PRESSED) {
-            char typed = Keys.typedChar(key, vk, dom);
+        char pressed = Keys.pressedChar(key, vk);
+        char typed = id == TKeyEvent.KEY_PRESSED ? Keys.typedChar(key, vk, dom) : 0;
+        // Like Swing, the key goes to whatever has the focus when its turn comes, so a key that moves the focus
+        // (Minesweeper's arrows) sends the next key, pressed before the move ran, to the new focus owner.
+        Edt.post(() -> {
+            TComponent source = focusOwnerOf(w);
+            dispatchKey(new TKeyEvent(source, id, when, mods, vk, pressed));
             if (typed != 0) {
-                TKeyEvent typedEvent = new TKeyEvent(source, TKeyEvent.KEY_TYPED, when, mods, 0, typed);
-                Edt.post(() -> dispatchKey(typedEvent));
+                dispatchKey(new TKeyEvent(source, TKeyEvent.KEY_TYPED, when, mods, 0, typed));
             }
+        });
+    }
+
+    private static TComponent focusOwnerOf(TWindow w) {
+        TComponent owner = w.focusOwner();
+        return owner != null && owner.isShowing() ? owner : w;
+    }
+
+    // ---- keyboard focus and screen readers ----
+
+    /** Keyboard focus the browser moved onto an app's button or field (its own Tab, a screen reader) is Swing's too. */
+    private static void onFocusIn(JSObject e) {
+        TComponent c = lookup(Js.target(e));
+        TWindow w = c != null ? c.windowAncestor() : null;
+        if (w == null || !c.acceptsFocus() || !c.isEnabled() || w.focusOwner() == c) {
+            return;
+        }
+        if (w != active && w.getFocusableWindowState()) {
+            activate(w);
+        }
+        w.setFocusOwnerQuietly(c);
+    }
+
+    /** Rows of components closer than this are one row, as in Swing's LayoutFocusTraversalPolicy. */
+    private static final int ROW_TOLERANCE = 10;
+    /** When the visitor last pressed a key or a mouse button (or touched) in an app. */
+    private static long lastInput;
+
+    /**
+     * Tab and Shift+Tab move the focus through the active window's buttons, fields and lists in reading order, as
+     * Swing's focus traversal does, and the page's keyboard focus moves with it. Past the last one (or before the
+     * first) the browser takes Tab on, out of the app to the rest of the page, so the keyboard is never trapped in the
+     * app. Tab on the page's own controls is left to the browser too.
+     */
+    private static void traverseFocus(JSObject e, TWindow w, boolean backward) {
+        if (!Js.targetIsAppOrPage(e)) {
+            return;
+        }
+        List<TComponent> cycle = focusCycle(w);
+        if (cycle.isEmpty()) {
+            return;
+        }
+        TComponent at = lookup(Js.target(e));
+        int next;
+        if (at == null) { // keyboard focus is on the page itself: Tab enters the app where its focus is
+            int owner = cycle.indexOf(w.focusOwner());
+            next = owner >= 0 ? owner : backward ? cycle.size() - 1 : 0;
+        } else {
+            int i = cycle.indexOf(at);
+            next = i + (backward ? -1 : 1);
+            if (i < 0 || next < 0 || next >= cycle.size()) {
+                return; // on a window's close box, or leaving the app: the browser moves on through the page
+            }
+        }
+        Js.preventDefault(e);
+        w.setFocusOwner(cycle.get(next));
+    }
+
+    /** The window's components that Tab can reach, top to bottom and left to right. */
+    private static List<TComponent> focusCycle(TWindow w) {
+        List<TComponent> found = new ArrayList<>();
+        collectFocusable(w, found);
+        found.sort((a, b) -> {
+            int dy = screenY(a) - screenY(b);
+            return Math.abs(dy) > ROW_TOLERANCE ? dy : screenX(a) - screenX(b);
+        });
+        return found;
+    }
+
+    private static void collectFocusable(TComponent c, List<TComponent> found) {
+        if (!c.isVisible()) {
+            return;
+        }
+        if (!(c instanceof TWindow) && c.acceptsFocus() && c.isEnabled()) {
+            found.add(c);
+        }
+        if (c instanceof TContainer) {
+            TContainer container = (TContainer) c;
+            for (int i = 0; i < container.getComponentCount(); i++) {
+                collectFocusable(container.getComponent(i), found);
+            }
+        }
+    }
+
+    private static int screenX(TComponent c) {
+        int x = 0;
+        for (TComponent p = c; p != null && !(p instanceof TWindow); p = p.getParent()) {
+            x += p.getX();
+        }
+        return x;
+    }
+
+    private static int screenY(TComponent c) {
+        int y = 0;
+        for (TComponent p = c; p != null && !(p instanceof TWindow); p = p.getParent()) {
+            y += p.getY();
+        }
+        return y;
+    }
+
+    /**
+     * A window title that changes in answer to the visitor (a key or a click within the last second and a half: a
+     * flag placed, a mine hit, a cube turned) is read out by screen readers. Titles that change on their own, like
+     * Clock's countdown, are not, so they do not talk over everything.
+     */
+    public static void titleChanged(TWindow w, String title) {
+        if (w == active && !title.isEmpty() && System.currentTimeMillis() - lastInput < 1500) {
+            Js.announce(title);
         }
     }
 
@@ -486,10 +609,6 @@ public final class TDesktop {
     /** The component that a synthetic (Robot) key event goes to. */
     public static TComponent keyTarget() {
         TWindow w = active;
-        if (w == null) {
-            return null;
-        }
-        TComponent owner = w.focusOwner();
-        return owner != null && owner.isShowing() ? owner : w;
+        return w == null ? null : focusOwnerOf(w);
     }
 }

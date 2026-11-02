@@ -45,16 +45,18 @@ public final class GameFrame extends JFrame {
    /** When the first tile was revealed (the clock starts then), or 0 before that. */
    private long startMillis;
    private long finishMillis;
+   /** The tile the keyboard is on, shown darker, or null while playing with the mouse. */
+   private MineTile cursor;
 
    public GameFrame(SoundPlayer soundPlayer) {
-      this(soundPlayer, null, null);
+      this(soundPlayer, null, null, null);
    }
 
    /**
     * Without best times, reads them from the file. That happens here, after JFrame's constructor, because the browser
     * build restores saved files when the first component is created.
     */
-   private GameFrame(SoundPlayer soundPlayer, BestTimes bestTimes, Point location) {
+   private GameFrame(SoundPlayer soundPlayer, BestTimes bestTimes, Point location, int[] cursorSpot) {
       this.soundPlayer = soundPlayer;
       this.bestTimes = bestTimes != null ? bestTimes : BestTimes.load(BEST_TIMES_FILE);
       this.level = this.bestTimes.lastLevel();
@@ -92,6 +94,9 @@ public final class GameFrame extends JFrame {
          this.setLocation(location);
       }
       this.setVisible(true);
+      if (cursorSpot != null) { // a new game started from the keyboard keeps the cursor where it was
+         this.focusTile(Math.min(cursorSpot[0], this.rows - 1), Math.min(cursorSpot[1], this.columns - 1));
+      }
    }
 
    /** One button per level; the current one is lit. Not focusable, so the arrow keys keep moving the window. */
@@ -184,6 +189,25 @@ public final class GameFrame extends JFrame {
       }
    }
 
+   /** Moves the keyboard cursor (and the focus) to the tile at that x and y index, if there is one. */
+   void focusTile(int x, int y) {
+      if (x >= 0 && y >= 0 && x < this.rows && y < this.columns) {
+         this.moveCursor(this.tiles[x][y]);
+         this.tiles[x][y].requestFocusInWindow();
+      }
+   }
+
+   /** Shows the keyboard cursor on that tile, or nowhere (null) once the mouse is used. */
+   void moveCursor(MineTile tile) {
+      if (this.cursor != null) {
+         this.cursor.setCursor(false);
+      }
+      this.cursor = tile;
+      if (tile != null) {
+         tile.setCursor(true);
+      }
+   }
+
    /** A new game on the same level, where this window was. */
    void restart() {
       this.play(this.level);
@@ -193,7 +217,7 @@ public final class GameFrame extends JFrame {
    void play(Level choice) {
       this.bestTimes.setLastLevel(choice);
       this.dispose();
-      new GameFrame(this.soundPlayer, this.bestTimes, this.getLocation());
+      new GameFrame(this.soundPlayer, this.bestTimes, this.getLocation(), this.cursor == null ? null : this.cursor.spot());
    }
 
    @Override

@@ -1,5 +1,7 @@
 package web.shim.java.awt;
 
+import web.shim.java.awt.web.TDesktop;
+
 public class TFrame extends TWindow {
     private String title = "";
     private boolean undecorated;
@@ -18,8 +20,12 @@ public class TFrame extends TWindow {
     }
 
     public void setTitle(String title) {
+        String before = this.title;
         this.title = title == null ? "" : title;
         syncDecorations();
+        if (!this.title.equals(before)) {
+            TDesktop.titleChanged(this, this.title);
+        }
     }
 
     @Override

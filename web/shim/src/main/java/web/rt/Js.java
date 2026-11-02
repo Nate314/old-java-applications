@@ -90,6 +90,25 @@ public final class Js {
     @JSBody(params = "el", script = "el.focus({preventScroll: true});")
     public static native void focus(JSObject el);
 
+    /** Focuses a component drawn as a button, field or list; for any other, drops keyboard focus from the app's widgets. */
+    @JSBody(params = "el", script = "if (el.matches('button, input, select, textarea')) {"
+            + " if (document.activeElement !== el && el.isConnected) el.focus({preventScroll: true}); return; }"
+            + " var _a = document.activeElement;"
+            + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a)) _a.blur();")
+    public static native void focusComponent(JSObject el);
+
+    /** Says the text to a screen reader through a polite live region (unseen on the page). */
+    @JSBody(params = "text", script = "var _r = document.getElementById('shim-live');"
+            + " if (!_r) { _r = document.createElement('div'); _r.id = 'shim-live'; _r.className = 'shim-live';"
+            + " _r.setAttribute('aria-live', 'polite'); _r.setAttribute('role', 'status'); document.body.appendChild(_r); }"
+            + " _r.textContent = text;")
+    public static native void announce(String text);
+
+    /** True when the event's target is the page itself or inside one of the app's windows, not the page's own controls. */
+    @JSBody(params = "e", script = "var _t = e.target; return !_t || _t === document.body || _t === document.documentElement"
+            + " || !!(_t.closest && _t.closest('.window'));")
+    public static native boolean targetIsAppOrPage(JSObject e);
+
     @JSBody(params = { "el", "id" }, script = "el.__cid = id;")
     public static native void setComponentId(JSObject el, int id);
 

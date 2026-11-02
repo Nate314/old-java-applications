@@ -17,7 +17,7 @@ An UltimateTicTacToe game written in Java, against the computer, for two players
   - The row under the board shows the link (or code) to send, with **Copy link** (Copy code) to copy it again and **Take back** to undo your move before you send it. To open a friend's link or code, paste it into the field and press **Open** or Enter. A link or a code works in either version.
   - A code is the game's moves, two characters each: the board as a letter a-i and the cell as a digit 1-9, both in reading order, so `e5` is the very middle. Opening one replays every move by the rules, so a code with an illegal move does not open ("That is not a game link").
   - The game is kept in the record file (below), so closing the window does not lose it, and switching to another mode only sets it aside. Opening the same link again after you answered it (reloading the page) keeps your answer.
-- No keyboard controls. One optional command-line argument: a friend's code or link, which opens it in Friend by link (`./run.ps1 UltimateTicTacToe e5e1`). The browser build also passes the page's own address, for the links. The window is about 3/4 of the screen height (narrower on a narrow screen, so it fits) and not resizable; the marks scale with the cells.
+- **Keyboard**: Tab and Shift+Tab move between the cells and buttons (Swing's focus order; in the browser too), and Space presses the focused one. A screen reader hears each cell's mark, whether the next move may go there and where it is ("empty, open, top left board, middle square"; "O, last move, top board, bottom left square"), through Swing's accessible names. No other keys. One optional command-line argument: a friend's code or link, which opens it in Friend by link (`./run.ps1 UltimateTicTacToe e5e1`). The browser build also passes the page's own address, for the links. The window is about 3/4 of the screen height (narrower on a narrow screen, so it fits) and not resizable; the marks scale with the cells.
 
 ## Code layout
 
@@ -29,7 +29,7 @@ An UltimateTicTacToe game written in Java, against the computer, for two players
 - `src/ultimateticktacktoe/Computer.java`: the computer's moves: Easy, and Hard's Monte Carlo tree search.
 - `src/ultimateticktacktoe/Record.java`: reads and writes the record against the computer, the last mode and the game with a friend.
 - `src/ultimateticktacktoe/SmallBoard.java`: one 3x3 board; lays out its cells.
-- `src/ultimateticktacktoe/CellButton.java`: one cell; forwards clicks to the game and shows its mark.
+- `src/ultimateticktacktoe/CellButton.java`: one cell; forwards clicks to the game, shows its mark and names itself for screen readers.
 
 ## Running
 

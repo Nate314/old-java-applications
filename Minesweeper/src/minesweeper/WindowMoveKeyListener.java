@@ -12,6 +12,10 @@ public final class WindowMoveKeyListener implements KeyListener {
    }
 
    private void handleKey(KeyEvent event) {
+      if (event.isConsumed()) { // a tile used the key (keyboard play: Space, F, arrows)
+         return;
+      }
+
       if (event.getKeyCode() == KeyEvent.VK_ESCAPE) {
          // Same as the close button, so inside NathaNOS it closes only this window.
          this.frame.dispatchEvent(new WindowEvent(this.frame, WindowEvent.WINDOW_CLOSING));
