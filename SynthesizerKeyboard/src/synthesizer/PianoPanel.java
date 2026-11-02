@@ -10,7 +10,7 @@ import javax.swing.JPanel;
 
 /**
  * Draws the 13 keys (C to the high C) with the computer key and the note name on each, shows which keys are held,
- * and lights the key a lesson is waiting for. Keys are numbered 0 to 12 in note order.
+ * lights the key a lesson is waiting for, and tints blue the note the microphone hears. Keys are numbered 0 to 12 in note order.
  */
 public final class PianoPanel extends JPanel {
    public static final int KEYS = 13;
@@ -27,11 +27,14 @@ public final class PianoPanel extends JPanel {
    private static final Color BLACK_PRESSED = new Color(80, 80, 88);
    private static final Color HINT = new Color(255, 196, 60);
    private static final Color HINT_BLACK = new Color(226, 152, 24);
+   private static final Color HEARD = new Color(160, 200, 255);
+   private static final Color HEARD_BLACK = new Color(56, 104, 196);
    private static final Color LABEL = new Color(60, 60, 70);
    private static final Color LABEL_SOFT = new Color(140, 140, 150);
 
    private final boolean[] pressed = new boolean[KEYS];
    private int hint = -1;
+   private int heard = -1;
 
    public PianoPanel() {
       this.setFocusable(false);
@@ -49,6 +52,18 @@ public final class PianoPanel extends JPanel {
          this.hint = key;
          this.repaint();
       }
+   }
+
+   /** Tints the keys of pitch class {@code pitchClass} (0 for C, both Cs) as the note the microphone hears; -1 for none. */
+   public void setHeard(int pitchClass) {
+      if (this.heard != pitchClass) {
+         this.heard = pitchClass;
+         this.repaint();
+      }
+   }
+
+   private boolean heardAt(int key) {
+      return this.heard >= 0 && key % 12 == this.heard;
    }
 
    public static boolean isBlack(int key) {
@@ -109,7 +124,7 @@ public final class PianoPanel extends JPanel {
       for (int white = 0; white < WHITE_KEYS.length; white++) {
          int key = WHITE_KEYS[white];
          int x = 2 + white * whiteWidth;
-         g.setColor(this.pressed[key] ? WHITE_PRESSED : key == this.hint ? HINT : WHITE);
+         g.setColor(this.pressed[key] ? WHITE_PRESSED : this.heardAt(key) ? HEARD : key == this.hint ? HINT : WHITE);
          g.fillRoundRect(x + 1, -8, whiteWidth - 2, height + 6, 10, 10);
          this.drawLabels(g, key, x, whiteWidth, height - 10, letterFont, noteFont, LABEL, LABEL_SOFT);
       }
@@ -119,9 +134,9 @@ public final class PianoPanel extends JPanel {
       for (int black = 0; black < BLACK_KEYS.length; black++) {
          int key = BLACK_KEYS[black];
          int x = this.blackX(black);
-         g.setColor(this.pressed[key] ? BLACK_PRESSED : key == this.hint ? HINT_BLACK : BLACK);
+         g.setColor(this.pressed[key] ? BLACK_PRESSED : this.heardAt(key) ? HEARD_BLACK : key == this.hint ? HINT_BLACK : BLACK);
          g.fillRoundRect(x, -6, blackWidth, blackHeight + 6, 8, 8);
-         Color text = key == this.hint && !this.pressed[key] ? BLACK : WHITE;
+         Color text = key == this.hint && !this.heardAt(key) && !this.pressed[key] ? BLACK : WHITE;
          this.drawLabels(g, key, x, blackWidth, blackHeight - 8, letterFont, noteFont, text, text);
       }
    }

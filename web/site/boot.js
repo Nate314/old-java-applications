@@ -9,7 +9,8 @@
  *   centered in the space left between it and the controller (or output panel) at the bottom, which the shim
  *   reports to Java as the screen, so neither the toolbar nor the controller covers an app window.
  * - On an app page: preloads the files listed in <body data-files>, then calls the TeaVM main().
- * - Provides window.__shimSynth, the Web Audio voices behind javax.sound.midi.
+ * - Provides window.__shimSynth, the Web Audio voices behind javax.sound.midi, and window.__shimMic, the
+ *   microphone behind javax.sound.sampled.
  * - Routes System.out to the console by line, and on pages with <body data-console> also to an output panel.
  * - Opens an app page on a title screen (thumbnail, hint, passport stamp and a live boot log of the files
  *   loading); the app starts on the visitor's Play click or key press, so its first sounds can play.
@@ -753,7 +754,7 @@
     SynthesizerKeyboard: [
       { piano: ['Z', 'S', 'X', 'D', 'C', 'V', 'G', 'B', 'H', 'N', 'J', 'M', ','] },
       { buttons: [{ k: 'T', label: 'Song' }, { k: 'L', label: 'Listen' }, { k: 'R', label: 'Restart' },
-                  { k: 'Space', label: 'Record' }, { k: 'Enter', label: 'Copy link' }] },
+                  { k: 'Space', label: 'Record' }, { k: 'Enter', label: 'Copy link' }, { k: 'I', label: 'Mic' }] },
       { buttons: [{ k: 'ArrowLeft', label: 'Octave −' }, { k: 'ArrowRight', label: 'Octave +' },
                   { k: 'ArrowDown', label: 'Sound −' }, { k: 'ArrowUp', label: 'Sound +' }] }
     ],
@@ -2849,6 +2850,68 @@
       });
     }
   };
+  // ---- javax.sound.sampled microphone (window.__shimMic) ----
+  // The shim's TargetDataLine asks for the microphone here and drains its samples (floats from -1 to 1) from a
+  // queue that keeps the last two seconds. Echo cancellation stays on (it keeps the app's own notes out); noise
+  // suppression is off, since it can swallow a held note or a whistle.
+  var mic = null;
+  window.__shimMic = {
+    open: function () {
+      if (mic) return;
+      var m = mic = { state: 'asking', chunks: [], queued: 0, out: new Float32Array(0), rate: 44100 };
+      var a = ctx();
+      var md = navigator.mediaDevices;
+      if (!a || !md || !md.getUserMedia || !a.createScriptProcessor) { m.state = 'none'; return; }
+      md.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }).then(function (stream) {
+        if (mic !== m) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+        m.stream = stream;
+        m.source = a.createMediaStreamSource(stream);
+        m.node = a.createScriptProcessor(2048, 1, 1);
+        m.node.onaudioprocess = function (e) {
+          var data = new Float32Array(e.inputBuffer.getChannelData(0));
+          m.chunks.push(data);
+          m.queued += data.length;
+          while (m.queued > a.sampleRate * 2) m.queued -= m.chunks.shift().length;
+        };
+        // A script node only runs while connected to the output; it writes silence there.
+        m.source.connect(m.node);
+        m.node.connect(a.destination);
+        m.rate = a.sampleRate;
+        if (a.state === 'suspended') a.resume();
+        m.state = 'open';
+      }, function (err) {
+        if (mic === m) m.state = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError') ? 'denied' : 'none';
+      });
+    },
+    state: function () { return mic ? mic.state : 'none'; },
+    rate: function () { return mic ? mic.rate : 44100; },
+    queued: function () { return mic ? mic.queued : 0; },
+    take: function (max) {
+      var m = mic;
+      if (!m || !m.queued) return 0;
+      var n = Math.min(max, m.queued);
+      if (m.out.length < n) m.out = new Float32Array(n);
+      for (var i = 0; i < n;) {
+        var chunk = m.chunks[0];
+        var count = Math.min(chunk.length, n - i);
+        m.out.set(chunk.subarray(0, count), i);
+        i += count;
+        if (count === chunk.length) m.chunks.shift(); else m.chunks[0] = chunk.subarray(count);
+      }
+      m.queued -= n;
+      return n;
+    },
+    sample: function (i) { return mic ? mic.out[i] : 0; },
+    close: function () {
+      var m = mic;
+      mic = null;
+      if (!m) return;
+      if (m.node) { m.node.onaudioprocess = null; m.node.disconnect(); }
+      if (m.source) m.source.disconnect();
+      if (m.stream) m.stream.getTracks().forEach(function (t) { t.stop(); });
+    }
+  };
+
   // Browsers only start audio after a user gesture.
   ['pointerdown', 'keydown'].forEach(function (type) {
     document.addEventListener(type, function () { if (audio && audio.state === 'suspended') audio.resume(); }, true);

@@ -17,6 +17,7 @@ public class ShimSubstitutionPolicy extends SimpleSubstitutionPolicy {
                         .or(inPackage("javax.swing", true))
                         .or(inPackage("javax.accessibility", true))
                         .or(inPackage("javax.sound.midi", true))
+                        .or(inPackage("javax.sound.sampled", true))
                         .or(inPackage("java.beans", true))
                         .or(inPackage("java.util.jar"))
                         .or(named("java.net.URLClassLoader")))

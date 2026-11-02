@@ -18,11 +18,14 @@ import javax.swing.Timer;
  * The keyboard window: a lesson bar over the keys. Keys sound for as long as the computer key or the mouse button is
  * held. Picking a song starts a lesson that lights the next key to press, and Listen plays the song first. Space
  * records a tune of your own, which goes to the clipboard as a link (see Tune) for a friend to hear and learn.
+ * With the microphone on (I, or its button), notes sung, whistled or played on a real instrument count like keys.
  */
 public final class KeyboardWindow extends JFrame implements KeyListener {
    private static final int MOUSE = -1;
    private static final int BEAT_MILLIS = 420;
    private static final int[] FANFARE = {0, 4, 7, 12};
+   /** The microphone ignores what it hears until the keyboard's own notes have been silent this long. */
+   private static final int ECHO_MILLIS = 500;
    private final MidiPlayer midiPlayer = new MidiPlayer();
    private final SongRecords records = SongRecords.load(new File(System.getProperty("user.home"), ".synthesizer-songs.txt"));
    private final PianoPanel piano = new PianoPanel();
@@ -53,6 +56,30 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    /** The key and MIDI note Listen is sounding, or -1. */
    private int listenKey = -1;
    private int listenMidi;
+   private final Microphone microphone = new Microphone(new Microphone.Ears() {
+      @Override
+      public void listening() {
+         KeyboardWindow.this.micState(LessonBar.MIC_ON);
+         KeyboardWindow.this.bar.setNotice("Listening: sing, whistle or play " + (KeyboardWindow.this.lesson == null ? "a note" : "the gold note"));
+      }
+
+      @Override
+      public void heard(int midi) {
+         KeyboardWindow.this.heard(midi);
+      }
+
+      @Override
+      public void hearing(int midi, int cents) {
+         KeyboardWindow.this.hearing(midi, cents);
+      }
+
+      @Override
+      public void failed(String why) {
+         KeyboardWindow.this.micState(LessonBar.MIC_FAILED);
+         KeyboardWindow.this.bar.setNotice(why);
+      }
+   });
+   private int mic = LessonBar.MIC_OFF;
 
    /** {@code friendCode} is the code of a tune a friend sent (null for none); {@code page} as in the field. */
    public KeyboardWindow(String page, String friendCode) {
@@ -84,7 +111,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          public void mousePressed(MouseEvent event) {
             KeyboardWindow window = KeyboardWindow.this;
             int chip = window.bar.chipAt(event.getX(), event.getY());
-            if (window.recorder != null) {
+            if (window.bar.micAt(event.getX(), event.getY())) {
+               window.toggleMic();
+            } else if (window.recorder != null) {
                window.stopRecording();
             } else if (chip == window.menu().length) {
                window.startRecording();
@@ -197,6 +226,61 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.heldNotes.put(holder, new int[]{key, note});
       this.midiPlayer.noteOn(note);
       this.piano.setPressed(key, true);
+      this.played(key);
+   }
+
+   /** Lets the microphone go when the window closes without ending the program (NathaNOS disposes its apps' windows). */
+   @Override
+   public void dispose() {
+      this.microphone.stop();
+      super.dispose();
+   }
+
+   /** Turns the microphone on or off. */
+   private void toggleMic() {
+      if (this.mic == LessonBar.MIC_OFF || this.mic == LessonBar.MIC_FAILED) {
+         this.micState(LessonBar.MIC_ASKING);
+         this.bar.setNotice(null);
+         this.microphone.start();
+      } else {
+         this.microphone.stop();
+         this.micState(LessonBar.MIC_OFF);
+         this.bar.setNotice(null);
+      }
+   }
+
+   private void micState(int state) {
+      this.mic = state;
+      this.bar.setMic(state, -1, 0);
+      this.piano.setHeard(-1);
+   }
+
+   /** Whether the microphone may be hearing the keyboard itself (a key held, Listen, the fanfare) rather than you. */
+   private boolean echoing() {
+      return !this.midiPlayer.quietFor(ECHO_MILLIS);
+   }
+
+   /** The tuner: the note the microphone hears now (-1 for none), shown on the button and tinted on the keys. */
+   private void hearing(int midi, int cents) {
+      boolean heard = midi >= 0 && !this.echoing();
+      this.bar.setMic(this.mic, heard ? midi : -1, cents);
+      this.piano.setHeard(heard ? Math.floorMod(midi, 12) : -1);
+   }
+
+   /** A note the microphone heard start: it counts like a key (the key of the same name, in any octave), unsounded. */
+   private void heard(int midi) {
+      if (this.echoing()) {
+         return;
+      }
+      int key = Math.floorMod(midi, 12);
+      if (key == 0 && this.lesson != null && this.lesson.expectedKey() == 12) {
+         key = 12;
+      }
+      this.played(key);
+   }
+
+   /** Counts key {@code key}, pressed or heard, in the recording and the lesson, and takes over from Listen. */
+   private void played(int key) {
       this.bar.setNotice(null);
       if (this.recorder != null) {
          this.recorder.press(key, System.currentTimeMillis());
@@ -342,6 +426,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          }
       } else if (keyCode == KeyEvent.VK_ENTER && !recording) {
          this.copyTune();
+      } else if (keyCode == KeyEvent.VK_I) {
+         this.toggleMic();
       } else if (keyCode == KeyEvent.VK_LEFT && this.octaveShift > -5) {
          this.octaveShift--;
       } else if (keyCode == KeyEvent.VK_RIGHT && this.octaveShift < 4) {

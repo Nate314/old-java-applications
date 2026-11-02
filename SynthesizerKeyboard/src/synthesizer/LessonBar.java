@@ -13,6 +13,7 @@ import javax.swing.JPanel;
  * The strip above the keys. In free play it lists the songs with their best stars, the recorded tune if there is
  * one, and Record; during a song it shows the notes coming up (the computer key and note name, wider for longer
  * notes) with the next one lit; after a song it shows the stars won. While recording it shows the notes so far.
+ * The microphone button sits at the top right, and doubles as a tuner while the microphone listens.
  */
 public final class LessonBar extends JPanel {
    public static final int HEIGHT = 100;
@@ -25,6 +26,14 @@ public final class LessonBar extends JPanel {
    private static final Color SOFT = new Color(160, 166, 184);
    private static final Color RECORD = new Color(232, 72, 72);
    private static final Color STAR_OFF = new Color(88, 94, 112);
+   private static final Color IN_TUNE = new Color(110, 214, 140);
+   /** The microphone's states, for setMic. */
+   public static final int MIC_OFF = 0;
+   public static final int MIC_ASKING = 1;
+   public static final int MIC_ON = 2;
+   public static final int MIC_FAILED = 3;
+   private static final int MIC_TOP = 8;
+   private static final int MIC_HEIGHT = 24;
    private static final Font HEADLINE = new Font("SansSerif", Font.BOLD, 16);
    private static final Font HELP = new Font("SansSerif", Font.PLAIN, 12);
    private static final Font CHIP_FONT = new Font("SansSerif", Font.BOLD, 13);
@@ -44,6 +53,10 @@ public final class LessonBar extends JPanel {
    private Song recorded;
    /** A line shown in gold in place of the help, such as "Link copied", until it is cleared; null for none. */
    private String notice;
+   private int mic = MIC_OFF;
+   /** The note the microphone hears (MIDI), or -1, and how far off it is in cents. */
+   private int micNote = -1;
+   private int micCents;
 
    public LessonBar(SongRecords records) {
       this.records = records;
@@ -74,6 +87,30 @@ public final class LessonBar extends JPanel {
    public void setNotice(String notice) {
       this.notice = notice;
       this.repaint();
+   }
+
+   /** Shows the microphone's state, and while it is on the note it hears ({@code midi} -1 for none). */
+   public void setMic(int state, int midi, int cents) {
+      if (state != this.mic || midi != this.micNote || cents != this.micCents) {
+         this.mic = state;
+         this.micNote = midi;
+         this.micCents = cents;
+         this.repaint();
+      }
+   }
+
+   /** Whether a point is on the microphone button. */
+   public boolean micAt(int x, int y) {
+      return y >= MIC_TOP && y < MIC_TOP + MIC_HEIGHT && x >= this.micLeft() && x < this.getWidth() - MARGIN;
+   }
+
+   /** The button shows a word or the note heard when there is room, else the microphone alone. */
+   private int micWidth() {
+      return this.getWidth() < 420 ? 34 : 132;
+   }
+
+   private int micLeft() {
+      return this.getWidth() - MARGIN - this.micWidth();
    }
 
    /** In free play, the chip at a point: a song's index in the menu, the menu's length for Record, or -1. */
@@ -139,14 +176,67 @@ public final class LessonBar extends JPanel {
       }
       g.drawString(headline, x, 24);
       int headlineEnd = x + g.getFontMetrics().stringWidth(headline);
+      this.paintMic(g);
+      int rightEdge = this.micLeft() - MARGIN;
       String right = this.notice != null ? this.notice : help;
       g.setFont(this.notice != null ? HEADLINE : HELP);
       g.setColor(this.notice != null ? NEXT : SOFT);
       int rightWidth = g.getFontMetrics().stringWidth(right);
       // Right-aligned when there is room, else dropped: the chips below say enough on a narrow window.
-      if (headlineEnd + rightWidth + 2 * MARGIN <= this.getWidth()) {
-         g.drawString(right, this.getWidth() - MARGIN - rightWidth, 24);
+      if (headlineEnd + rightWidth + MARGIN <= rightEdge) {
+         g.drawString(right, rightEdge - rightWidth, 24);
       }
+   }
+
+   /**
+    * The microphone button: "Sing along" while off; while on, the note heard and how far off it is (green when
+    * within 10 cents), or "Listening..." in the quiet.
+    */
+   private void paintMic(Graphics2D g) {
+      int left = this.micLeft();
+      int width = this.micWidth();
+      boolean on = this.mic == MIC_ON;
+      g.setColor(on ? new Color(70, 40, 46) : CHIP);
+      g.fillRoundRect(left, MIC_TOP, width, MIC_HEIGHT, MIC_HEIGHT, MIC_HEIGHT);
+      if (on) {
+         g.setColor(RECORD);
+         g.drawRoundRect(left, MIC_TOP, width - 1, MIC_HEIGHT - 1, MIC_HEIGHT, MIC_HEIGHT);
+      }
+      // The microphone: a capsule on a cradle and a stem.
+      int cx = left + 17;
+      g.setColor(on ? RECORD : this.mic == MIC_FAILED ? STAR_OFF : TEXT);
+      g.fillRoundRect(cx - 3, MIC_TOP + 4, 7, 10, 7, 7);
+      g.drawArc(cx - 6, MIC_TOP + 6, 13, 11, 180, 180);
+      g.drawLine(cx, MIC_TOP + 17, cx, MIC_TOP + 20);
+      g.drawLine(cx - 3, MIC_TOP + 20, cx + 4, MIC_TOP + 20);
+      if (this.mic == MIC_FAILED) {
+         g.setColor(RECORD);
+         g.drawLine(cx - 7, MIC_TOP + 20, cx + 8, MIC_TOP + 3);
+      }
+      if (width < 100) {
+         return;
+      }
+      String label;
+      Color color = TEXT;
+      if (this.mic == MIC_OFF) {
+         label = "Sing along";
+      } else if (this.mic == MIC_ASKING) {
+         label = "Allow mic...";
+         color = NEXT;
+      } else if (this.mic == MIC_FAILED) {
+         label = "No mic";
+         color = SOFT;
+      } else if (this.micNote < 0) {
+         label = "Listening...";
+         color = SOFT;
+      } else {
+         label = Song.noteName(Math.floorMod(this.micNote, 12)) + (this.micNote / 12 - 1)
+            + "  " + (this.micCents > 0 ? "+" : "") + this.micCents + "¢";
+         color = Math.abs(this.micCents) <= 10 ? IN_TUNE : NEXT;
+      }
+      g.setFont(CHIP_FONT);
+      g.setColor(color);
+      g.drawString(label, left + 30, MIC_TOP + 17);
    }
 
    private void paintLine(Graphics2D g, String line) {

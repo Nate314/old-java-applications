@@ -42,6 +42,9 @@ public abstract class TGraphics {
 
     public abstract void fillOval(int x, int y, int width, int height);
 
+    /** An arc of the oval in the box, from {@code startAngle} degrees (0 is 3 o'clock) through {@code arcAngle}, counterclockwise. */
+    public abstract void drawArc(int x, int y, int width, int height, int startAngle, int arcAngle);
+
     public abstract void drawPolygon(int[] xPoints, int[] yPoints, int nPoints);
 
     public abstract void fillPolygon(int[] xPoints, int[] yPoints, int nPoints);
