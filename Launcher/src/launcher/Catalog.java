@@ -10,8 +10,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The apps the launcher lists. The 17 browser apps come from the gallery in web/site/index.html (the one place
- * the site describes them), so a name or hint changed there shows here too. The three desktop-only apps are not in
+ * The apps the launcher lists. The 18 browser apps come from the gallery in web/site/index.html (the one place
+ * the site describes them), so a name or hint changed there shows here too. The two desktop-only apps are not in
  * the gallery, so they are described below, from their READMEs.
  */
 public final class Catalog {
@@ -76,11 +76,6 @@ public final class Catalog {
 
    static List<App> desktopOnly() {
       List<App> apps = new ArrayList<>();
-      apps.add(new App("DinoGame", "Dino Game bot", "toy",
-         "A bot for the Chrome dinosaur game: it watches one screen pixel and presses Space when an obstacle reaches it. "
-            + "Click one of its marker squares to stop it.",
-         false, true, "It starts pressing Space in whatever window has focus about 2.5 seconds after it opens. "
-            + "Open the dinosaur game first.", null));
       apps.add(new App("Windows", "Windows", "toy",
          "Presses the Windows key once, then exits. It has no window.",
          false, true, "It presses the real Windows key as soon as it starts, which opens the Start menu.", null));

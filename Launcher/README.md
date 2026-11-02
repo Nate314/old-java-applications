@@ -11,20 +11,20 @@ The front door for the desktop: `./run.ps1` with no app name opens it. Every app
 - **Click** a card to select it, **double-click** to play it.
 - **Detail pane** (right): a larger picture, the name, Decompiled jar or Original source, the hint, the play record, **Play** (Alt+P), **Read me** (Alt+R: the app's README in a window, Esc closes it) and **Open folder** (Alt+F).
 - **Pick for me** (Alt+K): plays a random app you have not launched yet, from the cards shown (or from all, if none of those qualify). It never picks a desktop-only app.
-- **Desktop-only apps that press real keys** (DinoGame, Windows, WindowsE) show a "Heads up" note, an orange Play button, and ask before they start.
+- **Desktop-only apps that press real keys** (Windows, WindowsE) show a "Heads up" note, an orange Play button, and ask before they start.
 - The launcher opens on the app you launched last, and stays open while apps run, so several can run at once. The same app cannot be started twice at once. The status line at the bottom says when an app starts, closes, or stops with an error (the details are in the console that ran `run.ps1`).
 - The window is resizable (at least 780 x 620); the cards reflow into as many columns as fit.
 
 ## Where things come from
 
-- **Names, hints, categories, origins and thumbnails** of the 17 browser apps are read from the gallery in `web/site/index.html` and the screenshots in `web/site/shots/`, so the home page stays the one place that describes an app. The Dino Game bot, Windows and Windows+E are not in the gallery; their entries are in `Catalog.java`, written from their READMEs, and their pictures are drawn cards with their initials.
+- **Names, hints, categories, origins and thumbnails** of the 18 browser apps are read from the gallery in `web/site/index.html` and the screenshots in `web/site/shots/`, so the home page stays the one place that describes an app. Windows and Windows+E are not in the gallery; their entries are in `Catalog.java`, written from their READMEs, and their pictures are drawn cards with their initials.
 - **Playing an app** runs `run.ps1 <App>` in the PowerShell that started the launcher, from the repo root, so each app is compiled and started from its own working folder exactly as from the command line. Its output goes to the same console.
 - **The play record** (how many launches, and the last) is saved to `.oldjava-launcher.txt` in the user's home folder, one `App count lastLaunchMillis` line per app. It counts launches from the launcher only. Delete the file to start over.
 
 ## Code layout
 
 - `src/launcher/Main.java`: entry point; reads the catalog from the current folder (the repo root) and opens the window. The optional argument is the PowerShell to run `run.ps1` with (default `powershell`).
-- `src/launcher/Catalog.java`: the list of apps; parses the gallery and adds the desktop-only three.
+- `src/launcher/Catalog.java`: the list of apps; parses the gallery and adds the desktop-only two.
 - `src/launcher/LauncherWindow.java`: the window: header with search and filters, the card grid, the detail pane, keys and launching.
 - `src/launcher/PlayLog.java`: the play record file, and its "Played twice, last yesterday" wording.
 - `src/launcher/Runner.java`: starts an app in its own process (`run.ps1`) and reports its exit code.

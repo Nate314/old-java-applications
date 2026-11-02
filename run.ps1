@@ -5,10 +5,12 @@
     ./run.ps1                  # opens the launcher: every app as a card, Enter plays one
     ./run.ps1 Minesweeper      # runs Minesweeper
     ./run.ps1 FlappyBird -Build  # builds out/FlappyBird.jar
+    ./run.ps1 DinoGame screen    # anything after the app name is passed to it
 #>
 param(
     [string]$App,
-    [switch]$Build
+    [switch]$Build,
+    [Parameter(ValueFromRemainingArguments)] [string[]]$AppArgs
 )
 $ErrorActionPreference = 'Stop'
 
@@ -19,17 +21,17 @@ $apps = [ordered]@{
     Clock             = @{ Main = 'clock.Main';                WorkDir = 'Clock' }
     FlappyBird        = @{ Main = 'flappyBird.Main';           WorkDir = 'FlappyBird/src'; Args = @('120') }
     Minesweeper       = @{ Main = 'minesweeper.Main';          WorkDir = 'Minesweeper' }
-    # Apps: built into NathaNOS's taskbar (assets/Clock.jar already ships; the Robot apps would drive the real desktop).
+    # Apps: built into NathaNOS's taskbar (assets/Clock.jar already ships; Windows and WindowsE would drive the real desktop).
     NathaNOS          = @{ Main = 'main.Main';                 WorkDir = 'NathaNOS'
                            Apps = @('Minesweeper', 'UltimateTicTacToe', 'RubiksCube2D', 'FlappyBird', 'SpriteFloatyStars',
                                     'ScreenSaver', 'CircleSpawner', 'StockChecker', 'SynthesizerKeyboard', 'BibleDownloader',
-                                    'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame') }
+                                    'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame', 'DinoGame') }
     RubiksCube2D      = @{ Main = 'rubikscube.Main';           WorkDir = 'RubiksCube2D' }
     ScreenSaver       = @{ Main = 'screensaver.Main';          WorkDir = 'ScreenSaver' }
     SpriteFloatyStars = @{ Main = 'animate2.Animate2Main';     WorkDir = 'SpriteFloatyStars' }
     UltimateTicTacToe = @{ Main = 'ultimateticktacktoe.Main';  WorkDir = 'UltimateTicTacToe' }
     CircleSpawner     = @{ Main = 'circlewindow.Main';         WorkDir = 'CircleSpawner' }
-    DinoGame          = @{ Main = 'dinosaurgameplayer.DinosaurGamePlayer'; WorkDir = 'DinoGame' }
+    DinoGame          = @{ Main = 'dinosaurgameplayer.Main';   WorkDir = 'DinoGame' }
     StockChecker      = @{ Main = 'stockchecker.Main';         WorkDir = 'StockChecker' }
     SynthesizerKeyboard = @{ Main = 'synthesizer.Main';        WorkDir = 'SynthesizerKeyboard' }
     Windows           = @{ Main = 'test.Test';                 WorkDir = 'Windows' }
@@ -68,7 +70,7 @@ Get-ChildItem -Recurse -File $src | Where-Object { $_.Extension -ne '.java' -and
 }
 
 $workDir = Join-Path $root $cfg.WorkDir
-$appArgs = @($cfg.Args | Where-Object { $_ })
+$appArgs = @(@($cfg.Args) + @($AppArgs) | Where-Object { $_ })
 
 # NathaNOS shows one taskbar button per jar in assets/. Stage a copy of its folder with a jar of each listed app,
 # plus the files those apps read from their own working folder (images, data), and run it from there.

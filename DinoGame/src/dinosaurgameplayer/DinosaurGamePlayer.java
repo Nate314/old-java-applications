@@ -20,7 +20,7 @@ public class DinosaurGamePlayer implements MouseListener {
       this.showMarker("Player1", sensorX, lowerSensorY, new Color(255, 0, 0));
       this.showMarker("Player2", sensorX, upperSensorY, new Color(0, 255, 0));
       ObstacleDetector detector = new ObstacleDetector(robot, sensorX, lowerSensorY);
-      detector.jump(70);
+      detector.jump(ObstacleDetector.START_HOLD_MS);
       Timer timer = new Timer(1, detector);
       timer.setRepeats(true);
       timer.start();

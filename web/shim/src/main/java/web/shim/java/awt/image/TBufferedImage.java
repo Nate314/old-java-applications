@@ -1,5 +1,6 @@
 package web.shim.java.awt.image;
 
+import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.web.TCanvasGraphics;
 import web.rt.Js;
@@ -47,6 +48,18 @@ public class TBufferedImage extends TImage {
         }
         return raster;
     }
+
+    /** The pixel at (x, y) as ARGB, read back from the canvas. */
+    public int getRGB(int x, int y) {
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+            throw new ArrayIndexOutOfBoundsException("Coordinate out of bounds!");
+        }
+        return readPixel(drawSource(), x, y);
+    }
+
+    @JSBody(params = { "c", "x", "y" }, script =
+            "var _d = c.getContext('2d').getImageData(x, y, 1, 1).data; return (_d[3] << 24) | (_d[0] << 16) | (_d[1] << 8) | _d[2];")
+    private static native int readPixel(JSObject c, int x, int y);
 
     @Override
     public JSObject drawSource() {

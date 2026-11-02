@@ -16,6 +16,7 @@ public final class Boot {
         Classes.register(
             clock.Main.class,
             circlewindow.Main.class,
+            dinosaurgameplayer.Main.class,
             audiobibledownloader.Main.class,
             flappyBird.Main.class,
             minesweeper.Main.class,

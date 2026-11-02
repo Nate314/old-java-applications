@@ -523,6 +523,10 @@
       { buttons: [{ k: 'Space', label: 'Flap', big: true }] },
       { buttons: [{ k: 'C', label: 'Course' }, { k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
     ],
+    DinoGame: [
+      { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'ArrowDown', label: 'Duck' }] },
+      { buttons: [{ k: 'B', label: 'Bot' }, { k: 'X', label: 'Reset eye' }] }
+    ],
     TankGame: [
       { title: 'Red tank', tint: 'red', dpad: ['W', 'A', 'S', 'D'], fire: 'Q' },
       { title: 'Green tank', tint: 'green', dpad: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'], fire: 'M' }
@@ -1562,6 +1566,13 @@
       var n = text.trim().split(',').map(Number);
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
       return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
+    } },
+    // Your best run and the bot's best run.
+    DinoGame: { file: '.dinogame.txt', show: function (text) {
+      var best = /^best=(\d+)$/m.exec(text), bot = /^bot=(\d+)$/m.exec(text);
+      var you = best ? +best[1] : 0, it = bot ? +bot[1] : 0;
+      if (!you && !it) return '';
+      return (you ? 'Your best: ' + you : 'No run of your own yet') + (it ? "; the bot's best: " + it : '');
     } },
     // The reader: the place it is open at, chapters read to the end and highlighted verses.
     BibleDownloader: { file: '.bibledownloader.txt', show: function (text) {

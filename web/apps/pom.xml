@@ -42,6 +42,7 @@
                 <source>${repo.dir}/BibleDownloader/src</source>
                 <source>${repo.dir}/CircleSpawner/src</source>
                 <source>${repo.dir}/Clock/src</source>
+                <source>${repo.dir}/DinoGame/src</source>
                 <source>${repo.dir}/FlappyBird/src</source>
                 <source>${repo.dir}/Minesweeper/src</source>
                 <source>${repo.dir}/RubiksCube2D/src</source>
@@ -134,6 +135,7 @@
                 <appsource app="BibleDownloader"/>
                 <appsource app="CircleSpawner"/>
                 <appsource app="Clock"/>
+                <appsource app="DinoGame"/>
                 <appsource app="FlappyBird"/>
                 <appsource app="Minesweeper"/>
                 <appsource app="NathaNOS"/>
@@ -179,6 +181,14 @@
             <configuration>
               <mainClass>audiobibledownloader.Main</mainClass>
               <targetDirectory>${site.dir}/BibleDownloader</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>DinoGame</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>dinosaurgameplayer.Main</mainClass>
+              <targetDirectory>${site.dir}/DinoGame</targetDirectory>
             </configuration>
           </execution>
           <execution>
