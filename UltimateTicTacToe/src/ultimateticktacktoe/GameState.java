@@ -74,11 +74,9 @@ public final class GameState {
 
    /** "X" or "O" if they own a line, DRAW if every square is taken (or drawn) without one, else null. */
    static String result(String[] squares) {
-      for (int[] line : LINES) {
-         String first = squares[line[0]];
-         if (("X".equals(first) || "O".equals(first)) && first.equals(squares[line[1]]) && first.equals(squares[line[2]])) {
-            return first;
-         }
+      int[] line = winningLine(squares);
+      if (line != null) {
+         return squares[line[0]];
       }
       for (String square : squares) {
          if (square == null || square.isEmpty()) {
@@ -86,5 +84,16 @@ public final class GameState {
          }
       }
       return DRAW;
+   }
+
+   /** The three squares of a line that X or O owns (the first in reading order), or null; drawn to strike through a win. */
+   static int[] winningLine(String[] squares) {
+      for (int[] line : LINES) {
+         String first = squares[line[0]];
+         if (("X".equals(first) || "O".equals(first)) && first.equals(squares[line[1]]) && first.equals(squares[line[2]])) {
+            return line;
+         }
+      }
+      return null;
    }
 }

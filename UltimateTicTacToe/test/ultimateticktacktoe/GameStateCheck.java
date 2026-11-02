@@ -10,6 +10,9 @@ public class GameStateCheck {
       check("O".equals(GameState.result(new String[]{"", "", "O", "", "O", "", "O", "", ""})), "diagonal win");
       check(GameState.result(new String[]{"X", "O", "", "", "", "", "", "", ""}) == null, "open board");
       check(GameState.DRAW.equals(GameState.result(new String[]{"X", "O", "X", "X", "O", "O", "O", "X", "X"})), "full board draws");
+      // The line a win is struck through, for drawing.
+      check(java.util.Arrays.equals(GameState.winningLine(new String[]{"", "", "O", "", "O", "", "O", "", ""}), new int[]{2, 4, 6}), "winning line");
+      check(GameState.winningLine(new String[]{"X", "O", "X", "X", "O", "O", "O", "X", "X"}) == null, "no line in a draw");
       // Draws on the big board do not count as a line.
       check(GameState.result(new String[]{GameState.DRAW, GameState.DRAW, GameState.DRAW, null, null, null, null, null, null}) == null, "draw line");
 
