@@ -827,7 +827,7 @@ canvas.paint.top {
   }
 }
 
-/* Leave out the output panel unless it is all the app shows (SimpleAlgorithms). */
+/* Leave out the output panel when the app has windows to show. */
 :root[data-shot] #desktop:has(.c) ~ .shim-console {
   display: none;
 }

@@ -1,16 +1,34 @@
 package simplealgorithms;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+
 public class MyMath {
 	public static double estimateSquareRoot(double num)
 	{
+		List<Double> steps = squareRootSteps(num);
+		return steps.get(steps.size() - 1);
+	}
+
+	/**
+	 * Every guess estimateSquareRoot makes, starting from 1: each next guess is the average of the guess and num
+	 * divided by it. Stops when the two agree, or after 100 guesses (a guess can bounce between two neighbouring
+	 * doubles, and 0 or a negative number never settles).
+	 */
+	public static List<Double> squareRootSteps(double num)
+	{
+		List<Double> steps = new ArrayList<>();
 		double result = 1;
 		double dividend = 0;
-		while(result != dividend)
+		steps.add(result);
+		while(result != dividend && steps.size() < 100)
 		{
 			dividend = num / result;
 			result = (dividend + result) / 2;
+			steps.add(result);
 		}
-		return result;
+		return steps;
 	}
 	
 	/**
@@ -77,6 +95,11 @@ public class MyMath {
 	}
 	//	a/b=c; a=bc;
 	public static double divide(double num1, double num2) {
+		return divide(num1, num2, System.out::println);
+	}
+
+	/** divide, handing each step of the search ("0: 1.0") to steps instead of printing it. */
+	public static double divide(double num1, double num2, Consumer<String> steps) {
 		double guess = 0;
 		double error = 0.01;
 		double tolerance = 1;
@@ -93,7 +116,7 @@ public class MyMath {
 			else {
 				guess += tolerance;
 			}
-			System.out.println(counter + ": " + guess);
+			steps.accept(counter + ": " + guess);
 //			try {
 //				Thread.sleep(100);
 //			} catch (InterruptedException e) {
