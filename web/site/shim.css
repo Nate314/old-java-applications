@@ -1105,6 +1105,7 @@ canvas.paint.top {
 
 .tint-red { --tint: #ef4444; }
 .tint-green { --tint: #16a34a; }
+.tint-gold { --tint: #d97706; }
 
 .shim-pad-body {
   display: flex;
@@ -1165,13 +1166,14 @@ canvas.paint.top {
 }
 
 /* The cross: four buttons on a 3 x 3 grid around an empty hub. */
-/* Two crosses and two fire buttons stay on one row, sized down to fit narrow pages. */
-.shim-pad:has(.shim-dpad) {
+/* Two crosses and two fire buttons (TankGame) stay on one row, sized down to fit narrow pages. A pad with one
+   cross (Star Catcher) wraps like any other. */
+.shim-pad:has(.shim-pad-group + .shim-pad-group .shim-dpad) {
   --k: clamp(30px, calc((100vw - 110px) / 9), 52px);
   flex-wrap: nowrap;
 }
 
-.shim-pad:has(.shim-dpad) .shim-pad-body {
+.shim-pad:has(.shim-pad-group + .shim-pad-group .shim-dpad) .shim-pad-body {
   flex-wrap: nowrap;
 }
 

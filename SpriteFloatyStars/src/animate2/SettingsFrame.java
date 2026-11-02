@@ -1,6 +1,8 @@
 package animate2;
 
+import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JButton;
@@ -17,13 +19,20 @@ public final class SettingsFrame extends JFrame implements ActionListener {
    private JLabel[] labels = new JLabel[]{new JLabel("Mode:"), new JLabel("X/Y:"), new JLabel("Number:"), new JLabel("Size:")};
    private JTextField[] textFields = new JTextField[]{new JTextField("0"), new JTextField("800"), new JTextField("800"), new JTextField("1000"), new JTextField("20")};
    private JButton okButton = new JButton("OK");
+   private JButton catchButton = new JButton("Play Star Catcher");
 
    public SettingsFrame() {
       this.setTitle("Animation Test");
       this.setDefaultCloseOperation(3);
-      this.setSize(new Dimension(300, 140));
+      this.setSize(new Dimension(300, 180));
       this.okButton.addActionListener(this);
-      this.add(this.panel);
+      this.catchButton.setFont(this.catchButton.getFont().deriveFont(Font.BOLD, 15f));
+      this.catchButton.addActionListener(event -> {
+         new CatchFrame(this).setVisible(true);
+         this.setVisible(false);
+      });
+      this.add(this.catchButton, BorderLayout.NORTH);
+      this.add(this.panel, BorderLayout.CENTER);
       this.panel.add(this.labels[0]);
       this.panel.add(this.modeComboBox);
       this.textFields[1].setColumns(4);

@@ -26,6 +26,11 @@ public final class StarField extends Component {
    private long lastTickNanos = System.nanoTime();
 
    public StarField(int mode, Dimension size, int starCount, int starSize) {
+      this(mode, size, starCount, starSize, true);
+   }
+
+   /** With {@code animate} false nothing moves until {@link #advance} is called (Star Catcher draws it as its sky). */
+   StarField(int mode, Dimension size, int starCount, int starSize, boolean animate) {
       this.mode = mode;
       this.starCount = starCount;
       this.starSize = starSize;
@@ -42,7 +47,9 @@ public final class StarField extends Component {
          this.initStar(star);
       }
 
-      new Timer(15, event -> this.tick()).start();
+      if (animate) {
+         new Timer(15, event -> this.tick()).start();
+      }
    }
 
    private void initStar(int star) {
@@ -100,6 +107,13 @@ public final class StarField extends Component {
       }
       this.move(steps);
       this.repaint();
+   }
+
+   /** Moves the stars on by {@code seconds} in a field of the given size, without a timer or repaint. */
+   final void advance(double seconds, int width, int height) {
+      this.fieldWidth = width;
+      this.fieldHeight = height;
+      this.move(Math.min(50.0, seconds * STEPS_PER_SECOND));
    }
 
    private void move(double steps) {
@@ -160,7 +174,11 @@ public final class StarField extends Component {
       g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
       g2.setColor(Color.blue);
       g2.fillRect(0, 0, this.getWidth(), this.getHeight());
+      this.drawStars(g2);
+   }
 
+   /** Draws the stars alone, in the current mode's colors. */
+   final void drawStars(Graphics2D g2) {
       for (int star = 0; star < this.starCount; star++) {
          this.setStarColor(g2, star);
          g2.fillOval((int)this.x[star], (int)this.y[star], this.starSize, this.starSize);
