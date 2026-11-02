@@ -76,6 +76,31 @@ public class GameStateCheck {
       }
       check(hardWins >= 7, "hard won only " + hardWins + " of " + games + " games against easy");
 
+      // Friend by link: a game's code replays to the same position, and only legal games are codes.
+      game = new GameState();
+      StringBuilder code = new StringBuilder();
+      while (game.winner == null) {
+         int move = Computer.easyMove(game, random);
+         game.play(move / 9, move % 9);
+         code.append(FriendLink.moveCode(move));
+      }
+      GameState replayed = FriendLink.replay(code.toString());
+      check(replayed != null && game.winner.equals(replayed.winner) && replayed.lastMove == game.lastMove, "a whole game replays");
+      for (int board = 0; board < 9; board++) {
+         check(java.util.Arrays.equals(game.marks[board], replayed.marks[board]), "replayed marks on board " + board);
+      }
+      check(FriendLink.moveCode(4 * 9 + 4).equals("e5") && FriendLink.moveCode(0).equals("a1") && FriendLink.moveCode(80).equals("i9"), "move names");
+      check(FriendLink.replay("").legalMoves().length == 81, "the empty code is a new game");
+      check(FriendLink.replay("e5e5") == null, "a taken cell is not a code");
+      check(FriendLink.replay("e5a1") == null, "a move off the active board is not a code");
+      check(FriendLink.replay("e") == null && FriendLink.replay("j1") == null && FriendLink.replay("e0") == null, "malformed codes");
+      check(FriendLink.replay(code + "a1") == null, "no moves after the game ends");
+      check(FriendLink.codeIn("https://example.org/UltimateTicTacToe/index.html?game=e5a1&x=1#src").equals("e5a1"), "code in a link");
+      check(FriendLink.codeIn(" E5 A1 ").equals("e5a1"), "a pasted code");
+      check("https://example.org/UltimateTicTacToe/index.html".equals(FriendLink.pageOf("https://example.org/UltimateTicTacToe/index.html?embed#x")), "page of a link");
+      check(FriendLink.pageOf("e5a1") == null, "a code is no page");
+      check(FriendLink.message(null, "e5").equals("e5") && FriendLink.message("https://h/p", "e5").equals("https://h/p?game=e5"), "messages");
+
       System.out.println("GameStateCheck passed (hard beat easy " + hardWins + " of " + games + ")");
    }
 

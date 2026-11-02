@@ -977,6 +977,8 @@
   // app link carries ?shared=N, the sender's stamp count, and the title screen it opens on says so.
   var shareBox = null;
   var SHARED = /[?&]shared=(\d{1,3})(?:&|$)/.exec(location.search);
+  // A game a friend sent (UltimateTicTacToe's Friend by link): the page opens on their move.
+  var GAME_LINK = /[?&]game=[a-i1-9]+(?:&|$)/i.test(location.search);
   function openShare(id, opener) {
     if (embedded && window.parent !== window) {   // the home page shows it over its player, at full size
       window.parent.postMessage({ oldjavaShare: id || '' }, location.origin);
@@ -2120,6 +2122,12 @@
         ? '✓ In your passport since ' + new Date(played[app.id]).toLocaleDateString()
         : 'New: playing it adds stamp ' + (count + 1) + ' of ' + apps.length + ' to your passport';
       stamp.classList.toggle('played', !!played[app.id]);
+      if (GAME_LINK) {
+        var invite = document.createElement('p');
+        invite.className = 'shim-title-shared';
+        invite.textContent = 'A friend sent you a game, and it is your move. Press Play to answer it.';
+        text.insertBefore(invite, cat);
+      }
       if (SHARED) {
         var theirs = Math.min(+SHARED[1], apps.length);
         var gift = document.createElement('p');
@@ -2523,6 +2531,9 @@
 
     var files = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
     var args = (body.getAttribute('data-args') || '').split(/\s+/).filter(Boolean);
+    // <body data-args-page> (UltimateTicTacToe): main also gets the page's address, to build links to itself
+    // (a game with a friend travels in ?game=, see the app's README) and to read the game a link brought.
+    if (body.hasAttribute('data-args-page')) args.push(location.href);
     var extras = !document.documentElement.hasAttribute('data-shot');
     var again = null;
     try {

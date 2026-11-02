@@ -79,6 +79,14 @@ public final class Js {
             "var _o = document.createElement('option'); _o.textContent = text; el.appendChild(_o);")
     public static native void addOption(JSObject el, String text);
 
+    /** Puts text on the clipboard: navigator.clipboard, or a hidden text area and the copy command where that is refused. */
+    @JSBody(params = "text", script =
+            "function _f() { var _a = document.createElement('textarea'); _a.value = text; _a.setAttribute('readonly', '');"
+            + " _a.style.position = 'fixed'; _a.style.opacity = '0'; var _o = document.activeElement; document.body.appendChild(_a);"
+            + " _a.select(); try { document.execCommand('copy'); } catch (e) { } _a.remove(); if (_o && _o.focus) _o.focus({preventScroll: true}); }"
+            + " if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(_f); else _f();")
+    public static native void copyText(String text);
+
     @JSBody(params = "el", script = "el.focus({preventScroll: true});")
     public static native void focus(JSObject el);
 
