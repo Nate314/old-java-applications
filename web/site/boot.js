@@ -1563,6 +1563,19 @@
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
       return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
     } },
+    // The practice desk: the day it is on, and the net worth at the last closing bell against the $10,000 start.
+    StockChecker: { file: '.stockchecker-desk.txt', show: function (text) {
+      var day = /^day=(\d+)$/m.exec(text);
+      if (!day) return '';
+      var closes = text.match(/^close=[\d.]+$/mg) || [];
+      var line = 'Your trading desk: day ' + day[1];
+      if (closes.length) {
+        var last = +closes[closes.length - 1].slice(6);
+        var pct = (last - 10000) / 100;
+        line += ', closed day ' + closes.length + ' at $' + Math.round(last).toLocaleString('en-US') + ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '% since day 1)';
+      }
+      return line;
+    } },
     // The saver it was left on, in the order of the app's list (screensaver.Main), and whether it cycles.
     ScreenSaver: { file: '.screensaver.txt', show: function (text) {
       var names = ['Green circles', 'Green squares', 'Bright circles', 'Starfield', 'Mystify', 'Pipes', 'Bouncing logo', 'Dot clock'];

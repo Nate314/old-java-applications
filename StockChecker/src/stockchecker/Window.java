@@ -1,250 +1,125 @@
 package stockchecker;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.Toolkit;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-import javax.swing.SpringLayout;
-import javax.swing.SwingUtilities;
 
-public class Window extends JFrame implements ActionListener {
+/**
+ * The window: the ticker list (still kept in {@code myStocks.txt}) and the COLOR! button across the top, and the
+ * practice trading {@link DeskPanel} under them. The quote API the app was written for is retired, so the desk runs a
+ * simulated market that opens at the last real quotes saved in {@code stockCheck.csv}.
+ */
+public class Window extends JFrame {
    private static final long serialVersionUID = 1L;
-   private JPanel panel = new JPanel();
-   private JButton addStockBtn = new JButton("addStock");
-   private JButton deleteStockBtn = new JButton("deleteStock");
-   private JButton makeItColorfulBtn = new JButton("COLOR!");
-   private JButton refreshStockPriceBtn = new JButton("refresh");
-   private SpringLayout layout = new SpringLayout();
-   private int numberOfStocks = 0;
-   private JTextField[] textBoxes = new JTextField[100];
-   private JLabel[] labels = new JLabel[100];
-   private JButton center = new JButton();
-   private int width = 330;
-   private int height = 0;
-   private int screenHeight = (int)Toolkit.getDefaultToolkit().getScreenSize().getHeight();
-   private StockChecker stockchecker = null;
+   /** The list the app shipped with, for when myStocks.txt is missing or empty. */
+   private static final String DEFAULT_STOCKS = "crm,lmt,tsn,nflx,swk";
 
-   public Window(StockChecker sc) {
-      this.stockchecker = sc;
+   private final JTextField tickers = new JTextField();
+   private final JPanel top = new JPanel();
+   private final Desk desk;
+   private final DeskPanel deskPanel;
+
+   public Window() {
       this.setTitle("StockChecker");
-      this.setSize(1000, 1000);
-      this.setLocationRelativeTo(null);
       this.setDefaultCloseOperation(3);
       this.setResizable(false);
-      this.createWindow();
-   }
-
-   private void createWindow() {
-      this.center.setVisible(false);
-      this.add(this.panel);
-      this.panel.add(this.center);
-      this.panel.setBackground(new Color(0, 0, 255));
-      Font font = new Font("Helvetica", 1, 22);
-
-      for (int i = 0; i < 100; i++) {
-         this.textBoxes[i] = new JTextField("");
-         // Enter in a ticker field saves the list and refreshes the prices.
-         this.textBoxes[i].addActionListener(this);
-         this.labels[i] = new JLabel("");
-         this.labels[i].setFont(font);
-         this.labels[i].setForeground(new Color(0, 255, 255));
+      // Read after the window exists, so the browser build has put the saved files back.
+      String stocks = new TextReader("myStocks").ReturnFileString().trim();
+      if (stocks.isEmpty()) {
+         stocks = DEFAULT_STOCKS;
       }
+      this.desk = Desk.load(new File(System.getProperty("user.home"), ".stockchecker-desk.txt"), split(stocks), firstPrices());
+      this.deskPanel = new DeskPanel(this.desk);
 
-      this.panel.setVisible(true);
-      this.panel.setLayout(this.layout);
-      this.addStockBtn.addActionListener(this);
-      this.deleteStockBtn.addActionListener(this);
-      this.makeItColorfulBtn.addActionListener(this);
-      this.refreshStockPriceBtn.addActionListener(this);
-      this.panel.add(this.addStockBtn);
-      this.panel.add(this.deleteStockBtn);
-      this.panel.add(this.makeItColorfulBtn);
-      this.panel.add(this.refreshStockPriceBtn);
-      this.layout.putConstraint("North", this.center, 0, "North", this.panel);
-      this.layout.putConstraint("East", this.center, 0, "HorizontalCenter", this.panel);
-      this.layout.putConstraint("South", this.center, 0, "VerticalCenter", this.panel);
-      this.layout.putConstraint("West", this.center, 0, "West", this.panel);
-      this.layout.putConstraint("North", this.addStockBtn, 5, "North", this.panel);
-      this.layout.putConstraint("East", this.addStockBtn, -5, "East", this.panel);
-      this.layout.putConstraint("West", this.addStockBtn, 5, "East", this.center);
-      this.layout.putConstraint("North", this.deleteStockBtn, 5, "South", this.addStockBtn);
-      this.layout.putConstraint("East", this.deleteStockBtn, -5, "East", this.panel);
-      this.layout.putConstraint("West", this.deleteStockBtn, 5, "HorizontalCenter", this.panel);
-      this.layout.putConstraint("North", this.makeItColorfulBtn, 5, "North", this.panel);
-      this.layout.putConstraint("East", this.makeItColorfulBtn, -5, "HorizontalCenter", this.panel);
-      this.layout.putConstraint("West", this.makeItColorfulBtn, 5, "West", this.panel);
-      this.layout.putConstraint("North", this.refreshStockPriceBtn, 5, "South", this.makeItColorfulBtn);
-      this.layout.putConstraint("East", this.refreshStockPriceBtn, -5, "HorizontalCenter", this.panel);
-      this.layout.putConstraint("West", this.refreshStockPriceBtn, 5, "West", this.panel);
-      this.getFromMyStocks();
+      JLabel label = new JLabel("Tickers:");
+      label.setForeground(Color.WHITE);
+      this.tickers.setColumns(34);
+      this.tickers.setText(String.join(", ", this.desk.watch()));
+      this.tickers.addActionListener(event -> this.applyTickers());
+      JButton watch = new JButton("Watch");
+      watch.addActionListener(event -> this.applyTickers());
+      JButton color = new JButton("COLOR!");
+      color.addActionListener(event -> {
+         this.deskPanel.recolor();
+         this.top.setBackground(this.deskPanel.background().darker());
+      });
+      this.top.add(label);
+      this.top.add(this.tickers);
+      this.top.add(watch);
+      this.top.add(color);
+      this.top.setBackground(this.deskPanel.background().darker());
+      this.add(this.top, BorderLayout.NORTH);
+      this.add(this.deskPanel, BorderLayout.CENTER);
+      this.pack();
+      this.setLocationRelativeTo(null);
+      this.deskPanel.requestFocusInWindow();
    }
 
-   private void putConstraint(Component component, Component north, Component east, Component south, Component west, int pad) {
-      this.layout.putConstraint("North", component, pad, "North", north);
-      this.layout.putConstraint("East", component, -1 * pad, "East", east);
-      this.layout.putConstraint("West", component, pad, "West", west);
-      this.layout.putConstraint("South", component, -1 * pad, "South", south);
-   }
-
-   private void getFromMyStocks() {
-      String stocks = new TextReader("myStocks").ReturnFileString();
-      String[] myStocks = stocks.trim().split(",");
-      this.numberOfStocks = Math.min(myStocks.length, this.textBoxes.length);
-      if (this.numberOfStocks != 0) {
-         for (int i = 0; i < this.numberOfStocks; i++) {
-            JTextField textfield = this.textBoxes[i];
-            textfield.setColumns(10);
-            textfield.setText(myStocks[i].trim());
-            textfield.setVisible(true);
-            this.panel.add(textfield);
-            JLabel label = this.labels[i];
-            label.setText("$--");
-            label.setVisible(true);
-            this.panel.add(label);
-            if (i == 0) {
-               this.layout.putConstraint("North", textfield, 5, "South", this.deleteStockBtn);
-               this.layout.putConstraint("West", textfield, 5, "West", this.panel);
-               this.layout.putConstraint("North", label, 0, "North", textfield);
-               this.layout.putConstraint("East", label, -10, "East", this.panel);
-            } else {
-               this.layout.putConstraint("North", textfield, 5, "South", this.textBoxes[i - 1]);
-               this.layout.putConstraint("West", textfield, 0, "West", this.textBoxes[i - 1]);
-               this.layout.putConstraint("North", label, 0, "North", textfield);
-               this.layout.putConstraint("East", label, -10, "East", this.panel);
-            }
-
+   /** Enter or Watch: the typed tickers become the watch list, saved to myStocks.txt. */
+   private void applyTickers() {
+      List<String> typed = split(this.tickers.getText());
+      List<String> before = new ArrayList<>(this.desk.symbols());
+      this.desk.setWatch(typed);
+      this.tickers.setText(String.join(", ", this.desk.watch()));
+      String note = null;
+      if (Desk.clean(typed).size() < typed.size() && typed.size() > Desk.MAX_SYMBOLS) {
+         note = "The desk watches up to " + Desk.MAX_SYMBOLS + " tickers.";
+      }
+      for (String symbol : this.desk.symbols()) {
+         if (!this.desk.watch().contains(symbol)) {
+            note = symbol + " stays on the desk until you sell it.";
          }
       }
-
-      this.resize();
-   }
-
-   @Override
-   public void actionPerformed(ActionEvent e) {
-      if (e.getSource() == this.addStockBtn) {
-         this.addStock();
+      if (note == null && !this.desk.symbols().equals(before)) {
+         note = "Watching " + this.desk.watch().size() + (this.desk.watch().size() == 1 ? " ticker." : " tickers.");
       }
-
-      if (e.getSource() == this.deleteStockBtn) {
-         this.deleteStock();
-      }
-
-      if (e.getSource() == this.makeItColorfulBtn) {
-         this.makeItColorful();
-      }
-
-      if (e.getSource() == this.refreshStockPriceBtn || e.getSource() instanceof JTextField) {
-         this.refreshStockPrice();
-      }
-   }
-
-   private void addStock() {
-      Dimension dim = new Dimension(330, 60 + this.numberOfStocks * (this.textBoxes[0].getHeight() + 5) + 2 * (this.textBoxes[0].getHeight() + 5));
-      if (this.numberOfStocks < this.textBoxes.length && dim.getHeight() <= (double)(this.screenHeight - 50)) {
-         JTextField textfield = this.textBoxes[this.numberOfStocks];
-         textfield.setColumns(10);
-         textfield.setVisible(true);
-         this.panel.add(textfield);
-         JLabel label = this.labels[this.numberOfStocks];
-         label.setText("$--");
-         label.setVisible(true);
-         this.panel.add(label);
-         if (this.numberOfStocks == 0) {
-            this.layout.putConstraint("North", textfield, 5, "South", this.deleteStockBtn);
-            this.layout.putConstraint("West", textfield, 5, "West", this.panel);
-            this.layout.putConstraint("North", label, 0, "North", textfield);
-            this.layout.putConstraint("East", label, -10, "East", this.panel);
-         } else {
-            this.layout.putConstraint("North", textfield, 5, "South", this.textBoxes[this.numberOfStocks - 1]);
-            this.layout.putConstraint("West", textfield, 0, "West", this.textBoxes[this.numberOfStocks - 1]);
-            this.layout.putConstraint("North", label, 0, "North", textfield);
-            this.layout.putConstraint("East", label, -10, "East", this.panel);
-         }
-
-         this.numberOfStocks++;
-         this.resize();
-         this.saveMyStocks();
-      }
-   }
-
-   private void deleteStock() {
-      if (this.numberOfStocks != 0) {
-         this.numberOfStocks--;
-         this.textBoxes[this.numberOfStocks].setText("");
-         this.textBoxes[this.numberOfStocks].setVisible(false);
-         this.labels[this.numberOfStocks].setText("");
-         this.labels[this.numberOfStocks].setVisible(false);
-      }
-
-      this.resize();
       this.saveMyStocks();
+      this.deskPanel.watchChanged(note);
+      this.deskPanel.requestFocusInWindow();
    }
 
-   private void makeItColorful() {
-      this.panel.setBackground(new Color((int)(Math.random() * 255.0), (int)(Math.random() * 255.0), (int)(Math.random() * 255.0)));
-
-      for (int i = 0; i < 100; i++) {
-         this.labels[i].setForeground(new Color((int)(Math.random() * 255.0), (int)(Math.random() * 255.0), (int)(Math.random() * 255.0)));
-      }
-   }
-
-   /** The trimmed, non-empty tickers in list order. */
-   private List<String> tickers() {
-      List<String> tickers = new ArrayList<>();
-      for (int i = 0; i < this.numberOfStocks; i++) {
-         String ticker = this.textBoxes[i].getText().trim();
-         if (!ticker.isEmpty()) {
-            tickers.add(ticker);
+   private static List<String> split(String text) {
+      List<String> symbols = new ArrayList<>();
+      for (String part : text.split("[,\\s]+")) {
+         if (!part.trim().isEmpty()) {
+            symbols.add(part.trim());
          }
       }
-      return tickers;
+      return symbols;
    }
 
-   /** Writes the current tickers back to myStocks.txt, comma separated like the original file. */
+   /** The last real quotes, from the stockCheck.csv the app last downloaded (May 13, 2016). */
+   private static Map<String, Double> firstPrices() {
+      Map<String, Double> prices = new HashMap<>();
+      List<String[]> rows = new CSVReader().CSVToDoubleStringArray("stockCheck");
+      for (String[] row : rows) {
+         String symbol = row[0].replace("\"", "").trim();
+         try {
+            prices.put(symbol.toUpperCase(), Double.parseDouble(StockChecker.priceFor(rows, symbol)));
+         } catch (NumberFormatException e) {
+            // "N/A": no real quote for it.
+         }
+      }
+      return prices;
+   }
+
+   /** Writes the watch list back to myStocks.txt, comma separated in lower case like the original file. */
    private void saveMyStocks() {
       try (FileWriter writer = new FileWriter("myStocks.txt")) {
-         writer.write(String.join(",", this.tickers()));
+         writer.write(String.join(",", this.desk.watch()).toLowerCase());
       } catch (IOException e) {
          System.err.println("Could not save myStocks.txt: " + e.getMessage());
       }
-   }
-
-   /** Saves the list, then downloads quotes on a background thread and fills the labels back on the event thread. */
-   private void refreshStockPrice() {
-      this.saveMyStocks();
-      List<String> tickers = this.tickers();
-      this.refreshStockPriceBtn.setEnabled(false);
-      this.refreshStockPriceBtn.setText("loading...");
-      new Thread(() -> {
-         List<String[]> rows = this.stockchecker.getStockPrice(tickers);
-         SwingUtilities.invokeLater(() -> {
-            for (int i = 0; i < this.numberOfStocks; i++) {
-               String ticker = this.textBoxes[i].getText().trim();
-               this.labels[i].setText(ticker.isEmpty() ? "$--" : "$" + StockChecker.priceFor(rows, ticker));
-            }
-            this.refreshStockPriceBtn.setText("refresh");
-            this.refreshStockPriceBtn.setEnabled(true);
-         });
-      }).start();
-   }
-
-   private void resize() {
-      this.width = 330;
-      this.height = 60 + this.numberOfStocks * 25 + 50;
-      this.setSize(this.width, this.height);
-      this.panel.revalidate();
-      this.panel.repaint();
    }
 }
