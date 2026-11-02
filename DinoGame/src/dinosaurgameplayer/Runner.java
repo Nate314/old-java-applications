@@ -125,6 +125,13 @@ final class Runner {
       this.state = State.RUNNING;
    }
 
+   /** Back to the ready screen, as when the window opened (the run under way, if any, is dropped). */
+   void ready() {
+      this.restart();
+      this.downHeld = false;
+      this.state = State.READY;
+   }
+
    // ---- one step ----
 
    void step() {
@@ -266,6 +273,35 @@ final class Runner {
 
    Obstacle crashedInto() {
       return this.crashedInto;
+   }
+
+   /** The bird drawing this step: wings up or down. */
+   String[] birdWings() {
+      return this.steps / 10 % 2 == 0 ? Sprites.BIRD_UP : Sprites.BIRD_DOWN;
+   }
+
+   /**
+    * Whether an obstacle is drawn over pixel (px, py) this step, worked out from the drawings instead of reading a
+    * drawn frame: what an evolved bot's eye sees. It sees only obstacles (not the dinosaur, the score or a marker).
+    */
+   boolean inkAt(int px, int py) {
+      for (Obstacle o : this.obstacles) {
+         int x = (int) Math.round(o.x);
+         if (px < x || px >= x + o.w) {
+            continue;
+         }
+         if (o.kind == Kind.BIRD) {
+            if (Sprites.covers(this.birdWings(), x, o.top(), 2, px, py)) {
+               return true;
+            }
+         } else {
+            int unit = o.w / o.size;
+            if (Sprites.cactusCovers(x + (px - x) / unit * unit, o.top(), o.kind == Kind.LARGE_CACTUS, px, py)) {
+               return true;
+            }
+         }
+      }
+      return false;
    }
 
    /** The obstacle across column x, or else the first one ahead of it, or null. */

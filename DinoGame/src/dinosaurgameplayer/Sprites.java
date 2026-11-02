@@ -121,23 +121,34 @@ final class Sprites {
       }
    }
 
+   /** The two cacti as rectangles {x, y, w, h} from their top left. Each has one row solid from arm to arm at the
+    *  original bot's height (22 above the ground), so a pixel that checks once a step cannot slip between the arms
+    *  and the trunk. */
+   private static final int[][] SMALL_CACTUS = { { 7, 0, 4, 1 }, { 6, 1, 6, 34 }, { 1, 6, 3, 10 }, { 13, 3, 3, 13 }, { 1, 12, 15, 4 } };
+   private static final int[][] LARGE_CACTUS = { { 10, 0, 6, 2 }, { 9, 2, 8, 48 }, { 1, 12, 4, 18 }, { 20, 8, 4, 22 }, { 1, 26, 23, 4 } };
+
    /** One cactus, 17 x 35 or (large) 25 x 50, with its top left at (x, y). */
    static void cactus(Graphics2D g, int x, int y, boolean large) {
       g.setColor(RunnerPanel.INK);
-      // Each has one row solid from arm to arm, at the bot's height (22 above the ground), so a pixel that
-      // checks once a step cannot slip between the arms and the trunk.
-      if (large) {
-         g.fillRect(x + 10, y, 6, 2);
-         g.fillRect(x + 9, y + 2, 8, 48);
-         g.fillRect(x + 1, y + 12, 4, 18);
-         g.fillRect(x + 20, y + 8, 4, 22);
-         g.fillRect(x + 1, y + 26, 23, 4);
-      } else {
-         g.fillRect(x + 7, y, 4, 1);
-         g.fillRect(x + 6, y + 1, 6, 34);
-         g.fillRect(x + 1, y + 6, 3, 10);
-         g.fillRect(x + 13, y + 3, 3, 13);
-         g.fillRect(x + 1, y + 12, 15, 4);
+      for (int[] r : large ? LARGE_CACTUS : SMALL_CACTUS) {
+         g.fillRect(x + r[0], y + r[1], r[2], r[3]);
       }
+   }
+
+   /** Whether the cactus drawn at (x, y) covers pixel (px, py). */
+   static boolean cactusCovers(int x, int y, boolean large, int px, int py) {
+      for (int[] r : large ? LARGE_CACTUS : SMALL_CACTUS) {
+         if (px >= x + r[0] && px < x + r[0] + r[2] && py >= y + r[1] && py < y + r[1] + r[3]) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   /** Whether the sprite drawn by draw(g, rows, x, y, cell) covers pixel (px, py). */
+   static boolean covers(String[] rows, int x, int y, int cell, int px, int py) {
+      int r = Math.floorDiv(py - y, cell);
+      int c = Math.floorDiv(px - x, cell);
+      return r >= 0 && r < rows.length && c >= 0 && c < rows[r].length() && rows[r].charAt(c) == 'X';
    }
 }

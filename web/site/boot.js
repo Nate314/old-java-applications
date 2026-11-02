@@ -1438,7 +1438,7 @@
     ],
     DinoGame: [
       { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'ArrowDown', label: 'Duck' }] },
-      { buttons: [{ k: 'B', label: 'Bot' }, { k: 'X', label: 'Reset eye' }] }
+      { buttons: [{ k: 'B', label: 'Bot' }, { k: 'X', label: 'Reset eye' }, { k: 'E', label: 'Evolve' }, { k: 'F', label: 'Speed' }] }
     ],
     TankGame: [
       { title: 'Red tank', tint: 'red', dpad: ['W', 'A', 'S', 'D'], fire: 'Q' },
@@ -1632,7 +1632,7 @@
   var GAMEPADS = {
     FlappyBird: [{ a: ['Space', 'Flap'], up: ['Space', 'Flap'], x: ['C', 'Course'], y: ['R', 'Reset'], start: ['P', 'Pause'] }],
     DinoGame: [{ a: ['Space', 'Jump'], up: ['Space', 'Jump'], down: ['ArrowDown', 'Duck'], b: ['ArrowDown', 'Duck'],
-                 x: ['B', 'Bot'], y: ['X', 'Reset eye'] }],
+                 x: ['B', 'Bot'], y: ['X', 'Reset eye'], start: ['E', 'Evolve bots'] }],
     TankGame: [
       { stick: true, up: ['W', 'Forward'], down: ['S', 'Back'], left: ['A', 'Turn left'], right: ['D', 'Turn right'],
         a: ['Q', 'Fire (on the title card: vs the computer)'] },
@@ -3153,12 +3153,13 @@
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
       return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
     } },
-    // Your best run and the bot's best run.
+    // Your best run, the bot's best run and the bots you evolved (generations bred, their record).
     DinoGame: { file: '.dinogame.txt', show: function (text) {
-      var best = /^best=(\d+)$/m.exec(text), bot = /^bot=(\d+)$/m.exec(text);
+      var best = /^best=(\d+)$/m.exec(text), bot = /^bot=(\d+)$/m.exec(text), evo = /^evolved=(\d+),(\d+)$/m.exec(text);
       var you = best ? +best[1] : 0, it = bot ? +bot[1] : 0;
-      if (!you && !it) return '';
-      return (you ? 'Your best: ' + you : 'No run of your own yet') + (it ? "; the bot's best: " + it : '');
+      var bred = evo ? 'your evolved bots: ' + evo[2] + ' after ' + evo[1] + (evo[1] === '1' ? ' generation' : ' generations') : '';
+      if (!you && !it) return bred ? bred.charAt(0).toUpperCase() + bred.slice(1) : '';
+      return (you ? 'Your best: ' + you : 'No run of your own yet') + (it ? "; the bot's best: " + it : '') + (bred ? '; ' + bred : '');
     } },
     // The reader: the place it is open at, chapters read to the end and highlighted verses.
     BibleDownloader: { file: '.bibledownloader.txt', show: function (text) {

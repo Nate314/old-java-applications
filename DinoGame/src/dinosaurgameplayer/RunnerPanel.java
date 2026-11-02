@@ -12,32 +12,39 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
  * Draws the game and takes the keys. With the bot on, every step is also drawn into an image, and the bot reads
- * its one pixel from that image: it sees exactly what you see, red marker and all.
+ * its one pixel from that image: it sees exactly what you see, red marker and all. E switches to evolving bots
+ * (Evolution, drawn by EvolveView) and back.
  */
 final class RunnerPanel extends JPanel {
    private static final long serialVersionUID = 1L;
    static final int HEIGHT = 220;
-   private static final int STRIP = 196;
+   static final int STRIP = 196;
    /** Steps after a crash before Space starts a new run, so a held key does not restart at once. */
    private static final int RESTART_LOCK = 24;
 
    static final Color INK = new Color(0x535353);
    static final Color PAPER = new Color(0xF7F7F7);
    private static final Color CLOUD = new Color(0xD6D6D6);
-   private static final Color MUTED = new Color(0x6E6E6E);
+   static final Color MUTED = new Color(0x6E6E6E);
    private static final Color STRIP_BG = new Color(0xEBEBEB);
    static final Color MARKER = new Color(255, 0, 0);
    private static final Color BOT_TEXT = new Color(0xC62828);
-   private static final Font SCORE = new Font(Font.MONOSPACED, Font.BOLD, 15);
-   private static final Font TITLE = new Font(Font.SANS_SERIF, Font.BOLD, 16);
-   private static final Font TEXT = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
+   static final Font SCORE = new Font(Font.MONOSPACED, Font.BOLD, 15);
+   static final Font TITLE = new Font(Font.SANS_SERIF, Font.BOLD, 16);
+   static final Font TEXT = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
    private static final Font SMALL = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
-   private static final Font TINY = new Font(Font.SANS_SERIF, Font.BOLD, 10);
+   static final Font TINY = new Font(Font.SANS_SERIF, Font.BOLD, 10);
+   /** Evolution speeds, in steps per game step. */
+   private static final int[] SPEEDS = { 1, 4, 16 };
+   /** How long after a first N a second one starts the evolution over. */
+   private static final long CONFIRM_NANOS = 3_000_000_000L;
 
    private final Runner runner;
    private final PixelBot bot = new PixelBot();
@@ -53,6 +60,12 @@ final class RunnerPanel extends JPanel {
    private boolean humanHelped;
    private String[] crashLines = new String[0];
    private boolean dragging;
+   /** Non-null while bots are evolving instead of the game being played. */
+   private Evolution evolution;
+   private int speed = 1;
+   private long confirmUntil;
+   /** The strip's buttons as last drawn: x, width and key code each. */
+   private final List<int[]> chips = new ArrayList<>();
 
    RunnerPanel(Records records, long seed) {
       this.runner = new Runner(seed);
@@ -64,7 +77,9 @@ final class RunnerPanel extends JPanel {
          @Override
          public void keyPressed(KeyEvent e) {
             int k = e.getKeyCode();
-            if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
+            if (RunnerPanel.this.evolution != null || k == KeyEvent.VK_E) {
+               RunnerPanel.this.evolveKey(k);
+            } else if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
                RunnerPanel.this.jumpKey(true);
             } else if (k == KeyEvent.VK_DOWN || k == KeyEvent.VK_S) {
                RunnerPanel.this.duckKey(true);
@@ -78,6 +93,9 @@ final class RunnerPanel extends JPanel {
          @Override
          public void keyReleased(KeyEvent e) {
             int k = e.getKeyCode();
+            if (RunnerPanel.this.evolution != null) {
+               return;
+            }
             if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
                RunnerPanel.this.jumpKey(false);
             } else if (k == KeyEvent.VK_DOWN || k == KeyEvent.VK_S) {
@@ -89,9 +107,13 @@ final class RunnerPanel extends JPanel {
          @Override
          public void mousePressed(MouseEvent e) {
             RunnerPanel.this.requestFocusInWindow();
-            if (RunnerPanel.this.bot.isOn() && RunnerPanel.this.bot.markerContains(e.getX(), e.getY())) {
+            if (e.getY() >= STRIP) {
+               RunnerPanel.this.clickStrip(e.getX());
+            } else if (RunnerPanel.this.evolution != null) {
+               return;
+            } else if (RunnerPanel.this.bot.isOn() && RunnerPanel.this.bot.markerContains(e.getX(), e.getY())) {
                RunnerPanel.this.dragging = true;
-            } else if (e.getY() < STRIP) {
+            } else {
                RunnerPanel.this.jumpKey(true);   // a click or a tap jumps, for touch screens
             }
          }
@@ -101,7 +123,7 @@ final class RunnerPanel extends JPanel {
             if (RunnerPanel.this.dragging) {
                RunnerPanel.this.dragging = false;
                RunnerPanel.this.saveMarker();
-            } else {
+            } else if (RunnerPanel.this.evolution == null) {
                RunnerPanel.this.jumpKey(false);
             }
          }
@@ -116,7 +138,7 @@ final class RunnerPanel extends JPanel {
 
          @Override
          public void mouseMoved(MouseEvent e) {
-            boolean over = RunnerPanel.this.bot.isOn() && RunnerPanel.this.bot.markerContains(e.getX(), e.getY());
+            boolean over = RunnerPanel.this.evolution == null && RunnerPanel.this.bot.isOn() && RunnerPanel.this.bot.markerContains(e.getX(), e.getY());
             RunnerPanel.this.setCursor(Cursor.getPredefinedCursor(over ? Cursor.MOVE_CURSOR : Cursor.DEFAULT_CURSOR));
          }
       };
@@ -166,6 +188,65 @@ final class RunnerPanel extends JPanel {
       this.repaint();
    }
 
+   /** E, and while evolving F (speed) and N (start over, pressed twice). */
+   private void evolveKey(int k) {
+      if (k == KeyEvent.VK_E) {
+         this.setEvolving(this.evolution == null);
+      } else if (k == KeyEvent.VK_F) {
+         this.speed = (this.speed + 1) % SPEEDS.length;
+      } else if (k == KeyEvent.VK_N) {
+         if (System.nanoTime() < this.confirmUntil) {
+            this.confirmUntil = 0;
+            this.records.generations = 0;
+            this.records.evolvedBest = 0;
+            this.records.champion = null;
+            this.records.chart.clear();
+            this.records.save();
+            this.evolution = this.newEvolution();
+         } else {
+            this.confirmUntil = System.nanoTime() + CONFIRM_NANOS;
+         }
+      }
+      this.repaint();
+   }
+
+   /** Into the evolution (carrying on from the saved champion) or back to the game's ready screen. */
+   void setEvolving(boolean on) {
+      // A run under way when the mode changes is dropped, and counts for nobody.
+      this.runner.duck(false);
+      this.runner.ready();
+      this.seen = Runner.State.READY;
+      this.crashLines = new String[0];
+      this.dragging = false;
+      this.confirmUntil = 0;
+      this.evolution = on ? this.newEvolution() : null;
+      this.setCursor(Cursor.getDefaultCursor());
+   }
+
+   private Evolution newEvolution() {
+      return new Evolution(System.nanoTime(), this.records.champion, this.records.generations, this.records.evolvedBest,
+         this.records.chart);
+   }
+
+   private void saveEvolution() {
+      this.records.generations = this.evolution.generation();
+      this.records.evolvedBest = this.evolution.championScore();
+      this.records.champion = this.evolution.champion();
+      this.records.chart.clear();
+      this.records.chart.addAll(this.evolution.history());
+      this.records.save();
+   }
+
+   /** A click on the strip presses the key of the button under it. */
+   private void clickStrip(int x) {
+      for (int[] c : this.chips) {
+         if (x >= c[0] && x < c[0] + c[1]) {
+            this.evolveKey(c[2]);
+            return;
+         }
+      }
+   }
+
    private void resetMarker() {
       this.bot.moveTo(PixelBot.DEFAULT_X, PixelBot.DEFAULT_Y);
       this.saveMarker();
@@ -193,6 +274,19 @@ final class RunnerPanel extends JPanel {
 
    /** One game step: the bot looks at the frame as drawn, then the game moves on. */
    void step() {
+      if (this.evolution != null) {
+         if (this.evolution.result() != null) {
+            this.evolution.step();   // the pause between generations runs at normal speed
+            return;
+         }
+         for (int i = 0; i < SPEEDS[this.speed]; i++) {
+            if (this.evolution.step()) {
+               this.saveEvolution();
+               break;
+            }
+         }
+         return;
+      }
       if (this.bot.isOn()) {
          if (this.frame == null) {
             this.frame = new BufferedImage(Runner.WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
@@ -251,10 +345,69 @@ final class RunnerPanel extends JPanel {
    }
 
    private void paintScene(Graphics2D g) {
+      if (this.evolution != null) {
+         EvolveView.paint(g, this.evolution, SPEEDS[this.speed]);
+      } else {
+         paintWorld(g, this.runner);
+         paintDino(g, this.runner, INK);
+         this.paintScore(g);
+         if (this.bot.isOn()) {
+            this.paintBot(g);
+         }
+         this.paintMessage(g);
+      }
+      this.paintStrip(g);
+   }
+
+   /** The strip along the bottom: what the keys do, and buttons a click or a tap presses. */
+   private void paintStrip(Graphics2D g) {
+      g.setColor(STRIP_BG);
+      g.fillRect(0, STRIP, Runner.WIDTH, HEIGHT - STRIP);
+      g.setFont(SMALL);
+      FontMetrics fm = g.getFontMetrics();
+      String help;
+      String[] labels;
+      int[] keys;
+      if (this.evolution != null) {
+         help = "The furthest five of each 20 go on and breed the next.";
+         labels = new String[] { "Speed " + SPEEDS[this.speed] + "x (F)",
+            System.nanoTime() < this.confirmUntil ? "Sure? N again" : "Start over (N)", "Back to the game (E)" };
+         keys = new int[] { KeyEvent.VK_F, KeyEvent.VK_N, KeyEvent.VK_E };
+      } else {
+         help = this.bot.isOn()
+            ? "B: bot off   Drag its red eye to change what it watches   X: put it back"
+            : "Space or ↑: jump (hold for higher)   ↓: duck   B: the original bot plays";
+         labels = new String[] { "Evolve a bot (E)" };
+         keys = new int[] { KeyEvent.VK_E };
+      }
+      this.chips.clear();
+      int x = Runner.WIDTH - 6;
+      for (int i = labels.length - 1; i >= 0; i--) {
+         int w = fm.stringWidth(labels[i]) + 16;
+         x -= w;
+         this.chips.add(0, new int[] { x, w, keys[i] });
+         x -= 6;
+      }
+      for (int i = 0; i < labels.length; i++) {
+         int[] c = this.chips.get(i);
+         boolean main = keys[i] == KeyEvent.VK_E;
+         g.setColor(main ? INK : PAPER);
+         g.fillRoundRect(c[0], STRIP + 3, c[1], HEIGHT - STRIP - 6, 8, 8);
+         g.setColor(main ? PAPER : MUTED);
+         g.drawString(labels[i], c[0] + 8, STRIP + 16);
+      }
+      g.setColor(MUTED);
+      if (fm.stringWidth(help) < x - 12) {
+         g.drawString(help, 12, STRIP + 16);
+      }
+   }
+
+   /** The background, the ground and the obstacles of runner's course. */
+   static void paintWorld(Graphics2D g, Runner runner) {
       g.setColor(PAPER);
       g.fillRect(0, 0, Runner.WIDTH, HEIGHT);
       g.setColor(CLOUD);
-      double[] clouds = this.runner.clouds();
+      double[] clouds = runner.clouds();
       for (int i = 0; i < clouds.length; i++) {
          Sprites.draw(g, Sprites.CLOUD, (int) clouds[i], 46 + i % 2 * 24, 2);
       }
@@ -262,7 +415,7 @@ final class RunnerPanel extends JPanel {
       // The ground: a line, with pebbles below it that scroll with the run.
       g.setColor(INK);
       g.fillRect(0, Runner.GROUND, Runner.WIDTH, 1);
-      double d = this.runner.distance();
+      double d = runner.distance();
       long first = (long) Math.floor(d / 23);
       for (long n = first; n * 23 - d < Runner.WIDTH; n++) {
          long h = (n * 2654435761L) >>> 7;
@@ -272,10 +425,10 @@ final class RunnerPanel extends JPanel {
          }
       }
 
-      for (Runner.Obstacle o : this.runner.obstacles()) {
+      for (Runner.Obstacle o : runner.obstacles()) {
          int x = (int) Math.round(o.x);
          if (o.kind == Runner.Kind.BIRD) {
-            Sprites.draw(g, this.runner.steps() / 10 % 2 == 0 ? Sprites.BIRD_UP : Sprites.BIRD_DOWN, x, o.top(), 2);
+            Sprites.draw(g, runner.birdWings(), x, o.top(), 2);
          } else {
             int unit = o.w / o.size;
             for (int j = 0; j < o.size; j++) {
@@ -283,39 +436,25 @@ final class RunnerPanel extends JPanel {
             }
          }
       }
-      this.paintDino(g);
-      this.paintScore(g);
-      if (this.bot.isOn()) {
-         this.paintBot(g);
-      }
-      this.paintMessage(g);
-
-      g.setColor(STRIP_BG);
-      g.fillRect(0, STRIP, Runner.WIDTH, HEIGHT - STRIP);
-      g.setColor(MUTED);
-      g.setFont(SMALL);
-      String help = this.bot.isOn()
-         ? "B: bot off   Drag the red marker to change what the bot watches   X: put it back"
-         : "Space or ↑: jump (hold for higher)   ↓: duck   B: let the original bot play";
-      centered(g, help, STRIP + 16);
    }
 
-   private void paintDino(Graphics2D g) {
-      int top = this.runner.dinoTop();
-      g.setColor(INK);
-      if (this.runner.isDucking()) {
-         Sprites.draw(g, this.runner.steps() / 6 % 2 == 0 ? Sprites.DUCK_A : Sprites.DUCK_B, Runner.DINO_X, top, 2);
+   /** runner's dinosaur, in color. */
+   static void paintDino(Graphics2D g, Runner runner, Color color) {
+      int top = runner.dinoTop();
+      g.setColor(color);
+      if (runner.isDucking()) {
+         Sprites.draw(g, runner.steps() / 6 % 2 == 0 ? Sprites.DUCK_A : Sprites.DUCK_B, Runner.DINO_X, top, 2);
          return;
       }
-      boolean running = this.runner.state() == Runner.State.RUNNING && !this.runner.isJumping();
-      String[] legs = !running ? Sprites.LEGS_STAND : this.runner.steps() / 6 % 2 == 0 ? Sprites.LEGS_A : Sprites.LEGS_B;
+      boolean running = runner.state() == Runner.State.RUNNING && !runner.isJumping();
+      String[] legs = !running ? Sprites.LEGS_STAND : runner.steps() / 6 % 2 == 0 ? Sprites.LEGS_A : Sprites.LEGS_B;
       Sprites.draw(g, Sprites.DINO, Runner.DINO_X, top, 2);
       Sprites.draw(g, legs, Runner.DINO_X, top + Sprites.DINO.length * 2, 2);
-      if (this.runner.state() == Runner.State.CRASHED) {
+      if (runner.state() == Runner.State.CRASHED) {
          // A wide-open eye.
          g.setColor(PAPER);
          g.fillRect(Runner.DINO_X + 23, top + 1, 6, 6);
-         g.setColor(INK);
+         g.setColor(color);
          g.fillRect(Runner.DINO_X + 25, top + 3, 2, 2);
       }
    }
@@ -368,11 +507,11 @@ final class RunnerPanel extends JPanel {
       }
    }
 
-   private static void centered(Graphics2D g, String s, int y) {
+   static void centered(Graphics2D g, String s, int y) {
       g.drawString(s, (Runner.WIDTH - g.getFontMetrics().stringWidth(s)) / 2, y);
    }
 
-   private static String pad(int n) {
+   static String pad(int n) {
       String s = "0000" + Math.min(n, 99999);
       return s.substring(s.length() - 5);
    }
@@ -395,5 +534,9 @@ final class RunnerPanel extends JPanel {
 
    String[] crashLines() {
       return this.crashLines;
+   }
+
+   Evolution evolution() {
+      return this.evolution;
    }
 }

@@ -1,8 +1,12 @@
 package dinosaurgameplayer;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Self-check for the game, the in-window bot and the saved records. Run with java -ea (headless is fine). */
 public final class RunnerCheck {
@@ -82,6 +86,80 @@ public final class RunnerCheck {
       assert team.crashLines()[0].startsWith("You and the bot") : team.crashLines()[0];
       assert Records.load(file).botBest == 0 && Records.load(file).best == saved.best;
 
+      // An evolved bot's eye sees exactly the obstacles drawn into the frame, birds and cacti alike.
+      Evolution.Dino strong = new Evolution.Dino(Brain.decode("144,146,65,117,120,299"), 1);
+      BufferedImage img = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      int inked = 0;
+      boolean sawBird = false;
+      for (int s = 0; strong.running(); s++) {
+         if (s % 29 == 0) {
+            Graphics2D g = img.createGraphics();
+            RunnerPanel.paintWorld(g, strong.runner);
+            g.dispose();
+            for (int y = Brain.MIN_Y; y <= Brain.MAX_Y; y++) {
+               for (int x = Brain.MIN_X; x <= Brain.MAX_X; x++) {
+                  boolean ink = ObstacleDetector.isObstacle(img.getRGB(x, y) & 0xFFFFFF);
+                  assert ink == strong.runner.inkAt(x, y) : "step " + s + " pixel " + x + "," + y;
+                  inked += ink ? 1 : 0;
+               }
+            }
+            for (Runner.Obstacle o : strong.runner.obstacles()) {
+               sawBird |= o.kind == Runner.Kind.BIRD && o.x < Runner.WIDTH - o.w;
+            }
+         }
+         strong.step();
+      }
+      assert inked > 10000 && sawBird : "checked " + inked + " inked pixels";
+      // That brain ducks under the middle birds and runs the whole course of seed 1.
+      assert strong.finished() && strong.score() == Evolution.FINISH && strong.ducks() > 0 : "scored " + strong.score();
+
+      // Evolution: generation 1 races the original bot and 19 random brains on one course; 40 generations
+      // later the best brain runs much further than the original did.
+      Evolution ev = new Evolution(5, null, 0, 0, new ArrayList<>());
+      assert ev.generation() == 1 && ev.dinos().size() == Evolution.SIZE;
+      assert ev.dinos().get(0).brain.encode().equals(Brain.original().encode());
+      for (Evolution.Dino d : ev.dinos()) {
+         assert d.runner.obstacles().isEmpty() && d.runner.state() == Runner.State.RUNNING;
+      }
+      int originalScore = -1;
+      while (ev.generation() <= 40) {
+         if (ev.step()) {
+            assert ev.result() != null && ev.result()[0].startsWith("Generation " + ev.generation() + ": the best ran ");
+            if (originalScore < 0) {
+               originalScore = ev.dinos().get(0).score();
+            }
+         }
+      }
+      assert ev.history().size() == 40 && ev.championScore() == maxOf(ev.history());
+      assert ev.championScore() > 2 * originalScore && ev.champion().ducks()
+         : "record " + ev.championScore() + " vs the original's " + originalScore;
+      // Carrying on from a saved champion: the next generation number, the champion runs first.
+      Evolution more = new Evolution(6, ev.champion(), 40, ev.championScore(), ev.history());
+      assert more.generation() == 41 && more.dinos().get(0).brain.encode().equals(ev.champion().encode());
+      assert Brain.decode("1,2,3") == null && Brain.decode("a,b,c,d,e,f") == null;
+      assert Brain.decode("0,0,0,999,999,-5").encode().equals(Brain.MIN_X + "," + Brain.MIN_Y + "," + Brain.MIN_MS + ","
+         + Brain.MAX_X + "," + Brain.MAX_Y + ",0") : "numbers are kept in range";
+
+      // In the window: E starts evolving where the file left off, and each generation is saved.
+      File evoFile = File.createTempFile("dinogame", ".txt");
+      evoFile.delete();
+      RunnerPanel evo = new RunnerPanel(Records.load(evoFile), 3);
+      evo.runner().press();
+      evo.step();
+      evo.setEvolving(true);
+      assert evo.evolution() != null && evo.runner().state() == Runner.State.READY : "the run under way is dropped";
+      for (int i = 0; i < 60 * 600 && Records.load(evoFile).generations < 2; i++) {
+         evo.step();
+      }
+      Records evoSaved = Records.load(evoFile);
+      assert evoSaved.generations == 2 && evoSaved.champion != null && evoSaved.chart.size() == 2
+         && evoSaved.evolvedBest == maxOf(evoSaved.chart) : "saved " + evoSaved.generations;
+      evo.setEvolving(false);
+      assert evo.evolution() == null && evo.runner().state() == Runner.State.READY;
+      evo.setEvolving(true);
+      assert evo.evolution().generation() == 3 : "carries on at generation " + evo.evolution().generation();
+      evoFile.delete();
+
       // The file keeps both bests and the marker; damaged lines are skipped.
       Records r = Records.load(file);
       r.best = 812;
@@ -91,6 +169,16 @@ public final class RunnerCheck {
       r.save();
       Records back = Records.load(file);
       assert back.best == 812 && back.botBest == 431 && back.markerX == 150 && back.markerY == 120;
+      assert back.generations == 0 && back.champion == null : "no evolution saved yet";
+      r.generations = 12;
+      r.evolvedBest = 1500;
+      r.champion = Brain.original();
+      r.chart.add(700);
+      r.chart.add(1500);
+      r.save();
+      back = Records.load(file);
+      assert back.generations == 12 && back.evolvedBest == 1500 && back.champion.encode().equals(Brain.original().encode())
+         && back.chart.equals(java.util.Arrays.asList(700, 1500)) && back.best == 812;
       try (FileOutputStream out = new FileOutputStream(file)) {
          out.write("best=oops\nbot=7\nmarker=1\n".getBytes(StandardCharsets.UTF_8));
       }
@@ -98,8 +186,16 @@ public final class RunnerCheck {
       assert broken.best == 0 && broken.botBest == 7 && broken.markerX == PixelBot.DEFAULT_X;
       file.delete();
 
-      System.out.println("RunnerCheck passed (bot average " + total / 6 + ")");
+      System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore() + ")");
       System.exit(0);
+   }
+
+   private static int maxOf(List<Integer> list) {
+      int max = 0;
+      for (int n : list) {
+         max = Math.max(max, n);
+      }
+      return max;
    }
 
    private static int peak(Runner r) {

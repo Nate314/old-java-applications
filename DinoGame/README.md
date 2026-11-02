@@ -11,6 +11,7 @@ The bot now comes with its game. `./run.ps1 DinoGame` opens Dino Game: a dinosau
 - **B**: the bot on or off. With the bot on, a red 10 x 10 marker shows where it looks ("bot's eye") and a badge counts its jumps this run. From the ready screen it starts the run itself, holding the key for 70 ms as the original did when it launched. After a crash it waits 3 s, then runs again.
 - **Drag the red marker** (bot on) to move what the bot watches. It stays ahead of the dinosaur and above the ground. **X** puts it back (36 px ahead of the dinosaur's nose, 22 px above the ground).
 - After a crash, Space starts a new run (after a short pause, so a held key does not restart at once).
+- **E** (or the **Evolve a bot** button at the right of the bottom strip): evolve bots (see Evolve a bot). E again, or **Back to the game**, returns to the ready screen. A run under way when you switch is dropped and counts for nobody.
 
 Score: the distance run. Top right shows the bot's best (red, BOT), your best (HI) and this run.
 
@@ -20,9 +21,25 @@ Score: the distance run. Top right shows the bot's best (red, BOT), your best (H
 
 With the marker where it starts, the bot clears cacti and low birds well and usually ends at the first middle bird it meets, usually somewhere between 400 and 650 points.
 
-Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`.
+Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`, and once a generation has been bred, `evolved=generations,record`, `champion=` (the record holder's six numbers, see below) and `chart=` (the best score of each of the last 60 generations).
 
 On the web site, `?watch` on its page (and the home page's demo, see Watch the computer play in `web/README.md`) starts it with the bot playing (B), and the visitor's first press takes over.
+
+## Evolve a bot
+
+The original bot has two numbers someone once picked by hand: where its pixel sits and how long it holds the key. Press E and the game picks them by evolution instead, while you watch.
+
+- A bot's brain is the original rule with its numbers left open: a **jump eye** (a pixel) and how long to hold the jump key, 20 to 300 ms, when an obstacle covers it, and optionally a **duck eye** and how long to hold Down when an obstacle covers that one. The original bot is the brain with its own pixel, 65 ms and no duck eye. Two small changes from the original rule: an eye does not fire while the dinosaur is in the air (so a bot does not waste its look on a jump that cannot happen), and a jump lets go of Down.
+- A **generation** is 20 dinosaurs racing the same course at once, each run by its own brain. The first has the original bot and 19 random brains. Every dinosaur still running is drawn as a see-through ghost in its own color, with small squares where its eyes are (red jumps, blue ducks). The first one still running in the generation's order (the best of the last generation, or the original bot in the first) is drawn solid, with its eyes labeled, and the line under the ground says which it is.
+- When the last one crashes, or the ones left reach 3,000 (the finish line), the generation's result shows for 1.5 s: the best score, whether it is a new record, and how many ducked or finished. Then the five that ran furthest go on unchanged, 13 children of the best eight join them (each number taken from one parent or the other, a third of them nudged; one child in ten gains or loses its duck eye), and two new random brains keep fresh ideas coming. Each generation runs a new course.
+- The badge (top left) shows the generation, how many are still running and the speed. Top right: the record in green (REC) and how far the race has got. Under it, a bar for each generation's best, the record's bar green.
+- **F** or **Speed**: 1x, 4x (where it starts) or 16x. The result between generations always shows at normal speed.
+- **N** or **Start over**, pressed twice within 3 s: forgets the evolution and starts again from generation 1.
+- The bots read what is drawn without drawing it: `Runner.inkAt` works out from the sprite drawings whether an obstacle covers a pixel, so 20 bots cost no more than one. They see only obstacles, not each other, the dinosaur, the score or a marker. The self-check compares this with the drawn frame pixel by pixel.
+- Each generation is saved as it ends. E carries on from the saved record holder: its next generation is that brain, 14 of its children and five random brains.
+- Evolution is luck as well as selection. In the self-check's seeded run the original bot ran 507 in generation 1, and after 40 generations the record was 3,000 (the finish line), held by a brain that ducks under the middle birds. Other runs can take longer to find ducking; some stay near the original's score for many generations.
+
+Evolved bots stay in evolve mode; the bot behind B is still the original, with your marker.
 
 ## Original screen bot
 
@@ -44,6 +61,9 @@ It sends real Space key presses via `java.awt.Robot` to whatever window has focu
 - `src/dinosaurgameplayer/PixelBot.java`: the bot inside the window: the marker, the 65 ms hold, and why a run ended.
 - `src/dinosaurgameplayer/Sprites.java`: the pixel drawings (dinosaur, ducking, birds, clouds, cacti).
 - `src/dinosaurgameplayer/Records.java`: `~/.dinogame.txt`.
+- `src/dinosaurgameplayer/Brain.java`: an evolved bot's six numbers, its children and its saved form.
+- `src/dinosaurgameplayer/Evolution.java`: a generation of 20 dinosaurs (`Evolution.Dino`, a brain at the keys of its own `Runner`), ranking and breeding.
+- `src/dinosaurgameplayer/EvolveView.java`: draws the evolution: ghosts, eyes, badge, record and chart.
 - `src/dinosaurgameplayer/DinosaurGamePlayer.java`: the original screen bot's entry; computes the sensor positions, waits 2.5 s on the main thread, then on the Swing event thread shows the markers, presses Space and starts the timer.
 - `src/dinosaurgameplayer/ObstacleDetector.java`: the original timer action; reads the sensor pixel with `java.awt.Robot` and holds Space, released by a one-shot timer. The pixel is not checked while Space is held. Its rule (blue 83, 65 ms, 70 ms to start) is shared with `PixelBot`.
 
@@ -53,7 +73,7 @@ From the repo root: `./run.ps1 DinoGame` (or `./run.ps1 DinoGame -Build` to buil
 
 ## Self-check
 
-`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file. From `DinoGame/`:
+`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file. For the evolution: that `Runner.inkAt` agrees with the drawn frame on every pixel an eye can sit on, through a whole course with birds; that a known brain ducks and finishes a course; that a seeded 40-generation run starts with the original bot, keeps a chart of 40 bests and ends with a record over twice the original's score held by a brain that ducks; that it carries on from a saved champion; that damaged brains are refused and numbers kept in range; that in the window E drops the run under way and each generation is saved; and the saved evolution lines. From `DinoGame/`:
 
 ```
 javac -encoding UTF-8 -d ../out/check/DinoGame src/dinosaurgameplayer/*.java test/dinosaurgameplayer/*.java
