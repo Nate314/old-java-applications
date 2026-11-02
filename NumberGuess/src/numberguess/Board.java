@@ -22,6 +22,7 @@ import javax.swing.Timer;
  * The game board: tabs for the five ranges and You pick along the top, the verdict, and two number lines. The top
  * line is the whole range with what is still possible lit; the bottom one zooms in on just that part, so a click on
  * it guesses the number under the pointer, even in 1 to 1,000,000. The guesses so far sit underneath as chips.
+ * The Magic tab is a card trick instead: see {@link MagicCards}, drawn by {@link MagicView}.
  */
 @SuppressWarnings("serial")
 public final class Board extends JPanel {
@@ -55,6 +56,8 @@ public final class Board extends JPanel {
 	private Level level;
 	private Game game;
 	private MindReader reader;
+	private MagicCards magic;
+	private final MagicView magicView = new MagicView(this::repaint);
 	private String headline = "";
 	private String subline = "";
 	private Color headlineColor = TEXT;
@@ -72,7 +75,7 @@ public final class Board extends JPanel {
 	/** Where the pointer is over the zoomed line, or -1. */
 	private int hoverX = -1;
 
-	/** {@code modeChanged} runs when the board switches between guessing and You pick, so the buttons can follow. */
+	/** {@code modeChanged} runs when the board needs other buttons (a switch of tab, or a step of the card trick). */
 	public Board(Records records, Runnable modeChanged) {
 		this.records = records;
 		this.modeChanged = modeChanged;
@@ -108,8 +111,29 @@ public final class Board extends JPanel {
 		return reader != null;
 	}
 
+	public boolean isMagic() {
+		return magic != null;
+	}
+
 	public boolean isOver() {
-		return isPicking() ? reader.isOver() : game.isOver();
+		return isMagic() ? magic.isDone() : isPicking() ? reader.isOver() : game.isOver();
+	}
+
+	/** The open tab: a range's ordinal, then You pick, then Magic. */
+	private int tab() {
+		return isMagic() ? Level.values().length + 1 : isPicking() ? Level.values().length : level.ordinal();
+	}
+
+	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic. */
+	private int kind() {
+		return isMagic() ? 2 : isPicking() ? 1 : 0;
+	}
+
+	/** Tells the window when a switch of tab needs other buttons. */
+	private void switched(int kindBefore) {
+		if (kind() != kindBefore) {
+			modeChanged.run();
+		}
 	}
 
 	public Game game() {
@@ -118,35 +142,49 @@ public final class Board extends JPanel {
 
 	/** A new number to guess in {@code level}. */
 	public void start(Level level) {
-		boolean wasPicking = isPicking();
+		int before = kind();
 		this.level = level;
 		reader = null;
+		magic = null;
 		game = new Game(level, random);
 		newBest = false;
 		opened = null;
 		say("Guess a number from 1 to " + Level.commas(level.max()), TEXT,
 				"Par " + level.par() + ": guess the middle of what is left. " + level.limit() + " guesses before it is given away.");
 		reset();
-		if (wasPicking) {
-			modeChanged.run();
-		}
+		switched(before);
 	}
 
 	/** You think of a number and the computer guesses it. */
 	public void startPicking() {
-		boolean wasPicking = isPicking();
+		int before = kind();
 		reader = new MindReader();
 		game = null;
+		magic = null;
 		askReader();
 		reset();
-		if (!wasPicking) {
-			modeChanged.run();
-		}
+		switched(before);
+	}
+
+	/** The card trick: a fresh shuffle of the six cards. */
+	public void startMagic() {
+		magic = new MagicCards(random);
+		reader = null;
+		game = null;
+		magicView.dealt(false);
+		askMagic();
+		slide.stop();
+		repaint();
+		modeChanged.run();
 	}
 
 	/** The same game again: a new number in this range, or a new round of You pick. */
 	public void again() {
-		if (isPicking()) {
+		if (isMagic()) {
+			if (!magicView.isFlipping()) {
+				startMagic();
+			}
+		} else if (isPicking()) {
 			startPicking();
 		} else {
 			start(opened != null ? opened : level);
@@ -155,8 +193,8 @@ public final class Board extends JPanel {
 
 	/** Page Up / Page Down: the tab before or after this one. */
 	public void moveTab(int by) {
-		int index = (isPicking() ? Level.values().length : level.ordinal()) + by;
-		if (index >= 0 && index <= Level.values().length) {
+		int index = tab() + by;
+		if (index >= 0 && index <= Level.values().length + 1) {
 			openTab(index);
 		}
 	}
@@ -198,7 +236,7 @@ public final class Board extends JPanel {
 
 	/** A typed or clicked guess. */
 	public void guess(int number) {
-		if (isPicking()) {
+		if (isPicking() || isMagic()) {
 			return;
 		}
 		if (game.isOver()) {
@@ -309,9 +347,70 @@ public final class Board extends JPanel {
 		repaint();
 	}
 
+	// ---- Magic ----
+
+	private void askMagic() {
+		if (!magic.isDone()) {
+			int card = magic.current() + 1;
+			say("Is your number on this card?", TEXT, card == 1
+					? "Think of a number from 1 to " + MagicCards.MAX + " and keep it secret. Card 1 of " + MagicCards.CARDS + "."
+					: "Card " + card + " of " + MagicCards.CARDS + ". Just yes or no, I will do the rest.");
+		} else if (magic.number() == 0) {
+			say("Not on any card?", HIGH, "Every number from 1 to " + MagicCards.MAX + " is on at least one card. Enter tries again.");
+		} else if (magicView.isExplaining()) {
+			say("How it works", GOLD, "Each card's smallest number is its key. Add the keys of the cards you said yes to.");
+		} else {
+			say("Your number is " + magic.number() + "!", RIGHT, "Read from six yes or no answers. S shows how, Enter does it again.");
+		}
+	}
+
+	/** Your number is ({@code yes}) or is not on the card shown; after the reveal, either one starts again. */
+	public void magicAnswer(boolean yes) {
+		if (!isMagic()) {
+			return;
+		}
+		if (magicView.isFlipping()) {
+			return; // a quick second click on No or Yes must not skip the reveal
+		}
+		if (magic.isDone()) {
+			startMagic();
+			return;
+		}
+		magic.answer(yes);
+		magicView.dealt(magic.isDone() && magic.number() > 0);
+		askMagic();
+		repaint();
+		if (magic.isDone()) {
+			modeChanged.run();
+		}
+	}
+
+	/** After the reveal: shows or hides how the trick works. */
+	public void explain() {
+		if (canExplain()) {
+			magicView.toggleExplaining();
+			askMagic();
+			repaint();
+			modeChanged.run();
+		}
+	}
+
+	/** True after the reveal of a number (not after answers that put it on no card). */
+	public boolean canExplain() {
+		return isMagic() && magic.isDone() && magic.number() > 0;
+	}
+
+	public boolean isExplaining() {
+		return isMagic() && magicView.isExplaining();
+	}
+
 	// ---- mouse ----
 
 	private void openTab(int index) {
+		if (index == Level.values().length + 1) {
+			startMagic();
+			return;
+		}
 		if (index == Level.values().length) {
 			startPicking();
 			return;
@@ -334,7 +433,7 @@ public final class Board extends JPanel {
 				return;
 			}
 		}
-		if (zoom.contains(x, y) && !isPicking()) {
+		if (zoom.contains(x, y) && !isPicking() && !isMagic()) {
 			guess(numberAt(x));
 		}
 	}
@@ -358,7 +457,7 @@ public final class Board extends JPanel {
 
 	/** The number a click on the zoomed line would guess now, or 0. */
 	private int hoverNumber() {
-		return hoverX >= 0 && !isPicking() && !isOver() ? numberAt(hoverX) : 0;
+		return hoverX >= 0 && !isPicking() && !isMagic() && !isOver() ? numberAt(hoverX) : 0;
 	}
 
 	/** The still possible number under {@code x} on the zoomed line. */
@@ -384,7 +483,7 @@ public final class Board extends JPanel {
 
 	private void layOut() {
 		int width = getWidth();
-		int count = Level.values().length + 1;
+		int count = Level.values().length + 2;
 		int gap = 6;
 		int tabWidth = (width - 2 * MARGIN - gap * (count - 1)) / count;
 		tabs.clear();
@@ -404,12 +503,18 @@ public final class Board extends JPanel {
 		g.setColor(BACKGROUND);
 		g.fillRect(0, 0, getWidth(), getHeight());
 		paintTabs(g);
-		g.setColor(headlineColor);
+		// The trick keeps its secret while the last card turns over.
+		boolean flipping = isMagic() && magicView.isFlipping();
+		g.setColor(flipping ? GOLD : headlineColor);
 		g.setFont(new Font("SansSerif", Font.BOLD, 22));
-		g.drawString(headline, MARGIN, 86);
+		g.drawString(flipping ? "Let me see..." : headline, MARGIN, 86);
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 13));
-		g.drawString(subline, MARGIN, 108);
+		g.drawString(flipping ? "" : subline, MARGIN, 108);
+		if (isMagic()) {
+			magicView.paint(g, magic, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
+			return;
+		}
 		paintGuessMeter(g);
 		paintFullLine(g);
 		paintZoom(g);
@@ -420,9 +525,10 @@ public final class Board extends JPanel {
 		for (int i = 0; i < tabs.size(); i++) {
 			Rectangle tab = tabs.get(i);
 			boolean picking = i == Level.values().length;
-			Level tabLevel = picking ? null : Level.values()[i];
-			boolean selected = picking ? isPicking() : !isPicking() && tabLevel == level;
-			boolean open = picking || records.isOpen(tabLevel);
+			boolean magicTab = i == Level.values().length + 1;
+			Level tabLevel = picking || magicTab ? null : Level.values()[i];
+			boolean selected = i == tab();
+			boolean open = tabLevel == null || records.isOpen(tabLevel);
 			g.setColor(selected ? SELECTED : i == hoverTab ? CARD_HOVER : CARD);
 			g.fillRoundRect(tab.x, tab.y, tab.width, tab.height, 10, 10);
 			if (selected) {
@@ -431,14 +537,17 @@ public final class Board extends JPanel {
 			}
 			g.setFont(new Font("SansSerif", Font.BOLD, 13));
 			g.setColor(open ? TEXT : DIM);
-			String label = picking ? "You pick" : tabLevel.label();
+			String label = picking ? "You pick" : magicTab ? "Magic" : tabLevel.label();
+			if (g.getFontMetrics().stringWidth(label) > tab.width - 6) {
+				g.setFont(new Font("SansSerif", Font.BOLD, 11));
+			}
 			FontMetrics metrics = g.getFontMetrics();
 			g.drawString(label, tab.x + (tab.width - metrics.stringWidth(label)) / 2, tab.y + 19);
 			int centerX = tab.x + tab.width / 2;
-			if (picking) {
+			if (tabLevel == null) {
 				g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 				g.setColor(SOFT);
-				String sub = "I guess yours";
+				String sub = picking ? "I guess yours" : "Card trick";
 				g.drawString(sub, centerX - g.getFontMetrics().stringWidth(sub) / 2, tab.y + 35);
 			} else if (!open) {
 				paintLock(g, centerX, tab.y + 31);
@@ -670,7 +779,7 @@ public final class Board extends JPanel {
 		}
 	}
 
-	private static void paintStar(Graphics2D g, int centerX, int centerY, int radius, Color color) {
+	static void paintStar(Graphics2D g, int centerX, int centerY, int radius, Color color) {
 		int[] xs = new int[10], ys = new int[10];
 		for (int i = 0; i < 10; i++) {
 			double angle = -Math.PI / 2 + i * Math.PI / 5;

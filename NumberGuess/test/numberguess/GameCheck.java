@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.Random;
 
-/** Self-check for the ranges, games, You pick and saved records. Run with java -ea. */
+/** Self-check for the ranges, games, You pick, the Magic cards and saved records. Run with java -ea. */
 public class GameCheck {
 	public static void main(String[] args) throws IOException {
 		int[] pars = { 4, 7, 10, 14, 20 };
@@ -82,6 +82,23 @@ public class GameCheck {
 			reader.higher();
 		}
 		check(reader.isCaught() && reader.low() == MindReader.MAX + 1, "higher than 100");
+
+		// Magic: six cards of 32, each card's smallest number is its key, and honest answers add up to the number.
+		Random shuffle = new Random(7);
+		for (int number = 0; number <= MagicCards.MAX; number++) {
+			MagicCards cards = new MagicCards(shuffle);
+			int keys = 0;
+			for (int i = 0; i < MagicCards.CARDS; i++) {
+				check(cards.numbers(i).size() == 32 && java.util.Collections.min(cards.numbers(i)) == cards.key(i), "card " + i);
+				keys |= cards.key(i);
+				check(cards.current() == i && cards.answer(i) == null, "asks in order");
+				cards.answer(cards.numbers(i).contains(number));
+			}
+			check(keys == MagicCards.MAX, "one card per key");
+			check(cards.isDone() && cards.number() == number, "magic reads " + number);
+			cards.answer(true);
+			check(cards.number() == number, "no answers after the last card");
+		}
 
 		File file = File.createTempFile("numberguess", ".txt");
 		file.deleteOnExit();
