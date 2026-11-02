@@ -130,6 +130,7 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `pom.xml`: parent build (TeaVM version, shared plugin settings).
 - `shim/`: the compatibility layer and the TeaVM compiler extensions (`web.teavm`).
 - `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files, plus every browser app's README and Java sources (NathaNOS included) into `<App>/source/` for the source viewer.
+- `then/`: 16 apps as they were recovered (see Then and now), each compiled to `<App>/then.js` with its page `<App>/then.html` (from the one template `then/then.html`) and its sources in `<App>/then-source/`.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
 - `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), `cards/` (the link preview cards, see Share), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
 - `shots.ps1`: recaptures `site/shots/` from a built site (see Home page).
@@ -171,6 +172,18 @@ On a phone or tablet a finger is the left mouse button, so every app can be play
 - Holding still for 500 ms on a button that listens to the mouse itself is a right click: the left press ends without a click and a right press, release and click follow. That is Minesweeper's flag (long-press a tile to cycle flag, question mark and blank). A ring closes in on the finger while it is held and pops when the right click goes (with a short vibration where the phone allows it); a quick tap shows nothing. Other buttons and panels keep a long press as a long left press, so held keys and press-and-drag work as before. Clock's right click (12 or 24 hours) has no touch equivalent.
 - Windows have `touch-action: none`, so a finger on a window works the app instead of panning or zooming the page; a swipe outside the windows still scrolls the home page. They also turn off the long-press callout and the tap flash.
 - Only the first finger counts; a second one is ignored until the first lifts. A touch the browser cancels is released without a click.
+
+## Then and now
+
+Every app here was reworked after it was recovered, so the site also keeps the apps as they came out of the old jars (or the author's own Eclipse projects), bugs and all, to play beside today's versions:
+
+- The `then` module (`web/then/pom.xml`) reads the sources at commit `b3d9f4e` ("Add six more apps from Downloads (#8)", the last commit before "Modernize all 20 apps") out of the repo's git history with `git archive`, so no copy of them is kept in the tree, and compiles them with TeaVM on today's shim. The build therefore needs `git` and the repo's history. 16 apps have a then version: all but NathaNOS, DinoGame (its original is only the screen bot), BibleDownloader (its original uses `JCheckBox`, which the shim lacks) and Windows (the original differs only by an unused `Robot` and an unused variable).
+- Each gets `<App>/then.html` (`<body data-then>`), which runs `then.js`. Its gallery card has `data-then`.
+- The app page's band has a Then | Now switch between `index.html` and `then.html`. The title screen of `then.html` says "As recovered" and shows, where today's page shows the thumbnail, the "Known quirks" list of the app's README as it was at that commit; today's title screen has a "Play it as recovered, bugs and all" link. On `then.html` the band's news line reads out those quirks instead of How to play, and the exit screen offers today's version.
+- Source on `then.html` shows the README and Java as recovered (from `then-source/`), so the code beside the app is again the code it runs.
+- The home page's player has a Then | Now switch next to the app's name (for apps with a then version): Then swaps `<App>/then.html?embed` into the player, and the bar shows the first known quirk with a link to the page that lists them all. `index.html#Minesweeper:then` opens the player on it.
+- A then version keeps its own saves (`oldjava.saves.<App>.then`, from `web.rt.Js.saveStore`), so the original never reads today's save files. Playing either version stamps the app's passport.
+- Save all for offline does not include the then versions; a page played once is cached by the service worker like any other.
 
 ## Pretend Windows
 

@@ -306,8 +306,10 @@ public final class Js {
 
     // ---- saved files (see Saves) ----
 
-    @JSBody(script = "return document.body ? document.body.getAttribute('data-app') : null;")
-    public static native String appId();
+    /** The page's store name: its data-app, plus ".then" on an app's then.html (the app as recovered keeps its own saves). */
+    @JSBody(script = "var b = document.body, a = b && b.getAttribute('data-app');"
+            + " return a ? a + (b.hasAttribute('data-then') ? '.then' : '') : null;")
+    public static native String saveStore();
 
     @JSBody(script = "try { return !!window.localStorage; } catch (e) { return false; }")
     public static native boolean storageAvailable();

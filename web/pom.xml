@@ -13,6 +13,7 @@
     <module>shim</module>
     <module>apps</module>
     <module>nathanos</module>
+    <module>then</module>
   </modules>
 
   <properties>

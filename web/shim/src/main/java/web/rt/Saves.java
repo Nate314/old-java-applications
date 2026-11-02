@@ -14,7 +14,7 @@ import java.util.Map;
 /**
  * Keeps the files an app writes across page loads. TeaVM's file system lives in memory, so every second (and when the
  * page is hidden) this walks it, and each file written since the last look is copied into localStorage under
- * {@code oldjava.saves.<App>}. On the next load those files are written back over the page's preloaded ones before
+ * {@code oldjava.saves.<App>} ({@code <App>.then} on an app's then.html). On the next load those files are written back over the page's preloaded ones before
  * main() runs, so FlappyBird's best score or StockChecker's edited list come back as they would on a desktop disk.
  * Files written to {@code ~/Downloads} are not kept: each is handed to the browser as a download, then deleted.
  */
@@ -34,7 +34,7 @@ public final class Saves {
 
     /** Writes the saved files back, then starts watching. Call once, after the preloaded files are in place. */
     public static void install() {
-        String app = Js.appId();
+        String app = Js.saveStore();
         if (app == null || app.isEmpty() || !Js.storageAvailable()) {
             return;
         }

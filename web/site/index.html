@@ -36,6 +36,13 @@
     .player-bar .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
                                 box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
     .player-bar h3 { margin: 0; font-size: 17px; }
+    /* Then | Now: the app as recovered, or today's (web/README.md, Then and now). */
+    .era { display: inline-flex; border: 1px solid var(--card-border); border-radius: 999px; overflow: hidden; }
+    .era[hidden] { display: none; }
+    .era button { padding: 2px 12px; border: 0; background: transparent; color: inherit; font: 600 13px/1.5 inherit;
+                  font-family: inherit; cursor: pointer; }
+    .era button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+    .era button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .player-bar .hint { flex: 1 1 260px; min-width: 0; font-size: 14px; opacity: 0.75; }
     .player-bar .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
     .btn { display: inline-block; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--card-border);
@@ -204,6 +211,9 @@
     <div class="player-bar">
       <span class="live">Live</span>
       <h3 id="player-name">Minesweeper</h3>
+      <div class="era" id="player-era" role="group" aria-label="Version" title="Then: the app as it was recovered from its old jar, before any fixes. Now: today's version.">
+        <button type="button" id="player-then" aria-pressed="false">Then</button><button type="button" id="player-now" aria-pressed="true">Now</button>
+      </div>
       <span class="hint" id="player-hint">Beginner, Classic and Expert boards against the clock, with your best times kept. Right-click (or long-press) to flag.</span>
       <div class="actions">
         <button class="btn arcade" type="button" id="player-arcade" aria-pressed="false" title="Neon CRT arcade look for every app (the Arcade skin)">Arcade mode</button>
@@ -273,26 +283,26 @@
     <button type="button" data-filter="tool" aria-pressed="false">Tools</button>
   </div>
   <ul class="apps" id="apps">
-    <li data-app="Minesweeper" data-cat="game"><a class="thumb" href="Minesweeper/index.html"><img src="shots/Minesweeper.png" alt="Minesweeper window" loading="lazy"></a><div class="body"><strong>Minesweeper</strong><span>Beginner, Classic and Expert boards against the clock, with your best times kept. Right-click (or long-press) to flag.</span><div class="actions"><a class="btn primary play" href="Minesweeper/index.html">Play</a><a class="btn" href="Minesweeper/index.html">Full page</a></div></div></li>
-    <li data-app="FlappyBird" data-cat="game"><a class="thumb" href="FlappyBird/index.html"><img src="shots/FlappyBird.png" alt="Flappy Bird window" loading="lazy"></a><div class="body"><strong>Flappy Bird</strong><span>Space to flap. Press C for today's course and race the ghost of your best run. Medals at 10, 20, 30 and 40 pipes.</span><div class="actions"><a class="btn primary play" href="FlappyBird/index.html">Play</a><a class="btn" href="FlappyBird/index.html">Full page</a></div></div></li>
+    <li data-app="Minesweeper" data-then data-cat="game"><a class="thumb" href="Minesweeper/index.html"><img src="shots/Minesweeper.png" alt="Minesweeper window" loading="lazy"></a><div class="body"><strong>Minesweeper</strong><span>Beginner, Classic and Expert boards against the clock, with your best times kept. Right-click (or long-press) to flag.</span><div class="actions"><a class="btn primary play" href="Minesweeper/index.html">Play</a><a class="btn" href="Minesweeper/index.html">Full page</a></div></div></li>
+    <li data-app="FlappyBird" data-then data-cat="game"><a class="thumb" href="FlappyBird/index.html"><img src="shots/FlappyBird.png" alt="Flappy Bird window" loading="lazy"></a><div class="body"><strong>Flappy Bird</strong><span>Space to flap. Press C for today's course and race the ghost of your best run. Medals at 10, 20, 30 and 40 pipes.</span><div class="actions"><a class="btn primary play" href="FlappyBird/index.html">Play</a><a class="btn" href="FlappyBird/index.html">Full page</a></div></div></li>
     <li data-app="DinoGame" data-cat="game"><a class="thumb" href="DinoGame/index.html"><img src="shots/DinoGame.png" alt="Dino Game: the bot jumping a cactus, its red marker ahead of the dinosaur" loading="lazy"></a><div class="body"><strong>Dino Game</strong><span>The dinosaur game, with the old bot that played it by watching one pixel. Press B to watch it, beat its best, or drag its eye to teach it.</span><div class="actions"><a class="btn primary play" href="DinoGame/index.html">Play</a><a class="btn" href="DinoGame/index.html">Full page</a></div></div></li>
     <li data-app="NathaNOS" data-cat="toy"><a class="thumb" href="NathaNOS/index.html"><img src="shots/NathaNOS.png" alt="NathaNOS desktop" loading="lazy"></a><div class="body"><strong>NathaNOS</strong><span>A fake desktop with icons, a start menu and a taskbar: double-click an icon to open any other app.</span><div class="actions"><a class="btn primary play" href="NathaNOS/index.html">Play</a><a class="btn" href="NathaNOS/index.html">Full page</a></div></div></li>
-    <li data-app="UltimateTicTacToe" data-cat="game"><a class="thumb" href="UltimateTicTacToe/index.html"><img src="shots/UltimateTicTacToe.png" alt="Ultimate Tic-Tac-Toe window" loading="lazy"></a><div class="body"><strong>Ultimate Tic-Tac-Toe</strong><span>Nine boards; your cell picks your opponent's next board. Play a friend or the computer.</span><div class="actions"><a class="btn primary play" href="UltimateTicTacToe/index.html">Play</a><a class="btn" href="UltimateTicTacToe/index.html">Full page</a></div></div></li>
-    <li data-app="RubiksCube2D" data-cat="game" data-min-height="720"><a class="thumb" href="RubiksCube2D/index.html"><img src="shots/RubiksCube2D.png" alt="Rubik's Cube 2D window" loading="lazy"></a><div class="body"><strong>Rubik's Cube 2D</strong><span>Click a square, then W A S D to turn. 20 levels: watch the cube get mixed, then turn it back for stars.</span><div class="actions"><a class="btn primary play" href="RubiksCube2D/index.html">Play</a><a class="btn" href="RubiksCube2D/index.html">Full page</a></div></div></li>
-    <li data-app="SynthesizerKeyboard" data-cat="music"><a class="thumb" href="SynthesizerKeyboard/index.html"><img src="shots/SynthesizerKeyboard.png" alt="Synthesizer Keyboard window" loading="lazy"></a><div class="body"><strong>Synthesizer Keyboard</strong><span>Learn five songs: the next key lights up, finish with no misses for three stars. Or just play: every key shows its letter.</span><div class="actions"><a class="btn primary play" href="SynthesizerKeyboard/index.html">Play</a><a class="btn" href="SynthesizerKeyboard/index.html">Full page</a></div></div></li>
-    <li data-app="Clock" data-cat="tool"><a class="thumb" href="Clock/index.html"><img src="shots/Clock.png" alt="Clock window with Clock, Timer and Stopwatch tabs" loading="lazy"></a><div class="body"><strong>Clock</strong><span>The analog or digital clock, plus a timer you set by dragging its red dial (it keeps counting in another tab, then rings) and a stopwatch with laps.</span><div class="actions"><a class="btn primary play" href="Clock/index.html">Play</a><a class="btn" href="Clock/index.html">Full page</a></div></div></li>
-    <li data-app="SpriteFloatyStars" data-cat="game"><a class="thumb" href="SpriteFloatyStars/index.html"><img src="shots/SpriteFloatyStars.png" alt="Sprite Floaty Stars settings window with Play Star Catcher" loading="lazy"></a><div class="body"><strong>Sprite Floaty Stars</strong><span>Star Catcher: click gold stars across six nights, dodging black holes. Or watch the five original star modes.</span><div class="actions"><a class="btn primary play" href="SpriteFloatyStars/index.html">Play</a><a class="btn" href="SpriteFloatyStars/index.html">Full page</a></div></div></li>
-    <li data-app="NumberGuess" data-origin="original" data-cat="game"><a class="thumb" href="NumberGuess/index.html"><img src="shots/NumberGuess.png" alt="Number Guess window" loading="lazy"></a><div class="body"><strong>Number Guess</strong><span>Find the hidden number in five ranges, from 1-10 to 1-1,000,000. The number line lights what is still possible: type a guess or click it. Par or better is three stars. You pick turns it around: the computer guesses yours.</span><div class="actions"><a class="btn primary play" href="NumberGuess/index.html">Play</a><a class="btn" href="NumberGuess/index.html">Full page</a></div></div></li>
-    <li data-app="TankGame" data-origin="original" data-cat="game"><a class="thumb" href="TankGame/index.html"><img src="shots/TankGame.png" alt="Tank Game window" loading="lazy"></a><div class="body"><strong>Tank Game</strong><span>Tank duel against the computer or a friend. W A S D and Q drive and fire red, arrow keys and M green. First to three rounds wins.</span><div class="actions"><a class="btn primary play" href="TankGame/index.html">Play</a><a class="btn" href="TankGame/index.html">Full page</a></div></div></li>
-    <li data-app="MusicTheoryExpert" data-origin="original" data-cat="music"><a class="thumb" href="MusicTheoryExpert/index.html"><img src="shots/MusicTheoryExpert.png" alt="Music Theory Expert window" loading="lazy"></a><div class="body"><strong>Music Theory Expert</strong><span>Ear training in six drills: hear a chord, an interval or a scale and name it. Six right out of ten wins a star and opens the next drill.</span><div class="actions"><a class="btn primary play" href="MusicTheoryExpert/index.html">Play</a><a class="btn" href="MusicTheoryExpert/index.html">Full page</a></div></div></li>
-    <li data-app="CircleSpawner" data-cat="toy"><a class="thumb" href="CircleSpawner/index.html"><img src="shots/CircleSpawner.png" alt="A rainbow circle built out of windows under the Circle Creator window" loading="lazy"></a><div class="body"><strong>Circle Spawner</strong><span>Builds circles, hearts, stars and your words out of borderless windows. Click one to scatter it.</span><div class="actions"><a class="btn primary play" href="CircleSpawner/index.html">Play</a><a class="btn" href="CircleSpawner/index.html">Full page</a></div></div></li>
-    <li data-app="ScreenSaver" data-cat="toy"><a class="thumb" href="ScreenSaver/index.html"><img src="shots/ScreenSaver.png" alt="Screen Saver" loading="lazy"></a><div class="body"><strong>Screen Saver</strong><span>Eight screen savers: green circles, Starfield, Mystify, Pipes, a bouncing logo, a dot clock. N for the next.</span><div class="actions"><a class="btn primary play" href="ScreenSaver/index.html">Play</a><a class="btn" href="ScreenSaver/index.html">Full page</a></div></div></li>
+    <li data-app="UltimateTicTacToe" data-then data-cat="game"><a class="thumb" href="UltimateTicTacToe/index.html"><img src="shots/UltimateTicTacToe.png" alt="Ultimate Tic-Tac-Toe window" loading="lazy"></a><div class="body"><strong>Ultimate Tic-Tac-Toe</strong><span>Nine boards; your cell picks your opponent's next board. Play a friend or the computer.</span><div class="actions"><a class="btn primary play" href="UltimateTicTacToe/index.html">Play</a><a class="btn" href="UltimateTicTacToe/index.html">Full page</a></div></div></li>
+    <li data-app="RubiksCube2D" data-then data-cat="game" data-min-height="720"><a class="thumb" href="RubiksCube2D/index.html"><img src="shots/RubiksCube2D.png" alt="Rubik's Cube 2D window" loading="lazy"></a><div class="body"><strong>Rubik's Cube 2D</strong><span>Click a square, then W A S D to turn. 20 levels: watch the cube get mixed, then turn it back for stars.</span><div class="actions"><a class="btn primary play" href="RubiksCube2D/index.html">Play</a><a class="btn" href="RubiksCube2D/index.html">Full page</a></div></div></li>
+    <li data-app="SynthesizerKeyboard" data-then data-cat="music"><a class="thumb" href="SynthesizerKeyboard/index.html"><img src="shots/SynthesizerKeyboard.png" alt="Synthesizer Keyboard window" loading="lazy"></a><div class="body"><strong>Synthesizer Keyboard</strong><span>Learn five songs: the next key lights up, finish with no misses for three stars. Or just play: every key shows its letter.</span><div class="actions"><a class="btn primary play" href="SynthesizerKeyboard/index.html">Play</a><a class="btn" href="SynthesizerKeyboard/index.html">Full page</a></div></div></li>
+    <li data-app="Clock" data-then data-cat="tool"><a class="thumb" href="Clock/index.html"><img src="shots/Clock.png" alt="Clock window with Clock, Timer and Stopwatch tabs" loading="lazy"></a><div class="body"><strong>Clock</strong><span>The analog or digital clock, plus a timer you set by dragging its red dial (it keeps counting in another tab, then rings) and a stopwatch with laps.</span><div class="actions"><a class="btn primary play" href="Clock/index.html">Play</a><a class="btn" href="Clock/index.html">Full page</a></div></div></li>
+    <li data-app="SpriteFloatyStars" data-then data-cat="game"><a class="thumb" href="SpriteFloatyStars/index.html"><img src="shots/SpriteFloatyStars.png" alt="Sprite Floaty Stars settings window with Play Star Catcher" loading="lazy"></a><div class="body"><strong>Sprite Floaty Stars</strong><span>Star Catcher: click gold stars across six nights, dodging black holes. Or watch the five original star modes.</span><div class="actions"><a class="btn primary play" href="SpriteFloatyStars/index.html">Play</a><a class="btn" href="SpriteFloatyStars/index.html">Full page</a></div></div></li>
+    <li data-app="NumberGuess" data-then data-origin="original" data-cat="game"><a class="thumb" href="NumberGuess/index.html"><img src="shots/NumberGuess.png" alt="Number Guess window" loading="lazy"></a><div class="body"><strong>Number Guess</strong><span>Find the hidden number in five ranges, from 1-10 to 1-1,000,000. The number line lights what is still possible: type a guess or click it. Par or better is three stars. You pick turns it around: the computer guesses yours.</span><div class="actions"><a class="btn primary play" href="NumberGuess/index.html">Play</a><a class="btn" href="NumberGuess/index.html">Full page</a></div></div></li>
+    <li data-app="TankGame" data-then data-origin="original" data-cat="game"><a class="thumb" href="TankGame/index.html"><img src="shots/TankGame.png" alt="Tank Game window" loading="lazy"></a><div class="body"><strong>Tank Game</strong><span>Tank duel against the computer or a friend. W A S D and Q drive and fire red, arrow keys and M green. First to three rounds wins.</span><div class="actions"><a class="btn primary play" href="TankGame/index.html">Play</a><a class="btn" href="TankGame/index.html">Full page</a></div></div></li>
+    <li data-app="MusicTheoryExpert" data-then data-origin="original" data-cat="music"><a class="thumb" href="MusicTheoryExpert/index.html"><img src="shots/MusicTheoryExpert.png" alt="Music Theory Expert window" loading="lazy"></a><div class="body"><strong>Music Theory Expert</strong><span>Ear training in six drills: hear a chord, an interval or a scale and name it. Six right out of ten wins a star and opens the next drill.</span><div class="actions"><a class="btn primary play" href="MusicTheoryExpert/index.html">Play</a><a class="btn" href="MusicTheoryExpert/index.html">Full page</a></div></div></li>
+    <li data-app="CircleSpawner" data-then data-cat="toy"><a class="thumb" href="CircleSpawner/index.html"><img src="shots/CircleSpawner.png" alt="A rainbow circle built out of windows under the Circle Creator window" loading="lazy"></a><div class="body"><strong>Circle Spawner</strong><span>Builds circles, hearts, stars and your words out of borderless windows. Click one to scatter it.</span><div class="actions"><a class="btn primary play" href="CircleSpawner/index.html">Play</a><a class="btn" href="CircleSpawner/index.html">Full page</a></div></div></li>
+    <li data-app="ScreenSaver" data-then data-cat="toy"><a class="thumb" href="ScreenSaver/index.html"><img src="shots/ScreenSaver.png" alt="Screen Saver" loading="lazy"></a><div class="body"><strong>Screen Saver</strong><span>Eight screen savers: green circles, Starfield, Mystify, Pipes, a bouncing logo, a dot clock. N for the next.</span><div class="actions"><a class="btn primary play" href="ScreenSaver/index.html">Play</a><a class="btn" href="ScreenSaver/index.html">Full page</a></div></div></li>
     <li data-app="Windows" data-cat="toy"><a class="thumb" href="Windows/index.html"><img src="shots/Windows.png" alt="Windows: a Start menu of every app on the site, with a search box" loading="lazy"></a><div class="body"><strong>Windows</strong><span>Presses the Windows key once, then quits. On this page the key opens a pretend Start menu of every app here: type to search, Enter to play.</span><div class="actions"><a class="btn primary play" href="Windows/index.html">Play</a><a class="btn" href="Windows/index.html">Full page</a></div></div></li>
-    <li data-app="WindowsE" data-cat="toy"><a class="thumb" href="WindowsE/index.html"><img src="shots/WindowsE.png" alt="Windows+E: a cascade of File Explorer windows over its DO IT!!! window" loading="lazy"></a><div class="body"><strong>Windows+E</strong><span>Presses Win+E as many times as you ask, opening that many File Explorer windows. Here they are pretend ones over this site's app folders: double-click a folder to play it.</span><div class="actions"><a class="btn primary play" href="WindowsE/index.html">Play</a><a class="btn" href="WindowsE/index.html">Full page</a></div></div></li>
+    <li data-app="WindowsE" data-then data-cat="toy"><a class="thumb" href="WindowsE/index.html"><img src="shots/WindowsE.png" alt="Windows+E: a cascade of File Explorer windows over its DO IT!!! window" loading="lazy"></a><div class="body"><strong>Windows+E</strong><span>Presses Win+E as many times as you ask, opening that many File Explorer windows. Here they are pretend ones over this site's app folders: double-click a folder to play it.</span><div class="actions"><a class="btn primary play" href="WindowsE/index.html">Play</a><a class="btn" href="WindowsE/index.html">Full page</a></div></div></li>
     <li data-app="BibleDownloader" data-cat="tool"><a class="thumb" href="BibleDownloader/index.html"><img src="shots/BibleDownloader.png" alt="Bible Downloader: Luke 1 open as a two-page book with a red ribbon bookmark" loading="lazy"></a><div class="body"><strong>Bible Downloader</strong><span>Now a Bible reader: an open book in five public domain translations. Turn pages with the arrow keys, click a verse to highlight it, and see every chapter you have read. Still saves chapters as web pages.</span><div class="actions"><a class="btn primary play" href="BibleDownloader/index.html">Play</a><a class="btn" href="BibleDownloader/index.html">Full page</a></div></div></li>
-    <li data-app="StockChecker" data-cat="tool"><a class="thumb" href="StockChecker/index.html"><img src="shots/StockChecker.png" alt="Stock Checker trading desk: a watch list with sparklines beside a day chart and buy and sell buttons" loading="lazy"></a><div class="body"><strong>Stock Checker</strong><span>A practice trading desk: $10,000 of play money in a simulated market that opens at its last real 2016 quotes. B buys, S sells, Space pauses.</span><div class="actions"><a class="btn primary play" href="StockChecker/index.html">Play</a><a class="btn" href="StockChecker/index.html">Full page</a></div></div></li>
-    <li data-app="GroupCreator" data-cat="tool"><a class="thumb" href="GroupCreator/index.html"><img src="shots/GroupCreator.png" alt="Group Creator: groups dealt onto cards" loading="lazy"></a><div class="body"><strong>Group Creator</strong><span>Deals a class into random groups, then remembers every round so the next one gives people partners they have not had yet. A chart shows who has met whom.</span><div class="actions"><a class="btn primary play" href="GroupCreator/index.html">Play</a><a class="btn" href="GroupCreator/index.html">Full page</a></div></div></li>
-    <li data-app="SimpleAlgorithms" data-origin="original" data-cat="tool"><a class="thumb" href="SimpleAlgorithms/index.html"><img src="shots/SimpleAlgorithms.png" alt="Simple Algorithms: Algorithm Lab window" loading="lazy"></a><div class="body"><strong>Simple Algorithms</strong><span>Algorithm Lab: watch a Tower of Hanoi solve itself from the binary of each move, or play it, then see square roots and sine converge step by step.</span><div class="actions"><a class="btn primary play" href="SimpleAlgorithms/index.html">Play</a><a class="btn" href="SimpleAlgorithms/index.html">Full page</a></div></div></li>
+    <li data-app="StockChecker" data-then data-cat="tool"><a class="thumb" href="StockChecker/index.html"><img src="shots/StockChecker.png" alt="Stock Checker trading desk: a watch list with sparklines beside a day chart and buy and sell buttons" loading="lazy"></a><div class="body"><strong>Stock Checker</strong><span>A practice trading desk: $10,000 of play money in a simulated market that opens at its last real 2016 quotes. B buys, S sells, Space pauses.</span><div class="actions"><a class="btn primary play" href="StockChecker/index.html">Play</a><a class="btn" href="StockChecker/index.html">Full page</a></div></div></li>
+    <li data-app="GroupCreator" data-then data-cat="tool"><a class="thumb" href="GroupCreator/index.html"><img src="shots/GroupCreator.png" alt="Group Creator: groups dealt onto cards" loading="lazy"></a><div class="body"><strong>Group Creator</strong><span>Deals a class into random groups, then remembers every round so the next one gives people partners they have not had yet. A chart shows who has met whom.</span><div class="actions"><a class="btn primary play" href="GroupCreator/index.html">Play</a><a class="btn" href="GroupCreator/index.html">Full page</a></div></div></li>
+    <li data-app="SimpleAlgorithms" data-then data-origin="original" data-cat="tool"><a class="thumb" href="SimpleAlgorithms/index.html"><img src="shots/SimpleAlgorithms.png" alt="Simple Algorithms: Algorithm Lab window" loading="lazy"></a><div class="body"><strong>Simple Algorithms</strong><span>Algorithm Lab: watch a Tower of Hanoi solve itself from the binary of each move, or play it, then see square roots and sine converge step by step.</span><div class="actions"><a class="btn primary play" href="SimpleAlgorithms/index.html">Play</a><a class="btn" href="SimpleAlgorithms/index.html">Full page</a></div></div></li>
   </ul>
 
 </main>
@@ -381,13 +391,40 @@
       }
     }
 
-    function play(li, focus) {
+    // Then | Now: apps with data-then also play as they were recovered (<App>/then.html), before any fixes.
+    var era = document.getElementById('player-era');
+    var thenButton = document.getElementById('player-then');
+    var nowButton = document.getElementById('player-now');
+    var then = false;
+
+    function play(li, focus, asThen) {
       mark(li);
       var app = li.getAttribute('data-app');
       var name = li.querySelector('strong').textContent;
-      var page = app + '/index.html';
+      then = !!asThen && li.hasAttribute('data-then');
+      var page = app + (then ? '/then.html' : '/index.html');
+      era.hidden = !li.hasAttribute('data-then');
+      thenButton.setAttribute('aria-pressed', String(then));
+      nowButton.setAttribute('aria-pressed', String(!then));
+      player.classList.toggle('then', then);
       document.getElementById('player-name').textContent = name;
-      document.getElementById('player-hint').textContent = li.querySelector('.body > span').textContent;
+      var hint = document.getElementById('player-hint');
+      hint.textContent = then ? 'As it was recovered, before any fixes: bugs and all.' : li.querySelector('.body > span').textContent;
+      // As recovered: its first known quirk, and a link to its page, whose title screen lists them all.
+      if (then) window.oldjavaThen.quirks(app).then(function (items) {
+        if (!then || current !== li || !items.length) return;
+        var q = document.createElement('span');
+        q.className = 'quirk';
+        q.appendChild(document.createTextNode(' Known quirk: '));
+        window.oldjavaThen.nodes(items[0]).forEach(function (n) { q.appendChild(n); });
+        hint.appendChild(q);
+        if (items.length > 1) {
+          var more = document.createElement('a');
+          more.href = page;
+          more.textContent = ' +' + (items.length - 1) + ' more';
+          hint.appendChild(more);
+        }
+      });
       document.getElementById('player-full').href = page;
       document.getElementById('player-source').href = page + '#source';
       frame.title = name;
@@ -405,10 +442,12 @@
       }
     }
 
-    function choose(li) {
-      history.replaceState(null, '', '#' + li.getAttribute('data-app'));
-      play(li, true);
+    function choose(li, asThen) {
+      history.replaceState(null, '', '#' + li.getAttribute('data-app') + (asThen ? ':then' : ''));
+      play(li, true, asThen);
     }
+    thenButton.addEventListener('click', function () { if (!then) choose(current, true); });
+    nowButton.addEventListener('click', function () { if (then) choose(current, false); });
 
     function step(by) { choose(cards[(cards.indexOf(current) + by + cards.length) % cards.length]); }
 
@@ -444,7 +483,7 @@
       if (e.key === 'Escape' && player.classList.contains('big')) setBig(false);
     });
 
-    document.getElementById('player-restart').addEventListener('click', function () { play(current, true); });
+    document.getElementById('player-restart').addEventListener('click', function () { play(current, true, then); });
 
     var filters = Array.prototype.slice.call(document.querySelectorAll('.filters button'));
     filters.forEach(function (b) {
@@ -588,8 +627,9 @@
     });
 
     window.addEventListener('resize', fit);
-    var start = card(decodeURIComponent(location.hash.slice(1)));
-    if (start) play(start, false);
+    var hash = /^#([^:]*)(:then)?$/.exec(decodeURIComponent(location.hash)) || [];
+    var start = card(hash[1]);
+    if (start) play(start, false, !!hash[2]);
     else { mark(card('Minesweeper')); fit(); }
   })();
 </script>

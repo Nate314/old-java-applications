@@ -124,6 +124,7 @@
       });
       news.onKind(function (kind) { help.setAttribute('aria-pressed', String(kind === 'hint')); });
       bar.appendChild(help);
+      bar.appendChild(eraSwitch('shim-era'));
       var back = document.createElement('a');
       back.href = '../index.html';
       back.textContent = 'All apps';
@@ -730,6 +731,7 @@
             id: li.getAttribute('data-app'),
             cat: li.getAttribute('data-cat'),
             origin: li.getAttribute('data-origin') || 'decompiled',
+            then: li.hasAttribute('data-then'),
             name: li.querySelector('strong').textContent,
             hint: li.querySelector('.body > span').textContent,   // not the home page's New/Played badge
             shot: root() + li.querySelector('img').getAttribute('src')
@@ -744,6 +746,77 @@
   }
 
   function appId() { return document.body.getAttribute('data-app'); }
+
+  // ---- then and now ----
+  // An app whose gallery card has data-then can also run as it was recovered, before it was modernized:
+  // <App>/then.html (<body data-then>) runs then.js, compiled by web/then from the sources at the commit before
+  // "Modernize all 20 apps", reads its source viewer files from then-source/ and keeps its own saves
+  // (oldjava.saves.<App>.then, as web.rt.Saves does). The band's Then | Now switch and the title screens go
+  // between the two pages, and the title screen of then.html lists the quirks its README listed back then.
+  function isThen() { return document.body.hasAttribute('data-then'); }
+  function sourceDir() { return isThen() ? 'then-source/' : 'source/'; }
+  function programFile() { return isThen() ? 'then.js' : 'classes.js'; }
+  function saveStore() { return appId() + (isThen() ? '.then' : ''); }
+  function eraPage(then) { return (then ? 'then.html' : 'index.html') + (embedded ? '?embed' : ''); }
+
+  // The "## Known quirks" list of an app's README as recovered (this page's app unless `id` says otherwise):
+  // one entry per bullet, as [text, code, text, ...].
+  var quirkLists = {};
+  function quirks(id) {
+    id = id || appId();
+    if (!quirkLists[id]) {
+      quirkLists[id] = fetch(root() + id + '/then-source/README.md').then(function (r) {
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.text();
+      }).then(function (text) {
+        var section = /^## Known quirks[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n?/g, '\n'));
+        if (!section) return [];
+        return section[1].split(/^- /m).slice(1).map(function (item) {
+          return item.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim().split('`');
+        });
+      }).catch(function (e) {
+        console.warn('Could not read the known quirks: ' + e.message);
+        return [];
+      });
+    }
+    return quirkLists[id];
+  }
+
+  // A quirk as nodes: its `code` spans as <code>.
+  function quirkNodes(parts) {
+    return parts.map(function (part, i) {
+      if (!(i % 2)) return document.createTextNode(part);
+      var code = document.createElement('code');
+      code.textContent = part;
+      return code;
+    });
+  }
+
+  // The home page's player shows the quirks of the app it plays as recovered.
+  window.oldjavaThen = { quirks: quirks, nodes: quirkNodes };
+
+  // Then | Now: two links, the current one marked. Hidden until the catalog says the app has a then.
+  function eraSwitch(className) {
+    var box = document.createElement('div');
+    box.className = className;
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', 'Version');
+    box.hidden = true;
+    [[true, 'Then', 'As it was recovered from the old jar, before any fixes'],
+     [false, 'Now', 'Today, fixed and reworked']].forEach(function (o) {
+      var a = document.createElement('a');
+      a.href = eraPage(o[0]);
+      a.textContent = o[1];
+      a.title = o[2];
+      if (o[0] === isThen()) a.setAttribute('aria-current', 'page');
+      box.appendChild(a);
+    });
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, appId())];
+      box.hidden = !(app && app.then);
+    });
+    return box;
+  }
 
   function indexOf(apps, id) {
     for (var i = 0; i < apps.length; i++) if (apps[i].id === id) return i;
@@ -1075,7 +1148,7 @@
 
   function sourceFiles() {
     if (!sourceList) {
-      sourceList = fetch('source/files.txt').then(function (r) {
+      sourceList = fetch(sourceDir() + 'files.txt').then(function (r) {
         if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
         return r.text();
       }).then(function (text) {
@@ -1295,7 +1368,7 @@
     var current = null;
     function text(f) {
       if (!texts[f]) {
-        texts[f] = fetch('source/' + f).then(function (r) {
+        texts[f] = fetch(sourceDir() + f).then(function (r) {
           if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
           return r.text();
         });
@@ -1335,7 +1408,7 @@
       });
       var tab = nav.querySelector('button[aria-current="true"]');
       if (tab) nav.scrollTo({ left: tab.offsetLeft - nav.offsetLeft - 8, top: tab.offsetTop - nav.offsetTop - 40 });
-      raw.href = 'source/' + f;
+      raw.href = sourceDir() + f;
       address(f, line);
       if (current === f) { mark(line); return; }
       current = f;
@@ -1420,15 +1493,21 @@
   }
 
   // The app's hint from the gallery, on the band's news line (the band's ? button shows it again).
+  // On then.html the line reads out the quirks the app was recovered with instead.
   function howToPlay() {
-    catalog().then(function (apps) {
-      var app = apps[indexOf(apps, appId())];
+    Promise.all([catalog(), isThen() ? quirks() : []]).then(function (r) {
+      var app = r[0][indexOf(r[0], appId())];
       if (!app || !news) return;
       var tag = document.createElement('strong');
       tag.className = 'shim-news-tag';
-      tag.textContent = 'How to play';
+      tag.textContent = isThen() ? 'Known quirks' : 'How to play';
       var text = document.createElement('span');
-      text.textContent = app.hint;
+      if (isThen() && r[1].length) {
+        r[1].forEach(function (parts, i) {
+          if (i) text.appendChild(document.createTextNode(' · '));
+          quirkNodes(parts).forEach(function (n) { text.appendChild(n); });
+        });
+      } else text.textContent = app.hint;
       news.show('hint', [tag], [text], [], 12000);
     });
   }
@@ -1461,6 +1540,13 @@
         var h = document.createElement('h2');
         h.textContent = app.name + ' has closed';
         box.insertBefore(h, box.firstChild);
+        if (app.then && !embedded) {   // the player has its own Then | Now switch
+          var era = document.createElement('a');
+          era.className = 'shim-exit-era';
+          era.href = eraPage(!isThen());
+          era.textContent = isThen() ? 'Play today’s version' : 'Play it as recovered';
+          box.insertBefore(era, tell.nextSibling);
+        }
       }
       var next = picks(apps, appId());
       if (!next.length) return;
@@ -1948,7 +2034,7 @@
     stamp.className = 'shim-title-stamp';
     var record = document.createElement('p');
     record.className = 'shim-title-record';
-    var recordText = savedRecord(appId());
+    var recordText = savedRecord(saveStore());
     record.hidden = !recordText;
     record.appendChild(document.createTextNode(recordText + ' '));
     // Forget clears the app's saves (a second click confirms), so it starts again from its bundled files.
@@ -1962,7 +2048,7 @@
         forget.textContent = 'Really forget?';
         return;
       }
-      try { localStorage.removeItem('oldjava.saves.' + appId()); } catch (e) { /* nothing was kept */ }
+      try { localStorage.removeItem('oldjava.saves.' + saveStore()); } catch (e) { /* nothing was kept */ }
       record.hidden = true;
     });
     record.appendChild(forget);
@@ -1983,8 +2069,14 @@
     read.className = 'shim-title-source';
     read.href = '#source';
     read.setAttribute('data-sound', 'none');
-    read.textContent = 'Read the source';
-    [cat, name, hint, stamp, record, play, press, read].forEach(function (el) { text.appendChild(el); });
+    read.textContent = isThen() ? 'Read the source as recovered' : 'Read the source';
+    // Then and now: the other version of the app, once the catalog says it has one.
+    var era = document.createElement('a');
+    era.className = 'shim-title-era';
+    era.href = eraPage(!isThen());
+    era.textContent = isThen() ? 'Play today’s version' : 'Play it as recovered, bugs and all';
+    era.hidden = true;
+    [cat, name, hint, stamp, record, play, press, read, era].forEach(function (el) { text.appendChild(el); });
     card.appendChild(art);
     card.appendChild(text);
     card.appendChild(meter);
@@ -2004,10 +2096,10 @@
       log.appendChild(row);
       log.scrollTop = log.scrollHeight;
     }
-    // classes.js has loaded by now (a blocking script in <head>): the app, compiled to JavaScript by TeaVM.
+    // classes.js (then.js) has loaded by now (a blocking script in <head>): the app, compiled by TeaVM.
     var entry = window.performance && performance.getEntriesByName &&
-      performance.getEntriesByName(new URL('classes.js', location.href).href)[0];
-    line('classes.js', entry && entry.decodedBodySize ? size(entry.decodedBodySize) : 'ok');
+      performance.getEntriesByName(new URL(programFile(), location.href).href)[0];
+    line(programFile(), entry && entry.decodedBodySize ? size(entry.decodedBodySize) : 'ok');
     var total = files.length + 1;
     var done = 1;
     function progress() { meter.style.setProperty('--p', String(done / total)); }
@@ -2016,10 +2108,13 @@
     catalog().then(function (apps) {
       var app = apps[indexOf(apps, appId())];
       if (!app) return;
-      img.src = app.shot;
-      cat.textContent = CATS[app.cat] || '';
+      era.hidden = !app.then;
       name.textContent = app.name;
-      hint.textContent = app.hint;
+      if (isThen()) thenTitle(app); else {
+        img.src = app.shot;
+        cat.textContent = CATS[app.cat] || '';
+        hint.textContent = app.hint;
+      }
       var count = apps.filter(function (a) { return played[a.id]; }).length;
       stamp.textContent = played[app.id]
         ? '✓ In your passport since ' + new Date(played[app.id]).toLocaleDateString()
@@ -2034,6 +2129,28 @@
         text.insertBefore(gift, cat);
       }
     });
+
+    // then.html: the quirks its README listed when it was recovered, where today's page shows its picture.
+    function thenTitle(app) {
+      screen.classList.add('then');
+      cat.textContent = 'As recovered';
+      hint.textContent = app.origin === 'original'
+        ? 'The author’s own source as it was found, before any fixes: bugs and all.'
+        : 'The code as it came out of the old jar, before any fixes: bugs and all.';
+      var head = document.createElement('h2');
+      head.textContent = 'Known quirks, from its README back then';
+      var list = document.createElement('ul');
+      art.appendChild(head);
+      art.appendChild(list);
+      quirks().then(function (items) {
+        head.hidden = !items.length;
+        items.forEach(function (parts) {
+          var li = document.createElement('li');
+          quirkNodes(parts).forEach(function (n) { li.appendChild(n); });
+          list.appendChild(li);
+        });
+      });
+    }
 
     var started = null;
     function go(e) {
@@ -2436,7 +2553,7 @@
     })).then(function () {
       if (loading) loading.remove();
       if (typeof main !== 'function') {
-        overlay('classes.js is missing. Build the site with Maven first (see web/README.md).');
+        overlay(programFile() + ' is missing. Build the site with Maven first (see web/README.md).');
         return;
       }
       if (title) title.ready(start); else start();
