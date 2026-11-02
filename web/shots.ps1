@@ -1,27 +1,57 @@
 # Captures the home page thumbnails (web/site/shots/<App>.png) from a built site with headless Chrome.
-# Each app page is opened in thumbnail mode (?embed&shot: square, shadowless windows on a magenta desktop),
-# then the image is cropped to its windows, the remaining magenta is made transparent, and wide shots are
-# scaled down to -MaxWidth.
+# Each app page is opened in thumbnail mode (?embed&shot: square, shadowless windows on a magenta desktop) and
+# driven over the DevTools protocol (web/cdp.ps1) through its recipe below, so every thumbnail shows its app in
+# play (a game under way, a lesson lit, a race half run) rather than a start screen, and can be taken again the
+# same way after a change. Then the image is cropped to its windows, the remaining magenta is made transparent,
+# and wide shots are scaled down to -MaxWidth.
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
 #   ./web/shots.ps1
 #   ./web/shots.ps1 -Apps Minesweeper,Clock -Port 8101
+#   ./web/shots.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
 param(
-    [string[]]$Apps = @('Clock', 'FlappyBird', 'Minesweeper', 'NathaNOS', 'RubiksCube2D', 'ScreenSaver',
-        'SpriteFloatyStars', 'UltimateTicTacToe', 'CircleSpawner', 'StockChecker', 'SynthesizerKeyboard',
-        'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame', 'BibleDownloader', 'DinoGame', 'Windows', 'WindowsE'),
+    [string[]]$Apps,
     [int]$Port = 8101,
+    [int]$DebugPort = 9302,
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [int]$Width = 960,
     [int]$Height = 600,
-    [int]$WaitMs = 4000,
-    [int]$MaxWidth = 480
+    [int]$MaxWidth = 480,
+    [string]$Out = (Join-Path $PSScriptRoot 'site/shots')
 )
 $ErrorActionPreference = 'Stop'
-$site = Join-Path $PSScriptRoot 'target/site'
-$out = Join-Path $PSScriptRoot 'site/shots'
-if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
-if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
-New-Item -ItemType Directory -Force $out | Out-Null
+. (Join-Path $PSScriptRoot 'cdp.ps1')
+
+# Steps as in web/cdp.ps1, taken once the app's first window is up; the picture is taken after the last one.
+# Query is added to the page address. Ready, a page expression, says the app is up (by default: its first window
+# is on the desktop). The four games with a computer player get its key (W, C) instead of ?watch, which thumbnail
+# mode leaves out.
+$ShellUp = "!!document.querySelector('.shim-shell > *')"
+# WindowsE's own window, lower right in front of the File Explorer windows it opened.
+$WindowsEFront = "js:(function (d) { var w = d.firstElementChild; d.style.zIndex = 1000000; w.style.left = (innerWidth - w.offsetWidth - 24) + 'px'; w.style.top = (innerHeight - w.offsetHeight - 24) + 'px'; })(document.getElementById('desktop'))"
+$Recipes = [ordered]@{
+    Clock               = @{ Steps = @('wait:800', 'key:F', 'wait:300', 'key:Space', 'wait:2500') }
+    FlappyBird          = @{ Steps = @('wait:800', 'key:Space', 'wait:500', 'key:Space', 'wait:450', 'key:Space', 'wait:350') }
+    Minesweeper         = @{ Steps = @('wait:800', 'key:W', 'wait:2200') }
+    NathaNOS            = @{ Steps = @('wait:2500') }
+    RubiksCube2D        = @{ Steps = @('wait:1500') }
+    ScreenSaver         = @{ Steps = @('wait:6000') }
+    SpriteFloatyStars   = @{ Steps = @('wait:800', (Click 'Star Catcher'), 'wait:800', 'key:1', 'wait:2500') }
+    UltimateTicTacToe   = @{ Steps = @('wait:800', 'key:W', 'wait:7000') }
+    CircleSpawner       = @{ Steps = @('wait:1500', (Pick 'Heart'), 'wait:3000') }
+    StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:4000', 'key:B', 'wait:300') }
+    SynthesizerKeyboard = @{ Steps = @('wait:800', 'key:L', 'wait:1700') }
+    GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500') }
+    MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:800') }
+    NumberGuess         = @{ Steps = @('wait:800', 'key:5', 'key:Enter', 'wait:900', 'key:8', 'key:Enter', 'wait:900') }
+    SimpleAlgorithms    = @{ Steps = @('wait:3500') }
+    TankGame            = @{ Steps = @('wait:800', 'key:C', 'wait:4500') }
+    BibleDownloader     = @{ Steps = @('wait:5000') }
+    DinoGame            = @{ HandMade = $true; Steps = @('wait:800', 'key:E', 'key:F', 'wait:25000', 'key:F', 'wait:1800') }
+    Windows             = @{ Ready = $ShellUp; Steps = @('wait:1500') }
+    WindowsE            = @{ Steps = @('wait:800', "js:(function (f) { f.value = '5'; f.dispatchEvent(new Event('input')); })(document.querySelector('#desktop input'))", (Click 'DO IT'), 'wait:2500', $WindowsEFront) }
+}
+# HandMade: the committed thumbnail was composited by hand (web/README.md), so only -Apps naming it retakes it.
+if (-not $Apps) { $Apps = @($Recipes.Keys | Where-Object { -not $Recipes[$_].HandMade }) }
 
 Add-Type -AssemblyName System.Drawing
 function Crop-Shot([string]$path) {
@@ -57,19 +87,28 @@ function Crop-Shot([string]$path) {
     }
     $bmp.Dispose()
 }
-$server = Start-Process python -ArgumentList '-m', 'http.server', $Port, '--bind', '127.0.0.1', '--directory', $site -PassThru -WindowStyle Hidden
-$profileDir = Join-Path ([IO.Path]::GetTempPath()) "oldjava-shots-$Port"
+
+$site = Join-Path $PSScriptRoot 'target/site'
+$out = $Out
+New-Item -ItemType Directory -Force $out | Out-Null
+$session = Start-Headless $site $Port $DebugPort $Chrome 'shots' $Width $Height
 try {
-    Start-Sleep -Seconds 1
+    Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = $Width; height = $Height; deviceScaleFactor = 1; mobile = $false } | Out-Null
     foreach ($app in $Apps) {
+        $recipe = $Recipes[$app]
+        if (-not $recipe) { Write-Warning "$app has no recipe; skipped."; continue }
+        $query = 'embed&shot' + $(if ($recipe.Query) { '&' + $recipe.Query } else { '' })
+        $up = if ($recipe.Ready) { $recipe.Ready } else { "(function (d) { return !!(d && d.firstElementChild && d.firstElementChild.offsetWidth); })(document.getElementById('desktop'))" }
+        if (-not (Open-App "http://127.0.0.1:$Port/$app/index.html?$query" $up)) { Write-Warning "$app did not open a window; skipped."; continue }
+        Invoke-Steps $recipe.Steps
+        # Only the app: no controller, toast or pretend taskbar tray over the desktop.
+        Invoke-Js "[].forEach.call(document.querySelectorAll('.shim-watch, .shim-pad, .shim-toast, .shim-gp-pointer, .shim-shell-tray'), function (e) { e.style.visibility = 'hidden'; })" | Out-Null
+        Start-Sleep -Milliseconds 100
         $png = Join-Path $out "$app.png"
-        & $Chrome --headless=new --disable-gpu --hide-scrollbars --mute-audio "--user-data-dir=$profileDir" `
-            "--window-size=$Width,$Height" "--virtual-time-budget=$WaitMs" "--screenshot=$png" `
-            "http://127.0.0.1:$Port/$app/index.html?embed&shot" 2>$null | Out-Null
+        [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String((Invoke-Cdp 'Page.captureScreenshot' @{ format = 'png' }).data))
         Crop-Shot $png
         Write-Host "$app -> $png"
     }
 } finally {
-    Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force $profileDir -ErrorAction SilentlyContinue
+    Stop-Headless $session
 }

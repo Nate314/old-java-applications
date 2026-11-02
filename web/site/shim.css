@@ -1022,25 +1022,46 @@ canvas.paint.top {
   pointer-events: none;
 }
 
-/* Narrow pages: the toast's button wraps under the text. */
+/* Phones: one compact row at the very top (a smaller seal, the button beside the text), so the
+   toast stays over the page's heading instead of reaching down over the player's bar. */
 @media (max-width: 560px) {
   .shim-toast {
-    flex-wrap: wrap;
-    width: calc(100vw - 16px);
+    top: max(6px, env(safe-area-inset-top));
+    width: calc(100vw - 12px);
+    max-width: calc(100vw - 12px);
+    gap: 8px;
+    padding: 6px 4px 6px 6px;
+    border-radius: 12px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .shim-toast-seal {
+    width: 38px;
+    height: 38px;
+    border-width: 2px;
   }
 
   .shim-toast-text {
     flex: 1;
+    min-width: 0;
+  }
+
+  .shim-toast-text strong {
+    font-size: 13px;
+  }
+
+  .shim-toast-text .shim-meter {
+    margin-top: 2px;
   }
 
   .shim-toast-go {
-    order: 3;
-    flex: 1 1 100%;
+    max-width: 40%;
+    padding: 5px 9px;
+    font-size: 12px;
+    line-height: 1.25;
+    white-space: normal;
     text-align: center;
-  }
-
-  .shim-toast .shim-close {
-    order: 2;
   }
 }
 

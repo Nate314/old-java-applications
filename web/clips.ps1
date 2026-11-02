@@ -21,14 +21,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-# Steps: 'wait:ms', 'key:<name>' (a letter, digit, Space, Enter or an arrow key), 'js:<expression>' run in the page,
-# and 'rec', where the kept clip starts. Query is added to the page address.
-function Repeat([int]$n, [string[]]$steps) { $out = @(); for ($i = 0; $i -lt $n; $i++) { $out += $steps }; $out }
-# Clicks the app's button (or tab) whose text matches, and picks a combo box entry, as a visitor would.
-function Click([string]$text) { "js:[].slice.call(document.querySelectorAll('#desktop button')).filter(function (b) { return /$text/.test(b.textContent); })[0].click()" }
-function Pick([string]$option) {
-    "js:(function (s) { s.value = '$option'; s.dispatchEvent(new Event('change')); })([].slice.call(document.querySelectorAll('#desktop select')).filter(function (s) { return [].some.call(s.options, function (o) { return o.value === '$option'; }); })[0])"
-}
+# Steps are those of web/cdp.ps1, plus 'rec', where the kept clip starts. Query is added to the page address.
+. (Join-Path $PSScriptRoot 'cdp.ps1')
 # Flappy Bird has no computer player, so the clip has a small one: it finds the bird (orange) and the next pipe
 # (green, from the top edge of the game's canvas) every frame and flaps while the bird is below the gap's middle
 # (the gap is twice a pipe's width, as in Pipes.java).
@@ -75,7 +69,7 @@ $Recipes = [ordered]@{
     UltimateTicTacToe   = @{ Query = 'watch'; Steps = @('wait:2500', 'rec') }
     RubiksCube2D        = @{ Steps = @('wait:800', 'rec') + (Repeat 4 @('key:ArrowLeft', 'wait:500', 'key:W', 'wait:500', 'key:ArrowUp', 'wait:500')) }
     SynthesizerKeyboard = @{ Steps = @('wait:800', 'key:L', 'wait:300', 'rec') }
-    Clock               = @{ Steps = @('wait:800', 'rec') }
+    Clock               = @{ Steps = @('wait:800', 'key:F', 'wait:300', 'key:Space', 'wait:600', 'rec') }
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Click 'Star Catcher'), 'wait:800', 'key:1', 'wait:1200', 'rec') }
     TankGame            = @{ Query = 'watch'; Steps = @('wait:3000', 'rec') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:500', 'key:Space', 'wait:1200', 'rec') }
@@ -89,98 +83,25 @@ if (-not $Apps) { $Apps = @($Recipes.Keys) }
 
 $site = Join-Path $PSScriptRoot 'target/site'
 $out = Join-Path $PSScriptRoot 'site/clips'
-if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
-if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
 New-Item -ItemType Directory -Force $out | Out-Null
-
-# ---- a minimal DevTools protocol client: one page, one request at a time ----
-$none = [Threading.CancellationToken]::None
-$script:ws = $null
-$script:next = 0
-function Receive-Message {
-    $buf = New-Object byte[] 65536
-    $ms = New-Object IO.MemoryStream
-    do {
-        $r = $script:ws.ReceiveAsync([ArraySegment[byte]]::new($buf), $none).GetAwaiter().GetResult()
-        $ms.Write($buf, 0, $r.Count)
-    } while (-not $r.EndOfMessage)
-    [Text.Encoding]::UTF8.GetString($ms.ToArray())
-}
-function Invoke-Cdp([string]$method, [hashtable]$params = @{}) {
-    $script:next++
-    $id = $script:next
-    $bytes = [Text.Encoding]::UTF8.GetBytes((@{ id = $id; method = $method; params = $params } | ConvertTo-Json -Depth 8 -Compress))
-    $script:ws.SendAsync([ArraySegment[byte]]::new($bytes), [Net.WebSockets.WebSocketMessageType]::Text, $true, $none).GetAwaiter().GetResult() | Out-Null
-    while ($true) {
-        $reply = Receive-Message | ConvertFrom-Json
-        if ($reply.id -ne $id) { continue }   # an event
-        if ($reply.error) { throw "$method failed: $($reply.error.message)" }
-        return $reply.result
-    }
-}
-function Invoke-Js([string]$expression, [switch]$Await) {
-    $result = Invoke-Cdp 'Runtime.evaluate' @{ expression = $expression; awaitPromise = [bool]$Await; returnByValue = $true }
-    if ($result.exceptionDetails) { throw "Page script failed: $($result.exceptionDetails.exception.description)" }
-    $result.result.value
-}
-function Send-Key([string]$name) {
-    $named = @{ Space = @(' ', 'Space', 32); Enter = @("`r", 'Enter', 13)
-        ArrowLeft = @('', 'ArrowLeft', 37); ArrowUp = @('', 'ArrowUp', 38); ArrowRight = @('', 'ArrowRight', 39); ArrowDown = @('', 'ArrowDown', 40) }
-    if ($named.ContainsKey($name)) { $text, $code, $vk = $named[$name]; $key = if ($text -eq ' ') { ' ' } else { $name } }
-    else {
-        $c = [string]$name[0]
-        $text = $c.ToLower(); $key = $text; $vk = [int][char]$c.ToUpper()
-        $code = if ($c -match '\d') { "Digit$c" } else { "Key$($c.ToUpper())" }
-    }
-    $down = @{ type = 'keyDown'; key = $key; code = $code; windowsVirtualKeyCode = $vk; nativeVirtualKeyCode = $vk }
-    if ($text) { $down.text = $text }
-    Invoke-Cdp 'Input.dispatchKeyEvent' $down | Out-Null
-    Invoke-Cdp 'Input.dispatchKeyEvent' @{ type = 'keyUp'; key = $key; code = $code; windowsVirtualKeyCode = $vk; nativeVirtualKeyCode = $vk } | Out-Null
-}
-
-$server = Start-Process python -ArgumentList '-m', 'http.server', $Port, '--bind', '127.0.0.1', '--directory', $site -PassThru -WindowStyle Hidden
-$profileDir = Join-Path ([IO.Path]::GetTempPath()) "oldjava-clips-$Port"
-$browser = Start-Process $Chrome -PassThru -ArgumentList '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio',
-    '--autoplay-policy=no-user-gesture-required', "--remote-debugging-port=$DebugPort", "--user-data-dir=$profileDir",
-    '--window-size=960,600', 'about:blank'
+$session = Start-Headless $site $Port $DebugPort $Chrome 'clips'
 try {
-    $page = $null
-    for ($i = 0; $i -lt 50 -and -not $page; $i++) {
-        Start-Sleep -Milliseconds 200
-        try {
-            $targets = Invoke-RestMethod "http://127.0.0.1:$DebugPort/json/list"
-            $page = $targets | ForEach-Object { $_ } | Where-Object { $_.type -eq 'page' } | Select-Object -First 1
-        } catch { }
-    }
-    if (-not $page) { throw "Chrome's DevTools port $DebugPort did not answer." }
-    $script:ws = New-Object Net.WebSockets.ClientWebSocket
-    $script:ws.ConnectAsync([Uri]$page.webSocketDebuggerUrl, $none).GetAwaiter().GetResult() | Out-Null
-
     foreach ($app in $Apps) {
         $recipe = $Recipes[$app]
         if (-not $recipe) { Write-Warning "$app has no recipe; skipped."; continue }
         $query = 'embed&clip' + $(if ($recipe.Query) { '&' + $recipe.Query } else { '' })
-        Invoke-Cdp 'Page.navigate' @{ url = "http://127.0.0.1:$Port/$app/index.html?$query" } | Out-Null
-        $live = $false
-        for ($i = 0; $i -lt 100 -and -not $live; $i++) {
-            Start-Sleep -Milliseconds 200
-            try { $live = Invoke-Js '!!(window.oldjavaReplay && window.oldjavaReplay.live())' } catch { }
+        if (-not (Open-App "http://127.0.0.1:$Port/$app/index.html?$query" '!!(window.oldjavaReplay && window.oldjavaReplay.live())')) {
+            Write-Warning "$app did not start recording; skipped."; continue
         }
-        if (-not $live) { Write-Warning "$app did not start recording; skipped."; continue }
-        $started = $null
-        foreach ($step in $recipe.Steps) {
-            $kind, $arg = $step -split ':', 2
-            switch ($kind) {
-                'wait' { Start-Sleep -Milliseconds ([int]$arg) }
-                'key' { Send-Key $arg }
-                'js' { Invoke-Js $arg | Out-Null }
-                'rec' {
-                    # Twice: the recorder keeps two overlapping recordings once it has run 10 seconds.
-                    Invoke-Js 'oldjavaReplay.take().then(function () { return oldjavaReplay.take(); }).then(function () { return 1; })' -Await | Out-Null
-                    $started = Get-Date
-                }
-            }
+        $mark = @{ Started = $null }
+        Invoke-Steps $recipe.Steps {
+            param($kind)
+            if ($kind -ne 'rec') { throw "Unknown step $kind" }
+            # Twice: the recorder keeps two overlapping recordings once it has run 10 seconds.
+            Invoke-Js 'oldjavaReplay.take().then(function () { return oldjavaReplay.take(); }).then(function () { return 1; })' -Await | Out-Null
+            $mark.Started = Get-Date
         }
+        $started = $mark.Started
         if (-not $started) { throw "$app's recipe has no rec step." }
         $left = $Seconds * 1000 - ((Get-Date) - $started).TotalMilliseconds
         if ($left -gt 0) { Start-Sleep -Milliseconds ([int]$left) }
@@ -200,9 +121,5 @@ oldjavaReplay.take().then(function (clip) {
         Write-Host ("{0} -> {1} ({2:N0} KB)" -f $app, $file, ((Get-Item $file).Length / 1KB))
     }
 } finally {
-    if ($script:ws) { $script:ws.Dispose() }
-    Stop-Process -Id $browser.Id -ErrorAction SilentlyContinue
-    Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
-    Remove-Item -Recurse -Force $profileDir -ErrorAction SilentlyContinue
+    Stop-Headless $session
 }
