@@ -172,6 +172,13 @@
         next.hidden = false;
       });
     }
+    if (isApp && !document.body.hasAttribute('data-own-layout')) {
+      var zoom = document.createElement('button');
+      zoom.type = 'button';
+      zoom.className = 'shim-zoom';
+      zoom.addEventListener('click', function () { setZoomFit(!zoomFit()); zoom.blur(); });
+      bar.appendChild(zoom);
+    }
     var sound = document.createElement('button');
     sound.type = 'button';
     sound.className = 'shim-sound';
@@ -194,6 +201,7 @@
     document.body.appendChild(bar);
     if (isApp) stageEdge(bar, '--bar-h');
     showSound();
+    showZoom();
     if (controls) padOnPage(controls);
   }
 
@@ -295,8 +303,43 @@
   // usual. A change in the desktop's size alone (the source panel docking, the controller shown, the browser
   // resized) keeps the group's last centering and only moves and scales it, so a dragged window keeps its place
   // beside the others instead of snapping back.
+  //
+  // Fit (the toolbar's zoom button, on unless the visitor picks Actual size) also zooms small windows up to
+  // fill the stage, up to ZOOM_MAX times, leaving a margin around them: most of these apps were made for an
+  // 800 x 600 screen and would otherwise sit in a corner of today's. The shim's paint canvases then get more
+  // pixels (window.__shimRender, announced with a shimrender event), so drawing stays sharp at the bigger size.
+  var ZOOM_KEY = 'oldjava.zoom', ZOOM_MAX = 2.5, ZOOM_ROOM = 0.9;
+  var zoomListeners = [];
+  function zoomFit() {
+    try { return localStorage.getItem(ZOOM_KEY) !== 'actual'; } catch (e) { return true; }
+  }
+  function setZoomFit(on) {
+    try { localStorage.setItem(ZOOM_KEY, on ? 'fit' : 'actual'); } catch (e) { /* this page only */ }
+    zoomChanged();
+  }
+  function zoomChanged() {
+    zoomListeners.forEach(function (fn) { fn(zoomFit()); });
+    showZoom();
+  }
+  // The toolbar's button says what Fit is doing: the zoom it picked for these windows, or that it has room only
+  // for their actual size.
+  function showZoom() {
+    var b = document.querySelector('.shim-toolbar .shim-zoom');
+    if (!b) return;
+    var on = zoomFit(), s = window.__shimScale || 1;
+    b.setAttribute('aria-pressed', String(on));
+    b.innerHTML = '⤢ <span>' + (on ? 'Fit' : 'Actual size') + '</span>' + (on && s > 1 ? ' <b>' + s + '×</b>' : '');
+    b.setAttribute('aria-label', on ? 'Fit to screen' + (s > 1 ? ', zoomed ' + s + ' times' : '') : 'Actual size');
+    b.title = on ? 'The app is zoomed to fit the screen' + (s > 1 ? ' (' + s + '×)' : '') + '. Click for its actual size.'
+      : 'The app is shown at its actual size. Click to zoom it to fit the screen.';
+  }
+  window.addEventListener('storage', function (e) { if (e.key === ZOOM_KEY || e.key === null) zoomChanged(); });
+  // The home page's player bar has a Fit button too; its iframe hears the change through the storage event.
+  window.oldjavaZoom = { fit: zoomFit, set: setZoomFit, onChange: function (fn) { zoomListeners.push(fn); } };
+
   function centerWindows(desktop) {
-    var key = '', size = '', box = null;
+    var key = '', size = '', box = null, fit = zoomFit();
+    zoomListeners.push(function (on) { fit = on; size = ''; });
     setInterval(function () {
       var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, k = '';
       for (var c = desktop.firstElementChild; c; c = c.nextElementSibling) {
@@ -305,7 +348,7 @@
         x0 = Math.min(x0, c.offsetLeft); y0 = Math.min(y0, c.offsetTop);
         x1 = Math.max(x1, c.offsetLeft + c.offsetWidth); y1 = Math.max(y1, c.offsetTop + c.offsetHeight);
       }
-      var z = desktop.clientWidth + 'x' + desktop.clientHeight;
+      var z = desktop.clientWidth + 'x' + desktop.clientHeight + ',' + (window.devicePixelRatio || 1);
       if (k === key && z === size) return;
       if (k !== key) box = x1 < x0 ? null : [x0, y0, x1, y1];
       key = k;
@@ -313,14 +356,23 @@
       if (!box) return;
       x0 = box[0]; y0 = box[1]; x1 = box[2]; y1 = box[3];
       var w = desktop.clientWidth, h = desktop.clientHeight;
-      var s = Math.min(1, w / (x1 - x0), h / (y1 - y0));
+      var s = Math.min(w / (x1 - x0), h / (y1 - y0));
+      // Zoomed up in quarter steps, so resizing the browser a little does not redraw every canvas.
+      s = s < 1 ? s : fit ? Math.max(1, Math.min(ZOOM_MAX, Math.floor(s * ZOOM_ROOM * 4) / 4)) : 1;
       // About the desktop's center (the default transform origin, which the Arcade power-on's scale shares).
       var dx = s * (w - x0 - x1) / 2;
       var dy = s * (h - y0 - y1) / 2;
       window.__shimScale = s;
-      // Whole pixels keep unscaled windows crisp; a scaled group keeps the exact fit instead.
+      // Whole pixels keep unscaled and zoomed windows crisp; a group scaled down keeps the exact fit instead.
       desktop.style.transform = s < 1 ? 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')'
-        : 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)';
+        : 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)' + (s > 1 ? ' scale(' + s + ')' : '');
+      showZoom();
+      var dpr = window.devicePixelRatio || 1;
+      var render = Math.max(dpr, Math.min(dpr * s, ZOOM_MAX));   // capped: a canvas 9 times bigger paints slowly
+      if (render !== (window.__shimRender || dpr)) {
+        window.__shimRender = render;
+        document.dispatchEvent(new Event('shimrender'));
+      }
     }, 250);
   }
 

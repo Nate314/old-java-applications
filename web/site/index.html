@@ -220,6 +220,7 @@
         <button class="btn" type="button" id="player-shuffle" title="Play a random app">Shuffle</button>
         <button class="btn" type="button" id="player-pad-toggle" aria-pressed="true" title="Show or hide the on-screen controller" hidden>Controls</button>
         <button class="btn" type="button" id="player-restart">Restart</button>
+        <button class="btn" type="button" id="player-zoom" aria-pressed="true">Fit</button>
         <button class="btn" type="button" id="player-big" aria-pressed="false" title="Fill the screen with the player">Big screen</button>
         <button class="btn" type="button" id="player-share" data-sound="none" title="Share this app: its link, with a preview card">&#8599; Share</button>
         <a class="btn" id="player-source" href="Minesweeper/index.html#source" title="Open the app's page with its Java source beside it">&lt;/&gt; Source</a>
@@ -611,6 +612,22 @@
 
     // Arcade mode: the Arcade skin on this page, its player and every other open page, and back to the
     // skin from before. The button follows the skin however it changes (the picker, another tab).
+    // Fit: small app windows zoom up to fill the player (boot.js centerWindows, in the player's page).
+    var zoomButton = document.getElementById('player-zoom');
+    function syncZoom() {
+      var on = window.oldjavaZoom.fit();
+      zoomButton.setAttribute('aria-pressed', String(on));
+      zoomButton.title = on ? 'Small apps are zoomed to fill the player. Click for their actual size.'
+        : 'Apps are shown at their actual size. Click to zoom small ones to fill the player.';
+    }
+    window.oldjavaZoom.onChange(syncZoom);
+    syncZoom();
+    zoomButton.addEventListener('click', function () {
+      window.oldjavaZoom.set(!window.oldjavaZoom.fit());
+      zoomButton.blur();
+      frame.focus();
+    });
+
     var arcadeButton = document.getElementById('player-arcade');
     var skinBefore = 'modern';
     function syncArcade() {

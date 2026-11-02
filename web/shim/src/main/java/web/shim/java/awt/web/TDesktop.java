@@ -218,6 +218,9 @@ public final class TDesktop {
         Js.listen(doc, "focusin", TDesktop::onFocusIn);
         Js.listen(doc, "keydown", e -> onKey(e, TKeyEvent.KEY_PRESSED));
         Js.listen(doc, "keyup", e -> onKey(e, TKeyEvent.KEY_RELEASED));
+        // boot.js changed window.__shimRender (the desktop was zoomed up or back): paint everything again on
+        // canvases of the new resolution.
+        Js.listen(doc, "shimrender", e -> Edt.post(TRepaint::repaintAll));
     }
 
     private static void onPress(JSObject e, JSObject node) {

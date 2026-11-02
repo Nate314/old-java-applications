@@ -141,7 +141,11 @@ public final class Js {
     @JSBody(script = "return window.__shimScale || 1;")
     public static native double desktopScale();
 
-    @JSBody(script = "return window.devicePixelRatio || 1;")
+    /**
+     * Canvas pixels per CSS pixel: devicePixelRatio, or more while boot.js zooms the page desktop up to fit the
+     * stage (window.__shimRender), so the paint canvases stay sharp when they are shown bigger.
+     */
+    @JSBody(script = "return window.__shimRender || window.devicePixelRatio || 1;")
     public static native double pixelRatio();
 
     @JSBody(params = "el", script = "var _r = el.getBoundingClientRect(); return _r.left;")
@@ -242,9 +246,9 @@ public final class Js {
     @JSBody(params = "canvas", script = "return canvas.getContext('2d');")
     public static native JSObject context2d(JSObject canvas);
 
-    /** Sets the canvas backing store to CSS size times devicePixelRatio. Returns true if it changed (which clears it). */
+    /** Sets the canvas backing store to CSS size times pixelRatio(). Returns true if it changed (which clears it). */
     @JSBody(params = { "canvas", "w", "h" }, script =
-            "var _r = window.devicePixelRatio || 1; var _bw = Math.max(1, Math.round(w * _r)), _bh = Math.max(1, Math.round(h * _r));"
+            "var _r = window.__shimRender || window.devicePixelRatio || 1; var _bw = Math.max(1, Math.round(w * _r)), _bh = Math.max(1, Math.round(h * _r));"
             + "canvas.style.width = w + 'px'; canvas.style.height = h + 'px';"
             + "if (canvas.width === _bw && canvas.height === _bh) return false;"
             + "canvas.width = _bw; canvas.height = _bh; return true;")
@@ -263,7 +267,7 @@ public final class Js {
     public static native void sizeCanvasExact(JSObject canvas, int w, int h);
 
     @JSBody(params = { "canvas", "img", "w", "h" }, script =
-            "var _g = canvas.getContext('2d'); var _r = window.devicePixelRatio || 1; _g.setTransform(_r, 0, 0, _r, 0, 0);"
+            "var _g = canvas.getContext('2d'); var _r = window.__shimRender || window.devicePixelRatio || 1; _g.setTransform(_r, 0, 0, _r, 0, 0);"
             + "_g.imageSmoothingQuality = 'high'; _g.drawImage(img, 0, 0, w, h);")
     public static native void drawImageScaled(JSObject canvas, JSObject img, int w, int h);
 

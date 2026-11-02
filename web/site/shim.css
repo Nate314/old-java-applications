@@ -635,9 +635,21 @@ canvas.paint.top {
 }
 
 @media (max-width: 1000px) {
-  .shim-toolbar .shim-sound span {
+  .shim-toolbar .shim-sound span,
+  .shim-toolbar .shim-zoom span {
     display: none;
   }
+}
+
+/* Fit (boot.js centerWindows): the zoom it picked, in a small chip. Actual size reads as off, like muted. */
+.shim-toolbar .shim-zoom b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.shim-toolbar .shim-zoom[aria-pressed="false"] {
+  opacity: 0.65;
 }
 
 .shim-close {

@@ -35,6 +35,23 @@ public final class TRepaint {
         }
     }
 
+    /** Marks every component of every window for painting, as when the canvases change resolution. */
+    public static void repaintAll() {
+        for (TWindow w : TDesktop.windows()) {
+            markAll(w);
+        }
+    }
+
+    private static void markAll(TComponent c) {
+        c.markDirty();
+        if (c instanceof TContainer) {
+            TContainer container = (TContainer) c;
+            for (int i = 0; i < container.getComponentCount(); i++) {
+                markAll(container.getComponent(i));
+            }
+        }
+    }
+
     public static void requestFrame() {
         if (!frameRequested) {
             frameRequested = true;

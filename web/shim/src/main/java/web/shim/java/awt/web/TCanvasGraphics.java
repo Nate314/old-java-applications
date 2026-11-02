@@ -23,7 +23,7 @@ import web.shim.java.awt.image.TImageObserver;
 /**
  * Graphics2D over a CanvasRenderingContext2D. The canvas is created lazily on the first drawing call, so
  * components whose paint() draws nothing never get one. Coordinates are CSS pixels; the backing store is
- * scaled by devicePixelRatio.
+ * scaled by Js.pixelRatio() (devicePixelRatio, times the zoom while the page desktop is zoomed up).
  */
 public final class TCanvasGraphics extends TGraphics2D {
     /** Supplies the 2D context on first use (creating and sizing the canvas). */
