@@ -4,7 +4,8 @@
  *   change in one page (the home page, say) reaches every other open page of the site through the storage event.
  * - An app page opened with ?embed (the home page's player) leaves out the toolbar and centers the app's
  *   windows, which most apps put at the top-left corner of the screen. ?embed&shot is the
- *   thumbnail mode web/shots.ps1 uses: square, shadowless windows on a flat magenta desktop.
+ *   thumbnail mode web/shots.ps1 uses: square, shadowless windows on a flat magenta desktop, and
+ *   ?embed&clip the mode web/clips.ps1 records the gallery's preview clips in.
  * - Any other app page is a stage: a toolbar band across the top with the app's name, and the app's windows
  *   centered in the space left between it and the controller (or output panel) at the bottom, which the shim
  *   reports to Java as the screen, so neither the toolbar nor the controller covers an app window.
@@ -69,6 +70,9 @@
   var embedded = /[?&]embed(=|&|$)/.test(location.search);
   if (embedded) document.documentElement.setAttribute('data-embed', '');
   if (embedded && /[?&]shot(=|&|$)/.test(location.search)) document.documentElement.setAttribute('data-shot', '');
+  // ?embed&clip is the preview mode web/clips.ps1 records the gallery's moving thumbnails in: the instant replay
+  // recorder (startReplay) makes small, silent, fixed-size clips (CLIP_SIZE) that fill a gallery thumbnail.
+  var clipMode = embedded && /[?&]clip(=|&|$)/.test(location.search);
 
   function setSkin(value) {
     if (!isSkin(value)) return;
@@ -576,6 +580,8 @@
   var REPLAY_MAX = 1280;   // the clip's longest side, in pixels
   var REPLAY_PAD = 16;     // desk around the windows, in page pixels
   var replay = null;       // the page's recorder (startReplay), once the app runs
+  var CLIP_SIZE = [640, 400];   // clip mode (?embed&clip): the gallery thumbnail's 16:10, at twice its usual width
+  var CLIP_BPS = 900000;
 
   // MP4 first: phones and most sites take it, and Chrome records it. Firefox records WebM.
   function replayType() {
@@ -723,8 +729,9 @@
   }
 
   // The clip's size for windows of that size: up to twice as big (small windows make small videos), at most
-  // REPLAY_MAX on the longest side, in even pixels (which video encoders want).
+  // REPLAY_MAX on the longest side, in even pixels (which video encoders want). Clip mode's size is fixed.
   function clipSize(box) {
+    if (clipMode) return CLIP_SIZE.slice();
     var s = Math.min(2, REPLAY_MAX / Math.max(box[0], box[1]));
     return [2 * Math.round(box[0] * s / 2), 2 * Math.round(box[1] * s / 2)];
   }
@@ -753,14 +760,14 @@
     }
 
     function begin() {
-      if (audio && !tap && audio.createMediaStreamDestination) {   // the app's voices, not the site's sounds
+      if (!clipMode && audio && !tap && audio.createMediaStreamDestination) {   // the app's voices, not the site's sounds
         tap = audio.createMediaStreamDestination();
         appOut(audio).connect(tap);
       }
       var stream = new MediaStream([track].concat(tap ? tap.stream.getAudioTracks() : []));
       var r = { chunks: [], t0: Date.now() };
       try {
-        r.rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 5000000 });
+        r.rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: clipMode ? CLIP_BPS : 5000000 });
         r.rec.ondataavailable = function (e) { if (e.data.size) r.chunks.push(e.data); };
         r.rec.start(1000);
       } catch (e) {
