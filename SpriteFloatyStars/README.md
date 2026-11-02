@@ -1,6 +1,19 @@
 # SpriteFloatyStars
 
-A background program written in Java that animates colored dots ("stars") on a blue field. A small settings window picks the mode, window size, star count and star size, then opens the animation. It now also has **Star Catcher**, a game played over those same animations.
+A background program written in Java that animates colored dots ("stars") on a blue field. A small settings window picks the mode, window size, star count and star size, then opens the animation. The stars in that window now answer the mouse: hold to pull them all in, let go to fling them out (see Playing with the stars). It also has **Star Catcher**, a game played over those same animations.
+
+## Playing with the stars
+
+The original animation only played to itself. Now the mouse (or a finger, in the browser) reaches into it:
+
+- **Hold** the button anywhere on the field: every star is pulled toward the pointer. The stars keep their own drift, so they swing through the pointer and swarm round it, under a glowing ring that grows while you hold. Drag to lead the swarm round the window.
+- **Let go**: the stars near the pointer burst away from it, harder the longer you held (full strength after 1.5 seconds), and a ring spreads out from the spot. Then each star glides back to its own drift.
+- **Click** (press and let go at once): a small burst.
+- **Rest** the pointer on the field: the stars near it slide out of its way.
+- In the bouncing modes (2 to 4) a flung star bounces off the edges; in the drifting modes (1 and 5) it wraps round to the other side.
+- **1** to **5** (or the number pad): start the stars over in that mode, with the same number of stars, sized to the window as it is now. **N**: the next mode. The mode's name shows in the top left corner for a moment ("Mode 3: Compass", by the names Star Catcher gives its nights).
+- **Space**: a burst from the middle of the field.
+- **H**: show or hide the two lines of help along the bottom. They show when the window opens and fade after 9 seconds.
 
 ## Star Catcher
 
@@ -42,6 +55,7 @@ Settings window:
 Animation window:
 
 - **Up / Down arrows**: add or remove one star.
+- **Mouse**: hold to pull, let go to fling, click to burst; **1** to **5**, **N**, **Space** and **H** as in Playing with the stars.
 
 Star Catcher window:
 
@@ -57,7 +71,8 @@ Closing the settings window or an animation window exits the program; closing th
 - `src/animate2/Animate2Main.java`: entry point; shows the `SettingsFrame`.
 - `src/animate2/SettingsFrame.java`: the settings window; parses the fields and opens an `AnimationFrame`, or a `CatchFrame`.
 - `src/animate2/AnimationFrame.java`: the animation window holding a `StarField`.
-- `src/animate2/StarField.java`: star positions, velocities and colors; moves them on a 15 ms Swing timer (scaled by the time since the last tick, so the speed does not depend on the machine) and draws them for each mode. Star Catcher makes one without a timer and moves and draws it as its sky.
+- `src/animate2/StarField.java`: star positions, velocities and colors; moves them on a 15 ms Swing timer (scaled by the time since the last tick, so the speed does not depend on the machine) and draws them for each mode. Each star also has a kick from the pointer (the pull, the wake and bursts) that dies away by itself, and the field draws the pull's glow, the burst ring, the mode name and the help. Star Catcher makes one without a timer or pointer and moves and draws it as its sky.
+- `src/animate2/StarHand.java`: the mouse on an animation window's field: press starts the pull, release flings, moving sets where the pointer rests.
 - `src/animate2/Night.java`: the six nights (sky mode, goal, gold stars, black holes, speed, twinkle and pull) and the stars for the time left.
 - `src/animate2/CatchGame.java`: one night with no drawing: moving and bouncing, catching, black holes, the clock and combos.
 - `src/animate2/NightRecords.java`: reads and writes the most time left per night, and which nights are open.
@@ -70,9 +85,10 @@ From the repo root: `./run.ps1 SpriteFloatyStars` (or `./run.ps1 SpriteFloatySta
 
 ## Self-check
 
-`test/animate2/CatchCheck.java` checks the stars for the time left, that every night starts with its gold stars and black holes and keeps them inside the field until the clock runs out, that stars twinkle out only on the nights that say so and Supernova's holes swallow stars, catching within reach, combos and their bonus, black holes costing time (never below zero), and that the saved records keep the most time left, skip bad lines and open nights in order. From `SpriteFloatyStars/`:
+`test/animate2/CatchCheck.java` checks the stars for the time left, that every night starts with its gold stars and black holes and keeps them inside the field until the clock runs out, that stars twinkle out only on the nights that say so and Supernova's holes swallow stars, catching within reach, combos and their bonus, black holes costing time (never below zero), and that the saved records keep the most time left, skip bad lines and open nights in order. `test/animate2/StarHandCheck.java` checks, in every mode, that holding gathers the stars, letting go spreads them and they all end up back on the field, that a click bursts near stars away, a longer hold flings harder (up to a cap), the wake nudges a star, mode changes keep the stars (Burst mode starts them in the middle) and wrap round, and the help shows, hides and fades. From `SpriteFloatyStars/`:
 
 ```powershell
 javac -d ../out/check/SpriteFloatyStars src/animate2/*.java test/animate2/*.java
 java -ea -cp ../out/check/SpriteFloatyStars animate2.CatchCheck
+java -ea -cp ../out/check/SpriteFloatyStars animate2.StarHandCheck
 ```
