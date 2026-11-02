@@ -1433,6 +1433,14 @@
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
       return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
     } },
+    // The saver it was left on, in the order of the app's list (screensaver.Main), and whether it cycles.
+    ScreenSaver: { file: '.screensaver.txt', show: function (text) {
+      var names = ['Green circles', 'Green squares', 'Bright circles', 'Starfield', 'Mystify', 'Pipes', 'Bouncing logo', 'Dot clock'];
+      var saver = /^saver (\d+)$/m.exec(text);
+      var name = saver && names[+saver[1]];
+      if (!name) return '';
+      return 'Your screen saver: ' + name + (/^cycle off$/m.test(text) ? ', kept on screen' : ', then the next every 30 s');
+    } },
     // The timer counts down against the wall clock, so a running one is still running (or has rung) on return.
     Clock: { file: '.clock.txt', show: function (text) {
       var v = {};
