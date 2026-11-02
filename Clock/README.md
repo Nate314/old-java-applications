@@ -25,6 +25,10 @@ The timer, stopwatch and focus sessions count against the wall clock, not the wi
 - No command-line arguments.
 - The window is a square one quarter of the screen width wide, but at least 380 pixels (and never bigger than the screen). The current time text is also printed to stdout each time it changes (once a second).
 
+## In the browser
+
+On the web site the clock follows you: while a timer, stopwatch or focus session runs, every other page shows it in its toolbar, rings when it ends, and offers a quick game for a break, then calls you back to focus (see [Clock follows you](../web/README.md#clock-follows-you)).
+
 ## Saved state
 
 `~/.clock.txt` (in `user.home`) keeps the tab, analog or digital, 12 or 24 hours, the timer (its length, and when it ends while running or the time left while paused) the stopwatch (when it started while running, the time banked before the last stop, and the laps), the focus session (the lengths, session or break, the sessions done in the set, and when it ends while running or the time left otherwise) and the minutes focused and sessions finished on each of the last 14 days. A missing or damaged file, or a damaged line, leaves the defaults: the Clock tab and a 5-minute timer.

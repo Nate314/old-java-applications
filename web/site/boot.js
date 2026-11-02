@@ -42,6 +42,9 @@
  *   fades it in over everything, and the first input fades it out without reaching the app.
  * - Gives the site's own controls and moments short synthesized sounds in the skin's voice
  *   (window.oldjavaSound), with a Sound button in the toolbar to mute them on every open page.
+ * - Lets Clock's timer, stopwatch and focus sessions follow the visitor round the site (clockFollows): while one
+ *   runs, clockbar.js is added to every page and puts its time in the toolbar, rings when it ends and offers a
+ *   game for a break (window.oldjavaSite is what it borrows from this file).
  */
 (function () {
   'use strict';
@@ -3301,6 +3304,47 @@
     return newsPromise;
   }
 
+  // ---- Clock follows you (clockbar.js) ----
+  // While Clock's timer, stopwatch or a focus session runs (its saved ~/.clock.txt says so), every other page gets
+  // clockbar.js: the time in the toolbar, a bell when it ends, and a game offered for a break. The Clock page gets
+  // it too, for the break's game; it is added once something starts, in this page or another.
+  var CLOCK_SAVES = 'oldjava.saves.Clock', CLOCK_OPEN = 'oldjava.clockOpen';
+  var CLOCK_RUNNING = /(?:focusEnd|timerEnd|watchStart)=[1-9]/;
+  function clockFollows() {
+    var added = false;
+    function check() {
+      var saved = '';
+      try { saved = localStorage.getItem(CLOCK_SAVES) || ''; } catch (e) { return; }
+      if (added || !CLOCK_RUNNING.test(saved)) return;
+      added = true;
+      var tag = document.createElement('script');
+      tag.src = root() + 'clockbar.js';
+      document.head.appendChild(tag);
+    }
+    check();
+    window.addEventListener('storage', function (e) { if (e.key === CLOCK_SAVES) check(); });
+    if (clockPage()) setInterval(check, 1000);   // this page's own saves raise no storage event
+  }
+  function clockPage() { return appId() === 'Clock' && !isThen(); }   // the 2016 Clock has no timer
+  // Clock running on this page (or in the home page's player) rings for itself, so the other pages stay quiet.
+  function clockOpen() {
+    function beat() { try { localStorage.setItem(CLOCK_OPEN, String(Date.now())); } catch (e) { /* they ring too */ } }
+    beat();
+    setInterval(beat, 5000);
+    window.addEventListener('pagehide', function () { try { localStorage.removeItem(CLOCK_OPEN); } catch (e) { /* stale soon */ } });
+  }
+  window.oldjavaSite = {
+    news: function () { return news; },   // the app page's band news line (null on the home page)
+    toast: function (shot, title, line, actions) { return floatToast(shot, title, line, [], actions); },
+    toastLink: toastLink,
+    pageOf: pageOf,
+    root: root,
+    appId: appId,
+    clockPage: clockPage,
+    // A link to an app page that skips its title screen, as Run again does.
+    skipTitle: function (id) { try { sessionStorage.setItem(AGAIN_KEY, id); } catch (e) { /* it shows */ } }
+  };
+
   function titleScreen(files) {
     var html = document.documentElement;
     html.setAttribute('data-title', '');
@@ -3754,7 +3798,12 @@
     exit: [7, 3, 0],
     skin: [0, 5, 9, 12],
     saved: [0, 7, 12, 19],
-    offline: [0, -6]
+    offline: [0, -6],
+    // Clock's moments, heard on other pages of the site (clockbar.js): a falling phrase for a break, a rising one
+    // back to work, and the timer's bell.
+    breakTime: [12, 7, 4, 0],
+    backToWork: [0, 4, 7, 12, 16],
+    ring: [12, 7, 12, 7, 12]
   };
   // Arcade's own tunes: a power-on for a new app and a coin for a stamp (B5 then E6, held).
   var ARCADE_TUNES = { start: ['power', 7, 12], stamp: ['thump', 7, 12] };
@@ -3914,6 +3963,7 @@
     // shows only its own stamp; the home page shows any.
     if (!embedded) passport.onChange(function (id) { if (id && (!isApp || id === appId())) stampToast(id); });
     gamepads(isApp);
+    if (!embedded) clockFollows();
     if (!isApp) return;
     if (!embedded) sourceFromHash();
 
@@ -3967,6 +4017,7 @@
       if (extras && !embedded) howToPlay();
       if (watch) watchApp(desktop); else if (extras) stampOnPlay();
       if (extras && !shell && !replay) replay = startReplay(desktop);
+      if (clockPage() && !saverMode) clockOpen();
     }
     Promise.all(files.map(function (f) {
       return title ? preload(f).then(function () { title.loaded(f); }) : preload(f);

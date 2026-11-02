@@ -3858,3 +3858,94 @@ html[data-saver] * {
 :root[data-skin="arcade"] .shim-title-story li.fresh time {
   color: #ffe14d;
 }
+
+/* ---- Clock follows you (clockbar.js): a running focus session, timer or stopwatch as a chip in the toolbar, a ring
+   that drains (--p is the part left) beside the time, linking back to Clock. Under 1000 px only the ring and the
+   time show. The last ten seconds blink. */
+
+.shim-toolbar .shim-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 1px 10px 1px 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.shim-toolbar .shim-clock:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.shim-clock-seg {
+  --ring: #ef4444;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.shim-clock-seg[data-kind="break"],
+.shim-clock-tag[data-kind="break"] { --ring: #22c55e; }
+.shim-clock-seg[data-kind="timer"],
+.shim-clock-tag[data-kind="timer"] { --ring: #38bdf8; }
+.shim-clock-seg[data-kind="watch"] { --ring: #a78bfa; }
+.shim-clock-tag[data-kind="back"] { --ring: #ef4444; }
+
+.shim-clock-ring {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: conic-gradient(var(--ring) calc(var(--p, 1) * 1turn), rgba(255, 255, 255, 0.18) 0);
+  -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+  mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+  filter: drop-shadow(0 0 3px var(--ring));
+}
+
+.shim-clock-seg b {
+  font-variant-numeric: tabular-nums;
+}
+
+.shim-clock-name {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.shim-toolbar .shim-clock[data-soon] .shim-clock-seg b {
+  animation: shim-clock-soon 1s steps(2, jump-none) infinite;
+}
+
+@keyframes shim-clock-soon {
+  50% { opacity: 0.35; }
+}
+
+@media (max-width: 1000px) {
+  .shim-clock-name {
+    display: none;
+  }
+}
+
+/* The band's news tag (and the home page's toast) in the moment's color: break green, back to focus red,
+   timer blue. */
+.shim-toolbar .shim-news-tag.shim-clock-tag,
+:root[data-skin="arcade"] .shim-toolbar .shim-news-tag.shim-clock-tag {
+  background: var(--ring, #ef4444);
+  box-shadow: 0 0 8px var(--ring, #ef4444);
+  color: #111827;
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-clock {
+  border-color: #7df9ff;
+  color: #7df9ff;
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.6);
+  box-shadow: 0 0 8px rgba(125, 249, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-toolbar .shim-clock[data-soon] .shim-clock-seg b {
+    animation: none;
+  }
+}
