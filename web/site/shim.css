@@ -2578,6 +2578,78 @@ button.shim-toast-go {
   }
 }
 
+/* ---- instant replay (boot.js startReplay, openClip) ----
+   Replay in the toolbar shows once the app runs, with a red dot that breathes while it records. The clip
+   plays in the share dialog's frame. */
+
+.shim-toolbar .shim-replay {
+  display: none;
+  white-space: nowrap;
+}
+
+:root[data-replay] .shim-toolbar .shim-replay {
+  display: inline-block;
+}
+
+.shim-replay-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  vertical-align: 0;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  animation: shim-replay-rec 2s ease-in-out infinite;
+}
+
+@keyframes shim-replay-rec {
+  50% { opacity: 0.45; }
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-replay span:not(.shim-replay-dot) {
+    display: none;
+  }
+}
+
+.shim-clip {
+  width: min(720px, calc(100vw - 24px));
+}
+
+.shim-clip-video {
+  display: block;
+  flex: none;
+  width: 100%;
+  max-height: calc(100vh - 220px);
+  border-radius: 10px;
+  background: transparent;   /* a tall clip leaves the panel showing beside it, not black bars */
+}
+
+.shim-clip-note {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+:root[data-skin="classic"] .shim-clip-video {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-replay-dot {
+  background: #ff2bd6;
+  box-shadow: 0 0 8px 2px rgba(255, 43, 214, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-clip-video {
+  box-shadow: 0 0 0 1px #00e5ff, 0 0 14px rgba(0, 229, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-replay-dot {
+    animation: none;
+  }
+}
+
 /* ---- app-page stage (boot.js stageEdge): the toolbar is a band across the top, and #desktop fills the space
    between it and the controller and output panel at the bottom. The shim reports that space to Java as the
    screen and boot.js centers the windows in it, so no window sits under the toolbar or the controller.

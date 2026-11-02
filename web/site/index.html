@@ -224,6 +224,7 @@
         <button class="btn" type="button" id="player-big" aria-pressed="false" title="Fill the screen with the player">Big screen</button>
         <button class="btn" type="button" id="player-pop" aria-pressed="false" data-sound="none" hidden>Pop out</button>
         <button class="btn" type="button" id="player-share" data-sound="none" title="Share this app: its link, with a preview card">&#8599; Share</button>
+        <button class="btn" type="button" id="player-replay" data-sound="none" hidden title="Instant replay: the last 10 to 20 seconds of play, as a video to watch, save or share">&#10226; Replay</button>
         <a class="btn" id="player-source" href="Minesweeper/index.html#source" title="Open the app's page with its Java source beside it">&lt;/&gt; Source</a>
         <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
       </div>
@@ -436,6 +437,7 @@
       // first, so its window closes with it.
       var api = popApi();
       if (api) api.back();
+      replayButton.hidden = true;   // until the new app's page says it is recording
       var next = frame.cloneNode(false);
       next.src = page + '?embed';
       frame.parentNode.replaceChild(next, frame);
@@ -453,6 +455,7 @@
     // the visitor's other windows (boot.js popOut). The player's iframe may not open that window, so this page
     // opens it and hands it to the app's page.
     var popButton = document.getElementById('player-pop');
+    var replayButton = document.getElementById('player-replay');
     function popApi() {
       try { return frame.contentWindow.oldjavaPop || null; } catch (e) { return null; }
     }
@@ -562,8 +565,16 @@
       var lit = e.data.oldjavaKeyLit;
       if (lit) { if (padLight) padLight(lit.which, !!lit.down); return; }
       if (typeof e.data.oldjavaShare === 'string') { window.oldjavaShare.open(e.data.oldjavaShare || null, frame); return; }
+      if (e.data.oldjavaReplay) { replayButton.hidden = false; return; }
+      if (e.data.oldjavaClip) { window.oldjavaReplay.open(e.data.oldjavaClip, frame); return; }
       var li = card(e.data.oldjavaPlay);
       if (li) choose(li);
+    });
+    // Instant replay: the player's app keeps its last moments (boot.js startReplay); this shows them here.
+    replayButton.addEventListener('click', function () {
+      var api = null;
+      try { api = frame.contentWindow.oldjavaReplay; } catch (e) { /* not loaded */ }
+      if (api) api.take().then(function (clip) { if (clip) window.oldjavaReplay.open(clip, replayButton); });
     });
     var shareButton = document.getElementById('player-share');
     shareButton.addEventListener('click', function () {
