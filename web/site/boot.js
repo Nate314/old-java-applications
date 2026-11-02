@@ -1413,7 +1413,8 @@
               down: ['ArrowDown', 'Minute −'] }],
     StockChecker: [{ up: ['ArrowUp', 'Pick'], down: ['ArrowDown', 'Pick'], x: ['B', 'Buy 1'], y: ['S', 'Sell 1'],
                      b: ['Space', 'Pause'] }],
-    GroupCreator: [{ x: ['N', 'New round'], y: ['R', 'Reshuffle'] }],
+    GroupCreator: [{ x: ['N', 'New round'], y: ['R', 'Reshuffle'], b: ['Space', 'New round / spin'],
+                     start: ['P', 'Pick someone / groups'] }],
     SimpleAlgorithms: [{ b: ['Space', 'Play / pause'], right: ['ArrowRight', 'One move'], x: ['R', 'Reset'], y: ['F', 'Speed'] }]
   };
   // Standard layout button numbers.
@@ -2894,8 +2895,13 @@
       var names = /^names=(.*)$/m.exec(text);
       var count = names ? names[1].split(',').filter(function (n) { return n.trim(); }).length : 0;
       var rounds = (text.match(/^round=/mg) || []).length;
-      if (!rounds) return '';
-      return 'Your class: ' + count + (count === 1 ? ' name, ' : ' names, ') + rounds + (rounds === 1 ? ' round' : ' rounds') + ' of groups remembered';
+      var picked = /^picked=(.*)$/m.exec(text);
+      var turns = picked ? picked[1].split(',').filter(function (n) { return n.trim(); }).length : 0;
+      if (!rounds && !turns) return '';
+      var parts = [];
+      if (rounds) parts.push(rounds + (rounds === 1 ? ' round' : ' rounds') + ' of groups remembered');
+      if (turns) parts.push(turns + ' of ' + count + ' picked by the wheel');
+      return 'Your class: ' + count + (count === 1 ? ' name, ' : ' names, ') + parts.join(', ');
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split(',').map(Number);

@@ -19,10 +19,12 @@ import java.util.List;
  * names=Alice,Bob,Carol,Dave
  * min=2
  * max=3
+ * picked=Carol,Alice
  * round=Alice,Carol|Bob,Dave
  * </pre>
  *
- * with one {@code round=} line per round, oldest first, its groups separated by {@code |}.
+ * with one {@code round=} line per round, oldest first, its groups separated by {@code |}, and a {@code picked=} line
+ * (the names the wheel has picked this time around, oldest first) once the wheel has picked someone.
  */
 public final class Roster {
    static final String EXAMPLE = "Alice,Bob,Carol,Dave,Erin,Frank,Grace,Heidi,Ivan,Judy,Mallory,Niaj";
@@ -32,6 +34,7 @@ public final class Roster {
    String min = "2";
    String max = "3";
    final PartnerHistory history = new PartnerHistory();
+   final PickBag picks = new PickBag();
 
    private Roster(File file) {
       this.file = file;
@@ -54,6 +57,8 @@ public final class Roster {
                roster.min = value;
             } else if (key.equals("max")) {
                roster.max = value;
+            } else if (key.equals("picked")) {
+               roster.picks.load(value);
             } else if (key.equals("round")) {
                List<List<String>> groups = new ArrayList<>();
                for (String group : value.split("\\|")) {
@@ -85,6 +90,9 @@ public final class Roster {
       text.append("names=").append(names).append('\n');
       text.append("min=").append(min).append('\n');
       text.append("max=").append(max).append('\n');
+      if (!picks.isEmpty()) {
+         text.append("picked=").append(picks.text()).append('\n');
+      }
       for (int r = 1; r <= history.size(); r++) {
          List<String> groups = new ArrayList<>();
          for (List<String> group : history.round(r)) {

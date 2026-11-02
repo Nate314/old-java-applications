@@ -15,6 +15,7 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 import javax.swing.JPanel;
 import javax.swing.Timer;
@@ -22,7 +23,8 @@ import javax.swing.Timer;
 /**
  * The board under the inputs. In Groups it deals the newest round onto one card per group, marks the people who were
  * together before, and swaps two names of different groups when they are clicked one after the other. Partner chart
- * shows, for every pair in the class, how many rounds put them in one group. Its buttons run along the bottom.
+ * shows, for every pair in the class, how many rounds put them in one group. Pick someone spins a wheel of the class
+ * that lands on someone who has not had a turn yet. Its buttons run along the bottom, and change with the view.
  */
 @SuppressWarnings("serial")
 public class GroupBoard extends JPanel {
@@ -48,7 +50,7 @@ public class GroupBoard extends JPanel {
 
    private static final Font TITLE = new Font("SansSerif", Font.BOLD, 15);
    private static final Font TEXT = new Font("SansSerif", Font.PLAIN, 13);
-   private static final Font BOLD = new Font("SansSerif", Font.BOLD, 13);
+   static final Font BOLD = new Font("SansSerif", Font.BOLD, 13);
    private static final Font SMALL = new Font("SansSerif", Font.PLAIN, 11);
 
    /** What the board's buttons and edits ask the window to do. */
@@ -61,6 +63,12 @@ public class GroupBoard extends JPanel {
 
       /** The newest round was changed by hand (two names swapped). */
       void edited(List<List<String>> groups);
+
+      /** The names typed in the names field now (the wheel follows the field, not only the saved rounds). */
+      List<String> classNames();
+
+      /** The wheel picked someone, or a pick was put back or forgotten: save the class. */
+      void picksChanged();
    }
 
    private final class Button {
@@ -78,11 +86,19 @@ public class GroupBoard extends JPanel {
    }
 
    private final PartnerHistory history;
+   private final PickBag picks;
    private final Actions actions;
-   private final List<Button> buttons = new ArrayList<>();
+   private final List<Button> groupButtons = new ArrayList<>();
+   private final List<Button> pickButtons = new ArrayList<>();
    private final Button reshuffle;
    private final Button chartButton;
    private final Button clear;
+   private final Button spin;
+   private final Button putBack;
+   private final Button startOver;
+   private final PickWheel wheel;
+   private final Random random = new Random();
+   private boolean picking;
 
    private List<List<String>> groups = Collections.emptyList();
    /** The rounds before the one shown, for marking who meets again. */
@@ -103,11 +119,14 @@ public class GroupBoard extends JPanel {
    private int mouseX = -1;
    private int mouseY = -1;
 
-   public GroupBoard(PartnerHistory history, Actions actions) {
+   public GroupBoard(PartnerHistory history, PickBag picks, Actions actions) {
       this.history = history;
+      this.picks = picks;
       this.actions = actions;
       setPreferredSize(new Dimension(WIDTH, HEIGHT));
       setFocusable(true);
+      wheel = new PickWheel(this::repaint, CARD_COLORS);
+      List<Button> buttons = groupButtons;
       buttons.add(new Button("New round", 'n', actions::newRound));
       reshuffle = new Button("Reshuffle", 'r', actions::reshuffle);
       buttons.add(reshuffle);
@@ -116,6 +135,28 @@ public class GroupBoard extends JPanel {
          unpick();
       });
       buttons.add(chartButton);
+      buttons.add(new Button("Pick someone", 'p', () -> {
+         picking = true;
+         unpick();
+      }));
+      spin = new Button("Spin", 's', this::spin);
+      pickButtons.add(spin);
+      putBack = new Button("Put back", 'b', () -> {
+         wheel.reset();
+         picks.putBack(actions.classNames());
+         actions.picksChanged();
+      });
+      pickButtons.add(putBack);
+      startOver = new Button("Start over", 'o', () -> {
+         wheel.reset();
+         picks.clear();
+         actions.picksChanged();
+      });
+      pickButtons.add(startOver);
+      pickButtons.add(new Button("Groups", 'p', () -> {
+         wheel.finish();
+         picking = false;
+      }));
       clear = new Button("Clear history", 'x', () -> {
          if (clearArmed) {
             clearArmed = false;
@@ -169,6 +210,9 @@ public class GroupBoard extends JPanel {
    public void showRound(List<String> roster, boolean deal) {
       names = new ArrayList<>(roster);
       groups = history.last();
+      if (deal) {
+         picking = false;
+      }
       before = history.first(history.size() - 1);
       message = null;
       clearArmed = false;
@@ -204,9 +248,28 @@ public class GroupBoard extends JPanel {
       pickedIndex = -1;
    }
 
+   private List<Button> buttons() {
+      return picking ? pickButtons : groupButtons;
+   }
+
+   /** Picks someone who has not had a turn yet, and spins the wheel to them. */
+   private void spin() {
+      if (wheel.spinning()) {
+         return;
+      }
+      List<String> names = actions.classNames();
+      List<String> pool = picks.pool(names);
+      String name = picks.pick(names, random);
+      if (name == null) {
+         return;
+      }
+      wheel.spin(pool, name);
+      actions.picksChanged();
+   }
+
    private void press(int x, int y) {
       if (y >= getHeight() - BAR) {
-         for (Button button : buttons) {
+         for (Button button : buttons()) {
             if (button.enabled && button.bounds.contains(x, y)) {
                if (button != clear) {
                   clearArmed = false;
@@ -219,6 +282,14 @@ public class GroupBoard extends JPanel {
       }
       clearArmed = false;
       message = null;
+      if (picking) {
+         if (wheel.spinning()) {
+            wheel.finish();
+         } else if (wheel.contains(x, y)) {
+            spin();
+         }
+         return;
+      }
       if (dealing()) {
          dealStart = 1;   // finish the deal
          return;
@@ -261,9 +332,9 @@ public class GroupBoard extends JPanel {
       }
       char key = Character.toLowerCase(event.getKeyChar());
       if (key == ' ') {
-         key = 'n';
+         key = picking ? 's' : 'n';
       }
-      for (Button button : buttons) {
+      for (Button button : buttons()) {
          if (button.key == key && button.enabled) {
             if (button != clear) {
                clearArmed = false;
@@ -304,8 +375,13 @@ public class GroupBoard extends JPanel {
       clear.enabled = !history.isEmpty();
       chartButton.label = chart ? "Groups" : "Partner chart";
       clear.label = clearArmed ? "Sure? Press again" : "Clear history";
+      spin.enabled = !wheel.spinning() && !actions.classNames().isEmpty();
+      putBack.enabled = !wheel.spinning() && !picks.picked(actions.classNames()).isEmpty();
+      startOver.enabled = putBack.enabled;
       String[] header;
-      if (chart) {
+      if (picking) {
+         header = paintPick(g, w, h - BAR);
+      } else if (chart) {
          header = paintChart(g, w, h - BAR);
       } else {
          header = paintGroups(g, w, h - BAR);
@@ -380,6 +456,115 @@ public class GroupBoard extends JPanel {
             c == pickedGroup && k == pickedIndex, c == hoverGroup && k == hoverIndex);
       }
       return summary();
+   }
+
+   /** The wheel on the left, and on the right who it picked, how far round the class it is, and the turns so far. */
+   private String[] paintPick(Graphics2D g, int w, int bottom) {
+      chips = new Rectangle[0][];
+      List<String> names = actions.classNames();
+      List<String> done = picks.picked(names);
+      List<String> pool = picks.pool(names);
+      List<String> toGo = picks.remaining(names);
+      if (wheel.spinning() && !done.isEmpty()) {
+         // The pick is made when the spin starts; keep it secret until the wheel stops.
+         done.remove(done.size() - 1);
+         toGo = new ArrayList<>();
+         for (String name : names) {
+            if (!done.contains(name) && !toGo.contains(name)) {
+               toGo.add(name);
+            }
+         }
+      }
+      int everyone = toGo.size() + done.size();
+      int top = HEADER + 4;
+      int height = bottom - top - 6;
+      int size = Math.min(height, w * 56 / 100);
+      wheel.paint(g, pool, GAP, top, size, height);
+
+      int left = GAP + size + 20;
+      int width = w - left - 16;
+      String landed = wheel.landedOn();
+      String under = wheel.underPointer();
+      // The result card.
+      int cardTop = top + 14;
+      int cardHeight = 112;
+      g.setColor(new Color(0, 0, 0, 30));
+      g.fillRoundRect(left + 2, cardTop + 3, width, cardHeight, 14, 14);
+      g.setColor(Color.WHITE);
+      g.fillRoundRect(left, cardTop, width, cardHeight, 14, 14);
+      Color strip = landed != null ? wheel.landedColor() : INK;
+      g.setColor(strip);
+      g.fillRoundRect(left, cardTop, width, 26, 14, 14);
+      g.fillRect(left, cardTop + 14, width, 12);
+      String label = landed != null ? "Turn " + done.size() + " of " + everyone : wheel.spinning() ? "Spinning..." : "Who is next?";
+      text(g, label, BOLD, Color.WHITE, left + 12, cardTop + 18);
+      Font big = new Font("SansSerif", Font.BOLD, 30);
+      if (landed != null) {
+         text(g, fit(g, landed, big, width - 24), big, INK, left + 12, cardTop + 70);
+         String group = groupOf(landed);
+         if (group != null) {
+            text(g, group, SMALL, MUTED, left + 12, cardTop + 94);
+         }
+      } else if (wheel.spinning() && under != null) {
+         text(g, fit(g, under, big, width - 24), big, MUTED, left + 12, cardTop + 70);
+      } else {
+         text(g, names.isEmpty() ? "Nobody yet" : "Spin the wheel", big, new Color(190, 186, 176), left + 12, cardTop + 70);
+         text(g, names.isEmpty() ? "Type the class in the names field." : "Space, S or a click on the wheel", SMALL, MUTED, left + 12, cardTop + 94);
+      }
+
+      // How far round the class this time around.
+      int y = cardTop + cardHeight + 26;
+      int had = done.size();
+      text(g, "Had a turn: " + had + " of " + everyone, BOLD, INK, left, y);
+      y += 8;
+      g.setColor(new Color(222, 214, 198));
+      g.fillRoundRect(left, y, width, 10, 10, 10);
+      if (everyone > 0 && had > 0) {
+         g.setColor(FRESH);
+         g.fillRoundRect(left, y, Math.max(10, width * had / everyone), 10, 10, 10);
+      }
+      y += 30;
+      // The turns so far, newest first, as many as fit.
+      List<String> recent = new ArrayList<>(done);
+      Collections.reverse(recent);
+      int lines = Math.max(0, (bottom - 26 - y) / 18);
+      for (int i = 0; i < Math.min(lines, recent.size()); i++) {
+         String line = (done.size() - i) + ". " + recent.get(i);
+         if (i == lines - 1 && recent.size() > lines) {
+            line = "... and " + (recent.size() - i) + " more";
+         }
+         text(g, fit(g, line, TEXT, width), i == 0 && landed != null ? BOLD : TEXT, i == 0 && landed != null ? INK : MUTED, left, y);
+         y += 18;
+      }
+      if (!toGo.isEmpty() && !done.isEmpty()) {
+         text(g, fit(g, "Still to go: " + String.join(", ", toGo), SMALL, width), SMALL, MUTED, left, bottom - 12);
+      }
+
+      String title = "Pick someone: " + (names.isEmpty() ? "no names yet"
+         : toGo.size() + " of " + everyone + " still to have a turn this time around");
+      if (wheel.spinning()) {
+         return new String[] {title, "Round and round it goes... (a click stops it where it was heading)", ""};
+      }
+      if (landed != null && toGo.isEmpty()) {
+         return new String[] {title, landed + " is up, and everyone has now had a turn. The next spin puts the whole class back on the wheel.", "fresh"};
+      }
+      if (landed != null) {
+         return new String[] {title, landed + " is up. Away today? Put back (B) puts them back on the wheel for later.", "fresh"};
+      }
+      if (!names.isEmpty() && toGo.isEmpty()) {
+         return new String[] {title, "Everyone has had a turn. The next spin starts again with the whole class.", "fresh"};
+      }
+      return new String[] {title, "The wheel only holds people who have not had a turn yet, so everyone gets one before anyone gets two.", ""};
+   }
+
+   /** "In Group 2 this round" for a name in the newest round, or null. */
+   private String groupOf(String name) {
+      for (int c = 0; c < groups.size(); c++) {
+         if (groups.get(c).contains(name)) {
+            return "In Group " + (c + 1) + " this round";
+         }
+      }
+      return null;
    }
 
    private void paintChip(Graphics2D g, String name, int x, int y, int width, int height, boolean again, boolean picked, boolean hover) {
@@ -652,7 +837,7 @@ public class GroupBoard extends JPanel {
       return (float) together / most;
    }
 
-   private static Color mix(Color from, Color to, float amount) {
+   static Color mix(Color from, Color to, float amount) {
       return new Color(
          Math.round(from.getRed() + (to.getRed() - from.getRed()) * amount),
          Math.round(from.getGreen() + (to.getGreen() - from.getGreen()) * amount),
@@ -665,6 +850,7 @@ public class GroupBoard extends JPanel {
       g.fillRect(0, top, w, BAR);
       int gap = 8;
       int total = -gap;
+      List<Button> buttons = buttons();
       for (Button button : buttons) {
          total += buttonWidth(g, button) + gap;
       }
@@ -692,22 +878,22 @@ public class GroupBoard extends JPanel {
       return 12 + width(g, button.label, BOLD) + 10 + width(g, String.valueOf(Character.toUpperCase(button.key)), SMALL) + 12;
    }
 
-   private static void text(Graphics2D g, String text, Font font, Color color, int x, int y) {
+   static void text(Graphics2D g, String text, Font font, Color color, int x, int y) {
       g.setFont(font);
       g.setColor(color);
       g.drawString(text, x, y);
    }
 
-   private static void centered(Graphics2D g, String text, Font font, Color color, int centerX, int y) {
+   static void centered(Graphics2D g, String text, Font font, Color color, int centerX, int y) {
       text(g, text, font, color, centerX - width(g, text, font) / 2, y);
    }
 
-   private static int width(Graphics2D g, String text, Font font) {
+   static int width(Graphics2D g, String text, Font font) {
       return g.getFontMetrics(font).stringWidth(text);
    }
 
    /** The text, cut short with "..." to fit in {@code room} pixels. */
-   private static String fit(Graphics2D g, String text, Font font, int room) {
+   static String fit(Graphics2D g, String text, Font font, int room) {
       if (width(g, text, font) <= room) {
          return text;
       }

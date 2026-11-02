@@ -35,7 +35,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       this.setResizable(false);
       // Read after the window exists, so the browser build has put the saved file back.
       roster = Roster.load(new File(System.getProperty("user.home"), ".groupcreator-class.txt"));
-      board = new GroupBoard(roster.history, this);
+      board = new GroupBoard(roster.history, roster.picks, this);
 
       JPanel names = new JPanel();
       names.add(new JLabel("Names, separated by commas:"));
@@ -130,6 +130,20 @@ public class Main extends JFrame implements GroupBoard.Actions {
       roster.history.clear();
       save(null);
       board.showRound(GroupMaker.parseNames(roster.names), false);
+   }
+
+   @Override
+   public List<String> classNames() {
+      return GroupMaker.parseNames(textField.getText());
+   }
+
+   @Override
+   public void picksChanged() {
+      roster.names = textField.getText().trim();
+      String problem = save(null);
+      if (problem != null) {
+         board.showMessage(problem);
+      }
    }
 
    /** Saves the class, and the groups (when there are some) to output.txt. Returns what went wrong, or null. */

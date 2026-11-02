@@ -2,7 +2,7 @@
 
 Shuffles a comma-separated list of names into random groups with a size between a minimum and a maximum, shows the groups in the window and writes them to `output.txt`. Decompiled with Vineflower from the author's own `GroupCreator.jar` (jar file date 2016-09-15). Try-with-resources blocks the decompiler could not rebuild were rewritten by hand, and catch variables were renamed.
 
-It has since become a tool for a class or team that is split into groups again and again: it remembers every round it made, and mixes each new round so people get partners they have not had yet. The groups are dealt onto colored cards, names can be swapped between groups by hand, and a partner chart shows who has been grouped with whom.
+It has since become a tool for a class or team that is split into groups again and again: it remembers every round it made, and mixes each new round so people get partners they have not had yet. The groups are dealt onto colored cards, names can be swapped between groups by hand, and a partner chart shows who has been grouped with whom. For the moments in between, a name wheel picks whose turn it is, and gets round everyone before it picks anyone twice.
 
 ## Controls / usage
 
@@ -19,18 +19,28 @@ It has since become a tool for a class or team that is split into groups again a
 - **Reshuffle** (R): mixes the newest round again, in its place, against the rounds before it.
 - **Swap by hand**: click a name, then a name in another group; the two trade places and the newest round is changed (Esc or a second click on the same name cancels).
 - **Partner chart** (C, again for Groups): a cell for every pair of names in the class, darker the more rounds put them together, with "met n/m" for each name. Pointing at a cell names the pair and the rounds they shared.
-- **Clear history** (X, then X or the button again to confirm): forgets every round.
+- **Clear history** (X, then X or the button again to confirm): forgets every round (not the wheel's picks).
+
+### Pick someone
+
+- **Pick someone** (P) turns the board into a wheel with a slice for every name in the names field (as typed now, each name once), and **Groups** (P again) goes back.
+- **Spin** (S, Space, or a click on the wheel): the wheel spins for about four seconds and slows to a stop under the pointer, with a click as each peg passes and a short chime when it lands. The name is chosen at random when the spin starts, from the names that have not had a turn yet; the wheel only shows those, so everyone gets one turn before anyone gets a second. A click while it spins stops it where it was heading.
+- The card beside the wheel shows who is up, which group they are in in the newest round, how many of the class have had a turn, the turns so far (newest first) and who is still to go. After the last person, the next spin puts the whole class back on the wheel.
+- **Put back** (B): the newest pick goes back on the wheel, for someone who is away. **Start over** (O): forgets this time around's picks.
 
 ### Files
 
-- The class (the names as typed, min, max and every round) is kept in `~/.groupcreator-class.txt`: lines `names=...`, `min=...`, `max=...` and one `round=` line per round, oldest first, with its groups separated by `|` (so names should not contain `|`).
+- The class (the names as typed, min, max, every round and the wheel's picks) is kept in `~/.groupcreator-class.txt`: lines `names=...`, `min=...`, `max=...`, `picked=...` (the names picked this time around, oldest first, once the wheel has picked someone) and one `round=` line per round, oldest first, with its groups separated by `|` (so names should not contain `|`). A spin also saves the names field as typed.
 - Each new, reshuffled or edited round is also written to `output.txt` in the working directory, one line per group, `Group 1 --- name, name`, as before.
 - The window is 760 px wide and not resizable. Title "Group Creator". No command-line arguments.
 
 ## Code layout
 
 - `src/groupcreator/Main.java`: entry point and window: the input fields, and the round actions (make, reshuffle, swap, clear) that save the class and `output.txt`.
-- `src/groupcreator/GroupBoard.java`: the board: the dealt cards, the swap clicks, the partner chart and the button bar.
+- `src/groupcreator/GroupBoard.java`: the board: the dealt cards, the swap clicks, the partner chart, the Pick someone view and the button bar.
+- `src/groupcreator/PickWheel.java`: the name wheel: its slices, pegs and pointer, and the spin that slows to a stop on the chosen name.
+- `src/groupcreator/PickBag.java`: who the wheel has picked this time around, and the pick from those still to go.
+- `src/groupcreator/WheelSound.java`: the peg clicks and the landing chime, on the MIDI synthesizer.
 - `src/groupcreator/FreshMix.java`: the mix that avoids pairs from earlier rounds.
 - `src/groupcreator/PartnerHistory.java`: the rounds made so far, and how often each pair shared a group.
 - `src/groupcreator/Roster.java`: reads and writes `~/.groupcreator-class.txt`.
@@ -45,10 +55,11 @@ From the repo root: `./run.ps1 GroupCreator` (or `./run.ps1 GroupCreator -Build`
 
 ## Self-check
 
-`test/groupcreator/GroupMakerCheck.java` checks group sizes, that every trimmed name lands in exactly one group, the refusal of impossible splits, and that the shuffle is even. `test/groupcreator/FreshMixCheck.java` checks that the fresh mix keeps legal sizes and every name, plays a four-person round robin in pairs with no repeated pair, never repeats a pair in a second round of twelve in threes, usually finds four repeat-free rounds of nine in threes, repeats fewer pairs than a plain shuffle after six rounds, and that the partner history and the class file round-trip. From `GroupCreator/`:
+`test/groupcreator/GroupMakerCheck.java` checks group sizes, that every trimmed name lands in exactly one group, the refusal of impossible splits, and that the shuffle is even. `test/groupcreator/FreshMixCheck.java` checks that the fresh mix keeps legal sizes and every name, plays a four-person round robin in pairs with no repeated pair, never repeats a pair in a second round of twelve in threes, usually finds four repeat-free rounds of nine in threes, repeats fewer pairs than a plain shuffle after six rounds, and that the partner history and the class file round-trip. `test/groupcreator/PickBagCheck.java` checks that the wheel picks all twelve example names once each before a new time around, that each name is equally likely to come first, put back and start over, that names not in the class and duplicates are handled, and that the picks round-trip through the class file in order. From `GroupCreator/`:
 
 ```
 javac -d ../out/check/GroupCreator src/groupcreator/*.java test/groupcreator/*.java
 java -ea -cp ../out/check/GroupCreator groupcreator.GroupMakerCheck
 java -ea -cp ../out/check/GroupCreator groupcreator.FreshMixCheck
+java -ea -cp ../out/check/GroupCreator groupcreator.PickBagCheck
 ```
