@@ -4,7 +4,12 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 
 ## Controls / usage
 
-- **Desktop icons**: one per `assets/*.jar`, in alphabetical order, in columns from the top-left corner. Click selects an icon, double-click opens the app. Clicking the empty desktop clears the selection and closes the start menu.
+- **Desktop icons**: one per `assets/*.jar`, on a grid of cells from the top-left corner, in alphabetical order down the columns. Click selects an icon, double-click opens the app. Clicking the empty desktop clears the selection and closes the menus.
+- **Moving icons**: drag an icon (press and move it at least 5 pixels) and it follows the pointer above every window, while a faint outline marks the cell it came from. Let go and it lands in the cell under its middle; an icon already there trades places with it. From then on every icon keeps its cell, so the gap a moved icon leaves stays a gap, as on a real desktop. Until the first move (and after Arrange icons by name) the icons fill the cells in alphabetical order.
+- **Desktop menu**: right-click the empty desktop (or long-press it on a touch screen) for:
+  - **Wallpaper**: Original photo (`assets/background.jpg`, the only background NathaNOS had), Night sky (stars, a crescent moon and hills), Sunset hills, Deep ocean (light rays and bubbles) and Aurora. Each row shows a small preview, and the current one is ticked. The painted ones are drawn in Java2D, once per screen size.
+  - **Arrange icons by name**: forgets where icons were moved and lines them all up alphabetically again.
+- On a narrow screen the icon tiles get narrower (down to 48 pixels) so every column of icons fits across it.
 - **MENU button** (left end of the taskbar): show / hide the start menu.
 - **Start menu**: the NathaNOS logo, one row per app (click to open it) and **Shut Down** (exit). On a short screen the rows wrap into more columns.
 - **Taskbar buttons**: one per open app window, in the order they opened, with the app's name and icon. The button of the active window is lit. Clicking a button brings that window to the front. Borderless windows (ScreenSaver, CircleSpawner's circle slices) get no button.
@@ -18,15 +23,22 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 - The desktop window never takes focus, so clicking the taskbar or background does not raise it over open apps. That also means an internal window (Clock) stays behind app windows that cover it, even after its taskbar button brings it to the front of the desktop.
 - Closing an app's window does not stop timers or threads it started unless the app stops them itself, so they can keep running until NathaNOS exits.
 - No keyboard controls or command-line arguments. The window is undecorated and fills the screen.
+
+## Saved state
+
+`~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
 - The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. `./run.ps1 NathaNOS` adds the other apps (see Running).
 
-The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later.
+The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers.
 
 ## Code layout
 
 - `src/main/Main.java`: the full-screen `JFrame` and `JDesktopPane` with the background image; creates the launcher, taskbar, start menu and icons.
 - `src/main/Launcher.java`: the apps in `assets/`, their icons, and opening one (internal window or `main`).
-- `src/main/DesktopShortcuts.java`: the desktop icons, on a layer below every window.
+- `src/main/DesktopShortcuts.java`: the desktop icons on their grid, on a layer below every window: placing, dragging (an icon carried on the drag layer) and trading places, and the right click that opens the desktop menu.
+- `src/main/DesktopMenu.java`: the right-click desktop menu with the wallpaper previews and Arrange icons by name.
+- `src/main/Wallpaper.java`: the five wallpapers; paints the four scenes into an image the size of the screen.
+- `src/main/DesktopSettings.java`: reads and writes `~/.nathanos.txt`.
 - `src/main/LauncherWindow.java`: the taskbar, with the MENU button, the window buttons and the clock.
 - `src/main/TaskList.java`: tracks the open app windows for the taskbar, and centers new windows that open in the top-left corner.
 - `src/main/StartMenu.java`: the start menu panel with the logo, the app list and Shut Down.

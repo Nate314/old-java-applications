@@ -11,19 +11,21 @@ import javax.swing.JLayeredPane;
 import javax.swing.SwingUtilities;
 
 public class Main extends JFrame {
+   /** The original wallpaper photo, scaled to the screen. */
+   final Image photo = new ImageIcon("assets/background.jpg").getImage().getScaledInstance(
+      Toolkit.getDefaultToolkit().getScreenSize().width, Toolkit.getDefaultToolkit().getScreenSize().height, 4);
    public JDesktopPane desktopPane = new JDesktopPane() {
-      ImageIcon icon = new ImageIcon("assets/background.jpg");
-      Image image = this.icon.getImage();
-      Image newimage = this.image.getScaledInstance(Toolkit.getDefaultToolkit().getScreenSize().width, Toolkit.getDefaultToolkit().getScreenSize().height, 4);
-
       @Override
       protected void paintComponent(Graphics g) {
          super.paintComponent(g);
-         g.drawImage(this.newimage, 0, 0, this);
+         Main.this.wallpaper.paint(g, this.getWidth(), this.getHeight(), Main.this.photo, this);
       }
    };
    public LauncherWindow launcherWindow;
    public StartMenu startMenu;
+   DesktopMenu desktopMenu;
+   DesktopSettings settings = new DesktopSettings();
+   Wallpaper wallpaper = Wallpaper.byId(Wallpaper.DEFAULT);
 
    public Main(Boolean visibility) {
       this.setUndecorated(true);
@@ -35,6 +37,9 @@ public class Main extends JFrame {
       this.setVisible(visibility);
       this.setCursor(this.getToolkit().createCustomCursor(new ImageIcon("assets/cursor.png").getImage(), new Point(), "defaultCursor"));
       this.add(this.desktopPane);
+      // Read only now: in the browser, saved files come back once the app's first window exists.
+      this.settings = DesktopSettings.load(DesktopSettings.FILE);
+      this.wallpaper = Wallpaper.byId(this.settings.wallpaper);
       TaskList tasks = new TaskList(this);
       Launcher launcher = new Launcher(this, tasks);
       this.launcherWindow = new LauncherWindow(this, tasks);
@@ -42,7 +47,19 @@ public class Main extends JFrame {
       // The taskbar and its menu stay above internal app windows (Clock), as on a real desktop.
       this.desktopPane.add(this.launcherWindow, JLayeredPane.PALETTE_LAYER);
       this.desktopPane.add(this.startMenu, JLayeredPane.POPUP_LAYER);
-      new DesktopShortcuts(this, launcher);
+      this.desktopMenu = new DesktopMenu(this, new DesktopShortcuts(this, launcher));
+      this.desktopPane.add(this.desktopMenu, JLayeredPane.POPUP_LAYER);
+   }
+
+   void setWallpaper(Wallpaper wallpaper) {
+      this.wallpaper = wallpaper;
+      this.settings.wallpaper = wallpaper.id;
+      this.saveSettings();
+      this.desktopPane.repaint();
+   }
+
+   void saveSettings() {
+      this.settings.save(DesktopSettings.FILE);
    }
 
    public static void main(String[] args) {

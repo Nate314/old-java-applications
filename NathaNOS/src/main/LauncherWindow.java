@@ -45,7 +45,10 @@ public class LauncherWindow extends JInternalFrame {
 
       FlatButton start = new FlatButton(
          new ImageIcon("assets/NathaNOS.png").getImage(), "NathaNOS", "MENU", new Color(0, 120, 215), new Color(0, 150, 255), null,
-         () -> screen.startMenu.toggleVisibility()
+         () -> {
+            screen.desktopMenu.hideMenu();
+            screen.startMenu.toggleVisibility();
+         }
       );
       start.setBounds(4, 0, START_WIDTH, this.getHeight());
       this.panel.add(start);

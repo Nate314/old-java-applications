@@ -10,36 +10,122 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JComponent;
 import javax.swing.JDesktopPane;
+import javax.swing.JLayeredPane;
 
 /**
- * A column-first grid of app icons on the desktop, below every window. Click selects an icon, double-click opens
- * the app, and a click on the empty desktop clears the selection and closes the start menu.
+ * The app icons on the desktop, below every window, on a grid of cells. Click selects an icon, double-click opens the
+ * app, and dragging an icon moves it to another cell (trading places with an icon already there); from the first move
+ * on, every icon's cell is saved. Until then, and for an app new to the desktop, icons fill the free cells column by
+ * column, in alphabetical order. A click on the
+ * empty desktop clears the selection and closes the menus; a right click opens the desktop menu.
  */
 final class DesktopShortcuts {
    private static final Integer LAYER = -1;
-   private static final int TILE_WIDTH = 96;
+   private static final int MAX_TILE_WIDTH = 96;
    private static final int TILE_HEIGHT = 92;
    private static final int ICON = 44;
    private static final int MARGIN = 12;
+   /** How far the pointer moves before a press on an icon becomes a drag. */
+   private static final int DRAG_START = 5;
+   private final Main screen;
    private final List<Shortcut> shortcuts = new ArrayList<>();
+   private final int rows;
+   private final int columns;
+   private final int tileWidth;
+   private final DragGhost ghost = new DragGhost();
    private Shortcut selected;
 
    DesktopShortcuts(Main screen, Launcher launcher) {
+      this.screen = screen;
       JDesktopPane desktop = screen.desktopPane;
-      int rows = Math.max(1, (screen.getHeight() - screen.launcherWindow.getHeight() - 2 * MARGIN) / TILE_HEIGHT);
+      int count = Math.max(1, launcher.count());
+      this.rows = Math.max(1, (screen.getHeight() - screen.launcherWindow.getHeight() - 2 * MARGIN) / TILE_HEIGHT);
+      // Tiles narrow on a small screen so every column of icons fits across it.
+      int needed = (count + this.rows - 1) / this.rows;
+      this.tileWidth = Math.max(48, Math.min(MAX_TILE_WIDTH, (screen.getWidth() - 2 * MARGIN) / needed));
+      this.columns = Math.max(needed, (screen.getWidth() - 2 * MARGIN) / this.tileWidth);
       for (int i = 0; i < launcher.count(); i++) {
-         Shortcut shortcut = new Shortcut(launcher, i, screen);
-         shortcut.setBounds(MARGIN + i / rows * TILE_WIDTH, MARGIN + i % rows * TILE_HEIGHT, TILE_WIDTH, TILE_HEIGHT);
+         Shortcut shortcut = new Shortcut(launcher, i);
          desktop.add(shortcut, LAYER);
          this.shortcuts.add(shortcut);
       }
+      this.ghost.setVisible(false);
+      desktop.add(this.ghost, JLayeredPane.DRAG_LAYER);
+      this.placeAll();
       desktop.addMouseListener(new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent e) {
             DesktopShortcuts.this.select(null);
             screen.startMenu.hideMenu();
+            if (e.getButton() == MouseEvent.BUTTON3 || e.isPopupTrigger()) {
+               screen.desktopMenu.showAt(e.getX(), e.getY());
+            } else {
+               screen.desktopMenu.hideMenu();
+            }
          }
       });
+   }
+
+   /** Forgets every hand-placed icon and lines them all up alphabetically again. */
+   void arrangeByName() {
+      this.screen.settings.places.clear();
+      this.screen.saveSettings();
+      this.placeAll();
+   }
+
+   /** Saved places first (if still on the grid and free), then the rest into the first free cells. */
+   private void placeAll() {
+      Shortcut[][] grid = new Shortcut[this.columns][this.rows];
+      List<Shortcut> unplaced = new ArrayList<>();
+      for (Shortcut shortcut : this.shortcuts) {
+         int[] place = this.screen.settings.places.get(shortcut.name);
+         if (place != null && place[0] < this.columns && place[1] < this.rows && grid[place[0]][place[1]] == null) {
+            grid[place[0]][place[1]] = shortcut;
+            shortcut.moveTo(place[0], place[1]);
+         } else {
+            unplaced.add(shortcut);
+         }
+      }
+      int cell = 0;
+      for (Shortcut shortcut : unplaced) {
+         while (cell < this.columns * this.rows && grid[cell / this.rows][cell % this.rows] != null) {
+            cell++;
+         }
+         if (cell < this.columns * this.rows) {
+            grid[cell / this.rows][cell % this.rows] = shortcut;
+         }
+         // More icons than cells (a tiny screen) stack on the last cell rather than vanish.
+         int at = Math.min(cell, this.columns * this.rows - 1);
+         shortcut.moveTo(at / this.rows, at % this.rows);
+      }
+   }
+
+   private Shortcut at(int column, int row) {
+      for (Shortcut shortcut : this.shortcuts) {
+         if (shortcut.column == column && shortcut.row == row) {
+            return shortcut;
+         }
+      }
+      return null;
+   }
+
+   /** Moves the icon to the cell under (x, y) on the desktop, trading places with an icon already there, and saves. */
+   private void drop(Shortcut shortcut, int x, int y) {
+      int column = Math.max(0, Math.min(this.columns - 1, (x - MARGIN) / this.tileWidth));
+      int row = Math.max(0, Math.min(this.rows - 1, (y - MARGIN) / TILE_HEIGHT));
+      Shortcut other = this.at(column, row);
+      if (other == shortcut) {
+         return;
+      }
+      if (other != null) {
+         other.moveTo(shortcut.column, shortcut.row);
+      }
+      shortcut.moveTo(column, row);
+      // Every icon keeps its cell from now on, so the gap a moved icon leaves stays a gap, as on a real desktop.
+      for (Shortcut each : this.shortcuts) {
+         this.screen.settings.places.put(each.name, new int[] {each.column, each.row});
+      }
+      this.screen.saveSettings();
    }
 
    private void select(Shortcut shortcut) {
@@ -56,17 +142,60 @@ final class DesktopShortcuts {
    private final class Shortcut extends JComponent {
       private final Launcher launcher;
       private final int app;
+      private final String name;
+      private int column;
+      private int row;
       private boolean hovered;
+      /** Where the press landed in the icon, and whether the pointer has since moved far enough to drag. */
+      private int pressX;
+      private int pressY;
+      private boolean pressed;
+      private boolean dragging;
 
-      Shortcut(Launcher launcher, int app, Main screen) {
+      Shortcut(Launcher launcher, int app) {
          this.launcher = launcher;
          this.app = app;
-         this.setCursor(screen.getCursor());
-         this.addMouseListener(new MouseAdapter() {
+         this.name = launcher.name(app);
+         this.setCursor(DesktopShortcuts.this.screen.getCursor());
+         MouseAdapter mouse = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
                DesktopShortcuts.this.select(Shortcut.this);
-               screen.startMenu.hideMenu();
+               DesktopShortcuts.this.screen.startMenu.hideMenu();
+               DesktopShortcuts.this.screen.desktopMenu.hideMenu();
+               Shortcut.this.pressed = e.getButton() == MouseEvent.BUTTON1;
+               Shortcut.this.pressX = e.getX();
+               Shortcut.this.pressY = e.getY();
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+               Shortcut shortcut = Shortcut.this;
+               if (!shortcut.pressed) {
+                  return;
+               }
+               if (!shortcut.dragging && Math.abs(e.getX() - shortcut.pressX) + Math.abs(e.getY() - shortcut.pressY) >= DRAG_START) {
+                  shortcut.dragging = true;
+                  DesktopShortcuts.this.ghost.carry(shortcut);
+                  shortcut.repaint();
+               }
+               if (shortcut.dragging) {
+                  DesktopShortcuts.this.ghost.follow(shortcut.getX() + e.getX() - shortcut.pressX, shortcut.getY() + e.getY() - shortcut.pressY);
+               }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+               Shortcut shortcut = Shortcut.this;
+               shortcut.pressed = false;
+               if (shortcut.dragging) {
+                  shortcut.dragging = false;
+                  DesktopShortcuts.this.ghost.drop();
+                  // The icon's middle decides the cell it lands in.
+                  DesktopShortcuts.this.drop(shortcut, shortcut.getX() + e.getX() - shortcut.pressX + DesktopShortcuts.this.tileWidth / 2,
+                     shortcut.getY() + e.getY() - shortcut.pressY + TILE_HEIGHT / 2);
+                  shortcut.repaint();
+               }
             }
 
             @Override
@@ -87,33 +216,85 @@ final class DesktopShortcuts {
                Shortcut.this.hovered = false;
                Shortcut.this.repaint();
             }
-         });
+         };
+         this.addMouseListener(mouse);
+         this.addMouseMotionListener(mouse);
+      }
+
+      void moveTo(int column, int row) {
+         this.column = column;
+         this.row = row;
+         this.setBounds(MARGIN + column * DesktopShortcuts.this.tileWidth, MARGIN + row * TILE_HEIGHT, DesktopShortcuts.this.tileWidth, TILE_HEIGHT);
       }
 
       @Override
       protected void paintComponent(Graphics g) {
          super.paintComponent(g);
-         AppIcon.smooth(g);
+         if (this.dragging) {
+            // The ghost carries the icon; its own cell shows a faint outline until it lands.
+            g.setColor(new Color(255, 255, 255, 70));
+            g.drawRoundRect(2, 2, this.getWidth() - 5, TILE_HEIGHT - 5, 10, 10);
+            return;
+         }
          boolean isSelected = DesktopShortcuts.this.selected == this;
          if (isSelected || this.hovered) {
+            AppIcon.smooth(g);
             g.setColor(isSelected ? new Color(0, 120, 215, 110) : new Color(255, 255, 255, 50));
-            g.fillRoundRect(2, 2, TILE_WIDTH - 4, TILE_HEIGHT - 4, 10, 10);
+            g.fillRoundRect(2, 2, this.getWidth() - 4, TILE_HEIGHT - 4, 10, 10);
          }
-         String name = this.launcher.name(this.app);
-         AppIcon.paint(g, this.launcher.icon(this.app), name, (TILE_WIDTH - ICON) / 2, 8, ICON);
+         this.paintIcon(g);
+      }
 
+      void paintIcon(Graphics g) {
+         AppIcon.smooth(g);
+         int width = this.getWidth();
+         AppIcon.paint(g, this.launcher.icon(this.app), this.name, (width - ICON) / 2, 8, ICON);
          g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
          FontMetrics metrics = g.getFontMetrics();
-         List<String> lines = wrap(AppIcon.words(name), metrics, TILE_WIDTH - 8);
+         List<String> lines = wrap(AppIcon.words(this.name), metrics, width - 8);
          int y = 8 + ICON + 4 + metrics.getAscent();
          for (String line : lines) {
-            int x = (TILE_WIDTH - metrics.stringWidth(line)) / 2;
+            int x = (width - metrics.stringWidth(line)) / 2;
             g.setColor(new Color(0, 0, 0, 170));
             g.drawString(line, x + 1, y + 1);
             g.setColor(Color.WHITE);
             g.drawString(line, x, y);
             y += metrics.getHeight() - 2;
          }
+      }
+   }
+
+   /** The icon being dragged, drawn above every window so it shows over whatever it passes. */
+   private final class DragGhost extends JComponent {
+      private Shortcut carried;
+
+      void carry(Shortcut shortcut) {
+         this.carried = shortcut;
+         this.setBounds(shortcut.getBounds());
+         this.setVisible(true);
+         this.repaint();
+      }
+
+      void follow(int x, int y) {
+         this.setLocation(x, y);
+         DesktopShortcuts.this.screen.desktopPane.repaint();
+      }
+
+      void drop() {
+         this.carried = null;
+         this.setVisible(false);
+         DesktopShortcuts.this.screen.desktopPane.repaint();
+      }
+
+      @Override
+      protected void paintComponent(Graphics g) {
+         if (this.carried == null) {
+            return;
+         }
+         AppIcon.smooth(g);
+         g.setColor(new Color(0, 120, 215, 90));
+         g.fillRoundRect(2, 2, this.getWidth() - 4, TILE_HEIGHT - 4, 10, 10);
+         this.carried.paintIcon(g);
       }
    }
 

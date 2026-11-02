@@ -15,6 +15,7 @@ import web.shim.java.awt.TWindow;
 import web.shim.java.awt.event.TKeyEvent;
 import web.shim.java.awt.event.TMouseEvent;
 import web.shim.javax.swing.TAbstractButton;
+import web.shim.javax.swing.TJDesktopPane;
 import web.shim.javax.swing.TJInternalFrame;
 
 /**
@@ -299,7 +300,8 @@ public final class TDesktop {
     // ---- touch ----
     // A finger works the apps as the left mouse button: a tap clicks, a drag drags (windows by their title bars,
     // Clock's dial, GroupCreator's names, the Hanoi disks). Holding still on a button that listens to the mouse
-    // itself (Minesweeper's tiles) is a right click once LONG_PRESS_MS have passed, as on a phone's desktop.
+    // itself (Minesweeper's tiles), or on a desktop pane (NathaNOS's empty desktop, for its menu), is a right click once
+    // LONG_PRESS_MS have passed, as on a phone's desktop.
 
     private static boolean afterTouch() {
         return Js.now() - touchAt < 1000;
@@ -330,7 +332,7 @@ public final class TDesktop {
         setHover(mouseTarget(c, false), e);
         onPress(e, Js.target(e));
         TComponent target = pressTarget;
-        if (target instanceof TAbstractButton && target.hasMouseListeners() && target.isEnabled()) {
+        if ((target instanceof TAbstractButton || target instanceof TJDesktopPane) && target.hasMouseListeners() && target.isEnabled()) {
             pressRing = Js.pressRing(e);
             longPressTimer = Js.setTimeout(TDesktop::longPress, LONG_PRESS_MS);
         }

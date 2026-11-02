@@ -13,7 +13,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 | [Clock](Clock/README.md) | Analog/text clock, plus a timer set by dragging a 60-minute dial (it keeps counting while the window is closed, then rings) and a stopwatch with laps |
 | [FlappyBird](FlappyBird/README.md) | Flappy Bird style game with endless pipes or today's course (race the ghost of your best run that day), and medals; the bird tilts, dives and crashes like the original's, with sounds, and a click or tap flaps |
 | [Minesweeper](Minesweeper/README.md) | Minesweeper on a field of grass: three boards, best times, openings that ripple out from the click, and clicking a number to open around it |
-| [NathaNOS](NathaNOS/README.md) | Desktop-style app launcher with icons, a start menu and a taskbar |
+| [NathaNOS](NathaNOS/README.md) | Desktop-style app launcher with icons, a start menu and a taskbar; drag the icons where you like and right-click the desktop for one of five wallpapers (the original photo or four painted scenes), and it stays that way next time |
 | [RubiksCube2D](RubiksCube2D/README.md) | Rubik's Cube puzzle with 20 levels (watch it get mixed, turn it back for stars), Hint, Undo and Solve, on a 3D cube whose layers turn as you drag them (or the original flat net), with moves now those of a real cube |
 | [ScreenSaver](ScreenSaver/README.md) | Eight screen savers (the original green circles, Starfield, Mystify, Pipes, a bouncing logo, a dot clock) that close when the mouse moves |
 | [SpriteFloatyStars](SpriteFloatyStars/README.md) | Animated stars with five modes, and Star Catcher: click gold stars over those modes across six nights, dodging black holes |
