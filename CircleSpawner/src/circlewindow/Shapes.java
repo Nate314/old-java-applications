@@ -12,7 +12,8 @@ final class Shapes {
    static final String HEART = "Heart";
    static final String STAR = "Star";
    static final String WORD = "Word";
-   static final String[] ALL = {CIRCLE, RING, HEART, STAR, WORD};
+   static final String DRAW = "Draw";
+   static final String[] ALL = {CIRCLE, RING, HEART, STAR, WORD, DRAW};
    /** Grid cells across a ring, heart or star: fine enough to look smooth, coarse enough to stay a few dozen windows. */
    private static final int CELLS = 28;
    static final int MAX_WORD_LENGTH = 12;
@@ -22,23 +23,32 @@ final class Shapes {
 
    /**
     * The windows for a shape about size pixels across, centered on (centerX, centerY). A word is size pixels
-    * tall, or less if that would make it wider than maxWidth.
+    * tall, or less if that would make it wider than maxWidth. Draw is the drawing, a square grid of cells.
     */
-   static List<Rectangle> build(String shape, int size, String word, int centerX, int centerY, int maxWidth) {
+   static List<Rectangle> build(String shape, int size, String word, boolean[][] drawing, int centerX, int centerY, int maxWidth) {
       if (CIRCLE.equals(shape)) {
          return circle(size, centerX, centerY);
       }
       if (WORD.equals(shape)) {
          return word(cleanWord(word), size, centerX, centerY, maxWidth);
       }
-      int cell = Math.max(2, size / CELLS);
-      int cells = Math.max(1, size / cell);
-      boolean[][] grid = new boolean[cells][cells];
-      for (int row = 0; row < cells; row++) {
-         for (int column = 0; column < cells; column++) {
-            double u = (column + 0.5) / cells * 2.0 - 1.0;
-            double v = (row + 0.5) / cells * 2.0 - 1.0;
-            grid[row][column] = inside(shape, u, v);
+      boolean[][] grid;
+      int cell;
+      int cells;
+      if (DRAW.equals(shape)) {
+         grid = drawing;
+         cells = drawing.length;
+         cell = Math.max(2, size / cells);
+      } else {
+         cell = Math.max(2, size / CELLS);
+         cells = Math.max(1, size / cell);
+         grid = new boolean[cells][cells];
+         for (int row = 0; row < cells; row++) {
+            for (int column = 0; column < cells; column++) {
+               double u = (column + 0.5) / cells * 2.0 - 1.0;
+               double v = (row + 0.5) / cells * 2.0 - 1.0;
+               grid[row][column] = inside(shape, u, v);
+            }
          }
       }
       int left = centerX - cells * cell / 2;

@@ -14,11 +14,11 @@ public final class CircleSliceWindow extends JFrame {
    double velocityY;
    double x;
    double y;
+   private final JPanel panel = new JPanel();
+   private Color color;
 
    public CircleSliceWindow(Rectangle bounds, Color color, String title, boolean onTop, Runnable onPress) {
-      JPanel panel = new JPanel();
-      panel.setBackground(color);
-      panel.addMouseListener(new MouseAdapter() {
+      this.panel.addMouseListener(new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent e) {
             onPress.run();
@@ -26,14 +26,26 @@ public final class CircleSliceWindow extends JFrame {
       });
       this.setTitle(title);
       this.setUndecorated(true);
-      this.add(panel);
-      this.setSize(bounds.width, bounds.height);
-      this.setLocation(bounds.x, bounds.y);
-      this.x = bounds.x;
-      this.y = bounds.y;
+      this.add(this.panel);
+      this.place(bounds, color);
       this.setAlwaysOnTop(onTop);
       // Popping up must not take the keyboard from the creator window while the shape is still appearing.
       this.setFocusableWindowState(false);
       this.setVisible(true);
+   }
+
+   Color color() {
+      return this.color;
+   }
+
+   /** Moves and sizes the window to bounds and fills it with color. */
+   void place(Rectangle bounds, Color color) {
+      this.setBounds(bounds);
+      this.x = bounds.x;
+      this.y = bounds.y;
+      if (!color.equals(this.color)) {
+         this.color = color;
+         this.panel.setBackground(color);
+      }
    }
 }
