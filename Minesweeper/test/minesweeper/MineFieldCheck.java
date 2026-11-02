@@ -65,6 +65,8 @@ public class MineFieldCheck {
       revealed[0][1] = revealed[1][0] = revealed[1][1] = true;
       check(MineFieldGenerator.isWon(tiny, revealed), "not won with all safe cells revealed");
 
+      checkChord();
+
       // Every level fits its mines around a safe first click.
       for (Level level : Level.values()) {
          String[][] board = new MineFieldGenerator(level.size, level.size, level.mines, 0, 0, new Random(1)).getGrid();
@@ -79,6 +81,40 @@ public class MineFieldCheck {
 
       checkBestTimes();
       System.out.println("MineFieldCheck passed");
+   }
+
+   /**
+    * Opening around a number: nothing until its flags add up, then exactly its hidden unflagged neighbors (a mine too,
+    * when a flag is wrong); never for a hidden cell or a blank.
+    */
+   private static void checkChord() {
+      String[][] grid = {
+         {"b", "2", "1"},
+         {"2", "b", "1"},
+         {"1", "1", "1"}};
+      boolean[][] revealed = new boolean[3][3];
+      boolean[][] flagged = new boolean[3][3];
+      check(MineFieldGenerator.chordTargets(grid, revealed, flagged, 2, 2).isEmpty(), "hidden cell opened around");
+      revealed[2][2] = true;
+      check(MineFieldGenerator.chordTargets(grid, revealed, flagged, 2, 2).isEmpty(), "opened with no flag");
+      check(MineFieldGenerator.hiddenNeighbors(revealed, flagged, 2, 2).size() == 3, "hidden neighbors of a corner");
+      flagged[1][1] = true;
+      List<int[]> targets = MineFieldGenerator.chordTargets(grid, revealed, flagged, 2, 2);
+      check(targets.size() == 2, "a 1 with its flag opens its 2 other neighbors, got " + targets.size());
+      for (int[] t : targets) {
+         check(!MineFieldGenerator.isMine(grid, t[0], t[1]) && !flagged[t[0]][t[1]], "opened a mine or a flag");
+      }
+      // A wrong flag: the 2 at (0, 1) counts two flags, but one is on a safe cell, so the mine under (0, 0) is opened.
+      revealed[0][1] = true;
+      flagged[0][2] = true; // wrong: (0, 2) is a 1, and the mine at (1, 1) is flagged already
+      targets = MineFieldGenerator.chordTargets(grid, revealed, flagged, 0, 1);
+      boolean opensMine = false;
+      for (int[] t : targets) {
+         opensMine |= MineFieldGenerator.isMine(grid, t[0], t[1]);
+      }
+      check(opensMine, "a wrong flag should let the number open a mine");
+      check(MineFieldGenerator.chordTargets(new String[][]{{" "}}, new boolean[][]{{true}}, new boolean[1][1], 0, 0).isEmpty(),
+         "a blank opened around");
    }
 
    /** Best times: only faster wins count, and the times and last level survive a reload of the file. */

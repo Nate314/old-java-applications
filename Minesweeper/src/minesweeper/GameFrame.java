@@ -8,6 +8,7 @@ import java.awt.Font;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import javax.swing.JButton;
@@ -21,8 +22,12 @@ public final class GameFrame extends JFrame {
    private static final File BEST_TIMES_FILE = new File(System.getProperty("user.home", "."), ".minesweeper-best.txt");
    /** Room for the level buttons and the status line, taken from the board so the window keeps its old size. */
    private static final int BARS_HEIGHT = 64;
-   private static final Color SELECTED_LEVEL = new Color(0, 255, 0);
+   private static final Color SELECTED_LEVEL = MineTile.GRASS_LIGHT;
    private static final int[] WIN_NOTES = {72, 76, 79, 84, 88, 91, 96};
+   /** An opening ripples out from the click: each ring of tiles pops this many ms after the one inside it. */
+   private static final int RIPPLE_MS = 22;
+   /** Mines burst in this many ms per tile of distance from the one hit; a win's flags plant at the same pace. */
+   private static final int BURST_STEP_MS = 45;
    public boolean gameOver = false;
    private final Level level;
    private final BestTimes bestTimes;
@@ -35,6 +40,9 @@ public final class GameFrame extends JFrame {
    private JPanel panel = new JPanel();
    private final JLabel status = new JLabel(" ", SwingConstants.CENTER);
    private final Timer clock = new Timer(1000, event -> this.updateStatus());
+   /** Tiles with an animation running, repainted every frame until they are done. */
+   private final List<MineTile> animating = new ArrayList<>();
+   private final Timer animation = new Timer(16, event -> this.animate());
    private int tileWidth;
    private int tileHeight;
    /** Null until the first reveal, so the first click is never a mine. */
@@ -117,17 +125,49 @@ public final class GameFrame extends JFrame {
 
    /** Left click on a tile: reveals it (and a blank region), or ends the game on a mine. */
    void revealFrom(int row, int column) {
+      this.reveal(row, column, row, column);
+   }
+
+   /**
+    * Left click (or Space) on a revealed number: once its flags add up, reveals its other hidden neighbors, which may
+    * end the game if a flag was wrong. While they do not add up, those neighbors glow briefly.
+    */
+   void chord(int row, int column) {
+      List<int[]> targets = MineFieldGenerator.chordTargets(this.grid, this.revealed, this.flagged, row, column);
+      if (targets.isEmpty()) {
+         for (int[] cell : MineFieldGenerator.hiddenNeighbors(this.revealed, this.flagged, row, column)) {
+            this.tiles[cell[0]][cell[1]].pulse();
+         }
+         return;
+      }
+      for (int[] cell : targets) {
+         if (this.gameOver) {
+            return;
+         }
+         this.reveal(cell[0], cell[1], row, column);
+      }
+   }
+
+   /** Reveals (row, column); the tiles ripple out from (fromRow, fromColumn), the tile that was clicked. */
+   private void reveal(int row, int column, int fromRow, int fromColumn) {
       if (this.grid == null) {
          this.grid = new MineFieldGenerator(this.rows, this.columns, this.level.mines, row, column, new Random()).getGrid();
          this.startMillis = System.currentTimeMillis();
          this.clock.start();
       }
 
+      if (this.revealed[row][column]) {
+         return;
+      }
+
       if (MineFieldGenerator.isMine(this.grid, row, column)) {
          for (int r = 0; r < this.rows; r++) {
             for (int c = 0; c < this.columns; c++) {
+               int delay = BURST_STEP_MS * distance(r, c, row, column);
                if (MineFieldGenerator.isMine(this.grid, r, c)) {
-                  this.tiles[r][c].showMine();
+                  this.tiles[r][c].showMine(r == row && c == column, delay);
+               } else if (this.tiles[r][c].isFlagged()) {
+                  this.tiles[r][c].showWrongFlag(delay);
                }
             }
          }
@@ -141,7 +181,7 @@ public final class GameFrame extends JFrame {
 
       List<int[]> cells = MineFieldGenerator.reveal(this.grid, this.revealed, this.flagged, row, column);
       for (int[] cell : cells) {
-         this.tiles[cell[0]][cell[1]].showValue(this.grid[cell[0]][cell[1]]);
+         this.tiles[cell[0]][cell[1]].showValue(this.grid[cell[0]][cell[1]], RIPPLE_MS * distance(cell[0], cell[1], fromRow, fromColumn));
          this.soundPlayer.queueNote(this.revealNote = this.revealNote + this.revealNoteDirection * 6);
          if (this.revealNote > 100) {
             this.revealNoteDirection = -1;
@@ -155,7 +195,7 @@ public final class GameFrame extends JFrame {
          for (int r = 0; r < this.rows; r++) {
             for (int c = 0; c < this.columns; c++) {
                if (MineFieldGenerator.isMine(this.grid, r, c)) {
-                  this.tiles[r][c].showFlag();
+                  this.tiles[r][c].showFlag(BURST_STEP_MS * distance(r, c, row, column));
                }
             }
          }
@@ -168,6 +208,36 @@ public final class GameFrame extends JFrame {
          this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
          this.status.setText("You win in " + BestTimes.format(time) + "! "
             + (!record ? "Best: " + BestTimes.format(before) : before == 0 ? "First " + this.level.label + " win." : "New best!"));
+      }
+   }
+
+   /** Steps between two tiles, counting a diagonal step as one, so equal distances form rings around a tile. */
+   private static int distance(int row, int column, int otherRow, int otherColumn) {
+      return Math.max(Math.abs(row - otherRow), Math.abs(column - otherColumn));
+   }
+
+   /** Keeps repainting that tile every frame until its animation is done. */
+   void animating(MineTile tile) {
+      if (!this.animating.contains(tile)) {
+         this.animating.add(tile);
+      }
+      tile.repaint();
+      if (!this.animation.isRunning()) {
+         this.animation.start();
+      }
+   }
+
+   private void animate() {
+      long now = System.currentTimeMillis();
+      for (int i = this.animating.size() - 1; i >= 0; i--) {
+         MineTile tile = this.animating.get(i);
+         tile.repaint();
+         if (!tile.isAnimating(now)) {
+            this.animating.remove(i);
+         }
+      }
+      if (this.animating.isEmpty()) {
+         this.animation.stop();
       }
    }
 
@@ -223,6 +293,7 @@ public final class GameFrame extends JFrame {
    @Override
    public void dispose() {
       this.clock.stop();
+      this.animation.stop();
       super.dispose();
    }
 

@@ -3450,3 +3450,9 @@ button.shim-toast-go {
   font: 600 11px/16px system-ui, sans-serif;
   opacity: 0.9;
 }
+
+/* A button that paints itself (no skin border, no filled content area: Minesweeper's tiles) is square, as in
+   Swing, so its drawing reaches the corners and neighboring tiles meet. */
+.button.no-border:not(.opaque) {
+  border-radius: 0;
+}

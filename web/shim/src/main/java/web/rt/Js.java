@@ -90,9 +90,17 @@ public final class Js {
     @JSBody(params = "el", script = "el.focus({preventScroll: true});")
     public static native void focus(JSObject el);
 
-    /** Focuses a component drawn as a button, field or list; for any other, drops keyboard focus from the app's widgets. */
-    @JSBody(params = "el", script = "if (el.matches('button, input, select, textarea')) {"
-            + " if (document.activeElement !== el && el.isConnected) el.focus({preventScroll: true}); return; }"
+    /**
+     * Focuses a component drawn as a button, field or list; for any other, drops keyboard focus from the app's widgets.
+     * The focus ring shows only when the last input was a key: a button the app focuses after a click (Swing focuses
+     * a clicked button) gets no ring, a tile the arrow keys move to does.
+     */
+    @JSBody(params = "el", script = "if (!window.__shimKeyed) { window.__shimKeyed = { on: false };"
+            + " addEventListener('keydown', function () { window.__shimKeyed.on = true; }, true);"
+            + " addEventListener('pointerdown', function () { window.__shimKeyed.on = false; }, true); }"
+            + " if (el.matches('button, input, select, textarea')) {"
+            + " if (document.activeElement !== el && el.isConnected)"
+            + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
             + " var _a = document.activeElement;"
             + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a)) _a.blur();")
     public static native void focusComponent(JSObject el);

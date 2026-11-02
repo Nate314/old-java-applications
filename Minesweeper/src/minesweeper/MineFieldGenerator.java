@@ -97,6 +97,42 @@ public final class MineFieldGenerator {
       return newlyRevealed;
    }
 
+   /**
+    * Opening around a revealed number ("chording"): once as many neighbors are flagged as the number says, the other
+    * hidden neighbors can all be revealed at once. Returns those neighbors, or an empty list while the flags do not add
+    * up (or the cell is not a revealed number). A wrong flag means one of them is a mine, as in the classic game.
+    */
+   public static List<int[]> chordTargets(String[][] grid, boolean[][] revealed, boolean[][] flagged, int row, int column) {
+      List<int[]> targets = new ArrayList<>();
+      String value = grid[row][column];
+      if (!revealed[row][column] || " ".equals(value) || isMine(grid, row, column)) {
+         return targets;
+      }
+      int flags = 0;
+      for (int[] n : neighbors(grid.length, grid[0].length, row, column)) {
+         if (flagged[n[0]][n[1]]) {
+            flags++;
+         } else if (!revealed[n[0]][n[1]]) {
+            targets.add(n);
+         }
+      }
+      if (flags != Integer.parseInt(value)) {
+         targets.clear();
+      }
+      return targets;
+   }
+
+   /** The hidden, unflagged neighbors of a cell: what a number would open, shown when its flags do not add up. */
+   public static List<int[]> hiddenNeighbors(boolean[][] revealed, boolean[][] flagged, int row, int column) {
+      List<int[]> result = new ArrayList<>();
+      for (int[] n : neighbors(revealed.length, revealed[0].length, row, column)) {
+         if (!revealed[n[0]][n[1]] && !flagged[n[0]][n[1]]) {
+            result.add(n);
+         }
+      }
+      return result;
+   }
+
    /** True when every non-mine cell is revealed. */
    public static boolean isWon(String[][] grid, boolean[][] revealed) {
       for (int row = 0; row < grid.length; row++) {
