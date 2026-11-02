@@ -1432,8 +1432,37 @@
       var n = text.trim().split(',').map(Number);
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
       return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
+    } },
+    // The timer counts down against the wall clock, so a running one is still running (or has rung) on return.
+    Clock: { file: '.clock.txt', show: function (text) {
+      var v = {};
+      text.split('\n').forEach(function (row) {
+        var at = row.indexOf('=');
+        if (at > 0) v[row.slice(0, at)] = row.slice(at + 1);
+      });
+      var parts = [];
+      var end = +v.timerEnd, left = Math.ceil((end - Date.now()) / 1000);
+      if (end > 0 && left > 0) parts.push('timer running, ' + Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + left % 60 + ' left');
+      else if (end > 0 || +v.timerDone > 0) parts.push('your timer has rung');
+      else if (+v.timer > 0) parts.push(Math.round(+v.timer / 60000) + '-minute timer set');
+      var laps = (v.laps || '').split(',').filter(Boolean).length;
+      if (+v.watchStart > 0) parts.push('stopwatch running');
+      if (laps) parts.push(laps + (laps === 1 ? ' lap' : ' laps') + ' on the stopwatch');
+      return parts.length ? 'Your clock: ' + parts.join(', ') : '';
     } }
   };
+
+  // <body data-tab-title>: the browser tab shows the app's window title whenever it says more than the app's name
+  // (Clock's "4:59 left - Clock"), so a running timer can be watched from another tab.
+  function followTitle(desktop) {
+    var base = document.title;
+    new MutationObserver(function () {
+      var bar = desktop.querySelector('.titlebar .title');
+      var text = bar ? bar.textContent : '';
+      var next = text && text !== base ? text : base;
+      if (document.title !== next) document.title = next;
+    }).observe(desktop, { subtree: true, childList: true, characterData: true });
+  }
 
   function savedRecord(id) {
     var saves;
@@ -1928,6 +1957,7 @@
     desktop.id = 'desktop';
     body.insertBefore(desktop, body.firstChild);
     if (!document.documentElement.hasAttribute('data-shot')) centerWindows(desktop);
+    if (body.hasAttribute('data-tab-title') && !embedded) followTitle(desktop);
     if (embedded && window.parent !== window) padInPlayer();
     if (body.hasAttribute('data-console')) {
       outPanel = document.createElement('pre');
