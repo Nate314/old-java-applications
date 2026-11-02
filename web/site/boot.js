@@ -3078,6 +3078,20 @@
     });
     return { won: won, stars: stars };
   }
+  // BibleDownloader's reading plan (audiobibledownloader.Plan): its name, days and chapters, the day it is on today
+  // (planstart is its day 1, in local time) and the chapters read for it.
+  var BIBLE_PLANS = { GOSPELS: ['The Gospels in 30 days', 30, 89], PROVERBS: ['Proverbs in a month', 31, 31],
+    PSALMS: ['Psalms in 50 days', 50, 150], NEW: ['The New Testament in 90 days', 90, 260], YEAR: ['The Bible in a year', 365, 1189] };
+  function biblePlan(text, count) {
+    var id = /^plan=(\w+)$/m.exec(text), start = /^planstart=(\d+)-(\d+)-(\d+)$/m.exec(text);
+    var plan = id && BIBLE_PLANS[id[1]];
+    if (!plan || !start) return '';
+    var now = new Date();
+    var day = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(+start[1], start[2] - 1, +start[3])) / 864e5);
+    var read = count(/^plandone=(.*)$/m.exec(text));
+    return '; reading plan: ' + plan[0] + (day >= 0 && day < plan[1] ? ', day ' + (day + 1) + ' of ' + plan[1] : '')
+      + ', ' + read + ' of ' + plan[2].toLocaleString('en-US') + ' chapters';
+  }
   var RECORDS = {
     // Today's course (.flappybird-today.txt) counts only on the day it was flown.
     FlappyBird: { file: '.flappybird-highscore.txt', show: function (text, saved) {
@@ -3168,7 +3182,7 @@
       if (!you && !it) return bred ? bred.charAt(0).toUpperCase() + bred.slice(1) : '';
       return (you ? 'Your best: ' + you : 'No run of your own yet') + (it ? "; the bot's best: " + it : '') + (bred ? '; ' + bred : '');
     } },
-    // The reader: the place it is open at, chapters read to the end and highlighted verses.
+    // The reader: the place it is open at, chapters read to the end and highlighted verses, and its reading plan.
     BibleDownloader: { file: '.bibledownloader.txt', show: function (text) {
       var place = /^place=(.+)$/m.exec(text);
       if (!place) return '';
@@ -3177,7 +3191,7 @@
       var count = function (m) { return m ? m[1].split(',').filter(function (r) { return r.trim(); }).length : 0; };
       var n = count(read), h = count(marks);
       return 'Your Bible: open at ' + place[1].trim() + ', ' + n + ' of 1,189 chapters read'
-        + (h ? ', ' + h + (h === 1 ? ' highlight' : ' highlights') : '');
+        + (h ? ', ' + h + (h === 1 ? ' highlight' : ' highlights') : '') + biblePlan(text, count);
     } },
     // The practice desk: the day it is on, and the net worth at the last closing bell against the $10,000 start.
     StockChecker: { file: '.stockchecker-desk.txt', show: function (text) {

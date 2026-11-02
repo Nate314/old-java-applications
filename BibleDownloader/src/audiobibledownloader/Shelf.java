@@ -17,7 +17,8 @@ import java.util.TreeSet;
 /**
  * What the reader remembers between runs, in {@code ~/.bibledownloader.txt}: the translation, the place (book,
  * chapter and the first verse on the open page), the text size, every chapter read to its end, and the highlighted
- * verses. One {@code key=value} line each, so the file is easy to read and the web title screen can show it.
+ * verses, and the reading plan being followed: which plan, the day it started and the chapters read for it. One
+ * {@code key=value} line each, so the file is easy to read and the web title screen can show it.
  */
 public final class Shelf {
    public static final int[] SIZES = {15, 17, 20};
@@ -32,6 +33,12 @@ public final class Shelf {
    private final BitSet read = new BitSet(Books.TOTAL);
    /** "LUK.1.3": a highlighted verse, in any translation. */
    private final TreeSet<String> marks = new TreeSet<>();
+   /** The reading plan being followed, or null. */
+   public Plan plan;
+   /** The day the plan started (days since 1970-01-01, local time): its day 1. */
+   public int planStart;
+   /** Chapters read for the plan since it started, by ordinal among all 1,189. */
+   private final BitSet planRead = new BitSet(Books.TOTAL);
 
    public Shelf(File file) {
       this.file = file;
@@ -95,6 +102,20 @@ public final class Shelf {
                }
             }
             break;
+         case "plan":
+            this.plan = Plan.find(value);
+            break;
+         case "planstart":
+            this.planStart = Plan.parseIso(value);
+            break;
+         case "plandone":
+            for (String ref : value.split(",")) {
+               int ordinal = parseChapter(ref);
+               if (ordinal >= 0) {
+                  this.planRead.set(ordinal);
+               }
+            }
+            break;
          default:
       }
    }
@@ -114,17 +135,24 @@ public final class Shelf {
       }
    }
 
-   public void save() {
-      List<String> readRefs = new ArrayList<>();
-      for (int i = this.read.nextSetBit(0); i >= 0; i = this.read.nextSetBit(i + 1)) {
-         readRefs.add(Books.IDS[Books.bookOf(i)] + "." + Books.chapterOf(i));
+   private static String refs(BitSet chapters) {
+      List<String> refs = new ArrayList<>();
+      for (int i = chapters.nextSetBit(0); i >= 0; i = chapters.nextSetBit(i + 1)) {
+         refs.add(Books.IDS[Books.bookOf(i)] + "." + Books.chapterOf(i));
       }
+      return String.join(",", refs);
+   }
+
+   public void save() {
       String text = "translation=" + this.translation + "\n"
          + "place=" + Books.NAMES[this.book] + " " + this.chapter + ":" + this.verse + "\n"
          + "at=" + Books.IDS[this.book] + "." + this.chapter + "." + this.verse + "\n"
          + "size=" + this.size + "\n"
-         + "read=" + String.join(",", readRefs) + "\n"
-         + "marks=" + String.join(",", this.marks) + "\n";
+         + "read=" + refs(this.read) + "\n"
+         + "marks=" + String.join(",", this.marks) + "\n"
+         + (this.plan == null ? "" : "plan=" + this.plan.id + "\n"
+            + "planstart=" + Plan.iso(this.planStart) + "\n"
+            + "plandone=" + refs(this.planRead) + "\n");
       try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(this.file), StandardCharsets.UTF_8))) {
          writer.write(text);
       } catch (IOException e) {
@@ -150,6 +178,45 @@ public final class Shelf {
          count += this.isRead(book, c) ? 1 : 0;
       }
       return count;
+   }
+
+   /** Starts a plan on a day, from its first chapter; any other plan and what was read for it are dropped. */
+   public void startPlan(Plan plan, int day) {
+      this.plan = plan;
+      this.planStart = day;
+      this.planRead.clear();
+   }
+
+   public void stopPlan() {
+      this.plan = null;
+      this.planRead.clear();
+   }
+
+   /** Counts a chapter read to its end for the plan; returns whether it is in the plan and was not counted yet. */
+   public boolean notePlanRead(int book, int chapter) {
+      if (this.plan == null || this.plan.indexOf(book, chapter) < 0 || this.planRead.get(Books.ordinal(book, chapter))) {
+         return false;
+      }
+      this.planRead.set(Books.ordinal(book, chapter));
+      return true;
+   }
+
+   /** The chapters read for the plan, indexed from the plan's first chapter (as {@link Plan} counts them). */
+   public BitSet planDone() {
+      BitSet done = new BitSet();
+      if (this.plan != null) {
+         for (int i = 0; i < this.plan.chapters; i++) {
+            if (this.planRead.get(this.plan.first + i)) {
+               done.set(i);
+            }
+         }
+      }
+      return done;
+   }
+
+   /** The plan's day for a date, 0 on the day it started (negative before, past the last day after). */
+   public int planDay(int today) {
+      return today - this.planStart;
    }
 
    public static String verseRef(int book, int chapter, int verse) {

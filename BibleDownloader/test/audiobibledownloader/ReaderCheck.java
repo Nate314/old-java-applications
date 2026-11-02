@@ -89,6 +89,65 @@ public class ReaderCheck {
          "damaged lines skipped");
       file.delete();
 
+      // Reading plans: every chapter falls on exactly one day, in order, and the days cover the plan.
+      check(Plan.find("gospels").chapters == 89 && Plan.find("NEW").chapters == 260 && Plan.find("YEAR").chapters == 1189
+         && Plan.find("PSALMS").chapters == 150 && Plan.find("PROVERBS").chapters == 31 && Plan.find("nope") == null, "plan sizes");
+      for (Plan plan : Plan.ALL) {
+         check(plan.dayStart(0) == 0 && plan.dayStart(plan.days) == plan.chapters, plan.id + " covers its chapters");
+         for (int d = 0; d < plan.days; d++) {
+            int size = plan.dayStart(d + 1) - plan.dayStart(d);
+            check(size == plan.chapters / plan.days || size == plan.chapters / plan.days + 1, plan.id + " even day " + d);
+         }
+         for (int i = 0; i < plan.chapters; i++) {
+            int d = plan.dayOf(i);
+            check(plan.dayStart(d) <= i && i < plan.dayStart(d + 1), plan.id + " chapter " + i + " on day " + d);
+            check(plan.indexOf(plan.bookAt(i), plan.chapterAt(i)) == i, plan.id + " index round-trip " + i);
+         }
+         check(plan.index() >= 0 && Plan.ALL[plan.index()] == plan, plan.id + " index");
+      }
+      Plan gospels = Plan.find("GOSPELS");
+      check(gospels.reading(0).equals("Matthew 1-2") && gospels.reading(29).equals("John 19-21"), "gospel days: " + gospels.reading(0) + " / " + gospels.reading(29));
+      check(gospels.reading(9).equals("Matthew 27-28, Mark 1"), "a day across two books: " + gospels.reading(9));
+      check(Plan.find("PROVERBS").reading(8).equals("Proverbs 9") && Plan.find("PROVERBS").pace().equals("1 chapter a day"), "proverbs");
+      check(Plan.find("PSALMS").pace().equals("3 chapters a day") && gospels.pace().equals("2 or 3 chapters a day"), "pace");
+      check(gospels.indexOf(Books.find("ACT"), 1) < 0 && gospels.indexOf(Books.find("MAT"), 1) == 0, "chapters outside the plan");
+      // Days on the calendar agree with java.time, and dates round-trip.
+      for (java.time.LocalDate day = java.time.LocalDate.of(1999, 12, 25); day.getYear() < 2031; day = day.plusDays(7)) {
+         int epoch = Plan.epochDay(day.getYear(), day.getMonthValue(), day.getDayOfMonth());
+         check(epoch == day.toEpochDay(), "epoch day " + day);
+         check(Plan.iso(epoch).equals(day.toString()) && Plan.parseIso(day.toString()) == epoch, "iso " + day);
+      }
+      check(Plan.shortDate(Plan.parseIso("2026-11-02")).equals("Nov 2"), "short date");
+      check(Math.abs(Plan.today() - java.time.LocalDate.now().toEpochDay()) <= 1, "today");
+      // Progress: behind, ahead, done days and the first chapter left.
+      java.util.BitSet done = new java.util.BitSet();
+      check(gospels.behind(done, 0) == 0 && gospels.behind(done, 3) == 3 && gospels.firstUnread(done) == 0, "nothing read");
+      done.set(0, gospels.dayStart(3));
+      check(gospels.behind(done, 3) == 0 && gospels.daysDone(done) == 3 && !gospels.dayDone(done, 3), "three days read");
+      check(gospels.ahead(done, 1) == 1 && gospels.ahead(done, 2) == 0, "ahead: " + gospels.ahead(done, 1));
+      check(gospels.readOn(done, 3) == 0 && gospels.firstUnread(done) == gospels.dayStart(3), "first unread");
+      done.set(0, gospels.chapters);
+      check(gospels.firstUnread(done) < 0 && gospels.daysDone(done) == 30 && gospels.behind(done, 40) == 0, "all read");
+      // The shelf keeps the plan, its start and what was read for it; chapters outside it are not counted.
+      File planFile = File.createTempFile("bibleplan", ".txt");
+      Shelf planned = Shelf.load(planFile);
+      check(planned.plan == null && !planned.notePlanRead(Books.find("MAT"), 1), "no plan at first");
+      planned.startPlan(gospels, Plan.parseIso("2026-11-02"));
+      check(planned.notePlanRead(Books.find("MAT"), 1) && !planned.notePlanRead(Books.find("MAT"), 1), "counted once");
+      check(!planned.notePlanRead(Books.find("ACT"), 1) && planned.notePlanRead(Books.find("JHN"), 21), "outside the plan");
+      check(planned.planDay(Plan.parseIso("2026-11-04")) == 2, "plan day");
+      planned.save();
+      Shelf reloaded = Shelf.load(planFile);
+      check(reloaded.plan == gospels && Plan.iso(reloaded.planStart).equals("2026-11-02"), "plan kept");
+      check(reloaded.planDone().cardinality() == 2 && reloaded.planDone().get(0) && reloaded.planDone().get(88), "plan chapters kept");
+      check(new String(java.nio.file.Files.readAllBytes(planFile.toPath()), "UTF-8").contains("plan=GOSPELS\nplanstart=2026-11-02\nplandone=MAT.1,JHN.21\n"), "plan lines");
+      reloaded.startPlan(Plan.find("PSALMS"), Plan.parseIso("2026-11-05"));
+      check(reloaded.planDone().isEmpty(), "a new plan starts empty");
+      reloaded.stopPlan();
+      reloaded.save();
+      check(Shelf.load(planFile).plan == null, "stopped plan");
+      planFile.delete();
+
       // Saved pages escape the text and name files as the original app did.
       check(DownloadManager.stem(Books.find("1JN")).equals("1John"), "file stem");
       String html = DownloadManager.chapterHtml(new Chapter(0, 1, "web", new int[]{1}, new String[]{"a < b & c"}), true);

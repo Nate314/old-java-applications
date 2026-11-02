@@ -15,6 +15,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -23,7 +24,8 @@ import javax.swing.Timer;
 /**
  * The reader: an open book on a leather desk. Chapters are set as pages (two side by side when the window is wide
  * enough), and turning past the last page opens the next chapter. A contents view shows which chapters have been
- * read, and a save view writes chapters to web pages as the original app did.
+ * read, a plans view follows a reading plan day by day on a calendar, and a save view writes chapters to web pages
+ * as the original app did.
  */
 public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private static final long serialVersionUID = 1L;
@@ -48,7 +50,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    /** Below this width the book shows one page at a time. */
    private static final int TWO_PAGE_WIDTH = 700;
 
-   private enum View { READ, BOOKS, CHAPTERS, SAVE }
+   private enum View { READ, BOOKS, CHAPTERS, SAVE, PLAN }
 
    /** A clickable area found while painting. */
    private static final class Hit {
@@ -86,6 +88,11 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private int hoverVerse;
    private String flash;
    private final Timer flashTimer;
+
+   /** The plan shown in the plans view. */
+   private int pickedPlan;
+   /** A button waiting for a second click ("stop", or "start:" and a plan id), or null. */
+   private String confirm;
 
    private int saveFrom = 1;
    private int saveTo = 1;
@@ -132,6 +139,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          }
       });
       this.open(shelf.book, shelf.chapter, false);
+      this.greet();
    }
 
    // ---- Reading and turning pages ----
@@ -264,9 +272,16 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          return;
       }
       this.shelf.verse = this.pages.get(this.spread).firstVerse;
-      if (this.spread + this.perView() >= this.pages.size() && !this.shelf.isRead(this.shelf.book, this.shelf.chapter)) {
-         this.shelf.markRead(this.shelf.book, this.shelf.chapter);
-         this.say(this.chapter.title() + " read: " + this.shelf.readCount() + " of 1,189 chapters");
+      if (this.spread + this.perView() >= this.pages.size()) {
+         boolean first = !this.shelf.isRead(this.shelf.book, this.shelf.chapter);
+         if (first) {
+            this.shelf.markRead(this.shelf.book, this.shelf.chapter);
+         }
+         if (this.shelf.notePlanRead(this.shelf.book, this.shelf.chapter)) {
+            this.say(this.planReadMessage(), 4000);
+         } else if (first) {
+            this.say(this.chapter.title() + " read: " + this.shelf.readCount() + " of 1,189 chapters");
+         }
       }
       this.shelf.save();
    }
@@ -312,7 +327,12 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    }
 
    private void say(String message) {
+      this.say(message, 2600);
+   }
+
+   private void say(String message, int millis) {
       this.flash = message;
+      this.flashTimer.setInitialDelay(millis);
       this.flashTimer.restart();
       this.repaint();
    }
@@ -401,6 +421,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          case 's':
             this.showSave(this.shelf.book);
             break;
+         case 'r':
+            this.showPlan();
+            break;
          case '+':
          case '=':
             this.resize(1);
@@ -415,7 +438,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private void back() {
       if (this.view == View.CHAPTERS || this.view == View.SAVE && !this.saving) {
          this.view = this.view == View.SAVE ? View.READ : View.BOOKS;
-      } else if (this.view == View.BOOKS) {
+      } else if (this.view == View.BOOKS || this.view == View.PLAN) {
          this.view = View.READ;
       }
       this.repaint();
@@ -472,6 +495,367 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       });
    }
 
+   // ---- Reading plans ----
+
+   private void showPlan() {
+      if (this.view == View.PLAN) {
+         this.view = View.READ;
+      } else {
+         this.view = View.PLAN;
+         if (this.shelf.plan != null) {
+            this.pickedPlan = this.shelf.plan.index();
+         }
+         this.confirm = null;
+      }
+      this.repaint();
+   }
+
+   private void pickPlan(int index) {
+      this.pickedPlan = (index + Plan.ALL.length) % Plan.ALL.length;
+      this.confirm = null;
+      this.repaint();
+   }
+
+   /** On opening, a plan with reading left for today says what it is. */
+   private void greet() {
+      Plan plan = this.shelf.plan;
+      if (plan == null) {
+         return;
+      }
+      BitSet done = this.shelf.planDone();
+      int day = this.shelf.planDay(Plan.today());
+      int first = plan.firstUnread(done);
+      if (first < 0 || day < 0 || day < plan.days && plan.dayDone(done, day) && plan.behind(done, day) == 0) {
+         return;
+      }
+      String what = plan.behind(done, day) > 0 ? "catch up at " + chapterName(plan, first) : "today, " + plan.reading(day);
+      this.say((day < plan.days ? "Day " + (day + 1) + " of " + plan.days + ": " : plan.name + ": ") + what + " (R: your plan)", 7000);
+   }
+
+   /** Today's reading as a toolbar note, "plan: 1 of 3 read today", or null without a plan day today. */
+   private String todayLine() {
+      Plan plan = this.shelf.plan;
+      int day = plan == null ? -1 : this.shelf.planDay(Plan.today());
+      if (day < 0 || day >= plan.days) {
+         return null;
+      }
+      int size = plan.dayStart(day + 1) - plan.dayStart(day);
+      int read = plan.readOn(this.shelf.planDone(), day);
+      return read == size ? "today's plan reading done" : "plan: " + read + " of " + size + " read today";
+   }
+
+   /** What reading a chapter to its end did for the plan. */
+   private String planReadMessage() {
+      Plan plan = this.shelf.plan;
+      BitSet done = this.shelf.planDone();
+      if (plan.firstUnread(done) < 0) {
+         return plan.name + ": finished, all " + commas(plan.chapters) + " chapters read";
+      }
+      int day = plan.dayOf(plan.indexOf(this.shelf.book, this.shelf.chapter));
+      int size = plan.dayStart(day + 1) - plan.dayStart(day);
+      if (plan.dayDone(done, day)) {
+         return (day == this.shelf.planDay(Plan.today()) ? "Today's reading done: day " : "Day ") + (day + 1) + " of " + plan.days + (day == this.shelf.planDay(Plan.today()) ? "" : " done");
+      }
+      return this.chapter.title() + " read: " + plan.readOn(done, day) + " of " + size + " for day " + (day + 1);
+   }
+
+   private static String chapterName(Plan plan, int index) {
+      return Books.NAMES[plan.bookAt(index)] + " " + plan.chapterAt(index);
+   }
+
+   /** Where a plan stands today, in one line. */
+   private static String planStatus(Plan plan, BitSet done, int day) {
+      int first = plan.firstUnread(done);
+      if (first < 0) {
+         return "Finished: all " + commas(plan.chapters) + " chapters read";
+      }
+      int behind = plan.behind(done, day);
+      if (behind > 0) {
+         return behind + (behind == 1 ? " day" : " days") + " behind: catch up at " + chapterName(plan, first);
+      }
+      int ahead = plan.ahead(done, day);
+      String lead = ahead > 0 ? ", " + ahead + (ahead == 1 ? " day" : " days") + " ahead" : "";
+      return (plan.dayDone(done, day) ? "Today's reading done" : "On track") + lead;
+   }
+
+   private void startPlan(Plan plan) {
+      this.confirm = null;
+      this.shelf.startPlan(plan, Plan.today());
+      this.shelf.save();
+      this.open(plan.bookAt(0), plan.chapterAt(0), false);
+      this.say("Day 1 of " + plan.days + ": " + plan.reading(0), 5000);
+   }
+
+   private void paintPlans(Graphics2D g, Rectangle[] sheets, Rectangle[] text) {
+      g.setFont(HEAD);
+      g.setColor(MUTED);
+      g.drawString("READING PLANS", text[0].x, sheets[0].y + 24);
+      Plan plan = Plan.ALL[this.pickedPlan];
+      if (sheets.length == 2) {
+         this.planList(g, text[0]);
+         this.planDetail(g, plan, text[1]);
+         return;
+      }
+      // One page: arrows in the running head step through the plans.
+      Rectangle area = text[0];
+      String of = (this.pickedPlan + 1) + " of " + Plan.ALL.length;
+      Rectangle next = new Rectangle(area.x + area.width - 30, sheets[0].y + 8, 30, 24);
+      Rectangle prev = new Rectangle(next.x - 36, next.y, 30, 24);
+      g.drawString(of, prev.x - 8 - g.getFontMetrics().stringWidth(of), sheets[0].y + 24);
+      this.pill(g, prev, "‹", PAPER_EDGE, INK);
+      this.pill(g, next, "›", PAPER_EDGE, INK);
+      this.hits.add(new Hit(prev, () -> this.pickPlan(this.pickedPlan - 1), 0));
+      this.hits.add(new Hit(next, () -> this.pickPlan(this.pickedPlan + 1), 0));
+      this.planDetail(g, plan, area);
+   }
+
+   /** The plans, one row each; the one being followed shows its progress. */
+   private void planList(Graphics2D g, Rectangle area) {
+      g.setFont(new Font("Serif", Font.BOLD, 26));
+      g.setColor(INK);
+      g.drawString("Reading plans", area.x, area.y + 26);
+      g.setFont(new Font("Serif", Font.ITALIC, 14));
+      g.setColor(MUTED);
+      int y = this.wrap(g, "A short reading every day. A chapter counts once its last page is open.", area.x, area.y + 50, area.width, 18) + 4;
+      int bottom = area.y + area.height - 22;
+      int rowH = Math.max(40, Math.min(62, (bottom - y) / Plan.ALL.length));
+      for (int i = 0; i < Plan.ALL.length; i++) {
+         Plan plan = Plan.ALL[i];
+         boolean active = this.shelf.plan == plan;
+         Rectangle r = new Rectangle(area.x - 8, y + i * rowH, area.width + 16, rowH - 6);
+         boolean over = r.contains(this.mouseX, this.mouseY);
+         if (i == this.pickedPlan || over) {
+            g.setColor(i == this.pickedPlan ? new Color(0xf3e6c4) : HOVER);
+            g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+         }
+         if (i == this.pickedPlan) {
+            g.setColor(RUBRIC);
+            g.fillRect(r.x, r.y + 6, 3, r.height - 12);
+         }
+         g.setFont(new Font("Serif", Font.BOLD, 16));
+         g.setColor(active ? RUBRIC : INK);
+         g.drawString(fit(g.getFontMetrics(), plan.name, area.width), area.x, r.y + 20);
+         g.setFont(new Font("Serif", Font.ITALIC, 13));
+         g.setColor(MUTED);
+         String sub;
+         if (active) {
+            BitSet done = this.shelf.planDone();
+            int day = this.shelf.planDay(Plan.today());
+            sub = (day < plan.days ? "Your plan: day " + (day + 1) + " of " + plan.days : "Your plan") + ", " + commas(done.cardinality()) + " of " + commas(plan.chapters) + " chapters read";
+            int barW = area.width;
+            g.setColor(PAPER_EDGE);
+            g.fillRect(area.x, r.y + r.height - 7, barW, 3);
+            g.setColor(done.cardinality() == plan.chapters ? GOLD : RUBRIC);
+            g.fillRect(area.x, r.y + r.height - 7, Math.max(done.isEmpty() ? 0 : 3, barW * done.cardinality() / plan.chapters), 3);
+            g.setFont(new Font("Serif", Font.ITALIC, 13));
+            g.setColor(MUTED);
+         } else {
+            sub = plan.days + " days, " + plan.pace();
+         }
+         g.drawString(fit(g.getFontMetrics(), sub, area.width), area.x, r.y + 37);
+         int index = i;
+         this.hits.add(new Hit(r, () -> this.pickPlan(index), 0));
+      }
+      g.setFont(new Font("Serif", Font.ITALIC, 13));
+      g.setColor(MUTED);
+      g.drawString("R or Esc goes back to reading.", area.x, area.y + area.height - 4);
+   }
+
+   /** One plan: where it stands and today's chapters (or what it holds, to start it), above its calendar. */
+   private void planDetail(Graphics2D g, Plan plan, Rectangle area) {
+      boolean active = this.shelf.plan == plan;
+      BitSet done = active ? this.shelf.planDone() : new BitSet();
+      int day = active ? Math.max(0, this.shelf.planDay(Plan.today())) : -1;
+      g.setFont(new Font("Serif", Font.BOLD, 24));
+      g.setColor(INK);
+      g.drawString(fit(g.getFontMetrics(), plan.name, area.width), area.x, area.y + 24);
+      g.setFont(new Font("Serif", Font.ITALIC, 14));
+      g.setColor(MUTED);
+      String sub = active
+         ? (day < plan.days ? "Day " + (day + 1) + " of " + plan.days : plan.days + " days") + ", started " + Plan.shortDate(this.shelf.planStart)
+         : plan.days + " days, " + plan.pace();
+      g.drawString(fit(g.getFontMetrics(), sub, area.width), area.x, area.y + 46);
+      int y = area.y + 58;
+      g.setFont(UI);
+      if (active) {
+         g.setFont(new Font("Serif", Font.BOLD, 15));
+         g.setColor(RUBRIC);
+         g.drawString(fit(g.getFontMetrics(), planStatus(plan, done, day), area.width), area.x, y + 14);
+         y += 26;
+         if (day < plan.days) {
+            y = this.todayChips(g, plan, done, day, area, y);
+         }
+         int first = plan.firstUnread(done);
+         g.setFont(UI);
+         Rectangle go = null;
+         if (first >= 0) {
+            String label = (plan.behind(done, day) > 0 ? "Catch up: " : plan.dayDone(done, day) ? "Read ahead: " : "Read today's: ")
+               + chapterName(plan, first) + " ›";
+            go = new Rectangle(area.x, y, g.getFontMetrics().stringWidth(label) + 30, 32);
+            this.pill(g, go, label, RUBRIC, Color.WHITE);
+            this.hits.add(new Hit(go, () -> this.open(plan.bookAt(first), plan.chapterAt(first), false), 0));
+         }
+         String stop = first < 0 ? ("restart".equals(this.confirm) ? "Click again to start over" : "Start over")
+            : ("stop".equals(this.confirm) ? "Click again to stop" : "Stop plan");
+         Rectangle stopButton = new Rectangle(go == null ? area.x : go.x + go.width + 10, y, g.getFontMetrics().stringWidth(stop) + 30, 32);
+         if (stopButton.x + stopButton.width > area.x + area.width) {
+            stopButton.x = area.x;
+            stopButton.y = y + 40;
+            y += 40;
+         }
+         this.pill(g, stopButton, stop, PAPER_EDGE, INK);
+         this.hits.add(new Hit(stopButton, () -> {
+            if (first < 0) {
+               if ("restart".equals(this.confirm)) {
+                  this.startPlan(plan);
+               } else {
+                  this.confirm = "restart";
+               }
+            } else if ("stop".equals(this.confirm)) {
+               this.shelf.stopPlan();
+               this.shelf.save();
+               this.confirm = null;
+               this.say("Plan stopped: pick another, or keep reading as you like");
+            } else {
+               this.confirm = "stop";
+            }
+            this.repaint();
+         }, 0));
+         y += 46;
+      } else {
+         g.setFont(new Font("Serif", Font.PLAIN, 15));
+         g.setColor(INK);
+         y = this.wrap(g, plan.blurb, area.x, y + 14, area.width, 19) + 2;
+         g.setFont(new Font("Serif", Font.ITALIC, 14));
+         g.setColor(MUTED);
+         for (int d = 0; d < 3; d++) {
+            g.drawString(fit(g.getFontMetrics(), "Day " + (d + 1) + ": " + plan.reading(d), area.width), area.x, y + 4);
+            y += 19;
+         }
+         y += 6;
+         Plan current = this.shelf.plan;
+         String key = "start:" + plan.id;
+         g.setFont(UI);
+         String label = current == null ? "Start today ›" : key.equals(this.confirm) ? "Click again to switch" : "Switch to this plan";
+         Rectangle start = new Rectangle(area.x, y, g.getFontMetrics().stringWidth(label) + 30, 32);
+         this.pill(g, start, label, RUBRIC, Color.WHITE);
+         this.hits.add(new Hit(start, () -> {
+            if (current == null || key.equals(this.confirm)) {
+               this.startPlan(plan);
+            } else {
+               this.confirm = key;
+               this.repaint();
+            }
+         }, 0));
+         if (current != null) {
+            g.setFont(new Font("Serif", Font.ITALIC, 13));
+            g.setColor(MUTED);
+            String note = "Ends " + current.name;
+            if (start.x + start.width + 12 + g.getFontMetrics().stringWidth(note) <= area.x + area.width) {
+               g.drawString(note, start.x + start.width + 12, start.y + 21);
+            }
+         }
+         y += 46;
+      }
+      this.paintCalendar(g, plan, done, active ? day : -1, new Rectangle(area.x, y, area.width, area.y + area.height - y - 20));
+   }
+
+   /** Today's chapters as chips, filled once read; a click opens one. Returns the y below them. */
+   private int todayChips(Graphics2D g, Plan plan, BitSet done, int day, Rectangle area, int y) {
+      g.setFont(new Font("Serif", Font.ITALIC, 14));
+      g.setColor(MUTED);
+      g.drawString("Today:", area.x, y + 18);
+      int x = area.x + g.getFontMetrics().stringWidth("Today:") + 10;
+      g.setFont(new Font("SansSerif", Font.BOLD, 12));
+      FontMetrics fm = g.getFontMetrics();
+      for (int i = plan.dayStart(day); i < plan.dayStart(day + 1); i++) {
+         String label = (done.get(i) ? "✓ " : "") + chapterName(plan, i);
+         int w = fm.stringWidth(label) + 20;
+         if (x + w > area.x + area.width && x > area.x + 60) {
+            x = area.x + 60;
+            y += 30;
+         }
+         Rectangle chip = new Rectangle(x, y + 2, w, 24);
+         boolean over = chip.contains(this.mouseX, this.mouseY);
+         g.setColor(done.get(i) ? (over ? RUBRIC.brighter() : RUBRIC) : (over ? HOVER : PAPER));
+         g.fillRoundRect(chip.x, chip.y, chip.width, chip.height, 24, 24);
+         g.setColor(done.get(i) ? RUBRIC : PAPER_EDGE.darker());
+         g.drawRoundRect(chip.x, chip.y, chip.width, chip.height, 24, 24);
+         g.setColor(done.get(i) ? Color.WHITE : INK);
+         g.drawString(label, chip.x + 10, chip.y + 17);
+         int index = i;
+         this.hits.add(new Hit(chip, () -> this.open(plan.bookAt(index), plan.chapterAt(index), false), 0));
+         x += w + 6;
+      }
+      return y + 38;
+   }
+
+   /** Every day of a plan as a square: filled when read, part-filled when begun, today ringed in gold. */
+   private void paintCalendar(Graphics2D g, Plan plan, BitSet done, int today, Rectangle area) {
+      int n = plan.days;
+      int cell = 40;
+      while (cell > 8) {
+         int cols = Math.max(1, area.width / cell);
+         if ((n + cols - 1) / cols * cell <= area.height) {
+            break;
+         }
+         cell--;
+      }
+      int cols = Math.max(1, area.width / cell);
+      int gap = cell >= 14 ? 2 : 1;
+      g.setFont(new Font("SansSerif", Font.BOLD, Math.max(8, cell / 3)));
+      FontMetrics fm = g.getFontMetrics();
+      String note = null;
+      for (int d = 0; d < n; d++) {
+         int x = area.x + (d % cols) * cell;
+         int y = area.y + (d / cols) * cell;
+         Rectangle r = new Rectangle(x + gap, y + gap, cell - 2 * gap, cell - 2 * gap);
+         int size = plan.dayStart(d + 1) - plan.dayStart(d);
+         int read = plan.readOn(done, d);
+         boolean full = read == size;
+         boolean missed = today >= 0 && d < today && !full;
+         boolean over = r.contains(this.mouseX, this.mouseY);
+         int arc = Math.max(2, cell / 6);
+         g.setColor(full ? (over ? RUBRIC.brighter() : RUBRIC) : over ? HOVER : PAPER);
+         g.fillRoundRect(r.x, r.y, r.width, r.height, arc, arc);
+         if (read > 0 && !full) {
+            int h = r.height * read / size;
+            g.setColor(new Color(0xe7b9a9));
+            g.fillRect(r.x + 1, r.y + r.height - h, r.width - 1, h);
+         }
+         g.setColor(full ? RUBRIC : missed ? new Color(0xc98f80) : PAPER_EDGE.darker());
+         g.drawRoundRect(r.x, r.y, r.width, r.height, arc, arc);
+         if (d == today) {
+            g.setColor(GOLD);
+            g.drawRoundRect(r.x - 1, r.y - 1, r.width + 2, r.height + 2, arc + 1, arc + 1);
+            g.drawRoundRect(r.x - 2, r.y - 2, r.width + 4, r.height + 4, arc + 2, arc + 2);
+         }
+         if (cell >= 18) {
+            String label = String.valueOf(d + 1);
+            g.setColor(full ? Color.WHITE : missed ? new Color(0xb0645a) : MUTED);
+            g.drawString(label, r.x + (r.width - fm.stringWidth(label)) / 2, r.y + (r.height + fm.getAscent() - fm.getDescent()) / 2);
+         }
+         if (over) {
+            note = "Day " + (d + 1) + ": " + plan.reading(d) + (today >= 0 ? (full ? ", read" : read > 0 ? ", " + read + " of " + size + " read" : "") : "");
+         }
+         if (today >= 0) {
+            int target = plan.dayStart(d);
+            while (target < plan.dayStart(d + 1) - 1 && done.get(target)) {
+               target++;
+            }
+            int index = target;
+            this.hits.add(new Hit(r, () -> this.open(plan.bookAt(index), plan.chapterAt(index), false), 0));
+         }
+      }
+      g.setFont(new Font("Serif", Font.ITALIC, 13));
+      g.setColor(MUTED);
+      if (note == null) {
+         note = today >= 0 ? "Filled: read. Ringed: today. Click a day to read it." : "Each square is a day's reading.";
+      }
+      int rows = (n + cols - 1) / cols;
+      g.drawString(fit(g.getFontMetrics(), note, area.width), area.x, area.y + rows * cell + 16);
+   }
+
    // ---- Painting ----
 
    private Font body() {
@@ -518,6 +902,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             break;
          case SAVE:
             this.paintSave(g, sheets, text);
+            break;
+         case PLAN:
+            this.paintPlans(g, sheets, text);
             break;
          default:
             this.paintRead(g, sheets, text);
@@ -665,7 +1052,17 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          this.centered(g, area, "The end", "Revelation is the last book", null);
          return;
       }
-      this.centered(g, area, "Next: " + next, "Turn the page to keep reading", "Next chapter \u203a");
+      Plan plan = this.shelf.plan;
+      int index = plan == null ? -1 : plan.indexOf(this.shelf.book, this.shelf.chapter);
+      BitSet done = this.shelf.planDone();
+      if (index >= 0 && done.get(index) && plan.dayStart(plan.dayOf(index) + 1) - 1 == index && plan.dayDone(done, plan.dayOf(index))) {
+         // The last chapter of a plan's day: the day is done, and the next one's reading follows.
+         int day = plan.dayOf(index);
+         String then = day + 1 < plan.days ? "Day " + (day + 2) + ": " + plan.reading(day + 1) : "That was the plan's last day";
+         this.centered(g, area, "Day " + (day + 1) + " of " + plan.days + " done", then, "Next chapter \u203a");
+      } else {
+         this.centered(g, area, "Next: " + next, "Turn the page to keep reading", "Next chapter \u203a");
+      }
       this.hits.add(new Hit(this.lastButton, this::nextChapter, 0));
    }
 
@@ -681,6 +1078,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setFont(new Font("Serif", Font.ITALIC, 15));
       g.setColor(MUTED);
       fm = g.getFontMetrics();
+      line = fit(fm, line, area.width);
       g.drawString(line, area.x + (area.width - fm.stringWidth(line)) / 2, cy + 28);
       if (button != null) {
          g.setFont(UI);
@@ -717,7 +1115,14 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          this.bookList(g, text[0], "Old Testament", ot, 2);
          this.bookList(g, text[1], "New Testament", nt, 2);
       } else {
-         this.bookList(g, text[0], "Books", range(0, Books.IDS.length), 3);
+         // One page: the toolbar has no room for Plan, so the contents lead to the reading plans.
+         Rectangle list = new Rectangle(text[0].x, text[0].y, text[0].width, text[0].height - 40);
+         this.bookList(g, list, "Books", range(0, Books.IDS.length), 3);
+         g.setFont(UI);
+         String label = (this.shelf.plan != null ? "Your reading plan" : "Reading plans") + " \u203a";
+         Rectangle plans = new Rectangle(list.x, list.y + list.height + 8, g.getFontMetrics().stringWidth(label) + 30, 30);
+         this.pill(g, plans, label, RUBRIC, Color.WHITE);
+         this.hits.add(new Hit(plans, this::showPlan, 0));
       }
       g.setFont(HEAD);
       g.setColor(MUTED);
@@ -993,6 +1398,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       int x = 14;
       x = this.barButton(g, x, y, bh, wide ? "\u2039 Prev" : "\u2039", this::previous, reading);
       x = this.barButton(g, x, y, bh, this.view == View.BOOKS ? "Close" : "Books", this::showBooks, true);
+      if (wide) {
+         x = this.barButton(g, x, y, bh, this.view == View.PLAN ? "Close" : "Plan", this::showPlan, true);
+      }
       int right = w - 14;
       right = this.barButtonRight(g, right, y, bh, wide ? "Next \u203a" : "\u203a", this::next, reading);
       if (wide) {
@@ -1042,7 +1450,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       if (this.view == View.READ && this.pages != null && this.chapter != null && this.loadError == null && this.spread >= 0) {
          int last = Math.min(this.pages.size(), this.spread + this.perView());
          String pageText = last - this.spread > 1 ? "pages " + (this.spread + 1) + "-" + last : "page " + (this.spread + 1);
-         return new String[]{pageText + " of " + this.pages.size() + "  \u00b7  click a verse to highlight it", pageText + " of " + this.pages.size(), last + " / " + this.pages.size()};
+         String today = this.todayLine();
+         String hint = today != null ? today : "click a verse to highlight it";
+         return new String[]{pageText + " of " + this.pages.size() + "  \u00b7  " + hint, pageText + " of " + this.pages.size(), last + " / " + this.pages.size()};
       }
       String read = commas(this.shelf.readCount());
       return new String[]{read + " of 1,189 chapters read", read + " of 1,189 read", read + " read"};
