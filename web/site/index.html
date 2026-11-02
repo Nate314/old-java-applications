@@ -18,6 +18,8 @@
   <meta name="twitter:card" content="summary_large_image">
   <!-- /share -->
   <link rel="stylesheet" href="shim.css">
+  <!-- The first frame waits for the player, so an app page's stage can shrink into it (see boot.js, one machine). -->
+  <link rel="expect" href="#player-frame" blocking="render">
   <script src="boot.js"></script>
   <style>
     body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
