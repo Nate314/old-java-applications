@@ -3423,6 +3423,53 @@ button.shim-toast-go {
   display: none;
 }
 
+/* ---- the site's screen saver (boot.js showSaver): Screen Saver fades in over a page left alone ---- */
+
+.shim-saver {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.4s ease-in;
+}
+
+.shim-saver.on {
+  opacity: 1;
+  transition: opacity 2s ease-out;
+}
+
+.shim-saver iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+html[data-saver] body {
+  background: #000;
+}
+
+html[data-saver],
+html[data-saver] * {
+  cursor: none !important;
+}
+
+.shim-title-saver {
+  font-size: 13px;
+}
+
+.shim-title-saver[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-saver,
+  .shim-saver.on {
+    transition: none;
+  }
+}
+
 /* ---- watch (boot.js watchApp): the computer plays; the first click or key takes over ---- */
 
 .shim-title-watch {

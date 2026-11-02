@@ -35,6 +35,8 @@
  *   screen and in the home page's player bar shows the clip to watch, save or share (window.oldjavaReplay).
  * - Lets four games play themselves (?watch, WATCH): the app's own key starts its computer player, the app is
  *   muted, and the visitor's first click or key takes over. The home page's player opens on one.
+ * - Uses Screen Saver as the site's screen saver (showSaver, window.oldjavaSaver): a page left alone for 3 minutes
+ *   fades it in over everything, and the first input fades it out without reaching the app.
  * - Gives the site's own controls and moments short synthesized sounds in the skin's voice
  *   (window.oldjavaSound), with a Sound button in the toolbar to mute them on every open page.
  */
@@ -1014,62 +1016,76 @@
       playSound(done ? 'complete' : 'stamp');
       if (done) confetti();
       if (news) { stampNews(app, count, apps.length, next); return; }
-      var old = document.querySelector('.shim-toast');
-      if (old) old.remove();
-      var toast = document.createElement('div');
-      toast.className = 'shim-toast';
-      toast.setAttribute('role', 'status');
-      var seal = document.createElement('span');
-      seal.className = 'shim-toast-seal';
-      var img = document.createElement('img');
-      img.src = app.shot;
-      img.alt = '';
-      seal.appendChild(img);
-      var text = document.createElement('div');
-      text.className = 'shim-toast-text';
-      var title = document.createElement('strong');
-      var line = document.createElement('span');
-      title.textContent = done ? 'Arcade complete!' : 'Stamp collected: ' + app.name;
-      line.textContent = done ? 'You have played all ' + apps.length + ' apps.'
-        : count + ' of ' + apps.length + ' apps played.';
-      text.appendChild(title);
-      text.appendChild(line);
       var meter = document.createElement('span');
       meter.className = 'shim-meter';
       meter.style.setProperty('--p', String(count / apps.length));
-      text.appendChild(meter);
-      toast.appendChild(seal);
-      toast.appendChild(text);
-      if (done) {
-        var brag = document.createElement('button');
-        brag.type = 'button';
-        brag.className = 'shim-toast-go';
-        brag.setAttribute('data-sound', 'none');
-        brag.textContent = 'Share it ›';
-        brag.addEventListener('click', function () { toast.remove(); openShare(null); });
-        toast.appendChild(brag);
-      }
-      if (next) {
-        var go = document.createElement('a');
-        go.className = 'shim-toast-go';
-        go.href = pageOf(next);
-        go.textContent = 'Try ' + next.name + ' ›';
-        go.addEventListener('click', function (e) {
-          if (!passport.open || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-          e.preventDefault();
-          toast.remove();
-          passport.open(next.id);
+      floatToast(app.shot, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
+        done ? 'You have played all ' + apps.length + ' apps.' : count + ' of ' + apps.length + ' apps played.',
+        [meter], function (toast) {
+          var actions = [];
+          if (done) {
+            var brag = document.createElement('button');
+            brag.type = 'button';
+            brag.className = 'shim-toast-go';
+            brag.setAttribute('data-sound', 'none');
+            brag.textContent = 'Share it ›';
+            brag.addEventListener('click', function () { toast.remove(); openShare(null); });
+            actions.push(brag);
+          }
+          if (next) actions.push(toastLink(toast, next, 'Try ' + next.name + ' ›'));
+          return actions;
         });
-        toast.appendChild(go);
-      }
-      toast.appendChild(closeButton(function () { toast.remove(); }));
-      ownKeys(toast);
-      document.body.appendChild(toast);
-      setTimeout(function () {
-        toast.classList.add('gone');
-        setTimeout(function () { toast.remove(); }, 600);
-      }, 9000);
     });
+  }
+
+  // A toast floating at the top of the home page (an app page uses its band's news line instead): an app's
+  // thumbnail as a seal, a title, a line, more nodes under them, and the buttons or links actions(toast) makes.
+  // It replaces the toast before it and fades away after 9 seconds.
+  function floatToast(shot, titleText, lineText, more, actions) {
+    var old = document.querySelector('.shim-toast');
+    if (old) old.remove();
+    var toast = document.createElement('div');
+    toast.className = 'shim-toast';
+    toast.setAttribute('role', 'status');
+    var seal = document.createElement('span');
+    seal.className = 'shim-toast-seal';
+    var img = document.createElement('img');
+    img.src = shot;
+    img.alt = '';
+    seal.appendChild(img);
+    var text = document.createElement('div');
+    text.className = 'shim-toast-text';
+    var title = document.createElement('strong');
+    var line = document.createElement('span');
+    title.textContent = titleText;
+    line.textContent = lineText;
+    [title, line].concat(more).forEach(function (n) { text.appendChild(n); });
+    toast.appendChild(seal);
+    toast.appendChild(text);
+    actions(toast).forEach(function (n) { toast.appendChild(n); });
+    toast.appendChild(closeButton(function () { toast.remove(); }));
+    ownKeys(toast);
+    document.body.appendChild(toast);
+    setTimeout(function () {
+      toast.classList.add('gone');
+      setTimeout(function () { toast.remove(); }, 600);
+    }, 9000);
+    return toast;
+  }
+
+  // A toast's link to an app: on the home page a plain click swaps the app into the player instead.
+  function toastLink(toast, app, label) {
+    var go = document.createElement('a');
+    go.className = 'shim-toast-go';
+    go.href = pageOf(app);
+    go.textContent = label;
+    go.addEventListener('click', function (e) {
+      if (!passport.open || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      toast.remove();
+      passport.open(app.id);
+    });
+    return go;
   }
 
   // The same news on an app page, in the band: the thumbnail pressed in as a seal, the count, and where to go.
@@ -1216,6 +1232,190 @@
     document.addEventListener('pointerdown', onInput, true);
     document.addEventListener('keydown', onInput, true);
     window.addEventListener('message', onMessage);
+  }
+
+  // ---- the site's screen saver ----
+  // Screen Saver is one of the apps, and it is also the site's own screen saver: when a page (the home page, an
+  // app page) has had no input for saver.after (3 minutes), Screen Saver fades in over everything, in an iframe of
+  // its page in saver mode (?embed&saver: no title screen, stamp or replay, as in thumbnail mode). It shares the
+  // app's saves, so it shows the saver the visitor left the app on, cycling or not, at their speed. The first key
+  // press, click, touch, real mouse move or controller press fades it out again; it never reaches the app beneath.
+  // Then the page says what that was, with a link to pick a saver and a way to turn it off (localStorage
+  // oldjava.saver = 'off'); Screen Saver's title screen turns it back on. It waits while a page is hidden or in
+  // fullscreen, while the computer plays (watch), while the app is popped out or a video plays, and on the apps
+  // that are read or watched without touching them (SAVER_SKIP).
+  var SAVER_KEY = 'oldjava.saver';
+  var SAVER_SKIP = { ScreenSaver: true, BibleDownloader: true, Clock: true };
+  if (embedded && /[?&]saver(=|&|$)/.test(location.search)) document.documentElement.setAttribute('data-saver', '');
+  var saver = null;   // a top page's saver (window.oldjavaSaver); embedded pages hand their input to the parent's
+  function saverOn() {
+    try { return localStorage.getItem(SAVER_KEY) !== 'off'; } catch (e) { return true; }
+  }
+  function setSaverOn(on) {
+    try { localStorage.setItem(SAVER_KEY, on ? 'on' : 'off'); } catch (e) { /* this visit only */ }
+  }
+  function saverHost() {
+    if (!embedded) return saver;
+    try { return window.parent !== window && window.parent.oldjavaSaver || null; } catch (e) { return null; }
+  }
+  function saverMinutes() {
+    var host = saverHost();
+    return Math.round((host ? host.after : 180000) / 60000);
+  }
+
+  // Every page, the player's and the saver's frames included: input counts as activity, and input that woke the
+  // saver (or fell on it) is kept from the app, its key's release too.
+  var saverHeld = {};
+  ['keydown', 'keyup', 'pointerdown', 'pointerup', 'pointercancel', 'pointermove', 'wheel'].forEach(function (type) {
+    window.addEventListener(type, function (e) {
+      if (!e.isTrusted) return;
+      var host = saverHost();
+      var mine = !!host && host.input(e);
+      if (e.type === 'keyup' && saverHeld[e.code]) { delete saverHeld[e.code]; mine = true; }
+      if (!mine) return;
+      if (e.type === 'keydown') saverHeld[e.code] = true;
+      if (e.type === 'keydown' || e.type === 'pointerdown') e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+  });
+
+  if (!embedded) {
+    var saverBox = null, saverPrev = null, saverDown = false, saverFading = false, saverBase = null, saverPads = '';
+    var saverLast = Date.now();
+    saver = window.oldjavaSaver = {
+      after: 3 * 60 * 1000,
+      // An input event from this page or a frame in it; true when it belongs to the saver.
+      input: function (e) {
+        var t = e.type;
+        if (t === 'pointerdown') saverDown = true;
+        if (t === 'pointerup' || t === 'pointercancel') saverDown = false;
+        if (!saverBox) { saverLast = Date.now(); return false; }
+        if (saverFading) { if (!saverDown) saverDone(); return true; }
+        if (t === 'pointermove') {
+          // Showing the saver can send a move from a mouse that has not moved; a real one goes somewhere.
+          if (!saverBase) { saverBase = [e.screenX, e.screenY]; return true; }
+          if (Math.abs(e.screenX - saverBase[0]) + Math.abs(e.screenY - saverBase[1]) < 12) return true;
+        }
+        if (t !== 'pointerup' && t !== 'pointercancel') wakeSaver();
+        return true;
+      },
+      show: showSaver,
+      wake: function () { if (saverBox && !saverFading) wakeSaver(); },
+      showing: function () { return !!saverBox; }
+    };
+    document.addEventListener('visibilitychange', function () { saverLast = Date.now(); });
+    setInterval(function () {
+      // A controller counts as input too: the Gamepad API stamps each pad with the time its state last changed.
+      var pads = navigator.getGamepads ? [].slice.call(navigator.getGamepads()).map(function (p) { return p ? p.timestamp : 0; }).join() : '';
+      if (pads !== saverPads) {
+        saverPads = pads;
+        saverLast = Date.now();
+        if (saverBox && !saverFading) wakeSaver();
+      }
+      if (saverBox) return;
+      if (!saverWanted()) { saverLast = Date.now(); return; }   // its minutes start when the reason ends
+      if (Date.now() - saverLast >= saver.after) showSaver();
+    }, 1000);
+  }
+
+  // The document of the app the visitor sees: this app page's own, or the home page player's.
+  function shownAppDoc() {
+    if (document.body.hasAttribute('data-app')) return document;
+    var frame = document.getElementById('player-frame');
+    try { return frame && frame.contentDocument; } catch (e) { return null; }
+  }
+
+  function saverWanted() {
+    if (!saverOn() || !document.body || document.visibilityState !== 'visible' || document.fullscreenElement) return false;
+    var doc = shownAppDoc();
+    if (!doc || !doc.body) return true;
+    if (SAVER_SKIP[doc.body.getAttribute('data-app')] || doc.documentElement.hasAttribute('data-popped')) return false;
+    if (doc.querySelector('.shim-watch:not(.gone)')) return false;
+    return ![document, doc].some(function (d) {
+      return [].some.call(d.querySelectorAll('video'), function (v) { return !v.paused && !v.ended; });
+    });
+  }
+
+  function showSaver() {
+    if (saverBox || !document.body) return;
+    saverPrev = document.activeElement;
+    saverBase = null;
+    saverFading = false;
+    saverBox = document.createElement('div');
+    saverBox.className = 'shim-saver';
+    var frame = document.createElement('iframe');
+    frame.src = siteRoot + 'ScreenSaver/index.html?embed&saver';
+    frame.title = 'Screen Saver: press a key or move the mouse to come back';
+    frame.tabIndex = -1;
+    saverBox.appendChild(frame);
+    document.body.appendChild(saverBox);
+    requestAnimationFrame(function () { requestAnimationFrame(function () { if (saverBox) saverBox.classList.add('on'); }); });
+  }
+
+  function wakeSaver() {
+    saverFading = true;
+    saverBox.classList.remove('on');
+    var box = saverBox;
+    setTimeout(function () {
+      if (saverBox !== box) return;
+      box.setAttribute('data-faded', '');
+      saverDone();
+    }, 400);
+  }
+
+  // Gone once it has faded and no button is held (the release would otherwise land on the app beneath).
+  function saverDone() {
+    if (!saverBox || !saverBox.hasAttribute('data-faded') || saverDown) return;
+    saverBox.remove();
+    saverBox = null;
+    saverFading = false;
+    saverLast = Date.now();
+    if (saverPrev && saverPrev.isConnected && saverPrev !== document.body && saverPrev.focus) saverPrev.focus({ preventScroll: true });
+    welcomeBack();
+  }
+
+  // What that was, where to pick another saver, and how to turn it off: in the band on an app page, a toast on the
+  // home page.
+  function welcomeBack() {
+    function strong(t) { var n = document.createElement('strong'); n.textContent = t; return n; }
+    function span(t) { var n = document.createElement('span'); n.textContent = t; return n; }
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, 'ScreenSaver')];
+      if (!app) return;
+      var title = 'Welcome back! ';
+      var line = 'That was ' + app.name + ', one of the ' + apps.length + ' apps here, minding the screen while you were away.';
+      function off() {
+        setSaverOn(false);
+        var said = 'Screen saver off. ', how = app.name + '’s title screen turns it back on.';
+        if (news) news.show('saver', [], [strong(said), span(how)], [], 6000);
+        else floatToast(app.shot, said, how, [], function () { return []; });
+      }
+      function offButton(cls, close) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = cls;
+        b.textContent = 'Turn it off';
+        b.addEventListener('click', function () { close(); off(); });
+        return b;
+      }
+      if (news) {
+        var seal = document.createElement('span');
+        seal.className = 'shim-news-seal';
+        var img = document.createElement('img');
+        img.src = app.shot;
+        img.alt = '';
+        seal.appendChild(img);
+        var go = document.createElement('a');
+        go.className = 'shim-news-go';
+        go.href = pageOf(app);
+        go.textContent = 'Pick your saver ›';
+        news.show('saver', [seal], [strong(title), span(line)], [go, offButton('shim-news-go', news.clear)], 10000);
+        return;
+      }
+      floatToast(app.shot, title, line, [], function (toast) {
+        return [toastLink(toast, app, 'Pick your saver ›'), offButton('shim-toast-go', function () { toast.remove(); })];
+      });
+    });
   }
 
   // ---- touch controller ----
@@ -3118,7 +3318,25 @@
     watchLink.href = '?watch';
     watchLink.textContent = 'Watch the computer play it first';
     watchLink.hidden = !WATCH[appId()] || isThen();
-    [cat, name, hint, stamp, record, play, press, read, watchLink, era].forEach(function (el) { text.appendChild(el); });
+    // Screen Saver is also the site's screen saver (see showSaver): its title screen turns that on and off.
+    var saverRow = document.createElement('p');
+    saverRow.className = 'shim-title-saver';
+    saverRow.hidden = appId() !== 'ScreenSaver' || isThen();
+    var saverText = document.createTextNode('');
+    var saverToggle = document.createElement('button');
+    saverToggle.type = 'button';
+    saverToggle.className = 'shim-title-forget';   // kept from starting the app, like Forget
+    function showSaverRow() {
+      var on = saverOn();
+      saverText.data = on ? 'Also this site’s screen saver, after ' + saverMinutes() + ' minutes away. '
+        : 'This site’s screen saver is off. ';
+      saverToggle.textContent = on ? 'Turn off' : 'Turn on';
+    }
+    saverToggle.addEventListener('click', function () { setSaverOn(!saverOn()); showSaverRow(); });
+    showSaverRow();
+    saverRow.appendChild(saverText);
+    saverRow.appendChild(saverToggle);
+    [cat, name, hint, stamp, record, saverRow, play, press, read, watchLink, era].forEach(function (el) { text.appendChild(el); });
     card.appendChild(art);
     card.appendChild(text);
     card.appendChild(meter);
@@ -3641,7 +3859,8 @@
     // them as a group while a shape grows in, one window at a time, would slide the whole group about.
     if (!document.documentElement.hasAttribute('data-shot') && !body.hasAttribute('data-own-layout')) centerWindows(desktop);
     if (body.hasAttribute('data-tab-title') && !embedded) followTitle(desktop);
-    if (embedded && window.parent !== window) padInPlayer();
+    var saverMode = document.documentElement.hasAttribute('data-saver');
+    if (embedded && window.parent !== window && !saverMode) padInPlayer();
     if (body.hasAttribute('data-console')) {
       outPanel = document.createElement('pre');
       outPanel.className = 'shim-console';
@@ -3655,7 +3874,7 @@
     // links to itself (a game with a friend travels in ?game=, a recorded tune in ?tune=, see the apps' READMEs) and
     // to read what a link brought.
     if (body.hasAttribute('data-args-page')) args.push(location.href);
-    var extras = !document.documentElement.hasAttribute('data-shot');
+    var extras = !document.documentElement.hasAttribute('data-shot') && !saverMode;
     var again = null;
     try {
       again = sessionStorage.getItem(AGAIN_KEY);
@@ -3668,6 +3887,7 @@
     var shell = body.hasAttribute('data-shell') ? pretendWindows() : null;
     window.__shimExited = function (msg) {
       bringBack();   // the app closed in its own window: its exit screen shows on the page
+      if (saverMode) { var host = saverHost(); if (host) host.wake(); return; }   // the mouse moved: back to the page
       function show() { if (extras) exitScreen(msg); else overlay(msg, 'Run again'); }
       if (!shell || !shell.holdExit(show)) show();
     };

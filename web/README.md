@@ -194,6 +194,16 @@ The moments worth keeping (a run of 30 pipes, a bank shot that wins the round, a
 - The panel plays the clip on a loop (with sound, since it opens on a click), says how many seconds it holds, and has Save video (a download named like `FlappyBird-replay-20261102-1655.mp4`) and Share..., where the browser can share files (`navigator.canShare`), which sends the video with the app's link to the system share sheet. The video stays in the page unless the visitor saves or shares it. Keys typed in the panel stay out of the app, and Esc, the close button or a click outside closes it. It uses the Share panel's frame in each skin.
 - Limits: drawing the page's elements is an approximation of the browser's own rendering: text shadows, outer box shadows, focus rings, CSS pseudo-elements and images used as CSS backgrounds are left out, and a gradient is drawn top to bottom, left to right or corner to corner from its colors. Tested in Chrome only.
 
+## The site's screen saver
+
+Screen Saver is one of the apps, and it is also the site's own screen saver. A page of the site (the home page or an app page) left without a key press, click, touch, mouse move, wheel turn or controller press for 3 minutes fades Screen Saver in over everything, the way a desktop does after a while away:
+
+- It is the app itself: an iframe of `ScreenSaver/index.html?embed&saver` covering the page (`showSaver` in `boot.js`). Saver mode is like thumbnail mode: no title screen, passport stamp, replay or touch controller. It shares the app's saves, so it shows the saver the visitor left the app on, cycling or kept on screen, at their speed and tile size, and carries on through the list from there.
+- The first key press, click, touch, controller press or real mouse move (more than a few pixels, since showing it can send a move from a mouse that has not moved) fades it out. That input never reaches the app beneath: every page, the home page's player and the saver's own frame included, hands its input to the top page first (a capture listener on `window`, before the shim's), which keeps the key and its release from the app, and keeps the saver up until a held button is let go.
+- Then the page says what that was ("Welcome back! That was Screen Saver, one of the 20 apps here..."), in the band's news line on an app page and in a toast on the home page, with Pick your saver (Screen Saver's page, or the home page's player) and Turn it off. Off is kept in `localStorage` (`oldjava.saver`) for every page; Screen Saver's title screen says whether it is on and turns it on and off.
+- It waits while the page is hidden or in fullscreen, while the computer plays (watch, so the home page's opening demo is never covered), while the app is popped out or a video (a replay) plays, and on the apps that are read or watched without touching them: Screen Saver itself, Bible Downloader and Clock. Its 3 minutes start again when the reason ends.
+- `window.oldjavaSaver` has `show()`, `wake()`, `showing()` and `after` (the wait in milliseconds), for testing.
+
 ## Watch the computer play
 
 A visitor who lands on the home page sees an app waiting for a click; a game that is already being played shows what it is in a few seconds. So four games can play themselves, and the home page opens on one doing it.

@@ -46,6 +46,10 @@ javac -d ../out/check/ScreenSaver src/screensaver/*.java test/screensaver/*.java
 java -ea -cp ../out/check/ScreenSaver screensaver.SaverCheck
 ```
 
+## On the web site
+
+The web site uses this app as its own screen saver: a page left alone for 3 minutes shows the saver last picked here (see [The site's screen saver](../web/README.md#the-sites-screen-saver)). Its title screen on the site turns that on and off.
+
 ## Running
 
 From the repo root: `./run.ps1 ScreenSaver` (or `./run.ps1 ScreenSaver -Build` to build a jar).
