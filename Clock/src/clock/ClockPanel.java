@@ -1,77 +1,127 @@
 package clock;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import javax.swing.JPanel;
 
-public final class ClockPanel extends JPanel implements MouseListener {
-   private Main clock;
-   private boolean analogMode = true;
+/**
+ * The window's content: a strip of three tabs (Clock, Timer, Stopwatch) over the chosen tab and a line of help.
+ * It routes the mouse and keys to that tab and saves the state after each change.
+ */
+public final class ClockPanel extends JPanel implements MouseListener, MouseMotionListener {
+   private static final String[] MODES = {ClockState.CLOCK, ClockState.TIMER, ClockState.STOPWATCH};
+
+   private final Main clock;
+   private final Tab[] tabs;
+   private Rectangle[] tabBoxes;
+   private Tab pressed;
+   private final KeyListener keys = new KeyAdapter() {
+      @Override
+      public void keyReleased(KeyEvent event) {
+         ClockPanel.this.keyReleased(event.getKeyCode());
+      }
+   };
 
    public ClockPanel(Main clock) {
       this.clock = clock;
+      this.tabs = new Tab[]{new ClockFace(clock), new TimerView(clock), new StopwatchView(clock)};
       this.addMouseListener(this);
+      this.addMouseMotionListener(this);
+      this.setFocusable(true);
    }
 
+   KeyListener keys() {
+      return this.keys;
+   }
+
+   private int current() {
+      for (int i = 0; i < MODES.length; i++) {
+         if (MODES[i].equals(this.clock.state.mode)) {
+            return i;
+         }
+      }
+      return 0;
+   }
+
+   void show(String mode) {
+      this.clock.state.mode = mode;
+   }
+
+   /** The tab strip, the tab and the help line, laid out for the panel's size. */
    @Override
    public final void paint(Graphics graphics) {
       Graphics2D g2 = (Graphics2D)graphics;
       g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
       g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-      g2.setColor(new Color(0, 255, 255));
+      g2.setColor(Ui.BACKGROUND);
       g2.fillRect(0, 0, this.getWidth(), this.getHeight());
-      int margin = Math.min(this.getWidth(), this.getHeight()) / 50;
-      if (this.analogMode) {
-         g2.setStroke(new BasicStroke((float)margin));
-         int diameter = Math.min(this.getWidth(), this.getHeight()) - (margin << 1);
-         int radius = diameter / 2;
-         int centerX = margin + radius;
-         int centerY = margin + radius;
-         double seconds = this.clock.seconds + this.clock.milliseconds / 1000.0;
-         double minutes = this.clock.minutes + seconds / 60.0;
-         double hours = this.clock.hours % 12 + minutes / 60.0;
-         g2.setColor(new Color(255, 255, 255));
-         g2.fillOval(margin, margin, diameter, diameter);
-         g2.setColor(new Color(0, 0, 0));
-         g2.drawOval(margin, margin, diameter, diameter);
-         drawHand(g2, centerX, centerY, radius / 2, (Math.PI / 2) - hours * (Math.PI / 6));
-         drawHand(g2, centerX, centerY, (radius << 1) / 3, (Math.PI / 2) - minutes * (Math.PI / 30));
-         g2.setColor(new Color(255, 0, 0));
-         drawHand(g2, centerX, centerY, radius * 9 / 10, (Math.PI / 2) - seconds * (Math.PI / 30));
-      } else {
-         g2.setColor(new Color(0, 0, 0));
-         String[] lines = this.clock.timeText.split("\\n");
-         Font font = new Font("Times New Roman", 1, 100);
-         g2.setFont(font);
+      long now = System.currentTimeMillis();
+      int pad = Math.max(4, Math.min(this.getWidth(), this.getHeight()) / 40);
+      int stripHeight = Math.max(24, Math.min(40, this.getHeight() / 11));
+      int hintHeight = Math.max(12, Math.min(18, this.getHeight() / 26));
 
-         // Shrink until the widest line fits across and all lines fit down.
-         while (font.getSize() > 1 && (widestLine(g2, lines) > this.getWidth() - 20 || font.getSize() * lines.length > this.getHeight() - 10)) {
-            font = new Font("Times New Roman", 1, font.getSize() - 1);
-            g2.setFont(font);
-         }
+      this.tabBoxes = Ui.row(new Rectangle(pad, pad, this.getWidth() - 2 * pad, stripHeight), MODES.length, pad / 2);
+      int current = this.current();
+      for (int i = 0; i < this.tabs.length; i++) {
+         Ui.button(g2, this.tabBoxes[i], this.tabs[i].label(now), i == current);
+      }
 
-         for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            g2.drawString(lines[lineIndex], 10, font.getSize() + lineIndex * font.getSize());
-         }
+      Tab tab = this.tabs[current];
+      int top = pad * 2 + stripHeight;
+      Rectangle area = new Rectangle(pad, top, this.getWidth() - 2 * pad, this.getHeight() - top - hintHeight - pad * 2);
+      tab.paint(g2, area, now);
+
+      g2.setColor(Ui.FAINT);
+      String hint = tab.hint();
+      Ui.center(g2, hint, Ui.fit(g2, Ui.LABELS, hint, this.getWidth() - 2 * pad, hintHeight, hintHeight),
+            new Rectangle(pad, this.getHeight() - pad - hintHeight, this.getWidth() - 2 * pad, hintHeight));
+   }
+
+   private void changed() {
+      this.clock.state.save();
+      this.clock.refresh();
+   }
+
+   @Override
+   public final void mousePressed(MouseEvent event) {
+      this.requestFocusInWindow();
+      int x = event.getX();
+      int y = event.getY();
+      Rectangle box = Ui.hit(this.tabBoxes, x, y);
+      if (box != null) {
+         this.show(MODES[Ui.indexOf(this.tabBoxes, box)]);
+         this.pressed = null;
+         this.changed();
+         return;
+      }
+      this.pressed = this.tabs[this.current()];
+      this.pressed.press(x, y, event.getButton() == MouseEvent.BUTTON3, System.currentTimeMillis());
+      this.clock.refresh();
+   }
+
+   @Override
+   public final void mouseDragged(MouseEvent event) {
+      if (this.pressed != null) {
+         this.pressed.drag(event.getX(), event.getY(), System.currentTimeMillis());
+         this.clock.refresh();
       }
    }
 
-   private static void drawHand(Graphics2D g2, int centerX, int centerY, int length, double angle) {
-      g2.drawLine(centerX, centerY, (int)(centerX + length * Math.cos(angle)), (int)(centerY - length * Math.sin(angle)));
-   }
-
-   private static int widestLine(Graphics2D g2, String[] lines) {
-      int widest = 0;
-      for (String line : lines) {
-         widest = Math.max(widest, g2.getFontMetrics().stringWidth(line));
+   @Override
+   public final void mouseReleased(MouseEvent event) {
+      if (this.pressed != null) {
+         this.pressed.release(event.getX(), event.getY(), System.currentTimeMillis());
+         this.pressed = null;
+         this.changed();
       }
-      return widest;
    }
 
    @Override
@@ -79,16 +129,7 @@ public final class ClockPanel extends JPanel implements MouseListener {
    }
 
    @Override
-   public final void mousePressed(MouseEvent event) {
-   }
-
-   @Override
-   public final void mouseReleased(MouseEvent event) {
-      if (event.getButton() == MouseEvent.BUTTON3) {
-         this.clock.twentyFourHour = !this.clock.twentyFourHour;
-      } else {
-         this.analogMode = !this.analogMode;
-      }
+   public final void mouseMoved(MouseEvent event) {
    }
 
    @Override
@@ -97,5 +138,18 @@ public final class ClockPanel extends JPanel implements MouseListener {
 
    @Override
    public final void mouseExited(MouseEvent event) {
+   }
+
+   /** 1 2 3 (or C T S) pick a tab; other keys go to the tab. */
+   private void keyReleased(int keyCode) {
+      int pick = keyCode == KeyEvent.VK_1 || keyCode == KeyEvent.VK_C ? 0
+            : keyCode == KeyEvent.VK_2 || keyCode == KeyEvent.VK_T ? 1
+            : keyCode == KeyEvent.VK_3 || keyCode == KeyEvent.VK_S ? 2 : -1;
+      if (pick >= 0) {
+         this.show(MODES[pick]);
+         this.changed();
+      } else if (this.tabs[this.current()].key(keyCode, System.currentTimeMillis())) {
+         this.changed();
+      }
    }
 }

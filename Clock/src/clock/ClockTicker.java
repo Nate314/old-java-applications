@@ -2,7 +2,7 @@ package clock;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.Calendar;
+import java.util.Date;
 
 final class ClockTicker implements ActionListener {
    private final Main clock;
@@ -12,28 +12,35 @@ final class ClockTicker implements ActionListener {
    }
 
    @Override
+   @SuppressWarnings("deprecation")
    public final void actionPerformed(ActionEvent event) {
-      Calendar now = Calendar.getInstance();
-      this.clock.month = now.get(Calendar.MONTH);
-      this.clock.dayOfMonth = now.get(Calendar.DAY_OF_MONTH);
-      this.clock.dayOfWeek = now.get(Calendar.DAY_OF_WEEK) - 1;
-      this.clock.year = now.get(Calendar.YEAR);
-      this.clock.hours = now.get(Calendar.HOUR_OF_DAY);
-      this.clock.minutes = now.get(Calendar.MINUTE);
-      this.clock.seconds = now.get(Calendar.SECOND);
-      this.clock.milliseconds = now.get(Calendar.MILLISECOND);
-      String hourText = this.clock.twentyFourHour
+      // Date's getters read local time on the desktop and in the browser; TeaVM's Calendar is always UTC.
+      long millis = System.currentTimeMillis();
+      Date now = new Date(millis);
+      this.clock.month = now.getMonth();
+      this.clock.dayOfMonth = now.getDate();
+      this.clock.dayOfWeek = now.getDay();
+      this.clock.year = now.getYear() + 1900;
+      this.clock.hours = now.getHours();
+      this.clock.minutes = now.getMinutes();
+      this.clock.seconds = now.getSeconds();
+      this.clock.milliseconds = (int)(millis % 1000);
+      boolean twentyFour = this.clock.state.twentyFour;
+      String hourText = twentyFour
          ? twoDigits(this.clock.hours)
          : (this.clock.hours != 12 && this.clock.hours != 0 ? String.valueOf(this.clock.hours % 12) : "12");
       String text = this.clock.dayNames[this.clock.dayOfWeek] + "\n"
          + (this.clock.month + 1) + "/" + this.clock.dayOfMonth + "/" + this.clock.year + "\n"
          + hourText + ":" + twoDigits(this.clock.minutes) + ":" + twoDigits(this.clock.seconds)
-         + (this.clock.twentyFourHour ? "" : this.clock.hours < 12 ? "am" : "pm");
+         + (twentyFour ? "" : this.clock.hours < 12 ? "am" : "pm");
       if (!text.equals(this.clock.timeText)) {
          System.out.println(text);
       }
       this.clock.timeText = text;
-      this.clock.clockPanel.repaint();
+      if (this.clock.state.countdown.update(millis)) {
+         this.clock.timerFinished();
+      }
+      this.clock.refresh();
    }
 
    private static String twoDigits(int value) {
