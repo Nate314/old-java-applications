@@ -15,7 +15,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 | [Minesweeper](Minesweeper/README.md) | Minesweeper game |
 | [NathaNOS](NathaNOS/README.md) | Desktop-style app launcher with icons, a start menu and a taskbar |
 | [RubiksCube2D](RubiksCube2D/README.md) | 2D Rubik's Cube puzzle with 20 levels (watch it get mixed, turn it back for stars), Hint, Undo and Solve |
-| [ScreenSaver](ScreenSaver/README.md) | Screen saver that closes when the mouse moves |
+| [ScreenSaver](ScreenSaver/README.md) | Eight screen savers (the original green circles, Starfield, Mystify, Pipes, a bouncing logo, a dot clock) that close when the mouse moves |
 | [SpriteFloatyStars](SpriteFloatyStars/README.md) | Animated stars with five modes, and Star Catcher: click gold stars over those modes across six nights, dodging black holes |
 | [UltimateTicTacToe](UltimateTicTacToe/README.md) | Ultimate Tic-Tac-Toe against an Easy or Hard computer, or for two players |
 | [CircleSpawner](CircleSpawner/README.md) | Builds a circle (the original), ring, heart, star or a typed word out of borderless windows, growing in and bursting apart when clicked |
