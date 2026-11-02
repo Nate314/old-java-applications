@@ -216,6 +216,50 @@ canvas.paint.top {
 .window {
   background: var(--frame-bg);
   overflow: hidden;
+  /* A finger on a window works the app (TDesktop's touch input): no page pan or zoom, no callout, no flash. */
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Held on something a long press right-clicks (Minesweeper's tiles): a ring closes in on the finger, then
+   pops when the right click goes. It waits a moment so a quick tap shows nothing. */
+.shim-press {
+  position: fixed;
+  z-index: 2147483000;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 4px solid var(--focus-ring);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.6);
+  animation: shim-press-in 380ms 120ms linear forwards;
+}
+
+.shim-press.done {
+  animation: shim-press-pop 380ms ease-out forwards;
+}
+
+@keyframes shim-press-in {
+  to { opacity: 1; transform: scale(0.75); }
+}
+
+@keyframes shim-press-pop {
+  from { opacity: 1; transform: scale(0.75); }
+  to { opacity: 0; transform: scale(1.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-press { transform: none; animation: shim-press-show 1ms 150ms forwards; }
+  .shim-press.done { animation: none; opacity: 0; }
+}
+
+@keyframes shim-press-show {
+  to { opacity: 1; }
 }
 
 .window.decorated {

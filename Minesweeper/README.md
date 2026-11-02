@@ -6,7 +6,7 @@ A Minesweeper game with three boards, a clock, best times and MIDI sound. Reveal
 
 - **Level buttons** (top of the window): Beginner (9x9, 10 mines), Classic (15x15, 18 mines, the original game's board) and Expert (16x16, 40 mines). The current level is lit. Picking one starts a new game on it. Keys **1**, **2** and **3** do the same, and **F2** starts a new game on the current level.
 - **Left click**: reveal a tile. Blank tiles also reveal their neighbors. The first click is always safe: mines are placed after it, away from the clicked tile and its neighbors. Flagged tiles cannot be revealed until unflagged.
-- **Right click**: cycle a hidden tile through flag (`f`), question mark (`?`) and back.
+- **Right click** (in the browser on a touch screen, a long press): cycle a hidden tile through flag (`f`), question mark (`?`) and back.
 - The status line under the board shows how many mines are left (mines minus flags), the time since the first click and the best time on that level. The title bar shows the mines left too. Both say when you win (with your time) or hit a mine, and on a win the status line also says whether the time is a new best.
 - **Any click after the game ends**: start a new game.
 - **Arrow keys**: move the window by 30 px per press.

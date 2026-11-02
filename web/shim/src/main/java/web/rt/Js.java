@@ -137,6 +137,36 @@ public final class Js {
     @JSBody(params = "e", script = "return e.button;")
     public static native int button(JSObject e);
 
+    // ---- touch (pointer events from fingers and pens; the mouse keeps its mouse events) ----
+
+    @JSBody(params = "e", script = "return !!e.pointerType && e.pointerType !== 'mouse';")
+    public static native boolean isTouch(JSObject e);
+
+    @JSBody(params = "e", script = "return e.pointerId;")
+    public static native int pointerId(JSObject e);
+
+    /** The element under a pointer event's point (a touch's own target stays the element it went down on). */
+    @JSBody(params = "e", script = "return document.elementFromPoint(e.clientX, e.clientY);")
+    public static native JSObject elementAt(JSObject e);
+
+    @JSBody(script = "return performance.now();")
+    public static native double now();
+
+    @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb, true);")
+    public static native void listenCapture(JSObject el, String type, EventCallback cb);
+
+    @JSBody(params = "e", script = "e.preventDefault(); e.stopPropagation();")
+    public static native void swallow(JSObject e);
+
+    /** The ring that closes in on a finger held on something long-press opens like a right click. */
+    @JSBody(params = "e", script = "var _r = document.createElement('div'); _r.className = 'shim-press';"
+            + "_r.style.left = e.clientX + 'px'; _r.style.top = e.clientY + 'px'; document.body.appendChild(_r); return _r;")
+    public static native JSObject pressRing(JSObject e);
+
+    @JSBody(params = "ring", script = "ring.classList.add('done'); setTimeout(function () { ring.remove(); }, 400);"
+            + "try { if (navigator.vibrate) navigator.vibrate(12); } catch (x) { }")
+    public static native void pressRingDone(JSObject ring);
+
     @JSBody(params = "e", script = "return e.buttons;")
     public static native int buttons(JSObject e);
 

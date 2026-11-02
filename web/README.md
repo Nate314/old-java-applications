@@ -87,6 +87,7 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 - Repaints are coalesced into one paint pass per animation frame (with a timer fallback for hidden tabs). A thread other than the EDT that calls `repaint()` waits for that pass, so loops like FlappyBird's `while (true) panel.repaint();` run once per frame instead of hanging the tab.
 - `javax.swing.Timer` runs on `setTimeout`; `SwingUtilities.invokeLater` and `EventQueue.invokeLater` queue on the EDT.
 - Mouse events go to the deepest component with mouse listeners; key events go through `KeyboardFocusManager` dispatchers, then to the focus owner (the first focusable widget of the active window, or the window itself). DOM key codes are mapped to AWT `VK_` codes.
+- Touch and pens work the apps too (see Touch).
 - `java.awt.Robot` can only reach the page: `keyPress`/`keyRelease` queue key events for the focused component, and `getPixelColor` samples the canvas or widget color at that viewport point.
 
 ### Standard output
@@ -159,6 +160,17 @@ Each app page (`<App>/index.html`) is built to lead to the next app as well as r
 - Switch app opens a panel on the right with every app's thumbnail, name and hint, the current app marked "Now playing". Esc, the close button or a click outside the panel closes it.
 - Nothing floats over the stage. The band's name slot doubles as a news line (`bandNews` in `boot.js`): when the app starts, the name slides up and "How to play" with the app's hint slides in for 12 seconds, then the name comes back. A hint longer than the slot scrolls through it like a marquee, twice (it stays longer to do so; with reduced motion it is cut off with an ellipsis and the full text is its tooltip). Pointing at the line holds it, and its x or Escape closes it. The ? button shows the hint again, and is lit while it shows. A new passport stamp uses the same line (see Arcade passport). On pages narrower than 560 px the slot and the ? button take the band's first row, so the line has room. Since the band's height never changes for the news, the stage never moves for it either.
 - When the app exits (for most apps, when its window is closed), the Run again box names the app, keeps Run again and All apps, and suggests three other apps with their thumbnails: apps not played yet first (see Arcade passport), and within that, apps of the same category first, then the others, each group in random order. The box ends with the passport count. In the home page's player the box has no All apps link, and picking a suggestion asks the home page (with `postMessage`) to swap that app into the player, so its title, rail and address follow.
+
+## Touch
+
+On a phone or tablet a finger is the left mouse button, so every app can be played by touch, not only the four with a touch controller:
+
+- The mouse still arrives as mouse events. Fingers and pens arrive as pointer events (`TDesktop`'s `onTouch*`), and the mouse events a browser makes up after a tap are ignored for a second after the last touch, so nothing is clicked twice.
+- A tap is a press, a release and a click. A drag is a drag: windows move by their title bars, Clock's timer dial turns, and anything else an app drags with the mouse follows the finger. Browsers send no mouse events while a finger moves, so before this none of that worked by touch.
+- Two taps within 500 ms and 30 px are a double click (NathaNOS opens its desktop icons on one). A pointer event carries no click count, so the shim counts the taps.
+- Holding still for 500 ms on a button that listens to the mouse itself is a right click: the left press ends without a click and a right press, release and click follow. That is Minesweeper's flag (long-press a tile to cycle flag, question mark and blank). A ring closes in on the finger while it is held and pops when the right click goes (with a short vibration where the phone allows it); a quick tap shows nothing. Other buttons and panels keep a long press as a long left press, so held keys and press-and-drag work as before. Clock's right click (12 or 24 hours) has no touch equivalent.
+- Windows have `touch-action: none`, so a finger on a window works the app instead of panning or zooming the page; a swipe outside the windows still scrolls the home page. They also turn off the long-press callout and the tap flash.
+- Only the first finger counts; a second one is ignored until the first lifts. A touch the browser cancels is released without a click.
 
 ## Pretend Windows
 
