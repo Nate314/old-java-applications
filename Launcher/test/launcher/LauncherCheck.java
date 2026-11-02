@@ -13,28 +13,28 @@ public class LauncherCheck {
       Path root = Paths.get("").toAbsolutePath();
       String runScript = new String(Files.readAllBytes(root.resolve("run.ps1")), StandardCharsets.UTF_8);
 
-      // Every app: 18 from the gallery, in its order, and the 2 desktop-only ones; each has a folder and a run.ps1 entry.
+      // Every app comes from the gallery, in its order; each has a folder, a run.ps1 entry and a thumbnail.
       List<Catalog.App> apps = Catalog.load(root);
       check(apps.size() == 20, "expected 20 apps, got " + apps.size());
       check(apps.get(0).id.equals("Minesweeper"), "gallery order: Minesweeper first");
-      int desktop = 0;
+      int keys = 0;
       for (Catalog.App a : apps) {
          check(Files.isRegularFile(root.resolve(a.id).resolve("README.md")), a.id + " has a README");
          check(runScript.contains("    " + a.id + " "), a.id + " is in run.ps1");
          check(!a.hint.isEmpty() && !a.name.isEmpty(), a.id + " has a name and a hint");
          check(a.hint.indexOf('&') < 0 || a.hint.contains("& "), a.id + " hint is unescaped");
          check(a.category.matches("game|music|toy|tool"), a.id + " category " + a.category);
-         if (a.desktopOnly) desktop++;
-         else check(Files.isRegularFile(a.thumbnail), a.id + " thumbnail " + a.thumbnail);
+         if (a.pressesKeys()) keys++;
+         check(Files.isRegularFile(a.thumbnail), a.id + " thumbnail " + a.thumbnail);
       }
-      check(desktop == 2, "two desktop-only apps");
+      check(keys == 2, "two apps press real keys");
       Catalog.App rubik = find(apps, "RubiksCube2D");
       check(rubik.name.equals("Rubik's Cube 2D"), "entities unescaped: " + rubik.name);
       check(find(apps, "TankGame").original && !find(apps, "Minesweeper").original, "origin from data-origin");
       check(find(apps, "Windows").warning != null && find(apps, "WindowsE").warning != null
          && find(apps, "BibleDownloader").warning == null && find(apps, "DinoGame").warning == null, "Robot apps warn");
-      check(!find(apps, "DinoGame").desktopOnly, "Dino Game plays in its own window, and in the browser");
-      check(!find(apps, "BibleDownloader").desktopOnly, "Bible Downloader plays in the browser too");
+      check(find(apps, "Windows").hint.startsWith("Presses the Windows key once, then exits"),
+         "the Robot apps describe the real desktop, not the browser's pretend Windows: " + find(apps, "Windows").hint);
 
       // Search looks at the name, id, category and hint, ignoring case and spaces around it.
       check(find(apps, "FlappyBird").matches("  FLAP "), "search by name");

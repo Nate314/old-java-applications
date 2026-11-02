@@ -8,7 +8,7 @@
 param(
     [string[]]$Apps = @('Clock', 'FlappyBird', 'Minesweeper', 'NathaNOS', 'RubiksCube2D', 'ScreenSaver',
         'SpriteFloatyStars', 'UltimateTicTacToe', 'CircleSpawner', 'StockChecker', 'SynthesizerKeyboard',
-        'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame', 'BibleDownloader', 'DinoGame'),
+        'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame', 'BibleDownloader', 'DinoGame', 'Windows', 'WindowsE'),
     [int]$Port = 8101,
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [int]$Width = 960,

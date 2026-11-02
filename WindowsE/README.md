@@ -20,3 +20,7 @@ A small window that presses Win+E a chosen number of times, which on Windows ope
 From the repo root: `./run.ps1 WindowsE` (or `./run.ps1 WindowsE -Build` to build a jar).
 
 Clicking the button presses Win+E the number of times in the text field.
+
+## In the browser
+
+The web build runs the same code on a page with a pretend Windows (see [web/README.md](../web/README.md), Pretend Windows): each Win+E opens a pretend File Explorer window on the site's app folders, cascading like the real ones. Click a folder to read what the app is, double-click it to play it; drag the windows by their title bar, close them with their x, or use Close all in the tray at the bottom left. At most 40 are open at once.

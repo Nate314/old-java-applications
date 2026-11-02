@@ -56,6 +56,8 @@
                 <source>${repo.dir}/NumberGuess/src</source>
                 <source>${repo.dir}/SimpleAlgorithms/src</source>
                 <source>${repo.dir}/TankGame/src</source>
+                <source>${repo.dir}/Windows/src</source>
+                <source>${repo.dir}/WindowsE/src</source>
               </sources>
             </configuration>
           </execution>
@@ -150,6 +152,8 @@
                 <appsource app="NumberGuess"/>
                 <appsource app="SimpleAlgorithms"/>
                 <appsource app="TankGame"/>
+                <appsource app="Windows"/>
+                <appsource app="WindowsE"/>
               </target>
             </configuration>
           </execution>
@@ -309,6 +313,22 @@
             <configuration>
               <mainClass>tankgame.Main</mainClass>
               <targetDirectory>${site.dir}/TankGame</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Windows</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>test.Test</mainClass>
+              <targetDirectory>${site.dir}/Windows</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>WindowsE</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>windowse.WindowsEMain</mainClass>
+              <targetDirectory>${site.dir}/WindowsE</targetDirectory>
             </configuration>
           </execution>
         </executions>

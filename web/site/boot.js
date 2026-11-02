@@ -26,6 +26,8 @@
  * - Share (toolbar, exit screen, arcade-complete toast; the home page's player bar and passport) opens a panel
  *   with the page's link preview card (cards/, made by web/cards.ps1), a message with the passport count, the
  *   link and ways to send it. A shared app link (?shared=N) says so on its title screen.
+ * - On <body data-shell> pages (Windows, WindowsE) plays the Windows their Robot key presses were meant for: the
+ *   Windows key opens a Start menu of every app, Win+E a File Explorer window on the app folders.
  * - Gives the site's own controls and moments short synthesized sounds in the skin's voice
  *   (window.oldjavaSound), with a Sound button in the toolbar to mute them on every open page.
  */
@@ -802,7 +804,6 @@
   function appCard(app, current, showNew) {
     var a = document.createElement('a');
     a.className = 'shim-app' + (current ? ' current' : '');
-    a.href = pageOf(app);
     if (current) a.setAttribute('aria-current', 'page');
     var pic = document.createElement('span');
     pic.className = 'shim-app-pic';
@@ -827,6 +828,13 @@
     text.appendChild(hint);
     a.appendChild(pic);
     a.appendChild(text);
+    playLink(a, app);
+    return a;
+  }
+
+  // Makes a link open the app: in the home page's player, by asking the page to swap it in.
+  function playLink(a, app) {
+    a.href = pageOf(app);
     if (embedded && window.parent !== window) {
       a.setAttribute('data-sound', 'none');   // the home page plays the new app's start
       a.addEventListener('click', function (e) {
@@ -835,7 +843,6 @@
         window.parent.postMessage({ oldjavaPlay: app.id }, location.origin);
       });
     }
-    return a;
   }
 
   // Keys typed in the page chrome must not reach the app (the shim listens on the document).
@@ -1466,6 +1473,262 @@
       box.appendChild(row);
       box.appendChild(passportLine(apps));
     });
+  }
+
+  // ---- pretend Windows (<body data-shell>: Windows and Windows+E) ----
+  // Those two apps do nothing but press keys with java.awt.Robot: the Windows key once, or Win+E over and
+  // over. The shim's Robot hands Windows key shortcuts to window.__shimShell instead of the app's window, and
+  // this plays the Windows they were written for, inside the stage: the Windows key alone opens a Start menu
+  // of every app on the site (type to search, Enter to play), and Win+E opens a File Explorer window on the
+  // folder of apps (double-click one to play it). Windows outlives the program that pressed its keys, so an
+  // exit waits until the Start menu is closed. Returns { holdExit(show) }.
+  var MAX_EXPLORERS = 40;
+  function pretendWindows() {
+    var layer = element('div', 'shim-shell');
+    document.body.appendChild(layer);
+    var menu = null, heldExit = null, explorers = [], opened = 0, front = 0, tray = null;
+
+    function element(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text) e.textContent = text;
+      return e;
+    }
+    function go(app) {
+      var a = document.createElement('a');
+      playLink(a, app);
+      a.click();
+    }
+    function picture(app, cls) {
+      var pic = element('span', cls);
+      var img = element('img');
+      img.src = app.shot;
+      img.alt = '';
+      pic.appendChild(img);
+      return pic;
+    }
+
+    function closeMenu() {
+      if (!menu) return;
+      menu.remove();
+      menu = null;
+      document.removeEventListener('pointerdown', outside, true);
+      playSound('close');
+      if (heldExit) {
+        var show = heldExit;
+        heldExit = null;
+        show();
+      }
+    }
+    function outside(e) { if (menu && !menu.contains(e.target)) closeMenu(); }
+    function openMenu() {
+      var box = menu = element('div', 'shim-start');
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-label', 'Start');
+      var search = element('input', 'shim-start-search');
+      search.type = 'search';
+      search.placeholder = 'Type here to search';
+      search.setAttribute('aria-label', 'Search apps');
+      var head = element('div', 'shim-start-head');
+      var heading = element('strong', null, 'All apps');
+      var count = element('span');
+      head.appendChild(heading);
+      head.appendChild(count);
+      var grid = element('div', 'shim-start-grid');
+      var none = element('p', 'shim-start-none');
+      none.hidden = true;
+      var foot = element('div', 'shim-start-foot');
+      var who = element('span', 'shim-start-user', 'Visitor');
+      var power = element('button', 'shim-start-power', '⏻');
+      power.type = 'button';
+      power.title = 'Close the Start menu';
+      power.setAttribute('aria-label', 'Close the Start menu');
+      power.setAttribute('data-sound', 'none');
+      power.addEventListener('click', closeMenu);
+      foot.appendChild(who);
+      foot.appendChild(power);
+      [search, head, grid, none, foot].forEach(function (n) { box.appendChild(n); });
+      ownKeys(box, closeMenu);
+      layer.appendChild(box);
+      document.addEventListener('pointerdown', outside, true);
+      playSound('open');
+      search.focus({ preventScroll: true });
+      catalog().then(function (apps) {
+        if (menu !== box) return;
+        var tiles = apps.map(function (app) {
+          var a = element('a', 'shim-tile');
+          playLink(a, app);
+          a.title = app.hint;
+          var pic = picture(app, 'shim-tile-pic');
+          if (played[app.id]) {
+            var badge = element('span', 'shim-badge played', '✓');
+            badge.title = 'Played';
+            pic.appendChild(badge);
+          }
+          a.appendChild(pic);
+          a.appendChild(element('span', 'shim-tile-name', app.name));
+          grid.appendChild(a);
+          return { app: app, a: a };
+        });
+        function shown() { return tiles.filter(function (t) { return !t.a.hidden; }); }
+        function filter() {
+          var q = search.value.trim().toLowerCase();
+          tiles.forEach(function (t) {
+            t.a.hidden = !!q && (t.app.name + ' ' + t.app.id + ' ' + t.app.hint).toLowerCase().indexOf(q) < 0;
+            t.a.classList.remove('first');
+          });
+          var hits = shown();
+          if (q && hits.length) hits[0].a.classList.add('first');
+          heading.textContent = !q ? 'All apps' : hits.length ? 'Best match' : 'Search';
+          count.textContent = hits.length + (hits.length === 1 ? ' app' : ' apps');
+          none.hidden = hits.length > 0;
+          grid.hidden = !hits.length;
+          none.textContent = 'No app matches "' + search.value.trim() + '".';
+        }
+        search.addEventListener('input', filter);
+        search.addEventListener('keydown', function (e) {
+          var hits = shown();
+          if (e.key === 'Enter' && hits.length) hits[0].a.click();
+        });
+        filter();
+        var n = apps.filter(function (a) { return played[a.id]; }).length;
+        who.textContent = 'Visitor · ' + n + ' of ' + apps.length + ' apps played';
+      });
+    }
+
+    function showTray() {
+      if (!explorers.length) {
+        if (tray) tray.remove();
+        tray = null;
+        return;
+      }
+      if (!tray) {
+        tray = element('div', 'shim-shell-tray');
+        tray.appendChild(element('span', 'shim-folder-mini'));
+        tray.appendChild(element('span', 'shim-shell-count'));
+        var all = element('button', null, 'Close all');
+        all.type = 'button';
+        all.addEventListener('click', function () {
+          explorers.forEach(function (w) { w.remove(); });
+          explorers = [];
+          showTray();
+        });
+        tray.appendChild(all);
+        layer.appendChild(tray);
+      }
+      tray.querySelector('.shim-shell-count').textContent = 'File Explorer: ' + explorers.length +
+        (explorers.length === 1 ? ' window' : ' windows') + (explorers.length >= MAX_EXPLORERS ? ' (the most this page opens)' : '');
+    }
+    function raise(w) {
+      w.style.zIndex = String(++front);
+      explorers.forEach(function (o) { o.classList.toggle('active', o === w); });
+    }
+    function draggable(w, handle) {
+      handle.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0 || e.target.closest('button')) return;
+        var x = e.clientX - w.offsetLeft, y = e.clientY - w.offsetTop;
+        handle.setPointerCapture(e.pointerId);
+        function move(m) {
+          w.style.left = Math.max(80 - w.offsetWidth, Math.min(layer.clientWidth - 80, m.clientX - x)) + 'px';
+          w.style.top = Math.max(0, Math.min(layer.clientHeight - 32, m.clientY - y)) + 'px';
+        }
+        function up() {
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', up);
+          handle.removeEventListener('pointercancel', up);
+        }
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', up);
+        handle.addEventListener('pointercancel', up);
+      });
+    }
+    function openExplorer() {
+      if (explorers.length >= MAX_EXPLORERS) return;
+      var w = element('div', 'shim-explorer');
+      w.setAttribute('role', 'dialog');
+      w.setAttribute('aria-label', 'File Explorer: java-applications');
+      var bar = element('div', 'shim-ex-title');
+      bar.appendChild(element('span', 'shim-folder-mini'));
+      bar.appendChild(element('span', 'shim-ex-name', 'java-applications'));
+      var close = closeButton(function () {
+        w.remove();
+        explorers = explorers.filter(function (o) { return o !== w; });
+        showTray();
+        playSound('close');
+      });
+      close.setAttribute('data-sound', 'none');
+      bar.appendChild(close);
+      var address = element('div', 'shim-ex-address');
+      ['This PC', 'java-applications'].forEach(function (crumb, i) {
+        if (i) address.appendChild(element('span', 'shim-ex-sep', '›'));
+        address.appendChild(element('span', null, crumb));
+      });
+      var items = element('div', 'shim-ex-items');
+      var status = element('div', 'shim-ex-status');
+      var info = element('span', 'shim-ex-info');
+      var open = element('button', null, 'Open');
+      open.type = 'button';
+      open.hidden = true;
+      status.appendChild(info);
+      status.appendChild(open);
+      [bar, address, items, status].forEach(function (n) { w.appendChild(n); });
+      ownKeys(w);
+      w.addEventListener('pointerdown', function () { raise(w); });
+      draggable(w, bar);
+
+      // Cascaded down and to the right from the top left, as Windows does, starting over when the next would
+      // not fit. The bottom 44 px are left to the tray.
+      var tall = layer.clientHeight - 44;
+      var width = Math.min(560, layer.clientWidth - 16), height = Math.max(160, Math.min(380, tall - 16));
+      var step = 28;
+      var room = Math.max(1, Math.floor(Math.min(layer.clientWidth - width, tall - height) / step));
+      var at = 8 + (opened++ % room) * step;
+      w.style.left = at + 'px';
+      w.style.top = at + 'px';
+      w.style.width = width + 'px';
+      w.style.height = height + 'px';
+      layer.appendChild(w);
+      explorers.push(w);
+      raise(w);
+      showTray();
+      playSound('open');
+
+      catalog().then(function (apps) {
+        var selected = null;
+        info.textContent = apps.length + ' items';
+        open.addEventListener('click', function () { if (selected) go(selected); });
+        apps.forEach(function (app) {
+          var b = element('button', 'shim-ex-item');
+          b.type = 'button';
+          b.title = app.name + ': ' + app.hint;
+          b.setAttribute('data-sound', 'none');
+          b.appendChild(picture(app, 'shim-folder'));
+          b.appendChild(element('span', 'shim-ex-label', app.id));
+          b.addEventListener('click', function () {
+            selected = app;
+            Array.prototype.forEach.call(items.children, function (o) { o.classList.toggle('sel', o === b); });
+            info.textContent = app.name + ': ' + app.hint;
+            open.hidden = false;
+          });
+          b.addEventListener('dblclick', function () { go(app); });
+          b.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            go(app);
+          });
+          items.appendChild(b);
+        });
+      });
+    }
+
+    window.__shimShell = function (keycode) {
+      if (keycode === 524) {
+        if (menu) closeMenu(); else openMenu();
+      } else if (keycode === 69) {
+        openExplorer();
+      }
+    };
+    return { holdExit: function (show) { if (!menu) return false; heldExit = show; return true; } };
   }
 
   // ---- title screen ----
@@ -2152,10 +2415,18 @@
     // The player's iframe starts at once (the visitor's click on the home page started it).
     var title = extras && !embedded && again !== appId() && typeof main === 'function' ? titleScreen(files) : null;
     var loading = !title && files.length ? overlay('Loading...') : null;
-    window.__shimExited = function (msg) { if (extras) exitScreen(msg); else overlay(msg, 'Run again'); };
+    var shell = body.hasAttribute('data-shell') ? pretendWindows() : null;
+    window.__shimExited = function (msg) {
+      function show() { if (extras) exitScreen(msg); else overlay(msg, 'Run again'); }
+      if (!shell || !shell.holdExit(show)) show();
+    };
 
     function start() {
-      main(args);
+      // TeaVM hands main's outcome to this callback. System.exit unwinds the calling thread with an error
+      // (web.rt.Exit); from main itself (Windows, which has no window) that is the end of the program, not a crash.
+      main(args, function (result) {
+        if (result instanceof Error && !/System\.exit$/.test(String(result))) throw result;
+      });
       if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
       if (extras && !embedded) howToPlay();
       if (extras) stampOnPlay();

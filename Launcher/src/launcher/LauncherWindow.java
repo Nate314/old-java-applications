@@ -54,7 +54,7 @@ public final class LauncherWindow extends JFrame {
    private static final int GAP = 14;
    private static final int PAD = 22;
    private static final String[][] FILTERS = {
-      {"all", "All"}, {"game", "Games"}, {"music", "Music"}, {"toy", "Toys"}, {"tool", "Tools"}, {"desktop", "Desktop only"}};
+      {"all", "All"}, {"game", "Games"}, {"music", "Music"}, {"toy", "Toys"}, {"tool", "Tools"}, {"keys", "Real keys"}};
 
    private final List<Catalog.App> apps;
    private final PlayLog log;
@@ -233,7 +233,7 @@ public final class LauncherWindow extends JFrame {
    }
 
    private static boolean inFilter(Catalog.App a, String f) {
-      return f.equals("all") || (f.equals("desktop") ? a.desktopOnly : a.category.equals(f));
+      return f.equals("all") || (f.equals("keys") ? a.pressesKeys() : a.category.equals(f));
    }
 
    // ---- state ---------------------------------------------------------------------------------------------
@@ -316,7 +316,7 @@ public final class LauncherWindow extends JFrame {
       List<Catalog.App> fresh = new ArrayList<>();
       List<Catalog.App> any = new ArrayList<>();
       for (Catalog.App a : among) {
-         if (a.desktopOnly || running.contains(a.id)) continue;
+         if (a.pressesKeys() || running.contains(a.id)) continue;
          any.add(a);
          if (log.count(a.id) == 0) fresh.add(a);
       }
@@ -484,7 +484,7 @@ public final class LauncherWindow extends JFrame {
          g2.setColor(Ui.TEXT);
          g2.drawString(fit(g2, app.name, w - 24), 12, ph + 30);
          int x = 12 + Ui.chip(g2, 11, ph + 40, Ui.categoryName(app.category), Ui.category(app.category));
-         if (app.desktopOnly) Ui.chip(g2, x + 6, ph + 40, "Desktop only", Ui.MUTED);
+         if (app.pressesKeys()) Ui.chip(g2, x + 6, ph + 40, "Real keys", Ui.WARN);
          g2.setFont(Ui.font(Font.PLAIN, 12f));
          g2.setColor(isRunning(app.id) ? Ui.GO : Ui.MUTED);
          String line = isRunning(app.id) ? "Running now" : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
@@ -540,7 +540,7 @@ public final class LauncherWindow extends JFrame {
             Graphics2D g2 = Ui.smooth(g);
             int x = Ui.chip(g2, 0, 0, Ui.categoryName(app.category), Ui.category(app.category)) + 6;
             x += Ui.chip(g2, x, 0, app.original ? "Original source" : "Decompiled jar", new Color(0x8fb4ff)) + 6;
-            if (app.desktopOnly) Ui.chip(g2, x, 0, "Desktop only", Ui.MUTED);
+            if (app.pressesKeys()) Ui.chip(g2, x, 0, "Presses real keys", Ui.WARN);
             g2.dispose();
          }
       };

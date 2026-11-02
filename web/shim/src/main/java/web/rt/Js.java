@@ -322,4 +322,8 @@ public final class Js {
 
     @JSBody(params = "msg", script = "if (window.__shimExited) window.__shimExited(msg);")
     public static native void notifyExited(String msg);
+
+    /** A Windows key shortcut the Robot pressed: the page's pretend Windows (boot.js, &lt;body data-shell&gt;) takes it. */
+    @JSBody(params = "keycode", script = "if (window.__shimShell) window.__shimShell(keycode);")
+    public static native void shellShortcut(int keycode);
 }
