@@ -54,10 +54,12 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 Requires a JDK (`java` and `javac` on PATH). From the repo root in PowerShell:
 
 ```powershell
-./run.ps1                      # prompts for an app, then compiles and runs it
+./run.ps1                      # opens the launcher, then compiles and runs the app you pick
 ./run.ps1 Minesweeper          # compiles and runs Minesweeper
 ./run.ps1 Minesweeper -Build   # builds out/Minesweeper.jar instead of running
 ```
+
+With no app name, `run.ps1` opens the [Launcher](Launcher/README.md): all 20 apps as cards with their pictures, filters for games, music, toys, tools and desktop-only apps, a search field that has the keyboard from the start, and Enter to play. It remembers what you launched (in `~/.oldjava-launcher.txt`), opens on the last one, marks the rest New, and Pick for me plays one you have not tried. Apps that press real keys (DinoGame, Windows, WindowsE) ask first. It reads the apps' names, hints and thumbnails from the web gallery, so both front doors describe them the same way.
 
 Run mode launches each app from the folder it expects (for example `FlappyBird/src` with argument `120`), with any non-Java files in `src/` on the classpath. Build mode prints the matching `java -jar` command. Build output goes to `out/`, which is git-ignored.
 
