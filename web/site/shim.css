@@ -544,7 +544,7 @@ canvas.paint.top {
   cursor: pointer;
 }
 
-/* ---- ways to the next app (boot.js): Switch app drawer, How to play card, exit screen ---- */
+/* ---- ways to the next app (boot.js): Switch app drawer, exit screen ---- */
 
 .shim-toolbar {
   flex-wrap: wrap;
@@ -710,37 +710,6 @@ canvas.paint.top {
   gap: 2px;
 }
 
-.shim-hint {
-  position: fixed;
-  top: 48px;
-  right: 8px;
-  z-index: 1999999999;
-  width: min(300px, calc(100vw - 16px));
-  box-sizing: border-box;
-  padding: 10px 40px 10px 14px;
-  border-radius: 10px;
-  border-left: 4px solid var(--accent);
-  background: var(--card-bg);
-  color: var(--page-text);
-  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
-  transition: opacity 0.5s;
-}
-
-.shim-hint.gone {
-  opacity: 0;
-}
-
-.shim-hint p {
-  margin: 4px 0 0;
-}
-
-.shim-hint .shim-close {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-}
-
 .shim-exit {
   width: min(560px, calc(100vw - 32px));
   padding: 20px 22px;
@@ -799,15 +768,10 @@ canvas.paint.top {
   height: 84px;
 }
 
-/* Narrow pages: the toolbar stays on one line, and the hint moves to the bottom, away from it. */
+/* Narrow pages: the toolbar stays on one line. */
 @media (max-width: 560px) {
   .shim-toolbar .shim-next {
     display: none;
-  }
-
-  .shim-hint {
-    top: auto;
-    bottom: 8px;
   }
 }
 
@@ -896,8 +860,7 @@ canvas.paint.top {
   color: #1f2937;
 }
 
-/* Top center, under the toolbar: the bottom has NathaNOS's taskbar, the output panel and (narrow pages)
-   the How to play card. */
+/* Home page: top center, under the toolbar (app pages show stamps on the band's news line instead). */
 .shim-toast {
   position: fixed;
   left: 50%;
@@ -1262,11 +1225,6 @@ canvas.paint.top {
 }
 
 @media (max-width: 560px) {
-  /* The How to play card sits above a shown controller. */
-  body .shim-hint {
-    bottom: calc(var(--pad-h, 0px) + 16px);
-  }
-
   .shim-pad {
     gap: 8px 12px;
     padding: 8px 10px 10px;
@@ -2592,8 +2550,7 @@ button.shim-toast-go {
 
 /* The app's name on the left; the controls keep to the right. */
 .shim-toolbar .shim-bar-name {
-  flex: 1 1 auto;
-  min-width: 0;
+  display: block;
   overflow: hidden;
   font-size: 14px;
   letter-spacing: 0.01em;
@@ -2619,10 +2576,164 @@ button.shim-toast-go {
   box-shadow: none;
 }
 
-/* Cards that cleared the floating toolbar now clear the band. */
-:root[data-stage] .shim-hint,
-:root[data-stage] .shim-toast {
-  top: calc(var(--bar-h, 40px) + 8px);
+/* ---- band news (boot.js bandNews): How to play and new stamps take the name's slot in the band for a few
+   seconds, so they never float over the stage and the stage never moves for them. The name slides up and the
+   news line slides in; a line too long for the slot scrolls through (boot.js), fading out at its right edge. */
+
+.shim-toolbar .shim-bar-slot {
+  position: relative;
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shim-bar-slot > .shim-bar-name,
+.shim-news {
+  transition: transform 0.35s cubic-bezier(0.3, 1.3, 0.5, 1), opacity 0.25s, visibility 0.35s;
+}
+
+.shim-bar-slot[data-news] > .shim-bar-name {
+  transform: translateY(-110%);
+  opacity: 0;
+}
+
+.shim-news {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateY(110%);
+  opacity: 0;
+  visibility: hidden;
+}
+
+.shim-bar-slot[data-news] > .shim-news {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+}
+
+.shim-news-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+}
+
+.shim-news-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 20px;   /* clear of the fade when scrolled to its end */
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.shim-news-tag {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The stamped app's thumbnail in a small round seal, pressed in like a rubber stamp. */
+.shim-news-seal {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid #22c55e;
+  background: var(--desk);
+  overflow: hidden;
+  animation: shim-stamp 0.6s 0.2s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+.shim-news-seal img {
+  max-width: 80%;
+  max-height: 80%;
+}
+
+.shim-news-track .shim-meter {
+  flex: none;
+  width: 72px;
+}
+
+.shim-toolbar .shim-news-go {
+  flex: none;
+  padding: 1px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shim-toolbar .shim-news .shim-close {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.shim-toolbar .shim-news .shim-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* The band's ? button, which shows How to play again: lit while it shows. */
+.shim-toolbar .shim-help {
+  width: 22px;
+  padding: 1px 0;
+}
+
+.shim-toolbar .shim-help[aria-pressed="true"] {
+  background: #fff;
+  color: #111827;
+}
+
+:root[data-skin="arcade"] .shim-news-tag,
+:root[data-skin="arcade"] .shim-toolbar .shim-news-go {
+  background: #ff2bd6;
+  box-shadow: 0 0 8px rgba(255, 43, 214, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-news-track {
+  color: #7df9ff;
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-bar-slot > .shim-bar-name,
+  .shim-news {
+    transition: opacity 0.25s, visibility 0.25s;
+  }
+
+  .shim-bar-slot[data-news] > .shim-bar-name,
+  .shim-news {
+    transform: none;
+  }
+
+  .shim-news-seal {
+    animation: none;
+  }
 }
 
 :root[data-stage] .shim-title {
@@ -2653,8 +2764,10 @@ button.shim-toast-go {
     font-size: 12px;
   }
 
-  :root[data-stage] .shim-hint {
-    top: auto;
+  /* The name's slot takes the band's first row, beside only its ? button, so the news line has room to read. */
+  :root[data-stage] .shim-toolbar .shim-bar-slot {
+    flex-basis: calc(100% - 40px);
+    min-height: 24px;
   }
 }
 
