@@ -1421,6 +1421,13 @@
       var r = starRows(text);
       return r.won ? 'Your Star Catcher nights: ' + r.won + ' of 6 caught, ' + r.stars + ' of 18 stars' : '';
     } },
+    GroupCreator: { file: '.groupcreator-class.txt', show: function (text) {
+      var names = /^names=(.*)$/m.exec(text);
+      var count = names ? names[1].split(',').filter(function (n) { return n.trim(); }).length : 0;
+      var rounds = (text.match(/^round=/mg) || []).length;
+      if (!rounds) return '';
+      return 'Your class: ' + count + (count === 1 ? ' name, ' : ' names, ') + rounds + (rounds === 1 ? ' round' : ' rounds') + ' of groups remembered';
+    } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split(',').map(Number);
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
