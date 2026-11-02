@@ -54,6 +54,7 @@
             <configuration>
               <sources>
                 <source>${repo.dir}/NathaNOS/src</source>
+                <source>${repo.dir}/BibleDownloader/src</source>
                 <source>${repo.dir}/CircleSpawner/src</source>
                 <source>${repo.dir}/FlappyBird/src</source>
                 <source>${repo.dir}/Minesweeper/src</source>
@@ -131,6 +132,7 @@
                     </jar>
                   </sequential>
                 </macrodef>
+                <appjar app="BibleDownloader" main="audiobibledownloader.Main"/>
                 <appjar app="CircleSpawner" main="circlewindow.Main"/>
                 <appjar app="FlappyBird" main="flappyBird.Main"/>
                 <appjar app="Minesweeper" main="minesweeper.Main"/>

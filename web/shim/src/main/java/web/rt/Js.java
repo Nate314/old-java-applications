@@ -290,6 +290,15 @@ public final class Js {
     @JSBody(params = { "key", "path" }, script = "var _v = (window.__shimSaves || {})[path]; return typeof _v === 'string' ? _v : null;")
     public static native String savedData(String key, String path);
 
+    /** Offers a file to the user as a browser download; data holds one byte per char. */
+    @JSBody(params = { "name", "data" }, script =
+            "var _b = new Uint8Array(data.length); for (var _i = 0; _i < data.length; _i++) _b[_i] = data.charCodeAt(_i);"
+            + "var _t = name.toLowerCase().endsWith('.html') ? 'text/html' : 'application/octet-stream';"
+            + "var _u = URL.createObjectURL(new Blob([_b], { type: _t }));"
+            + "var _a = document.createElement('a'); _a.href = _u; _a.download = name; document.body.appendChild(_a); _a.click();"
+            + "_a.remove(); setTimeout(function () { URL.revokeObjectURL(_u); }, 10000);")
+    public static native void download(String name, String data);
+
     /** Replaces the app's saved files. A full localStorage logs an error and keeps the previous copy. */
     @JSBody(params = { "key", "paths", "data" }, script =
             "var _s = {}; for (var _i = 0; _i < paths.length; _i++) _s[paths[_i]] = data[_i];"

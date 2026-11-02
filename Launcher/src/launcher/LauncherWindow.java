@@ -295,7 +295,7 @@ public final class LauncherWindow extends JFrame {
 
    /**
     * Plays an app not launched yet, of the apps shown if any qualify, else of all. Desktop-only apps are never
-    * picked: they drive the real desktop, or (Bible Downloader) fail.
+    * picked: they drive the real desktop.
     */
    void pickForMe() {
       List<Catalog.App> from = candidates(visible());

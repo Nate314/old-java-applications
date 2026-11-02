@@ -31,6 +31,10 @@ public class TToolkit {
         return TImage.load(filename);
     }
 
+    public TImage getImage(java.net.URL url) {
+        return TImage.load(url.getPath());
+    }
+
     public TImage createImage(String filename) {
         return TImage.load(filename);
     }

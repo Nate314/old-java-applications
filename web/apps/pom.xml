@@ -39,6 +39,7 @@
             <goals><goal>add-source</goal></goals>
             <configuration>
               <sources>
+                <source>${repo.dir}/BibleDownloader/src</source>
                 <source>${repo.dir}/CircleSpawner/src</source>
                 <source>${repo.dir}/Clock/src</source>
                 <source>${repo.dir}/FlappyBird/src</source>
@@ -130,6 +131,7 @@
                     <echo file="${site.dir}/@{app}/source/files.txt" message="${source.@{app}}${line.separator}"/>
                   </sequential>
                 </macrodef>
+                <appsource app="BibleDownloader"/>
                 <appsource app="CircleSpawner"/>
                 <appsource app="Clock"/>
                 <appsource app="FlappyBird"/>
@@ -171,6 +173,14 @@
         <groupId>org.teavm</groupId>
         <artifactId>teavm-maven-plugin</artifactId>
         <executions>
+          <execution>
+            <id>BibleDownloader</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>audiobibledownloader.Main</mainClass>
+              <targetDirectory>${site.dir}/BibleDownloader</targetDirectory>
+            </configuration>
+          </execution>
           <execution>
             <id>CircleSpawner</id>
             <goals><goal>compile</goal></goals>

@@ -18,13 +18,16 @@ import org.teavm.vm.spi.TeaVMPlugin;
  * Compile-time rewrite of a few JDK calls inside app code, so app sources stay untouched:
  * {@code Thread.sleep(long)} goes to {@code web.rt.Sleep.sleep} (JDK semantics for negative values),
  * {@code System.exit(int)} goes to {@code web.rt.Exit.exit} (closes the app's windows on the page), and
- * URL/URLConnection stream opening goes to {@code web.rt.Net} (throws IOException on failed requests).
+ * URL/URLConnection stream opening goes to {@code web.rt.Net} (throws IOException on failed requests), and
+ * {@code Class.getResource(String)} goes to {@code web.rt.Net.resource} (null: the page has no class path to look in).
  */
 public class ShimPlugin implements TeaVMPlugin, ClassHolderTransformer {
     private static final MethodReference SLEEP = new MethodReference("web.rt.Sleep", "sleep", ValueType.LONG, ValueType.VOID);
     private static final MethodReference EXIT = new MethodReference("web.rt.Exit", "exit", ValueType.INTEGER, ValueType.VOID);
     private static final MethodReference OPEN_STREAM = new MethodReference("web.rt.Net", "openStream",
             ValueType.object("java.net.URL"), ValueType.object("java.io.InputStream"));
+    private static final MethodReference RESOURCE = new MethodReference("web.rt.Net", "resource",
+            ValueType.object("java.lang.Class"), ValueType.object("java.lang.String"), ValueType.object("java.net.URL"));
     private static final MethodReference GET_INPUT_STREAM = new MethodReference("web.rt.Net", "getInputStream",
             ValueType.object("java.net.URLConnection"), ValueType.object("java.io.InputStream"));
 
@@ -55,6 +58,14 @@ public class ShimPlugin implements TeaVMPlugin, ClassHolderTransformer {
                         } else if (invoke.getInstance() == null && isLang(target.getClassName(), "System")
                                 && target.getName().equals("exit")) {
                             invoke.setMethod(EXIT);
+                        } else if (invoke.getInstance() != null && isLang(target.getClassName(), "Class")
+                                && target.getName().equals("getResource") && target.parameterCount() == 1) {
+                            Variable receiver = invoke.getInstance();
+                            Variable resourceName = invoke.getArguments().get(0);
+                            invoke.setType(InvocationType.SPECIAL);
+                            invoke.setInstance(null);
+                            invoke.setArguments(receiver, resourceName);
+                            invoke.setMethod(RESOURCE);
                         } else if (invoke.getInstance() != null && target.parameterCount() == 0
                                 && (isNet(target.getClassName(), "URL") && target.getName().equals("openStream")
                                     || (isNet(target.getClassName(), "URLConnection") || isNet(target.getClassName(), "HttpURLConnection"))

@@ -4,7 +4,7 @@ The front door for the desktop: `./run.ps1` with no app name opens it. Every app
 
 ## Controls / usage
 
-- **Cards**: one per app, the 16 browser apps in the web gallery's order, then the 4 desktop-only ones. Each shows the app's thumbnail, its category, and "New: not launched here yet" (with a NEW badge) or "Played 3 times, last yesterday". An app that is running says so with a green RUNNING badge.
+- **Cards**: one per app, the 17 browser apps in the web gallery's order, then the 3 desktop-only ones. Each shows the app's thumbnail, its category, and "New: not launched here yet" (with a NEW badge) or "Played 3 times, last yesterday". An app that is running says so with a green RUNNING badge.
 - **Search**: the field at the top right has the keyboard from the start. Typing narrows the cards to apps whose name, folder name, category or hint contain the text. **Esc** clears it.
 - **Arrow keys** move the selection (Up and Down by a row; Left, Right, Home and End while the search field is empty). **Enter** plays the selected app, from anywhere in the window.
 - **Filters**: All, Games, Music, Toys, Tools and Desktop only, each with its count.
@@ -17,14 +17,14 @@ The front door for the desktop: `./run.ps1` with no app name opens it. Every app
 
 ## Where things come from
 
-- **Names, hints, categories, origins and thumbnails** of the 16 browser apps are read from the gallery in `web/site/index.html` and the screenshots in `web/site/shots/`, so the home page stays the one place that describes an app. Bible Downloader, the Dino Game bot, Windows and Windows+E are not in the gallery; their entries are in `Catalog.java`, written from their READMEs, and their pictures are drawn cards with their initials.
+- **Names, hints, categories, origins and thumbnails** of the 17 browser apps are read from the gallery in `web/site/index.html` and the screenshots in `web/site/shots/`, so the home page stays the one place that describes an app. The Dino Game bot, Windows and Windows+E are not in the gallery; their entries are in `Catalog.java`, written from their READMEs, and their pictures are drawn cards with their initials.
 - **Playing an app** runs `run.ps1 <App>` in the PowerShell that started the launcher, from the repo root, so each app is compiled and started from its own working folder exactly as from the command line. Its output goes to the same console.
 - **The play record** (how many launches, and the last) is saved to `.oldjava-launcher.txt` in the user's home folder, one `App count lastLaunchMillis` line per app. It counts launches from the launcher only. Delete the file to start over.
 
 ## Code layout
 
 - `src/launcher/Main.java`: entry point; reads the catalog from the current folder (the repo root) and opens the window. The optional argument is the PowerShell to run `run.ps1` with (default `powershell`).
-- `src/launcher/Catalog.java`: the list of apps; parses the gallery and adds the desktop-only four.
+- `src/launcher/Catalog.java`: the list of apps; parses the gallery and adds the desktop-only three.
 - `src/launcher/LauncherWindow.java`: the window: header with search and filters, the card grid, the detail pane, keys and launching.
 - `src/launcher/PlayLog.java`: the play record file, and its "Played twice, last yesterday" wording.
 - `src/launcher/Runner.java`: starts an app in its own process (`run.ps1`) and reports its exit code.

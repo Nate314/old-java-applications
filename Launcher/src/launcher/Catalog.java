@@ -10,8 +10,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The apps the launcher lists. The 16 browser apps come from the gallery in web/site/index.html (the one place
- * the site describes them), so a name or hint changed there shows here too. The four desktop-only apps are not in
+ * The apps the launcher lists. The 17 browser apps come from the gallery in web/site/index.html (the one place
+ * the site describes them), so a name or hint changed there shows here too. The three desktop-only apps are not in
  * the gallery, so they are described below, from their READMEs.
  */
 public final class Catalog {
@@ -76,10 +76,6 @@ public final class Catalog {
 
    static List<App> desktopOnly() {
       List<App> apps = new ArrayList<>();
-      apps.add(new App("BibleDownloader", "Bible Downloader", "tool",
-         "Downloads NIV Bible chapters from bible.com, as each chapter's MP3 audio or as chapter text saved to HTML. "
-            + "Its 2016 page addresses return 404 today, so every chapter fails.",
-         false, true, null, null));
       apps.add(new App("DinoGame", "Dino Game bot", "toy",
          "A bot for the Chrome dinosaur game: it watches one screen pixel and presses Space when an obstacle reaches it. "
             + "Click one of its marker squares to stop it.",

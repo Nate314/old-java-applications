@@ -1563,6 +1563,17 @@
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
       return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
     } },
+    // The reader: the place it is open at, chapters read to the end and highlighted verses.
+    BibleDownloader: { file: '.bibledownloader.txt', show: function (text) {
+      var place = /^place=(.+)$/m.exec(text);
+      if (!place) return '';
+      var read = /^read=(.*)$/m.exec(text);
+      var marks = /^marks=(.*)$/m.exec(text);
+      var count = function (m) { return m ? m[1].split(',').filter(function (r) { return r.trim(); }).length : 0; };
+      var n = count(read), h = count(marks);
+      return 'Your Bible: open at ' + place[1].trim() + ', ' + n + ' of 1,189 chapters read'
+        + (h ? ', ' + h + (h === 1 ? ' highlight' : ' highlights') : '');
+    } },
     // The practice desk: the day it is on, and the net worth at the last closing bell against the $10,000 start.
     StockChecker: { file: '.stockchecker-desk.txt', show: function (text) {
       var day = /^day=(\d+)$/m.exec(text);

@@ -16,9 +16,12 @@ import java.util.Map;
  * page is hidden) this walks it, and each file written since the last look is copied into localStorage under
  * {@code oldjava.saves.<App>}. On the next load those files are written back over the page's preloaded ones before
  * main() runs, so FlappyBird's best score or StockChecker's edited list come back as they would on a desktop disk.
+ * Files written to {@code ~/Downloads} are not kept: each is handed to the browser as a download, then deleted.
  */
 public final class Saves {
     private static final String PREFIX = "oldjava.saves.";
+    /** user.home is "/" here, so this is ~/Downloads. */
+    private static final String DOWNLOADS = "/Downloads/";
 
     /** Last-modified time of every file seen, so unchanged files are not read again. */
     private static final Map<String, Long> seen = new HashMap<>();
@@ -56,6 +59,14 @@ public final class Saves {
         Map<String, Boolean> present = new HashMap<>();
         for (File file : files) {
             String path = file.getAbsolutePath();
+            if (path.startsWith(DOWNLOADS)) {
+                String data = read(file);
+                if (data != null) {
+                    Js.download(file.getName(), data);
+                }
+                file.delete();
+                continue;
+            }
             present.put(path, Boolean.TRUE);
             long modified = file.lastModified();
             Long before = seen.put(path, modified);
