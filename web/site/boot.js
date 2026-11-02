@@ -536,7 +536,8 @@
     ],
     SynthesizerKeyboard: [
       { piano: ['Z', 'S', 'X', 'D', 'C', 'V', 'G', 'B', 'H', 'N', 'J', 'M', ','] },
-      { buttons: [{ k: 'T', label: 'Song' }, { k: 'L', label: 'Listen' }, { k: 'R', label: 'Restart' }] },
+      { buttons: [{ k: 'T', label: 'Song' }, { k: 'L', label: 'Listen' }, { k: 'R', label: 'Restart' },
+                  { k: 'Space', label: 'Record' }, { k: 'Enter', label: 'Copy link' }] },
       { buttons: [{ k: 'ArrowLeft', label: 'Octave −' }, { k: 'ArrowRight', label: 'Octave +' },
                   { k: 'ArrowDown', label: 'Sound −' }, { k: 'ArrowUp', label: 'Sound +' }] }
     ],
@@ -551,6 +552,7 @@
   // A key name from PADS as the fields of a DOM key event, plus the label on its keycap.
   function keyOf(name) {
     if (name === 'Space') return { key: ' ', code: 'Space', which: 32, cap: 'Space' };
+    if (name === 'Enter') return { key: 'Enter', code: 'Enter', which: 13, cap: 'Enter' };
     if (ARROWS[name]) return { key: name, code: name, which: ARROWS[name][0], cap: ARROWS[name][1] };
     if (name === ',') return { key: ',', code: 'Comma', which: 188, cap: ',' };
     return { key: name.toLowerCase(), code: 'Key' + name, which: name.charCodeAt(0), cap: name };
@@ -977,8 +979,13 @@
   // app link carries ?shared=N, the sender's stamp count, and the title screen it opens on says so.
   var shareBox = null;
   var SHARED = /[?&]shared=(\d{1,3})(?:&|$)/.exec(location.search);
-  // A game a friend sent (UltimateTicTacToe's Friend by link): the page opens on their move.
-  var GAME_LINK = /[?&]game=[a-i1-9]+(?:&|$)/i.test(location.search);
+  // A game a friend sent (UltimateTicTacToe's Friend by link) or a tune (SynthesizerKeyboard's Record): the title
+  // screen says what the link brought.
+  var INVITE = /[?&]game=[a-i1-9]+(?:&|$)/i.test(location.search)
+    ? 'A friend sent you a game, and it is your move. Press Play to answer it.'
+    : /[?&]tune=(?:[a-m][1-8]){2,}(?:&|$)/i.test(location.search)
+      ? 'A friend sent you a tune. Press Play to hear it, then play it back.'
+      : '';
   function openShare(id, opener) {
     if (embedded && window.parent !== window) {   // the home page shows it over its player, at full size
       window.parent.postMessage({ oldjavaShare: id || '' }, location.origin);
@@ -2122,10 +2129,10 @@
         ? '✓ In your passport since ' + new Date(played[app.id]).toLocaleDateString()
         : 'New: playing it adds stamp ' + (count + 1) + ' of ' + apps.length + ' to your passport';
       stamp.classList.toggle('played', !!played[app.id]);
-      if (GAME_LINK) {
+      if (INVITE) {
         var invite = document.createElement('p');
         invite.className = 'shim-title-shared';
-        invite.textContent = 'A friend sent you a game, and it is your move. Press Play to answer it.';
+        invite.textContent = INVITE;
         text.insertBefore(invite, cat);
       }
       if (SHARED) {
@@ -2531,8 +2538,9 @@
 
     var files = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
     var args = (body.getAttribute('data-args') || '').split(/\s+/).filter(Boolean);
-    // <body data-args-page> (UltimateTicTacToe): main also gets the page's address, to build links to itself
-    // (a game with a friend travels in ?game=, see the app's README) and to read the game a link brought.
+    // <body data-args-page> (UltimateTicTacToe, SynthesizerKeyboard): main also gets the page's address, to build
+    // links to itself (a game with a friend travels in ?game=, a recorded tune in ?tune=, see the apps' READMEs) and
+    // to read what a link brought.
     if (body.hasAttribute('data-args-page')) args.push(location.href);
     var extras = !document.documentElement.hasAttribute('data-shot');
     var again = null;

@@ -10,9 +10,9 @@ import java.awt.RenderingHints;
 import javax.swing.JPanel;
 
 /**
- * The strip above the keys. In free play it lists the songs with their best stars; during a song it shows the
- * notes coming up (the computer key and note name, wider for longer notes) with the next one lit; after a song it
- * shows the stars won.
+ * The strip above the keys. In free play it lists the songs with their best stars, the recorded tune if there is
+ * one, and Record; during a song it shows the notes coming up (the computer key and note name, wider for longer
+ * notes) with the next one lit; after a song it shows the stars won. While recording it shows the notes so far.
  */
 public final class LessonBar extends JPanel {
    public static final int HEIGHT = 100;
@@ -23,6 +23,7 @@ public final class LessonBar extends JPanel {
    private static final Color LISTEN = new Color(96, 164, 255);
    private static final Color TEXT = new Color(238, 240, 246);
    private static final Color SOFT = new Color(160, 166, 184);
+   private static final Color RECORD = new Color(232, 72, 72);
    private static final Color STAR_OFF = new Color(88, 94, 112);
    private static final Font HEADLINE = new Font("SansSerif", Font.BOLD, 16);
    private static final Font HELP = new Font("SansSerif", Font.PLAIN, 12);
@@ -30,11 +31,19 @@ public final class LessonBar extends JPanel {
    private static final Font LETTER_FONT = new Font("SansSerif", Font.BOLD, 18);
    private static final int CHIP_TOP = 38;
    private static final int MARGIN = 10;
+   private static final int NOTE_UNIT = 34;
 
    private final SongRecords records;
    private Lesson lesson;
    private int listenNote = -1;
    private boolean newBest;
+   /** The songs in the free play menu, which ends with a Record chip. */
+   private Song[] menu = Song.ALL;
+   /** Whether recording is on, and the notes so far (null before the first). */
+   private boolean recording;
+   private Song recorded;
+   /** A line shown in gold in place of the help, such as "Link copied", until it is cleared; null for none. */
+   private String notice;
 
    public LessonBar(SongRecords records) {
       this.records = records;
@@ -50,17 +59,34 @@ public final class LessonBar extends JPanel {
       this.repaint();
    }
 
-   /** In free play, the song whose button is at a point, or -1. */
-   public int songAt(int x, int y) {
-      if (this.lesson != null || y < CHIP_TOP || y > HEIGHT - MARGIN || x < MARGIN) {
+   public void setMenu(Song[] menu) {
+      this.menu = menu;
+      this.repaint();
+   }
+
+   /** Shows the recording ({@code soFar} is null before the first note), or ends it. */
+   public void setRecording(boolean on, Song soFar) {
+      this.recording = on;
+      this.recorded = soFar;
+      this.repaint();
+   }
+
+   public void setNotice(String notice) {
+      this.notice = notice;
+      this.repaint();
+   }
+
+   /** In free play, the chip at a point: a song's index in the menu, the menu's length for Record, or -1. */
+   public int chipAt(int x, int y) {
+      if (this.recording || this.lesson != null || y < CHIP_TOP || y > HEIGHT - MARGIN || x < MARGIN) {
          return -1;
       }
-      int song = (x - MARGIN) / this.menuChipWidth();
-      return song < Song.ALL.length ? song : -1;
+      int chip = (x - MARGIN) / this.menuChipWidth();
+      return chip <= this.menu.length ? chip : -1;
    }
 
    private int menuChipWidth() {
-      return Math.max(1, (this.getWidth() - 2 * MARGIN) / Song.ALL.length);
+      return Math.max(1, (this.getWidth() - 2 * MARGIN) / (this.menu.length + 1));
    }
 
    @Override
@@ -71,49 +97,77 @@ public final class LessonBar extends JPanel {
       g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
       g.setColor(BACKGROUND);
       g.fillRect(0, 0, this.getWidth(), this.getHeight());
-      if (this.lesson == null) {
-         this.header(g, "Free play", "Pick a song: click it, or T or 1-5");
+      if (this.recording) {
+         int notes = this.recorded == null ? 0 : this.recorded.length();
+         this.header(g, "Recording", RECORD, (notes == 0 ? "Play your tune" : notes + " of " + Tune.MAX_NOTES + " notes")
+            + "   Space or click here to stop");
+         if (this.recorded == null) {
+            this.paintLine(g, "Play the keys. Your timing sets the note lengths.");
+         } else {
+            this.paintNotes(g, this.recorded, this.lastFitting(this.recorded), notes - 1, RECORD);
+         }
+      } else if (this.lesson == null) {
+         this.header(g, "Free play", TEXT, "Pick a song: click it, or T or 1-" + this.menu.length + "   Space record your own");
          this.paintMenu(g);
       } else if (this.lesson.finished()) {
-         this.header(g, this.lesson.song().title() + ": done!", "R again   T next song   0 free play");
+         this.header(g, this.lesson.song().title() + ": done!", TEXT,
+            this.onTune() ? "R again   Space record a reply   0 free play" : "R again   T next song   0 free play");
          this.paintResult(g);
       } else if (this.listenNote >= 0) {
-         this.header(g, "Listening: " + this.lesson.song().title(), "Press any piano key to play it yourself");
-         this.paintNotes(g, this.listenNote, LISTEN);
+         this.header(g, "Listening: " + this.lesson.song().title(), TEXT, "Press any piano key to play it yourself");
+         this.paintNotes(g, this.lesson.song(), Math.max(0, this.listenNote - 2), this.listenNote, LISTEN);
       } else {
-         this.header(g, this.lesson.song().title(), "Note " + (this.lesson.position() + 1) + " of " + this.lesson.song().length()
+         this.header(g, this.lesson.song().title(), TEXT, "Note " + (this.lesson.position() + 1) + " of " + this.lesson.song().length()
             + "   misses " + this.lesson.misses() + "   L listen   R restart   0 free play");
-         this.paintNotes(g, this.lesson.position(), NEXT);
+         this.paintNotes(g, this.lesson.song(), Math.max(0, this.lesson.position() - 2), this.lesson.position(), NEXT);
       }
    }
 
-   private void header(Graphics2D g, String headline, String help) {
-      g.setFont(HELP);
-      FontMetrics helpMetrics = g.getFontMetrics();
-      int helpWidth = helpMetrics.stringWidth(help);
+   /** Whether the lesson is on a recorded tune (which keeps no records) rather than one of the five songs. */
+   private boolean onTune() {
+      return this.lesson != null && this.lesson.song().id() == null;
+   }
+
+   /** The headline (with a red dot while recording), and the help, or the notice in gold, right-aligned. */
+   private void header(Graphics2D g, String headline, Color headlineColor, String help) {
       g.setFont(HEADLINE);
-      g.setColor(TEXT);
-      g.drawString(headline, MARGIN, 24);
-      int headlineWidth = g.getFontMetrics().stringWidth(headline);
+      g.setColor(headlineColor);
+      int x = MARGIN;
+      if (headlineColor == RECORD) {
+         g.fillOval(x, 12, 14, 14);
+         x += 20;
+      }
+      g.drawString(headline, x, 24);
+      int headlineEnd = x + g.getFontMetrics().stringWidth(headline);
+      String right = this.notice != null ? this.notice : help;
+      g.setFont(this.notice != null ? HEADLINE : HELP);
+      g.setColor(this.notice != null ? NEXT : SOFT);
+      int rightWidth = g.getFontMetrics().stringWidth(right);
+      // Right-aligned when there is room, else dropped: the chips below say enough on a narrow window.
+      if (headlineEnd + rightWidth + 2 * MARGIN <= this.getWidth()) {
+         g.drawString(right, this.getWidth() - MARGIN - rightWidth, 24);
+      }
+   }
+
+   private void paintLine(Graphics2D g, String line) {
       g.setFont(HELP);
       g.setColor(SOFT);
-      // Right-aligned when there is room, else dropped: the chips below say enough on a narrow window.
-      if (headlineWidth + helpWidth + 3 * MARGIN <= this.getWidth()) {
-         g.drawString(help, this.getWidth() - MARGIN - helpWidth, 24);
-      }
+      g.drawString(line, MARGIN, CHIP_TOP + 26);
    }
 
    private void paintMenu(Graphics2D g) {
       int chipWidth = this.menuChipWidth();
       int chipHeight = HEIGHT - CHIP_TOP - MARGIN;
-      for (int song = 0; song < Song.ALL.length; song++) {
+      for (int song = 0; song <= this.menu.length; song++) {
          int x = MARGIN + song * chipWidth;
+         boolean record = song == this.menu.length;
          g.setColor(CHIP);
          g.fillRoundRect(x + 2, CHIP_TOP, chipWidth - 4, chipHeight, 10, 10);
          g.setFont(CHIP_FONT);
          g.setColor(TEXT);
          // Too narrow for a name: just the number to press.
-         String label = chipWidth < 90 ? String.valueOf(song + 1) : (song + 1) + "  " + Song.ALL[song].shortTitle();
+         String label = record ? (chipWidth < 90 ? "Rec" : "Record")
+            : chipWidth < 90 ? String.valueOf(song + 1) : (song + 1) + "  " + this.menu[song].shortTitle();
          FontMetrics metrics = g.getFontMetrics();
          if (metrics.stringWidth(label) > chipWidth - 12) {
             while (label.length() > 4 && metrics.stringWidth(label + "..") > chipWidth - 12) {
@@ -122,18 +176,41 @@ public final class LessonBar extends JPanel {
             label = label.trim() + "..";
          }
          g.drawString(label, x + (chipWidth - metrics.stringWidth(label)) / 2, CHIP_TOP + 20);
-         this.paintStars(g, x + chipWidth / 2, CHIP_TOP + 38, 7, this.records.stars(Song.ALL[song]));
+         if (record) {
+            g.setColor(RECORD);
+            g.fillOval(x + chipWidth / 2 - 7, CHIP_TOP + 31, 14, 14);
+         } else if (this.menu[song].id() == null) {
+            g.setFont(HELP);
+            g.setColor(SOFT);
+            String notes = this.menu[song].length() + " notes";
+            g.drawString(notes, x + (chipWidth - g.getFontMetrics().stringWidth(notes)) / 2, CHIP_TOP + 42);
+         } else {
+            this.paintStars(g, x + chipWidth / 2, CHIP_TOP + 38, 7, this.records.stars(this.menu[song]));
+         }
       }
    }
 
-   /** The song's notes from just before {@code current}, as many as fit; the current one in {@code lit}. */
-   private void paintNotes(Graphics2D g, int current, Color lit) {
-      Song song = this.lesson.song();
-      int unit = 34;
+   private static int noteWidth(Song song, int note) {
+      return (int)(NOTE_UNIT * Math.max(1, Math.min(2, song.beats(note))));
+   }
+
+   /** The note from which the song's last notes fill the strip. */
+   private int lastFitting(Song song) {
+      int room = this.getWidth() - 2 * MARGIN;
+      int first = song.length();
+      while (first > 0 && room >= noteWidth(song, first - 1)) {
+         first--;
+         room -= noteWidth(song, first);
+      }
+      return first;
+   }
+
+   /** The song's notes from {@code first}, as many as fit; note {@code current} in {@code lit}. */
+   private void paintNotes(Graphics2D g, Song song, int first, int current, Color lit) {
       int chipHeight = HEIGHT - CHIP_TOP - MARGIN;
       int x = MARGIN;
-      for (int note = Math.max(0, current - 2); note < song.length(); note++) {
-         int width = (int)(unit * Math.max(1, Math.min(2, song.beats(note))));
+      for (int note = first; note < song.length(); note++) {
+         int width = noteWidth(song, note);
          if (x + width > this.getWidth() - MARGIN) {
             break;
          }
@@ -162,14 +239,15 @@ public final class LessonBar extends JPanel {
       g.setColor(TEXT);
       String line = misses == 0 ? "No misses!" : misses == 1 ? "1 miss" : misses + " misses";
       g.drawString(line, MARGIN + 120, CHIP_TOP + 22);
-      if (this.newBest) {
+      if (this.newBest && !this.onTune()) {
          int lineWidth = g.getFontMetrics().stringWidth(line);
          g.setColor(NEXT);
          g.drawString("New best!", MARGIN + 136 + lineWidth, CHIP_TOP + 22);
       }
       g.setFont(HELP);
       g.setColor(SOFT);
-      g.drawString(stars == 3 ? "Perfect. Try another song." : "Three stars for no misses. Press R to try again.", MARGIN + 120, CHIP_TOP + 42);
+      g.drawString(this.onTune() ? "Now record a reply: press Space."
+         : stars == 3 ? "Perfect. Try another song." : "Three stars for no misses. Press R to try again.", MARGIN + 120, CHIP_TOP + 42);
    }
 
    /** Three stars centred on (centerX, centerY), the first {@code lit} of them gold. */

@@ -2,11 +2,13 @@ package synthesizer;
 
 import java.awt.BorderLayout;
 import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import javax.swing.JFrame;
@@ -14,7 +16,8 @@ import javax.swing.Timer;
 
 /**
  * The keyboard window: a lesson bar over the keys. Keys sound for as long as the computer key or the mouse button is
- * held. Picking a song starts a lesson that lights the next key to press, and Listen plays the song first.
+ * held. Picking a song starts a lesson that lights the next key to press, and Listen plays the song first. Space
+ * records a tune of your own, which goes to the clipboard as a link (see Tune) for a friend to hear and learn.
  */
 public final class KeyboardWindow extends JFrame implements KeyListener {
    private static final int MOUSE = -1;
@@ -24,6 +27,14 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private final SongRecords records = SongRecords.load(new File(System.getProperty("user.home"), ".synthesizer-songs.txt"));
    private final PianoPanel piano = new PianoPanel();
    private final LessonBar bar = new LessonBar(this.records);
+   private final File tuneFile = new File(System.getProperty("user.home"), ".synthesizer-tune.txt");
+   /** The address of the page this runs on, for tune links; null on the desktop, which sends the code alone. */
+   private final String page;
+   /** The last tune recorded or received, the sixth song in the menu; null if there is none. */
+   private Song tune = Tune.load(this.tuneFile);
+   /** The tune being recorded, or null when not recording. */
+   private Tune.Recorder recorder;
+   private boolean spaceDown;
    /** Computer keys in note order from C (60) to C (72). */
    private final int[] keyCodes = new int[]{
       KeyEvent.VK_Z, KeyEvent.VK_S, KeyEvent.VK_X, KeyEvent.VK_D, KeyEvent.VK_C, KeyEvent.VK_V, KeyEvent.VK_G,
@@ -43,7 +54,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private int listenKey = -1;
    private int listenMidi;
 
-   public KeyboardWindow() {
+   /** {@code friendCode} is the code of a tune a friend sent (null for none); {@code page} as in the field. */
+   public KeyboardWindow(String page, String friendCode) {
+      this.page = page;
       int screenWidth = (int)Toolkit.getDefaultToolkit().getScreenSize().getWidth();
       int screenHeight = (int)Toolkit.getDefaultToolkit().getScreenSize().getHeight();
       this.setSize(screenWidth * 3 / 4, Math.max(screenHeight / 2, 340));
@@ -69,15 +82,86 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.bar.addMouseListener(new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent event) {
-            int song = KeyboardWindow.this.bar.songAt(event.getX(), event.getY());
-            if (song >= 0) {
-               KeyboardWindow.this.startSong(song);
+            KeyboardWindow window = KeyboardWindow.this;
+            int chip = window.bar.chipAt(event.getX(), event.getY());
+            if (window.recorder != null) {
+               window.stopRecording();
+            } else if (chip == window.menu().length) {
+               window.startRecording();
+            } else if (chip >= 0) {
+               window.startSong(chip);
             }
          }
       });
+      this.bar.setMenu(this.menu());
       this.updateTitle();
       this.refresh();
       this.setVisible(true);
+      if (friendCode != null) {
+         this.openFriendsTune(friendCode);
+      }
+   }
+
+   /** The songs to pick from: the five, then the tune if there is one. */
+   private Song[] menu() {
+      if (this.tune == null) {
+         return Song.ALL;
+      }
+      Song[] menu = Arrays.copyOf(Song.ALL, Song.ALL.length + 1);
+      menu[Song.ALL.length] = this.tune;
+      return menu;
+   }
+
+   /** Starts a lesson on the tune a friend sent, and plays it to the visitor first. */
+   private void openFriendsTune(String code) {
+      Song friends = Tune.decode(code, Tune.FRIENDS);
+      if (friends == null) {
+         this.bar.setNotice("That tune link is not complete");
+         return;
+      }
+      this.keepTune(friends);
+      this.startSong(this.menu().length - 1);
+      later(700, this::listen);
+   }
+
+   private void keepTune(Song song) {
+      this.tune = song;
+      Tune.save(this.tuneFile, song);
+      this.bar.setMenu(this.menu());
+   }
+
+   private void startRecording() {
+      this.startSong(-1);
+      this.recorder = new Tune.Recorder();
+      this.bar.setRecording(true, null);
+   }
+
+   /** Ends the recording; a tune of two notes or more becomes the sixth song and its link goes to the clipboard. */
+   private void stopRecording() {
+      Song recorded = this.recorder.song(Tune.MINE);
+      this.recorder = null;
+      this.bar.setRecording(false, null);
+      if (recorded == null || recorded.length() < 2) {
+         this.bar.setNotice("Too short: record at least two notes");
+         return;
+      }
+      this.keepTune(recorded);
+      this.startSong(this.menu().length - 1);
+      this.copyTune();
+   }
+
+   /** Puts the tune's link (or code, on the desktop) on the clipboard and says so. */
+   private void copyTune() {
+      if (this.tune == null) {
+         return;
+      }
+      String what = this.page == null ? "Code" : "Link";
+      try {
+         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(Tune.message(this.page, this.tune)), null);
+         this.bar.setNotice(what + " copied: send it to a friend");
+      } catch (RuntimeException e) {
+         this.bar.setNotice("Could not copy the " + what.toLowerCase() + ": " + Tune.encode(this.tune));   // headless, or the clipboard is busy
+      }
    }
 
    private int keyIndex(int keyCode) {
@@ -113,13 +197,21 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.heldNotes.put(holder, new int[]{key, note});
       this.midiPlayer.noteOn(note);
       this.piano.setPressed(key, true);
+      this.bar.setNotice(null);
+      if (this.recorder != null) {
+         this.recorder.press(key, System.currentTimeMillis());
+         this.bar.setRecording(true, this.recorder.song(Tune.MINE));
+         if (this.recorder.full()) {
+            this.stopRecording();
+         }
+      }
       if (this.listenNote >= 0) {
          this.stopListening();
       }
       if (this.lesson != null && !this.lesson.finished()) {
          this.lesson.press(key);
          if (this.lesson.finished()) {
-            this.newBest = this.records.add(this.lesson);
+            this.newBest = this.lesson.song().id() != null && this.records.add(this.lesson);
             this.fanfare();
          }
       }
@@ -134,17 +226,19 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       }
    }
 
-   /** Starts song {@code index} of Song.ALL from its first note, or free play for -1. */
+   /** Starts song {@code index} of the menu from its first note, or free play for -1. */
    private void startSong(int index) {
       this.stopListening();
-      this.lesson = index < 0 ? null : new Lesson(Song.ALL[index]);
+      this.bar.setNotice(null);
+      this.lesson = index < 0 ? null : new Lesson(this.menu()[index]);
       this.newBest = false;
       this.refresh();
    }
 
    private int songIndex() {
-      for (int index = 0; this.lesson != null && index < Song.ALL.length; index++) {
-         if (Song.ALL[index] == this.lesson.song()) {
+      Song[] menu = this.menu();
+      for (int index = 0; this.lesson != null && index < menu.length; index++) {
+         if (menu[index] == this.lesson.song()) {
             return index;
          }
       }
@@ -233,7 +327,22 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    @Override
    public final void keyPressed(KeyEvent event) {
       int keyCode = event.getKeyCode();
-      if (keyCode == KeyEvent.VK_LEFT && this.octaveShift > -5) {
+      int songs = this.menu().length;
+      boolean recording = this.recorder != null;
+      if (keyCode == KeyEvent.VK_SPACE) {
+         // Holding Space auto-repeats it; only the first press counts.
+         if (this.spaceDown) {
+            return;
+         }
+         this.spaceDown = true;
+         if (recording) {
+            this.stopRecording();
+         } else {
+            this.startRecording();
+         }
+      } else if (keyCode == KeyEvent.VK_ENTER && !recording) {
+         this.copyTune();
+      } else if (keyCode == KeyEvent.VK_LEFT && this.octaveShift > -5) {
          this.octaveShift--;
       } else if (keyCode == KeyEvent.VK_RIGHT && this.octaveShift < 4) {
          this.octaveShift++;
@@ -249,9 +358,11 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          }
 
          this.midiPlayer.setInstrument(this.instrument);
+      } else if (recording) {
+         // Song keys wait until the recording is stopped; the piano keys below are recorded.
       } else if (keyCode == KeyEvent.VK_T) {
-         this.startSong((this.songIndex() + 1) % Song.ALL.length);
-      } else if (keyCode >= KeyEvent.VK_1 && keyCode < KeyEvent.VK_1 + Song.ALL.length) {
+         this.startSong((this.songIndex() + 1) % songs);
+      } else if (keyCode >= KeyEvent.VK_1 && keyCode < KeyEvent.VK_1 + songs) {
          this.startSong(keyCode - KeyEvent.VK_1);
       } else if (keyCode == KeyEvent.VK_0) {
          this.startSong(-1);
@@ -270,6 +381,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
 
    @Override
    public final void keyReleased(KeyEvent event) {
+      if (event.getKeyCode() == KeyEvent.VK_SPACE) {
+         this.spaceDown = false;
+      }
       this.release(event.getKeyCode());
    }
 }

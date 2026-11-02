@@ -41,6 +41,15 @@ public final class Song {
       }
    }
 
+   /** A recorded tune (see Tune): no id, since its results are not kept. */
+   Song(String title, int[] keys, double[] beats) {
+      this.id = null;
+      this.title = title;
+      this.shortTitle = title;
+      this.keys = keys;
+      this.beats = beats;
+   }
+
    private void parse(int i, String token) {
       int nameLength = token.length() > 1 && (token.charAt(1) == '#' || token.charAt(1) == '\'') ? 2 : 1;
       String name = token.substring(0, nameLength);
@@ -62,7 +71,7 @@ public final class Song {
       return key == 12 ? "C" : NOTE_NAMES[key];
    }
 
-   /** The name used in the saved records. */
+   /** The name used in the saved records; null for a recorded tune. */
    public String id() {
       return this.id;
    }
