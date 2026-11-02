@@ -9,7 +9,8 @@ import java.io.Writer;
 
 /**
  * The best stars and fewest moves on each solved level and the level played last, kept in a small text file of
- * {@code name=value} lines: {@code level=4}, then one line such as {@code 3=3,3} (stars, moves) per solved level.
+ * {@code name=value} lines: {@code level=4}, then one line such as {@code 3=3,3} (stars, moves) per solved level, and
+ * {@code view=net} when the flat net was picked over the 3D cube.
  */
 public final class LevelRecords {
    public static final int LEVELS = 20;
@@ -17,6 +18,7 @@ public final class LevelRecords {
    private final int[] stars = new int[LEVELS + 1];
    private final int[] moves = new int[LEVELS + 1];
    private int lastLevel = 1;
+   private boolean netView = false;
 
    private LevelRecords(File file) {
       this.file = file;
@@ -43,6 +45,10 @@ public final class LevelRecords {
 
    private void read(String name, String value) {
       try {
+         if (name.equals("view")) {
+            this.netView = value.equals("net");
+            return;
+         }
          if (name.equals("level")) {
             this.lastLevel = clamp(Integer.parseInt(value));
             return;
@@ -102,6 +108,18 @@ public final class LevelRecords {
       }
    }
 
+   /** True when the flat net was picked over the 3D cube. */
+   public boolean netView() {
+      return this.netView;
+   }
+
+   public void setNetView(boolean net) {
+      if (this.netView != net) {
+         this.netView = net;
+         this.save();
+      }
+   }
+
    /** Records a solve; keeps the most stars and the fewest moves seen on that level and saves. */
    public void record(int level, int starCount, int moveCount) {
       this.stars[level] = Math.max(this.stars[level], starCount);
@@ -123,6 +141,9 @@ public final class LevelRecords {
       }
       try (Writer writer = new FileWriter(this.file)) {
          writer.write("level=" + this.lastLevel + "\n");
+         if (this.netView) {
+            writer.write("view=net\n");
+         }
          for (int level = 1; level <= LEVELS; level++) {
             if (this.stars[level] > 0) {
                writer.write(level + "=" + this.stars[level] + "," + this.moves[level] + "\n");

@@ -4,7 +4,10 @@ import java.awt.KeyEventDispatcher;
 import java.awt.event.KeyEvent;
 import javax.swing.JTextField;
 
-/** Global keys: W/A/S/D turn the selected square, Z/H/R/N/P are the level keys. Typing in the Mix fields is left alone. */
+/**
+ * Global keys: W/A/S/D turn the selected square, Z/H/R/N/P are the level keys, V switches between the 3D cube and
+ * the flat net and the arrow keys turn the 3D cube to look around. Typing in the Mix fields is left alone.
+ */
 public final class MoveKeyDispatcher implements KeyEventDispatcher {
    private CubeFrame frame = null;
 
@@ -34,6 +37,16 @@ public final class MoveKeyDispatcher implements KeyEventDispatcher {
             this.frame.levelKey('n');
          } else if (keyCode == KeyEvent.VK_P) {
             this.frame.levelKey('p');
+         } else if (keyCode == KeyEvent.VK_V) {
+            this.frame.toggleView();
+         } else if (keyCode == KeyEvent.VK_LEFT) {
+            this.frame.orbit(-1, 0);
+         } else if (keyCode == KeyEvent.VK_RIGHT) {
+            this.frame.orbit(1, 0);
+         } else if (keyCode == KeyEvent.VK_UP) {
+            this.frame.orbit(0, -1);
+         } else if (keyCode == KeyEvent.VK_DOWN) {
+            this.frame.orbit(0, 1);
          }
       }
 

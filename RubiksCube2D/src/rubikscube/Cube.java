@@ -18,6 +18,15 @@ public final class Cube {
    protected Face backFace = null;
    protected Face leftFace = null;
    protected String selectedFaceColor = "";
+   /** Told about every turn and reset, to show them (the 3D view); may be null. */
+   Watcher watcher = null;
+
+   /** Hears the cube change. */
+   interface Watcher {
+      void turned(CubeGeometry.Turn turn);
+
+      void reset();
+   }
 
    public Cube(CubeFrame frame, JButton[][] faceButtons, int cellWidth, int cellHeight) {
       this.frame = frame;
@@ -53,6 +62,17 @@ public final class Cube {
          face.reset();
       }
       this.refresh();
+      if (this.watcher != null) {
+         this.watcher.reset();
+      }
+   }
+
+   /** A layer turn was just applied to the stickers. */
+   final void turned(CubeGeometry.Turn turn) {
+      this.refresh();
+      if (this.watcher != null) {
+         this.watcher.turned(turn);
+      }
    }
 
    /** The face with that color name, or null. */

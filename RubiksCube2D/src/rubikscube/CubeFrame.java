@@ -17,7 +17,7 @@ import javax.swing.JTextField;
 import javax.swing.Timer;
 
 /**
- * The window: the unfolded cube, the w/a/s/d buttons, Mix, and the level ladder. Level n is a solved cube mixed by n
+ * The window: the cube (in 3D, or unfolded as the original net), the w/a/s/d buttons, Mix, and the level ladder. Level n is a solved cube mixed by n
  * moves that the player watches happen, then turns back; solving it at par (n moves) wins three stars and unlocks
  * the next level. Hint shows the next move back, Undo takes a move back and Solve plays the way back.
  */
@@ -48,6 +48,13 @@ public final class CubeFrame extends JFrame implements ActionListener {
          "<html>Click a square, then<br>press W A S D (or the<br>buttons) to turn its row,<br>column or ring.<br><br>"
                + "Each level mixes the cube<br>one move more while you<br>watch. Turn it back to<br>solved: at par for 3 stars.<br><br>"
                + "Keys: Z undo, H hint,<br>R retry, N next, P prev.</html>");
+   private static final String HELP_3D =
+         "<html>Drag a square to turn<br>its row, column or ring.<br>Drag around the cube<br>(or press the arrow keys)<br>to look at other sides.<br>"
+               + "Or click a square, then<br>press W A S D.<br><br>"
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: the flat net.</html>";
+   private final String helpNet;
+   private final JButton viewButton = new JButton();
+   private CubeView3D view = null;
    public int selectedCubie = 0;
    private JPanel panel = new JPanel();
    private int frameWidth = 0;
@@ -83,6 +90,9 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.cube = new Cube(this, this.stickerButtons, this.cellWidth, this.cellHeight);
       this.history = new MoveHistory(this.cube);
       this.records = LevelRecords.load(RECORDS_FILE);
+      this.helpNet = this.helpLabel.getText();
+      this.view = new CubeView3D(this.cube, this::select, this::applyUserMove);
+      this.cube.watcher = this.view;
       this.setTitle("Rubik's Cube");
       this.setLocationRelativeTo(null);
       this.setDefaultCloseOperation(3);
@@ -96,27 +106,15 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.moveButtons[1].addActionListener(this);
       this.moveButtons[2].addActionListener(this);
       this.moveButtons[3].addActionListener(this);
-      this.moveButtons[0]
-         .setBounds(
-            this.cellWidth + (int)(2.75 * (double)this.cellWidth / 3.0), (int)(1.75 * (double)this.cellHeight), (int)(2.75 * (double)this.cellWidth / 3.0), (int)(2.75 * (double)this.cellHeight / 3.0)
-         );
-      this.moveButtons[1].setBounds(this.moveButtons[0].getX() - this.moveButtons[0].getWidth(), this.moveButtons[0].getY() + this.moveButtons[0].getHeight(), this.moveButtons[0].getWidth(), this.moveButtons[0].getHeight());
-      this.moveButtons[2].setBounds(this.moveButtons[1].getX() + this.moveButtons[1].getWidth(), this.moveButtons[1].getY(), this.moveButtons[0].getWidth(), this.moveButtons[0].getHeight());
-      this.moveButtons[3].setBounds(this.moveButtons[2].getX() + this.moveButtons[2].getWidth(), this.moveButtons[1].getY(), this.moveButtons[0].getWidth(), this.moveButtons[0].getHeight());
       this.panel.add(this.moveButtons[0]);
       this.panel.add(this.moveButtons[1]);
       this.panel.add(this.moveButtons[2]);
       this.panel.add(this.moveButtons[3]);
-      this.mixLabels[0].setBounds((int)(7.5 * (double)this.cellWidth), this.cellHeight, (int)(1.25 * (double)this.cellWidth), this.cellHeight / 2);
-      this.mixLabels[1].setBounds((int)(8.75 * (double)this.cellWidth), this.cellHeight, (int)(1.25 * (double)this.cellWidth), this.cellHeight / 2);
       this.panel.add(this.mixLabels[0]);
       this.panel.add(this.mixLabels[1]);
-      this.mixFields[0].setBounds((int)(7.5 * (double)this.cellWidth), (int)(1.5 * (double)this.cellHeight), (int)(1.25 * (double)this.cellWidth), this.cellHeight / 2);
-      this.mixFields[1].setBounds((int)(8.75 * (double)this.cellWidth), (int)(1.5 * (double)this.cellHeight), (int)(1.25 * (double)this.cellWidth), this.cellHeight / 2);
       this.panel.add(this.mixFields[0]);
       this.panel.add(this.mixFields[1]);
       this.mixButton.addActionListener(this);
-      this.mixButton.setBounds((int)(7.5 * (double)this.cellWidth), 2 * this.cellHeight, (int)(2.5 * (double)this.cellWidth), (int)(1.5 * (double)this.cellHeight));
       this.panel.add(this.mixButton);
       this.cube.topFace.panel.setBounds(4 * this.cellWidth, this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
       this.cube.frontFace.panel.setBounds(4 * this.cellWidth, 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
@@ -129,6 +127,11 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.panel.add(face.panel);
       }
       this.layoutLevelControls();
+      this.viewButton.addActionListener(this);
+      this.panel.add(this.viewButton);
+      // Last, so it lies under every other control.
+      this.panel.add(this.view);
+      this.showView(this.records.netView());
       this.startLevel(this.records.lastLevel());
    }
 
@@ -161,6 +164,64 @@ public final class CubeFrame extends JFrame implements ActionListener {
       }
    }
 
+   /**
+    * Shows the flat net (the original window) or the 3D cube. The 3D cube takes the top half of the window; the
+    * w/a/s/d buttons move under the message and Mix under the level ladder.
+    */
+   private void showView(boolean net) {
+      int w = this.cellWidth;
+      int h = this.cellHeight;
+      for (Face face : this.cube.faces()) {
+         face.panel.setVisible(net);
+      }
+      this.view.setVisible(!net);
+      this.view.setBounds(0, 0, this.frameWidth, 7 * h + 2);
+      this.view.reset();
+      this.viewButton.setText(net ? "3D cube" : "Flat net");
+      this.viewButton.setBounds(this.frameWidth - 112, 10, 92, 28);
+      int keyWidth = (int)(2.75 * w / 3.0);
+      int keyHeight = (int)(2.75 * h / 3.0);
+      int keyX = net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
+      int keyY = net ? (int)(1.75 * h) : (int)(9.0 * h);
+      this.moveButtons[0].setBounds(keyX, keyY, keyWidth, keyHeight);
+      for (int index = 1; index < 4; index++) {
+         this.moveButtons[index].setBounds(keyX + (index - 2) * keyWidth, keyY + keyHeight, keyWidth, keyHeight);
+      }
+      if (net) {
+         this.mixLabels[0].setBounds((int)(7.5 * w), h, (int)(1.25 * w), h / 2);
+         this.mixLabels[1].setBounds((int)(8.75 * w), h, (int)(1.25 * w), h / 2);
+         this.mixFields[0].setBounds((int)(7.5 * w), (int)(1.5 * h), (int)(1.25 * w), h / 2);
+         this.mixFields[1].setBounds((int)(8.75 * w), (int)(1.5 * h), (int)(1.25 * w), h / 2);
+         this.mixButton.setBounds((int)(7.5 * w), 2 * h, (int)(2.5 * w), (int)(1.5 * h));
+      } else {
+         int x = (int)(7.2 * w);
+         int y = (int)(11.6 * h);
+         this.mixLabels[0].setBounds(x, y, 56, 16);
+         this.mixLabels[1].setBounds(x + 60, y, 50, 16);
+         this.mixFields[0].setBounds(x, y + 18, 56, 26);
+         this.mixFields[1].setBounds(x + 60, y + 18, 46, 26);
+         this.mixButton.setBounds(x + 110, y + 18, (int)(3.3 * w) - 110, 26);
+      }
+      this.helpLabel.setText(net ? this.helpNet : HELP_3D);
+      if (this.hinted != null) {
+         this.hintMessage();
+      }
+      this.records.setNetView(net);
+      this.panel.repaint();
+   }
+
+   /** V: the other view. */
+   final void toggleView() {
+      this.showView(this.view.isVisible());
+   }
+
+   /** The arrow keys: turn the 3D cube to look at another side. */
+   final void orbit(int right, int down) {
+      if (this.view.isVisible()) {
+         this.view.orbit(right, down);
+      }
+   }
+
    /** A click on a square: selects it for the next W/A/S/D. */
    final void select(String faceColor, int cubie) {
       this.cube.selectedFaceColor = faceColor;
@@ -173,6 +234,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       for (Face face : this.cube.faces()) {
          face.mark(face.colorName().equals(faceColor) ? cubie : 0);
       }
+      this.view.mark(faceColor, cubie);
    }
 
    private boolean busy() {
@@ -323,8 +385,16 @@ public final class CubeFrame extends JFrame implements ActionListener {
       }
       this.select(move[0], Integer.parseInt(move[2]));
       this.keyButton(move[1]).setBackground(HINT_KEY);
-      this.message("Hint: press " + move[1].toUpperCase() + " on<br>the ringed square.");
+      this.view.hint(move[0], Integer.parseInt(move[2]), move[1]);
+      this.hintMessage();
       this.updateStatus();
+   }
+
+   /** Says how to make the hinted move, in the words of the view shown. */
+   private void hintMessage() {
+      String key = this.hinted[1].toUpperCase();
+      this.message(this.view.isVisible() ? "Hint: drag the ringed<br>square along the arrow<br>(or press " + key + ")."
+            : "Hint: press " + key + " on<br>the ringed square.");
    }
 
    private JButton keyButton(String key) {
@@ -340,6 +410,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       if (this.hinted != null) {
          this.keyButton(this.hinted[1]).setBackground(this.keyColor);
          this.hinted = null;
+         this.view.hint(null, 0, null);
       }
    }
 
@@ -444,7 +515,9 @@ public final class CubeFrame extends JFrame implements ActionListener {
             this.applyUserMove(this.moveButtons[index].getText());
          }
       }
-      if (source == this.undoButton) {
+      if (source == this.viewButton) {
+         this.toggleView();
+      } else if (source == this.undoButton) {
          this.levelKey('z');
       } else if (source == this.hintButton) {
          this.levelKey('h');

@@ -48,6 +48,50 @@ public class MoveCheck {
          }
       }
 
+      // Every move is a real cube's: after any moves, the stickers that shared a cubie still share one (the recovered
+      // moves broke this), and the square a key moves goes the way the key points in the net.
+      Cube real = new Cube(null, new JButton[6][9], 50, 50);
+      Face[] realFaces = real.faces();
+      for (int s = 0; s < 54; s++) {
+         realFaces[s / 9].stickers[s % 9] = String.valueOf(s);
+      }
+      Random realRandom = new Random(7);
+      for (int i = 0; i < 500; i++) {
+         new Move(COLORS[realRandom.nextInt(6)], KEYS[realRandom.nextInt(4)], realRandom.nextInt(9) + 1, real);
+      }
+      int[] at = new int[54];
+      for (int s = 0; s < 54; s++) {
+         at[Integer.parseInt(realFaces[s / 9].stickers[s % 9])] = s;
+      }
+      for (int s = 0; s < 54; s++) {
+         for (int t = 0; t < 54; t++) {
+            if (Arrays.equals(CubeGeometry.POS[s], CubeGeometry.POS[t])) {
+               check(Arrays.equals(CubeGeometry.POS[at[s]], CubeGeometry.POS[at[t]]), "stickers " + s + " and " + t + " came apart");
+            }
+         }
+      }
+      for (int f = 0; f < 6; f++) {
+         for (int cubie = 1; cubie <= 9; cubie++) {
+            for (String key : KEYS) {
+               CubeGeometry.Turn turn = CubeGeometry.turnOf(COLORS[f], key, cubie);
+               int s = f * 9 + cubie - 1;
+               // The middle of the sticker, doubled to stay whole: 2 * position + normal.
+               int[] before = new int[3];
+               for (int k = 0; k < 3; k++) {
+                  before[k] = 2 * CubeGeometry.POS[s][k] + CubeGeometry.NORMAL[s][k];
+               }
+               int[] after = CubeGeometry.rotate(before, turn.axis, turn.dir);
+               int[] along = CubeGeometry.keyDirection(f, key);
+               int dot = 0;
+               for (int k = 0; k < 3; k++) {
+                  dot += (after[k] - before[k]) * along[k];
+               }
+               // The center square of a face stays put on an outer turn; every other square moves along.
+               check(dot > 0 || Arrays.equals(before, after), COLORS[f] + " " + cubie + " " + key + " does not go the way of the key");
+            }
+         }
+      }
+
       // A random scramble undone in reverse order returns to the start, and the solved check sees it.
       Cube solved = new Cube(null, new JButton[6][9], 50, 50);
       Random random = new Random(1);
