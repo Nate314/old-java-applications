@@ -89,6 +89,7 @@ public final class TCanvasGraphics extends TGraphics2D {
     }
 
     private JSObject ctx() {
+        Js.painted();
         if (ctx == null) {
             ctx = surface.context();
         }

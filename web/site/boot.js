@@ -560,8 +560,14 @@
   // them always holds between half a segment and a whole one. Replay (toolbar, exit screen, the home page's
   // player bar) stops that one and shows its video (openClip) with the app's own sound, if it made any
   // (appOut), to watch, save or share. The video stays in the page unless the visitor saves or shares it.
+  // Only a changed app is drawn again: the shim flags every canvas it draws on (window.__shimPainted) and a
+  // MutationObserver sees the rest (text, buttons, windows moving), so an app at rest (a solved cube, a clock
+  // between ticks, a menu) costs one frame a second (REPLAY_IDLE), and the encoder has nothing new to encode.
+  // Nothing is drawn or recorded while nobody can see the app: its tab is hidden, or the page has scrolled the
+  // app out of view (the home page's player, once the visitor scrolls down to the gallery).
   var REPLAY_SEG = 20000;
   var REPLAY_FPS = 30;     // at most; fewer where drawing the windows costs more (REPLAY_SHARE)
+  var REPLAY_IDLE = 1000;  // ms between frames while nothing changes, so the clip's last frame is never stale
   var REPLAY_SHARE = 0.1;  // of the page's time, at most, spent drawing them
   var REPLAY_MAX = 1280;   // the clip's longest side, in pixels
   var REPLAY_PAD = 16;     // desk around the windows, in page pixels
@@ -726,7 +732,21 @@
     if (!type) return null;
     var canvas = document.createElement('canvas');
     var g = canvas.getContext('2d');
-    var track = null, tap = null, recs = [], last = 0, cost = 0, moved = 0;
+    var track = null, tap = null, recs = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
+    function look() { changed = true; }
+    if (window.MutationObserver) {
+      new MutationObserver(look).observe(desktop, { subtree: true, childList: true, attributes: true, characterData: true });
+      new MutationObserver(look).observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+    }
+    // The body, not the desktop: it stays in this page while the desktop is popped out. In the home page's
+    // player it is the whole iframe, so this says whether the visitor has scrolled the player away.
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(function (seen) {
+        inView = seen[seen.length - 1].isIntersecting;
+        if (inView) changed = true;
+        sync();
+      }).observe(document.body);
+    }
 
     function begin() {
       if (audio && !tap && audio.createMediaStreamDestination) {   // the app's voices, not the site's sounds
@@ -743,10 +763,25 @@
         console.warn('Instant replay:', e);
         return;
       }
-      if (document.hidden && !popped) r.rec.pause();
+      if (away()) {
+        r.rec.pause();
+        r.pausedAt = Date.now();
+      }
       recs.push(r);
     }
-    function away() { return document.hidden && !popped; }   // a popped out app is still in sight
+    function away() { return !popped && (document.hidden || !inView); }   // a popped out app is still in sight
+    // A paused recording leaves that time out of its video, so its start moves up by as much (the clip's seconds).
+    function sync() {
+      recs.forEach(function (r) {
+        if (away() && r.rec.state === 'recording') {
+          r.rec.pause();
+          r.pausedAt = Date.now();
+        } else if (!away() && r.rec.state === 'paused') {
+          r.rec.resume();
+          r.t0 += Date.now() - r.pausedAt;
+        }
+      });
+    }
     function rotate() {
       if (away()) return;
       while (recs.length > 1) recs.shift().rec.stop();
@@ -755,10 +790,16 @@
     function frame() {
       (popped && !popped.win.closed ? popped.win : window).requestAnimationFrame(frame);
       var t = performance.now();   // not the frame's time, which a popped out window counts from its own start
+      if (away()) return;
+      if (window.__shimPainted) {
+        window.__shimPainted = false;
+        changed = true;
+      }
       // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
       // less often: the app keeps at least nine tenths of the time.
-      if (t - last < Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) - 4) return;
+      if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
       last = t;
+      changed = false;
       var t0 = performance.now(), box = drawDesk(g, canvas, desktop);
       cost = 0.8 * cost + 0.2 * (performance.now() - t0);
       if (!box) return;
@@ -786,12 +827,7 @@
       if (embedded && window.parent !== window) window.parent.postMessage({ oldjavaReplay: true }, location.origin);
     }
     requestAnimationFrame(frame);
-    document.addEventListener('visibilitychange', function () {
-      recs.forEach(function (r) {
-        if (away() && r.rec.state === 'recording') r.rec.pause();
-        else if (!away() && r.rec.state === 'paused') r.rec.resume();
-      });
-    });
+    document.addEventListener('visibilitychange', sync);
 
     return {
       live: function () { return recs.length > 0; },
@@ -799,11 +835,12 @@
       take: function () {
         var r = recs.shift();
         if (!r) return Promise.resolve(null);
+        var end = r.rec.state === 'paused' ? r.pausedAt : Date.now();
         return new Promise(function (done) {
           r.rec.onstop = function () {
             done({
               blob: new Blob(r.chunks, { type: (r.rec.mimeType || type).split(';')[0] }),
-              seconds: Math.max(1, Math.floor((Date.now() - r.t0) / 1000)),
+              seconds: Math.max(1, Math.floor((end - r.t0) / 1000)),
               app: appId()
             });
           };

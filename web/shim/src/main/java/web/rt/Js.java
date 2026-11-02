@@ -261,6 +261,13 @@ public final class Js {
 
     // ---- canvas ----
 
+    /**
+     * Notes that something drew on a canvas, for the page's instant replay (boot.js), which redraws the app into
+     * its video only after the app changed, so a still app costs it nothing but a frame a second.
+     */
+    @JSBody(script = "window.__shimPainted = true;")
+    public static native void painted();
+
     @JSBody(params = "canvas", script = "return canvas.getContext('2d');")
     public static native JSObject context2d(JSObject canvas);
 
@@ -269,16 +276,17 @@ public final class Js {
             "var _r = window.__shimRender || window.devicePixelRatio || 1; var _bw = Math.max(1, Math.round(w * _r)), _bh = Math.max(1, Math.round(h * _r));"
             + "canvas.style.width = w + 'px'; canvas.style.height = h + 'px';"
             + "if (canvas.width === _bw && canvas.height === _bh) return false;"
-            + "canvas.width = _bw; canvas.height = _bh; return true;")
+            + "canvas.width = _bw; canvas.height = _bh; window.__shimPainted = true; return true;")
     public static native boolean sizeCanvas(JSObject canvas, int w, int h);
 
     @JSBody(params = "canvas", script =
-            "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.clearRect(0, 0, canvas.width, canvas.height); _g.restore();")
+            "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.clearRect(0, 0, canvas.width, canvas.height); _g.restore();"
+            + " window.__shimPainted = true;")
     public static native void clearCanvas(JSObject canvas);
 
     @JSBody(params = { "canvas", "color" }, script =
             "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.fillStyle = color;"
-            + " _g.fillRect(0, 0, canvas.width, canvas.height); _g.restore();")
+            + " _g.fillRect(0, 0, canvas.width, canvas.height); _g.restore(); window.__shimPainted = true;")
     public static native void fillCanvas(JSObject canvas, String color);
 
     @JSBody(params = { "canvas", "w", "h" }, script = "canvas.width = w; canvas.height = h;")
@@ -286,7 +294,8 @@ public final class Js {
 
     @JSBody(params = { "canvas", "img", "w", "h" }, script =
             "var _g = canvas.getContext('2d'); var _r = window.__shimRender || window.devicePixelRatio || 1; _g.setTransform(_r, 0, 0, _r, 0, 0);"
-            + "_g.imageSmoothingQuality = 'high'; _g.drawImage(img, 0, 0, w, h);")
+            + "_g.imageSmoothingQuality = 'high'; _g.drawImage(img, 0, 0, w, h);"
+            + " window.__shimPainted = true;")
     public static native void drawImageScaled(JSObject canvas, JSObject img, int w, int h);
 
     @JSBody(params = "canvas", script = "return canvas.toDataURL();")
