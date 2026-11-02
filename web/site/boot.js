@@ -1956,7 +1956,9 @@
     var desktop = document.createElement('div');
     desktop.id = 'desktop';
     body.insertBefore(desktop, body.firstChild);
-    if (!document.documentElement.hasAttribute('data-shot')) centerWindows(desktop);
+    // <body data-own-layout> (CircleSpawner): the app places its windows on the screen itself, and recentering
+    // them as a group while a shape grows in, one window at a time, would slide the whole group about.
+    if (!document.documentElement.hasAttribute('data-shot') && !body.hasAttribute('data-own-layout')) centerWindows(desktop);
     if (body.hasAttribute('data-tab-title') && !embedded) followTitle(desktop);
     if (embedded && window.parent !== window) padInPlayer();
     if (body.hasAttribute('data-console')) {
