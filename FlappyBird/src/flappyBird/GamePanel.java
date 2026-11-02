@@ -9,6 +9,8 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -25,6 +27,8 @@ public final class GamePanel extends JPanel implements KeyListener {
    private static final int READY = 0;
    private static final int PLAYING = 1;
    private static final int GAME_OVER = 2;
+   /** Between a crash and the game over screen: the bird drops to the ground. */
+   private static final int DYING = 3;
    private static final File HIGH_SCORE_FILE = new File(System.getProperty("user.home", "."), ".flappybird-highscore.txt");
    private boolean debugMode = false;
    private boolean paused = false;
@@ -54,6 +58,18 @@ public final class GamePanel extends JPanel implements KeyListener {
    private final double stepsPerSecond;
    private double pendingSteps = 0.0;
    private long lastTickNanos = System.nanoTime();
+   private final Sounds sounds = new Sounds();
+   /** The crash's white flash and screen shake, 1 at the crash fading to 0. */
+   private float flash;
+   private float shake;
+   /** 1 when a pipe is passed, fading to 0: the score is drawn bigger for it. */
+   private float scorePop;
+   private int lastScore;
+   /** Game steps since the title screen opened (the bird hovers) or the game over screen did (it slides in). */
+   private int stateSteps;
+   /** Puffs of air under each flap and feathers from a crash. */
+   private final List<Puff> puffs = new ArrayList<>();
+   private final Random puffRandom = new Random();
 
    public GamePanel(int stepsPerSecond) {
       this.stepsPerSecond = stepsPerSecond;
@@ -63,7 +79,30 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.images.add(new ImageIcon("bottomPipe.png").getImage().getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
       this.images.add(new ImageIcon("bird.png").getImage().getScaledInstance(Bird.WIDTH, Bird.HEIGHT, 4));
       this.reset();
+      // Click or tap anywhere in the game to flap, as Space does.
+      this.addMouseListener(new MouseAdapter() {
+         @Override
+         public void mousePressed(MouseEvent event) {
+            if (event.getButton() == MouseEvent.BUTTON1) {
+               GamePanel.this.press();
+            }
+         }
+      });
       new Timer(10, event -> this.tick()).start();
+   }
+
+   /** Space, a click or a tap: start, flap, or (once the game over screen has settled) back to the title screen. */
+   private void press() {
+      if (this.state == GAME_OVER) {
+         if (this.stateSteps > this.stepsPerSecond / 2) {
+            this.reset();
+         }
+      } else if (this.state != DYING && !this.paused) {
+         this.state = PLAYING;
+         this.bird.flap();
+         this.sounds.flap();
+         this.puff(5, new Color(255, 255, 255), Bird.HEIGHT / 10.0F);
+      }
    }
 
    /** Runs as many fixed game steps as the elapsed time calls for, then repaints. */
@@ -81,12 +120,35 @@ public final class GamePanel extends JPanel implements KeyListener {
    }
 
    private void step() {
-      if (this.paused || this.state == GAME_OVER) {
+      if (this.noticeSteps > 0) {
+         this.noticeSteps--;
+      }
+      if (this.paused) {
+         return;
+      }
+
+      float fade = 4.0F / (float)this.stepsPerSecond;
+      this.flash = Math.max(0.0F, this.flash - fade);
+      this.shake = Math.max(0.0F, this.shake - fade);
+      this.scorePop = Math.max(0.0F, this.scorePop - fade);
+      this.stepPuffs();
+      this.stateSteps++;
+      if (this.state == GAME_OVER) {
+         return;
+      }
+      if (this.state == DYING) {
+         this.bird.update();
+         if (this.onGround()) {
+            this.land();
+         }
          return;
       }
 
       this.background.scroll();
       if (this.state == READY) {
+         // Hover gently on the title screen, as the original does: a bob every 0.8 seconds.
+         double bob = Math.sin(this.stateSteps * 2.0 * Math.PI / (this.stepsPerSecond * 0.8)) * Bird.HEIGHT / 5.0;
+         this.bird.position.set(new Position(this.bird.position.collisionX, (float)(Main.FRAME_HEIGHT / 3 + bob)));
          return;
       }
 
@@ -96,23 +158,76 @@ public final class GamePanel extends JPanel implements KeyListener {
       if (this.daily && this.steps % DailyCourse.SAMPLE_STEPS == 0) {
          this.samples.add(this.sample());
       }
-      if (this.noticeSteps > 0) {
-         this.noticeSteps--;
+      if (this.score() > this.lastScore) {
+         this.lastScore = this.score();
+         this.scorePop = 1.0F;
+         this.sounds.point();
       }
       if (this.target > 0 && this.score() > this.target) {
          this.target = 0;
          this.notice = this.daily ? "You passed your ghost!" : "New best!";
          this.noticeSteps = (int)this.stepsPerSecond * 2;
       }
-      this.collided = this.hitsPipe() || this.bird.position.collisionY + (float)Bird.HEIGHT > (float)Background.groundY;
+      this.collided = this.hitsPipe() || this.onGround();
       if (this.collided && !this.debugMode) {
-         this.state = GAME_OVER;
-         if (this.score() > this.highScore) {
-            this.highScore = this.score();
-            saveHighScore(this.highScore);
-         }
-         if (this.daily && this.course.offer(this.score(), this.samples)) {
-            this.course.save(DailyCourse.FILE);
+         this.crash();
+      }
+   }
+
+   private boolean onGround() {
+      return this.bird.position.collisionY + (float)Bird.HEIGHT > (float)Background.groundY;
+   }
+
+   /** The run is over: keep the records, flash, shake, and let the bird drop to the ground before the game over screen. */
+   private void crash() {
+      if (this.score() > this.highScore) {
+         this.highScore = this.score();
+         saveHighScore(this.highScore);
+      }
+      if (this.daily && this.course.offer(this.score(), this.samples)) {
+         this.course.save(DailyCourse.FILE);
+      }
+      this.flash = 1.0F;
+      this.shake = 1.0F;
+      this.sounds.hit();
+      this.puff(12, new Color(250, 200, 40), Bird.HEIGHT / 6.0F);
+      this.bird.stall();
+      if (this.onGround()) {
+         this.land();
+      } else {
+         this.state = DYING;
+         this.sounds.fall();
+      }
+   }
+
+   private void land() {
+      this.bird.position.set(new Position(this.bird.position.collisionX, (float)(Background.groundY - Bird.HEIGHT)));
+      this.state = GAME_OVER;
+      this.stateSteps = 0;
+   }
+
+   /** Little bits flung out from the bird: air under a flap, feathers from a crash. */
+   private void puff(int count, Color color, float speed) {
+      float x = this.bird.position.collisionX + Bird.WIDTH / 3.0F;
+      float y = this.bird.position.collisionY + Bird.HEIGHT * 0.7F;
+      for (int i = 0; i < count; i++) {
+         double angle = this.puffRandom.nextDouble() * Math.PI * 2.0;
+         float pace = speed * (0.4F + this.puffRandom.nextFloat());
+         float vx = (float)Math.cos(angle) * pace - Pipes.scrollSpeed;
+         float vy = (float)Math.sin(angle) * pace + speed * 0.5F;
+         this.puffs.add(new Puff(x, y, vx, vy, color, (int)(this.stepsPerSecond * (0.25 + this.puffRandom.nextDouble() * 0.25))));
+      }
+   }
+
+   private void stepPuffs() {
+      for (int i = this.puffs.size() - 1; i >= 0; i--) {
+         Puff puff = this.puffs.get(i);
+         puff.x += puff.vx;
+         puff.y += puff.vy;
+         puff.vx *= 0.97F;
+         puff.vy *= 0.97F;
+         if (--puff.life <= 0) {
+            this.puffs.remove(i);
          }
       }
    }
@@ -165,6 +280,14 @@ public final class GamePanel extends JPanel implements KeyListener {
          )
       );
       g2.setStroke(new BasicStroke((float)(Main.FRAME_WIDTH / 250)));
+      int shakeX = 0;
+      int shakeY = 0;
+      if (this.shake > 0.0F) {
+         int reach = Math.max(2, Main.FRAME_HEIGHT / 40);
+         shakeX = Math.round((this.puffRandom.nextFloat() * 2.0F - 1.0F) * reach * this.shake);
+         shakeY = Math.round((this.puffRandom.nextFloat() * 2.0F - 1.0F) * reach * this.shake);
+      }
+      g2.translate(shakeX, shakeY);
 
       for (Position tile : this.background.layers.get(0)) {
          g2.drawImage(this.background.backgroundImage, (int)tile.x, (int)tile.y, null);
@@ -189,17 +312,19 @@ public final class GamePanel extends JPanel implements KeyListener {
          }
       }
 
-      if (this.daily && this.state != GAME_OVER && this.course.hasGhost()) {
+      if (this.daily && (this.state == READY || this.state == PLAYING) && this.course.hasGhost()) {
          float ghostY = this.course.ghostY(this.steps);
          if (ghostY >= 0.0F) {
             this.drawGhost(g2, (int)this.bird.position.collisionX, (int)(ghostY * Main.FRAME_HEIGHT));
          }
       }
 
-      g2.drawImage(this.bird.image, (int)this.bird.position.collisionX, (int)this.bird.position.collisionY, null);
+      this.drawPuffs(g2);
+      this.drawBird(g2);
       if (this.debugMode) {
          g2.drawRect((int)this.bird.position.collisionX, (int)this.bird.position.collisionY, this.bird.image.getWidth(null), this.bird.image.getHeight(null));
       }
+      g2.translate(-shakeX, -shakeY);
 
       if (this.collided && this.debugMode) {
          g2.setColor(new Color(255, 0, 0));
@@ -207,34 +332,47 @@ public final class GamePanel extends JPanel implements KeyListener {
          g2.drawString("COLISION", Main.FRAME_WIDTH / 2, (Main.FRAME_HEIGHT << 1) / 10);
       }
 
-      g2.setColor(new Color(0, 0, 255));
-      g2.setFont(new Font("Times New Roman", 1, Main.FRAME_HEIGHT / 10));
-      g2.drawString(String.valueOf(this.score()), Main.FRAME_WIDTH / 2, Main.FRAME_HEIGHT / 10);
+      // The score shows in flight; the title and game over screens show it in their banners instead.
+      boolean flying = this.state == PLAYING || this.state == DYING;
+      if (flying) {
+         this.drawScore(g2);
+      }
 
-      if (this.state == PLAYING && this.noticeSteps > 0) {
+      if (this.noticeSteps > 0) {
          int noticeX = (Main.FRAME_WIDTH - fitFont(g2, this.notice, Main.FRAME_HEIGHT / 18, Main.FRAME_WIDTH * 19 / 20)) / 2;
+         int noticeY = flying ? Main.FRAME_HEIGHT / 4 : Main.FRAME_HEIGHT / 8;
          g2.setColor(new Color(0, 0, 0, 140));
-         g2.drawString(this.notice, noticeX + 2, Main.FRAME_HEIGHT / 6 + 2);
+         g2.drawString(this.notice, noticeX + 2, noticeY + 2);
          g2.setColor(new Color(255, 220, 60));
-         g2.drawString(this.notice, noticeX, Main.FRAME_HEIGHT / 6);
+         g2.drawString(this.notice, noticeX, noticeY);
       }
 
       String records = "Best " + this.highScore + (this.daily || this.course.bestScore() > 0 ? "     Today " + this.course.bestScore() : "");
       if (this.state == READY) {
          if (this.daily) {
-            this.drawBanner(g2, "Today's Course", "The same pipes all day. Race your best run's ghost.", "Space to start, C for endless pipes", records);
+            this.drawBanner(g2, "Today's Course", "The same pipes all day. Race your best run's ghost.", "Space, click or tap to flap; C for endless pipes", records);
          } else {
-            this.drawBanner(g2, "Flappy Bird", "Endless: new pipes every run", "Space to start, C for today's course", records);
+            this.drawBanner(g2, "Flappy Bird", "Endless: new pipes every run", "Space, click or tap to flap; C for today's course", records);
          }
       } else if (this.state == GAME_OVER) {
          String scores = "Score " + this.score() + "     " + records;
-         int titleWidth = this.drawBanner(g2, "Game Over", scores, medalLine(this.score()), "Space for the title screen");
+         // The game over screen rises into place over its first third of a second.
+         float rise = Math.max(0.0F, 1.0F - this.stateSteps / (float)(this.stepsPerSecond / 3.0));
+         int lift = Math.round(rise * rise * Main.FRAME_HEIGHT / 6.0F);
+         g2.translate(0, lift);
+         int titleWidth = this.drawBanner(g2, "Game Over", scores, medalLine(this.score()), "Space, click or tap for the title screen");
          Color medal = medalColor(this.score());
          if (medal != null) {
             this.drawMedal(g2, medal, titleWidth);
          }
+         g2.translate(0, -lift);
       } else if (this.paused) {
          this.drawBanner(g2, "Paused", "Press P to resume");
+      }
+
+      if (this.flash > 0.0F) {
+         g2.setColor(new Color(255, 255, 255, Math.round(200 * this.flash)));
+         g2.fillRect(0, 0, Main.FRAME_WIDTH, Main.FRAME_HEIGHT);
       }
 
       if (this.debugMode) {
@@ -257,6 +395,48 @@ public final class GamePanel extends JPanel implements KeyListener {
             g2.drawString(debugLines[line], Main.FRAME_WIDTH - 11 * this.consoleFontSize, Main.FRAME_HEIGHT - this.consoleFontSize * 10 + this.consoleFontSize * line);
          }
       }
+   }
+
+   /** The bird, tilted with its flight and stretched for a moment by each flap. */
+   private void drawBird(Graphics2D g2) {
+      Graphics2D g = (Graphics2D)g2.create();
+      g.translate(this.bird.position.collisionX + Bird.WIDTH / 2.0, this.bird.position.collisionY + Bird.HEIGHT / 2.0);
+      g.rotate(Math.toRadians(this.bird.rotation()));
+      float squash = this.bird.squash();
+      g.scale(1.0 + 0.15 * squash, 1.0 - 0.2 * squash);
+      g.drawImage(this.bird.image, -Bird.WIDTH / 2, -Bird.HEIGHT / 2, null);
+      g.dispose();
+   }
+
+   private void drawPuffs(Graphics2D g2) {
+      for (Puff puff : this.puffs) {
+         int size = Math.max(2, Bird.HEIGHT / 5 * puff.life / puff.lifetime + 1);
+         Color c = puff.color;
+         g2.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 230 * puff.life / puff.lifetime));
+         g2.fillOval(Math.round(puff.x) - size / 2, Math.round(puff.y) - size / 2, size, size);
+      }
+   }
+
+   /** The score in big white digits outlined in black, centered at the top, popping bigger as each pipe is passed. */
+   private void drawScore(Graphics2D g2) {
+      String text = String.valueOf(this.score());
+      int size = Math.round(Main.FRAME_HEIGHT / 9.0F * (1.0F + 0.3F * this.scorePop));
+      g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, size));
+      int x = (Main.FRAME_WIDTH - g2.getFontMetrics().stringWidth(text)) / 2;
+      int y = Main.FRAME_HEIGHT / 6 + Math.round((size - Main.FRAME_HEIGHT / 9.0F) / 3.0F);
+      int edge = Math.max(2, size / 16);
+      g2.setColor(new Color(0, 0, 0, 90));
+      g2.drawString(text, x + edge, y + edge * 2);
+      g2.setColor(new Color(40, 30, 20));
+      for (int dx = -edge; dx <= edge; dx += edge) {
+         for (int dy = -edge; dy <= edge; dy += edge) {
+            if (dx != 0 || dy != 0) {
+               g2.drawString(text, x + dx, y + dy);
+            }
+         }
+      }
+      g2.setColor(new Color(255, 255, 255));
+      g2.drawString(text, x, y);
    }
 
    /** A title and lines of text centered on the screen. Returns the title's width. */
@@ -365,6 +545,10 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.collided = false;
       this.paused = false;
       this.state = READY;
+      this.stateSteps = 0;
+      this.lastScore = 0;
+      this.scorePop = 0.0F;
+      this.puffs.clear();
       this.steps = 0;
       this.samples.clear();
       this.samples.add(this.sample());
@@ -396,12 +580,11 @@ public final class GamePanel extends JPanel implements KeyListener {
    public final void keyPressed(KeyEvent event) {
       switch (event.getKeyCode()) {
          case KeyEvent.VK_SPACE:
-            if (this.state == GAME_OVER) {
-               this.reset();
-            } else if (!this.paused) {
-               this.state = PLAYING;
-               this.bird.flap();
-            }
+            this.press();
+            return;
+         case KeyEvent.VK_M:
+            this.notice = this.sounds.toggle() ? "Sound on" : "Sound off";
+            this.noticeSteps = (int)this.stepsPerSecond;
             return;
          case KeyEvent.VK_UP:
             this.consoleFontSize += 5;
@@ -441,5 +624,26 @@ public final class GamePanel extends JPanel implements KeyListener {
 
    @Override
    public final void keyReleased(KeyEvent event) {
+   }
+
+   /** One bit flung from the bird. */
+   private static final class Puff {
+      float x;
+      float y;
+      float vx;
+      float vy;
+      final Color color;
+      final int lifetime;
+      int life;
+
+      Puff(float x, float y, float vx, float vy, Color color, int lifetime) {
+         this.x = x;
+         this.y = y;
+         this.vx = vx;
+         this.vy = vy;
+         this.color = color;
+         this.lifetime = Math.max(1, lifetime);
+         this.life = this.lifetime;
+      }
    }
 }

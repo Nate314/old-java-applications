@@ -2,6 +2,13 @@
 
 A Flappy Bird clone. The bird falls under gravity and flaps upward; fly through the gaps between scrolling pipes. Hitting a pipe or the ground ends the game. The score (pipes passed) is drawn at the top center, and the best score is saved between runs.
 
+It moves and sounds like the original Flappy Bird:
+
+- The bird hovers on the title screen, tilts nose up with each flap and turns into a nose-down dive as it falls, and each flap stretches it for a moment and puffs a little air.
+- The score is big white digits outlined in black, and it pops bigger with each pipe passed.
+- A crash flashes the screen white, shakes it and scatters feathers; after hitting a pipe the bird drops to the ground before the game over screen rises into place. For half a second that screen ignores Space, a click or a tap, so a flap pressed at the moment of the crash does not skip it.
+- Sounds on the MIDI synthesizer: a tick for each flap, a two-note ding for each pipe, a thud for a crash and a falling run of notes as the bird drops. M turns them off and on.
+
 There are two courses, chosen on the title screen:
 
 - **Endless**: new random pipes every run (the original game).
@@ -11,7 +18,8 @@ The game over screen shows your score, best and today's best, and a medal: Bronz
 
 ## Controls / usage
 
-- **Space**: start from the title screen, flap, or (on the game over screen) go back to the title screen.
+- **Space**, or a **click** or **tap** anywhere in the game: start from the title screen, flap, or (on the game over screen) go back to the title screen.
+- **M**: sound off / on.
 - **C**: on the title screen, switch between endless pipes and today's course.
 - **P**: pause / resume.
 - **R**: reset the game to the title screen.
@@ -25,9 +33,10 @@ The game over screen shows your score, best and today's best, and a medal: Bronz
 ## Code layout
 
 - `src/flappyBird/Main.java`: the `JFrame`; sizes the window, parses the argument and wires the key listener.
-- `src/flappyBird/GamePanel.java`: loads images; a Swing timer runs fixed game steps based on elapsed time, then repaints. Draws the game, the ghost and the title, pause and game over screens (with the medal), checks collisions, handles keys and the saved best score, and records the run for today's course.
+- `src/flappyBird/GamePanel.java`: loads images; a Swing timer runs fixed game steps based on elapsed time, then repaints. Draws the game, the ghost and the title, pause and game over screens (with the medal), the tilted bird, its puffs and feathers, the crash's flash and shake; checks collisions, handles keys, clicks and the saved best score, and records the run for today's course.
+- `src/flappyBird/Sounds.java`: the flap, pipe, crash and fall sounds on the MIDI synthesizer, opened on a background thread.
 - `src/flappyBird/DailyCourse.java`: today's course: the date's pipe seed, today's best score and ghost, and its file.
-- `src/flappyBird/Bird.java`: bird position, gravity and flap.
+- `src/flappyBird/Bird.java`: bird position, gravity and flap, its tilt (nose up after a flap, diving as it falls) and the stretch of a flap.
 - `src/flappyBird/Pipes.java`: generates pipe pairs endlessly from a random source as they scroll in (a seeded one for today's course), drops them once off screen, and counts the pairs passed.
 - `src/flappyBird/Background.java`: two scrolling layers (sky and ground) that wrap around.
 - `src/flappyBird/Position.java`: x/y plus collision x/y.
