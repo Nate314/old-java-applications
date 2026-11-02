@@ -2,6 +2,7 @@ package tankgame;
 
 import java.awt.Color;
 import java.awt.Toolkit;
+import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.io.File;
 import java.util.Random;
@@ -27,6 +28,15 @@ public class Main extends JFrame
         // Read after the window exists: in the browser, saved files are restored once the first window is made.
         Battle battle = new Battle(red, green, new ComputerControls(new Random()), Record.load(RECORD_FILE));
         GamePanel panel = new GamePanel(battle);
+        // C: watch the computer play both tanks (Battle.toggleWatch).
+        this.addKeyListener(new KeyAdapter()
+        {
+            @Override
+            public void keyPressed(KeyEvent e)
+            {
+                if (e.getKeyCode() == KeyEvent.VK_C) battle.toggleWatch();
+            }
+        });
         this.add(panel);
         this.setVisible(visibility);
         panel.start();

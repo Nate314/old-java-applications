@@ -3,6 +3,7 @@ package tankgame;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 /**
  * The rules of a match, one tick at a time: three hits destroy a tank, destroying the other tank wins the round, and
@@ -30,9 +31,17 @@ public class Battle
     public static final int  ROUND_OVER_TICKS   = 110;
     /** A pause before the match-over screen takes fire presses, so a last shot does not skip it. */
     public static final int  MATCH_OVER_TICKS   = 90;
+    /** Watch: the computer starts a match after the title (or the last match's result) has shown this long. */
+    public static final int  WATCH_START_TICKS  = 120;
     private final Tank       red;
     private final Tank       green;
     private final Controls   greenKeys;
+    private final Controls   redKeys;
+    /** Watch: the computer drives red too. */
+    private final ComputerControls redComputer = new ComputerControls(new Random());
+    private boolean          watching;
+    /** The computer drove red at some point in this match, so it does not count in the record. */
+    private boolean          watchedMatch;
     private final ComputerControls computer;
     private final Record     record;
     private final List<Shell> shells            = new ArrayList<>();
@@ -60,6 +69,7 @@ public class Battle
         this.red = red;
         this.green = green;
         this.greenKeys = green.controls();
+        this.redKeys = red.controls();
         this.computer = computer;
         this.record = record;
     }
@@ -68,6 +78,7 @@ public class Battle
     public void startMatch(boolean againstComputer)
     {
         vsComputer = againstComputer;
+        watchedMatch = watching;
         green.setControls(againstComputer ? computer : greenKeys);
         green.setName(againstComputer ? "Computer" : "Green");
         redWins = greenWins = 0;
@@ -129,7 +140,7 @@ public class Battle
                 boolean redFire = red.controls().fire();
                 boolean greenFire = greenKeys.fire();
                 if (phase == Phase.MATCH_OVER && phaseTicks < MATCH_OVER_TICKS) break;
-                if (redFire) startMatch(true);
+                if (redFire || watching && phaseTicks >= WATCH_START_TICKS) startMatch(true);
                 else if (greenFire) startMatch(false);
                 break;
             case ROUND_START:
@@ -151,6 +162,7 @@ public class Battle
     private void fight(int width, int height)
     {
         if (vsComputer) computer.plan(green, red, shells, width, height, arena);
+        if (watching) redComputer.plan(red, green, shells, width, height, arena);
         drive(red, green, width, height);
         drive(green, red, width, height);
         shells.removeIf(shell -> !fly(shell, width, height) || strike(shell, red, width, height)
@@ -220,8 +232,26 @@ public class Battle
             return;
         }
         winner = redWins > greenWins ? red : green;
-        if (vsComputer && record != null) record.add(winner == red);
+        if (vsComputer && !watchedMatch && record != null) record.add(winner == red);
         enter(Phase.MATCH_OVER);
+    }
+
+    /**
+     * Watch (C): the computer drives red as well, starting matches against itself, until C again. Turned off in a
+     * match, red is the player's again; that match does not count in the record.
+     */
+    public void toggleWatch()
+    {
+        watching = !watching;
+        watchedMatch |= watching;
+        red.setControls(watching ? redComputer : redKeys);
+        // The computer's first match starts a moment after C, not at once.
+        if (phase == Phase.TITLE || phase == Phase.MATCH_OVER) phaseTicks = Math.min(phaseTicks, MATCH_OVER_TICKS);
+    }
+
+    public boolean watching()
+    {
+        return watching;
     }
 
     public Phase phase()

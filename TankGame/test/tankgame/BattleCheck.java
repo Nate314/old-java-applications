@@ -40,7 +40,34 @@ public final class BattleCheck
         computerDestroysASittingTarget();
         computerShootsRoundTheBunker();
         computerAgainstComputerFinishes();
+        watchPlaysOnItsOwn();
         System.out.println("BattleCheck: all checks passed");
+    }
+
+    /** Watch (C): from the title the computer starts matches against itself, they are not recorded, and C hands red back. */
+    private static void watchPlaysOnItsOwn() throws Exception
+    {
+        File file = File.createTempFile("tankgame-watch", ".txt");
+        file.delete();
+        Script redKeys = new Script();
+        Tank red = new Tank("Red", Color.RED, redKeys, 100, 250, 90);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
+        Battle battle = new Battle(red, green, new ComputerControls(new Random(2)), Record.load(file));
+        battle.toggleWatch();
+        assert battle.watching() && red.controls() instanceof ComputerControls;
+        int ticks = 0;
+        while (battle.phase() == Battle.Phase.TITLE && ticks++ < Battle.WATCH_START_TICKS + 5) battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.ROUND_START && battle.vsComputer() : "watch did not start a match";
+        ticks = 0;
+        while (battle.phase() != Battle.Phase.MATCH_OVER && ticks++ < 60 * 60 * 20) battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.MATCH_OVER : "computer against computer did not finish a match";
+        assert Record.load(file).wins() + Record.load(file).losses() == 0 : "a watched match was recorded";
+        ticks = 0;
+        while (battle.phase() == Battle.Phase.MATCH_OVER && ticks++ < Battle.WATCH_START_TICKS + 5) battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.ROUND_START : "watch did not start the next match";
+        battle.toggleWatch();
+        assert !battle.watching() && red.controls() == redKeys;
+        file.delete();
     }
 
     private static Tank tank(Controls c, int x, int y, int rotation)

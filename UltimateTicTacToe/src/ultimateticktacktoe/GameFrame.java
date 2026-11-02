@@ -28,6 +28,10 @@ public final class GameFrame extends JFrame {
    private static final int HARD_THINK_MILLIS = 700;
    /** A pause before the computer moves, so the player sees their own move land first. */
    private static final int MOVE_DELAY_MILLIS = 350;
+   /** Watch: each side searches this briefly, so a click to take over is not held up for long. */
+   private static final int WATCH_THINK_MILLIS = 150;
+   /** Watch: the next game starts this long after one ends. */
+   private static final int WATCH_NEXT_GAME_MILLIS = 3000;
    private static final Color TEXT = new Color(230, 235, 245);
    private static final Color QUIET_TEXT = new Color(150, 162, 186);
    private static final Color BUTTON = new Color(46, 58, 86);
@@ -71,6 +75,11 @@ public final class GameFrame extends JFrame {
    private int cursorMove = -1;
    /** The game's status line, shown again when a preview's line ends. */
    private String statusLine = " ";
+   /** Watch (W): the computer plays both sides, game after game, until a click or W again. */
+   private boolean watching;
+   /** The computer played X in this game, so it does not count in the record. */
+   private boolean computerPlayedX;
+   private final Timer nextGameTimer = new Timer(WATCH_NEXT_GAME_MILLIS, event -> this.newGame(this.mode));
 
    /** {@code page} and {@code code} come from the arguments (see Main); either may be null. */
    public GameFrame(String page, String code) {
@@ -82,6 +91,7 @@ public final class GameFrame extends JFrame {
          this.restoreFriendGame();
       }
       this.computerTimer.setRepeats(false);
+      this.nextGameTimer.setRepeats(false);
       this.setDefaultCloseOperation(3);
       this.setResizable(false);
       // 3/4 of the screen height, but no wider than the screen, so the board also fits a narrow (portrait) browser window.
@@ -135,7 +145,10 @@ public final class GameFrame extends JFrame {
       for (Mode choice : Mode.values()) {
          JButton button = new JButton(choice.label);
          button.setFocusable(false);
-         button.addActionListener(event -> this.newGame(choice));
+         button.addActionListener(event -> {
+            this.takeOver();
+            this.newGame(choice);
+         });
          this.modeButtons[choice.ordinal()] = button;
          bar.add(button);
       }
@@ -175,6 +188,8 @@ public final class GameFrame extends JFrame {
    /** Starts over in the given mode. */
    private void newGame(Mode choice) {
       this.computerTimer.stop();
+      this.nextGameTimer.stop();
+      this.computerPlayedX = this.watching;
       boolean backToFriend = choice == Mode.FRIEND && this.mode != Mode.FRIEND;
       this.mode = choice;
       this.record.setLastMode(choice);
@@ -187,6 +202,34 @@ public final class GameFrame extends JFrame {
          this.saveFriendGame();
       }
       this.refresh();
+      this.moveSoon();
+   }
+
+   /**
+    * W: the computer plays both sides (a short Hard search each, so the page waits little) until W again or a click on
+    * a cell. From two players or Friend by link it first starts a game against the computer on Easy, so the game with
+    * a friend is only set aside. A game the computer played X in does not count in the record.
+    */
+   final void toggleWatch() {
+      if (!this.watching && !this.mode.vsComputer()) {
+         this.newGame(Mode.EASY);
+      }
+      this.watching = !this.watching;
+      this.computerPlayedX |= this.watching;
+      this.computerTimer.stop();
+      this.nextGameTimer.stop();
+      this.refresh();
+      if (this.watching && this.state.winner != null) {
+         this.nextGameTimer.restart();
+      }
+      this.moveSoon();
+   }
+
+   /** The player clicked: X (and the mode buttons) are theirs again. */
+   private void takeOver() {
+      if (this.watching) {
+         this.toggleWatch();
+      }
    }
 
    private void restoreFriendGame() {
@@ -211,6 +254,7 @@ public final class GameFrame extends JFrame {
          this.status.setText("That is not a game " + this.thing() + ".");
          return;
       }
+      this.takeOver();
       this.computerTimer.stop();
       this.mode = Mode.FRIEND;
       this.record.setLastMode(Mode.FRIEND);
@@ -314,7 +358,7 @@ public final class GameFrame extends JFrame {
 
    /** True if the player at this screen may make that move now (not while the computer or a friend is to move). */
    private boolean canPreview(int move) {
-      return !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting) && this.state.canPlay(move / 9, move % 9);
+      return !this.watching && !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting) && this.state.canPlay(move / 9, move % 9);
    }
 
    /** The mouse (or, with {@code keyboard}, the arrow keys) is on that cell: show what playing there would do. */
@@ -375,11 +419,12 @@ public final class GameFrame extends JFrame {
    }
 
    private boolean computerToMove() {
-      return this.mode.vsComputer() && !this.state.xTurn && this.state.winner == null;
+      return this.state.winner == null && (this.watching || this.mode.vsComputer() && !this.state.xTurn);
    }
 
    /** A cell was clicked: play there, or start over if the game has ended. Clicks wait while the computer thinks. */
    public final void cellClicked(int board, int cell) {
+      this.takeOver();
       if (this.state.winner != null) {
          this.newGame(this.mode);
          return;
@@ -402,8 +447,8 @@ public final class GameFrame extends JFrame {
       if (!this.computerToMove()) {
          return;
       }
-      int move = this.mode == Mode.HARD
-         ? Computer.hardMove(this.state, this.random, HARD_THINK_MILLIS)
+      int move = this.watching ? Computer.hardMove(this.state, this.random, WATCH_THINK_MILLIS)
+         : this.mode == Mode.HARD ? Computer.hardMove(this.state, this.random, HARD_THINK_MILLIS)
          : Computer.easyMove(this.state, this.random);
       this.play(move / 9, move % 9);
       this.moved();
@@ -411,10 +456,18 @@ public final class GameFrame extends JFrame {
 
    /** After any move: count a finished game against the computer, redraw, and hand the turn to the computer if it is O's. */
    private void moved() {
-      if (this.state.winner != null && this.mode.vsComputer()) {
+      if (this.state.winner != null && this.mode.vsComputer() && !this.computerPlayedX) {
          this.record.add(this.mode, this.state.winner);
       }
       this.refresh();
+      if (this.watching && this.state.winner != null) {
+         this.nextGameTimer.restart();
+      }
+      this.moveSoon();
+   }
+
+   /** Hands the turn to the computer if it is its move. */
+   private void moveSoon() {
       if (this.computerToMove()) {
          // The computer waits for the move to draw in (a won board takes longer), since a Hard search holds up the page.
          this.computerTimer.setInitialDelay((int) Math.max(MOVE_DELAY_MILLIS, this.animateUntil - System.currentTimeMillis()));
@@ -437,13 +490,15 @@ public final class GameFrame extends JFrame {
       }
 
       String winner = this.state.winner;
-      this.setTitle(winner == null ? "Ultimate Tic-Tac-Toe: " + (this.state.xTurn ? "X" : "O") + " to move"
+      this.setTitle(this.watching ? "Ultimate Tic-Tac-Toe: the computer plays both sides"
+         : winner == null ? "Ultimate Tic-Tac-Toe: " + (this.state.xTurn ? "X" : "O") + " to move"
          : GameState.DRAW.equals(winner) ? "Ultimate Tic-Tac-Toe: draw. Click to play again."
          : "Ultimate Tic-Tac-Toe: " + winner + " wins! Click to play again.");
       this.statusLine = this.notice != null ? this.notice : this.statusText();
       this.notice = null;
       this.updatePreview();
-      this.tally.setText(this.mode.vsComputer()
+      this.tally.setText(this.watching ? "Games the computer plays X in do not count."
+         : this.mode.vsComputer()
          ? "Your record on " + (this.mode == Mode.HARD ? "Hard" : "Easy") + ": " + this.record.describe(this.mode)
          : " ");
       boolean friend = this.mode == Mode.FRIEND;
@@ -460,6 +515,10 @@ public final class GameFrame extends JFrame {
          return this.friendStatusText();
       }
       String winner = this.state.winner;
+      if (this.watching) {
+         return winner == null ? "Computer vs computer: click to take over."
+            : (GameState.DRAW.equals(winner) ? "A draw." : winner + " wins.") + " Next game...";
+      }
       if (!this.mode.vsComputer()) {
          return winner == null ? (this.state.xTurn ? "X" : "O") + " to move, on an outlined board."
             : (GameState.DRAW.equals(winner) ? "A draw." : winner + " wins!") + " Click any cell to play again.";

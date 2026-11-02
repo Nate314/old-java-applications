@@ -22,6 +22,8 @@ With the marker where it starts, the bot clears cacti and low birds well and usu
 
 Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`.
 
+On the web site, `?watch` on its page (and the home page's demo, see Watch the computer play in `web/README.md`) starts it with the bot playing (B), and the visitor's first press takes over.
+
 ## Original screen bot
 
 `./run.ps1 DinoGame screen` runs the original program, which plays a dinosaur game in another window (such as Chrome's) by reading the real screen:

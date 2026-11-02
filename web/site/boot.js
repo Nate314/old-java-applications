@@ -33,6 +33,8 @@
  *   Windows key opens a Start menu of every app, Win+E a File Explorer window on the app folders.
  * - Keeps the last 10 to 20 seconds of a running app as video (instant replay): Replay in the toolbar, on the exit
  *   screen and in the home page's player bar shows the clip to watch, save or share (window.oldjavaReplay).
+ * - Lets four games play themselves (?watch, WATCH): the app's own key starts its computer player, the app is
+ *   muted, and the visitor's first click or key takes over. The home page's player opens on one.
  * - Gives the site's own controls and moments short synthesized sounds in the skin's voice
  *   (window.oldjavaSound), with a Sound button in the toolbar to mute them on every open page.
  */
@@ -1109,6 +1111,74 @@
     }
     document.addEventListener('pointerdown', onInput, true);
     document.addEventListener('keydown', onInput, true);
+  }
+
+  // ---- watch: the computer plays (?watch) ----
+  // Four games can play themselves: Minesweeper's solver and Ultimate Tic-Tac-Toe's computer on both sides (W),
+  // TankGame's computer driving both tanks (C) and DinoGame's original bot (B); the keys are the apps' own. A page
+  // opened with ?watch skips the title screen, presses that key once the app's window is up, keeps the app quiet and
+  // says so in a line over the stage. The visitor's first click or key (or press on the controller) takes over:
+  // the key is pressed again, so the computer stops, before the visitor's own press reaches the app, which makes
+  // that press their first move. The passport stamp waits for it too.
+  var WATCH = { Minesweeper: 'W', UltimateTicTacToe: 'W', TankGame: 'C', DinoGame: 'B' };
+  var NOT_TAKING_OVER = '.shim-toolbar, .shim-drawer, .shim-share, .shim-scrim, .shim-overlay, .shim-toast, .shim-source';
+  window.oldjavaWatch = { has: function (id) { return !!WATCH[id]; } };
+
+  function watchWanted() {
+    return /[?&]watch(=|&|$)/.test(location.search) && !!WATCH[appId()] && !isThen();
+  }
+
+  function watchApp(desktop) {
+    var key = WATCH[appId()];
+    var note = document.createElement('div');
+    note.className = 'shim-watch';
+    note.setAttribute('role', 'status');
+    var dot = document.createElement('span');
+    dot.className = 'shim-watch-dot';
+    var strong = document.createElement('strong');
+    strong.textContent = 'The computer is playing';
+    var how = document.createElement('span');
+    how.textContent = 'Click or press any key to take over';
+    [dot, strong, how].forEach(function (el) { note.appendChild(el); });
+    document.body.appendChild(note);
+    setAppMuted(true);
+    var pressed = false;
+    function press() { fireKey('keydown', key); fireKey('keyup', key); }
+    // Once the app's first window is on the desktop, and has had a moment to take the focus.
+    var wait = setInterval(function () {
+      if (!windowsBox(desktop).box) return;
+      clearInterval(wait);
+      wait = setTimeout(function () { press(); pressed = true; }, 400);
+    }, 100);
+
+    function take(ownKey) {
+      document.removeEventListener('pointerdown', onInput, true);
+      document.removeEventListener('keydown', onInput, true);
+      window.removeEventListener('message', onMessage);
+      clearInterval(wait);
+      clearTimeout(wait);
+      if (pressed && !ownKey) press();
+      setAppMuted(false);
+      note.classList.add('gone');
+      setTimeout(function () { note.remove(); }, 400);
+      // A reload now starts the app for the visitor.
+      var search = location.search.replace(/([?&])watch(=[^&]*)?(&|$)/, function (m, lead, value, tail) { return tail ? lead : ''; });
+      history.replaceState(history.state, '', location.pathname + search + location.hash);
+      passport.stamp(appId());
+      if (embedded && window.parent !== window) window.parent.postMessage({ oldjavaWatch: 'taken' }, location.origin);
+    }
+    function onInput(e) {
+      if (!e.isTrusted || e.target && e.target.closest && e.target.closest(NOT_TAKING_OVER)) return;
+      if (e.type === 'keydown' && /^(Shift|Control|Alt|Meta|Tab|Escape)$/.test(e.key)) return;
+      take(e.type === 'keydown' && e.code === keyOf(key).code);
+    }
+    // The home page's player asks first, before it passes its controller's presses in.
+    function onMessage(e) {
+      if (e.origin === location.origin && e.source === window.parent && e.data && e.data.oldjavaWatchTake) take(false);
+    }
+    document.addEventListener('pointerdown', onInput, true);
+    document.addEventListener('keydown', onInput, true);
+    window.addEventListener('message', onMessage);
   }
 
   // ---- touch controller ----
@@ -2999,7 +3069,13 @@
     era.href = eraPage(!isThen());
     era.textContent = isThen() ? 'Play today’s version' : 'Play it as recovered, bugs and all';
     era.hidden = true;
-    [cat, name, hint, stamp, record, play, press, read, era].forEach(function (el) { text.appendChild(el); });
+    // The games that play themselves: a look before playing (see watch).
+    var watchLink = document.createElement('a');
+    watchLink.className = 'shim-title-watch';
+    watchLink.href = '?watch';
+    watchLink.textContent = 'Watch the computer play it first';
+    watchLink.hidden = !WATCH[appId()] || isThen();
+    [cat, name, hint, stamp, record, play, press, read, watchLink, era].forEach(function (el) { text.appendChild(el); });
     card.appendChild(art);
     card.appendChild(text);
     card.appendChild(meter);
@@ -3210,12 +3286,18 @@
   // The app's voices meet in one gain on their way out, so instant replay can record them without the site's
   // own sounds.
   var appGain = null;
+  var appMuted = false;   // while the computer plays (watch)
   function appOut(a) {
     if (!appGain) {
       appGain = a.createGain();
+      appGain.gain.value = appMuted ? 0 : 1;
       appGain.connect(a.destination);
     }
     return appGain;
+  }
+  function setAppMuted(on) {
+    appMuted = on;
+    if (appGain) appGain.gain.value = on ? 0 : 1;
   }
 
   window.__shimSynth = {
@@ -3537,7 +3619,8 @@
       sessionStorage.removeItem(AGAIN_KEY);
     } catch (e) { /* no Run again shortcut */ }
     // The player's iframe starts at once (the visitor's click on the home page started it).
-    var title = extras && !embedded && again !== appId() && typeof main === 'function' ? titleScreen(files) : null;
+    var watch = extras && watchWanted();
+    var title = extras && !embedded && !watch && again !== appId() && typeof main === 'function' ? titleScreen(files) : null;
     var loading = !title && files.length ? overlay('Loading...') : null;
     var shell = body.hasAttribute('data-shell') ? pretendWindows() : null;
     window.__shimExited = function (msg) {
@@ -3554,7 +3637,7 @@
       });
       if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
       if (extras && !embedded) howToPlay();
-      if (extras) stampOnPlay();
+      if (watch) watchApp(desktop); else if (extras) stampOnPlay();
       if (extras && !shell && !replay) replay = startReplay(desktop);
     }
     Promise.all(files.map(function (f) {

@@ -403,6 +403,7 @@ public final class MineTile extends JButton implements MouseListener {
 
    /** A left click (reveal, or open around a number) or a right click (cycle the flag), from the mouse or the keyboard. */
    private void play(boolean reveal) {
+      this.game.takeOver();
       if (this.game.gameOver) {
          this.game.restart();
          return;
@@ -427,6 +428,17 @@ public final class MineTile extends JButton implements MouseListener {
          this.describe(this.mark == FLAG ? "flag" : this.mark == QUESTION ? "question mark" : "hidden");
          this.game.setFlagged(this.row, this.column, this.mark == FLAG);
       }
+   }
+
+   /** The computer (Watch) flags this tile, planted like a player's flag. */
+   void plantFlag() {
+      if (this.mark == FLAG) {
+         return;
+      }
+      this.mark = FLAG;
+      this.animate(0, PLANT_MS);
+      this.describe("flag");
+      this.game.setFlagged(this.row, this.column, true);
    }
 
    @Override

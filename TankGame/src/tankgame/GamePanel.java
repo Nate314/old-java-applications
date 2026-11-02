@@ -193,6 +193,7 @@ public class GamePanel extends JPanel
             scoreBar(g, battle.green(), battle.greenWins(), true);
         }
         banner(g);
+        if (battle.watching()) watchNote(g);
     }
 
     /** A tank's name, its health and the rounds it has won, in the top left (red) or top right (green) corner. */
@@ -241,6 +242,7 @@ public class GamePanel extends JPanel
                                 new Line("", SMALL, TEXT),
                                 new Line("Press Q to play the computer", MEDIUM, light(red)),
                                 new Line("Press M for two players", MEDIUM, light(green)),
+                                new Line("Press C to watch the computer play itself", SMALL, DIM),
                                 recordLine() });
                 break;
             case ROUND_START:
@@ -258,7 +260,7 @@ public class GamePanel extends JPanel
             case MATCH_OVER:
                 String score = Math.max(battle.redWins(), battle.greenWins()) + " - "
                                 + Math.min(battle.redWins(), battle.greenWins());
-                String title = !battle.vsComputer() ? winner.name() + " wins the match"
+                String title = !battle.vsComputer() || battle.watching() ? winner.name() + " wins the match"
                                 : winner == red ? "You beat the computer!" : "The computer wins";
                 boolean ready = battle.phaseTicks() >= Battle.MATCH_OVER_TICKS;
                 panel(g, new Line[] { new Line(title, MEDIUM, light(winner)), new Line(score, BIG, TEXT),
@@ -269,6 +271,20 @@ public class GamePanel extends JPanel
             default:
                 break;
         }
+    }
+
+    /** Watch: a line along the bottom of the field saying who drives and how to take over. */
+    private void watchNote(Graphics2D g)
+    {
+        String text = "Computer vs computer. Press C to take red";
+        g.setFont(SMALL);
+        int w = g.getFontMetrics().stringWidth(text) + 20;
+        int x = (getWidth() - w) / 2;
+        int y = getHeight() - 34;
+        g.setColor(new Color(0, 0, 0, 150));
+        g.fillRoundRect(x, y, w, 24, 12, 12);
+        g.setColor(Color.YELLOW);
+        g.drawString(text, x + 10, y + 17);
     }
 
     /** The tank's color mixed with white, so text in it reads well on the dark banners. */

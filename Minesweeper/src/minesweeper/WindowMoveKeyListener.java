@@ -27,6 +27,11 @@ public final class WindowMoveKeyListener implements KeyListener {
          return;
       }
 
+      if (event.getKeyCode() == KeyEvent.VK_W) {
+         this.frame.toggleWatch();
+         return;
+      }
+
       if (event.getKeyCode() == KeyEvent.VK_F2) {
          this.frame.restart();
          return;

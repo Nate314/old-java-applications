@@ -314,7 +314,7 @@
       </div>
     </div>
     <div class="screen" id="screen">
-      <iframe id="player-frame" title="Minesweeper" src="Minesweeper/index.html?embed" allow="autoplay; clipboard-write; microphone"></iframe>
+      <iframe id="player-frame" title="Minesweeper" src="Minesweeper/index.html?embed&amp;watch" allow="autoplay; clipboard-write; microphone"></iframe>
     </div>
     <div class="docked" id="player-pad" hidden></div>
     <nav class="rail" aria-label="Switch app">
@@ -542,7 +542,31 @@
     var nowButton = document.getElementById('player-now');
     var then = false;
 
-    function play(li, focus, asThen) {
+    // Demo: until the visitor picks an app or takes over, the player shows the games that play themselves
+    // (boot.js watch, ?watch), the computer at the controls, a new one every REEL_MS while the player is in view.
+    var REEL_MS = 40000;
+    var demo = false;
+    var reelTimer = 0;
+    function reel() {
+      clearTimeout(reelTimer);
+      if (!demo) return;
+      reelTimer = setTimeout(function () {
+        var box = screen.getBoundingClientRect();
+        if (document.hidden || box.bottom < 0 || box.top > window.innerHeight) { reel(); return; }
+        for (var k = 1; k < cards.length; k++) {
+          var li = cards[(cards.indexOf(current) + k) % cards.length];
+          if (window.oldjavaWatch.has(li.getAttribute('data-app'))) { play(li, false, false, true); return; }
+        }
+      }, REEL_MS);
+    }
+    function endDemo() {
+      demo = false;
+      clearTimeout(reelTimer);
+    }
+
+    function play(li, focus, asThen, watch) {
+      demo = !!watch;
+      reel();
       mark(li);
       var app = li.getAttribute('data-app');
       var name = li.querySelector('strong').textContent;
@@ -582,7 +606,7 @@
       if (api) api.back();
       replayButton.hidden = true;   // until the new app's page says it is recording
       var next = frame.cloneNode(false);
-      next.src = page + '?embed';
+      next.src = page + '?embed' + (watch ? '&watch' : '');
       frame.parentNode.replaceChild(next, frame);
       frame = next;
       frame.addEventListener('load', syncPop);
@@ -690,6 +714,11 @@
       var has = pad.has(app);
       padToggle.hidden = !has;
       padLight = has ? pad.render(padBox, app, function (type, key) {
+        // A press on the controller takes over from the computer first (boot.js watch).
+        if (demo) {
+          endDemo();
+          frame.contentWindow.postMessage({ oldjavaWatchTake: true }, location.origin);
+        }
         frame.contentWindow.postMessage({ oldjavaKey: { type: type, name: key } }, location.origin);
       }) : null;
       padBox.hidden = !has || !pad.wanted(true);
@@ -711,6 +740,7 @@
       if (typeof e.data.oldjavaShare === 'string') { window.oldjavaShare.open(e.data.oldjavaShare || null, frame); return; }
       if (e.data.oldjavaReplay) { replayButton.hidden = false; return; }
       if (e.data.oldjavaClip) { window.oldjavaReplay.open(e.data.oldjavaClip, frame); return; }
+      if (e.data.oldjavaWatch === 'taken') { endDemo(); return; }
       var li = card(e.data.oldjavaPlay);
       if (li) choose(li);
     });
@@ -860,7 +890,7 @@
     var hash = /^#([^:]*)(:then)?$/.exec(decodeURIComponent(location.hash)) || [];
     var start = card(hash[1]);
     if (start) play(start, false, !!hash[2]);
-    else { mark(card('Minesweeper')); fit(); }
+    else { mark(card('Minesweeper')); fit(); demo = true; reel(); }   // the page's own frame: Minesweeper, watched
   })();
 </script>
 <script>

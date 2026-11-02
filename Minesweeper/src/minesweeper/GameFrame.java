@@ -28,6 +28,9 @@ public final class GameFrame extends JFrame {
    private static final int RIPPLE_MS = 22;
    /** Mines burst in this many ms per tile of distance from the one hit; a win's flags plant at the same pace. */
    private static final int BURST_STEP_MS = 45;
+   /** Watch: the computer makes a move this often, and starts the next game this long after one ends. */
+   private static final int WATCH_STEP_MS = 280;
+   private static final int WATCH_NEXT_GAME_MS = 2600;
    public boolean gameOver = false;
    private final Level level;
    private final BestTimes bestTimes;
@@ -55,16 +58,22 @@ public final class GameFrame extends JFrame {
    private long finishMillis;
    /** The tile the keyboard is on, shown darker, or null while playing with the mouse. */
    private MineTile cursor;
+   /** Watch (W): the computer is playing this board. */
+   private boolean watching;
+   /** The computer made a move in this game, so its time is not a best time. */
+   private boolean computerPlayed;
+   private final Timer watchTimer = new Timer(WATCH_STEP_MS, event -> this.watchStep());
+   private final Random random = new Random();
 
    public GameFrame(SoundPlayer soundPlayer) {
-      this(soundPlayer, null, null, null);
+      this(soundPlayer, null, null, null, false);
    }
 
    /**
     * Without best times, reads them from the file. That happens here, after JFrame's constructor, because the browser
     * build restores saved files when the first component is created.
     */
-   private GameFrame(SoundPlayer soundPlayer, BestTimes bestTimes, Point location, int[] cursorSpot) {
+   private GameFrame(SoundPlayer soundPlayer, BestTimes bestTimes, Point location, int[] cursorSpot, boolean watching) {
       this.soundPlayer = soundPlayer;
       this.bestTimes = bestTimes != null ? bestTimes : BestTimes.load(BEST_TIMES_FILE);
       this.level = this.bestTimes.lastLevel();
@@ -104,6 +113,9 @@ public final class GameFrame extends JFrame {
       this.setVisible(true);
       if (cursorSpot != null) { // a new game started from the keyboard keeps the cursor where it was
          this.focusTile(Math.min(cursorSpot[0], this.rows - 1), Math.min(cursorSpot[1], this.columns - 1));
+      }
+      if (watching) {
+         this.toggleWatch();
       }
    }
 
@@ -174,8 +186,13 @@ public final class GameFrame extends JFrame {
          int[][] gameOverChords = new int[][]{{49, 67, 71, 75, 78}, {48, 67, 70, 73, 76}};
          this.soundPlayer.playChord(gameOverChords[new Random().nextInt(2)]);
          this.finish();
-         this.setTitle("Minesweeper: you hit a mine. Click to play again.");
-         this.status.setText("Boom! Click any tile to play again.");
+         if (this.watching) {
+            this.setTitle("Minesweeper: the computer hit a mine.");
+            this.status.setText("Boom! The computer had to guess. Next game...");
+         } else {
+            this.setTitle("Minesweeper: you hit a mine. Click to play again.");
+            this.status.setText("Boom! Click any tile to play again.");
+         }
          return;
       }
 
@@ -200,11 +217,18 @@ public final class GameFrame extends JFrame {
             }
          }
          long time = this.finishMillis - this.startMillis;
-         long before = this.bestTimes.best(this.level);
-         boolean record = this.bestTimes.record(this.level, time);
          for (int note : WIN_NOTES) {
             this.soundPlayer.queueNote(note);
          }
+         if (this.computerPlayed) {
+            // Not a best time: the computer played some or all of it.
+            String who = this.watching ? "The computer" : "You and the computer";
+            this.setTitle("Minesweeper: " + who.toLowerCase() + " cleared it in " + BestTimes.format(time) + ".");
+            this.status.setText(who + " cleared it in " + BestTimes.format(time) + (this.watching ? ". Next game..." : ". Click to play again."));
+            return;
+         }
+         long before = this.bestTimes.best(this.level);
+         boolean record = this.bestTimes.record(this.level, time);
          this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
          this.status.setText("You win in " + BestTimes.format(time) + "! "
             + (!record ? "Best: " + BestTimes.format(before) : before == 0 ? "First " + this.level.label + " win." : "New best!"));
@@ -287,11 +311,69 @@ public final class GameFrame extends JFrame {
    void play(Level choice) {
       this.bestTimes.setLastLevel(choice);
       this.dispose();
-      new GameFrame(this.soundPlayer, this.bestTimes, this.getLocation(), this.cursor == null ? null : this.cursor.spot());
+      new GameFrame(this.soundPlayer, this.bestTimes, this.getLocation(), this.cursor == null ? null : this.cursor.spot(), this.watching);
+   }
+
+   /** W: the computer plays this board (and the games after it) until W again, a click or a key on a tile. */
+   void toggleWatch() {
+      this.watching = !this.watching;
+      if (this.watching) {
+         this.watchTimer.start();
+      } else {
+         this.watchTimer.stop();
+         this.moveCursor(null);
+      }
+      this.updateStatus();
+   }
+
+   /** The player clicked or pressed a tile's key: the computer stops and the board is theirs. */
+   void takeOver() {
+      if (this.watching) {
+         this.toggleWatch();
+      }
+   }
+
+   boolean isWatching() {
+      return this.watching;
+   }
+
+   /** One move of the computer's, shown with the cursor ring; after a game, the next one. */
+   private void watchStep() {
+      if (this.gameOver) {
+         if (System.currentTimeMillis() - this.finishMillis >= WATCH_NEXT_GAME_MS) {
+            this.restart();
+         }
+         return;
+      }
+      Solver.Move move = Solver.next(this.view(), this.level.mines - this.flagCount, this.random);
+      if (move == null) {
+         return;
+      }
+      this.computerPlayed = true;
+      MineTile tile = this.tiles[move.row][move.column];
+      this.moveCursor(tile);
+      if (move.flag) {
+         tile.plantFlag();
+      } else {
+         this.revealFrom(move.row, move.column);
+      }
+   }
+
+   /** The board as a player sees it, for the computer: hidden, flagged or a revealed count. */
+   private int[][] view() {
+      int[][] view = new int[this.rows][this.columns];
+      for (int r = 0; r < this.rows; r++) {
+         for (int c = 0; c < this.columns; c++) {
+            String value = this.revealed[r][c] ? this.grid[r][c] : null;
+            view[r][c] = value == null ? (this.flagged[r][c] ? Solver.FLAG : Solver.HIDDEN) : value.trim().isEmpty() ? 0 : Integer.parseInt(value);
+         }
+      }
+      return view;
    }
 
    @Override
    public void dispose() {
+      this.watchTimer.stop();
       this.clock.stop();
       this.animation.stop();
       super.dispose();
@@ -304,6 +386,11 @@ public final class GameFrame extends JFrame {
       int minesLeft = this.level.mines - this.flagCount;
       long elapsed = this.startMillis == 0 ? 0 : System.currentTimeMillis() - this.startMillis;
       long best = this.bestTimes.best(this.level);
+      if (this.watching) {
+         this.setTitle("Minesweeper: the computer is playing");
+         this.status.setText("Computer playing: click to take over");
+         return;
+      }
       this.setTitle("Minesweeper: " + minesLeft + " mines left");
       this.status.setText(minesLeft + " mines left    Time " + elapsed / 1000 / 60 + ":" + (elapsed / 1000 % 60 < 10 ? "0" : "")
          + elapsed / 1000 % 60 + "    Best " + (best == 0 ? "none yet" : BestTimes.format(best)));

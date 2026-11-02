@@ -80,6 +80,7 @@ public class MineFieldCheck {
       }
 
       checkBestTimes();
+      checkSolver();
       System.out.println("MineFieldCheck passed");
    }
 
@@ -118,6 +119,58 @@ public class MineFieldCheck {
    }
 
    /** Best times: only faster wins count, and the times and last level survive a reload of the file. */
+   /**
+    * The computer (Watch) plays whole games: a move it is sure of is never a mine (or a wrong flag), it never touches
+    * a revealed tile, and it wins most Beginner games (only guesses can lose).
+    */
+   private static void checkSolver() {
+      for (Level level : Level.values()) {
+         int wins = 0;
+         int games = 200;
+         for (int seed = 0; seed < games; seed++) {
+            Random random = new Random(seed);
+            int size = level.size;
+            String[][] grid = null;
+            boolean[][] revealed = new boolean[size][size];
+            boolean[][] flagged = new boolean[size][size];
+            int flags = 0;
+            for (int step = 0; step < size * size * 2; step++) {
+               int[][] view = new int[size][size];
+               for (int r = 0; r < size; r++) {
+                  for (int c = 0; c < size; c++) {
+                     view[r][c] = revealed[r][c] ? (grid[r][c].trim().isEmpty() ? 0 : Integer.parseInt(grid[r][c]))
+                        : flagged[r][c] ? Solver.FLAG : Solver.HIDDEN;
+                  }
+               }
+               Solver.Move move = Solver.next(view, level.mines - flags, random);
+               check(move != null, "no move on an unfinished board");
+               check(!revealed[move.row][move.column] && !flagged[move.row][move.column], "moved on a revealed or flagged tile");
+               if (grid == null) {
+                  grid = new MineFieldGenerator(size, size, level.mines, move.row, move.column, random).getGrid();
+               }
+               boolean mine = MineFieldGenerator.isMine(grid, move.row, move.column);
+               if (move.flag) {
+                  check(mine, "flagged a safe tile");
+                  flagged[move.row][move.column] = true;
+                  flags++;
+                  continue;
+               }
+               check(!move.sure || !mine, "a sure move hit a mine");
+               if (mine) {
+                  break;
+               }
+               MineFieldGenerator.reveal(grid, revealed, flagged, move.row, move.column);
+               if (MineFieldGenerator.isWon(grid, revealed)) {
+                  wins++;
+                  break;
+               }
+            }
+         }
+         System.out.println("Solver " + level + ": " + wins + " of " + games + " games won");
+         check(level != Level.BEGINNER || wins > games * 0.7, "the computer won only " + wins + " Beginner games");
+      }
+   }
+
    private static void checkBestTimes() {
       try {
          File file = File.createTempFile("minesweeper-best", ".txt");

@@ -26,6 +26,7 @@ The original colors (bright green hidden tiles, blue revealed ones with a white 
 - **Keyboard play**: Tab into the board (in the browser), or start playing on the first tile (on the desktop, where it has the focus). The **arrow keys** move a cursor from tile to tile (the tile under it has a blue ring), **Space** or **Enter** reveals it, and **F** (or the menu key, or Shift+F10) cycles its flag like a right click. A new game started from the keyboard keeps the cursor where it was. A mouse click hides the cursor until a key is used again.
 - **Screen readers** hear each tile's state and place ("hidden, row 3, column 5", "2 mines near, ...", "flag, ...", "mine, ...", and after a loss "mine, hit, ..." and "wrong flag, ..."), through Swing's accessible names (the Java Access Bridge on the desktop, `aria-label` in the browser). In the browser the title bar's changes are read out too: the mines left after a flag, a mine hit, a win.
 - **Shift+arrow keys**: move the window by 30 px per press (plain arrows did this before keyboard play; they still do while the window itself, not a tile, has the focus).
+- **W**: watch the computer play. It plays the board as it stands (or a new one) about three moves a second, with the cursor ring on the tile it plays: it opens the neighbors of a number whose mines are all flagged, flags hidden neighbors that must all be mines, compares two overlapping numbers to settle the tiles only one of them touches, and when nothing is certain reveals the tile least likely to be a mine (so it can lose). A finished game is followed by a new one after about 2.5 s. W again, a click on a tile, or Space, Enter or F on one takes over the board as it stands; 1, 2, 3 and F2 keep it playing on the new board. A game the computer played in records no best time: the status line says "The computer cleared it" (or "You and the computer cleared it") instead.
 - **Esc**: close the window, like its close button. Run alone that exits; inside NathaNOS it closes only Minesweeper.
 - No command-line arguments. The window is about 3/4 of the screen height tall; a new game opens where the last window was.
 - The best time on each level and the level played last are stored in `.minesweeper-best.txt` in your home folder, so the next start opens on that level.
@@ -35,6 +36,7 @@ The original colors (bright green hidden tiles, blue revealed ones with a white 
 - `src/minesweeper/Main.java`: entry point; creates a `GameFrame`.
 - `src/minesweeper/GameFrame.java`: the window; builds the level buttons, the grid of tiles and the status line, holds game state, and handles reveals, loss, win, the clock and the mine counter.
 - `src/minesweeper/Level.java`: the three board sizes and mine counts.
+- `src/minesweeper/Solver.java`: the computer's next move for W, from the board as a player sees it.
 - `src/minesweeper/BestTimes.java`: reads and writes the best times and the last level.
 - `src/minesweeper/MineFieldGenerator.java`: places mines at random and computes neighbor counts; also the flood reveal, opening around a number, and the win check.
 - `src/minesweeper/MineTile.java`: a tile button that paints itself and its animations; forwards left clicks and Space or Enter to the game, cycles flags on a right click or F, moves the keyboard cursor with the arrow keys, and names itself for screen readers. `GameFrame` repaints the tiles that are animating every 16 ms until they are done.
@@ -47,7 +49,7 @@ From the repo root: `./run.ps1 Minesweeper` (or `./run.ps1 Minesweeper -Build` t
 
 ## Self-check
 
-`test/minesweeper/MineFieldCheck.java` checks board generation on every level, the flood reveal, opening around a number (including a wrong flag), the win check and the best times file. From `Minesweeper/`:
+`test/minesweeper/MineFieldCheck.java` checks board generation on every level, the flood reveal, opening around a number (including a wrong flag), the win check, the best times file, and the computer (W) playing 200 games on each level: a move it is sure of never hits a mine or flags a safe tile, it never plays a revealed or flagged tile, and it wins more than 70% of Beginner games (it prints its wins per level). From `Minesweeper/`:
 
 ```
 javac -d ../out/check/Minesweeper src/minesweeper/*.java test/minesweeper/*.java

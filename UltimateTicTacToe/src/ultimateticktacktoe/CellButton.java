@@ -91,6 +91,10 @@ public final class CellButton extends JButton implements ActionListener {
             this.doClick();
             event.consume();
             return;
+         case KeyEvent.VK_W:
+            this.game.toggleWatch();
+            event.consume();
+            return;
          default:
             return;
       }
