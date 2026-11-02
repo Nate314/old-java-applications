@@ -18,7 +18,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 | [ScreenSaver](ScreenSaver/README.md) | Screen saver that closes when the mouse moves |
 | [SpriteFloatyStars](SpriteFloatyStars/README.md) | Animated stars with five modes, and Star Catcher: click gold stars over those modes across six nights, dodging black holes |
 | [UltimateTicTacToe](UltimateTicTacToe/README.md) | Ultimate Tic-Tac-Toe against an Easy or Hard computer, or for two players |
-| [CircleSpawner](CircleSpawner/README.md) | Draws a filled circle of a chosen diameter out of overlapping borderless windows |
+| [CircleSpawner](CircleSpawner/README.md) | Builds a circle (the original), ring, heart, star or a typed word out of borderless windows, growing in and bursting apart when clicked |
 | [DinoGame](DinoGame/README.md) | Bot that plays the Chrome dino game by watching a screen pixel |
 | [StockChecker](StockChecker/README.md) | Editable ticker list (seeded from `myStocks.txt`) that fetched quotes from the retired Yahoo Finance CSV API |
 | [SynthesizerKeyboard](SynthesizerKeyboard/README.md) | One-octave MIDI piano keyboard played with the computer keyboard, with five song lessons that light the next key and award stars |
