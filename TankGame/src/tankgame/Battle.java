@@ -10,6 +10,9 @@ import java.util.Random;
  * the first to win three rounds wins the match. Red's fire key starts a match against the computer, green's fire key
  * a match for two players. Each round is fought on the next battlefield of walls (see {@link Arena}). Knows nothing
  * about Swing, so the self-check can play whole matches.
+ * <p>
+ * With supply drops on, a crate floats down by parachute a few seconds into each round and again a while after each one
+ * is taken or shot: the first tank to drive over it gets its power (see {@link Supply.Power}).
  */
 public class Battle
 {
@@ -33,6 +36,14 @@ public class Battle
     public static final int  MATCH_OVER_TICKS   = 90;
     /** Watch: the computer starts a match after the title (or the last match's result) has shown this long. */
     public static final int  WATCH_START_TICKS  = 120;
+    /** Supply drops: the first crate comes 2.5 s into a round, the next 5 to 9 s after one is taken or shot. */
+    public static final int  FIRST_DROP_TICKS   = 150;
+    public static final int  DROP_GAP_TICKS     = 300;
+    public static final int  DROP_GAP_RANDOM    = 240;
+    /** How long the name of a power just taken shows over the tank. */
+    public static final int  NOTICE_TICKS       = 90;
+    /** Crates land at least this far below the top, clear of the score bar. */
+    private static final int DROP_TOP           = 80;
     private final Tank       red;
     private final Tank       green;
     private final Controls   greenKeys;
@@ -63,6 +74,16 @@ public class Battle
     private int              round;
     /** The winner of the round or match just finished; null for a round where both tanks fell. */
     private Tank             winner;
+    private boolean          supplies;
+    private Random           dropRandom         = new Random();
+    /** The crate on the field (falling or landed), or null. */
+    private Supply           supply;
+    private int              supplyClock;
+    private int              nextDrop           = FIRST_DROP_TICKS;
+    /** The last power taken, by which tank, and ticks since, for the line that rises over it. */
+    private Supply.Power     noticePower;
+    private Tank             noticeTank;
+    private int              noticeTicks;
 
     public Battle(Tank red, Tank green, ComputerControls computer, Record record)
     {
@@ -93,6 +114,10 @@ public class Battle
         green.reset();
         shells.clear();
         winner = null;
+        supply = null;
+        supplyClock = 0;
+        nextDrop = FIRST_DROP_TICKS;
+        noticePower = null;
         enter(Phase.ROUND_START);
     }
 
@@ -133,6 +158,7 @@ public class Battle
             smoke(green);
         }
         phaseTicks++;
+        noticeTicks++;
         switch (phase)
         {
             case TITLE:
@@ -161,12 +187,13 @@ public class Battle
 
     private void fight(int width, int height)
     {
-        if (vsComputer) computer.plan(green, red, shells, width, height, arena);
-        if (watching) redComputer.plan(red, green, shells, width, height, arena);
+        if (vsComputer) computer.plan(green, red, shells, width, height, arena, supply);
+        if (watching) redComputer.plan(red, green, shells, width, height, arena, supply);
         drive(red, green, width, height);
         drive(green, red, width, height);
         shells.removeIf(shell -> !fly(shell, width, height) || strike(shell, red, width, height)
-                        || strike(shell, green, width, height));
+                        || strike(shell, green, width, height) || shootCrate(shell));
+        supplies(width, height);
         if (red.isAlive() && green.isAlive()) return;
         explodeIfDead(red);
         explodeIfDead(green);
@@ -186,6 +213,74 @@ public class Battle
             Shell shell = shells.get(fired);
             Spark.burst(sparks, shell.x(), shell.y(), 8, 2.5, new Color(255, 160, 60));
         }
+        // Turbo: a trail of yellow sparks from the back of a moving tank.
+        if (tank.turboTicks() > 0 && (tank.velocityX() != 0 || tank.velocityY() != 0))
+        {
+            double heading = Math.toRadians(tank.rotation());
+            Spark.burst(sparks, tank.x() - Math.sin(heading) * Tank.SIZE, tank.y() + Math.cos(heading) * Tank.SIZE, 1,
+                            1.5, Supply.Power.TURBO.color);
+        }
+    }
+
+    /** Counts down to the next crate and drops it, lets it fall, and gives its power to the first tank over it. */
+    private void supplies(int width, int height)
+    {
+        if (!supplies) return;
+        if (supply == null)
+        {
+            if (++supplyClock >= nextDrop) supply = drop(width, height);
+            return;
+        }
+        supply.tick();
+        for (Tank tank : new Tank[] { red, green })
+        {
+            if (!supply.takenBy(tank)) continue;
+            tank.give(supply.power());
+            Spark.burst(sparks, supply.x(), supply.y(), 24, 3.5, supply.power().color);
+            noticePower = supply.power();
+            noticeTank = tank;
+            noticeTicks = 0;
+            crateGone();
+            return;
+        }
+    }
+
+    /** A shell that hits a landed crate blows it up, and is used up. */
+    private boolean shootCrate(Shell shell)
+    {
+        if (supply == null || !supply.hitBy(shell)) return false;
+        Spark.burst(sparks, supply.x(), supply.y(), 20, 3.5, new Color(170, 120, 66));
+        scorches.add(new double[] { supply.x(), supply.y(), 14 });
+        crateGone();
+        return true;
+    }
+
+    private void crateGone()
+    {
+        supply = null;
+        supplyClock = 0;
+        nextDrop = DROP_GAP_TICKS + dropRandom.nextInt(DROP_GAP_RANDOM);
+    }
+
+    /**
+     * A crate of a random power at a random spot clear of the walls and the score bar and not right next to a tank;
+     * null (try again next tick) if none of the spots tried is free.
+     */
+    private Supply drop(int width, int height)
+    {
+        Supply.Power[] powers = Supply.Power.values();
+        Supply.Power power = powers[dropRandom.nextInt(powers.length)];
+        int margin = Supply.HALF + 10;
+        for (int i = 0; i < 40; i++)
+        {
+            double x = margin + dropRandom.nextDouble() * Math.max(1, width - 2 * margin);
+            double y = DROP_TOP + dropRandom.nextDouble() * Math.max(1, height - DROP_TOP - margin);
+            if (arena.blocks(x, y, Supply.HALF + 6)) continue;
+            if (Math.hypot(red.x() - x, red.y() - y) < Tank.SIZE + 60) continue;
+            if (Math.hypot(green.x() - x, green.y() - y) < Tank.SIZE + 60) continue;
+            return new Supply(power, x, y);
+        }
+        return null;
     }
 
     /** Moves a shell one tick, chipping a wall it bounces off; returns false once it is gone. */
@@ -205,8 +300,11 @@ public class Battle
     private boolean strike(Shell shell, Tank tank, int width, int height)
     {
         if (!shell.hits(tank)) return false;
-        tank.hit(shell, width, height, arena);
-        Spark.burst(sparks, shell.x(), shell.y(), 12, 4, tank.color());
+        boolean shielded = tank.shielded();
+        boolean damaged = tank.hit(shell, width, height, arena);
+        boolean popped = shielded && !tank.shielded();
+        Spark.burst(sparks, shell.x(), shell.y(), popped ? 22 : 12, 4,
+                        damaged ? tank.color() : popped ? Supply.Power.SHIELD.color : CHIPS);
         return true;
     }
 
@@ -252,6 +350,52 @@ public class Battle
     public boolean watching()
     {
         return watching;
+    }
+
+    /** Supply drops (X): on or off, saved with the record. Turning them off takes away the crate on the field. */
+    public void setSupplies(boolean on)
+    {
+        supplies = on;
+        if (!on) supply = null;
+    }
+
+    public void toggleSupplies()
+    {
+        setSupplies(!supplies);
+        if (record != null) record.setSupplies(supplies);
+    }
+
+    public boolean supplies()
+    {
+        return supplies;
+    }
+
+    /** Where crates fall and what they hold (a test can fix it). */
+    void setDropRandom(Random random)
+    {
+        dropRandom = random;
+    }
+
+    /** The crate on the field, falling or landed, or null. */
+    public Supply supply()
+    {
+        return supply;
+    }
+
+    /** The last power a tank took this round, or null. */
+    public Supply.Power noticePower()
+    {
+        return noticePower;
+    }
+
+    public Tank noticeTank()
+    {
+        return noticeTank;
+    }
+
+    public int noticeTicks()
+    {
+        return noticeTicks;
     }
 
     public Phase phase()

@@ -26,15 +26,18 @@ public class Main extends JFrame
         Tank green = new Tank("Green", new Color(66, 170, 64), new KeyControls(this, KeyEvent.VK_UP, KeyEvent.VK_LEFT,
                         KeyEvent.VK_DOWN, KeyEvent.VK_RIGHT, KeyEvent.VK_M), width - 120, 250, 270);
         // Read after the window exists: in the browser, saved files are restored once the first window is made.
-        Battle battle = new Battle(red, green, new ComputerControls(new Random()), Record.load(RECORD_FILE));
+        Record record = Record.load(RECORD_FILE);
+        Battle battle = new Battle(red, green, new ComputerControls(new Random()), record);
+        battle.setSupplies(record.supplies());
         GamePanel panel = new GamePanel(battle);
-        // C: watch the computer play both tanks (Battle.toggleWatch).
+        // C: watch the computer play both tanks (Battle.toggleWatch). X: supply drops on / off.
         this.addKeyListener(new KeyAdapter()
         {
             @Override
             public void keyPressed(KeyEvent e)
             {
                 if (e.getKeyCode() == KeyEvent.VK_C) battle.toggleWatch();
+                if (e.getKeyCode() == KeyEvent.VK_X) battle.toggleSupplies();
             }
         });
         this.add(panel);

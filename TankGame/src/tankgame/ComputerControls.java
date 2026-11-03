@@ -10,7 +10,9 @@ import java.util.Random;
  * distance, backs or drives out of the way of shells it notices, and fires when its aim is close. It has the same
  * speed, turning rate and reload as a player, and a human-sized reaction time, aim error and trigger delay, and it
  * misses some shells, so it can be beaten. When a wall is in the way it does not fire, but drives round to a spot with
- * a clear shot, and it backs out and turns when it finds itself stuck against a wall.
+ * a clear shot, and it backs out and turns when it finds itself stuck against a wall. It goes for a supply crate it can
+ * reach about as soon as the player can, unless the crate would do it no good (a repair at full health, a second
+ * shield).
  */
 public class ComputerControls implements Controls
 {
@@ -27,7 +29,17 @@ public class ComputerControls implements Controls
     /** Spacing of the spots it considers when looking for a clear shot round a wall. */
     private static final int     SPOT_STEP      = 20;
     private static final int     UNSTICK_TICKS  = 20;
+    /** It goes for a crate this close, or one at most this much farther from it than from the enemy. */
+    private static final double  CRATE_NEAR     = 160;
+    private static final double  CRATE_LEAD     = 40;
+    /** It gives up on a crate it has driven toward this long (6 s), say when the other tank sits between them. */
+    private static final int     CRATE_PATIENCE = 360;
+    /** It fights instead of fetching a crate when the enemy is this close. */
+    private static final double  CRATE_FIGHT    = Tank.SIZE * 2.6;
     private final Random         random;
+    /** The crate it last went for, and for how many ticks. */
+    private Supply               chased;
+    private int                  chaseTicks;
     /** Whether each incoming shell was noticed, decided once per shell. */
     private final Map<Shell, Boolean> noticed   = new HashMap<>();
     private boolean              forward;
@@ -58,8 +70,14 @@ public class ComputerControls implements Controls
         plan(self, enemy, shells, width, height, Arena.EMPTY);
     }
 
-    /** Decides this tick's moves for {@code self} against {@code enemy}. */
+    /** Decides this tick's moves for {@code self} against {@code enemy} with no supply crate about. */
     public void plan(Tank self, Tank enemy, List<Shell> shells, int width, int height, Arena arena)
+    {
+        plan(self, enemy, shells, width, height, arena, null);
+    }
+
+    /** Decides this tick's moves for {@code self} against {@code enemy}; {@code supply} is the crate on the field or null. */
+    public void plan(Tank self, Tank enemy, List<Shell> shells, int width, int height, Arena arena, Supply supply)
     {
         if (sinceLook++ >= REACTION_TICKS)
         {
@@ -88,6 +106,20 @@ public class ComputerControls implements Controls
             back = right = true;
             return;
         }
+        if (supply != chased)
+        {
+            chased = supply;
+            chaseTicks = 0;
+        }
+        if (supply != null && chaseTicks < CRATE_PATIENCE && wants(self, enemy, supply))
+        {
+            chaseTicks++;
+            steer(self, supply.x(), supply.y(), 0);
+            forward = Math.abs(turnTo(self, supply.x(), supply.y(), 0)) < 50;
+            back = false;
+            dodgeShells(self, shells, width, height);
+            return;
+        }
         if (spot != null)
         {
             if (Math.hypot(spot[0] - self.x(), spot[1] - self.y()) < Tank.SPEED * 2) spot = null;
@@ -107,6 +139,17 @@ public class ComputerControls implements Controls
         forward = distance > FAR && Math.abs(turn) < 60;
         back = distance < NEAR;
         dodgeShells(self, shells, width, height);
+    }
+
+    /** Whether the crate is worth driving to: it helps, the enemy is not much closer to it, and not right here. */
+    static boolean wants(Tank self, Tank enemy, Supply supply)
+    {
+        if (self.distanceTo(enemy) < CRATE_FIGHT) return false;
+        if (supply.power() == Supply.Power.REPAIR && self.health() == Tank.MAX_HEALTH) return false;
+        if (supply.power() == Supply.Power.SHIELD && self.shielded()) return false;
+        double mine = Math.hypot(supply.x() - self.x(), supply.y() - self.y());
+        double theirs = Math.hypot(supply.x() - enemy.x(), supply.y() - enemy.y());
+        return mine < CRATE_NEAR || mine < theirs + CRATE_LEAD;
     }
 
     /** Turns toward a point; returns how far off it still is, in degrees. */
