@@ -5,15 +5,21 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
  * Runs the battle on a Swing timer and paints the battlefield (grass and dirt that keeps the round's track marks and
- * blast scorches, and concrete walls), the tanks, the shells, the sparks and smoke, the score bar and the banners.
+ * blast scorches, and concrete walls), the supply crates, the tanks, the shells, the sparks and smoke, the score bar
+ * with each tank's powers, and the banners.
  */
 @SuppressWarnings("serial")
 public class GamePanel extends JPanel
@@ -29,6 +35,8 @@ public class GamePanel extends JPanel
     private static final Font  BIG         = new Font(Font.SANS_SERIF, Font.BOLD, 34);
     private static final Font  MEDIUM      = new Font(Font.SANS_SERIF, Font.BOLD, 18);
     private static final Font  SMALL       = new Font(Font.SANS_SERIF, Font.PLAIN, 14);
+    private static final Font  CHIP        = new Font(Font.SANS_SERIF, Font.BOLD, 11);
+    private static final Color CRATE       = new Color(240, 200, 140);
     private final Battle       battle;
     private final Timer        timer       = new Timer(TICK_MILLIS, e -> tick());
     /** The round's ground, with every track mark and scorch so far; made again for each battlefield. */
@@ -37,11 +45,27 @@ public class GamePanel extends JPanel
     /** Each tank's x, y and rotation when its tracks last marked the ground. */
     private final double[][]   lastPose    = new double[2][];
     private int                ticks;
+    /** The supply drops line on the title card or match-over screen, and where it was last drawn (null when hidden). */
+    private Line               suppliesShown;
+    private Rectangle          suppliesBox;
 
     public GamePanel(Battle battle)
     {
         this.battle = battle;
         this.setBackground(FIELD);
+        // A click (or a tap, on a touch screen) on the supply drops line turns them on or off, like X.
+        this.addMouseListener(new MouseAdapter()
+        {
+            @Override
+            public void mousePressed(MouseEvent e)
+            {
+                if (suppliesBox != null && suppliesBox.contains(e.getX(), e.getY()))
+                {
+                    battle.toggleSupplies();
+                    repaint();
+                }
+            }
+        });
     }
 
     public void start()
@@ -174,23 +198,29 @@ public class GamePanel extends JPanel
     protected void paintComponent(Graphics gr)
     {
         super.paintComponent(gr);
+        suppliesBox = null;
         Graphics2D g = (Graphics2D) gr;
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         if (ground != null) g.drawImage(ground, 0, 0, getWidth(), getHeight(), null);
         for (Arena.Wall wall : battle.arena().walls()) wall(g, wall);
+        // A landed crate lies under the tanks; a falling one is above everything on the ground.
+        Supply supply = battle.supply();
+        if (supply != null && supply.landed()) supply.paint(g, ticks);
         if (battle.phase() != Battle.Phase.TITLE)
         {
             battle.red().paint(g);
             battle.green().paint(g);
         }
+        if (supply != null && !supply.landed()) supply.paint(g, ticks);
         for (Shell shell : battle.shells()) shell.paint(g);
         for (Spark spark : battle.sparks()) spark.paint(g);
         if (battle.phase() != Battle.Phase.TITLE)
         {
             scoreBar(g, battle.red(), battle.redWins(), false);
             scoreBar(g, battle.green(), battle.greenWins(), true);
+            notice(g);
         }
         banner(g);
         if (battle.watching()) watchNote(g);
@@ -223,6 +253,77 @@ public class GamePanel extends JPanel
             else g.drawOval(px + i * 16, 35, 12, 12);
         }
         g.setStroke(new BasicStroke(1));
+        powers(g, tank, rightAligned);
+    }
+
+    /** Chips under the score bar for the tank's powers from crates, with shots or seconds left. */
+    private void powers(Graphics2D g, Tank tank, boolean rightAligned)
+    {
+        if (!tank.isAlive()) return;
+        List<Supply.Power> powers = new ArrayList<>();
+        List<String> texts = new ArrayList<>();
+        if (tank.shielded()) chip(powers, texts, Supply.Power.SHIELD, "SHIELD");
+        if (tank.tripleShots() > 0) chip(powers, texts, Supply.Power.TRIPLE, "TRIPLE x" + tank.tripleShots());
+        if (tank.ricochetTicks() > 0) chip(powers, texts, Supply.Power.RICOCHET, "RICOCHET " + seconds(tank.ricochetTicks()));
+        if (tank.turboTicks() > 0) chip(powers, texts, Supply.Power.TURBO, "TURBO " + seconds(tank.turboTicks()));
+        g.setFont(CHIP);
+        // In a row on a wide field; stacked in the corner on a narrow one, so the two sides never meet.
+        boolean stack = getWidth() < 440;
+        int x = rightAligned ? getWidth() - 6 : 6;
+        int y = 61;
+        for (int i = 0; i < powers.size(); i++)
+        {
+            String text = texts.get(i);
+            int w = g.getFontMetrics().stringWidth(text) + 12;
+            int left = rightAligned ? x - w : x;
+            g.setColor(powers.get(i).color);
+            g.fillRoundRect(left, y, w, 17, 9, 9);
+            g.setColor(new Color(25, 20, 15));
+            g.drawString(text, left + 6, y + 12);
+            if (stack) y += 20;
+            else x = rightAligned ? left - 4 : left + w + 4;
+        }
+    }
+
+    private static void chip(List<Supply.Power> powers, List<String> texts, Supply.Power power,
+                    String text)
+    {
+        powers.add(power);
+        texts.add(text);
+    }
+
+    private static String seconds(int ticks)
+    {
+        return (ticks + 59) / 60 + "s";
+    }
+
+    /** The power a tank just took, rising and fading over it: its name, and what it does. */
+    private void notice(Graphics2D g)
+    {
+        Supply.Power power = battle.noticePower();
+        int age = battle.noticeTicks();
+        if (power == null || age >= Battle.NOTICE_TICKS) return;
+        Tank tank = battle.noticeTank();
+        // Full strength for the first two thirds, then fading out.
+        int alpha = Math.min(255, 255 * (Battle.NOTICE_TICKS - age) * 3 / Battle.NOTICE_TICKS);
+        int y = (int) (tank.y() - Tank.SIZE - 18 - age * 0.4);
+        y = Math.max(96, y);
+        outlined(g, power.label.toUpperCase(), MEDIUM, power.color, tank.x(), y, alpha);
+        outlined(g, power.what, SMALL, Color.WHITE, tank.x(), y + 17, alpha);
+    }
+
+    /** Text centered on x with a dark outline, so it reads on grass and walls, kept inside the field. */
+    private void outlined(Graphics2D g, String text, Font font, Color color, double centerX, int baseline, int alpha)
+    {
+        g.setFont(font);
+        int w = g.getFontMetrics().stringWidth(text);
+        int x = (int) Math.max(4, Math.min(getWidth() - w - 4, centerX - w / 2.0));
+        g.setColor(new Color(0, 0, 0, alpha * 3 / 4));
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+                if (dx != 0 || dy != 0) g.drawString(text, x + dx * 2, baseline + dy * 2);
+        g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+        g.drawString(text, x, baseline);
     }
 
     private void banner(Graphics2D g)
@@ -237,13 +338,14 @@ public class GamePanel extends JPanel
                                 new Line("Three hits destroy a tank. First to " + Battle.ROUNDS_TO_WIN + " rounds wins.", SMALL, DIM),
                                 new Line("Hide behind walls. Shells bounce once.", SMALL, DIM),
                                 new Line("Each round is a new battlefield.", SMALL, DIM),
+                                new Line("Drive over supply crates for powers.", SMALL, DIM),
                                 new Line("Red: W A S D to drive, Q to fire", SMALL, light(red)),
                                 new Line("Green: arrow keys to drive, M to fire", SMALL, light(green)),
                                 new Line("", SMALL, TEXT),
                                 new Line("Press Q to play the computer", MEDIUM, light(red)),
                                 new Line("Press M for two players", MEDIUM, light(green)),
                                 new Line("Press C to watch the computer play itself", SMALL, DIM),
-                                recordLine() });
+                                suppliesLine(), recordLine() });
                 break;
             case ROUND_START:
                 boolean go = battle.phaseTicks() > Battle.ROUND_START_TICKS - 25;
@@ -266,7 +368,8 @@ public class GamePanel extends JPanel
                 panel(g, new Line[] { new Line(title, MEDIUM, light(winner)), new Line(score, BIG, TEXT),
                                 battle.vsComputer() ? recordLine() : new Line("", SMALL, TEXT),
                                 new Line(ready ? "Press Q to play the computer" : "", SMALL, light(red)),
-                                new Line(ready ? "Press M for two players" : "", SMALL, light(green)) });
+                                new Line(ready ? "Press M for two players" : "", SMALL, light(green)),
+                                ready ? suppliesLine() : new Line("", SMALL, TEXT) });
                 break;
             default:
                 break;
@@ -292,6 +395,13 @@ public class GamePanel extends JPanel
     {
         Color c = tank.color();
         return new Color((c.getRed() + 255) / 2, (c.getGreen() + 255) / 2, (c.getBlue() + 255) / 2);
+    }
+
+    private Line suppliesLine()
+    {
+        suppliesShown = new Line(battle.supplies() ? "Supply drops on: tap or press X to turn off"
+                        : "Supply drops off: tap or press X to turn on", SMALL, CRATE);
+        return suppliesShown;
     }
 
     private Line recordLine()
@@ -324,6 +434,8 @@ public class GamePanel extends JPanel
             g.setFont(line.font);
             g.setColor(line.color);
             g.drawString(line.text, (getWidth() - g.getFontMetrics().stringWidth(line.text)) / 2, baseline - 8);
+            if (line == suppliesShown) suppliesBox = new Rectangle(x, baseline - 8 - line.font.getSize() - 4, width,
+                            line.font.getSize() + 10);
         }
     }
 

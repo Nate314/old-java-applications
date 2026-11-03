@@ -1777,7 +1777,7 @@
                  x: ['B', 'Bot'], y: ['X', 'Reset eye'], start: ['E', 'Evolve bots'] }],
     TankGame: [
       { stick: true, up: ['W', 'Forward'], down: ['S', 'Back'], left: ['A', 'Turn left'], right: ['D', 'Turn right'],
-        a: ['Q', 'Fire (on the title card: vs the computer)'] },
+        a: ['Q', 'Fire (on the title card: vs the computer)'], x: ['X', 'Supply crates on/off'] },
       { stick: true, up: ['ArrowUp', 'Forward'], down: ['ArrowDown', 'Back'], left: ['ArrowLeft', 'Turn left'],
         right: ['ArrowRight', 'Turn right'], a: ['M', 'Fire (on the title card: two players)'] }
     ],
@@ -3307,7 +3307,7 @@
       return 'Your class: ' + count + (count === 1 ? ' name, ' : ' names, ') + parts.join(', ');
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
-      var n = text.trim().split(',').map(Number);
+      var n = text.trim().split('\n')[0].split(',').map(Number);
       if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
       return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
     } },

@@ -7,12 +7,16 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 
-/** The player's matches won and lost against the computer, kept in one line of a text file: {@code wins,losses}. */
+/**
+ * The player's matches won and lost against the computer, kept in the first line of a text file ({@code wins,losses}),
+ * and whether supply drops are on.
+ */
 public class Record
 {
     private final File file;
     private int        wins;
     private int        losses;
+    private boolean    supplies = true;
 
     private Record(File file)
     {
@@ -28,6 +32,7 @@ public class Record
             String[] parts = reader.readLine().split(",");
             record.wins = Math.max(0, Integer.parseInt(parts[0].trim()));
             record.losses = Math.max(0, Integer.parseInt(parts[1].trim()));
+            record.supplies = !"supplies=off".equals(String.valueOf(reader.readLine()).trim());
         }
         catch (IOException | RuntimeException e)
         {
@@ -41,9 +46,26 @@ public class Record
     {
         if (won) wins++;
         else losses++;
+        save();
+    }
+
+    /** Whether supply drops are on (the default); saved as a second line {@code supplies=off} when they are not. */
+    public boolean supplies()
+    {
+        return supplies;
+    }
+
+    public void setSupplies(boolean on)
+    {
+        supplies = on;
+        save();
+    }
+
+    private void save()
+    {
         try (Writer writer = new FileWriter(file))
         {
-            writer.write(wins + "," + losses + "\n");
+            writer.write(wins + "," + losses + "\n" + (supplies ? "" : "supplies=off\n"));
         }
         catch (IOException e)
         {

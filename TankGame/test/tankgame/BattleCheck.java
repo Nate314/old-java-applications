@@ -3,7 +3,9 @@ package tankgame;
 import java.awt.Color;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Random;
 
 /** Assert-based self-check of the tank rules and the computer. Run with {@code java -ea}. */
@@ -41,6 +43,10 @@ public final class BattleCheck
         computerShootsRoundTheBunker();
         computerAgainstComputerFinishes();
         watchPlaysOnItsOwn();
+        powersFromCrates();
+        cratesFallAndAreTaken();
+        suppliesSetting();
+        computerAgainstComputerWithSupplies();
         System.out.println("BattleCheck: all checks passed");
     }
 
@@ -318,5 +324,170 @@ public final class BattleCheck
             System.out.println("  match " + (match + 1) + ": " + battle.redWins() + "-" + battle.greenWins() + " in " + ticks / 60 + " s");
         }
         assert redWins > 0 && redWins < 6 : "one side won every match: " + redWins;
+    }
+
+    /** Each crate's power: repair, shield, triple shot, ricochet and turbo; and a crate is taken or shot only once landed. */
+    private static void powersFromCrates()
+    {
+        Script s = new Script();
+        Tank a = tank(s, 100, 200, 90);
+        Tank b = tank(new Script(), 400, 200, 270);
+        Shell shot = new Shell(b, 100, 200, -1, 0);
+        a.hit(shot, W, H);
+        a.give(Supply.Power.REPAIR);
+        assert a.health() == Tank.MAX_HEALTH;
+        a.give(Supply.Power.REPAIR);
+        assert a.health() == Tank.MAX_HEALTH : "repair went over full health";
+
+        a.give(Supply.Power.SHIELD);
+        assert a.shielded() && !a.hit(shot, W, H) && a.health() == Tank.MAX_HEALTH && !a.shielded();
+        assert a.hit(shot, W, H) && a.health() == Tank.MAX_HEALTH - 1 : "the shield stopped more than one hit";
+
+        List<Shell> shells = new ArrayList<>();
+        a.give(Supply.Power.TRIPLE);
+        for (int i = 0; i < Tank.TRIPLE_SHOTS; i++) a.fireTank(shells);
+        assert shells.size() == 3 * Tank.TRIPLE_SHOTS && a.tripleShots() == 0 : shells.size();
+        // Facing right (90): the middle shell flies straight, the others fan up and down.
+        assert Math.abs(shells.get(0).dy()) < 1e-9 && shells.get(1).dy() < 0 && shells.get(2).dy() > 0 : "no fan";
+        a.fireTank(shells);
+        assert shells.size() == 3 * Tank.TRIPLE_SHOTS + 1 : "triple shot did not run out";
+        // A volley hits a tank once at most; the next volley can hit again.
+        Tank target = tank(new Script(), 400, 200, 0);
+        assert target.hit(shells.get(0), W, H) && !target.hit(shells.get(1), W, H) && !target.hit(shells.get(2), W, H);
+        assert target.hit(shells.get(3), W, H) && target.health() == Tank.MAX_HEALTH - 2 : target.health();
+
+        a.reset();
+        assert a.tripleShots() == 0 && !a.shielded() && a.ricochetTicks() == 0 && a.turboTicks() == 0;
+        a.give(Supply.Power.RICOCHET);
+        shells.clear();
+        a.fireTank(shells);
+        Shell r = shells.get(0);
+        int bounces = 0;
+        while (r.move(W, H)) if (r.bounced()) bounces++;
+        assert r.ricochet() && bounces == Shell.RICOCHET_BOUNCES : bounces;
+
+        a.give(Supply.Power.TURBO);
+        s.forward = true;
+        double x = a.x();
+        a.update(W, H, shells, b);
+        assert Math.abs(a.x() - x - Tank.TURBO_SPEED) < 1e-9 : a.x() - x;
+        s.forward = false;
+        for (int i = 0; i < Tank.TURBO_TICKS; i++) a.update(W, H, shells, b);
+        s.forward = true;
+        x = a.x();
+        a.update(W, H, shells, b);
+        assert Math.abs(a.x() - x - Tank.SPEED) < 1e-9 && a.turboTicks() == 0 : "turbo did not wear off";
+
+        Supply crate = new Supply(Supply.Power.SHIELD, 300, 300);
+        Tank over = tank(new Script(), 300, 300, 0);
+        Shell atCrate = new Shell(b, 300, 300, 1, 0);
+        assert !crate.takenBy(over) && !crate.hitBy(atCrate) : "a falling crate was taken";
+        for (int i = 0; i < Supply.FALL_TICKS; i++) crate.tick();
+        assert crate.landed() && crate.takenBy(over) && crate.hitBy(atCrate);
+        assert !crate.takenBy(tank(new Script(), 300, 420, 0)) && !crate.hitBy(new Shell(b, 340, 300, 1, 0));
+    }
+
+    /** With supply drops on, crates fall a few seconds into a round, clear of walls and tanks, and the computer takes them. */
+    private static void cratesFallAndAreTaken() throws Exception
+    {
+        File file = File.createTempFile("tankgame-crates", ".txt");
+        file.delete();
+        Tank red = new Tank("Red", Color.RED, new Script(), 100, 250, 90);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
+        Battle battle = new Battle(red, green, new ComputerControls(new Random(5)), Record.load(file));
+        battle.setDropRandom(new Random(5));
+        battle.setSupplies(true);
+        battle.startMatch(false);
+        while (battle.phase() != Battle.Phase.FIGHT) battle.tick(W, H);
+        for (int i = 1; i < Battle.FIRST_DROP_TICKS; i++)
+        {
+            battle.tick(W, H);
+            assert battle.supply() == null : "a crate came early";
+        }
+        int ticks = 0;
+        while (battle.supply() == null && ticks++ < 20) battle.tick(W, H);
+        Supply crate = battle.supply();
+        assert crate != null && !crate.landed() : "no crate fell";
+        assert !battle.arena().blocks(crate.x(), crate.y(), Supply.HALF) && crate.y() >= 80;
+        assert Math.hypot(crate.x() - red.x(), crate.y() - red.y()) > Tank.SIZE + 50;
+        assert Math.hypot(crate.x() - green.x(), crate.y() - green.y()) > Tank.SIZE + 50;
+        for (int i = 0; i < Supply.FALL_TICKS; i++) battle.tick(W, H);
+        assert battle.supply() == crate && crate.landed() : "nobody moved, but the crate went";
+
+        battle.setSupplies(false);
+        assert battle.supply() == null : "turning supplies off left the crate";
+        for (int i = 0; i < Battle.DROP_GAP_TICKS * 3; i++)
+        {
+            battle.tick(W, H);
+            assert battle.supply() == null : "a crate fell with supplies off";
+        }
+
+        // Watch: both computers drive; between them they should take crates of several kinds.
+        battle.setSupplies(true);
+        battle.toggleWatch();
+        battle.startMatch(true);
+        ticks = 0;
+        Set<Supply.Power> taken = new HashSet<>();
+        while (taken.size() < 3 && ticks++ < 60 * 60 * 10)
+        {
+            battle.tick(W, H);
+            if (battle.noticePower() != null && battle.noticeTicks() == 0) taken.add(battle.noticePower());
+        }
+        assert taken.size() >= 3 : "the computers took only " + taken;
+        System.out.println("  computers took " + taken + " in " + ticks / 60 + " s");
+        file.delete();
+    }
+
+    /** X: supply drops are on by default, and turning them off is saved beside the record without losing it. */
+    private static void suppliesSetting() throws Exception
+    {
+        File file = File.createTempFile("tankgame-supplies", ".txt");
+        file.delete();
+        assert Record.load(file).supplies() : "supply drops should start on";
+        Record record = Record.load(file);
+        record.add(true);
+        record.add(false);
+        Battle battle = new Battle(tank(new Script(), 100, 250, 90), tank(new Script(), 380, 250, 270),
+                        new ComputerControls(new Random(1)), record);
+        battle.setSupplies(record.supplies());
+        battle.toggleSupplies();
+        assert !battle.supplies();
+        Record back = Record.load(file);
+        assert !back.supplies() && back.wins() == 1 && back.losses() == 1 : back;
+        String text = new String(java.nio.file.Files.readAllBytes(file.toPath()), "UTF-8");
+        assert text.startsWith("1,1\n") && text.contains("supplies=off") : text;
+        back.add(true);
+        assert !Record.load(file).supplies() && Record.load(file).wins() == 2 : "a win forgot the setting";
+        battle.toggleSupplies();
+        assert Record.load(file).supplies() && Record.load(file).wins() == 1;
+        file.delete();
+    }
+
+    /** Computer against computer with crates still finishes matches, without one side winning every one. */
+    private static void computerAgainstComputerWithSupplies()
+    {
+        Random random = new Random(11);
+        int redWins = 0;
+        for (int match = 0; match < 6; match++)
+        {
+            ComputerControls left = new ComputerControls(random);
+            Tank red = new Tank("Red", Color.RED, left, 100, 250, 90);
+            Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
+            Battle battle = new Battle(red, green, new ComputerControls(random), null);
+            battle.setDropRandom(random);
+            battle.setSupplies(true);
+            battle.startMatch(true);
+            int ticks = 0;
+            while (battle.phase() != Battle.Phase.MATCH_OVER && ticks++ < 60 * 60 * 10)
+            {
+                left.plan(red, green, battle.shells(), W, H, battle.arena(), battle.supply());
+                battle.tick(W, H);
+            }
+            assert battle.phase() == Battle.Phase.MATCH_OVER : "a match with crates did not end in 10 minutes";
+            if (battle.winner() == red) redWins++;
+            System.out.println("  with crates, match " + (match + 1) + ": " + battle.redWins() + "-" + battle.greenWins()
+                            + " in " + ticks / 60 + " s");
+        }
+        assert redWins > 0 && redWins < 6 : "one side won every match with crates: " + redWins;
     }
 }

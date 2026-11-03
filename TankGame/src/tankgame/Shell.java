@@ -5,8 +5,8 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 
 /**
- * A fired shell: flies straight, bounces once off the edge of the field or a wall, and then flies out or bursts on the
- * next wall it meets.
+ * A fired shell: flies straight, bounces once (three times after a Ricochet crate) off the edge of the field or a wall,
+ * and then flies out or bursts on the next wall it meets.
  */
 public class Shell
 {
@@ -14,7 +14,9 @@ public class Shell
     /** How far from a wall the shell's center is when it touches it. */
     public static final int  RADIUS      = 4;
     private static final int SIZE        = 10;
-    private static final int MAX_BOUNCES = 1;
+    /** Bounces a shell makes before it flies out or bursts; a Ricochet crate's shells make more. */
+    public static final int  RICOCHET_BOUNCES = 3;
+    private int              maxBounces  = 1;
     private double           x;
     private double           y;
     /** Where the shell was before its last move (the tank's center for a new shell), to find the wall it crossed. */
@@ -26,6 +28,8 @@ public class Shell
     private boolean          bounced;
     private boolean          burst;
     private final Tank       owner;
+    /** The shells of one Triple shot share a volley, which can hit a tank only once; null for a single shell. */
+    private Object           volley;
 
     public Shell(Tank owner, double x, double y, double dx, double dy)
     {
@@ -41,6 +45,28 @@ public class Shell
     {
         lastX = x;
         lastY = y;
+    }
+
+    /** Lets the shell bounce {@code bounces} times instead of once (Ricochet). */
+    void setMaxBounces(int bounces)
+    {
+        maxBounces = bounces;
+    }
+
+    void setVolley(Object volley)
+    {
+        this.volley = volley;
+    }
+
+    public Object volley()
+    {
+        return volley;
+    }
+
+    /** Whether this shell bounces more than once. */
+    public boolean ricochet()
+    {
+        return maxBounces > 1;
     }
 
     /** Moves one tick on a field with no walls. */
@@ -64,7 +90,7 @@ public class Shell
             double t = Math.max(0, hit[0] - 0.01);
             x = fromX + (x - fromX) * t;
             y = fromY + (y - fromY) * t;
-            if (bounces >= MAX_BOUNCES || hit[1] < 0)
+            if (bounces >= maxBounces || hit[1] < 0)
             {
                 burst = true;
                 return false;
@@ -74,7 +100,7 @@ public class Shell
             bounces++;
             bounced = true;
         }
-        else if (bounces < MAX_BOUNCES)
+        else if (bounces < maxBounces)
         {
             if (x < 0 || x > width)
             {
@@ -154,5 +180,13 @@ public class Shell
         g.fillOval((int) x - SIZE / 2, (int) y - SIZE / 2, SIZE, SIZE);
         g.setColor(new Color(255, 230, 150));
         g.fillOval((int) x - SIZE / 2 + 2, (int) y - SIZE / 2 + 2, SIZE - 4, SIZE - 4);
+        if (ricochet())
+        {
+            Color r = Supply.Power.RICOCHET.color;
+            g.setColor(new Color(r.getRed(), r.getGreen(), r.getBlue(), 180));
+            g.setStroke(new BasicStroke(2));
+            g.drawOval((int) x - SIZE / 2 - 3, (int) y - SIZE / 2 - 3, SIZE + 6, SIZE + 6);
+            g.setStroke(new BasicStroke(1));
+        }
     }
 }

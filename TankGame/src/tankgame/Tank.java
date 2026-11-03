@@ -23,6 +23,12 @@ public class Tank
     /** How far the barrel kicks back when it fires, and for how many ticks it slides back out. */
     private static final int   RECOIL     = 10;
     private static final int   RECOIL_TICKS = 8;
+    /** Supply crates: how long Ricochet and Turbo last (10 and 7 s), Turbo's speed, Triple shot's shots and spread. */
+    public static final int    RICOCHET_TICKS = 600;
+    public static final int    TURBO_TICKS  = 420;
+    public static final int    TURBO_SPEED  = 8;
+    public static final int    TRIPLE_SHOTS = 3;
+    private static final int   SPREAD       = 12;
     private final Color      tankColor;
     private final int        startX;
     private final int        startY;
@@ -40,6 +46,13 @@ public class Tank
     /** How far each track has rolled, which moves the cleats drawn on it. */
     private double           leftTrack;
     private double           rightTrack;
+    /** Powers from supply crates. */
+    private boolean          shield;
+    /** The Triple shot volley that last hit this tank. */
+    private Object           lastVolley;
+    private int              tripleShots;
+    private int              ricochetTicks;
+    private int              turboTicks;
 
     /**
      * @param x
@@ -70,6 +83,31 @@ public class Tank
         health = MAX_HEALTH;
         reload = 0;
         flash = 0;
+        shield = false;
+        tripleShots = ricochetTicks = turboTicks = 0;
+    }
+
+    /** Takes a supply crate's power. */
+    public void give(Supply.Power power)
+    {
+        switch (power)
+        {
+            case REPAIR:
+                health = Math.min(MAX_HEALTH, health + 1);
+                break;
+            case SHIELD:
+                shield = true;
+                break;
+            case TRIPLE:
+                tripleShots = TRIPLE_SHOTS;
+                break;
+            case RICOCHET:
+                ricochetTicks = RICOCHET_TICKS;
+                break;
+            case TURBO:
+                turboTicks = TURBO_TICKS;
+                break;
+        }
     }
 
     /**
@@ -79,9 +117,9 @@ public class Tank
      */
     public void moveTank(boolean forward)
     {
-        int direction = forward ? 1 : -1;
-        tankX += Math.sin(Math.toRadians(tankRotation)) * SPEED * direction;
-        tankY -= Math.cos(Math.toRadians(tankRotation)) * SPEED * direction;
+        int step = (forward ? 1 : -1) * (turboTicks > 0 ? TURBO_SPEED : SPEED);
+        tankX += Math.sin(Math.toRadians(tankRotation)) * step;
+        tankY -= Math.cos(Math.toRadians(tankRotation)) * step;
     }
 
     /**
@@ -95,16 +133,24 @@ public class Tank
     }
 
     /**
-     * fires the cannon: a shell leaves the end of the barrel
+     * fires the cannon: a shell leaves the end of the barrel (with Triple shot, three in a fan, the middle one first)
      */
     public void fireTank(List<Shell> shells)
     {
-        double dx = Math.sin(Math.toRadians(tankRotation));
-        double dy = -Math.cos(Math.toRadians(tankRotation));
-        int barrelEnd = SIZE * 3 / 2;
-        Shell shell = new Shell(this, tankX + dx * barrelEnd, tankY + dy * barrelEnd, dx, dy);
-        shell.startFrom(tankX, tankY);
-        shells.add(shell);
+        int[] angles = tripleShots > 0 ? new int[] { 0, -SPREAD, SPREAD } : new int[] { 0 };
+        if (tripleShots > 0) tripleShots--;
+        Object volley = angles.length > 1 ? new Object() : null;
+        for (int angle : angles)
+        {
+            double dx = Math.sin(Math.toRadians(tankRotation + angle));
+            double dy = -Math.cos(Math.toRadians(tankRotation + angle));
+            int barrelEnd = SIZE * 3 / 2;
+            Shell shell = new Shell(this, tankX + dx * barrelEnd, tankY + dy * barrelEnd, dx, dy);
+            shell.startFrom(tankX, tankY);
+            shell.setVolley(volley);
+            if (ricochetTicks > 0) shell.setMaxBounces(Shell.RICOCHET_BOUNCES);
+            shells.add(shell);
+        }
         reload = RELOAD_TICKS;
     }
 
@@ -143,6 +189,8 @@ public class Tank
         velocityX = tankX - oldX;
         velocityY = tankY - oldY;
         if (reload > 0) reload--;
+        if (ricochetTicks > 0) ricochetTicks--;
+        if (turboTicks > 0) turboTicks--;
         if (controls.fire() && reload == 0) fireTank(shells);
     }
 
@@ -172,14 +220,25 @@ public class Tank
     }
 
     /** Takes one hit from a shell, which knocks the tank back along the shell's path. */
-    public void hit(Shell shell, int width, int height)
+    public boolean hit(Shell shell, int width, int height)
     {
-        hit(shell, width, height, Arena.EMPTY);
+        return hit(shell, width, height, Arena.EMPTY);
     }
 
-    /** Takes one hit; the knockback stops at a wall. */
-    public void hit(Shell shell, int width, int height, Arena arena)
+    /**
+     * Takes one hit; the knockback stops at a wall. A shield stops the hit instead and is used up, and a second shell of a
+     * Triple shot volley that already hit does nothing; returns whether the tank was damaged.
+     */
+    public boolean hit(Shell shell, int width, int height, Arena arena)
     {
+        // A Triple shot's fan does one hit at most: the other shells of a volley that already hit burst harmlessly.
+        if (shell.volley() != null && shell.volley() == lastVolley) return false;
+        lastVolley = shell.volley();
+        if (shield)
+        {
+            shield = false;
+            return false;
+        }
         health = Math.max(0, health - 1);
         flash = FLASH_TICKS;
         double oldX = tankX;
@@ -188,6 +247,7 @@ public class Tank
         tankY += shell.dy() * KNOCKBACK;
         clamp(width, height);
         keepOffWalls(arena, oldX, oldY);
+        return true;
     }
 
     /** Whether the point lies on the tank's (turned) square body. */
@@ -270,6 +330,20 @@ public class Tank
             g.fillRoundRect(-SIZE, -SIZE, 2 * SIZE, 2 * SIZE, 20, 20);
         }
         g.dispose();
+        if (shield && isAlive())
+        {
+            // A see-through bubble round the tank, with a bright rim and a highlight.
+            int r = SIZE + 22;
+            Color c = Supply.Power.SHIELD.color;
+            gr.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 45));
+            gr.fillOval((int) tankX - r, (int) tankY - r, 2 * r, 2 * r);
+            gr.setStroke(new BasicStroke(3));
+            gr.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 200));
+            gr.drawOval((int) tankX - r, (int) tankY - r, 2 * r, 2 * r);
+            gr.setColor(new Color(255, 255, 255, 120));
+            gr.drawArc((int) tankX - r + 10, (int) tankY - r + 10, 2 * r - 20, 2 * r - 20, 110, 50);
+            gr.setStroke(new BasicStroke(1));
+        }
     }
 
     /** One track along the side at {@code top}, with cleats placed by how far it has rolled. */
@@ -354,5 +428,25 @@ public class Tank
     public int reload()
     {
         return reload;
+    }
+
+    public boolean shielded()
+    {
+        return shield;
+    }
+
+    public int tripleShots()
+    {
+        return tripleShots;
+    }
+
+    public int ricochetTicks()
+    {
+        return ricochetTicks;
+    }
+
+    public int turboTicks()
+    {
+        return turboTicks;
     }
 }
