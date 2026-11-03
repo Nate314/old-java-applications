@@ -4092,3 +4092,298 @@ html[data-saver] * {
   40% { transform: scale(1, 0.012); filter: brightness(3); }
   to { transform: none; filter: none; }
 }
+
+/* ---- Find (boot.js, find.js): Ctrl+K anywhere, / on the home page ----
+   A box near the top of the page: the query, then results in groups (apps, things to do, source files). */
+.shim-toolbar .shim-find-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.shim-find-open kbd,
+.shim-find kbd {
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 10px/16px system-ui, -apple-system, "Segoe UI", sans-serif;
+  opacity: 0.7;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-find-open .shim-find-label,
+  .shim-toolbar .shim-find-open kbd {
+    display: none;
+  }
+}
+
+.shim-find-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2000000003;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  animation: shim-find-fade 0.15s ease-out;
+}
+
+.shim-find {
+  position: fixed;
+  top: max(12px, 10vh);
+  left: 50%;
+  z-index: 2000000004;
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - 24px - max(12px, 10vh)));
+  max-height: min(560px, calc(100dvh - 24px - max(12px, 10vh)));
+  box-sizing: border-box;
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  animation: shim-find-in 0.16s ease-out;
+}
+
+@keyframes shim-find-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.98); }
+}
+
+@keyframes shim-find-fade {
+  from { opacity: 0; }
+}
+
+.shim-find-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shim-find-glass {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.shim-find-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: 18px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-find-input::placeholder {
+  color: inherit;
+  opacity: 0.5;
+}
+
+.shim-find-esc {
+  cursor: pointer;
+}
+
+.shim-find-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px 8px;
+  overscroll-behavior: contain;
+}
+
+.shim-find-group {
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.shim-find-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.shim-find-item[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.shim-find-pic {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--desk);
+  color: var(--accent);
+  font: 700 15px/1 ui-monospace, Consolas, monospace;
+}
+
+.shim-find-item.kind-do .shim-find-pic,
+.shim-find-item.kind-source .shim-find-pic {
+  background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+}
+
+.shim-find-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shim-find-item.kind-then .shim-find-pic img {
+  filter: sepia(0.85) contrast(0.95);
+}
+
+.shim-find-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shim-find-text strong,
+.shim-find-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shim-find-text span {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.shim-find-item.kind-source .shim-find-text strong {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+}
+
+.shim-find-tag {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.shim-find-tag.new {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shim-find-item.current .shim-find-tag {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.shim-find-status {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.shim-find-status:empty {
+  display: none;
+}
+
+.shim-find-status:not(:empty) {
+  padding-bottom: 10px;
+}
+
+.shim-find-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--card-border);
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+@media (max-width: 520px) {
+  .shim-find-foot {
+    display: none;
+  }
+
+  .shim-find-pic {
+    width: 52px;
+    height: 34px;
+  }
+
+  .shim-find-tag {
+    display: none;
+  }
+}
+
+:root[data-skin="classic"] .shim-find {
+  border-color: var(--frame-border);
+  border-radius: 0;
+  box-shadow: var(--window-shadow);
+}
+
+:root[data-skin="classic"] .shim-find-head {
+  background: var(--title-bg);
+}
+
+:root[data-skin="classic"] .shim-find-item,
+:root[data-skin="classic"] .shim-find-pic {
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-find-item[aria-selected="true"] {
+  background: #b8cfe5;
+  box-shadow: none;
+}
+
+:root[data-skin="arcade"] .shim-find {
+  border-color: #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 40px rgba(255, 43, 214, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-find-glass,
+:root[data-skin="arcade"] .shim-find-input {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-find-input {
+  caret-color: #ff2bd6;
+}
+
+:root[data-skin="arcade"] .shim-find-item[aria-selected="true"] {
+  background: rgba(255, 43, 214, 0.16);
+  box-shadow: inset 3px 0 0 #ff2bd6, 0 0 12px rgba(255, 43, 214, 0.25);
+}
+
+:root[data-skin="arcade"] .shim-find-group {
+  color: #39ff88;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-find,
+  .shim-find-scrim {
+    animation: none;
+  }
+}
