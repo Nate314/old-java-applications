@@ -43,7 +43,7 @@ $Recipes = [ordered]@{
     GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:800') }
     NumberGuess         = @{ Steps = @('wait:800', 'key:5', 'key:Enter', 'wait:900', 'key:8', 'key:Enter', 'wait:900') }
-    SimpleAlgorithms    = @{ Steps = @('wait:3500') }
+    SimpleAlgorithms    = @{ Steps = @('wait:800', 'key:5', 'wait:3500') }
     TankGame            = @{ Steps = @('wait:800', 'key:C', 'wait:4500') }
     BibleDownloader     = @{ Steps = @('wait:5000') }
     DinoGame            = @{ HandMade = $true; Steps = @('wait:800', 'key:E', 'key:F', 'wait:25000', 'key:F', 'wait:1800') }

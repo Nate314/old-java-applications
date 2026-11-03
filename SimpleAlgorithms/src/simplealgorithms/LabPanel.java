@@ -15,7 +15,7 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
- * The Algorithm Lab: a sheet of graph paper with a tab per page across the top (keys 1 to 5) and the page's
+ * The Algorithm Lab: a sheet of graph paper with a tab per page across the top (keys 1 to 6) and the page's
  * buttons along the bottom. It routes clicks, keys and a 30 ms tick to the page that shows.
  */
 @SuppressWarnings("serial")
@@ -28,6 +28,8 @@ public class LabPanel extends JPanel {
 	private final Page[] pages;
 	private int current;
 	private Page.Button pressed;
+	/** True while the button is held after a click on the page's area. */
+	private boolean dragging;
 
 	public LabPanel(Page... pages) {
 		this.pages = pages;
@@ -42,8 +44,21 @@ public class LabPanel extends JPanel {
 
 			@Override
 			public void mouseReleased(MouseEvent event) {
+				if (dragging) {
+					dragging = false;
+					page().release();
+					repaint();
+				}
 				if (pressed != null) {
 					pressed = null;
+					repaint();
+				}
+			}
+
+			@Override
+			public void mouseDragged(MouseEvent event) {
+				if (dragging) {
+					page().drag(event.getX(), event.getY() - TABS);
 					repaint();
 				}
 			}
@@ -87,6 +102,10 @@ public class LabPanel extends JPanel {
 
 	private void show(int index) {
 		if (index != current && index >= 0 && index < pages.length) {
+			if (dragging) {
+				dragging = false;
+				page().release();
+			}
 			page().hidden();
 			current = index;
 			repaint();
@@ -108,6 +127,7 @@ public class LabPanel extends JPanel {
 			repaint();
 			return;
 		}
+		dragging = true;
 		page().click(x, y - TABS);
 		repaint();
 	}

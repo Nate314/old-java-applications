@@ -63,6 +63,14 @@ abstract class Page {
 	void click(int x, int y) {
 	}
 
+	/** The pointer moved to (x, y) with the button held, after a click on the page's area. */
+	void drag(int x, int y) {
+	}
+
+	/** The button held since a click on the page's area was let go. */
+	void release() {
+	}
+
 	/** The pointer moved to (x, y) in the page's area, or left it (x and y are -1). */
 	void hover(int x, int y) {
 	}
