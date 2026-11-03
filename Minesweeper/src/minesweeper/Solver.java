@@ -6,9 +6,8 @@ import java.util.Random;
 
 /**
  * Picks the computer's next move when it plays (Watch). It sees only what a player sees: each tile is hidden, flagged
- * or a revealed count of the mines around it. A count whose mines are all flagged opens its other neighbors, a count
- * with as many hidden neighbors as mines left flags them, and two overlapping counts can settle the tiles only one
- * of them touches. With nothing certain, it guesses the tile least likely to be a mine.
+ * or a revealed count of the mines around it. Whatever {@link Logic} can work out comes first (taking its own flags as
+ * mines), and the move carries the reason. With nothing certain, it guesses the tile least likely to be a mine.
  */
 public final class Solver {
    public static final int HIDDEN = -1;
@@ -21,12 +20,15 @@ public final class Solver {
       public final boolean flag;
       /** False when nothing was certain and this is a guess. */
       public final boolean sure;
+      /** Why the move is certain (shown while the computer plays), or null for the first click and guesses. */
+      public final Logic.Deduction why;
 
-      Move(int row, int column, boolean flag, boolean sure) {
+      Move(int row, int column, boolean flag, boolean sure, Logic.Deduction why) {
          this.row = row;
          this.column = column;
          this.flag = flag;
          this.sure = sure;
+         this.why = why;
       }
    }
 
@@ -73,33 +75,22 @@ public final class Solver {
          return null;
       }
       if (hidden.size() == rows * columns) {
-         return new Move(rows / 2, columns / 2, false, true);   // the first click is always safe
+         return new Move(rows / 2, columns / 2, false, true, null);   // the first click is always safe
       }
 
-      for (Count count : counts) {
-         if (count.mines <= 0) {
-            return move(count.hidden.get(0), columns, false);
-         }
-         if (count.mines == count.hidden.size()) {
-            return move(count.hidden.get(0), columns, true);
+      // Its own flags are taken as mines (the computer only plants flags it is sure of).
+      boolean[][] flags = new boolean[rows][columns];
+      int flagCount = 0;
+      for (int row = 0; row < rows; row++) {
+         for (int column = 0; column < columns; column++) {
+            flags[row][column] = view[row][column] == FLAG;
+            flagCount += flags[row][column] ? 1 : 0;
          }
       }
-      // Two counts, one's tiles all among the other's: the other's extra tiles hold the difference in mines.
-      for (Count small : counts) {
-         for (Count big : counts) {
-            if (small == big || small.hidden.size() >= big.hidden.size() || !big.hidden.containsAll(small.hidden)) {
-               continue;
-            }
-            List<Integer> extra = new ArrayList<>(big.hidden);
-            extra.removeAll(small.hidden);
-            int mines = big.mines - small.mines;
-            if (mines == 0) {
-               return move(extra.get(0), columns, false);
-            }
-            if (mines == extra.size()) {
-               return move(extra.get(0), columns, true);
-            }
-         }
+      Logic.Deduction step = Logic.find(view, flags, minesLeft + flagCount);
+      if (step != null) {
+         int cell = step.cells.get(0);
+         return new Move(cell / columns, cell % columns, step.mines, true, step);
       }
 
       // A guess: each tile's risk is the worst of its counts' odds, or the mines left spread over the hidden tiles.
@@ -125,10 +116,6 @@ public final class Solver {
          }
       }
       int cell = safest.get(random.nextInt(safest.size()));
-      return new Move(cell / columns, cell % columns, false, false);
-   }
-
-   private static Move move(int cell, int columns, boolean flag) {
-      return new Move(cell / columns, cell % columns, flag, true);
+      return new Move(cell / columns, cell % columns, false, false, null);
    }
 }

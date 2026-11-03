@@ -62,6 +62,17 @@ public final class MineTile extends JButton implements MouseListener {
    private int mark = HIDDEN;
    private int shown = SHOW_HIDDEN;
    private String value = " ";
+   /** How a hint (H, or the computer's reasoning while it plays) marks this tile. */
+   static final int HINT_NONE = 0;
+   /** A number the reasoning reads: a gold ring. */
+   static final int HINT_CLUE = 1;
+   /** A hidden tile worked out to be safe: it glows. */
+   static final int HINT_SAFE = 2;
+   /** A hidden tile worked out to be a mine: tinted red. */
+   static final int HINT_MINE = 3;
+   private static final Color CLUE_GOLD = new Color(245, 176, 0);
+   private static final Color SAFE_GLOW = new Color(255, 252, 214);
+   private int hint = HINT_NONE;
    private boolean cursor;
    private boolean hover;
    private boolean pressed;
@@ -115,6 +126,14 @@ public final class MineTile extends JButton implements MouseListener {
          return;
       }
       event.consume();
+   }
+
+   /** Marks the tile for a hint ({@link #HINT_CLUE}, {@link #HINT_SAFE}, {@link #HINT_MINE}) or clears it ({@link #HINT_NONE}). */
+   void setHint(int role) {
+      if (this.hint != role) {
+         this.hint = role;
+         this.repaint();
+      }
    }
 
    /** Shows or hides the keyboard cursor on this tile. */
@@ -236,6 +255,7 @@ public final class MineTile extends JButton implements MouseListener {
             this.paintGrass(g, s, dark, 1 - ease(t));
          }
       }
+      this.paintHint(g, s);
       if (this.cursor) {
          g.setColor(CURSOR);
          g.setStroke(new BasicStroke(Math.max(2, s / 14f)));
@@ -274,6 +294,34 @@ public final class MineTile extends JButton implements MouseListener {
       g.fillRoundRect(x, y, iw, ih - bevel, arc, arc);
       g.setColor(withAlpha(base, alpha));
       g.fillRoundRect(x + 1, y + Math.max(1, bevel / 2), iw - 2, ih - bevel - Math.max(1, bevel / 2), arc, arc);
+   }
+
+   /**
+    * A hint's mark: a gold ring around a number it reads; a warm glow and a light ring on a tile it found safe; a red
+    * tint and ring on a tile it found to be a mine. Only hidden tiles glow or tint (the rest are already settled).
+    */
+   private void paintHint(Graphics2D g, int s) {
+      boolean hidden = this.shown == SHOW_HIDDEN;
+      if (this.hint == HINT_NONE || this.hint != HINT_CLUE && !hidden || this.hint == HINT_CLUE && hidden) {
+         return;
+      }
+      int w = this.getWidth();
+      int h = this.getHeight();
+      int inset = Math.max(2, s / 10);
+      int arc = Math.max(6, s / 3);
+      float stroke = Math.max(2.5f, s / 11f);
+      g.setStroke(new BasicStroke(stroke));
+      if (this.hint == HINT_CLUE) {
+         g.setColor(withAlpha(CLUE_GOLD, 45));
+         g.fillRoundRect(inset, inset, w - 2 * inset, h - 2 * inset, arc, arc);
+         g.setColor(CLUE_GOLD);
+      } else {
+         boolean safe = this.hint == HINT_SAFE;
+         g.setColor(safe ? withAlpha(SAFE_GLOW, 150) : withAlpha(HIT, 170));
+         g.fillRoundRect(inset, inset, w - 2 * inset, h - 2 * inset, arc, arc);
+         g.setColor(safe ? Color.WHITE : new Color(190, 20, 20));
+      }
+      g.drawRoundRect(inset, inset, w - 2 * inset - 1, h - 2 * inset - 1, arc, arc);
    }
 
    /** Revealed ground: a flat sand square, with a faint line where it meets the next one. */

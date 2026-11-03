@@ -20,8 +20,10 @@ import javax.swing.Timer;
 
 public final class GameFrame extends JFrame {
    private static final File BEST_TIMES_FILE = new File(System.getProperty("user.home", "."), ".minesweeper-best.txt");
-   /** Room for the level buttons and the status line, taken from the board so the window keeps its old size. */
-   private static final int BARS_HEIGHT = 64;
+   /** Room for the level buttons, the status line and the two hint lines, taken from the board so the window keeps its old size. */
+   private static final int BARS_HEIGHT = 104;
+   /** How long dealing a no-guess board may take before a random one is played instead (it takes a few ms). */
+   private static final int DEAL_BUDGET_MS = 1500;
    private static final Color SELECTED_LEVEL = MineTile.GRASS_LIGHT;
    private static final int[] WIN_NOTES = {72, 76, 79, 84, 88, 91, 96};
    /** An opening ripples out from the click: each ring of tiles pops this many ms after the one inside it. */
@@ -64,6 +66,18 @@ public final class GameFrame extends JFrame {
    private boolean computerPlayed;
    private final Timer watchTimer = new Timer(WATCH_STEP_MS, event -> this.watchStep());
    private final Random random = new Random();
+   /** Under the status line: what a hint (or the computer) worked out and why, or a tip between hints. */
+   private final JLabel hintAction = new JLabel(" ", SwingConstants.CENTER);
+   private final JLabel hintReason = new JLabel(" ", SwingConstants.CENTER);
+   /** Tiles a hint marked, cleared by the next move. */
+   private final List<MineTile> hinted = new ArrayList<>();
+   /** This board was dealt to need no guess (No guess was on and one turned up in time). */
+   private boolean fairBoard;
+   /** Hints shown in this game; a game won with hints sets no best time. */
+   private int hints;
+   /** Moves made in this game, so asking twice for the same hint counts once. */
+   private int moves;
+   private int hintedAtMove = -1;
 
    public GameFrame(SoundPlayer soundPlayer) {
       this(soundPlayer, null, null, null, false);
@@ -87,7 +101,14 @@ public final class GameFrame extends JFrame {
       this.addKeyListener(new WindowMoveKeyListener(this));
       this.add(this.levelBar(), BorderLayout.NORTH);
       this.status.setFont(new Font("Dialog", Font.BOLD, 14));
-      this.add(this.status, BorderLayout.SOUTH);
+      JPanel lines = new JPanel(new BorderLayout());
+      this.hintAction.setFont(new Font("Dialog", Font.BOLD, 13));
+      this.hintReason.setFont(new Font("Dialog", Font.PLAIN, 13));
+      lines.add(this.status, BorderLayout.NORTH);
+      lines.add(this.hintAction, BorderLayout.CENTER);
+      lines.add(this.hintReason, BorderLayout.SOUTH);
+      this.add(lines, BorderLayout.SOUTH);
+      this.showTip();
       // Centered, for when the buttons or the status line are wider than a small board.
       JPanel boardHolder = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
       boardHolder.add(this.panel);
@@ -132,6 +153,20 @@ public final class GameFrame extends JFrame {
          button.addActionListener(event -> this.play(choice));
          bar.add(button);
       }
+      JButton noGuess = new JButton("No guess");
+      noGuess.setFocusable(false);
+      noGuess.setToolTipText("Deal boards that logic alone can clear (G)");
+      if (this.bestTimes.noGuess()) {
+         noGuess.setBackground(SELECTED_LEVEL);
+         noGuess.setForeground(Color.BLACK);
+      }
+      noGuess.addActionListener(event -> this.toggleNoGuess());
+      bar.add(noGuess);
+      JButton hint = new JButton("Hint");
+      hint.setFocusable(false);
+      hint.setToolTipText("Show the next tile that can be worked out, and why (H)");
+      hint.addActionListener(event -> this.hint());
+      bar.add(hint);
       return bar;
    }
 
@@ -145,6 +180,7 @@ public final class GameFrame extends JFrame {
     * end the game if a flag was wrong. While they do not add up, those neighbors glow briefly.
     */
    void chord(int row, int column) {
+      this.clearHint();
       List<int[]> targets = MineFieldGenerator.chordTargets(this.grid, this.revealed, this.flagged, row, column);
       if (targets.isEmpty()) {
          for (int[] cell : MineFieldGenerator.hiddenNeighbors(this.revealed, this.flagged, row, column)) {
@@ -163,7 +199,13 @@ public final class GameFrame extends JFrame {
    /** Reveals (row, column); the tiles ripple out from (fromRow, fromColumn), the tile that was clicked. */
    private void reveal(int row, int column, int fromRow, int fromColumn) {
       if (this.grid == null) {
-         this.grid = new MineFieldGenerator(this.rows, this.columns, this.level.mines, row, column, new Random()).getGrid();
+         if (this.bestTimes.noGuess()) {
+            this.grid = FairBoard.deal(this.rows, this.columns, this.level.mines, row, column, new Random(), DEAL_BUDGET_MS);
+            this.fairBoard = this.grid != null;
+         }
+         if (this.grid == null) {
+            this.grid = new MineFieldGenerator(this.rows, this.columns, this.level.mines, row, column, new Random()).getGrid();
+         }
          this.startMillis = System.currentTimeMillis();
          this.clock.start();
       }
@@ -172,7 +214,11 @@ public final class GameFrame extends JFrame {
          return;
       }
 
+      this.clearHint();
+      this.moves++;
       if (MineFieldGenerator.isMine(this.grid, row, column)) {
+         // What could have been worked out instead, read from the board before this tile.
+         Logic.Deduction instead = this.watching ? null : Logic.hint(this.view(), this.flagged, this.level.mines, true);
          for (int r = 0; r < this.rows; r++) {
             for (int c = 0; c < this.columns; c++) {
                int delay = BURST_STEP_MS * distance(r, c, row, column);
@@ -192,6 +238,11 @@ public final class GameFrame extends JFrame {
          } else {
             this.setTitle("Minesweeper: you hit a mine. Click to play again.");
             this.status.setText("Boom! Click any tile to play again.");
+            if (instead != null) {
+               this.showDeduction(instead, "No need to guess: the glowing tiles were safe.");
+            } else {
+               this.setHintLines("That one was a guess.", this.bestTimes.noGuess() ? " " : "No guess (G) deals boards logic can clear.");
+            }
          }
          return;
       }
@@ -220,11 +271,21 @@ public final class GameFrame extends JFrame {
          for (int note : WIN_NOTES) {
             this.soundPlayer.queueNote(note);
          }
+         if (!this.computerPlayed) {
+            this.setHintLines(this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
+               : this.fairBoard ? "Cleared by logic alone, no guesses." : "Cleared!",
+               this.hints > 0 ? "A game won with hints sets no best time." : " ");
+         }
          if (this.computerPlayed) {
             // Not a best time: the computer played some or all of it.
             String who = this.watching ? "The computer" : "You and the computer";
             this.setTitle("Minesweeper: " + who.toLowerCase() + " cleared it in " + BestTimes.format(time) + ".");
             this.status.setText(who + " cleared it in " + BestTimes.format(time) + (this.watching ? ". Next game..." : ". Click to play again."));
+            return;
+         }
+         if (this.hints > 0) {
+            this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
+            this.status.setText("You win in " + BestTimes.format(time) + " with hints. Click to play again.");
             return;
          }
          long before = this.bestTimes.best(this.level);
@@ -279,6 +340,8 @@ public final class GameFrame extends JFrame {
       if (this.flagged[row][column] != flag) {
          this.flagged[row][column] = flag;
          this.flagCount += flag ? 1 : -1;
+         this.moves++;
+         this.clearHint();
          this.updateStatus();
       }
    }
@@ -357,6 +420,92 @@ public final class GameFrame extends JFrame {
       } else {
          this.revealFrom(move.row, move.column);
       }
+      if (move.why != null) {
+         this.showDeduction(move.why, move.flag ? "Computer: a mine, so it flags it." : "Computer: safe, so it opens it.");
+      } else if (!move.sure && !this.gameOver) {
+         this.setHintLines("Computer: nothing is certain, so it guesses.", "It picks the tile least likely to be a mine.");
+      }
+   }
+
+   /**
+    * H or the Hint button: marks the next tile (or tiles) that can be worked out from the numbers, gold-rings the
+    * numbers that show it, and says why under the status line. Flags are not trusted, so a wrong one is pointed out.
+    */
+   void hint() {
+      this.takeOver();
+      if (this.gameOver) {
+         return;
+      }
+      if (this.grid == null) {
+         this.setHintLines("Click any tile to start.", "The first click is always safe.");
+         return;
+      }
+      Logic.Deduction step = Logic.hint(this.view(), this.flagged, this.level.mines, false);
+      if (step == null) {
+         this.setHintLines("Nothing is certain here.", "On a random board you sometimes have to guess.");
+         return;
+      }
+      if (this.hintedAtMove != this.moves) {
+         this.hintedAtMove = this.moves;
+         this.hints++;
+      }
+      String action = step.action();
+      if (!step.mines) {
+         for (int cell : step.cells) {
+            if (this.flagged[cell / this.columns][cell % this.columns]) {
+               action = "Safe: a flag there is wrong.";
+               break;
+            }
+         }
+      }
+      this.showDeduction(step, action);
+   }
+
+   /** G or the No guess button: deal boards that logic alone can clear, or random ones; starts a new game. */
+   void toggleNoGuess() {
+      this.bestTimes.setNoGuess(!this.bestTimes.noGuess());
+      this.restart();
+   }
+
+   /** Marks a deduction on the board (its numbers ringed, its tiles glowing or red) with a line saying what and why. */
+   private void showDeduction(Logic.Deduction step, String action) {
+      this.clearHint();
+      for (int cell : step.numbers) {
+         this.markHint(cell, MineTile.HINT_CLUE);
+      }
+      for (int cell : step.cells) {
+         this.markHint(cell, step.mines ? MineTile.HINT_MINE : MineTile.HINT_SAFE);
+      }
+      this.setHintLines(action, step.reason);
+   }
+
+   private void markHint(int cell, int role) {
+      MineTile tile = this.tiles[cell / this.columns][cell % this.columns];
+      tile.setHint(role);
+      this.hinted.add(tile);
+   }
+
+   /** Takes a hint's marks off the board and puts the tip back. */
+   private void clearHint() {
+      for (MineTile tile : this.hinted) {
+         tile.setHint(MineTile.HINT_NONE);
+      }
+      this.hinted.clear();
+      this.showTip();
+   }
+
+   /** Between hints: what kind of board this is and where the help is. */
+   private void showTip() {
+      if (this.bestTimes.noGuess()) {
+         this.setHintLines("No guess: logic alone clears every board.", "Stuck? Hint (H) shows the next step and why.");
+      } else {
+         this.setHintLines("Random boards: some need a lucky guess.", "No guess (G) deals boards logic can clear.");
+      }
+   }
+
+   private void setHintLines(String action, String reason) {
+      this.hintAction.setText(action);
+      this.hintReason.setText(reason);
    }
 
    /** The board as a player sees it, for the computer: hidden, flagged or a revealed count. */
