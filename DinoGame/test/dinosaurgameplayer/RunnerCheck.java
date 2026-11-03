@@ -160,6 +160,88 @@ public final class RunnerCheck {
       assert evo.evolution().generation() == 3 : "carries on at generation " + evo.evolution().generation();
       evoFile.delete();
 
+      // Night falls at 700 for 12 s, fading in and out, and again at 1400; a new run starts by day.
+      Sky sky = new Sky();
+      sky.step(699);
+      assert sky.darkness() == 0 && sky.nights() == 0;
+      sky.step(700);
+      assert sky.darkness() > 0 && sky.darkness() < 0.1 && sky.nights() == 1 : "dusk " + sky.darkness();
+      for (int i = 0; i < Sky.NIGHT_STEPS / 2; i++) {
+         sky.step(700 + i / 10);
+      }
+      assert sky.darkness() == 1 : "full night";
+      for (int i = 0; i < Sky.NIGHT_STEPS / 2; i++) {
+         sky.step(800);
+      }
+      assert sky.darkness() == 0 && sky.nightStep() == -1 : "dawn";
+      sky.step(1399);
+      assert sky.darkness() == 0;
+      sky.step(1400);
+      assert sky.darkness() > 0 && sky.nights() == 2 && sky.moonPhase() == 1;
+      sky.reset();
+      assert sky.darkness() == 0 && sky.nights() == 0;
+
+      // From the first moment of dusk no color the game draws has blue 83, so the original bot is blind at night
+      // and a fading sky never makes it jump.
+      java.awt.Color[] colors = { RunnerPanel.INK, RunnerPanel.PAPER, RunnerPanel.MUTED, new java.awt.Color(0xD6D6D6),
+         new java.awt.Color(0xBDBDBD), new java.awt.Color(0xEBEBEB) };
+      for (java.awt.Color c : colors) {
+         for (int i = 1; i <= 1000; i++) {
+            assert !ObstacleDetector.isObstacle(Sky.tint(c, i / 1000.0).getRGB() & 0xFFFFFF) : c + " at " + i;
+            assert !ObstacleDetector.isObstacle(Sky.mix(Sky.tint(RunnerPanel.PAPER, i / 1000.0), new java.awt.Color(0xE6E6E6), i / 1000.0).getRGB() & 0xFFFFFF);
+         }
+      }
+      assert ObstacleDetector.isObstacle(Sky.tint(RunnerPanel.INK, 0).getRGB() & 0xFFFFFF) : "by day the bot sees";
+      // Drawn: a course with birds under a whole night, dusk to dawn, shows the bot no obstacle anywhere it can look,
+      // though the same frames by day are full of them.
+      Evolution.Dino nightRun = new Evolution.Dino(Brain.decode("144,146,65,117,120,299"), 1);
+      Sky nightSky = new Sky();
+      int dayInk = 0;
+      for (int s = 0; s < Sky.NIGHT_STEPS + 300 && nightRun.running(); s++) {
+         nightSky.step(s == 150 ? Sky.NIGHT_EVERY : 0);
+         if (s % 11 == 0) {
+            Graphics2D g = img.createGraphics();
+            RunnerPanel.paintWorld(g, nightRun.runner, nightSky);
+            g.dispose();
+            boolean night = nightSky.darkness() > 0;
+            for (int y = Runner.GROUND - 110; y < Runner.GROUND; y++) {
+               for (int x = Runner.DINO_X + Runner.DINO_W + 1; x < Runner.WIDTH; x++) {
+                  boolean ink = ObstacleDetector.isObstacle(img.getRGB(x, y) & 0xFFFFFF);
+                  assert !(night && ink) : "night step " + nightSky.nightStep() + " pixel " + x + "," + y;
+                  dayInk += ink ? 1 : 0;
+               }
+            }
+         }
+         nightRun.step();
+      }
+      assert dayInk > 1000 && nightSky.nights() == 1 && nightSky.darkness() == 0 : "day ink " + dayInk;
+      // A bot crash at night says why.
+      Runner blind = new Runner(2);
+      blind.press();
+      blind.release();
+      while (blind.state() == Runner.State.RUNNING) {
+         blind.step();
+      }
+      assert PixelBot.whyItCrashed(blind, true).startsWith("Night fell") && !PixelBot.whyItCrashed(blind, false).startsWith("Night");
+
+      // Dust: a jump kicks some up and the landing more, and it all stays behind the bot's marker.
+      Dust dust = new Dust();
+      Runner hop = new Runner(1);
+      hop.press();
+      dust.step(hop);
+      assert dust.count() >= 5 : "take-off dust";
+      while (hop.isJumping()) {
+         hop.step();
+         dust.step(hop);
+         assert dust.right() < PixelBot.DEFAULT_X - 30 : "dust at " + dust.right();
+      }
+      assert dust.count() >= 8 : "landing dust " + dust.count();
+      for (int i = 0; i < 60; i++) {
+         hop.step();
+         dust.step(hop);
+      }
+      assert dust.count() < 8 : "dust settles";
+
       // The file keeps both bests and the marker; damaged lines are skipped.
       Records r = Records.load(file);
       r.best = 812;
@@ -179,11 +261,15 @@ public final class RunnerCheck {
       back = Records.load(file);
       assert back.generations == 12 && back.evolvedBest == 1500 && back.champion.encode().equals(Brain.original().encode())
          && back.chart.equals(java.util.Arrays.asList(700, 1500)) && back.best == 812;
+      assert back.sound : "sound starts on";
+      back.sound = false;
+      back.save();
+      assert !Records.load(file).sound && Records.load(file).best == 812 : "sound=off is kept";
       try (FileOutputStream out = new FileOutputStream(file)) {
          out.write("best=oops\nbot=7\nmarker=1\n".getBytes(StandardCharsets.UTF_8));
       }
       Records broken = Records.load(file);
-      assert broken.best == 0 && broken.botBest == 7 && broken.markerX == PixelBot.DEFAULT_X;
+      assert broken.sound && broken.best == 0 && broken.botBest == 7 && broken.markerX == PixelBot.DEFAULT_X;
       file.delete();
 
       System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore() + ")");

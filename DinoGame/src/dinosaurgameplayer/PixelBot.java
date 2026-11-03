@@ -106,11 +106,19 @@ final class PixelBot {
 
    /** Why a bot run ended, in a line, or "" when it was not the bot's run. */
    static String whyItCrashed(Runner runner) {
+      return whyItCrashed(runner, false);
+   }
+
+   /** The same, knowing whether it was night (when the ink is pale, and the bot blind). */
+   static String whyItCrashed(Runner runner, boolean night) {
       Runner.Obstacle o = runner.crashedInto();
       if (o == null) {
          return "";
       }
       String what = o.kind == Runner.Kind.BIRD ? "that bird" : "that cactus";
+      if (!o.botJumped && night) {
+         return "Night fell and the ink turned pale. Its pixel only knows blue " + ObstacleDetector.OBSTACLE_BLUE + ".";
+      }
       if (!o.botJumped) {
          return o.kind == Runner.Kind.BIRD && o.lift > 20
             ? "Its pixel never saw " + what + ". It cannot duck. Try the red marker higher?"
