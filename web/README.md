@@ -519,6 +519,17 @@ Ctrl+K (Cmd+K on a Mac) on any page, / on the home page, the toolbar's Find butt
 - It wears the visitor's skin (Modern, Classic or Arcade, from `shim.css` and `oldjava.skin`; Yours shows as Modern), but does not load `boot.js`, which is for the home and app pages, so it has no toolbar, Find or site sounds. Its words stay beside the pictures on screens at least 820 px tall and stack above them below 760 px wide. It is in the offline file list with `play.html` and the quotes file.
 - The words come from HISTORY.md: when that changes, change `story.html` with it.
 
+## Instant open
+
+Every app page used to load from scratch after its link was clicked: the page, `boot.js`, the app's program (`classes.js`, 57 KB to 1.4 MB) and its files, then the title screen's boot log ran up to Ready. Now the next page is made ready while the visitor is still choosing it, so the click only swaps it in.
+
+- In Chrome and Edge, `boot.js` adds speculation rules to the home page and every app page: a link to an app page (`<App>/index.html` or `then.html`), the home page or the story page is prerendered when the pointer rests on it for about 200 ms or presses it (`eagerness: "moderate"`). That covers Switch app, Next, the exit screen's suggestions, a gallery card's Full page, All apps and Then | Now. The prerendered page loads its program and files and shows its title screen with Play lit; the app itself still starts only on Play. Once opened, its boot log adds "Loaded ahead, while you chose it" (with "no wait", or the head start it had if it was not quite ready). The page transition (Between pages) plays as before.
+- Find's highlighted result is made ready too (`window.oldjavaSite.ready`, called by `find.js`): a list rule of its own for that one page, replaced as the highlight moves, so Enter opens it at once.
+- The home page's player is an iframe, which cannot be prerendered, so pointing at a rail button, a gallery card's Play or its picture (or highlighting an app in Find on the home page) fetches that app's page, program and `data-files` into the browser's cache instead ("warm"). Browsers without speculation rules warm every app link the same way.
+- Left out: links to `?embed` and `?watch` pages (a watched game starts playing at once), links that open a new tab or download, and the page's own address. Nothing is fetched ahead with Save-Data on or on a 2G connection, nor in the player, thumbnail, clip and screen saver modes.
+- Chrome throws a prerendered page away when it calls `navigator.getGamepads()`, which the screen saver's idle clock polls every second, so while a page is prerendering `boot.js` answers that call with no controllers.
+- Tested in a plain Chrome window (DevTools turns prerendering off, so not over the DevTools protocol): the server log showed the next page requested when the rule fired and not again when it was opened, and the opened page's boot log had the new line with Play already lit, for an app page, a `then.html`, the home page and a Find result. Hover timing itself is Chrome's.
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".

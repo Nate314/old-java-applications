@@ -331,6 +331,11 @@
       for (var k = 0; k < rows.length; k++) rows[k].setAttribute('aria-selected', String(k === active));
       input.setAttribute('aria-activedescendant', 'shim-find-' + active);
       if (scroll && rows[active]) rows[active].scrollIntoView({ block: 'nearest' });
+      // The highlighted app gets ready while the visitor reads (boot.js instant open), so Enter opens it at once.
+      var it = shownItems[active];
+      if (site.ready && it.app && !it.current && (it.kind === 'app' || it.kind === 'then')) {
+        site.ready(it.app.id, it.kind === 'then', it.kind === 'app' && onHome());
+      }
     }
     // groups: [[heading, items], ...]
     function render(groups) {

@@ -47,6 +47,8 @@
  *   game for a break (window.oldjavaSite is what it borrows from this file).
  * - Lets the visitor make a fourth skin, Yours (ownCss here, the maker panel in skinmaker.js), and share it as a
  *   ?skin= link.
+ * - Gets the next page ready before the click (instant open, at the end): speculation rules prerender a pointed-at
+ *   app page, and the home page's player warms the app it is pointed at into the browser's cache.
  */
 (function () {
   'use strict';
@@ -4440,4 +4442,135 @@
     }
     if (skinOffer) makerScript().then(function (maker) { maker.offer(); }, function (e) { console.warn(e.message); });
   });
+
+  // ---- instant open: the next app is ready before the click ----
+  // Pointing at a link to another page of the site (a gallery card, Switch app, Next, an exit suggestion, Find's
+  // results, All apps) gets that page ready while the visitor decides. In Chrome and Edge, speculation rules
+  // prerender it: the page loads in the background, fetches its program and files and shows its title screen with
+  // Play already lit, so the click only swaps it in (the page transition still plays, and its boot log says how
+  // much of a head start it had). The app itself waits for Play as always, and a page that is never opened is
+  // thrown away. Elsewhere, and for the home page's player (an iframe, which a prerender cannot fill), the page's
+  // files are fetched into the browser's cache instead (warm), so the app starts without waiting for the network.
+  // Nothing is fetched ahead with Save-Data on or on a 2G connection.
+  // Chrome throws a prerendered page away when it asks for the game controllers, which this file polls (the screen
+  // saver's idle clock, the controller support): until the visitor opens the page there are none to ask about.
+  if (document.prerendering && navigator.getGamepads) {
+    var padsNow = navigator.getGamepads;
+    navigator.getGamepads = function () { return document.prerendering ? [] : padsNow.call(navigator); };
+  }
+  var INSTANT_HOLD = 120;   // ms of pointing (or focus) before a page is warmed, so a sweep across the cards fetches nothing
+  var net = navigator.connection || {};
+  var instantOff = embedded || findOff || net.saveData || /(^|-)2g$/.test(net.effectiveType || '');
+  var speculates = !!(window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules'));
+  function speculate() {
+    var base = new URL(siteRoot).pathname;
+    function page(path) { return { href_matches: { pathname: base + path, baseURL: location.href } }; }
+    var rules = { prerender: [{
+      source: 'document',
+      where: { and: [
+        { or: [page(':app/index.html'), page(':app/then.html'), page('index.html'), page(''), page('story.html')] },
+        { not: { href_matches: { pathname: location.pathname, baseURL: location.href } } },   // this page, ?watch or #source
+        // the player's own pages, the games that start playing at once, and the gallery links that play in the player
+        { not: { selector_matches: '[href*="embed"], [href*="watch"], [download], [target="_blank"], #apps a.play, #apps a.thumb' } }
+      ] },
+      eagerness: 'moderate'   // on hover (about 200 ms) or pointer down, the same as a tap on a phone
+    }] };
+    var tag = document.createElement('script');
+    tag.type = 'speculationrules';
+    tag.textContent = JSON.stringify(rules);
+    document.head.appendChild(tag);
+  }
+  // Warm: an app page's HTML, its program and the files its <body data-files> lists, into the HTTP cache (and the
+  // service worker's), each once.
+  var warmed = {};
+  function warmFile(url) {
+    if (warmed[url]) return warmed[url];
+    warmed[url] = fetch(url, { priority: 'low' }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.headers.get('Content-Type') && /html/.test(r.headers.get('Content-Type')) ? r.text() : r.arrayBuffer();
+    }).catch(function () { delete warmed[url]; return null; });
+    return warmed[url];
+  }
+  function warmApp(id, then) {
+    var dir = siteRoot + id + '/';
+    warmFile(dir + (then ? 'then.js' : 'classes.js'));
+    warmFile(dir + (then ? 'then.html' : 'index.html')).then(function (html) {
+      if (typeof html !== 'string') return;
+      var m = /<body[^>]*\sdata-files="([^"]*)"/.exec(html);
+      if (m) m[1].split(/\s+/).filter(Boolean).forEach(function (f) { warmFile(dir + f); });
+    });
+  }
+  // What a pointed-at element would open: { app, then, player } for a link to an app page, or for one of the home
+  // page's player controls (its rail, whose buttons follow the gallery's order, and the gallery's Play and picture
+  // links, which play in the player), whose app is warmed rather than prerendered.
+  function instantTarget(el) {
+    if (!el || !el.closest) return null;
+    var rail = el.closest('#rail button');
+    if (rail) {
+      var li = document.querySelectorAll('#apps li[data-app]')[[].indexOf.call(document.querySelectorAll('#rail button'), rail)];
+      return li ? { app: li.getAttribute('data-app'), then: false, player: true } : null;
+    }
+    var a = el.closest('a[href]');
+    var place = a && !a.hasAttribute('download') && tripPlace(a.href);
+    if (!place || !place[0]) return null;
+    var here = tripPlace(location.href);
+    if (here && here[0] === place[0] && here[1] === place[1]) return null;
+    return { app: place[0], then: place[1], player: !!a.closest('#apps a.play, #apps a.thumb') };
+  }
+  // One page chosen ahead by the page itself (Find's highlighted result): a list rule of its own, replaced by the
+  // next choice, which cancels the last one's prerender.
+  var instantChosen = null;
+  function prerenderOne(url) {
+    if (instantChosen && instantChosen.url === url) return;
+    if (instantChosen) instantChosen.tag.remove();
+    var tag = document.createElement('script');
+    tag.type = 'speculationrules';
+    tag.textContent = JSON.stringify({ prerender: [{ source: 'list', urls: [url] }] });
+    document.head.appendChild(tag);
+    instantChosen = { url: url, tag: tag };
+  }
+  var instantSoon = 0;
+  // The site's other scripts (find.js) get an app ready with this: on its own page, or in the home page's player.
+  window.oldjavaSite.ready = function (id, then, player) {
+    if (instantOff) return;
+    clearTimeout(instantSoon);
+    instantSoon = setTimeout(function () {
+      if (speculates && !player) prerenderOne(siteRoot + id + (then ? '/then.html' : '/index.html'));
+      else warmApp(id, then);
+    }, INSTANT_HOLD);
+  };
+  if (!instantOff) {
+    if (speculates) speculate();
+    var instantTimer = 0;
+    var instantArm = function (e) {
+      var t = instantTarget(e.target);
+      if (!t || (speculates && !t.player)) return;   // the speculation rules prerender it
+      clearTimeout(instantTimer);
+      if (e.type === 'pointerdown') warmApp(t.app, t.then);
+      else instantTimer = setTimeout(function () { warmApp(t.app, t.then); }, INSTANT_HOLD);
+    };
+    document.addEventListener('pointerover', instantArm, true);
+    document.addEventListener('focusin', instantArm, true);
+    document.addEventListener('pointerdown', instantArm, { capture: true, passive: true });
+    document.addEventListener('pointerout', function () { clearTimeout(instantTimer); }, true);
+  }
+  // A page that was prerendered says so in its title screen's boot log once the visitor opens it.
+  function headStart() {
+    var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    var ahead = nav && nav.activationStart;
+    var log = ahead > 0 && document.querySelector('.shim-title-log');
+    if (!log) return;
+    var row = document.createElement('span');
+    row.className = 'row ready';
+    var l = document.createElement('span');
+    l.textContent = 'Loaded ahead, while you chose it';
+    var v = document.createElement('span');
+    v.textContent = document.querySelector('.shim-title-play:not([disabled])') ? 'no wait'
+      : (ahead < 1000 ? Math.round(ahead) + ' ms' : (ahead / 1000).toFixed(1) + ' s') + ' head start';
+    row.appendChild(l);
+    row.appendChild(v);
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+  if (document.prerendering) document.addEventListener('prerenderingchange', headStart, { once: true });
 })();
