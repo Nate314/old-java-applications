@@ -28,6 +28,15 @@ $ErrorActionPreference = 'Stop'
 $ShellUp = "!!document.querySelector('.shim-shell > *')"
 # WindowsE's own window, lower right in front of the File Explorer windows it opened.
 $WindowsEFront = "js:(function (d) { var w = d.firstElementChild; d.style.zIndex = 1000000; w.style.left = (innerWidth - w.offsetWidth - 24) + 'px'; w.style.top = (innerHeight - w.offsetHeight - 24) + 'px'; })(document.getElementById('desktop'))"
+# SynthesizerKeyboard's looper: clear any old loop (Delete twice), record a melody layer after the count-in, then a
+# bass layer an octave down at the next bar. Keys are held (keydown, then keyup after ms) so notes get their lengths.
+function SynthHold([string]$key, [int]$code, [int]$ms) {
+    "js:(function (t) { function f(type) { t.dispatchEvent(new KeyboardEvent(type, { key: '$key', keyCode: $code, which: $code, bubbles: true })); } f('keydown'); setTimeout(function () { f('keyup'); }, $ms); })(document.activeElement || document.body)"
+}
+$SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Delete' 46 20), 'wait:200', 'key:Space', 'wait:2450') +
+    (@(@('z', 90), @('c', 67), @('b', 66), @('c', 67), @('z', 90), @('c', 67), @('b', 66), @(',', 188)) | ForEach-Object { (SynthHold $_[0] $_[1] 450), 'wait:625' }) +
+    @('wait:400', 'key:ArrowLeft', 'key:Space', 'wait:2300') +
+    (@(@('z', 90), @('b', 66), @('v', 86), @('c', 67)) | ForEach-Object { (SynthHold $_[0] $_[1] 1100), 'wait:1250' })
 $Recipes = [ordered]@{
     Clock               = @{ Steps = @('wait:800', 'key:F', 'wait:300', 'key:Space', 'wait:2500') }
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', 'wait:500', 'key:Space', 'wait:450', 'key:Space', 'wait:350') }
@@ -39,7 +48,7 @@ $Recipes = [ordered]@{
     UltimateTicTacToe   = @{ Steps = @('wait:800', 'key:W', 'wait:7000') }
     CircleSpawner       = @{ Steps = @('wait:1500', (Pick 'Heart'), 'wait:3000') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:4000', 'key:B', 'wait:3000', 'key:R', 'wait:300') }
-    SynthesizerKeyboard = @{ Steps = @('wait:800', 'key:L', 'wait:1700') }
+    SynthesizerKeyboard = @{ Steps = $SynthLoop + @('wait:1300') }
     GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:800') }
     NumberGuess         = @{ Steps = @('wait:800', 'key:5', 'key:Enter', 'wait:900', 'key:8', 'key:Enter', 'wait:900') }

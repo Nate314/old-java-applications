@@ -27,7 +27,12 @@ public final class MidiPlayer {
    }
 
    public final void setInstrument(int program) {
-      this.channels[0].programChange(program);
+      this.setInstrument(0, program);
+   }
+
+   /** Sets the instrument of one channel (the keys play on 0, the looper's layers on others). */
+   public final void setInstrument(int channel, int program) {
+      this.channels[channel].programChange(program);
    }
 
    /** Starts a note and stops it after the given time, using a one-shot Swing timer instead of waiting. */
@@ -39,13 +44,21 @@ public final class MidiPlayer {
    }
 
    public final void noteOn(int note) {
-      this.channels[0].noteOn(note, VELOCITY);
-      this.sounding.add(note);
+      this.noteOn(0, note, VELOCITY);
    }
 
    public final void noteOff(int note) {
-      this.channels[0].noteOff(note);
-      if (this.sounding.remove(note)) {
+      this.noteOff(0, note);
+   }
+
+   public final void noteOn(int channel, int note, int velocity) {
+      this.channels[channel].noteOn(note, velocity);
+      this.sounding.add(channel << 7 | note);
+   }
+
+   public final void noteOff(int channel, int note) {
+      this.channels[channel].noteOff(note);
+      if (this.sounding.remove(channel << 7 | note)) {
          this.lastOff = System.currentTimeMillis();
       }
    }

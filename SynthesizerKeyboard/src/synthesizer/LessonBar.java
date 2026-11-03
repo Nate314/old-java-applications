@@ -13,7 +13,8 @@ import javax.swing.JPanel;
  * The strip above the keys. In free play it lists the songs with their best stars, the recorded tune if there is
  * one, and Record; during a song it shows the notes coming up (the computer key and note name, wider for longer
  * notes) with the next one lit; after a song it shows the stars won. While recording it shows the notes so far.
- * The microphone button sits at the top right, and doubles as a tuner while the microphone listens.
+ * The microphone button sits at the top right, and doubles as a tuner while the microphone listens. With the
+ * looper on, the strip holds the looper's buttons instead, each with its key.
  */
 public final class LessonBar extends JPanel {
    public static final int HEIGHT = 100;
@@ -37,6 +38,7 @@ public final class LessonBar extends JPanel {
    private static final Font HEADLINE = new Font("SansSerif", Font.BOLD, 16);
    private static final Font HELP = new Font("SansSerif", Font.PLAIN, 12);
    private static final Font CHIP_FONT = new Font("SansSerif", Font.BOLD, 13);
+   private static final Font SMALL_CHIP_FONT = new Font("SansSerif", Font.BOLD, 11);
    private static final Font LETTER_FONT = new Font("SansSerif", Font.BOLD, 18);
    private static final int CHIP_TOP = 38;
    private static final int MARGIN = 10;
@@ -57,6 +59,19 @@ public final class LessonBar extends JPanel {
    /** The note the microphone hears (MIDI), or -1, and how far off it is in cents. */
    private int micNote = -1;
    private int micCents;
+   /** The looper, while it is on; null otherwise. */
+   private Looper looper;
+   private static final int LOOP_CHIPS = 8;
+   /** The looper's buttons, by their index in loopChipAt. */
+   public static final int LOOP_PLAY = 0;
+   public static final int LOOP_RECORD = 1;
+   public static final int LOOP_SLOWER = 2;
+   public static final int LOOP_FASTER = 3;
+   public static final int LOOP_CLICK = 4;
+   public static final int LOOP_UNDO = 5;
+   public static final int LOOP_CLEAR = 6;
+   public static final int LOOP_SONGS = 7;
+   private static final String[] LOOP_KEYS = {"P", "Space", "-", "=", "K", "Bksp", "Del", "O"};
 
    public LessonBar(SongRecords records) {
       this.records = records;
@@ -82,6 +97,25 @@ public final class LessonBar extends JPanel {
       this.recording = on;
       this.recorded = soFar;
       this.repaint();
+   }
+
+   /** Shows the looper's buttons, or the songs again for null. */
+   public void setLooper(Looper looper) {
+      this.looper = looper;
+      this.repaint();
+   }
+
+   /** With the looper on, the button at a point (LOOP_PLAY to LOOP_SONGS), or -1. */
+   public int loopChipAt(int x, int y) {
+      if (this.looper == null || y < CHIP_TOP || y > HEIGHT - MARGIN || x < MARGIN) {
+         return -1;
+      }
+      int chip = (x - MARGIN) / this.loopChipWidth();
+      return chip < LOOP_CHIPS ? chip : -1;
+   }
+
+   private int loopChipWidth() {
+      return Math.max(1, (this.getWidth() - 2 * MARGIN) / LOOP_CHIPS);
    }
 
    public void setNotice(String notice) {
@@ -113,17 +147,20 @@ public final class LessonBar extends JPanel {
       return this.getWidth() - MARGIN - this.micWidth();
    }
 
-   /** In free play, the chip at a point: a song's index in the menu, the menu's length for Record, or -1. */
+   /**
+    * In free play, the chip at a point: a song's index in the menu, the menu's length for Record, one more for the
+    * looper, or -1.
+    */
    public int chipAt(int x, int y) {
-      if (this.recording || this.lesson != null || y < CHIP_TOP || y > HEIGHT - MARGIN || x < MARGIN) {
+      if (this.looper != null || this.recording || this.lesson != null || y < CHIP_TOP || y > HEIGHT - MARGIN || x < MARGIN) {
          return -1;
       }
       int chip = (x - MARGIN) / this.menuChipWidth();
-      return chip <= this.menu.length ? chip : -1;
+      return chip <= this.menu.length + 1 ? chip : -1;
    }
 
    private int menuChipWidth() {
-      return Math.max(1, (this.getWidth() - 2 * MARGIN) / (this.menu.length + 1));
+      return Math.max(1, (this.getWidth() - 2 * MARGIN) / (this.menu.length + 2));
    }
 
    @Override
@@ -134,7 +171,10 @@ public final class LessonBar extends JPanel {
       g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
       g.setColor(BACKGROUND);
       g.fillRect(0, 0, this.getWidth(), this.getHeight());
-      if (this.recording) {
+      if (this.looper != null) {
+         this.header(g, "Looper", TEXT, "Play over your loop: each layer keeps its own sound   1-4 mute a layer");
+         this.paintLoopChips(g);
+      } else if (this.recording) {
          int notes = this.recorded == null ? 0 : this.recorded.length();
          this.header(g, "Recording", RECORD, (notes == 0 ? "Play your tune" : notes + " of " + Tune.MAX_NOTES + " notes")
             + "   Space or click here to stop");
@@ -144,7 +184,7 @@ public final class LessonBar extends JPanel {
             this.paintNotes(g, this.recorded, this.lastFitting(this.recorded), notes - 1, RECORD);
          }
       } else if (this.lesson == null) {
-         this.header(g, "Free play", TEXT, "Pick a song: click it, or T or 1-" + this.menu.length + "   Space record your own");
+         this.header(g, "Free play", TEXT, "Pick a song: click it, or T or 1-" + this.menu.length + "   Space record   O looper");
          this.paintMenu(g);
       } else if (this.lesson.finished()) {
          this.header(g, this.lesson.song().title() + ": done!", TEXT,
@@ -248,8 +288,12 @@ public final class LessonBar extends JPanel {
    private void paintMenu(Graphics2D g) {
       int chipWidth = this.menuChipWidth();
       int chipHeight = HEIGHT - CHIP_TOP - MARGIN;
-      for (int song = 0; song <= this.menu.length; song++) {
+      for (int song = 0; song <= this.menu.length + 1; song++) {
          int x = MARGIN + song * chipWidth;
+         if (song == this.menu.length + 1) {
+            this.paintLoopChip(g, x, chipWidth, chipHeight);
+            continue;
+         }
          boolean record = song == this.menu.length;
          g.setColor(CHIP);
          g.fillRoundRect(x + 2, CHIP_TOP, chipWidth - 4, chipHeight, 10, 10);
@@ -275,8 +319,68 @@ public final class LessonBar extends JPanel {
             String notes = this.menu[song].length() + " notes";
             g.drawString(notes, x + (chipWidth - g.getFontMetrics().stringWidth(notes)) / 2, CHIP_TOP + 42);
          } else {
-            this.paintStars(g, x + chipWidth / 2, CHIP_TOP + 38, 7, this.records.stars(this.menu[song]));
+            // Three stars span seven radii: smaller stars on a narrow chip.
+            int radius = Math.max(3, Math.min(7, (chipWidth - 10) / 7));
+            this.paintStars(g, x + chipWidth / 2, CHIP_TOP + 38, radius, this.records.stars(this.menu[song]));
          }
+      }
+   }
+
+   /** The menu's Looper chip: its name over a ring of four dots, one per layer. */
+   private void paintLoopChip(Graphics2D g, int x, int chipWidth, int chipHeight) {
+      g.setColor(CHIP);
+      g.fillRoundRect(x + 2, CHIP_TOP, chipWidth - 4, chipHeight, 10, 10);
+      g.setFont(CHIP_FONT);
+      g.setColor(TEXT);
+      String label = chipWidth < 90 ? "Loop" : "Looper";
+      g.drawString(label, x + (chipWidth - g.getFontMetrics().stringWidth(label)) / 2, CHIP_TOP + 20);
+      int cx = x + chipWidth / 2;
+      int cy = CHIP_TOP + 37;
+      g.setColor(SOFT);
+      g.drawOval(cx - 8, cy - 7, 16, 14);
+      Color[] dots = {NEXT, LISTEN, IN_TUNE, RECORD};
+      int[][] at = {{0, -7}, {8, 0}, {0, 7}, {-8, 0}};
+      for (int dot = 0; dot < dots.length; dot++) {
+         g.setColor(dots[dot]);
+         g.fillOval(cx + at[dot][0] - 3, cy + at[dot][1] - 3, 6, 6);
+      }
+   }
+
+   /** The looper's buttons, each with its key under its name; Record is red, and lit while a take is under way. */
+   private void paintLoopChips(Graphics2D g) {
+      int chipWidth = this.loopChipWidth();
+      int chipHeight = HEIGHT - CHIP_TOP - MARGIN;
+      Loop loop = this.looper.loop();
+      String[] labels = {
+         this.looper.playing() ? "Stop" : "Play",
+         this.looper.taking() ? "Cancel" : loop.full() ? "Full" : "Record",
+         "Slower", "Faster", loop.click() ? "Click on" : "Click off", "Undo", "Clear", "Songs"
+      };
+      // For a narrow window.
+      String[] shorts = {
+         labels[0], this.looper.taking() ? "X" : loop.full() ? "Full" : "Rec", "Slow", "Fast", loop.click() ? "Click" : "Off", "Undo", "Clear", "Songs"
+      };
+      for (int chip = 0; chip < LOOP_CHIPS; chip++) {
+         int x = MARGIN + chip * chipWidth;
+         boolean lit = chip == LOOP_RECORD && this.looper.taking() || chip == LOOP_PLAY && this.looper.playing();
+         g.setColor(lit ? (chip == LOOP_RECORD ? RECORD : PLAYED) : CHIP);
+         g.fillRoundRect(x + 2, CHIP_TOP, chipWidth - 4, chipHeight, 10, 10);
+         g.setFont(chipWidth < 64 ? SMALL_CHIP_FONT : CHIP_FONT);
+         FontMetrics metrics = g.getFontMetrics();
+         String label = labels[chip];
+         if (metrics.stringWidth(label) > chipWidth - 8) {
+            label = shorts[chip];
+         }
+         g.setColor(chip == LOOP_RECORD && !lit && !loop.full() ? RECORD : TEXT);
+         g.drawString(label, x + (chipWidth - metrics.stringWidth(label)) / 2, CHIP_TOP + 20);
+         g.setFont(HELP);
+         metrics = g.getFontMetrics();
+         g.setColor(lit ? TEXT : SOFT);
+         String key = chip == LOOP_SLOWER || chip == LOOP_FASTER ? LOOP_KEYS[chip] + "   " + loop.tempo() + " bpm" : LOOP_KEYS[chip];
+         if (metrics.stringWidth(key) > chipWidth - 6) {
+            key = LOOP_KEYS[chip];
+         }
+         g.drawString(key, x + (chipWidth - metrics.stringWidth(key)) / 2, CHIP_TOP + 40);
       }
    }
 
