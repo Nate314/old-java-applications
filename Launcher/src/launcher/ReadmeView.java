@@ -26,6 +26,11 @@ final class ReadmeView {
       } catch (IOException e) {
          md = "Could not read " + readme + ": " + e.getMessage();
       }
+      showText(owner, title + " README", md);
+   }
+
+   /** Shows Markdown text in a dialog titled {@code title}; Esc closes it. */
+   static void showText(Window owner, String title, String md) {
       JEditorPane pane = new JEditorPane("text/html", toHtml(md));
       pane.setEditable(false);
       pane.setCaretPosition(0);
@@ -34,7 +39,7 @@ final class ReadmeView {
       JScrollPane scroll = new JScrollPane(pane);
       scroll.setBorder(null);
       Ui.ThinScrollBarUI.apply(scroll.getVerticalScrollBar());
-      JDialog d = new JDialog(owner, title + " README", java.awt.Dialog.ModalityType.MODELESS);
+      JDialog d = new JDialog(owner, title,java.awt.Dialog.ModalityType.MODELESS);
       d.getContentPane().add(scroll, BorderLayout.CENTER);
       d.getRootPane().registerKeyboardAction(e -> d.dispose(), KeyStroke.getKeyStroke("ESCAPE"),
          JComponent.WHEN_IN_FOCUSED_WINDOW);

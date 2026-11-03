@@ -123,6 +123,46 @@ public class LauncherCheck {
          Files.delete(d);
       }
 
+      // Then: each app's story from git history, back to the commit the web site's Then pages use.
+      String thenPom = new String(Files.readAllBytes(root.resolve("web/then/pom.xml")), StandardCharsets.UTF_8);
+      check(thenPom.contains("<then.commit>" + History.THEN + "</then.commit>"), "same first restored commit as the web");
+      List<String> ids = new java.util.ArrayList<>();
+      for (Catalog.App a : apps) ids.add(a.id);
+      History history = History.load(Git.in(root), ids);
+      if (!history.available()) {
+         System.out.println("LauncherCheck: no git history back to " + History.THEN + ", Then checks skipped");
+      } else {
+         for (String id : ids) check(history.of(id) != null && !history.of(id).about.isEmpty(), id + " existed then");
+         History.Story mine = history.of("Minesweeper");
+         check(mine.changed && mine.thenLines > 0 && mine.nowLines > mine.thenLines && !mine.changes.isEmpty(), "Minesweeper grew");
+         check(mine.warning == null, "only apps that call Robot.keyPress warn, not ones with key listeners");
+         check(history.of("DinoGame").warning != null && history.of("DinoGame").warning.contains("Space"), "the first DinoGame was a screen bot");
+         check(!history.of("Windows").changed && history.of("Windows").thenLines == history.of("Windows").nowLines, "Windows unchanged");
+         check(LauncherWindow.historyText(find(apps, "Clock"), history.of("Clock"), utc).contains("## Changes since"), "history text");
+      }
+      check(History.sentences("One. Two. Three.", 2).equals("One. Two.") && History.sentences("One.", 2).equals("One."), "sentences");
+      check(History.firstParagraph("# T\n\nA `b` **c** [d](e)\nmore.\n\nNext").equals("A b c d more."), "first paragraph");
+      check(History.lines("rev:Clock/src/a/B.java:12\nrev:Clock/src/C.java:3\nrev:web/x.java:9\n").toString().equals("{Clock=15}"), "lines per app");
+      Map<String, List<History.Change>> parsed = History.parseLog("@@100 Two apps\n\nClock/README.md\nTankGame/src/A.java\nClock/src/B.java\n@@50 One\n\nClock/x\n");
+      check(parsed.get("Clock").size() == 2 && parsed.get("TankGame").size() == 1 && parsed.get("Clock").get(0).millis == 100_000L, "log per app");
+      check(Runner.homeOption("-Xmx1g", Paths.get("/h o")).endsWith("\"-Duser.home=" + Paths.get("/h o").toAbsolutePath() + "\"")
+         && Runner.homeOption(null, Paths.get("/h")).startsWith("\"-D"), "then home option");
+      // The unpacker refuses entries that would land outside its folder.
+      Path unpack = Files.createTempDirectory("launcher-then");
+      java.io.ByteArrayOutputStream zipBytes = new java.io.ByteArrayOutputStream();
+      try (java.util.zip.ZipOutputStream z = new java.util.zip.ZipOutputStream(zipBytes)) {
+         z.putNextEntry(new java.util.zip.ZipEntry("App/ok.txt"));
+         z.write('x');
+         z.putNextEntry(new java.util.zip.ZipEntry("../evil.txt"));
+         z.write('x');
+      }
+      boolean unsafe = false;
+      try { ThenCopy.unzip(new java.io.ByteArrayInputStream(zipBytes.toByteArray()), unpack); } catch (java.io.IOException e) { unsafe = true; }
+      check(unsafe && Files.isRegularFile(unpack.resolve("App/ok.txt")) && !Files.exists(unpack.resolveSibling("evil.txt")), "unsafe zip refused");
+      Files.delete(unpack.resolve("App/ok.txt"));
+      Files.delete(unpack.resolve("App"));
+      Files.delete(unpack);
+
       System.out.println("LauncherCheck: all checks passed");
    }
 

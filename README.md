@@ -63,6 +63,8 @@ Requires a JDK (`java` and `javac` on PATH). From the repo root in PowerShell:
 
 With no app name, `run.ps1` opens the [Launcher](Launcher/README.md): all 20 apps as cards with their pictures, filters for games, music, toys, tools and the apps that press real keys, a search field that has the keyboard from the start, and Enter to play. It remembers what you launched (in `~/.oldjava-launcher.txt`), opens on the last one, marks the rest New, and Pick for me plays one you have not tried. Apps that press real keys (Windows, WindowsE) say so with a Real keys chip and ask first. It reads the apps' names, hints and thumbnails from the web gallery, so both front doors describe them the same way.
 
+The launcher's Then button (Alt+T) plays any app as it was first restored, the version the web site's Then pages run, on the desktop: it unpacks that commit from git history into `out/then` and runs it with that commit's own `run.ps1`, next to today's version if you like. In Then mode each app shows its lines of Java then and now, and History (Alt+H) lists every change since.
+
 Run mode launches each app from the folder it expects (for example `FlappyBird/src` with argument `120`), with any non-Java files in `src/` on the classpath. Build mode prints the matching `java -jar` command. Build output goes to `out/`, which is git-ignored.
 
 ## Web (TeaVM)

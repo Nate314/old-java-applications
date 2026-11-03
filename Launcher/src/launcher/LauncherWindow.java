@@ -19,7 +19,10 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -60,6 +63,7 @@ public final class LauncherWindow extends JFrame {
    private final List<Catalog.App> apps;
    private final PlayLog log;
    private final Runner runner;
+   private final Runner thenRunner;
    private final Path root;
    private final LongSupplier clock;
    private final Thumbs thumbs = new Thumbs();
@@ -76,12 +80,16 @@ public final class LauncherWindow extends JFrame {
 
    private String filter = "all";
    private Catalog.App selected;
+   private History history = History.NONE;
+   private boolean then;   // Play runs the apps as first restored
 
-   public LauncherWindow(List<Catalog.App> apps, PlayLog log, Runner runner, Path root, LongSupplier clock) {
+   public LauncherWindow(List<Catalog.App> apps, PlayLog log, Runner runner, Runner thenRunner, Path root,
+         LongSupplier clock) {
       super("Old Java Applications");
       this.apps = apps;
       this.log = log;
       this.runner = runner;
+      this.thenRunner = thenRunner;
       this.root = root;
       this.clock = clock;
       search = new Ui.SearchField("Search " + apps.size() + " apps");
@@ -291,6 +299,37 @@ public final class LauncherWindow extends JFrame {
       }
    }
 
+   /** The apps' stories from git, once they are read; until then (or without git) there is no Then. */
+   void setHistory(History h) {
+      history = h;
+      if (!h.available()) then = false;
+      refresh();
+   }
+
+   /** Switches Play between today's apps and the apps as first restored. */
+   void setThen(boolean on) {
+      if (on && !history.available()) return;
+      then = on;
+      status(on ? "Then: Play runs each app as it was first restored (commit " + History.THEN.substring(0, 7)
+         + "), unpacked from git history. Alt+N goes back to now."
+         : "Now: Play runs each app as it is today. Alt+T plays them as first restored.");
+      refresh();
+   }
+
+   boolean isThen() {
+      return then;
+   }
+
+   /** True when Play would run this app's first restored code: in Then mode, for an app changed since. */
+   boolean playsThen(Catalog.App a) {
+      History.Story s = a == null ? null : history.of(a.id);
+      return then && s != null && s.changed;
+   }
+
+   private static String key(Catalog.App a, boolean old) {
+      return old ? a.id + " then" : a.id;
+   }
+
    private void move(int delta) {
       List<Catalog.App> shown = visible();
       if (shown.isEmpty()) return;
@@ -318,7 +357,7 @@ public final class LauncherWindow extends JFrame {
          applyFilter();
       }
       select(app, true);
-      play(app);
+      play(app, false);   // today's: the pick is an app not launched yet, and only today's launches count
    }
 
    /** The pickable apps among these: the ones never launched, or if none, all that are not running. */
@@ -326,37 +365,51 @@ public final class LauncherWindow extends JFrame {
       List<Catalog.App> fresh = new ArrayList<>();
       List<Catalog.App> any = new ArrayList<>();
       for (Catalog.App a : among) {
-         if (a.pressesKeys() || running.contains(a.id)) continue;
+         if (a.pressesKeys() || isRunning(a.id)) continue;
          any.add(a);
          if (log.count(a.id) == 0) fresh.add(a);
       }
       return fresh.isEmpty() ? any : fresh;
    }
 
-   /** Starts the app in its own process; the apps that press real keys ask first. */
+   /** Plays the app in the current mode: as first restored in Then mode, when its code has changed since. */
    void play(Catalog.App app) {
-      if (app == null || running.contains(app.id)) return;
-      if (app.warning != null) {
-         int answer = JOptionPane.showConfirmDialog(this, app.warning + "\n\nStart " + app.name + " now?",
-            app.name + " drives your real desktop", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+      play(app, playsThen(app));
+   }
+
+   /**
+    * Starts the app (today's, or as first restored) in its own process; the apps that press real keys ask first.
+    * Today's and the first restored version of one app can run side by side. Only today's launches are counted.
+    */
+   private void play(Catalog.App app, boolean old) {
+      if (app == null || running.contains(key(app, old))) return;
+      String warning = old ? history.of(app.id).warning : app.warning;
+      String name = old ? app.name + " (as first restored)" : app.name;
+      if (warning != null) {
+         int answer = JOptionPane.showConfirmDialog(this, warning + "\n\nStart " + name + " now?",
+            name + " drives your real desktop", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
          if (answer != JOptionPane.OK_OPTION) return;
       }
       CompletableFuture<Integer> done;
       try {
-         done = runner.start(app.id);
+         done = (old ? thenRunner : runner).start(app.id);
       } catch (IOException e) {
-         status("Could not start " + app.name + ": " + e.getMessage());
+         status("Could not start " + name + ": " + e.getMessage());
          return;
       }
-      log.launched(app.id, clock.getAsLong());
-      running.add(app.id);
-      status("Starting " + app.name + ": run.ps1 compiles it, then its window opens. You can start others meanwhile.");
+      if (!old) log.launched(app.id, clock.getAsLong());
+      running.add(key(app, old));
+      status(old ? "Starting " + name + ": the first time, its code is unpacked from git history into out/then;"
+            + " that commit's run.ps1 compiles it."
+         : "Starting " + app.name + ": run.ps1 compiles it, then its window opens. You can start others meanwhile.");
       refresh();
       done.whenComplete((code, err) -> SwingUtilities.invokeLater(() -> {
-         running.remove(app.id);
-         if (err != null) status(app.name + " could not be watched: " + err.getMessage());
-         else if (code == 0) status(app.name + " closed. " + log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault()) + ".");
-         else status(app.name + " stopped with exit code " + code + ". The console that started the launcher says why.");
+         running.remove(key(app, old));
+         Throwable why = err != null && err.getCause() != null ? err.getCause() : err;
+         if (why != null) status(name + " could not be started: " + why.getMessage());
+         else if (code != 0) status(name + " stopped with exit code " + code + ". The console that started the launcher says why.");
+         else if (old) status(name + " closed. Switch to Now (Alt+N) to compare it with today's.");
+         else status(app.name + " closed. " + log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault()) + ".");
          refresh();
       }));
    }
@@ -366,8 +419,9 @@ public final class LauncherWindow extends JFrame {
       detail.show(selected);
    }
 
+   /** True while either version of the app runs. */
    boolean isRunning(String id) {
-      return running.contains(id);
+      return running.contains(id) || running.contains(id + " then");
    }
 
    // ---- the grid ------------------------------------------------------------------------------------------
@@ -487,8 +541,8 @@ public final class LauncherWindow extends JFrame {
          g2.fillRoundRect(6, 6, w - 12, ph, 12, 12);
          thumbs.draw(g2, app, 14, 12, w - 28, ph - 12);
          // badge on the picture
-         if (isRunning(app.id)) badge(g2, w, "RUNNING", Ui.GO);
-         else if (log.count(app.id) == 0) badge(g2, w, "NEW", Ui.ACCENT);
+         if (isRunning(app.id)) badge(g2, w, running.contains(app.id) ? "RUNNING" : "RUNNING THEN", Ui.GO);
+         else if (log.count(app.id) == 0 && !then) badge(g2, w, "NEW", Ui.ACCENT);
          // words
          g2.setFont(Ui.font(Font.BOLD, 15f));
          g2.setColor(Ui.TEXT);
@@ -496,8 +550,11 @@ public final class LauncherWindow extends JFrame {
          int x = 12 + Ui.chip(g2, 11, ph + 40, Ui.categoryName(app.category), Ui.category(app.category));
          if (app.pressesKeys()) Ui.chip(g2, x + 6, ph + 40, "Real keys", Ui.WARN);
          g2.setFont(Ui.font(Font.PLAIN, 12f));
-         g2.setColor(isRunning(app.id) ? Ui.GO : Ui.MUTED);
-         String line = isRunning(app.id) ? "Running now" : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
+         History.Story story = then ? history.of(app.id) : null;
+         g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : Ui.MUTED);
+         String line = isRunning(app.id) ? "Running now"
+            : story != null ? growth(story)
+            : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
          g2.drawString(fit(g2, line, w - 24), 12, h - 12);
          if (sel) {
             g2.setColor(Ui.ACCENT);
@@ -516,6 +573,11 @@ public final class LauncherWindow extends JFrame {
          g2.setColor(Color.WHITE);
          g2.drawString(text, w - bw - 5, 12 + (18 + fm.getAscent() - fm.getDescent()) / 2);
       }
+   }
+
+   /** "412 lines then, 1,877 now", or that its code has not changed. */
+   static String growth(History.Story s) {
+      return s.changed ? String.format("%,d lines then, %,d now", s.thenLines, s.nowLines) : "Same code as first restored";
    }
 
    private static String fit(Graphics2D g, String s, int w) {
@@ -538,10 +600,16 @@ public final class LauncherWindow extends JFrame {
             Graphics2D g2 = Ui.smooth(g);
             g2.setColor(new Color(0x12141a));
             g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
-            thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
+            History.Story s = then ? history.of(app.id) : null;
+            if (s != null) thenCard(g2, s, getWidth(), getHeight());
+            else thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
             g2.dispose();
          }
       };
+      private final Ui.FlatButton now = new Ui.FlatButton("Now", false);
+      private final Ui.FlatButton old = new Ui.FlatButton("Then: as first restored", false);
+      private final JPanel modes = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+      private final Ui.FlatButton changes = new Ui.FlatButton("History", false);
       private final JLabel name = new JLabel();
       private final JComponent tags = new JComponent() {
          @Override
@@ -588,17 +656,37 @@ public final class LauncherWindow extends JFrame {
          play.setPreferredSize(new Dimension(inner, 46));
          play.addActionListener(e -> play(app));
          readme.setMnemonic(KeyEvent.VK_R);
-         readme.addActionListener(e -> ReadmeView.show(LauncherWindow.this, app.name, root.resolve(app.id).resolve("README.md")));
+         readme.addActionListener(e -> {
+            History.Story s = then ? history.of(app.id) : null;
+            if (s != null) ReadmeView.showText(LauncherWindow.this, app.name + " README, as first restored", s.readme);
+            else ReadmeView.show(LauncherWindow.this, app.name, root.resolve(app.id).resolve("README.md"));
+         });
          folder.setMnemonic(KeyEvent.VK_F);
          folder.addActionListener(e -> openFolder(app));
+         changes.setMnemonic(KeyEvent.VK_H);
+         changes.setToolTipText("Every change to this app since it was first restored (Alt+H)");
+         changes.addActionListener(e -> showHistory(app));
          JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
          buttons.setOpaque(false);
          buttons.add(readme);
          buttons.add(Box.createHorizontalStrut(8));
          buttons.add(folder);
+         buttons.add(Box.createHorizontalStrut(8));
+         buttons.add(changes);
          buttons.setMaximumSize(new Dimension(inner, 40));
+         now.setMnemonic(KeyEvent.VK_N);
+         now.setToolTipText("Play today's version of each app (Alt+N)");
+         now.addActionListener(e -> setThen(false));
+         old.setMnemonic(KeyEvent.VK_T);
+         old.setToolTipText("Play each app as it was first restored, before the reworks, from git history (Alt+T)");
+         old.addActionListener(e -> setThen(true));
+         modes.setOpaque(false);
+         modes.add(now);
+         modes.add(Box.createHorizontalStrut(8));
+         modes.add(old);
+         modes.setMaximumSize(new Dimension(inner, 40));
 
-         for (JComponent c : new JComponent[] {picture, name, tags, hint, warning, record, play, buttons}) {
+         for (JComponent c : new JComponent[] {picture, name, tags, hint, warning, modes, record, play, buttons}) {
             c.setAlignmentX(Component.LEFT_ALIGNMENT);
          }
          add(picture);
@@ -612,6 +700,8 @@ public final class LauncherWindow extends JFrame {
          add(warning);
          add(Box.createVerticalStrut(10));
          add(Box.createVerticalGlue());
+         add(modes);
+         add(Box.createVerticalStrut(12));
          add(record);
          add(Box.createVerticalStrut(10));
          add(play);
@@ -631,17 +721,63 @@ public final class LauncherWindow extends JFrame {
          boolean some = a != null;
          for (Component c : getComponents()) c.setVisible(some);
          if (!some) return;
+         History.Story s = then ? history.of(a.id) : null;
+         boolean playsOld = playsThen(a);
+         String warn = playsOld ? s.warning : a.warning;
          name.setText(a.name);
-         hint.setText(a.hint);
-         warning.setVisible(a.warning != null);
-         if (a.warning != null) warning.setText("Heads up: " + a.warning);
-         boolean on = running.contains(a.id);
-         record.setText(on ? "Running now. Close its window to finish." : log.describe(a.id, clock.getAsLong(), ZoneId.systemDefault()));
-         play.setText(on ? "Running..." : "Play " + a.name);
+         hint.setText(s != null ? "As first restored: " + History.sentences(s.about, 2) : a.hint);
+         warning.setVisible(warn != null);
+         if (warn != null) warning.setText("Heads up: " + warn);
+         modes.setVisible(history.available());
+         changes.setVisible(history.of(a.id) != null);
+         now.setSelected(!then);
+         old.setSelected(then);
+         boolean on = running.contains(key(a, playsOld));
+         record.setForeground(s != null ? Ui.THEN : Ui.MUTED);
+         record.setText(on ? "Running now. Close its window to finish."
+            : s == null ? log.describe(a.id, clock.getAsLong(), ZoneId.systemDefault())
+            : !s.changed ? "Its code has not changed since: Play runs today's."
+            : changeCount(s) + " since then. History (Alt+H) lists them.");
+         play.setText(on ? "Running..." : playsOld ? "Play it as first restored" : "Play " + a.name);
          play.setEnabled(!on);
-         play.setFill(a.warning != null ? new Color(0xc9822a) : Ui.ACCENT);
+         play.setFill(warn != null ? new Color(0xc9822a) : playsOld ? Ui.THEN_FILL : Ui.ACCENT);
          revalidate();
          repaint();
+      }
+
+      /**
+       * In Then mode the picture well shows the app's then and now instead of today's screenshot: lines of Java
+       * when first restored and now, as two bars, and how many changes lie between.
+       */
+      private void thenCard(Graphics2D g2, History.Story s, int w, int h) {
+         int x = 18;
+         boolean roomy = h >= 170;   // the well shrinks first on a short window: then only the essentials
+         int y = roomy ? 34 : 24;
+         g2.setFont(Ui.font(Font.BOLD, 11f));
+         g2.setColor(Ui.THEN);
+         g2.drawString("LINES OF JAVA, FIRST RESTORED AND NOW", x, y);
+         g2.setFont(Ui.font(Font.BOLD, roomy ? 32f : 26f));
+         g2.setColor(Ui.TEXT);
+         String big = s.changed ? String.format("%,d  →  %,d", s.thenLines, s.nowLines) : String.format("%,d", s.nowLines);
+         y += roomy ? 42 : 32;
+         g2.drawString(big, x, y);
+         int bw = w - 2 * x - 44;
+         int max = Math.max(1, Math.max(s.thenLines, s.nowLines));
+         y += roomy ? 18 : 12;
+         bar(g2, "Then", s.thenLines, max, x, y, bw, Ui.THEN);
+         bar(g2, "Now", s.nowLines, max, x, y + 19, bw, Ui.ACCENT);
+         if (!roomy) return;
+         g2.setFont(Ui.font(Font.PLAIN, 12.5f));
+         g2.setColor(Ui.MUTED);
+         g2.drawString((s.changed ? changeCount(s) : "No code changes") + " since commit " + History.THEN.substring(0, 7),
+            x, y + 58);
+      }
+
+      private void bar(Graphics2D g2, String label, int lines, int max, int x, int y, int w, Color c) {
+         g2.setFont(Ui.font(Font.BOLD, 11.5f));
+         g2.setColor(c);
+         g2.drawString(label, x, y + 10);
+         g2.fillRoundRect(x + 44, y, Math.max(4, w * lines / max), 11, 11, 11);
       }
 
       /** Read-only text that wraps at the pane's inner width and is as tall as its lines. */
@@ -671,6 +807,32 @@ public final class LauncherWindow extends JFrame {
          t.setWrapStyleWord(true);
          return t;
       }
+   }
+
+   static String changeCount(History.Story s) {
+      int n = s.changes.size();
+      return n == 1 ? "1 change" : n + " changes";
+   }
+
+   /** Every commit that changed the app's folder since it was first restored, newest first, with dates. */
+   static String historyText(Catalog.App app, History.Story s, ZoneId zone) {
+      StringBuilder md = new StringBuilder("# " + app.name + ", then and now\n\n");
+      md.append(String.format("When first restored (commit `%s`) it had **%,d** lines of Java. Now it has **%,d**",
+         History.THEN.substring(0, 7), s.thenLines, s.nowLines));
+      md.append(s.changed ? ", after " + changeCount(s) + " to its folder.\n\n" : ": its code has not changed since.\n\n");
+      if (!s.changes.isEmpty()) md.append("## Changes since, newest first\n\n");
+      DateTimeFormatter day = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
+      for (History.Change c : s.changes) {
+         md.append("- **").append(Instant.ofEpochMilli(c.millis).atZone(zone).format(day)).append("**: ")
+            .append(c.subject).append('\n');
+      }
+      md.append("\n## As first restored\n\n").append(s.about).append('\n');
+      return md.toString();
+   }
+
+   private void showHistory(Catalog.App app) {
+      History.Story s = history.of(app.id);
+      if (s != null) ReadmeView.showText(this, app.name + " history", historyText(app, s, ZoneId.systemDefault()));
    }
 
    private void openFolder(Catalog.App app) {

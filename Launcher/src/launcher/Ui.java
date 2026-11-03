@@ -31,6 +31,8 @@ final class Ui {
    static final Color ACCENT = new Color(0x4f8cff);
    static final Color GO = new Color(0x34c47c);
    static final Color WARN = new Color(0xffb547);
+   static final Color THEN = new Color(0xd2aa7c);        // the first restored apps: old paper
+   static final Color THEN_FILL = new Color(0x8c6438);
 
    static final String FAMILY = "Segoe UI";
 

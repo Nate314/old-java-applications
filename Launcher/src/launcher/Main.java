@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
@@ -29,7 +30,15 @@ public final class Main {
             return;
          }
          PlayLog log = new PlayLog(Paths.get(System.getProperty("user.home"), ".oldjava-launcher.txt"));
-         LauncherWindow window = new LauncherWindow(apps, log, Runner.powerShell(shell, root), root, System::currentTimeMillis);
+         Git git = Git.in(root);
+         // Then: the apps as first restored, unpacked into out/then, with their own home folder for saves.
+         Runner then = Runner.then(shell, git, root.resolve("out/then"),
+            Paths.get(System.getProperty("user.home"), ".oldjava-then"));
+         LauncherWindow window = new LauncherWindow(apps, log, Runner.powerShell(shell, root), then, root,
+            System::currentTimeMillis);
+         List<String> ids = apps.stream().map(a -> a.id).collect(java.util.stream.Collectors.toList());
+         CompletableFuture.supplyAsync(() -> History.load(git, ids))
+            .thenAccept(h -> SwingUtilities.invokeLater(() -> window.setHistory(h)));
          try {
             window.setIconImage(ImageIO.read(root.resolve("web/site/icons/icon-192.png").toFile()));   // the site's icon
          } catch (IOException ignored) {
