@@ -3735,7 +3735,7 @@
       });
     }
 
-    var started = null;
+    var started = null, skipping = false;
     function go(e) {
       if (!started || screen.classList.contains('leaving')) return;
       if (e && e.type === 'keydown') {
@@ -3776,7 +3776,10 @@
         play.textContent = '▶ Play';
         if (!sourcePanel) play.focus({ preventScroll: true });   // keep the keyboard in an open source panel
         document.addEventListener('keydown', go, true);
-      }
+        if (skipping) go();
+      },
+      // Straight on, as if Play were pressed (now, or once the files are in).
+      skip: function () { if (started) go(); else skipping = true; }
     };
   }
 
@@ -4171,7 +4174,7 @@
     // shows only its own stamp; the home page shows any.
     if (!embedded) passport.onChange(function (id) { if (id && (!isApp || id === appId())) stampToast(id); });
     gamepads(isApp);
-    if (!embedded) clockFollows();
+    if (!embedded) whenShown(clockFollows);   // a prerendered page must not take the bell from the one in view
     if (!isApp) return;
     if (!embedded) sourceFromHash();
 
@@ -4206,6 +4209,16 @@
     // The player's iframe starts at once (the visitor's click on the home page started it).
     var watch = extras && watchWanted();
     var title = extras && !embedded && !watch && again !== appId() && typeof main === 'function' ? titleScreen(files) : null;
+    // Prerendered (instant open): the page had its own copy of sessionStorage until it is opened, so the shortcut is
+    // read again then, both to clear it (the copy's removal is gone) and because a link that skips the title screen
+    // (clockbar's Clock chip) may have set it with the click, after this page had loaded.
+    if (document.prerendering) document.addEventListener('prerenderingchange', function () {
+      try {
+        if (sessionStorage.getItem(AGAIN_KEY) !== appId()) return;
+        sessionStorage.removeItem(AGAIN_KEY);
+      } catch (e) { return; }
+      if (title) title.skip();
+    }, { once: true });
     var loading = !title && files.length ? overlay('Loading...') : null;
     var shell = body.hasAttribute('data-shell') ? pretendWindows() : null;
     window.__shimExited = function (msg) {
@@ -4235,7 +4248,7 @@
         overlay(programFile() + ' is missing. Build the site with Maven first (see web/README.md).');
         return;
       }
-      if (title) title.ready(start); else start();
+      if (title) title.ready(start); else whenShown(start);   // no app runs unseen in a prerendered page
     });
   });
 
@@ -4578,4 +4591,10 @@
     log.scrollTop = log.scrollHeight;
   }
   if (document.prerendering) document.addEventListener('prerenderingchange', headStart, { once: true });
+  // What has an effect beyond the page (a running app with its sounds, saves and replay recording, Clock's bell
+  // and its open beat) waits until a prerendered page is opened; a page that is never opened leaves no trace.
+  function whenShown(fn) {
+    if (document.prerendering) document.addEventListener('prerenderingchange', function () { fn(); }, { once: true });
+    else fn();
+  }
 })();
