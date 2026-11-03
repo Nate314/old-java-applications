@@ -379,6 +379,10 @@
                                      white-space: nowrap; }
     :root[data-skin="arcade"] .arcade-tabs .badge.new { background: #ffe14d; color: #170a2e; }
     :root[data-skin="arcade"] .arcade-tabs [role="tab"][aria-selected="true"] { box-shadow: inset 0 3px 0 var(--accent), 0 -4px 14px rgba(255, 43, 214, 0.25); }
+    /* The story (story.html): HISTORY.md told with the real code and the apps. */
+    p.story-link { margin: -12px 0 20px; font-size: 14px; }
+    p.story-link a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    p.story-link a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -387,6 +391,7 @@
   <p class="lead">Java Swing and AWT programs recovered from old jars<span class="tech">, compiled to JavaScript with TeaVM.
     Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page</span>.
     One is already running below: pick any other to swap it in.</p>
+  <p class="story-link"><a href="story.html">How twenty old programs came back: read the story, with the real code &rarr;</a></p>
   <p class="offline-banner" id="offline-banner" role="status" hidden></p>
 
   <section class="player" id="player" aria-label="Now playing">
@@ -1064,6 +1069,7 @@
       var files = ['./', 'index.html', 'boot.js', 'qr.js', 'saves.js', 'news.js', 'clockbar.js', 'find.js', 'history.txt', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
                    'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
       files.push('skinmaker.js');   // Your skin's maker panel (boot.js adds it when it opens)
+      files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv');   // the story page and what it shows
       cards.forEach(function (li) { files.push(li.querySelector('img').getAttribute('src')); });
       return files.map(abs);
     }
