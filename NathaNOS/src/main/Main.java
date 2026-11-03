@@ -25,6 +25,7 @@ public class Main extends JFrame {
    public StartMenu startMenu;
    DesktopMenu desktopMenu;
    DesktopSettings settings = new DesktopSettings();
+   Pictures pictures;
    Wallpaper wallpaper = Wallpaper.byId(Wallpaper.DEFAULT);
 
    public Main(Boolean visibility) {
@@ -39,7 +40,16 @@ public class Main extends JFrame {
       this.add(this.desktopPane);
       // Read only now: in the browser, saved files come back once the app's first window exists.
       this.settings = DesktopSettings.load(DesktopSettings.FILE);
-      this.wallpaper = Wallpaper.byId(this.settings.wallpaper);
+      this.pictures = Pictures.load(Pictures.FILE);
+      this.wallpaper = this.findWallpaper(this.settings.wallpaper);
+      // A Paint picture on the wallpaper changes with each stroke, and the photo comes back if it is deleted.
+      this.pictures.onChange(() -> {
+         if (this.wallpaper.picture != null && !this.pictures.contains(this.wallpaper.picture)) {
+            this.setWallpaper(Wallpaper.byId(Wallpaper.DEFAULT));
+         } else if (this.wallpaper.picture != null) {
+            this.desktopPane.repaint();
+         }
+      });
       TaskList tasks = new TaskList(this);
       Launcher launcher = new Launcher(this, tasks);
       this.launcherWindow = new LauncherWindow(this, tasks);
@@ -49,6 +59,16 @@ public class Main extends JFrame {
       this.desktopPane.add(this.startMenu, JLayeredPane.POPUP_LAYER);
       this.desktopMenu = new DesktopMenu(this, new DesktopShortcuts(this, launcher));
       this.desktopPane.add(this.desktopMenu, JLayeredPane.POPUP_LAYER);
+   }
+
+   /** The wallpaper the id names (a scene, or a Paint picture still on the desktop), else the original photo. */
+   private Wallpaper findWallpaper(String id) {
+      Wallpaper wallpaper = Wallpaper.byId(id);
+      if (wallpaper == null && id.startsWith(Wallpaper.PICTURE)) {
+         Picture picture = this.pictures.find(id.substring(Wallpaper.PICTURE.length()));
+         wallpaper = picture == null ? null : Wallpaper.of(picture);
+      }
+      return wallpaper != null ? wallpaper : Wallpaper.byId(Wallpaper.DEFAULT);
    }
 
    void setWallpaper(Wallpaper wallpaper) {

@@ -9,10 +9,14 @@ import java.util.Random;
 
 /**
  * The desktop backgrounds: the original photo (assets/background.jpg) and four painted scenes. A painted one is drawn
- * once into an image the size of the screen and then copied on every repaint.
+ * once into an image the size of the screen and then copied on every repaint. A picture painted in Paint can be the
+ * wallpaper too: its fat pixels stretched to cover the screen (cut at the edges that do not fit), redrawn after it
+ * changes.
  */
 final class Wallpaper {
    static final String DEFAULT = "photo";
+   /** A Paint picture's wallpaper id is this followed by the picture's name. */
+   static final String PICTURE = "picture:";
    static final Wallpaper[] ALL = {
       new Wallpaper("photo", "Original photo"),
       new Wallpaper("night", "Night sky"),
@@ -23,12 +27,24 @@ final class Wallpaper {
 
    final String id;
    final String name;
+   /** The Paint picture this wallpaper shows, or null for the photo and the painted scenes. */
+   final Picture picture;
    private BufferedImage painted;
+   private int paintedVersion;
    private BufferedImage swatch;
 
    private Wallpaper(String id, String name) {
+      this(id, name, null);
+   }
+
+   private Wallpaper(String id, String name, Picture picture) {
       this.id = id;
       this.name = name;
+      this.picture = picture;
+   }
+
+   static Wallpaper of(Picture picture) {
+      return new Wallpaper(PICTURE + picture.name, picture.name, picture);
    }
 
    static Wallpaper byId(String id) {
@@ -45,6 +61,10 @@ final class Wallpaper {
       if (this.id.equals("photo")) {
          g.drawImage(photo, 0, 0, w, h, observer);
          return;
+      }
+      if (this.picture != null && this.paintedVersion != this.picture.version()) {
+         this.painted = null; // the picture changed since it was last stretched over the screen
+         this.paintedVersion = this.picture.version();
       }
       this.painted = this.scene(this.painted, w, h);
       g.drawImage(this.painted, 0, 0, observer);
@@ -69,6 +89,12 @@ final class Wallpaper {
       }
       BufferedImage image = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_RGB);
       Graphics g = image.createGraphics();
+      if (this.picture != null) {
+         double scale = Math.max(w / (double)Picture.WIDTH, h / (double)Picture.HEIGHT);
+         this.picture.paint(g, (w - Picture.WIDTH * scale) / 2, (h - Picture.HEIGHT * scale) / 2, scale, scale);
+         g.dispose();
+         return image;
+      }
       AppIcon.smooth(g);
       this.paintScene(g, w, h);
       g.dispose();

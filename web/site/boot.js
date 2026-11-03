@@ -3400,13 +3400,16 @@
       }
       return line;
     } },
-    // The desktop as it was left: its wallpaper (main.Wallpaper) and whether its icons were arranged by hand.
+    // The desktop as it was left: its wallpaper (main.Wallpaper, "picture:<name>" for a Paint picture) and whether its
+    // icons were arranged by hand.
     NathaNOS: { file: '.nathanos.txt', show: function (text) {
       var names = { photo: 'the original photo', night: 'Night sky', sunset: 'Sunset hills', ocean: 'Deep ocean', aurora: 'Aurora' };
-      var wall = /^wallpaper=(\w+)$/m.exec(text);
+      var wall = /^wallpaper=(.+)$/m.exec(text);
       var moved = /^icon=/m.test(text);
       if (!wall || (wall[1] === 'photo' && !moved)) return '';
-      return 'Your desktop: ' + (names[wall[1]] || 'the original photo') + ' wallpaper' + (moved ? ', icons arranged by hand' : '');
+      var painted = /^picture:(.+)$/.exec(wall[1]);
+      return 'Your desktop: ' + (painted ? 'your painting ' + painted[1] + ' as the' : (names[wall[1]] || 'the original photo'))
+        + ' wallpaper' + (moved ? ', icons arranged by hand' : '');
     } },
     // The saver it was left on, in the order of the app's list (screensaver.Main), and whether it cycles.
     ScreenSaver: { file: '.screensaver.txt', show: function (text) {

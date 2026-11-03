@@ -3,43 +3,71 @@ package main;
 import java.awt.Image;
 import java.beans.PropertyVetoException;
 import java.lang.reflect.Constructor;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 
-/** The apps in assets/ and how to start them; the desktop icons, start menu and taskbar all launch through it. */
+/**
+ * The apps in assets/ and how to start them, plus NathaNOS's own Paint (in its alphabetical place); the desktop icons,
+ * start menu and taskbar all launch through it.
+ */
 final class Launcher {
+   static final String PAINT = "Paint";
    private final Main screen;
    private final TaskList tasks;
    private final FileGatherer fileGatherer = new FileGatherer();
-   private final Class<?>[] applications;
-   private final Image[] icons;
+   private final List<String> names = new ArrayList<>();
+   /** Each app's Main-Class (null for Paint, or for a jar that failed to load). */
+   private final List<Class<?>> applications = new ArrayList<>();
+   private final List<Image> icons = new ArrayList<>();
+   private final int paint;
 
    Launcher(Main screen, TaskList tasks) {
       this.screen = screen;
       this.tasks = tasks;
-      this.applications = this.fileGatherer.getAllJFrameClasses();
-      this.icons = new Image[this.count()];
-      for (int i = 0; i < this.icons.length; i++) {
+      Class<?>[] mains = this.fileGatherer.getAllJFrameClasses();
+      List<String> jarNames = this.fileGatherer.applicationNames;
+      for (int i = 0; i < jarNames.size(); i++) {
          String path = this.fileGatherer.iconPaths.get(i);
-         this.icons[i] = path == null ? null : new ImageIcon(path).getImage();
+         this.names.add(jarNames.get(i));
+         this.applications.add(mains[i]);
+         this.icons.add(path == null ? null : new ImageIcon(path).getImage());
       }
+      int at = 0;
+      while (at < this.names.size() && this.names.get(at).compareToIgnoreCase(PAINT) < 0) {
+         at++;
+      }
+      this.paint = at;
+      this.names.add(at, PAINT);
+      this.applications.add(at, null);
+      this.icons.add(at, PaintWindow.icon());
    }
 
    int count() {
-      return this.fileGatherer.applicationNames.size();
+      return this.names.size();
    }
 
    String name(int app) {
-      return this.fileGatherer.applicationNames.get(app);
+      return this.names.get(app);
    }
 
    /** The app's icon file, or null when it has none (AppIcon then draws a tile). */
    Image icon(int app) {
-      return this.icons[app];
+      return this.icons.get(app);
+   }
+
+   /** Opens a picture from the desktop in a Paint window of its own. */
+   void openPicture(Picture picture) {
+      PaintWindow.open(this.screen, this.tasks, picture, this.icon(this.paint));
    }
 
    void launch(int app) {
-      Class<?> main = this.applications[app];
+      if (app == this.paint) {
+         PaintWindow.open(this.screen, this.tasks, null, this.icon(app));
+         return;
+      }
+      Class<?> main = this.applications.get(app);
       String name = this.name(app);
       if (main == null) {
          System.err.println(name + " could not be loaded.");

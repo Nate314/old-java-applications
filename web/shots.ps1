@@ -37,11 +37,16 @@ $SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Dele
     (@(@('z', 90), @('c', 67), @('b', 66), @('c', 67), @('z', 90), @('c', 67), @('b', 66), @(',', 188)) | ForEach-Object { (SynthHold $_[0] $_[1] 450), 'wait:625' }) +
     @('wait:400', 'key:ArrowLeft', 'key:Space', 'wait:2300') +
     (@(@('z', 90), @('b', 66), @('v', 86), @('c', 67)) | ForEach-Object { (SynthHold $_[0] $_[1] 1100), 'wait:1250' })
+# NathaNOS: a sunset picture saved as if painted in its Paint and made the wallpaper (written into the page's saves,
+# then the page reloads), then opened from its desktop icon (the 19th icon: column 4, row 4 at 960 x 600).
+$NathaNOSPicture = "js:(function () { var W = 200, H = 125, p = [], x, y, c, s = '', i = 0, j; for (y = 0; y < H; y++) for (x = 0; x < W; x++) { c = y < 20 ? 14 : y < 38 ? 15 : y < 55 ? 11 : y < 70 ? 4 : 12; if (y < 34 && (x * 7 + y * 13) % 89 == 0) c = 8; if ((x - 100) * (x - 100) + (y - 78) * (y - 78) < 500 && !(y > 74 && y % 5 == 0)) c = 5; if (y > 84 + 7 * Math.sin(x / 17)) c = 2; if (y > 100 + 6 * Math.sin(x / 11 + 1)) c = 0; p.push(c); } while (i < p.length) { j = i; while (j < p.length && p[j] == p[i]) j++; s += String.fromCharCode(65 + p[i]) + (j - i > 1 ? (j - i).toString(36) : ''); i = j; } localStorage.setItem('oldjava.saves.NathaNOS', JSON.stringify({ '/.nathanos-pictures.txt': 'picture=Sunset:' + s + '\n', '/.nathanos.txt': 'wallpaper=picture:Sunset\n' })); location.reload(); })()"
+# A double click there (cdp.ps1's clicks are single: the shim reads a mouse click's count from its detail).
+$NathaNOSOpen = "js:(function (x, y) { var t = document.elementFromPoint(x, y); [1, 2].forEach(function (n) { ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: n, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }); })(348, 318)"
 $Recipes = [ordered]@{
     Clock               = @{ Steps = @('wait:800', 'key:F', 'wait:300', 'key:Space', 'wait:2500') }
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', 'wait:500', 'key:Space', 'wait:450', 'key:Space', 'wait:350') }
     Minesweeper         = @{ Steps = @('wait:800', 'key:W', 'wait:2200') }
-    NathaNOS            = @{ Steps = @('wait:2500') }
+    NathaNOS            = @{ Steps = @('wait:1500', $NathaNOSPicture, 'wait:5000', $NathaNOSOpen, 'wait:1500') }
     RubiksCube2D        = @{ Steps = @('wait:1500', (Click '^Mix$'), 'wait:1500', 'key:T', 'wait:600') + (Repeat 19 @($CoachTurn, 'wait:120')) + @('wait:1500') }
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:7000', 'key:F', 'wait:1800') }
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Click 'Star Catcher'), 'wait:800', 'key:1', 'wait:2500') }
