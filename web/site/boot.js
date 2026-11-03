@@ -3381,8 +3381,13 @@
       var marks = /^marks=(.*)$/m.exec(text);
       var count = function (m) { return m ? m[1].split(',').filter(function (r) { return r.trim(); }).length : 0; };
       var n = count(read), h = count(marks);
+      // By heart: learn.<verse>=<translation>|<box>|<next review, yyyy-mm-dd>|<text>; box 0 is still being learned.
+      var cards = text.match(/^learn\.\S+?=\w+\|\d+\|[\d-]+\|/mg) || [];
+      var now = new Date(), today = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2) + '-' + ('0' + now.getDate()).slice(-2);
+      var due = cards.filter(function (c) { var p = c.split('=')[1].split('|'); return p[1] === '0' || p[2] <= today; }).length;
       return 'Your Bible: open at ' + place[1].trim() + ', ' + n + ' of 1,189 chapters read'
-        + (h ? ', ' + h + (h === 1 ? ' highlight' : ' highlights') : '') + biblePlan(text, count);
+        + (h ? ', ' + h + (h === 1 ? ' highlight' : ' highlights') : '') + biblePlan(text, count)
+        + (cards.length ? '; by heart: ' + cards.length + (cards.length === 1 ? ' verse' : ' verses') + (due ? ', ' + due + ' to practice today' : '') : '');
     } },
     // The practice desk: the day it is on, the net worth at the last closing bell against the $10,000 start, and the rivals.
     StockChecker: { file: '.stockchecker-desk.txt', show: function (text) {

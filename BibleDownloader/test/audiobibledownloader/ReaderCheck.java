@@ -148,6 +148,82 @@ public class ReaderCheck {
       check(Shelf.load(planFile).plan == null, "stopped plan");
       planFile.delete();
 
+      // By heart: a drill asks the first letter of each word; dashes are never asked; two wrong letters give the word.
+      int jhn = Books.find("JHN");
+      Memory.Card john = new Memory.Card(jhn, 3, 16, "web", "For God so loved — the “world,” 3 times", 0, 100);
+      Memory.Drill read = new Memory.Drill(john, Memory.Drill.READ);
+      check(read.done() && read.askedCount() == 0 && read.words.length == 9, "reading asks nothing");
+      Memory.Drill half = new Memory.Drill(john, Memory.Drill.HALF);
+      check(half.askedCount() == 4 && !half.isAsked(0) && half.isAsked(1) && !half.isAsked(4) && half.isAsked(6), "every other word: the 2nd, 4th...");
+      check(half.at() == 1 && half.type('g') == Memory.Drill.RIGHT && half.at() == 3, "right letter moves on");
+      check(half.type('x') == Memory.Drill.WRONG && half.at() == 3 && half.slips() == 0, "one wrong letter waits");
+      check(half.type('q') == Memory.Drill.GIVEN && half.isShown(3) && half.isSlipped(3) && half.slips() == 1, "two wrong letters give the word");
+      check(half.type('W') == Memory.Drill.RIGHT && half.at() == 8, "quotes skipped, case ignored");
+      check(half.type('-') == Memory.Drill.IGNORED, "punctuation ignored");
+      half.give();
+      check(half.done() && half.slips() == 2 && !half.passed(), "show word slips; too many slips");
+      Memory.Drill memo = new Memory.Drill(john, Memory.Drill.MEMORY);
+      check(memo.askedCount() == 8 && !memo.isAsked(4) && memo.allowed() == 1, "from memory asks every word");
+      for (char c : "fgsltw".toCharArray()) {
+         check(memo.type(c) == Memory.Drill.RIGHT, "typed " + c);
+      }
+      check(memo.at() == 7 && !memo.done(), "at the number");
+      check(memo.type('3') == Memory.Drill.RIGHT && memo.at() == 8, "a number is asked by its first digit");
+      memo.give();
+      check(memo.done() && memo.slips() == 1 && memo.passed(), "one slip passes");
+      Memory.Drill letters = new Memory.Drill(john, Memory.Drill.LETTERS);
+      check(letters.showsLetter(0) && !new Memory.Drill(john, Memory.Drill.MEMORY).showsLetter(0), "first letters shown only in that stage");
+      for (int i = 0; i < 8 && !letters.done(); i++) {
+         char[] three = letters.choices();
+         check(three.length == 3 && three[0] != three[1] && three[1] != three[2] && three[0] != three[2], "three different choices");
+         boolean has = false;
+         for (char c : three) {
+            has |= c == Memory.Drill.keyOf(letters.words[letters.at()]);
+         }
+         check(has, "the right letter is offered");
+         letters.type(Memory.Drill.keyOf(letters.words[letters.at()]));
+      }
+      check(letters.done() && letters.slips() == 0, "letters run done");
+      // The schedule: learning stays due until passed; passing doubles the gap; a slip on review goes back to box 1.
+      check(john.isDue(100) && john.status(100).equals("Learning"), "learning is due");
+      check(!Memory.grade(new Memory.Card(jhn, 3, 17, "web", "x", 2, 105), true, 100), "not due: schedule stays");
+      check(Memory.grade(john, false, 100) && john.box == 0 && john.due == 100, "slip while learning keeps learning");
+      check(Memory.grade(john, true, 100) && john.box == 1 && john.due == 101 && john.status(100).equals("Next review tomorrow"), "learned");
+      check(!Memory.grade(john, true, 100) && john.box == 1, "a second run the same day does not count");
+      check(Memory.grade(john, true, 101) && john.box == 2 && john.due == 103, "two days");
+      check(Memory.grade(john, true, 104) && john.box == 3 && john.due == 108 && john.status(104).equals("Next review in 4 days"), "four days");
+      check(john.status(110).startsWith("Review due since"), "overdue");
+      check(Memory.grade(john, false, 110) && john.box == 1 && john.due == 111, "slip on review: back to tomorrow");
+      john.box = Memory.GAPS.length;
+      john.due = 110;
+      check(Memory.grade(john, true, 110) && john.box == Memory.GAPS.length && john.due == 110 + 64, "top box stays");
+      // The list: Bible order, due counts, next due wraps; the shelf keeps the verses with their text across a reload.
+      File learnFile = File.createTempFile("bibleheart", ".txt");
+      Shelf heart = Shelf.load(learnFile);
+      heart.memory.put(new Memory.Card(jhn, 3, 16, "kjv", "For God so loved | the world", 2, Plan.today() + 2));
+      heart.memory.put(new Memory.Card(Books.find("GEN"), 1, 1, "web", "In the beginning, God created the heavens and the earth.", 0, Plan.today()));
+      heart.memory.put(new Memory.Card(Books.find("PSA"), 23, 1, "web", "Yahweh is my shepherd: I shall lack nothing.", 1, Plan.today()));
+      check(heart.memory.cards().get(0).book == Books.find("GEN") && heart.memory.size() == 3, "Bible order");
+      check(heart.memory.dueCount(Plan.today()) == 2 && heart.memory.learnedCount() == 2, "due and learned counts");
+      Memory.Card psalm = heart.memory.find(Books.find("PSA"), 23, 1);
+      check(heart.memory.nextDue(psalm, Plan.today()).book == Books.find("GEN"), "next due wraps round");
+      heart.save();
+      Shelf heart2 = Shelf.load(learnFile);
+      Memory.Card back = heart2.memory.find(jhn, 3, 16);
+      check(heart2.memory.size() == 3 && back != null && back.text.equals("For God so loved | the world") && back.translation.equals("kjv")
+         && back.box == 2 && back.due == Plan.today() + 2, "verses kept with their text");
+      java.nio.file.Files.write(learnFile.toPath(), ("learn.JHN.3.16=web|1|2026-11-02|Text\nlearn.ZZZ.1.1=web|1|2026-11-02|x\nlearn.JHN.3=web|1|2026-11-02|x\n"
+         + "learn.JHN.3.17=web|9|2026-11-02|x\nlearn.JHN.3.18=xyz|1|2026-11-02|x\nlearn.JHN.3.19=web|1|2026-11-02|\n").getBytes("UTF-8"));
+      check(Shelf.load(learnFile).memory.size() == 1, "damaged verse lines skipped");
+      learnFile.delete();
+      Shelf marked = Shelf.load(File.createTempFile("biblemarks", ".txt"));
+      marked.toggleMark(Books.find("ACT"), 2, 1);
+      marked.toggleMark(Books.find("1CO"), 13, 4);
+      marked.toggleMark(Books.find("ACT"), 1, 8);
+      check(marked.marks().get(0)[0] == Books.find("ACT") && marked.marks().get(0)[1] == 1 && marked.marks().get(2)[0] == Books.find("1CO"), "highlights in Bible order");
+      int[][] laid = LearnView.layout(body, "a bb ccc dddd eeeee".split(" "), body.stringWidth("a bb ccc"));
+      check(laid[0][1] == 0 && laid[2][1] == 0 && laid[3][1] == 1 && laid[3][0] == 0, "verse word wrap");
+
       // Saved pages escape the text and name files as the original app did.
       check(DownloadManager.stem(Books.find("1JN")).equals("1John"), "file stem");
       String html = DownloadManager.chapterHtml(new Chapter(0, 1, "web", new int[]{1}, new String[]{"a < b & c"}), true);
