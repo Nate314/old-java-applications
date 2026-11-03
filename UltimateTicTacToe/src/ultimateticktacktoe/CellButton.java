@@ -2,6 +2,8 @@ package ultimateticktacktoe;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -80,6 +82,10 @@ public final class CellButton extends JButton implements ActionListener {
 
    /** The arrow keys move across the whole 9 x 9 grid; Enter plays, like Space. */
    private void keyPressed(KeyEvent event) {
+      if (this.game.reviewKey(event.getKeyCode())) {
+         event.consume();   // R, and the review's keys while one is open
+         return;
+      }
       int row = this.boardIndex / 3 * 3 + this.cellIndex / 3;
       int column = this.boardIndex % 3 * 3 + this.cellIndex % 3;
       switch (event.getKeyCode()) {
@@ -160,6 +166,27 @@ public final class CellButton extends JButton implements ActionListener {
             progress(now, this.game.placedAt[this.move()], MARK_MS), alpha);
       } else if (this.game.previewMove() == this.move()) {
          this.paintMark(g, state.xTurn ? "X" : "O", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 90);
+      } else if (this.game.reviewBetter() == this.move()) {
+         // Review: where the search would have played instead, a faint mark of the side that moved in a gold ring.
+         this.paintMark(g, state.xTurn ? "O" : "X", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 110);
+         g.setColor(GOLD);
+         g.setStroke(new BasicStroke(Math.max(2f, w / 16f)));
+         g.drawRoundRect(pad, pad, w - 2 * pad - 1, h - 2 * pad - 1, arc, arc);
+      }
+      Review.Grade grade = last ? this.game.reviewGrade() : null;
+      if (grade != null && grade != Review.Grade.GOOD) {
+         // Review: the move's grade as a badge in the tile's corner ("!" best, "?!" inaccuracy, "?" mistake, "??" blunder).
+         int d = Math.max(12, w / 3);
+         int x = w - d - pad / 2;
+         int y = pad / 2;
+         g.setColor(BACKGROUND);
+         g.fillOval(x - 1, y - 1, d + 2, d + 2);
+         g.setColor(ReviewGraph.color(grade));
+         g.fillOval(x, y, d, d);
+         g.setColor(BACKGROUND);
+         g.setFont(new Font("Dialog", Font.BOLD, Math.max(9, d * 3 / 5)));
+         FontMetrics metrics = g.getFontMetrics();
+         g.drawString(grade.sign, x + (d - metrics.stringWidth(grade.sign)) / 2, y + (d + metrics.getAscent() - metrics.getDescent()) / 2);
       }
 
       // Board-wide shapes, in the board's coordinates.
