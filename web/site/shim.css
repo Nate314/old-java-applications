@@ -4641,3 +4641,176 @@ html[data-saver] * {
     animation: none;
   }
 }
+
+/* ---- Put it on your site (embed.js): the Share panel's builder for the embeddable player, play.html ---- */
+.shim-embed {
+  border-top: 1px solid var(--card-border);
+  padding-top: 10px;
+}
+
+.shim-embed summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.shim-embed summary::-webkit-details-marker {
+  display: none;
+}
+
+.shim-embed summary::after {
+  content: "▸";
+  margin-left: auto;
+  opacity: 0.6;
+  transition: transform 0.15s ease;
+}
+
+.shim-embed[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.shim-embed summary span {
+  color: var(--accent);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+}
+
+.shim-embed summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-embed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.shim-embed-intro {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.shim-embed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+}
+
+.shim-embed-pick,
+.shim-embed-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.shim-embed-pick,
+.shim-embed-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shim-embed-pick select {
+  padding: 5px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: inherit;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-embed-choice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shim-embed-choice button {
+  padding: 5px 12px;
+  border: 0;
+  border-left: 1px solid var(--card-border);
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+.shim-embed-choice button:first-child {
+  border-left: 0;
+}
+
+.shim-embed-choice button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.shim-embed-choice button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.shim-embed-choice button:focus-visible,
+.shim-embed-pick select:focus-visible,
+.shim-embed-code:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.shim-embed-view {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0f172a;
+}
+
+.shim-embed-view iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  transform-origin: 0 0;
+}
+
+.shim-embed-code {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  resize: vertical;
+}
+
+:root[data-skin="classic"] .shim-embed-choice,
+:root[data-skin="classic"] .shim-embed-pick select,
+:root[data-skin="classic"] .shim-embed-view,
+:root[data-skin="classic"] .shim-embed-code {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-embed summary span {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-embed-view {
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.5), 0 0 18px rgba(255, 43, 214, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-embed summary::after {
+    transition: none;
+  }
+}
