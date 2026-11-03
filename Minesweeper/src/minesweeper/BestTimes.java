@@ -8,13 +8,15 @@ import java.io.IOException;
 import java.io.Writer;
 
 /**
- * The fastest win on each level and the level played last, kept in a small text file of {@code name=value} lines:
- * {@code level=CLASSIC}, then one line such as {@code BEGINNER=42317} (milliseconds) per level that has been won.
+ * The fastest win on each level, the level played last and whether boards are dealt with no guessing, kept in a small
+ * text file of {@code name=value} lines: {@code level=CLASSIC}, {@code noguess=on}, then one line such as
+ * {@code BEGINNER=42317} (milliseconds) per level that has been won.
  */
 public final class BestTimes {
    private final File file;
    private final long[] best = new long[Level.values().length];
    private Level lastLevel = Level.CLASSIC;
+   private boolean noGuess = true;
 
    private BestTimes(File file) {
       this.file = file;
@@ -40,6 +42,8 @@ public final class BestTimes {
       try {
          if (name.equals("level")) {
             this.lastLevel = Level.valueOf(value);
+         } else if (name.equals("noguess")) {
+            this.noGuess = !value.equals("off");
          } else {
             long millis = Long.parseLong(value);
             if (millis > 0) {
@@ -67,6 +71,18 @@ public final class BestTimes {
       }
    }
 
+   /** True (the default) when every board is dealt so that it can be cleared without a guess (see {@link FairBoard}). */
+   public boolean noGuess() {
+      return this.noGuess;
+   }
+
+   public void setNoGuess(boolean on) {
+      if (this.noGuess != on) {
+         this.noGuess = on;
+         this.save();
+      }
+   }
+
    /** Records a win; returns true (and saves) when it beats the best time on that level. */
    public boolean record(Level level, long millis) {
       long before = this.best(level);
@@ -81,6 +97,7 @@ public final class BestTimes {
    private void save() {
       try (Writer writer = new FileWriter(this.file)) {
          writer.write("level=" + this.lastLevel.name() + "\n");
+         writer.write("noguess=" + (this.noGuess ? "on" : "off") + "\n");
          for (Level level : Level.values()) {
             if (this.best(level) > 0) {
                writer.write(level.name() + "=" + this.best(level) + "\n");
