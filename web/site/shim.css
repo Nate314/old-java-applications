@@ -3970,3 +3970,125 @@ html[data-saver] * {
     animation: none;
   }
 }
+
+/* ---- one machine: page-to-page transitions (the trip code at the end of boot.js says what kind of trip) ----
+   Every page of the site opts in to the browser's cross-document view transitions, except with reduced motion.
+   The app pages' toolbar band is its own layer, so it stays put while the stage under it changes; the element
+   named oldjava-hero (a clicked thumbnail, the home page's player, an app's title card) grows into its place on
+   the next page. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+:root {
+  --trip-ms: 420ms;
+}
+
+:root[data-skin="classic"] {
+  --trip-ms: 220ms;
+}
+
+:root[data-stage] .shim-toolbar {
+  view-transition-name: oldjava-band;
+}
+
+::view-transition-group(*) {
+  animation-duration: var(--trip-ms);
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-old(root) {
+  animation: var(--trip-ms) ease both oldjava-trip-out;
+}
+
+::view-transition-new(root) {
+  animation: var(--trip-ms) ease both oldjava-trip-in;
+}
+
+/* Next and Previous slide the stage sideways under the band. */
+:root:active-view-transition-type(forward)::view-transition-old(root) {
+  animation-name: oldjava-trip-left-out;
+}
+
+:root:active-view-transition-type(forward)::view-transition-new(root) {
+  animation-name: oldjava-trip-left-in;
+}
+
+:root:active-view-transition-type(back)::view-transition-old(root) {
+  animation-name: oldjava-trip-right-out;
+}
+
+:root:active-view-transition-type(back)::view-transition-new(root) {
+  animation-name: oldjava-trip-right-in;
+}
+
+/* Then and Now pass through an old photograph's sepia. */
+:root:active-view-transition-type(era)::view-transition-old(root) {
+  animation: calc(var(--trip-ms) * 1.5) ease both oldjava-trip-sepia-out;
+}
+
+:root:active-view-transition-type(era)::view-transition-new(root) {
+  animation: calc(var(--trip-ms) * 1.5) ease both oldjava-trip-sepia-in;
+}
+
+@keyframes oldjava-trip-out {
+  to { opacity: 0; transform: scale(0.97); }
+}
+
+@keyframes oldjava-trip-in {
+  from { opacity: 0; transform: scale(1.03); }
+}
+
+@keyframes oldjava-trip-left-out {
+  to { opacity: 0; transform: translateX(-14%); }
+}
+
+@keyframes oldjava-trip-left-in {
+  from { opacity: 0; transform: translateX(14%); }
+}
+
+@keyframes oldjava-trip-right-out {
+  to { opacity: 0; transform: translateX(14%); }
+}
+
+@keyframes oldjava-trip-right-in {
+  from { opacity: 0; transform: translateX(-14%); }
+}
+
+@keyframes oldjava-trip-sepia-out {
+  60% { opacity: 1; filter: sepia(1) contrast(0.85) brightness(1.08); }
+  to { opacity: 0; filter: sepia(1) contrast(0.85) brightness(1.08); }
+}
+
+@keyframes oldjava-trip-sepia-in {
+  from { opacity: 0; filter: sepia(1) contrast(0.85) brightness(1.08); }
+  40% { opacity: 0; filter: sepia(1) contrast(0.85) brightness(1.08); }
+}
+
+/* Arcade: every trip is a CRT changing channel. The old picture collapses into a bright line and goes dark, the
+   new one opens out of it (the skin's power-on, as a page change), and the band, the cabinet's marquee, stays lit. */
+:root[data-skin="arcade"]::view-transition {
+  background: #07020f;
+}
+
+:root[data-skin="arcade"]::view-transition-old(root) {
+  animation: 240ms cubic-bezier(0.6, 0, 1, 1) both oldjava-crt-off;
+}
+
+:root[data-skin="arcade"]::view-transition-new(root) {
+  animation: 320ms 220ms cubic-bezier(0, 0, 0.2, 1) both oldjava-crt-on;
+}
+
+@keyframes oldjava-crt-off {
+  60% { opacity: 1; transform: scale(1, 0.012); filter: brightness(3); }
+  to { opacity: 0; transform: scale(0, 0.004); filter: brightness(6); }
+}
+
+@keyframes oldjava-crt-on {
+  from { opacity: 0; transform: scale(0, 0.004); filter: brightness(6); }
+  10% { opacity: 1; }
+  40% { transform: scale(1, 0.012); filter: brightness(3); }
+  to { transform: none; filter: none; }
+}
