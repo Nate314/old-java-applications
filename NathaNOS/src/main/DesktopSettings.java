@@ -14,7 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The desktop as the user left it, in ~/.nathanos.txt: the wallpaper ("wallpaper=sunset") and, once the icons have
+ * The desktop as the user left it, in ~/.nathanos.txt: the wallpaper ("wallpaper=sunset", or
+ * "wallpaper=picture:Picture 2" for a Paint picture) and, once the icons have
  * been moved by hand, each icon's cell ("icon=Minesweeper,2,0" for column 2, row 0). A missing file or a damaged line
  * leaves the defaults.
  */
@@ -38,7 +39,8 @@ final class DesktopSettings {
          try {
             if (line.startsWith("wallpaper=")) {
                String id = line.substring("wallpaper=".length()).trim();
-               if (Wallpaper.byId(id) != null) {
+               // A Paint picture's id is kept too; Main falls back to the photo if that picture is gone.
+               if (Wallpaper.byId(id) != null || id.startsWith(Wallpaper.PICTURE)) {
                   settings.wallpaper = id;
                }
             } else if (line.startsWith("icon=")) {

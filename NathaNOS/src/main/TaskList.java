@@ -81,6 +81,17 @@ final class TaskList {
       this.tasks.add(new Task(frame, name, icon));
    }
 
+   /** How many windows of the app are showing. */
+   int countNamed(String name) {
+      int count = 0;
+      for (Task task : this.showing()) {
+         if (task.name.equals(name)) {
+            count++;
+         }
+      }
+      return count;
+   }
+
    /** The windows showing now, in the order they opened. Closed ones are forgotten. */
    List<Task> showing() {
       this.tasks.removeIf(task -> !task.window.isDisplayable());
