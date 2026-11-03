@@ -2192,7 +2192,7 @@
     NumberGuess: [{ up: ['ArrowUp', 'Higher / yes'], down: ['ArrowDown', 'Lower / no'], b: ['Enter', 'Enter'],
                     x: ['S', 'How it works'] }],
     Clock: [{ b: ['Space', 'Start / pause'], x: ['R', 'Reset'], y: ['L', 'Lap / lengths'], start: ['N', 'Skip (Focus)'], up: ['ArrowUp', 'Minute +'],
-              down: ['ArrowDown', 'Minute −'] }],
+              down: ['ArrowDown', 'Minute −'], left: ['ArrowLeft', 'Earlier (World)'], right: ['ArrowRight', 'Later (World)'] }],
     StockChecker: [{ up: ['ArrowUp', 'Pick'], down: ['ArrowDown', 'Pick'], x: ['B', 'Buy 1'], y: ['S', 'Sell 1'],
                      b: ['Space', 'Pause'], start: ['R', 'Race'] }],
     GroupCreator: [{ x: ['N', 'New round'], y: ['R', 'Reshuffle'], b: ['Space', 'New round / spin'],
@@ -4068,6 +4068,8 @@
         var p = day.split(':');
         if (p[0] === today && +p[2] > 0) parts.push(p[2] + (+p[2] === 1 ? ' focus session' : ' focus sessions') + ' today');
       });
+      // The World tab's cities, once changed from its first three ("world=London,New York,Tokyo").
+      if (v.world && v.world !== 'London,New York,Tokyo') parts.push('world clock: ' + v.world.split(',').join(', '));
       return parts.length ? 'Your clock: ' + parts.join(', ') : '';
     } }
   };

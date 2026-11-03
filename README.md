@@ -12,7 +12,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 
 | App | Description |
 |---|---|
-| [Clock](Clock/README.md) | Analog/text clock, plus a timer set by dragging a 60-minute dial (it keeps counting while the window is closed, then rings), a stopwatch with laps, and focus sessions (25 minutes, then a break, a long break after four) with a week of focused minutes |
+| [Clock](Clock/README.md) | Analog/text clock, plus a timer set by dragging a 60-minute dial (it keeps counting while the window is closed, then rings), a stopwatch with laps, focus sessions (25 minutes, then a break, a long break after four) with a week of focused minutes, and a world clock of picked cities that finds the hours that suit everyone |
 | [FlappyBird](FlappyBird/README.md) | Flappy Bird style game with endless pipes or today's course (race the ghost of your best run that day), and medals; the bird tilts, dives and crashes like the original's, with sounds, and a click or tap flaps; a crash can be rewound (Z) to fly on from 2.5 seconds before it, as a practice run |
 | [Minesweeper](Minesweeper/README.md) | Minesweeper on a field of grass: three boards, best times, openings that ripple out from the click, and clicking a number to open around it; every board can be solved without a guess, and Hint shows the next step and why |
 | [NathaNOS](NathaNOS/README.md) | Desktop-style app launcher with icons, a start menu and a taskbar; drag the icons where you like and right-click the desktop for one of five wallpapers (the original photo or four painted scenes), and it stays that way next time. Its own Paint draws fat-pixel pictures that are saved with every stroke, show up as desktop icons with live thumbnails, and can become the wallpaper |
