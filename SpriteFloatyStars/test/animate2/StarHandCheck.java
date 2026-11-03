@@ -8,7 +8,7 @@ public class StarHandCheck {
    private static final int H = 600;
 
    public static void main(String[] args) {
-      for (int mode = 0; mode < StarField.MODE_NAMES.length; mode++) {
+      for (int mode = 0; mode < StarField.ORBITS; mode++) { // the five original modes; OrbitsCheck has the sixth
          // Holding pulls the stars in: after 3 s the average distance to the pointer has shrunk a lot.
          StarField field = field(mode);
          double before = meanDistance(field, 200, 150);
@@ -63,7 +63,10 @@ public class StarHandCheck {
       field.setMode(4);
       check(field.mode() == 4 && field.starCount == count, "mode change keeps the stars");
       field.setMode(field.mode() + 1);
+      check(field.mode() == StarField.ORBITS, "N goes on to Orbits");
+      field.setMode(field.mode() + 1);
       check(field.mode() == 0, "N wraps to mode 1");
+      run(field, 10.0); // Orbits showed its help; let it fade
       field.setMode(1);
       for (int s = 0; s < field.starCount; s++) {
          check(Math.abs(field.centerX(s) - W / 2.0) < 1 && Math.abs(field.centerY(s) - H / 2.0) < 1, "Burst mode starts in the middle");

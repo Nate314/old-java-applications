@@ -8,14 +8,17 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import javax.swing.Timer;
 
 public final class StarField extends Component {
    /** Movement per star per step was tuned for an uncapped repaint loop; this many steps per second keeps a similar pace. */
    private static final double STEPS_PER_SECOND = 200.0;
-   /** The five modes, by the names Star Catcher gives the nights flown over them. */
-   static final String[] MODE_NAMES = {"Drift", "Burst", "Compass", "Confetti", "Flock"};
+   /** The five original modes, by the names Star Catcher gives the nights flown over them, then Orbits. */
+   static final String[] MODE_NAMES = {"Drift", "Burst", "Compass", "Confetti", "Flock", "Orbits"};
+   /** Mode 6: the stars circle suns the visitor places (see {@link Orbits}). */
+   static final int ORBITS = 5;
    /** Held down, the pointer pulls every star toward it this hard (px per step, per step). */
    private static final double PULL = 0.03;
    /** A kick from the pointer keeps this much of itself each step, so a flung star glides back to its own drift. */
@@ -32,6 +35,8 @@ public final class StarField extends Component {
    private static final double HINT_SECONDS = 9.0;
    private static final double BADGE_SECONDS = 1.6;
    private static final double RING_SECONDS = 0.5;
+   /** With trails on, each frame lays this much (of 255) of the sky over the last, so a path fades in about a second. */
+   private static final int TRAIL_FADE = 28;
    public int starCount;
    private int starSize = 20;
    private int fieldWidth;
@@ -51,6 +56,8 @@ public final class StarField extends Component {
    private double clock;
    private boolean pulling;
    private double pullStart;
+   private double pressX;
+   private double pressY;
    private boolean pointerOn;
    private double pointerX;
    private double pointerY;
@@ -61,6 +68,10 @@ public final class StarField extends Component {
    private double ringX;
    private double ringY;
    private double ringRadius;
+   /** T: each frame fades the last one instead of clearing it, so every star draws its path. */
+   private boolean trails;
+   private BufferedImage trailImage;
+   private final Orbits orbits = new Orbits(this);
 
    public StarField(int mode, Dimension size, int starCount, int starSize) {
       this(mode, size, starCount, starSize, true);
@@ -84,6 +95,7 @@ public final class StarField extends Component {
       this.randomColorValues = new int[starCount * 3];
       this.kickX = new double[starCount];
       this.kickY = new double[starCount];
+      this.startOrbits();
 
       for (int star = 0; star < this.starCount; star++) {
          this.initStar(star);
@@ -110,6 +122,8 @@ public final class StarField extends Component {
             this.velocityX[star] = Math.random();
             this.velocityY[star] = Math.random();
          }
+      } else if (this.mode == ORBITS) {
+         this.orbits.place(star, true);
       } else if (this.mode == 1 || this.mode == 2) {
          this.x[star] = this.startSize.getWidth() / 2.0 - (double)(this.starSize / 2);
          this.y[star] = this.startSize.getHeight() / 2.0 - (double)(this.starSize / 2);
@@ -145,14 +159,76 @@ public final class StarField extends Component {
       }
    }
 
-   /** Keys 1 to 5 and N: the stars start over in another mode (0 to 4), sized to the window as it is now. */
+   /**
+    * Keys 1 to 6 and N: the stars start over in another mode (0 to 5), sized to the window as it is now. Orbits
+    * starts with one sun in the middle, turns the trails on and shows its own help.
+    */
    final void setMode(int mode) {
       this.mode = Math.floorMod(mode, MODE_NAMES.length);
       this.startSize = new Dimension(this.fieldWidth, this.fieldHeight);
+      this.startOrbits();
       for (int star = 0; star < this.starCount; star++) {
          this.initStar(star);
       }
       this.badgeAt = this.clock;
+   }
+
+   private void startOrbits() {
+      if (this.mode == ORBITS) {
+         this.orbits.reset();
+         this.trails = true;
+         this.trailImage = null;
+         this.hintShown = true;
+         this.hintShownAt = this.clock;
+      }
+   }
+
+   /** T: trails on or off, in any mode. */
+   final void toggleTrails() {
+      this.trails = !this.trails;
+      this.trailImage = null;
+   }
+
+   final boolean trails() {
+      return this.trails;
+   }
+
+   final Orbits orbits() {
+      return this.orbits;
+   }
+
+   final int fieldWidth() {
+      return this.fieldWidth;
+   }
+
+   final int fieldHeight() {
+      return this.fieldHeight;
+   }
+
+   final int starSize() {
+      return this.starSize;
+   }
+
+   final double clock() {
+      return this.clock;
+   }
+
+   /** Orbits keeps each star's place and velocity here, by its center, in px and px per step (x and y both growing). */
+   final void setStar(int star, double centerX, double centerY, double velocityX, double velocityY) {
+      this.x[star] = centerX - this.starSize / 2.0;
+      this.y[star] = centerY - this.starSize / 2.0;
+      this.velocityX[star] = velocityX;
+      this.velocityY[star] = velocityY;
+      this.kickX[star] = 0.0;
+      this.kickY[star] = 0.0;
+   }
+
+   final double velocityX(int star) {
+      return this.velocityX[star];
+   }
+
+   final double velocityY(int star) {
+      return this.velocityY[star];
    }
 
    final int mode() {
@@ -181,15 +257,25 @@ public final class StarField extends Component {
       this.pointer(x, y, true);
       this.pulling = true;
       this.pullStart = this.clock;
+      this.pressX = x;
+      this.pressY = y;
    }
 
-   /** Let go: the stars near the pointer burst away, harder the longer they were gathered. */
+   /**
+    * Let go: the stars near the pointer burst away, harder the longer they were gathered. In Orbits a click (a
+    * quick press that stayed put) places a sun there instead.
+    */
    final void release(double x, double y) {
       if (!this.pulling) {
          return;
       }
       this.pulling = false;
       this.pointer(x, y, this.pointerOn);
+      if (this.mode == ORBITS && this.clock - this.pullStart < Orbits.CLICK_SECONDS
+         && Math.hypot(x - this.pressX, y - this.pressY) < Orbits.CLICK_SLOP) {
+         this.orbits.addSun(x, y);
+         return;
+      }
       this.burst(x, y, this.flingStrength());
    }
 
@@ -223,7 +309,7 @@ public final class StarField extends Component {
             dy = Math.sin(angle);
             distance = 1.0;
          }
-         double push = strength * (1.0 - distance / reach);
+         double push = strength * (1.0 - distance / reach) * (this.mode == ORBITS ? Orbits.BURST_SHARE : 1.0);
          this.kickX[star] += dx / distance * push;
          this.kickY[star] += dy / distance * push;
       }
@@ -273,6 +359,10 @@ public final class StarField extends Component {
       }
 
       this.pushByPointer(steps);
+      if (this.mode == ORBITS) {
+         this.orbits.move(steps);
+         return;
+      }
       for (int star = 0; star < this.starCount; star++) {
          if (this.mode == 0 || this.mode == 4) {
             this.x[star] = this.x[star] - this.velocityX[star] * steps;
@@ -333,6 +423,13 @@ public final class StarField extends Component {
                this.kickY[star] -= dy / distance * push;
             }
          }
+         if (this.mode == ORBITS) { // a push changes a star's orbit for good, as it would in space
+            this.velocityX[star] += this.kickX[star];
+            this.velocityY[star] += this.kickY[star];
+            this.kickX[star] = 0.0;
+            this.kickY[star] = 0.0;
+            continue;
+         }
          this.kickX[star] *= kept;
          this.kickY[star] *= kept;
          this.x[star] += this.kickX[star] * steps;
@@ -364,14 +461,41 @@ public final class StarField extends Component {
       super.paint(g);
       Graphics2D g2 = (Graphics2D)g;
       g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-      g2.setColor(Color.blue);
-      g2.fillRect(0, 0, this.getWidth(), this.getHeight());
-      this.drawStars(g2);
+      Color sky = this.mode == ORBITS ? Orbits.SKY : Color.blue;
+      int width = this.getWidth();
+      int height = this.getHeight();
+      if (this.trails && width > 0 && height > 0) {
+         if (this.trailImage == null || this.trailImage.getWidth() != width || this.trailImage.getHeight() != height) {
+            this.trailImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D first = this.trailImage.createGraphics();
+            first.setColor(sky);
+            first.fillRect(0, 0, width, height);
+            first.dispose();
+         }
+         Graphics2D trail = this.trailImage.createGraphics();
+         trail.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+         trail.setColor(new Color(sky.getRed(), sky.getGreen(), sky.getBlue(), TRAIL_FADE));
+         trail.fillRect(0, 0, width, height);
+         this.drawStars(trail);
+         trail.dispose();
+         g2.drawImage(this.trailImage, 0, 0, null);
+      } else {
+         g2.setColor(sky);
+         g2.fillRect(0, 0, width, height);
+         this.drawStars(g2);
+      }
+      if (this.mode == ORBITS) {
+         this.orbits.drawSuns(g2);
+      }
       this.drawHand(g2);
    }
 
    /** Draws the stars alone, in the current mode's colors. */
    final void drawStars(Graphics2D g2) {
+      if (this.mode == ORBITS) {
+         this.orbits.drawStars(g2);
+         return;
+      }
       for (int star = 0; star < this.starCount; star++) {
          this.setStarColor(g2, star);
          g2.fillOval((int)this.x[star], (int)this.y[star], this.starSize, this.starSize);
@@ -405,8 +529,12 @@ public final class StarField extends Component {
          int alpha = fade(HINT_SECONDS - (this.clock - this.hintShownAt));
          g2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, this.textSize()));
          int lineHeight = g2.getFontMetrics().getHeight() + 10;
-         String[] lines = {"Hold to pull the stars in, let go to fling them. Click to burst.",
-                           "1-5 or N: mode    Space: burst    Up/Down: stars    H: help"};
+         String[] lines = this.mode == ORBITS
+            ? new String[]{"Click to place a sun (up to " + Orbits.MAX_SUNS + "). Drag a sun to move it.",
+                           "Drag it off the edge to take it away. Hold to pull the stars.",
+                           "1-6 or N: mode   T: trails   Space: burst   H: help"}
+            : new String[]{"Hold to pull the stars in, let go to fling them. Click to burst.",
+                           "1-6 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help"};
          int top = this.getHeight() - 8 - lines.length * lineHeight;
          for (String line : lines) {
             this.tag(g2, line, 14, top, alpha);

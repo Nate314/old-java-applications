@@ -14,7 +14,7 @@ import javax.swing.JTextField;
 
 public final class SettingsFrame extends JFrame implements ActionListener {
    private JPanel panel = new JPanel();
-   private String[] modeNames = new String[]{"Mode 1", "Mode 2", "Mode 3", "Mode 4", "Mode 5"};
+   private String[] modeNames = new String[]{"Mode 1", "Mode 2", "Mode 3", "Mode 4", "Mode 5", "Mode 6"};
    private JComboBox<String> modeComboBox = new JComboBox<>(this.modeNames);
    private JLabel[] labels = new JLabel[]{new JLabel("Mode:"), new JLabel("X/Y:"), new JLabel("Number:"), new JLabel("Size:")};
    private JTextField[] textFields = new JTextField[]{new JTextField("0"), new JTextField("800"), new JTextField("800"), new JTextField("1000"), new JTextField("20")};
