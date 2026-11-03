@@ -27,16 +27,17 @@ final class Morph {
    /**
     * Starts moving the shape's windows (old) to the rectangles target with colors. The shape's list of windows
     * becomes the new shape's at once, in target order; newWindow makes a window that splits off at a rectangle,
-    * in a color.
+    * in a color. With inPlace (the Clock ticking) windows pair by where they are on screen rather than within
+    * their shape, so the windows of the digits that did not change stay where they are.
     */
-   Morph(List<CircleSliceWindow> old, List<Rectangle> target, List<Color> colors, int frames,
+   Morph(List<CircleSliceWindow> old, List<Rectangle> target, List<Color> colors, int frames, boolean inPlace,
          BiFunction<Rectangle, Color, CircleSliceWindow> newWindow) {
       this.frames = Math.max(1, frames);
       List<Rectangle> oldBounds = new ArrayList<>();
       for (CircleSliceWindow w : old) {
          oldBounds.add(w.getBounds());
       }
-      int[] source = match(target, oldBounds);
+      int[] source = match(target, oldBounds, inPlace);
       boolean[] used = new boolean[old.size()];
       List<CircleSliceWindow> next = new ArrayList<>();
       for (int i = 0; i < target.size(); i++) {
@@ -52,7 +53,7 @@ final class Morph {
          this.add(w, target.get(i), colors.get(i));
          next.add(w);
       }
-      int[] sink = match(oldBounds, target);
+      int[] sink = match(oldBounds, target, inPlace);
       for (int s = 0; s < old.size(); s++) {
          if (!used[s]) {
             CircleSliceWindow w = old.get(s);
@@ -102,16 +103,19 @@ final class Morph {
    /**
     * For each rectangle in wanted, the index of the rectangle in have at the most similar place within its own
     * shape (centers and sizes as fractions of each shape's bounds), each one used once while any are left and
-    * then shared; -1 when have is empty. Nearest pairs are taken first.
+    * then shared; -1 when have is empty. Nearest pairs are taken first. With inPlace both are measured against
+    * the bounds of the two shapes together, so a rectangle that is in both pairs with itself.
     */
-   static int[] match(List<Rectangle> wanted, List<Rectangle> have) {
+   static int[] match(List<Rectangle> wanted, List<Rectangle> have, boolean inPlace) {
       int[] result = new int[wanted.size()];
       Arrays.fill(result, -1);
       if (have.isEmpty() || wanted.isEmpty()) {
          return result;
       }
-      double[][] a = normalized(wanted);
-      double[][] b = normalized(have);
+      Rectangle together = bounds(wanted);
+      together.add(bounds(have));
+      double[][] a = normalized(wanted, inPlace ? together : bounds(wanted));
+      double[][] b = normalized(have, inPlace ? together : bounds(have));
       int pairs = wanted.size() * have.size();
       double[] cost = new double[pairs];
       for (int i = 0; i < wanted.size(); i++) {
@@ -148,12 +152,16 @@ final class Morph {
       return result;
    }
 
-   /** Each rectangle's center and size as fractions of the bounds of them all. */
-   private static double[][] normalized(List<Rectangle> rects) {
+   private static Rectangle bounds(List<Rectangle> rects) {
       Rectangle area = new Rectangle(rects.get(0));
       for (Rectangle r : rects) {
          area.add(r);
       }
+      return area;
+   }
+
+   /** Each rectangle's center and size as fractions of area's size, measured from its corner. */
+   private static double[][] normalized(List<Rectangle> rects, Rectangle area) {
       double w = Math.max(1, area.width);
       double h = Math.max(1, area.height);
       double[][] out = new double[rects.size()][];

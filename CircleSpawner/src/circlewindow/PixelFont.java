@@ -1,10 +1,10 @@
 package circlewindow;
 
-/** A 5 x 7 pixel font for the Word shape: capital letters, digits and a little punctuation. */
+/** A 5 x 7 pixel font for the Word and Clock shapes: capital letters, digits and a little punctuation. */
 final class PixelFont {
    static final int WIDTH = 5;
    static final int HEIGHT = 7;
-   private static final String CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?.-' ";
+   private static final String CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?.-' :";
    private static final String[][] GLYPHS = {
       {".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"},
       {"####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."},
@@ -48,6 +48,7 @@ final class PixelFont {
       {".....", ".....", ".....", "#####", ".....", ".....", "....."},
       {"..#..", "..#..", ".....", ".....", ".....", ".....", "....."},
       {".....", ".....", ".....", ".....", ".....", ".....", "....."},
+      {".....", "..#..", "..#..", ".....", "..#..", "..#..", "....."},
    };
 
    private PixelFont() {

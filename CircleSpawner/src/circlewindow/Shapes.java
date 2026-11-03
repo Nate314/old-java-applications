@@ -3,6 +3,7 @@ package circlewindow;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 
 /** Turns a shape into the rectangles of the windows that draw it, in the order they should appear. */
@@ -12,8 +13,9 @@ final class Shapes {
    static final String HEART = "Heart";
    static final String STAR = "Star";
    static final String WORD = "Word";
+   static final String CLOCK = "Clock";
    static final String DRAW = "Draw";
-   static final String[] ALL = {CIRCLE, RING, HEART, STAR, WORD, DRAW};
+   static final String[] ALL = {CIRCLE, RING, HEART, STAR, WORD, CLOCK, DRAW};
    /** Grid cells across a ring, heart or star: fine enough to look smooth, coarse enough to stay a few dozen windows. */
    private static final int CELLS = 28;
    static final int MAX_WORD_LENGTH = 12;
@@ -22,14 +24,15 @@ final class Shapes {
    }
 
    /**
-    * The windows for a shape about size pixels across, centered on (centerX, centerY). A word is size pixels
-    * tall, or less if that would make it wider than maxWidth. Draw is the drawing, a square grid of cells.
+    * The windows for a shape about size pixels across, centered on (centerX, centerY). A word (and the Clock,
+    * whose word is the time) is size pixels tall, or less if that would make it wider than maxWidth. Draw is
+    * the drawing, a square grid of cells.
     */
    static List<Rectangle> build(String shape, int size, String word, boolean[][] drawing, int centerX, int centerY, int maxWidth) {
       if (CIRCLE.equals(shape)) {
          return circle(size, centerX, centerY);
       }
-      if (WORD.equals(shape)) {
+      if (WORD.equals(shape) || CLOCK.equals(shape)) {
          return word(cleanWord(word), size, centerX, centerY, maxWidth);
       }
       boolean[][] grid;
@@ -57,6 +60,21 @@ final class Shapes {
       // Grow from the middle outwards.
       pieces.sort(Comparator.comparingDouble(r -> Math.hypot(r.x + r.width / 2.0 - centerX, r.y + r.height / 2.0 - centerY)));
       return pieces;
+   }
+
+   /**
+    * The time the Clock shape spells, as on a desk clock: 12-hour, hours without a leading zero, minutes and
+    * seconds with one ("9:05:07", "12:30:00"). Date's getters read local time on the desktop and in the
+    * browser (TeaVM's Calendar is always UTC).
+    */
+   @SuppressWarnings("deprecation")
+   static String clockText(Date now) {
+      int hour = now.getHours() % 12;
+      return (hour == 0 ? 12 : hour) + ":" + twoDigits(now.getMinutes()) + ":" + twoDigits(now.getSeconds());
+   }
+
+   private static String twoDigits(int n) {
+      return (n < 10 ? "0" : "") + n;
    }
 
    /** The word in capitals with the characters the font cannot draw left out, at most MAX_WORD_LENGTH long. */

@@ -7,6 +7,7 @@ import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import javax.swing.JButton;
@@ -39,7 +40,11 @@ public final class CircleCreatorWindow extends JFrame {
    /** Frames for one shape to turn into another, and for the drawing to follow the pen. */
    private static final int MORPH_FRAMES = 40;
    private static final int DRAW_FRAMES = 10;
+   /** Frames for the Clock to turn into the next second, so it settles well before the one after. */
+   private static final int TICK_FRAMES = 24;
    private static final int FRAME_MILLIS = 16;
+   /** How often the Clock looks at the time. */
+   private static final int TICK_MILLIS = 100;
 
    private final JComboBox<String> shapeBox = new JComboBox<>(Shapes.ALL);
    private final JTextField sizeField = new JTextField("200", 4);
@@ -57,9 +62,14 @@ public final class CircleCreatorWindow extends JFrame {
    private final Timer buildTimer = new Timer(FRAME_MILLIS, event -> this.buildStep());
    private final Timer scatterTimer = new Timer(FRAME_MILLIS, event -> this.scatterStep());
    private final Timer morphTimer = new Timer(FRAME_MILLIS, event -> this.morphStep());
+   private final Timer clockTimer = new Timer(TICK_MILLIS, event -> this.tick());
    private final Saved saved = Saved.load();
    private Morph morph;
    private String builtShape = "";
+   /** The time the Clock on screen spells (or is turning into). */
+   private String shownTime = "";
+   /** True while the Clock turns into the next second: no messages, nothing saved, windows stay in place. */
+   private boolean ticking;
    private int built;
    private int scatterFrame;
    private boolean settingUp = true;
@@ -127,6 +137,26 @@ public final class CircleCreatorWindow extends JFrame {
       this.setVisible(true);
       this.settingUp = false;
       this.build();
+      this.clockTimer.start();
+   }
+
+   /**
+    * Turns the Clock on screen into the time now when the second has changed, once whatever it is doing is
+    * done (so a slow screen skips a second rather than never settling).
+    */
+   private void tick() {
+      if (!Shapes.CLOCK.equals(this.builtShape) || !Shapes.CLOCK.equals(this.shapeBox.getSelectedItem())
+            || this.slices.isEmpty() || this.buildTimer.isRunning() || this.scatterTimer.isRunning()
+            || this.morphTimer.isRunning()
+            || Shapes.clockText(new Date()).equals(this.shownTime)) {
+         return;
+      }
+      this.ticking = true;
+      try {
+         this.show(TICK_FRAMES);
+      } finally {
+         this.ticking = false;
+      }
    }
 
    private boolean drawing() {
@@ -182,8 +212,15 @@ public final class CircleCreatorWindow extends JFrame {
          return null;
       }
       this.builtShape = shape;
-      this.remember();
-      List<Rectangle> pieces = Shapes.build(shape, size, this.wordField.getText(), this.pad.cells(),
+      String word = this.wordField.getText();
+      if (Shapes.CLOCK.equals(shape)) {
+         word = Shapes.clockText(new Date());
+         this.shownTime = word;
+      }
+      if (!this.ticking) {
+         this.remember();
+      }
+      List<Rectangle> pieces = Shapes.build(shape, size, word, this.pad.cells(),
          screen.width / 2, top + (screen.height - top) / 2, screen.width * 9 / 10);
       if (pieces.isEmpty()) {
          this.status.setText("Draw on the pad and the windows follow.");
@@ -236,9 +273,9 @@ public final class CircleCreatorWindow extends JFrame {
       this.stopAll();
       this.pending.clear();
       this.pendingColors.clear();
-      this.morph = new Morph(this.slices, pieces, this.colors(pieces, this.builtShape), frames,
+      this.morph = new Morph(this.slices, pieces, this.colors(pieces, this.builtShape), frames, this.ticking,
          (bounds, color) -> new CircleSliceWindow(bounds, color, "", false, this::scatter));
-      if (frames > DRAW_FRAMES) {
+      if (frames > DRAW_FRAMES && !this.ticking) {
          this.status.setText("Changing into " + this.shapeName() + "...");
       }
       this.morphTimer.start();
