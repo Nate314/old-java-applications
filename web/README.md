@@ -557,6 +557,16 @@ These were desktop programs, and a desktop runs more than one at a time. The Sid
 
 Find, Ctrl+K: keys typed right after the first Ctrl+K of a page, while `find.js` is still loading, used to reach the app behind the box (a title screen would start the app on them). They are now held and typed into the box once it has the focus, also from the home page's player and the panel beside. Keys typed in the open box no longer start the app behind it either: the title screen's any-key start now leaves keys in the box (`.shim-find`) alone, as it does for the toolbar and the other panels.
 
+## Short links and the lost page
+
+GitHub Pages matches addresses by case, so `.../old-java-applications/minesweeper` (or a link someone typed from memory, or a page that moves one day) used to end on GitHub's plain "404 File not found", with no way back into the arcade. `web/site/404.html`, which Pages shows for any address with nothing at it, turns that into a way in:
+
+- Every app has a short link: the site's address, a slash and a word, such as `/dino`, `/flappy`, `/mines`, `/tanks`, `/piano` or `/timer`. The page sends the visitor straight on to the app's page (`location.replace`, so Back skips it), keeping the query and the hash. The app's folder or name in any case works too (`/minesweeper`, `/Flappy-Bird`), and so does a close misspelling of one of the words, or the start of only one (`/minesweper`, `/algo`). `SHORT` in the page lists the words; the first is the one it shows.
+- A second word picks how the app opens: `then` its Then version (where it has one), `watch` the computer playing (`?watch`), `source` the Source panel (`#source`). `/dino/watch`, `/mines/then`. `story`, `home` and `embed` go to the story page, the home page and the embeddable player.
+- Anything else shows the lost page in the visitor's skin (Modern, Classic or Arcade from `oldjava.skin`; Yours shows as Modern): the address that was not found, a search over the 20 apps that starts with the words of that address (the closest app first, tagged Closest; Enter opens it), the short link on every card and all 20 as chips, and Dino Game in the embeddable player (`play.html`, a poster until Play, so no Java loads unless asked), since browsers show a dinosaur when a page will not load.
+- The page is shown at the missing address, at any depth, so it has no relative links: it finds the site's root by asking each folder above the address for `boot.js` (`HEAD` requests, in parallel; the nearest that has it wins), then reads the apps from that root's `index.html`, as `play.html` does. It works at a server root and under a sub-path alike. `noindex` keeps it out of search engines.
+- `python -m http.server` does not serve a `404.html`, so locally the page is only seen when opened by name. It was tested with a small server that serves the built site the way Pages does (under `/old-java-applications/`, matching case, `404.html` with status 404 for a miss).
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".
