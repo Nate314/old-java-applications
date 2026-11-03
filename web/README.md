@@ -331,6 +331,18 @@ mvn -f web/pom.xml package "-Dsite.url=https://example.org/arcade"
 
 Save all for offline does not include the cards; a card shown once in the panel is cached by the service worker like any other file.
 
+## Embed
+
+Any app can be put on another site, so the arcade can be played where people already are (a blog post, a class page, a forum that allows iframes), with a way back here:
+
+- `play.html?app=<App>` is the embeddable player, one self-contained page (no `boot.js`). It first shows a poster: the app's thumbnail on a blurred backdrop of itself, its name, its hint and a Play button, so a page with the widget on it loads one picture and none of the app until the visitor asks. Play (or a click on the thumbnail) runs `<App>/index.html?embed` in a frame, as the home page's player does. Under it a slim bar names Old Java Applications and links to the app's full page and to all 20 apps, in a new tab, and a full screen button shows where the host page allows it (`allow="fullscreen"`). `&then` plays the app as recovered (its poster says so and leaves out today's thumbnail and hint), and `&watch` skips the poster and opens with the computer playing, for the four apps that can (see Watch the computer play). An unknown `app` says so and links to the home page.
+- The app's page talks to the widget the way it talks to the home page's player, so picking a suggestion on its exit screen swaps that app into the widget. Share and Replay belong to the full page: asking for them in the widget lights the bar's Full page link instead.
+- The app's page gets a viewport of at least 640 x 520 (the home page player's height, which leaves the watch line room above the windows), or as much as its card asks for (`data-min-width`, `data-min-height`), scaled down into a smaller widget, so a 480 x 320 widget shows the same layout as a big one.
+- The poster lays the picture beside the words when the widget is wider than 520 px and above them when narrower, drops the picture in widgets under 300 px tall, and the bar drops the app's name under 560 px.
+- Every Share panel ends with "Put it on your site" (closed). Opening it adds `embed.js`, which builds the tag: pick the app (any of the 20; the arcade's Share panel starts on Minesweeper), Now or Then (where the app has a Then version), Opens with a Play button or Computer playing (Minesweeper, Ultimate Tic-Tac-Toe, Tank Game, Dino Game), and a size (Fit width, which is `width:100%` at 16:10, or 480 x 320, 640 x 420, 900 x 560). A live preview shows the widget at that size, scaled into the panel; Copy embed code copies the `<iframe>` tag and Open it opens the widget on its own. The tag's address is absolute, the address the site is served from. Find's "Put an app on your site" opens the panel with the builder open.
+- In the widget, the apps keep their saves in the browser's storage for that site as usual; browsers that partition storage keep a widget's saves apart from the same app's saves on this site.
+- Not in the widget: the on-screen touch controller the home page docks under its player (the touch gestures on the app's windows still work). Save all for offline leaves out `play.html` and `embed.js`, which are for other sites and for sharing.
+
 ## Arcade passport
 
 The site keeps a stamp for every app the visitor has played, to give them a reason to try all 20:

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Old Java Applications</title>
+  <meta name="description" content="An old Java app, playable right here. Part of Old Java Applications: 20 Java Swing and AWT programs recovered from old jars and running in the browser.">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <!--
+    The embeddable player: play.html?app=<App> goes in an iframe on any other site (the Share panel's "Put it on
+    your site" writes the tag, see embed.js and web/README.md, Embed). It shows a poster first (the app's
+    thumbnail, name, hint and a Play button), so a page with the widget on it loads one picture and no Java until
+    the visitor asks; Play runs <App>/index.html?embed in its own frame. A slim bar names the arcade and links to
+    the app's full page and to all 20 apps, in a new tab. Options: &then (the app as recovered, where it has a
+    Then version) and &watch (no poster: the computer is already playing, for the apps that can watch). The app
+    pages talk to their parent the way they talk to the home page's player, so an exit screen's suggestion swaps
+    that app in here too.
+  -->
+  <style>
+    :root { --accent: #3b82f6; --ink: #e5e7eb; --muted: #9ca3af; --bar: #0b1120; --edge: rgba(148, 163, 184, 0.22);
+            --desk: linear-gradient(135deg, #1e293b, #0f172a); color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; overflow: hidden; background: #0f172a; color: var(--ink);
+           font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    a { color: inherit; }
+    .main { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--desk); }
+
+    /* ---- the poster: one picture until the visitor asks for the app ---- */
+    .poster { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 24px;
+              padding: 16px 24px; overflow: hidden; }
+    .poster[hidden], .stage[hidden], .oops[hidden] { display: none; }
+    .poster .bg { position: absolute; inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px);
+                  object-fit: cover; filter: blur(28px) saturate(1.3); opacity: 0.45; transform: scale(1.05); }
+    .poster::after { content: ""; position: absolute; inset: 0;
+                     background: radial-gradient(ellipse at 30% 40%, transparent, rgba(2, 6, 23, 0.75)), rgba(2, 6, 23, 0.35); }
+    .poster.then::after { background: rgba(2, 6, 23, 0.62); }
+    .poster > * { position: relative; z-index: 1; }
+    .poster > .bg { position: absolute; z-index: 0; }   /* under the shade (::after), which is under the rest */
+    .shot { flex: 0 1 auto; min-width: 0; max-width: 48%; max-height: calc(100% - 8px); object-fit: contain;
+            border-radius: 10px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+            cursor: pointer; transition: transform 0.2s ease; }
+    .shot[hidden] { display: none; }
+    .poster.then .bg { filter: blur(28px) sepia(0.9); }
+    .poster:hover .shot { transform: translateY(-2px) scale(1.01); }
+    .text { flex: 1 1 0; min-width: 0; max-width: 340px; display: flex; flex-direction: column; align-items: flex-start;
+            gap: 8px; }
+    .kicker { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+              color: #93c5fd; }
+    h1 { margin: 0; font-size: clamp(20px, 5vw, 30px); line-height: 1.1; letter-spacing: -0.01em; }
+    .hint { margin: 0; color: #cbd5e1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+            overflow: hidden; }
+    .play { display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 22px 10px 16px;
+            border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 700; line-height: 1.2;
+            font-family: inherit; cursor: pointer; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.45);
+            transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .play::before { content: ""; width: 0; height: 0; border-style: solid; border-width: 8px 0 8px 13px;
+                    border-color: transparent transparent transparent #fff; }
+    .play:hover { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(59, 130, 246, 0.6); }
+    .play:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .note { margin: 0; font-size: 12px; color: var(--muted); }
+    /* Narrow: the picture above the words. Short: no picture, and one line of the hint. */
+    @media (max-width: 520px) {
+      .poster { flex-direction: column; justify-content: center; gap: 12px; text-align: center; }
+      .shot { max-width: 78%; max-height: 38%; }
+      .text { align-items: center; max-width: none; }
+    }
+    @media (max-height: 300px) {
+      .shot { display: none; }
+      .hint { -webkit-line-clamp: 1; }
+      .note { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .shot, .play { transition: none; }
+    }
+
+    /* ---- the app: its own page in embed mode, as in the home page's player ---- */
+    .stage iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+    .oops { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; padding: 24px; text-align: center; }
+    .oops p { margin: 0; }
+
+    /* ---- the bar: whose arcade this is, and the way to the rest of it ---- */
+    .bar { flex: none; display: flex; align-items: center; gap: 4px 12px; min-height: 34px; padding: 4px 10px;
+           border-top: 1px solid var(--edge); background: var(--bar); font-size: 13px; white-space: nowrap; }
+    .brand { display: inline-flex; align-items: center; gap: 7px; min-width: 0; font-weight: 700; text-decoration: none; }
+    .brand img { width: 18px; height: 18px; flex: none; }
+    .brand span { overflow: hidden; text-overflow: ellipsis; }
+    .now { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+    .bar .go { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .bar .go a, .bar .go button { padding: 3px 10px; border: 1px solid var(--edge); border-radius: 6px; background: transparent;
+                                   color: inherit; font-size: 12px; font-weight: 600; line-height: 1.4; font-family: inherit; text-decoration: none;
+                                   cursor: pointer; }
+    .bar .go a:hover, .bar .go button:hover { border-color: var(--accent); }
+    .bar .go .more { border-color: var(--accent); background: var(--accent); color: #fff; }
+    .bar a:focus-visible, .bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .bar .go a.lit { animation: lit 0.6s ease-in-out 3; }
+    @keyframes lit { 50% { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45); } }
+    #fullscreen[hidden] { display: none; }
+    @media (max-width: 560px) {
+      .now { display: none; }
+    }
+    @media (max-width: 400px) {
+      #fullscreen { display: none; }
+    }
+    @media (max-width: 330px) {
+      .brand > span { display: none; }
+    }
+    @media (max-height: 360px) {
+      .note { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="main">
+    <div class="poster" id="poster" hidden>
+      <img class="bg" id="poster-bg" alt="">
+      <img class="shot" id="poster-shot" alt="">
+      <div class="text">
+        <p class="kicker" id="poster-kicker">Play in your browser</p>
+        <h1 id="poster-name"></h1>
+        <p class="hint" id="poster-hint"></p>
+        <button class="play" type="button" id="poster-play">Play</button>
+        <p class="note">Runs right here, nothing to install.</p>
+      </div>
+    </div>
+    <div class="stage" id="stage" hidden>
+      <iframe id="frame" title="App" allow="autoplay; fullscreen; clipboard-write; microphone"></iframe>
+    </div>
+    <div class="oops" id="oops" hidden>
+      <p id="oops-text"></p>
+      <p><a href="index.html" target="_blank" rel="noopener">See all 20 apps</a></p>
+    </div>
+  </div>
+  <nav class="bar" aria-label="Old Java Applications">
+    <a class="brand" href="index.html" target="_blank" rel="noopener" title="Old Java Applications: 20 recovered Java apps you can play in the browser">
+      <img src="icons/icon.svg" alt=""><span>Old Java Applications</span>
+    </a>
+    <span class="now" id="now"></span>
+    <span class="go">
+      <button type="button" id="fullscreen" title="Fill the screen" aria-label="Fill the screen" hidden>&#x26F6;</button>
+      <a id="full" href="index.html" target="_blank" rel="noopener" title="Open this app on its own page, with its source and more">Full page &#8599;</a>
+      <a class="more" href="index.html" target="_blank" rel="noopener" title="20 old Java apps, all playable in the browser">All 20 apps &#8599;</a>
+    </span>
+  </nav>
+  <script>
+  (function () {
+    'use strict';
+    var params = new URLSearchParams(location.search);
+    var poster = document.getElementById('poster');
+    var stage = document.getElementById('stage');
+    var frame = document.getElementById('frame');
+    var full = document.getElementById('full');
+    var now = document.getElementById('now');
+    var apps = [];
+    var current = null;   // { id, name, hint, shot, then, watch, minWidth, minHeight }
+    var then = params.has('then');
+
+    // The gallery on the home page is the one list of apps (as boot.js's catalog() reads it).
+    function readCatalog() {
+      return fetch('index.html').then(function (r) {
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.text();
+      }).then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        return Array.prototype.map.call(doc.querySelectorAll('#apps li[data-app]'), function (li) {
+          var img = li.querySelector('img');
+          return {
+            id: li.getAttribute('data-app'),
+            name: li.querySelector('strong').textContent,
+            hint: li.querySelector('.body > span').textContent,
+            shot: img.getAttribute('src'),
+            alt: img.getAttribute('alt') || '',
+            then: li.hasAttribute('data-then'),
+            minWidth: +(li.getAttribute('data-min-width') || 0),
+            minHeight: +(li.getAttribute('data-min-height') || 0)
+          };
+        });
+      });
+    }
+
+    // The same four apps boot.js's WATCH table lets the computer play.
+    var WATCHABLE = ['Minesweeper', 'UltimateTicTacToe', 'TankGame', 'DinoGame'];
+
+    function page(app, watch) {
+      return app.id + '/' + (then && app.then ? 'then.html' : 'index.html') + '?embed' + (watch ? '&watch' : '');
+    }
+
+    function label(app) {
+      now.textContent = app.name + (then && app.then ? ' (Then: as recovered)' : '');
+      full.href = app.id + '/' + (then && app.then ? 'then.html' : 'index.html');
+      document.title = app.name + ' | Old Java Applications';
+    }
+
+    function showPoster(app) {
+      document.getElementById('poster-bg').src = app.shot;
+      var shot = document.getElementById('poster-shot');
+      shot.src = app.shot;
+      shot.alt = app.alt;
+      document.getElementById('poster-name').textContent = app.name;
+      document.getElementById('poster-hint').textContent = app.hint;
+      // The thumbnail and hint show today's app, so the Then poster keeps only a faded backdrop of it.
+      if (then && app.then) {
+        document.getElementById('poster-kicker').textContent = 'Then: as it was recovered';
+        document.getElementById('poster-hint').textContent =
+          'The app as it came out of its old jar, before any fixes: bugs and all.';
+        shot.hidden = true;
+        poster.classList.add('then');
+      }
+      poster.hidden = false;
+    }
+
+    // The app's page keeps a viewport of at least 640 x 520 (so a small widget is the app's page scaled down, its
+    // notes and windows laid out as usual), or as big as its card asks for (CircleSpawner places its own 380 px
+    // window, Rubik's Cube's is 700 px tall), as in the home page's player. The viewport keeps the widget's shape.
+    var MIN_W = 640;
+    var MIN_H = 520;   // the home page player's height, which leaves the watch line room above the windows
+    function fit() {
+      if (!current) return;
+      var w = stage.parentNode.clientWidth;
+      var h = stage.parentNode.clientHeight;
+      var scale = Math.min(1, w / Math.max(MIN_W, current.minWidth), h / Math.max(MIN_H, current.minHeight));
+      frame.style.width = Math.round(w / scale) + 'px';
+      frame.style.height = Math.round(h / scale) + 'px';
+      frame.style.transform = scale < 1 ? 'scale(' + scale + ')' : '';
+    }
+    window.addEventListener('resize', fit);
+
+    function run(app, watch) {
+      current = app;
+      label(app);
+      poster.hidden = true;
+      stage.hidden = false;
+      fit();
+      frame.title = app.name;
+      frame.src = page(app, watch);
+      if (!watch) frame.focus();
+    }
+
+    // What the app's page asks of the page around it (it asks the home page's player the same things).
+    window.addEventListener('message', function (e) {
+      if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data) return;
+      if (e.data.oldjavaPlay) {   // a suggestion on the exit screen
+        var next = apps.filter(function (a) { return a.id === e.data.oldjavaPlay; })[0];
+        if (next) run(next, false);
+        return;
+      }
+      // Share (and the replay viewer) belong to the full page; point at it, since a message is no click that
+      // may open a tab.
+      if (typeof e.data.oldjavaShare === 'string' || e.data.oldjavaClip) {
+        full.classList.remove('lit');
+        void full.offsetWidth;
+        full.classList.add('lit');
+        full.focus();
+      }
+    });
+
+    var fs = document.getElementById('fullscreen');
+    if (document.fullscreenEnabled) {
+      fs.hidden = false;
+      fs.addEventListener('click', function () {
+        if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+        else document.documentElement.requestFullscreen().catch(function () {});
+      });
+      document.addEventListener('fullscreenchange', function () {
+        fs.title = document.fullscreenElement ? 'Leave full screen' : 'Fill the screen';
+        fs.setAttribute('aria-label', fs.title);
+        setTimeout(fit, 50);
+      });
+    }
+
+    function oops(text) {
+      document.getElementById('oops-text').textContent = text;
+      document.getElementById('oops').hidden = false;
+      full.hidden = true;
+    }
+
+    readCatalog().then(function (list) {
+      apps = list;
+      var id = params.get('app');
+      var app = apps.filter(function (a) { return a.id === id; })[0];
+      if (!app) { oops(id ? 'There is no app named "' + id + '" here.' : 'Which app? Add ?app= and its name to the address.'); return; }
+      current = app;
+      label(app);
+      if (params.has('watch') && WATCHABLE.indexOf(app.id) >= 0 && !(then && app.then)) { run(app, true); return; }
+      showPoster(app);
+      document.getElementById('poster-play').addEventListener('click', function () { run(app, false); });
+      document.getElementById('poster-shot').addEventListener('click', function () { run(app, false); });
+    }, function (e) {
+      oops('The list of apps did not load (' + e.message + ').');
+    });
+  })();
+  </script>
+</body>
+</html>

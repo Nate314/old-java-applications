@@ -2493,10 +2493,56 @@
       way('Email', function (m) { return 'mailto:?subject=' + e(subject) + '&body=' + e(m + '\n\n' + url); }).removeAttribute('target');
 
       [label, preview, msgLabel, linkRow, ways].forEach(function (el) { body.appendChild(el); });
+      if (apps.length) body.appendChild(embedSection(app ? app.id : null, apps));
       ((navigator.share && ways.firstChild) || copy).focus();
     });
   }
   window.oldjavaShare = { open: openShare };
+
+  // ---- embed: put an app on your own site (play.html, built by embed.js) ----
+  // The Share panel ends with "Put it on your site", closed: opening it adds embed.js, which builds the
+  // <iframe> tag for play.html (the embeddable player) with a live preview. See web/README.md, Embed.
+  var embedPromise = null;
+  var embedOpenNext = false;
+  // Opens the Share panel with "Put it on your site" already open (Find uses it).
+  window.oldjavaShare.embed = function (id, opener) {
+    if (shareBox) return;
+    embedOpenNext = true;
+    openShare(id, opener);
+  };
+  function embedScript() {
+    if (!embedPromise) embedPromise = new Promise(function (resolve, reject) {
+      var tag = document.createElement('script');
+      tag.src = root() + 'embed.js';
+      tag.onload = function () { resolve(window.oldjavaEmbed); };
+      tag.onerror = function () { embedPromise = null; reject(new Error('embed.js did not load')); };
+      document.head.appendChild(tag);
+    });
+    return embedPromise;
+  }
+  function embedSection(id, apps) {
+    var box = document.createElement('details');
+    box.className = 'shim-embed';
+    var summary = document.createElement('summary');
+    summary.innerHTML = '<span aria-hidden="true">&lt;/&gt;</span> Put it on your site';
+    summary.setAttribute('data-sound', 'none');
+    box.appendChild(summary);
+    var built = false;
+    if (embedOpenNext) { embedOpenNext = false; box.open = true; }   // Find's "Put an app on your site"
+    box.addEventListener('toggle', function () {
+      if (!box.open || built) return;
+      built = true;
+      playSound('open');
+      embedScript().then(function (embed) {
+        var inner = document.createElement('div');
+        inner.className = 'shim-embed-body';
+        box.appendChild(inner);
+        embed.build(inner, { apps: apps, app: id, siteRoot: siteRoot, watchable: Object.keys(WATCH), sound: playSound });
+        box.scrollIntoView({ block: 'nearest' });
+      }, function (e) { built = false; console.warn(e.message); });
+    });
+    return box;
+  }
 
   // ---- source viewer ----
   // The Java this page runs, next to it: Source (toolbar or title screen) docks a panel on the right with the

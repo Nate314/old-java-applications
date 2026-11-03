@@ -169,6 +169,9 @@
       if (switcher) add(action('Switch app', 'Every app in a panel on the right', '☰', 'switch drawer list apps', function () { switcher.click(); }));
       add(action('All apps', 'Back to the home page', '⌂', 'home all apps gallery back index', function () { go(site.root() + 'index.html'); }));
     }
+    if (window.oldjavaShare && window.oldjavaShare.embed) add(action('Put an app on your site',
+      'The tag that plays it in your own page, blog or class site', '</>', 'embed iframe widget website blog html code site put',
+      function () { window.oldjavaShare.embed(site.appId() || null); }));
     var notYet = apps.filter(function (a) { return !site.played(a.id) && a.id !== site.appId(); });
     var pool = notYet.length ? notYet : apps.filter(function (a) { return a.id !== site.appId(); });
     if (pool.length) add(action('Surprise me', notYet.length ? 'Open an app you have not played yet (' + notYet.length + ' left)' : 'Open a random app',
