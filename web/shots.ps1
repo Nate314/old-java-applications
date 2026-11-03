@@ -51,7 +51,7 @@ $Recipes = [ordered]@{
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:7000', 'key:F', 'wait:1800') }
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Click 'Star Catcher'), 'wait:800', 'key:1', 'wait:2500') }
     UltimateTicTacToe   = @{ Steps = @('wait:800', 'key:W', 'wait:7000') }
-    CircleSpawner       = @{ Steps = @('wait:1500', (Pick 'Heart'), 'wait:3000') }
+    CircleSpawner       = @{ Steps = @('wait:1500', (Pick 'Clock'), 'wait:3000') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:4000', 'key:B', 'wait:3000', 'key:R', 'wait:300') }
     SynthesizerKeyboard = @{ Steps = $SynthLoop + @('wait:1300') }
     GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500') }
