@@ -38,7 +38,7 @@ $Recipes = [ordered]@{
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Click 'Star Catcher'), 'wait:800', 'key:1', 'wait:2500') }
     UltimateTicTacToe   = @{ Steps = @('wait:800', 'key:W', 'wait:7000') }
     CircleSpawner       = @{ Steps = @('wait:1500', (Pick 'Heart'), 'wait:3000') }
-    StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:4000', 'key:B', 'wait:300') }
+    StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:4000', 'key:B', 'wait:3000', 'key:R', 'wait:300') }
     SynthesizerKeyboard = @{ Steps = @('wait:800', 'key:L', 'wait:1700') }
     GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:800') }

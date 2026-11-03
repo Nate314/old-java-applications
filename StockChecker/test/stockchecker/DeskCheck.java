@@ -97,7 +97,85 @@ public class DeskCheck {
       third.startOver();
       check(third.market.day == 1 && third.portfolio.cash == Portfolio.START && third.portfolio.holdings.isEmpty(), "start over");
       check(worth > 0, "worth");
+      for (Rival rival : third.rivals) {
+         check(rival.portfolio.cash == Portfolio.START && rival.portfolio.holdings.isEmpty() && rival.portfolio.closes.isEmpty(),
+            "start over resets " + rival.name);
+      }
       file.delete();
+
+      // The rivals: same trades for everybody, carried across a reload, no credit, day traders out by the close.
+      List<String> five = Arrays.asList("crm", "lmt", "tsn", "nflx", "swk");
+      Desk one = Desk.load(null, five, first);
+      Desk two = Desk.load(null, five, first);
+      int trades = 0;
+      for (int day = 1; day <= 6; day++) {
+         while (!one.tick()) {
+            for (Rival rival : one.rivals) {
+               check(rival.portfolio.cash >= 0, rival.name + " never spends more than he or she has");
+            }
+         }
+         while (!two.tick()) {
+            // the same day again
+         }
+         Rival hal = one.rivals.get(Rival.HAL);
+         check(hal.portfolio.holdings.keySet().containsAll(one.watch()), "Hal holds the whole list: " + hal.portfolio.holdings.keySet());
+         for (Rival rival : one.rivals) {
+            Rival twin = two.rivals.get(rival.kind);
+            check(rival.portfolio.trades.size() == twin.portfolio.trades.size()
+               && rival.portfolio.worth(one.market) == twin.portfolio.worth(two.market), rival.name + " trades the same for everybody");
+            if (rival.kind != Rival.HAL) {
+               check(rival.portfolio.holdings.isEmpty(), rival.name + " holds nothing overnight");
+               trades += rival.portfolio.trades.size();
+            }
+            double[] series = rival.portfolio.worthToday(one.market);
+            check(series.length == Market.CLOSE + 1 && Math.abs(series[Market.CLOSE] - rival.portfolio.worth(one.market)) < 0.01,
+               "worth through the day ends at the worth now");
+            check(rival.kind == Rival.HAL || Math.abs(series[0] - rival.portfolio.openingWorth()) < 1, rival.name + " opens the day at the last close: "
+               + series[0] + " vs " + rival.portfolio.openingWorth());
+         }
+         check(one.standings(false).size() == 5 && one.rank(false) >= 1 && one.rank(true) <= 5, "five in the standings");
+         one.nextDay();
+         two.nextDay();
+      }
+      check(trades > 20, "the day traders trade: " + trades);
+
+      File saved = File.createTempFile("stockchecker-rivals", ".txt");
+      saved.delete();
+      Desk straight = Desk.load(saved, five, first);
+      for (int i = 0; i < 210; i++) {
+         straight.tick();
+      }
+      Desk reloaded = Desk.load(saved, five, first);
+      for (Rival rival : straight.rivals) {
+         Rival copy = reloaded.rivals.get(rival.kind);
+         check(copy.portfolio.cash == rival.portfolio.cash && copy.portfolio.trades.size() == rival.portfolio.trades.size()
+            && copy.portfolio.holdings.keySet().equals(rival.portfolio.holdings.keySet()), rival.name + " reloads mid-day");
+      }
+      while (!straight.tick()) {
+         reloaded.tick();
+      }
+      reloaded.tick();
+      for (Rival rival : straight.rivals) {
+         check(Math.abs(reloaded.rivals.get(rival.kind).portfolio.worth(reloaded.market) - rival.portfolio.worth(straight.market)) < 0.01,
+            rival.name + " ends the day the same after a reload");
+      }
+      // Hal sells a stock that left the list at the next open, and its price is still known until then.
+      straight.setWatch(Arrays.asList("crm", "lmt"));
+      check(straight.marketSymbols().contains("NFLX"), "a stock Hal holds stays in the market");
+      straight.nextDay();
+      straight.tick();
+      check(straight.rivals.get(Rival.HAL).portfolio.holdings.keySet().equals(new java.util.HashSet<>(Arrays.asList("CRM", "LMT"))),
+         "Hal sells what left the list: " + straight.rivals.get(Rival.HAL).portfolio.holdings.keySet());
+      // A desk saved before the rivals existed gives them $10,000 each.
+      try (java.io.Writer writer = new java.io.FileWriter(saved)) {
+         writer.write("day=3\nminute=10\ncash=9000\nclose=10100\nclose=10200\n");
+      }
+      Desk old = Desk.load(saved, five, first);
+      check(old.market.day == 3 && old.portfolio.cash == 9000, "old desk loads");
+      for (Rival rival : old.rivals) {
+         check(rival.portfolio.cash == Portfolio.START && rival.portfolio.openingWorth() == Portfolio.START, rival.name + " joins an old desk");
+      }
+      saved.delete();
 
       // Money text.
       check(Money.dollars(10234.5).equals("$10,234.50"), Money.dollars(10234.5));
