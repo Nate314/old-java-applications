@@ -3942,7 +3942,9 @@
         var n = parseInt(kv[1], 10);
         if (/^\d+$/.test(kv[0]) && n >= 1 && n <= 3) { solved++; stars += n; }
       });
-      return solved ? 'Your levels: ' + solved + ' of 20 solved, ' + stars + ' of 60 stars' : '';
+      var made = /^patterns=(.+)$/m.exec(text), parts = solved ? ['Your levels: ' + solved + ' of 20 solved, ' + stars + ' of 60 stars'] : [];
+      if (made) parts.push((parts.length ? 'patterns' : 'Your patterns') + ': ' + made[1].split(',').length + ' of 7 made');
+      return parts.join('; ');
     } },
     MusicTheoryExpert: { file: '.musictheory-drills.txt', show: function (text) {
       var r = starRows(text);

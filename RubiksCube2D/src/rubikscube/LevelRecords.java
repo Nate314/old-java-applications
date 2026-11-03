@@ -6,11 +6,15 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * The best stars and fewest moves on each solved level and the level played last, kept in a small text file of
  * {@code name=value} lines: {@code level=4}, then one line such as {@code 3=3,3} (stars, moves) per solved level, and
- * {@code view=net} when the flat net was picked over the 3D cube.
+ * {@code view=net} when the flat net was picked over the 3D cube, and {@code patterns=spots,checkerboard} for the
+ * patterns made by hand.
  */
 public final class LevelRecords {
    public static final int LEVELS = 20;
@@ -19,6 +23,7 @@ public final class LevelRecords {
    private final int[] moves = new int[LEVELS + 1];
    private int lastLevel = 1;
    private boolean netView = false;
+   private final Set<String> patterns = new LinkedHashSet<>();
 
    private LevelRecords(File file) {
       this.file = file;
@@ -47,6 +52,14 @@ public final class LevelRecords {
       try {
          if (name.equals("view")) {
             this.netView = value.equals("net");
+            return;
+         }
+         if (name.equals("patterns")) {
+            for (String key : value.split(",")) {
+               if (Patterns.byKey(key.trim()) != null) {
+                  this.patterns.add(key.trim());
+               }
+            }
             return;
          }
          if (name.equals("level")) {
@@ -120,6 +133,18 @@ public final class LevelRecords {
       }
    }
 
+   /** The keys of the patterns made by hand (see {@link Patterns}). */
+   public Set<String> patternsMade() {
+      return Collections.unmodifiableSet(this.patterns);
+   }
+
+   /** Records a pattern made by hand and saves, the first time. */
+   public void madePattern(String key) {
+      if (this.patterns.add(key)) {
+         this.save();
+      }
+   }
+
    /** Records a solve; keeps the most stars and the fewest moves seen on that level and saves. */
    public void record(int level, int starCount, int moveCount) {
       this.stars[level] = Math.max(this.stars[level], starCount);
@@ -143,6 +168,9 @@ public final class LevelRecords {
          writer.write("level=" + this.lastLevel + "\n");
          if (this.netView) {
             writer.write("view=net\n");
+         }
+         if (!this.patterns.isEmpty()) {
+            writer.write("patterns=" + String.join(",", this.patterns) + "\n");
          }
          for (int level = 1; level <= LEVELS; level++) {
             if (this.stars[level] > 0) {
