@@ -413,6 +413,7 @@
         <button class="btn" type="button" id="player-pop" aria-pressed="false" data-sound="none" hidden>Pop out</button>
         <button class="btn" type="button" id="player-share" data-sound="none" title="Share this app: its link, with a preview card">&#8599; Share</button>
         <button class="btn" type="button" id="player-replay" data-sound="none" hidden title="Instant replay: the last 10 to 20 seconds of play, as a video to watch, save or share">&#10226; Replay</button>
+        <button class="btn" type="button" id="player-photo" data-sound="none" hidden aria-label="Take a photo" title="Photo: a picture of the app to save, copy or share, in an instant print or postcard frame">&#128247;</button>
         <a class="btn" id="player-source" href="Minesweeper/index.html#source" title="Open the app's page with its Java source beside it">&lt;/&gt; Source</a>
         <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
       </div>
@@ -733,6 +734,7 @@
       var api = popApi();
       if (api) api.back();
       replayButton.hidden = true;   // until the new app's page says it is recording
+      photoButton.hidden = true;   // until the new app's page says it runs (boot.js photo booth)
       var next = frame.cloneNode(false);
       next.src = page + '?embed' + (watch ? '&watch' : '');
       frame.parentNode.replaceChild(next, frame);
@@ -867,6 +869,7 @@
       if (lit) { if (padLight) padLight(lit.which, !!lit.down); return; }
       if (typeof e.data.oldjavaShare === 'string') { window.oldjavaShare.open(e.data.oldjavaShare || null, frame); return; }
       if (e.data.oldjavaReplay) { replayButton.hidden = false; return; }
+      if (e.data.oldjavaPhoto === true) { photoButton.hidden = false; return; }
       if (e.data.oldjavaClip) { window.oldjavaReplay.open(e.data.oldjavaClip, frame); return; }
       if (e.data.oldjavaWatch === 'taken') { endDemo(); return; }
       var li = card(e.data.oldjavaPlay);
@@ -877,6 +880,15 @@
       var api = null;
       try { api = frame.contentWindow.oldjavaReplay; } catch (e) { /* not loaded */ }
       if (api) api.take().then(function (clip) { if (clip) window.oldjavaReplay.open(clip, replayButton); });
+    });
+    // Photo: the player's app draws its windows (boot.js takePhoto in the iframe); the print shows on this page.
+    var photoButton = document.getElementById('player-photo');
+    photoButton.addEventListener('click', function () {
+      window.oldjavaPhoto.snap(function () {
+        var api = null;
+        try { api = frame.contentWindow.oldjavaPhoto; } catch (e) { /* not loaded */ }
+        return api && api.can() ? api.take() : Promise.resolve(null);
+      }, screen, photoButton);
     });
     var shareButton = document.getElementById('player-share');
     shareButton.addEventListener('click', function () {

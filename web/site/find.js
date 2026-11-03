@@ -148,6 +148,7 @@
       var big = shown('#player-big');
       add(clickAction('#player-big', big && big.getAttribute('aria-pressed') === 'true' ? 'Exit big screen' : 'Big screen',
         'Fill the screen with the player', '⛶', 'fullscreen big screen large'));
+      add(clickAction('#player-photo', 'Take a photo', 'A picture of the app in the player, in an instant print or postcard frame', '▣', 'photo picture screenshot snapshot camera image postcard print'));
       add(clickAction('#player-restart', 'Restart the player\'s app', 'Start it again from the beginning', '↻', 'restart reload again'));
       add(tabAction('tab-news', 'What\'s new', 'The latest changes to the apps', '★', 'news changes updates history'));
       add(tabAction('tab-passport', 'Arcade passport', 'A stamp for every app you have played', '✓', 'passport stamps badges progress'));
@@ -157,6 +158,7 @@
       add(clickAction('.shim-help', 'How to play', 'Show this app\'s hint in the toolbar', '?', 'help how to play hint keys controls'));
       add(clickAction('.shim-source-open', 'Read the source', 'The Java this app was compiled from, beside it', '</>', 'source code java read'));
       add(clickAction('.shim-share-open', 'Share this app', 'Its link with a preview card', '↗', 'share link send'));
+      add(clickAction('.shim-photo-open', 'Take a photo', 'A picture of the app in an instant print or postcard frame', '▣', 'photo picture screenshot snapshot camera image postcard print'));
       add(clickAction('.shim-replay', 'Instant replay', 'The last 10 to 20 seconds as a video', '●', 'replay video record clip save'));
       var zoom = shown('.shim-zoom');
       if (zoom) add(action(zoom.getAttribute('aria-pressed') === 'false' ? 'Fit to screen' : 'Actual size',
