@@ -172,6 +172,8 @@
     if (window.oldjavaShare && window.oldjavaShare.embed) add(action('Put an app on your site',
       'The tag that plays it in your own page, blog or class site', '</>', 'embed iframe widget website blog html code site put',
       function () { window.oldjavaShare.embed(site.appId() || null); }));
+    add(action('The story', 'How these 20 old programs were recovered and brought to the browser', '❦',
+      'story history about how recovered decompiled then origin 2016 chapter', function () { go(site.root() + 'story.html'); }));
     var notYet = apps.filter(function (a) { return !site.played(a.id) && a.id !== site.appId(); });
     var pool = notYet.length ? notYet : apps.filter(function (a) { return a.id !== site.appId(); });
     if (pool.length) add(action('Surprise me', notYet.length ? 'Open an app you have not played yet (' + notYet.length + ' left)' : 'Open a random app',

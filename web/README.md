@@ -508,6 +508,17 @@ Ctrl+K (Cmd+K on a Mac) on any page, / on the home page, the toolbar's Find butt
 - With nothing typed it offers the apps played last (`oldjava.lastPlayed`), some not played yet, and the page's things to do. Arrow keys move, Enter opens, Esc or the same shortcut closes; keys typed in the box never reach the app.
 - The code is `find.js`, which `boot.js` adds the first time the box opens (the end of `boot.js` has the shortcut, the toolbar button and what it lends through `window.oldjavaSite`). In the home page's player the shortcut is passed up to the home page, so the box opens over the whole page. The box keeps the focus while it is open, since the player focuses its iframe when it loads the next demo game. Off in the thumbnail, clip and screen saver modes. `find.js` is in the offline file list.
 
+## The story
+
+`story.html` tells [HISTORY.md](../HISTORY.md) on the site, in four chapters, with the things each chapter talks about beside the words. A link under the home page's intro and a "The story" entry in Find lead to it. Before it, a visitor met 20 apps with no word on where they came from, and the history lived only in the repo.
+
+- **The originals**: the 2016 quotes Stock Checker saved, read from `StockChecker/stockCheck.csv` (its five real quotes, and a note for the 95 empty rows after them), and all 20 apps grouped by where each was recovered from, linking to their pages.
+- **The recovery**: Flappy Bird's `Bird` class as decompiled (`b.java` in the first commit, 4fea701) and as #1 renamed it (`Bird.java`). Both files are in the page; split on identifiers they line up token for token, so Rename turns each obfuscated name into its English one in place, one name at a time, and Show decompiled turns them back.
+- **The first restoration**: the embeddable player (`play.html`) on any app's Then version, with a Then | Now switch and an app picker. It loads when the chapter comes near the screen and shows its poster until the visitor presses Play.
+- **The Claude Code chain**: the number of changes, the days from first to latest and the changes to each app's folder, counted in the browser from `history.txt` (the same file What's new reads), each bar a link to the app.
+- It wears the visitor's skin (Modern, Classic or Arcade, from `shim.css` and `oldjava.skin`; Yours shows as Modern), but does not load `boot.js`, which is for the home and app pages, so it has no toolbar, Find or site sounds. Its words stay beside the pictures on screens at least 820 px tall and stack above them below 760 px wide. It is in the offline file list with `play.html` and the quotes file.
+- The words come from HISTORY.md: when that changes, change `story.html` with it.
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".
