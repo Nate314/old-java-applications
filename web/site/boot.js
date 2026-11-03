@@ -3385,12 +3385,15 @@
   // this plays the Windows they were written for, inside the stage: the Windows key alone opens a Start menu
   // of every app on the site (type to search, Enter to play), and Win+E opens a File Explorer window on the
   // folder of apps (double-click one to play it). Windows outlives the program that pressed its keys, so an
-  // exit waits until the Start menu is closed. Returns { holdExit(show) }.
+  // exit waits until the Start menu is closed. Windows+E's keyboard also presses Win+D (show desktop), Win+R
+  // (a Run box that opens an app by name), Win+Tab (task view) and Win+arrows (snap, maximize, restore,
+  // minimize the File Explorer window in front). Returns { holdExit(show) }.
   var MAX_EXPLORERS = 40;
   function pretendWindows() {
     var layer = element('div', 'shim-shell');
     document.body.appendChild(layer);
     var menu = null, heldExit = null, explorers = [], opened = 0, front = 0, tray = null;
+    var peeked = null, runBox = null, tasks = null, note = null;   // Win+D's hidden windows, Win+R, Win+Tab
 
     function element(tag, cls, text) {
       var e = document.createElement(tag);
@@ -3510,11 +3513,17 @@
         tray = element('div', 'shim-shell-tray');
         tray.appendChild(element('span', 'shim-folder-mini'));
         tray.appendChild(element('span', 'shim-shell-count'));
+        var desk = element('button', null, 'Show desktop');
+        desk.type = 'button';
+        desk.title = 'Hide the windows, or bring them back (Win+D)';
+        desk.addEventListener('click', showDesktop);
+        tray.appendChild(desk);
         var all = element('button', null, 'Close all');
         all.type = 'button';
         all.addEventListener('click', function () {
           explorers.forEach(function (w) { w.remove(); });
           explorers = [];
+          peeked = null;
           showTray();
         });
         tray.appendChild(all);
@@ -3533,6 +3542,12 @@
         var x = e.clientX - w.offsetLeft, y = e.clientY - w.offsetTop;
         handle.setPointerCapture(e.pointerId);
         function move(m) {
+          if (w.hasAttribute('data-snap') && w._restore) {   // dragging a snapped window takes it back to its size
+            w.removeAttribute('data-snap');
+            x = Math.min(x, w._restore[2] / 2);
+            w.style.width = w._restore[2] + 'px';
+            w.style.height = w._restore[3] + 'px';
+          }
           w.style.left = Math.max(80 - w.offsetWidth, Math.min(layer.clientWidth - 80, m.clientX - x)) + 'px';
           w.style.top = Math.max(0, Math.min(layer.clientHeight - 32, m.clientY - y)) + 'px';
         }
@@ -3625,12 +3640,215 @@
       });
     }
 
-    window.__shimShell = function (keycode) {
-      if (keycode === 524) {
-        if (menu) closeMenu(); else openMenu();
-      } else if (keycode === 69) {
-        openExplorer();
+    // A line at the top of the layer for a shortcut with nothing to act on.
+    function say(text) {
+      if (note) note.remove();
+      var n = note = element('div', 'shim-shell-note', text);
+      n.setAttribute('role', 'status');
+      layer.appendChild(n);
+      setTimeout(function () { if (note === n) { n.remove(); note = null; } }, 2600);
+    }
+    function shown() { return explorers.filter(function (w) { return !w.classList.contains('min'); }); }
+    function topWindow() {
+      return shown().reduce(function (best, w) { return !best || +w.style.zIndex > +best.style.zIndex ? w : best; }, null);
+    }
+    function minimize(w) {
+      w.classList.add('min');
+      w.classList.remove('active');
+      var next = topWindow();
+      if (next) raise(next);
+    }
+    function restore(w) {
+      w.classList.remove('min');
+      raise(w);
+    }
+
+    // Win+arrows on the window in front, as on Windows: Left and Right snap it to a half (the other way from a
+    // half puts it back), Up maximizes it, Down puts a snapped or maximized window back and minimizes one that is
+    // not. The bottom 44 px stay free for the tray. Its size before snapping is kept in w._restore.
+    function snap(how) {
+      var w = topWindow();
+      if (!w) { say(explorers.length ? 'Every window is minimized. Win+Tab shows them.' : 'No window to move. Win+E opens one.'); return; }
+      var now = w.getAttribute('data-snap') || '';
+      var to = how === 'down' ? (now ? '' : 'min') : how === 'up' ? 'max'
+        : now === (how === 'left' ? 'right' : 'left') ? '' : how;
+      if (to === 'min') { minimize(w); playSound('close'); return; }
+      // From its style, not its layout, which lags behind while a snap is still sliding.
+      if (!now) w._restore = ['left', 'top', 'width', 'height'].map(function (k) { return parseFloat(w.style[k]) || 0; });
+      var wide = layer.clientWidth, tall = layer.clientHeight - 44, half = Math.floor(wide / 2);
+      var r = to === 'left' ? [0, 0, half, tall] : to === 'right' ? [half, 0, wide - half, tall]
+        : to === 'max' ? [0, 0, wide, tall] : w._restore;
+      if (to) w.setAttribute('data-snap', to); else w.removeAttribute('data-snap');
+      w.classList.add('moving');
+      w.style.left = r[0] + 'px';
+      w.style.top = r[1] + 'px';
+      w.style.width = r[2] + 'px';
+      w.style.height = r[3] + 'px';
+      clearTimeout(w._moving);
+      w._moving = setTimeout(function () { w.classList.remove('moving'); }, 260);
+      raise(w);
+      playSound('open');
+    }
+
+    // Win+D: every window out of the way, and pressed again (or Show desktop in the tray) back where it was.
+    function showDesktop() {
+      var up = shown();
+      if (up.length || menu || runBox || tasks) {
+        if (menu) closeMenu();
+        if (runBox) closeRun();
+        if (tasks) closeTasks();
+        up.forEach(function (w) { w.classList.add('min'); w.classList.remove('active'); });
+        peeked = (peeked || []).concat(up);
+        playSound('close');
+      } else if (peeked && peeked.length) {
+        peeked.filter(function (w) { return explorers.indexOf(w) >= 0; }).forEach(restore);
+        peeked = null;
+        playSound('open');
+      } else {
+        say('Nothing to hide. Win+E opens a window.');
       }
+    }
+
+    // Win+R: the Run box, at the bottom left as on Windows. It opens an app by its name (or the start of it), and
+    // "explorer" opens File Explorer.
+    function closeRun() {
+      if (!runBox) return;
+      runBox.remove();
+      runBox = null;
+    }
+    function openRun() {
+      if (runBox) { runBox.querySelector('input').focus({ preventScroll: true }); return; }
+      var box = runBox = element('div', 'shim-run');
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-label', 'Run');
+      var bar = element('div', 'shim-ex-title');
+      bar.appendChild(element('span', 'shim-run-icon'));
+      bar.appendChild(element('span', 'shim-ex-name', 'Run'));
+      var x = closeButton(function () { closeRun(); playSound('close'); });
+      x.setAttribute('data-sound', 'none');
+      bar.appendChild(x);
+      var body = element('div', 'shim-run-body');
+      body.appendChild(element('p', null, 'Type the name of an app, and Windows will open it for you.'));
+      var row = element('label', 'shim-run-row', 'Open: ');
+      var input = element('input');
+      input.type = 'text';
+      input.setAttribute('list', 'shim-run-apps');
+      input.setAttribute('autocomplete', 'off');
+      input.spellcheck = false;
+      row.appendChild(input);
+      var list = element('datalist');
+      list.id = 'shim-run-apps';
+      var error = element('p', 'shim-run-error');
+      error.setAttribute('role', 'alert');
+      var buttons = element('div', 'shim-run-buttons');
+      var ok = element('button', null, 'OK');
+      ok.type = 'button';
+      var cancel = element('button', null, 'Cancel');
+      cancel.type = 'button';
+      cancel.addEventListener('click', function () { closeRun(); playSound('close'); });
+      buttons.appendChild(ok);
+      buttons.appendChild(cancel);
+      [row, list, error, buttons].forEach(function (n) { body.appendChild(n); });
+      box.appendChild(bar);
+      box.appendChild(body);
+      ownKeys(box, function () { closeRun(); playSound('close'); });
+      draggable(box, bar);
+      box.style.zIndex = String(++front);
+      layer.appendChild(box);
+      input.focus({ preventScroll: true });
+      playSound('open');
+      catalog().then(function (apps) {
+        if (runBox !== box) return;
+        apps.forEach(function (app) {
+          var o = element('option');
+          o.value = app.name;
+          list.appendChild(o);
+        });
+        function match(q) {
+          var named = function (a) { return [a.name.toLowerCase(), a.id.toLowerCase()]; };
+          return apps.filter(function (a) { return named(a).indexOf(q) >= 0; })[0] ||
+            apps.filter(function (a) { return named(a).some(function (n) { return n.indexOf(q) === 0; }); })[0] ||
+            apps.filter(function (a) { return named(a).some(function (n) { return n.indexOf(q) >= 0; }); })[0];
+        }
+        function runTyped() {
+          var typed = input.value.trim(), q = typed.toLowerCase();
+          if (!q) return;
+          if (q === 'explorer' || q === 'explorer.exe') { closeRun(); openExplorer(); return; }
+          var app = match(q);
+          if (app) { go(app); return; }
+          error.textContent = 'Windows cannot find \'' + typed + '\'. Make sure you typed the name correctly, and then try again.';
+        }
+        ok.addEventListener('click', runTyped);
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') runTyped(); });
+        input.addEventListener('input', function () { error.textContent = ''; });
+      });
+    }
+
+    // Win+Tab: task view, every File Explorer window as a card (a scaled copy of it) to bring to the front or close.
+    function closeTasks() {
+      if (!tasks) return;
+      tasks.remove();
+      tasks = null;
+    }
+    function openTasks() {
+      if (tasks) { closeTasks(); return; }
+      var view = tasks = element('div', 'shim-tasks');
+      view.setAttribute('role', 'dialog');
+      view.setAttribute('aria-label', 'Task view');
+      view.appendChild(element('strong', 'shim-tasks-head', explorers.length ? 'Task view: ' + explorers.length +
+        (explorers.length === 1 ? ' window' : ' windows') : 'Task view: no windows open. Win+E opens File Explorer.'));
+      var grid = element('div', 'shim-tasks-grid');
+      explorers.slice().sort(function (a, b) { return +b.style.zIndex - +a.style.zIndex; }).forEach(function (w, i) {
+        var card = element('div', 'shim-task');
+        var pick = element('button', 'shim-task-pick');
+        pick.type = 'button';
+        pick.setAttribute('aria-label', 'File Explorer window ' + (i + 1) + (w.classList.contains('min') ? ', minimized' : ''));
+        var pic = element('span', 'shim-task-pic');
+        var copy = w.cloneNode(true);
+        copy.classList.remove('min', 'moving');
+        copy.removeAttribute('role');
+        copy.setAttribute('aria-hidden', 'true');
+        copy.inert = true;
+        copy.style.left = copy.style.top = '0';
+        copy.style.transform = 'scale(' + (200 / Math.max(1, w.offsetWidth || parseInt(w.style.width, 10))) + ')';
+        pic.appendChild(copy);
+        pick.appendChild(pic);
+        pick.appendChild(element('span', 'shim-task-name', 'File Explorer' + (w.classList.contains('min') ? ' (minimized)' : '')));
+        pick.addEventListener('click', function () { closeTasks(); restore(w); });
+        var x = closeButton(function () {
+          w.remove();
+          explorers = explorers.filter(function (o) { return o !== w; });
+          card.remove();
+          showTray();
+          if (!explorers.length) closeTasks();
+        });
+        card.appendChild(pick);
+        card.appendChild(x);
+        grid.appendChild(card);
+      });
+      view.appendChild(grid);
+      view.addEventListener('click', function (e) { if (e.target === view || e.target === grid) closeTasks(); });
+      ownKeys(view, closeTasks);
+      layer.appendChild(view);
+      var first = view.querySelector('button');
+      if (first) first.focus({ preventScroll: true });
+      playSound('open');
+    }
+
+    // The keys Windows+E's keyboard sends with the Windows key held (Windows itself only sends the key alone).
+    var SHORTCUTS = {
+      524: function () { if (menu) closeMenu(); else openMenu(); },
+      69: openExplorer,
+      68: showDesktop,
+      82: openRun,
+      9: openTasks,
+      37: function () { snap('left'); },
+      38: function () { snap('up'); },
+      39: function () { snap('right'); },
+      40: function () { snap('down'); }
+    };
+    window.__shimShell = function (keycode) {
+      if (SHORTCUTS[keycode]) SHORTCUTS[keycode]();
     };
     return { holdExit: function (show) { if (!menu) return false; heldExit = show; return true; } };
   }

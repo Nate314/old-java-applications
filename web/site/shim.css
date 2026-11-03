@@ -3392,6 +3392,209 @@ button.shim-toast-go {
   text-shadow: 0 0 6px rgba(125, 249, 255, 0.7);
 }
 
+/* Windows+E's other shortcuts: minimized (Win+Down, Win+D) and snapping (Win+arrows) File Explorer windows, a
+   status line for a shortcut with nothing to act on, the Run box (Win+R) and task view (Win+Tab). */
+.shim-explorer.min {
+  display: none;
+}
+
+.shim-explorer.moving {
+  transition: left 0.22s ease, top 0.22s ease, width 0.22s ease, height 0.22s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-explorer.moving {
+    transition: none;
+  }
+}
+
+.shim-shell-note {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 1000002;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  padding: 7px 14px;
+  background: var(--frame-bg);
+  border: 1px solid var(--card-border);
+  border-radius: max(var(--window-radius), 4px);
+  box-shadow: var(--window-shadow);
+}
+
+.shim-run {
+  position: absolute;
+  left: 10px;
+  bottom: 54px;
+  width: min(400px, calc(100% - 20px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--frame-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--window-radius);
+  box-shadow: var(--window-shadow);
+  animation: shim-ex-in 0.14s ease-out;
+}
+
+.shim-run .shim-ex-title {
+  background: var(--title-bg);
+}
+
+.shim-run-icon {
+  flex: none;
+  width: 16px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-width: 4px;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+.shim-run-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.shim-run-body p {
+  margin: 0;
+}
+
+.shim-run-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shim-run-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-bg);
+  color: var(--field-text);
+  font: inherit;
+}
+
+.shim-run-row input:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.shim-run-error {
+  color: #d93025;
+  font-size: 12px;
+}
+
+.shim-run-error:empty {
+  display: none;
+}
+
+.shim-run-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.shim-run-buttons button {
+  min-width: 76px;
+  padding: 3px 12px;
+  border: 1px solid var(--button-border);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
+}
+
+.shim-tasks {
+  position: absolute;
+  inset: 0;
+  z-index: 1000001;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 16px;
+  box-sizing: border-box;
+  overflow: auto;
+  background: rgba(10, 14, 24, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: shim-start-in 0.18s ease-out;
+}
+
+.shim-tasks-head {
+  color: #fff;
+  font-size: 15px;
+  text-align: center;
+}
+
+.shim-tasks-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+}
+
+.shim-task {
+  position: relative;
+}
+
+.shim-shell .shim-task-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--frame-bg);
+  border: 2px solid transparent;
+  border-radius: max(var(--window-radius), 6px);
+  box-shadow: var(--window-shadow);
+}
+
+.shim-task-pick:hover,
+.shim-task-pick:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.shim-task-pic {
+  position: relative;
+  display: block;
+  width: 200px;
+  height: 130px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.shim-task-pic .shim-explorer {
+  transform-origin: 0 0;
+  pointer-events: none;
+  animation: none;
+}
+
+.shim-task-name {
+  text-align: left;
+}
+
+.shim-task .shim-close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: var(--frame-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-run,
+  .shim-tasks {
+    animation: none;
+  }
+}
+
 /* ---- then and now (boot.js eraSwitch, thenTitle): an app as it was recovered, before any fixes, runs on
    <App>/then.html. The band's Then | Now switch goes between the two pages; the title screen of then.html shows
    the quirks the README listed back then where today's page shows its picture. ---- */
