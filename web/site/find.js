@@ -181,6 +181,9 @@
      ['arcade', 'Arcade', 'Neon CRT cabinet with scanlines', 'dark neon crt retro']].forEach(function (s) {
       if (s[0] !== skin) add(action('Skin: ' + s[1], s[2], '◐', 'skin theme look style ' + s[3], function () { window.oldjavaSkin.set(s[0]); }));
     });
+    if (window.oldjavaSkin && window.oldjavaSkin.make) add(action(skin === 'own' ? 'Change your skin' : 'Make your own skin',
+      'Pick a color, a desk, corners and windows for every page and app', '🎨', 'skin theme look style own custom yours color colour make design paint dark light wallpaper',
+      function () { window.oldjavaSkin.make(); }));
     var sound = shown('.shim-sound');
     if (sound) add(action(sound.getAttribute('aria-pressed') === 'false' ? 'Turn site sounds on' : 'Turn site sounds off',
       'The short sounds of the site\'s own buttons', '♪', 'sound mute audio quiet volume', function () { sound.click(); }));

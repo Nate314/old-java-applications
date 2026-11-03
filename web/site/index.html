@@ -399,6 +399,7 @@
       <span class="hint" id="player-hint">Every board can be solved without a guess, and Hint shows the next step and why. Right-click (or long-press) to flag; click a number to open around it.</span>
       <div class="actions">
         <button class="btn arcade" type="button" id="player-arcade" aria-pressed="false" title="Neon CRT arcade look for every app (the Arcade skin)">Arcade mode</button>
+        <button class="btn" type="button" id="player-own-skin" data-skin-maker data-sound="none" title="Make your own skin for every page and app: a color, a desk, corners and windows">&#127912; Your skin</button>
         <button class="btn" type="button" id="player-shuffle" title="Play a random app">Shuffle</button>
         <button class="btn" type="button" id="player-pad-toggle" aria-pressed="true" title="Show or hide the on-screen controller" hidden>Controls</button>
         <button class="btn" type="button" id="player-restart">Restart</button>
@@ -1062,6 +1063,7 @@
     function shell() {
       var files = ['./', 'index.html', 'boot.js', 'qr.js', 'saves.js', 'news.js', 'clockbar.js', 'find.js', 'history.txt', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
                    'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
+      files.push('skinmaker.js');   // Your skin's maker panel (boot.js adds it when it opens)
       cards.forEach(function (li) { files.push(li.querySelector('img').getAttribute('src')); });
       return files.map(abs);
     }

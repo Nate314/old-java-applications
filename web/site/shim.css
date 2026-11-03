@@ -4387,3 +4387,257 @@ html[data-saver] * {
     animation: none;
   }
 }
+
+/* ---- Your skin (boot.js ownCss, skinmaker.js) ----
+   The skin's variables come from a <style> boot.js writes; these are the maker panel, the toolbar's Edit button
+   (shown while Yours is worn) and the box a shared skin's link opens with. The panel sits at the side, not over
+   the middle, so the page and the running app behind it show each choice as it is made. */
+.shim-toolbar .shim-own-edit {
+  display: none;
+}
+
+:root[data-skin="own"] .shim-toolbar .shim-own-edit {
+  display: inline-block;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-own-edit-label {
+    display: none;
+  }
+}
+
+.shim-own,
+.shim-own-offer {
+  position: fixed;
+  right: 12px;
+  z-index: 2000000003;
+  box-sizing: border-box;
+  border: 1px solid var(--card-border);
+  border-radius: max(var(--window-radius), 4px);
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  animation: shim-own-in 0.18s ease-out;
+}
+
+.shim-own {
+  top: 52px;
+  width: 336px;
+  max-height: calc(100vh - 64px);
+  max-height: calc(100dvh - 64px);
+  overflow: auto;
+  padding: 12px 14px 14px;
+}
+
+.shim-own-offer {
+  bottom: 16px;
+  width: min(380px, calc(100vw - 24px));
+  padding: 12px 14px;
+}
+
+@keyframes shim-own-in {
+  from { opacity: 0; transform: translateX(12px); }
+}
+
+.shim-own-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.shim-own-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.shim-own-x {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: 20px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.shim-own-x:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.shim-own-lead {
+  margin: 2px 0 8px;
+  opacity: 0.75;
+}
+
+.shim-own-row {
+  margin-top: 10px;
+}
+
+.shim-own-label {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.shim-own-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shim-own-option,
+.shim-own-btn,
+.shim-own-copy {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--button-radius);
+  background: var(--control);
+  color: var(--page-text);
+  cursor: pointer;
+}
+
+.shim-own-option[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+
+.shim-own-option:focus-visible,
+.shim-own-btn:focus-visible,
+.shim-own-copy:focus-visible,
+.shim-own-x:focus-visible,
+.shim-own-picker:focus-visible,
+.shim-own-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-own-options.base .shim-own-option,
+.shim-own-options.corners .shim-own-option,
+.shim-own-options.chromes .shim-own-option {
+  flex: 1;
+}
+
+.shim-own-options.colors {
+  gap: 4px;
+}
+
+.shim-own-options.colors .shim-own-option,
+.shim-own-picker {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--card-bg);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--card-border);
+}
+
+.shim-own-options.colors .shim-own-option[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--page-text);
+}
+
+.shim-own-picker {
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+}
+
+.shim-own-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+  opacity: 0;
+}
+
+.shim-own-options.desks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.shim-own-options.desks .shim-own-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px;
+  font-size: 12px;
+}
+
+.shim-own-options.desks .shim-own-option {
+  border-radius: min(var(--button-radius), 10px);
+}
+
+.shim-own-desk {
+  display: block;
+  height: 34px;
+  border-radius: min(var(--window-radius), 6px);
+  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.25);
+}
+
+.shim-own-share {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.shim-own-link {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-bg);
+  color: var(--field-text);
+  font: 12px ui-monospace, Consolas, monospace;
+}
+
+.shim-own-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.shim-own-foot .primary {
+  margin-left: auto;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Phones: a sheet along the bottom, so the top of the page (and the app) stays in view. */
+@media (max-width: 560px) {
+  .shim-own {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 58vh;
+    max-height: 58dvh;
+    border-radius: 14px 14px 0 0;
+    animation-name: shim-own-up;
+  }
+
+  .shim-own-offer {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  @keyframes shim-own-up {
+    from { opacity: 0; transform: translateY(16px); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-own,
+  .shim-own-offer {
+    animation: none;
+  }
+}
