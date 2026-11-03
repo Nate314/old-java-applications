@@ -35,6 +35,8 @@ final class DeskPanel extends JPanel {
    private static final Color WARN = new Color(255, 200, 70);
    private static final Color TEXT = new Color(240, 244, 255);
    private static final Color MUTED = new Color(170, 184, 220);
+   /** Hal, Mo, Val and Nell (in {@link Rival} order); you are drawn in {@link #TEXT}. */
+   private static final Color[] RIVALS = {new Color(120, 196, 255), new Color(255, 172, 64), new Color(196, 150, 255), new Color(255, 128, 200)};
    private static final Font BIG = new Font("SansSerif", Font.BOLD, 18);
    private static final Font TITLE = new Font("SansSerif", Font.BOLD, 15);
    private static final Font BOLD = new Font("SansSerif", Font.BOLD, 13);
@@ -49,6 +51,8 @@ final class DeskPanel extends JPanel {
       final BooleanSupplier shown;
       final Color fill;
       final Rectangle bounds;
+      /** Whether a button with no fill of its own shows as on (the current speed, the open tab). */
+      BooleanSupplier lit = () -> false;
 
       Button(String label, char key, Color fill, Rectangle bounds, BooleanSupplier shown, Runnable action) {
          this.label = label;
@@ -74,8 +78,9 @@ final class DeskPanel extends JPanel {
    private Color messageColor = TEXT;
    private long messageUntil;
    private boolean startOverArmed;
+   /** Whether the chart card shows the race against the rivals instead of the picked stock. */
+   private boolean race;
    private final Rectangle[] rows = new Rectangle[Desk.MAX_SYMBOLS * 2];
-
    DeskPanel(Desk desk) {
       this.desk = desk;
       setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -83,9 +88,21 @@ final class DeskPanel extends JPanel {
       BooleanSupplier open = () -> !desk.market.closed();
       BooleanSupplier closed = () -> desk.market.closed();
       BooleanSupplier always = () -> true;
-      buttons.add(new Button("Pause", ' ', null, new Rectangle(236, 10, 60, 26), always, () -> speed(Desk.PAUSED)));
-      buttons.add(new Button("Play", 'p', null, new Rectangle(300, 10, 60, 26), always, () -> speed(Desk.NORMAL)));
-      buttons.add(new Button("Fast", 'f', null, new Rectangle(364, 10, 60, 26), always, () -> speed(Desk.FAST)));
+      String[] speeds = {"Pause", "Play", "Fast"};
+      char[] speedKeys = {' ', 'p', 'f'};
+      for (int i = 0; i < speeds.length; i++) {
+         int speed = i;
+         Button button = new Button(speeds[i], speedKeys[i], null, new Rectangle(236 + i * 64, 10, 60, 26), always, () -> speed(speed));
+         button.lit = () -> desk.speed == speed;
+         buttons.add(button);
+      }
+      // The chart card's two tabs: the picked stock's chart, or the race against the rivals (R toggles).
+      Button chartTab = new Button("Chart", 'c', null, new Rectangle(588, 60, 56, 22), always, () -> race = false);
+      chartTab.lit = () -> !race;
+      buttons.add(chartTab);
+      Button raceTab = new Button("Race", 'r', null, new Rectangle(648, 60, 56, 22), always, () -> race = true);
+      raceTab.lit = () -> race;
+      buttons.add(raceTab);
       String[] labels = {"Buy 1", "Buy 10", "Buy max", "Sell 1", "Sell 10", "Sell all"};
       char[] keys = {'b', 'v', 'm', 's', 'd', 'a'};
       int[] counts = {1, 10, Integer.MAX_VALUE, -1, -10, Integer.MIN_VALUE};
@@ -262,6 +279,10 @@ final class DeskPanel extends JPanel {
          speed(desk.speed == Desk.PAUSED ? Desk.NORMAL : Desk.PAUSED);
          return;
       }
+      if (key == 'r') {
+         race = !race;
+         return;
+      }
       for (Button button : buttons) {
          if (button.key == key && button.shown.getAsBoolean()) {
             if (!button.label.equals("Start over")) {
@@ -285,9 +306,17 @@ final class DeskPanel extends JPanel {
       paintHeader(g);
       paintWatch(g);
       if (desk.market.closed()) {
-         paintClose(g);
+         if (race) {
+            paintStandings(g);
+         } else {
+            paintClose(g);
+         }
       } else {
-         paintChart(g);
+         if (race) {
+            paintRace(g);
+         } else {
+            paintChart(g);
+         }
          paintPosition(g);
       }
       paintButtons(g);
@@ -312,7 +341,12 @@ final class DeskPanel extends JPanel {
       double worth = desk.portfolio.worth(market);
       double opening = desk.portfolio.openingWorth();
       String value = Money.dollars(worth);
-      text(g, value, BIG, TEXT, WIDTH - 14 - width(g, value, BIG), 38);
+      int valueX = WIDTH - 14 - width(g, value, BIG);
+      text(g, value, BIG, TEXT, valueX, 38);
+      // Your place among the five traders by net worth.
+      int rank = desk.rank(false);
+      String place = ordinal(rank) + " of " + (desk.rivals.size() + 1);
+      text(g, place, BOLD, rank == 1 ? UP : WARN, valueX - 12 - width(g, place, BOLD), 37);
       String today = Money.change(worth - opening) + " today";
       String cash = "Cash " + Money.dollars(desk.portfolio.cash) + "   ";
       int right = WIDTH - 14 - width(g, today, SMALL);
@@ -436,6 +470,27 @@ final class DeskPanel extends JPanel {
       g.fillOval(xOf.applyAsInt(now) - dot / 2, yOf.applyAsInt(stock.path[now]) - dot / 2, dot, dot);
 
       if (big) {
+         // The rivals' trades in this stock: a dot in their color with their initial, filled for a buy, a ring for a sell.
+         for (Rival rival : desk.rivals) {
+            for (Portfolio.Trade trade : rival.portfolio.trades) {
+               if (trade.symbol.equals(stock.symbol) && trade.minute <= now) {
+                  int x = xOf.applyAsInt(trade.minute);
+                  int y = yOf.applyAsInt(trade.price);
+                  Color color = RIVALS[rival.kind];
+                  boolean buy = trade.shares > 0;
+                  g.setColor(buy ? color : new Color(10, 16, 40, 160));
+                  g.fillOval(x - 7, y - 7, 14, 14);
+                  if (!buy) {
+                     g.setColor(color);
+                     g.setStroke(new BasicStroke(2f));
+                     g.drawOval(x - 7, y - 7, 14, 14);
+                     g.setStroke(new BasicStroke(1f));
+                  }
+                  String initial = rival.name.substring(0, 1);
+                  text(g, initial, SMALL, buy ? new Color(10, 16, 40) : color, x - width(g, initial, SMALL) / 2, y + 4);
+               }
+            }
+         }
          for (Portfolio.Trade trade : desk.portfolio.trades) {
             if (trade.symbol.equals(stock.symbol) && trade.minute <= now) {
                int x = xOf.applyAsInt(trade.minute);
@@ -469,9 +524,170 @@ final class DeskPanel extends JPanel {
       text(g, Money.dollars(price), BIG, TEXT, x, card.y + 25);
       x += width(g, Money.dollars(price), BIG) + 10;
       boolean up = price >= stock.open();
-      String change = Money.change(price - stock.open()) + " (" + Money.percent(stock.open(), price) + ") since the open";
-      text(g, change, PLAIN, up ? UP : DOWN, x, card.y + 24);
+      String change = Money.change(price - stock.open()) + " (" + Money.percent(stock.open(), price) + ") today";
+      text(g, fit(g, change, PLAIN, 580 - x), PLAIN, up ? UP : DOWN, x, card.y + 24);
       paintLine(g, stock, new Rectangle(card.x + 14, card.y + 38, card.width - 84, card.height - 62), true);
+   }
+
+   private static Color colorOf(Desk.Standing standing) {
+      return standing.rival == null ? TEXT : RIVALS[standing.rival.kind];
+   }
+
+   private static String styleOf(Desk.Standing standing) {
+      return standing.rival == null ? "your trades" : Rival.STYLES[standing.rival.kind];
+   }
+
+   private static String planOf(Desk.Standing standing) {
+      return standing.rival == null ? "Your own trades." : standing.rival.plan;
+   }
+
+   /** The race tab while the market is open: everyone's net worth today as a line, the order, the latest rival trade. */
+   private void paintRace(Graphics2D g) {
+      Rectangle card = new Rectangle(272, 54, 438, 222);
+      g.setColor(new Color(255, 255, 255, 14));
+      g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
+      text(g, "Race today", BIG, accent, card.x + 14, card.y + 25);
+      Market market = desk.market;
+      int now = market.minute;
+      List<Desk.Standing> standings = desk.standings(true);
+
+      // Each trader's change since the open, minute by minute, on one scale (at least +/-0.5%).
+      Rectangle box = new Rectangle(card.x + 14, card.y + 44, 232, 140);
+      List<double[]> series = new ArrayList<>();
+      double reach = 0.005;
+      for (Desk.Standing standing : standings) {
+         double[] worth = standing.portfolio.worthToday(market);
+         double opening = standing.portfolio.openingWorth();
+         for (int m = 0; m < worth.length; m++) {
+            worth[m] = worth[m] / opening - 1;
+            reach = Math.max(reach, Math.abs(worth[m]));
+         }
+         series.add(worth);
+      }
+      double top = reach * 1.15;
+      java.util.function.DoubleToIntFunction yOf = change -> box.y + box.height / 2 - (int) Math.round(change / top * box.height / 2);
+      java.util.function.IntUnaryOperator xOf = m -> box.x + (int) Math.round((double) m * box.width / Market.CLOSE);
+      g.setColor(new Color(0, 0, 0, 50));
+      g.fillRect(box.x, box.y, box.width, box.height);
+      int zero = yOf.applyAsInt(0);
+      g.setColor(new Color(255, 255, 255, 90));
+      for (int x = box.x; x < box.x + box.width; x += 6) {
+         g.drawLine(x, zero, Math.min(x + 2, box.x + box.width), zero);
+      }
+      String high = "+" + percentText(top);
+      text(g, high, SMALL, MUTED, box.x + box.width + 4, box.y + 10);
+      text(g, "0%", SMALL, MUTED, box.x + box.width + 4, zero + 4);
+      text(g, "-" + percentText(top), SMALL, MUTED, box.x + box.width + 4, box.y + box.height);
+      text(g, "9:30", SMALL, MUTED, box.x, box.y + box.height + 13);
+      text(g, "4:00", SMALL, MUTED, box.x + box.width - width(g, "4:00", SMALL), box.y + box.height + 13);
+      // Rivals first, you on top, thicker.
+      for (int pass = 0; pass < 2; pass++) {
+         for (int i = 0; i < standings.size(); i++) {
+            Desk.Standing standing = standings.get(i);
+            if ((standing.rival == null) != (pass == 1)) {
+               continue;
+            }
+            double[] line = series.get(i);
+            g.setColor(colorOf(standing));
+            g.setStroke(new BasicStroke(standing.rival == null ? 2.4f : 1.5f));
+            for (int m = 1; m < line.length; m++) {
+               g.drawLine(xOf.applyAsInt(m - 1), yOf.applyAsInt(line[m - 1]), xOf.applyAsInt(m), yOf.applyAsInt(line[m]));
+            }
+            g.setStroke(new BasicStroke(1f));
+            g.fillOval(xOf.applyAsInt(now) - 3, yOf.applyAsInt(line[now]) - 3, 7, 7);
+         }
+      }
+
+      // The order today, with each trader's style; pointing at one shows their rule below.
+      Desk.Standing pointed = null;
+      int lx = box.x + box.width + 44;
+      for (int i = 0; i < standings.size(); i++) {
+         Desk.Standing standing = standings.get(i);
+         Rectangle row = new Rectangle(lx - 4, card.y + 36 + i * 31, card.x + card.width - lx - 2, 29);
+         boolean hover = row.contains(mouseX, mouseY);
+         if (hover) {
+            pointed = standing;
+         }
+         if (standing.rival == null || hover) {
+            g.setColor(new Color(255, 255, 255, hover ? 34 : 20));
+            g.fillRoundRect(row.x, row.y, row.width, row.height, 8, 8);
+         }
+         text(g, Integer.toString(i + 1), BOLD, MUTED, lx, row.y + 15);
+         text(g, standing.name, BOLD, colorOf(standing), lx + 14, row.y + 14);
+         text(g, styleOf(standing), SMALL, MUTED, lx + 14, row.y + 26);
+         String change = Money.percent(1, 1 + standing.today);
+         text(g, change, BOLD, standing.today >= 0 ? UP : DOWN, row.x + row.width - 4 - width(g, change, BOLD), row.y + 14);
+      }
+
+      String line;
+      Color color;
+      if (pointed != null) {
+         line = pointed.name + ": " + planOf(pointed);
+         color = colorOf(pointed);
+      } else {
+         Rival who = null;
+         Portfolio.Trade last = null;
+         for (Rival rival : desk.rivals) {
+            for (Portfolio.Trade trade : rival.portfolio.trades) {
+               if (last == null || trade.minute >= last.minute) {
+                  last = trade;
+                  who = rival;
+               }
+            }
+         }
+         if (last == null) {
+            line = "No rival has traded yet today. Point at a name to read their rule.";
+            color = MUTED;
+         } else {
+            int count = Math.abs(last.shares);
+            line = Market.clock(last.minute) + "  " + who.name + (last.shares > 0 ? " bought " : " sold ") + count + " "
+               + last.symbol + " at " + Money.dollars(last.price) + ".";
+            color = RIVALS[who.kind];
+         }
+      }
+      text(g, fit(g, line, SMALL, card.width - 28), SMALL, color, card.x + 14, card.y + card.height - 8);
+   }
+
+   /** "0.5%" or "1.2%": a scale label. */
+   private static String percentText(double fraction) {
+      long tenths = Math.round(fraction * 1000);
+      return tenths / 10 + "." + tenths % 10 + "%";
+   }
+
+   /** The race tab after the closing bell: the five traders by net worth, with today's change and their rules. */
+   private void paintStandings(Graphics2D g) {
+      Rectangle card = new Rectangle(272, 54, 438, 322);
+      g.setColor(new Color(0, 0, 0, 60));
+      g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
+      g.setColor(withAlpha(accent, 120));
+      g.drawRoundRect(card.x, card.y, card.width, card.height, 12, 12);
+      text(g, "Standings, day " + desk.market.day, BIG, accent, card.x + 18, card.y + 30);
+      int todayRight = card.x + 340;
+      int worthRight = card.x + card.width - 12;
+      text(g, "Today", SMALL, MUTED, todayRight - width(g, "Today", SMALL), card.y + 52);
+      text(g, "Net worth", SMALL, MUTED, worthRight - width(g, "Net worth", SMALL), card.y + 52);
+      List<Desk.Standing> standings = desk.standings(false);
+      for (int i = 0; i < standings.size(); i++) {
+         Desk.Standing standing = standings.get(i);
+         int y = card.y + 58 + i * 40;
+         if (standing.rival == null) {
+            g.setColor(withAlpha(accent, 40));
+            g.fillRoundRect(card.x + 8, y, card.width - 16, 37, 10, 10);
+         }
+         text(g, Integer.toString(i + 1), BIG, MUTED, card.x + 18, y + 25);
+         text(g, standing.name, BOLD, colorOf(standing), card.x + 42, y + 16);
+         text(g, fit(g, planOf(standing), SMALL, todayRight - 60 - card.x - 42), SMALL, MUTED, card.x + 42, y + 31);
+         String today = Money.percent(1, 1 + standing.today);
+         text(g, today, BOLD, standing.today >= 0 ? UP : DOWN, todayRight - width(g, today, BOLD), y + 22);
+         String worth = Money.dollars(standing.worth);
+         text(g, worth, BOLD, TEXT, worthRight - width(g, worth, BOLD), y + 16);
+         String all = Money.percent(Portfolio.START, standing.worth) + " in all";
+         text(g, all, SMALL, standing.worth >= Portfolio.START ? UP : DOWN, worthRight - width(g, all, SMALL), y + 31);
+      }
+   }
+
+   private static String ordinal(int n) {
+      return n + (n == 1 ? "st" : n == 2 ? "nd" : n == 3 ? "rd" : "th");
    }
 
    private void paintPosition(Graphics2D g) {
@@ -535,14 +751,22 @@ final class DeskPanel extends JPanel {
       if (best != null) {
          String movers = "Best " + best.symbol + " " + Money.percent(best.open(), best.close())
             + "    Worst " + worst.symbol + " " + Money.percent(worst.open(), worst.close());
-         text(g, movers, PLAIN, MUTED, x, card.y + 100);
+         text(g, movers, SMALL, MUTED, x, card.y + 120);
       }
+      // How the race against the rivals went today.
+      List<Desk.Standing> race = desk.standings(true);
+      int place = desk.rank(true);
+      Desk.Standing winner = race.get(0);
+      String finish = place == 1 ? "You won today's race, " + (race.size() - 1) + " rivals behind you. R: standings"
+         : "You came " + ordinal(place) + " of " + race.size() + " today; " + winner.name + " won with "
+            + Money.percent(1, 1 + winner.today) + ". R: standings";
+      text(g, fit(g, finish, PLAIN, card.width - 36), PLAIN, place == 1 ? UP : WARN, x, card.y + 100);
 
       // Net worth at every close so far (the last 14), today's bar last, against the starting cash.
       List<Double> closes = new ArrayList<>(desk.portfolio.closes);
       closes.add(worth);
       int from = Math.max(0, closes.size() - 14);
-      Rectangle box = new Rectangle(x, card.y + 116, card.width - 36, 140);
+      Rectangle box = new Rectangle(x, card.y + 132, card.width - 36, 124);
       double low = Portfolio.START;
       double high = Portfolio.START;
       for (int i = from; i < closes.size(); i++) {
@@ -576,15 +800,13 @@ final class DeskPanel extends JPanel {
    }
 
    private void paintButtons(Graphics2D g) {
-      int speed = desk.speed;
       for (Button button : buttons) {
          if (!button.shown.getAsBoolean()) {
             continue;
          }
          Rectangle r = button.bounds;
          boolean hover = r.contains(mouseX, mouseY);
-         boolean on = button.fill == null && ((button.key == ' ' && speed == Desk.PAUSED)
-            || (button.key == 'p' && speed == Desk.NORMAL) || (button.key == 'f' && speed == Desk.FAST));
+         boolean on = button.fill == null && button.lit.getAsBoolean();
          Color fill = button.fill != null ? button.fill : on ? withAlpha(accent, 150) : new Color(255, 255, 255, 30);
          g.setColor(hover ? fill.brighter() : fill);
          g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);

@@ -75,7 +75,7 @@ $Recipes = [ordered]@{
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:500', 'key:Space', 'wait:1200', 'rec') }
     CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', (Pick 'Heart'), 'wait:2600', (Pick 'Star')) }
     ScreenSaver         = @{ Steps = @('wait:1500', 'rec') }
-    StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'rec') }
+    StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'key:R', 'rec') }
     GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:P', 'wait:600', 'key:Space') }
     SimpleAlgorithms    = @{ Steps = @('wait:800', 'rec') }
 }

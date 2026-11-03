@@ -1,6 +1,7 @@
 package stockchecker;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +88,49 @@ final class Portfolio {
          total += entry.getValue().shares * market.price(entry.getKey());
       }
       return total;
+   }
+
+   /** Net worth at every minute of today up to now, worked back from what is held now by undoing later trades. */
+   double[] worthToday(Market market) {
+      int now = market.minute;
+      double[] worth = new double[now + 1];
+      double money = cash;
+      Map<String, Integer> shares = new HashMap<>();
+      for (Map.Entry<String, Holding> entry : holdings.entrySet()) {
+         shares.put(entry.getKey(), entry.getValue().shares);
+      }
+      int t = trades.size() - 1;
+      for (int m = now; m >= 0; m--) {
+         for (; t >= 0 && trades.get(t).minute > m; t--) {
+            Trade trade = trades.get(t);
+            money += trade.shares * trade.price;
+            Integer had = shares.get(trade.symbol);
+            shares.put(trade.symbol, (had == null ? 0 : had) - trade.shares);
+         }
+         double total = money;
+         for (Map.Entry<String, Integer> entry : shares.entrySet()) {
+            Market.Stock stock = market.stock(entry.getKey());
+            if (stock != null) {
+               total += entry.getValue() * stock.path[m];
+            }
+         }
+         worth[m] = total;
+      }
+      return worth;
+   }
+
+   /** At the closing bell: notes the day's net worth and clears the day's trades. */
+   void closeDay(Market market) {
+      closes.add(cents(worth(market)));
+      trades.clear();
+   }
+
+   /** Back to the starting cash with nothing held. */
+   void reset() {
+      cash = START;
+      holdings.clear();
+      trades.clear();
+      closes.clear();
    }
 
    /** Net worth when today opened: the last close, or the starting cash. */

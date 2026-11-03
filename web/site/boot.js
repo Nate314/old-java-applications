@@ -1669,7 +1669,7 @@
     Clock: [{ b: ['Space', 'Start / pause'], x: ['R', 'Reset'], y: ['L', 'Lap / lengths'], start: ['N', 'Skip (Focus)'], up: ['ArrowUp', 'Minute +'],
               down: ['ArrowDown', 'Minute −'] }],
     StockChecker: [{ up: ['ArrowUp', 'Pick'], down: ['ArrowDown', 'Pick'], x: ['B', 'Buy 1'], y: ['S', 'Sell 1'],
-                     b: ['Space', 'Pause'] }],
+                     b: ['Space', 'Pause'], start: ['R', 'Race'] }],
     GroupCreator: [{ x: ['N', 'New round'], y: ['R', 'Reshuffle'], b: ['Space', 'New round / spin'],
                      start: ['P', 'Pick someone / groups'] }],
     SimpleAlgorithms: [{ b: ['Space', 'Play / pause'], right: ['ArrowRight', 'One move'], x: ['R', 'Reset'], y: ['F', 'Speed'] }]
@@ -3198,7 +3198,7 @@
       return 'Your Bible: open at ' + place[1].trim() + ', ' + n + ' of 1,189 chapters read'
         + (h ? ', ' + h + (h === 1 ? ' highlight' : ' highlights') : '') + biblePlan(text, count);
     } },
-    // The practice desk: the day it is on, and the net worth at the last closing bell against the $10,000 start.
+    // The practice desk: the day it is on, the net worth at the last closing bell against the $10,000 start, and the rivals.
     StockChecker: { file: '.stockchecker-desk.txt', show: function (text) {
       var day = /^day=(\d+)$/m.exec(text);
       if (!day) return '';
@@ -3208,6 +3208,11 @@
         var last = +closes[closes.length - 1].slice(6);
         var pct = (last - 10000) / 100;
         line += ', closed day ' + closes.length + ' at $' + Math.round(last).toLocaleString('en-US') + ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '% since day 1)';
+        // The computer traders' last closes (rclose=Name:worth, stockchecker.Desk): how many you are ahead of.
+        var rivals = {}, m, re = /^rclose=(\w+):([\d.]+)$/mg;
+        while ((m = re.exec(text))) rivals[m[1]] = +m[2];
+        var names = Object.keys(rivals);
+        if (names.length) line += ', ahead of ' + names.filter(function (n) { return rivals[n] < last; }).length + ' of ' + names.length + ' rivals';
       }
       return line;
     } },
