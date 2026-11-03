@@ -33,24 +33,24 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private static final Color LEATHER = new Color(0x2f2219);
    private static final Color LEATHER_LIGHT = new Color(0x3d2c20);
    private static final Color PAPER = new Color(0xfbf5e6);
-   private static final Color PAPER_EDGE = new Color(0xe3d5b5);
-   private static final Color INK = new Color(0x2b2118);
-   private static final Color RUBRIC = new Color(0x9e2a2b);
-   private static final Color MUTED = new Color(0x8a7a66);
+   static final Color PAPER_EDGE = new Color(0xe3d5b5);
+   static final Color INK = new Color(0x2b2118);
+   static final Color RUBRIC = new Color(0x9e2a2b);
+   static final Color MUTED = new Color(0x8a7a66);
    private static final Color MARK = new Color(0xf6dc7c);
-   private static final Color HOVER = new Color(0xefe4c6);
+   static final Color HOVER = new Color(0xefe4c6);
    private static final Color BUTTON = new Color(0x4a3828);
    private static final Color BUTTON_HOVER = new Color(0x654b34);
    private static final Color BUTTON_TEXT = new Color(0xf3e7cf);
-   private static final Color GOLD = new Color(0xd8b45e);
-   private static final Font UI = new Font("SansSerif", Font.BOLD, 13);
+   static final Color GOLD = new Color(0xd8b45e);
+   static final Font UI = new Font("SansSerif", Font.BOLD, 13);
    private static final Font UI_SMALL = new Font("SansSerif", Font.PLAIN, 11);
-   private static final Font HEAD = new Font("SansSerif", Font.BOLD, 10);
+   static final Font HEAD = new Font("SansSerif", Font.BOLD, 10);
    private static final int BAR = 56;
    /** Below this width the book shows one page at a time. */
    private static final int TWO_PAGE_WIDTH = 700;
 
-   private enum View { READ, BOOKS, CHAPTERS, SAVE, PLAN }
+   private enum View { READ, BOOKS, CHAPTERS, SAVE, PLAN, LEARN }
 
    /** A clickable area found while painting. */
    private static final class Hit {
@@ -102,6 +102,10 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private int savePercent = 100;
    private String saveStatus = "";
 
+   private final LearnView learn;
+   /** The verse just highlighted in the open chapter and not being learned, so L can start learning it; 0 for none. */
+   private int justMarked;
+
    public ReaderPanel(Shelf shelf) {
       this.shelf = shelf;
       this.pickedBook = shelf.book;
@@ -112,6 +116,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          this.repaint();
       });
       this.flashTimer.setRepeats(false);
+      this.learn = new LearnView(this, shelf);
 
       MouseAdapter mouse = new MouseAdapter() {
          @Override
@@ -152,6 +157,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       this.shelf.book = book;
       this.shelf.chapter = number;
       this.landAtEnd = atEnd;
+      this.justMarked = 0;
       this.view = View.READ;
       this.loadError = null;
       int ticket = ++this.request;
@@ -309,7 +315,10 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private void toggleMark(int verse) {
       boolean on = this.shelf.toggleMark(this.shelf.book, this.shelf.chapter, verse);
       this.shelf.save();
-      this.say((on ? "Highlighted " : "Highlight removed: ") + Books.NAMES[this.shelf.book] + " " + this.shelf.chapter + ":" + verse);
+      String name = Books.NAMES[this.shelf.book] + " " + this.shelf.chapter + ":" + verse;
+      boolean learning = this.shelf.memory.find(this.shelf.book, this.shelf.chapter, verse) != null;
+      this.justMarked = on && !learning ? verse : 0;
+      this.say(on ? "Highlighted " + name + (learning ? "" : " (L: learn it by heart)") : "Highlight removed: " + name, on ? 3200 : 2600);
       this.repaint();
    }
 
@@ -330,7 +339,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       this.say(message, 2600);
    }
 
-   private void say(String message, int millis) {
+   void say(String message, int millis) {
       this.flash = message;
       this.flashTimer.setInitialDelay(millis);
       this.flashTimer.restart();
@@ -376,6 +385,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    }
 
    private void key(int code, char c) {
+      if (this.view == View.LEARN && this.learn.key(code, c, this.perView() == 1)) {
+         return;
+      }
       switch (code) {
          case KeyEvent.VK_RIGHT:
          case KeyEvent.VK_PAGE_DOWN:
@@ -424,6 +436,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          case 'r':
             this.showPlan();
             break;
+         case 'l':
+            this.showLearn();
+            break;
          case '+':
          case '=':
             this.resize(1);
@@ -438,7 +453,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private void back() {
       if (this.view == View.CHAPTERS || this.view == View.SAVE && !this.saving) {
          this.view = this.view == View.SAVE ? View.READ : View.BOOKS;
-      } else if (this.view == View.BOOKS || this.view == View.PLAN) {
+      } else if (this.view == View.BOOKS || this.view == View.PLAN || this.view == View.LEARN) {
          this.view = View.READ;
       }
       this.repaint();
@@ -446,6 +461,23 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    private void showBooks() {
       this.view = this.view == View.BOOKS ? View.READ : View.BOOKS;
+      this.repaint();
+   }
+
+   /** By heart: the verses being learned, and practice. */
+   private void showLearn() {
+      if (this.view == View.LEARN) {
+         this.view = View.READ;
+      } else {
+         boolean fromReading = this.view == View.READ;
+         this.view = View.LEARN;
+         this.learn.opened(this.perView() == 1);
+         // L right after highlighting a verse starts learning it.
+         if (fromReading && this.justMarked > 0 && this.shelf.isMarked(this.shelf.book, this.shelf.chapter, this.justMarked)) {
+            this.learn.add(this.shelf.book, this.shelf.chapter, this.justMarked);
+         }
+      }
+      this.justMarked = 0;
       this.repaint();
    }
 
@@ -520,16 +552,30 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private void greet() {
       Plan plan = this.shelf.plan;
       if (plan == null) {
+         this.greetReviews();
          return;
       }
       BitSet done = this.shelf.planDone();
       int day = this.shelf.planDay(Plan.today());
       int first = plan.firstUnread(done);
       if (first < 0 || day < 0 || day < plan.days && plan.dayDone(done, day) && plan.behind(done, day) == 0) {
+         this.greetReviews();
          return;
       }
       String what = plan.behind(done, day) > 0 ? "catch up at " + chapterName(plan, first) : "today, " + plan.reading(day);
       this.say((day < plan.days ? "Day " + (day + 1) + " of " + plan.days + ": " : plan.name + ": ") + what + " (R: your plan)", 7000);
+   }
+
+   /** On opening, verses learned by heart that are due for review today say so. */
+   private void greetReviews() {
+      int today = Plan.today();
+      int due = 0;
+      for (Memory.Card card : this.shelf.memory.cards()) {
+         due += card.box > 0 && card.due <= today ? 1 : 0;
+      }
+      if (due > 0) {
+         this.say((due == 1 ? "1 verse" : due + " verses") + " to review by heart today (L: practice)", 7000);
+      }
    }
 
    /** Today's reading as a toolbar note, "plan: 1 of 3 read today", or null without a plan day today. */
@@ -906,6 +952,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          case PLAN:
             this.paintPlans(g, sheets, text);
             break;
+         case LEARN:
+            this.learn.paint(g, sheets, text);
+            break;
          default:
             this.paintRead(g, sheets, text);
       }
@@ -1068,6 +1117,20 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    private Rectangle lastButton;
 
+   /** A clickable area for {@link LearnView}. */
+   void hit(Rectangle area, Runnable action) {
+      this.hits.add(new Hit(area, action, 0));
+   }
+
+   boolean over(Rectangle area) {
+      return area.contains(this.mouseX, this.mouseY);
+   }
+
+   /** A heading and a line centered in an area. */
+   void centeredNote(Graphics2D g, Rectangle area, String heading, String line) {
+      this.centered(g, area, heading, line, null);
+   }
+
    /** A heading, a line and an optional button, centered in an area; the button's bounds go to lastButton. */
    private void centered(Graphics2D g, Rectangle area, String heading, String line, String button) {
       int cy = area.y + area.height / 2 - 30;
@@ -1088,7 +1151,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }
    }
 
-   private void pill(Graphics2D g, Rectangle r, String label, Color fill, Color ink) {
+   void pill(Graphics2D g, Rectangle r, String label, Color fill, Color ink) {
       boolean over = r.contains(this.mouseX, this.mouseY);
       g.setColor(over ? fill.brighter() : fill);
       g.fillRoundRect(r.x, r.y, r.width, r.height, r.height, r.height);
@@ -1123,6 +1186,10 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          Rectangle plans = new Rectangle(list.x, list.y + list.height + 8, g.getFontMetrics().stringWidth(label) + 30, 30);
          this.pill(g, plans, label, RUBRIC, Color.WHITE);
          this.hits.add(new Hit(plans, this::showPlan, 0));
+         String heart = "By heart \u203a";
+         Rectangle learning = new Rectangle(plans.x + plans.width + 8, plans.y, g.getFontMetrics().stringWidth(heart) + 30, 30);
+         this.pill(g, learning, heart, PAPER_EDGE, INK);
+         this.hits.add(new Hit(learning, this::showLearn, 0));
       }
       g.setFont(HEAD);
       g.setColor(MUTED);
@@ -1368,7 +1435,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    }
 
    /** Draws text wrapped to a width; returns the y below the last line. */
-   private int wrap(Graphics2D g, String text, int x, int y, int width, int lh) {
+   int wrap(Graphics2D g, String text, int x, int y, int width, int lh) {
       FontMetrics fm = g.getFontMetrics();
       StringBuilder line = new StringBuilder();
       for (String word : text.split(" ")) {
@@ -1400,6 +1467,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       x = this.barButton(g, x, y, bh, this.view == View.BOOKS ? "Close" : "Books", this::showBooks, true);
       if (wide) {
          x = this.barButton(g, x, y, bh, this.view == View.PLAN ? "Close" : "Plan", this::showPlan, true);
+         x = this.barButton(g, x, y, bh, this.view == View.LEARN ? "Close" : "By heart", this::showLearn, true);
       }
       int right = w - 14;
       right = this.barButtonRight(g, right, y, bh, wide ? "Next \u203a" : "\u203a", this::next, reading);
@@ -1472,7 +1540,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       return t.equals(text) ? text : "..." + t;
    }
 
-   private static String fit(FontMetrics fm, String text, int width) {
+   static String fit(FontMetrics fm, String text, int width) {
       if (fm.stringWidth(text) <= width) {
          return text;
       }

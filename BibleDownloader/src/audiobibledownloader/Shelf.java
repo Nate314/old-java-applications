@@ -17,7 +17,8 @@ import java.util.TreeSet;
 /**
  * What the reader remembers between runs, in {@code ~/.bibledownloader.txt}: the translation, the place (book,
  * chapter and the first verse on the open page), the text size, every chapter read to its end, and the highlighted
- * verses, and the reading plan being followed: which plan, the day it started and the chapters read for it. One
+ * verses, the reading plan being followed (which plan, the day it started and the chapters read for it), and the
+ * verses being learned by heart, with their text and next review. One
  * {@code key=value} line each, so the file is easy to read and the web title screen can show it.
  */
 public final class Shelf {
@@ -39,6 +40,8 @@ public final class Shelf {
    public int planStart;
    /** Chapters read for the plan since it started, by ordinal among all 1,189. */
    private final BitSet planRead = new BitSet(Books.TOTAL);
+   /** Verses being learned by heart, each on its own {@code learn.JHN.3.16=} line. */
+   public final Memory memory = new Memory();
 
    public Shelf(File file) {
       this.file = file;
@@ -117,6 +120,9 @@ public final class Shelf {
             }
             break;
          default:
+            if (key.startsWith("learn.")) {
+               this.memory.put(Memory.Card.parse(key.substring(6), value));
+            }
       }
    }
 
@@ -153,6 +159,11 @@ public final class Shelf {
          + (this.plan == null ? "" : "plan=" + this.plan.id + "\n"
             + "planstart=" + Plan.iso(this.planStart) + "\n"
             + "plandone=" + refs(this.planRead) + "\n");
+      StringBuilder learning = new StringBuilder();
+      for (Memory.Card card : this.memory.cards()) {
+         learning.append("learn.").append(card.ref()).append('=').append(card.line()).append('\n');
+      }
+      text += learning;
       try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(this.file), StandardCharsets.UTF_8))) {
          writer.write(text);
       } catch (IOException e) {
@@ -235,6 +246,17 @@ public final class Shelf {
       }
       this.marks.add(ref);
       return true;
+   }
+
+   /** Every highlighted verse as {book, chapter, verse}, in Bible order. */
+   public List<int[]> marks() {
+      List<int[]> out = new ArrayList<>();
+      for (String ref : this.marks) {
+         String[] p = ref.split("\\.");
+         out.add(new int[]{Books.find(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2])});
+      }
+      out.sort((a, b) -> Long.compare(key(a[0], a[1], a[2]), key(b[0], b[1], b[2])));
+      return out;
    }
 
    public int markCount() {
