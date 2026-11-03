@@ -19,7 +19,8 @@ import javax.swing.SwingUtilities;
 /**
  * The window: the original names, min and max fields and button across the top, and the {@link GroupBoard} under
  * them. Each round is mixed by {@link FreshMix} against every round before it, kept with the class in
- * {@code ~/.groupcreator-class.txt}, and written to {@code output.txt} as before.
+ * {@code ~/.groupcreator-class.txt}, and written to {@code output.txt} as before. Names marked away in the roll call
+ * sit a round out, and keep-apart rules hold whenever the group sizes allow.
  */
 public class Main extends JFrame implements GroupBoard.Actions {
    private final JTextField textField = new JTextField();
@@ -35,7 +36,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       this.setResizable(false);
       // Read after the window exists, so the browser build has put the saved file back.
       roster = Roster.load(new File(System.getProperty("user.home"), ".groupcreator-class.txt"));
-      board = new GroupBoard(roster.history, roster.picks, this);
+      board = new GroupBoard(roster.history, roster.picks, roster.rules, this);
 
       JPanel names = new JPanel();
       names.add(new JLabel("Names, separated by commas:"));
@@ -90,11 +91,17 @@ public class Main extends JFrame implements GroupBoard.Actions {
          board.showMessage("min and max must be whole numbers.");
          return;
       }
-      List<String> names = GroupMaker.parseNames(textField.getText());
+      List<String> typed = GroupMaker.parseNames(textField.getText());
+      // Names marked away in the roll call sit this round out.
+      List<String> names = roster.rules.present(typed);
+      if (names.isEmpty() && !typed.isEmpty()) {
+         board.showMessage("Everyone is marked away. Mark who is here in Roll call (A).");
+         return;
+      }
       PartnerHistory past = replace ? roster.history.first(roster.history.size() - 1) : roster.history;
       List<List<String>> groups;
       try {
-         groups = FreshMix.mix(names, min, max, past, random);
+         groups = FreshMix.mix(names, min, max, past, roster.rules, random);
       } catch (IllegalArgumentException ex) {
          board.showMessage(ex.getMessage());
          return;
@@ -108,7 +115,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       roster.min = String.valueOf(min);
       roster.max = String.valueOf(max);
       String problem = save(groups);
-      board.showRound(names, true);
+      board.showRound(typed, true);
       if (problem != null) {
          board.showMessage(problem);
       }
@@ -135,6 +142,11 @@ public class Main extends JFrame implements GroupBoard.Actions {
    @Override
    public List<String> classNames() {
       return GroupMaker.parseNames(textField.getText());
+   }
+
+   @Override
+   public void rulesChanged() {
+      picksChanged();
    }
 
    @Override

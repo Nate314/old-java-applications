@@ -20,11 +20,14 @@ import java.util.List;
  * min=2
  * max=3
  * picked=Carol,Alice
+ * away=Dave
+ * apart=Alice,Bob
  * round=Alice,Carol|Bob,Dave
  * </pre>
  *
  * with one {@code round=} line per round, oldest first, its groups separated by {@code |}, and a {@code picked=} line
- * (the names the wheel has picked this time around, oldest first) once the wheel has picked someone.
+ * (the names the wheel has picked this time around, oldest first) once the wheel has picked someone, an {@code away=}
+ * line for the names marked away in the roll call, and one {@code apart=} line per keep-apart rule.
  */
 public final class Roster {
    static final String EXAMPLE = "Alice,Bob,Carol,Dave,Erin,Frank,Grace,Heidi,Ivan,Judy,Mallory,Niaj";
@@ -35,6 +38,7 @@ public final class Roster {
    String max = "3";
    final PartnerHistory history = new PartnerHistory();
    final PickBag picks = new PickBag();
+   final ClassRules rules = new ClassRules();
 
    private Roster(File file) {
       this.file = file;
@@ -59,6 +63,10 @@ public final class Roster {
                roster.max = value;
             } else if (key.equals("picked")) {
                roster.picks.load(value);
+            } else if (key.equals("away")) {
+               roster.rules.loadAway(value);
+            } else if (key.equals("apart")) {
+               roster.rules.loadApart(value);
             } else if (key.equals("round")) {
                List<List<String>> groups = new ArrayList<>();
                for (String group : value.split("\\|")) {
@@ -92,6 +100,12 @@ public final class Roster {
       text.append("max=").append(max).append('\n');
       if (!picks.isEmpty()) {
          text.append("picked=").append(picks.text()).append('\n');
+      }
+      if (!rules.awayText().isEmpty()) {
+         text.append("away=").append(rules.awayText()).append('\n');
+      }
+      for (String pair : rules.apartText()) {
+         text.append("apart=").append(pair).append('\n');
       }
       for (int r = 1; r <= history.size(); r++) {
          List<String> groups = new ArrayList<>();
