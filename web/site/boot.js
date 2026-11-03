@@ -1659,7 +1659,7 @@
                           y: ['R', 'Again'] }],
     ScreenSaver: [{ stick: true, a: ['N', 'Next saver'], b: ['P', 'Previous'], x: ['C', 'Cycle'], y: ['H', 'Keys'],
                     left: ['ArrowLeft', 'Slower'], right: ['ArrowRight', 'Faster'], up: ['ArrowUp', 'Smaller tiles'],
-                    down: ['ArrowDown', 'Bigger tiles'] }],
+                    down: ['ArrowDown', 'Bigger tiles'], start: ['F', 'Feed the fish'] }],
     RubiksCube2D: [{ up: ['W', 'Turn'], left: ['A', 'Turn'], down: ['S', 'Turn'], right: ['D', 'Turn'], b: ['Z', 'Undo'],
                      x: ['T', 'Teach me'], y: ['R', 'Retry'], start: ['N', 'Next level'] }],
     MusicTheoryExpert: [{ b: ['Space', 'Play / next'], up: ['ArrowUp', 'Previous drill'], down: ['ArrowDown', 'Next drill'],
@@ -3226,11 +3226,15 @@
     } },
     // The saver it was left on, in the order of the app's list (screensaver.Main), and whether it cycles.
     ScreenSaver: { file: '.screensaver.txt', show: function (text) {
-      var names = ['Green circles', 'Green squares', 'Bright circles', 'Starfield', 'Mystify', 'Pipes', 'Bouncing logo', 'Dot clock'];
+      var names = ['Green circles', 'Green squares', 'Bright circles', 'Starfield', 'Mystify', 'Pipes', 'Bouncing logo', 'Dot clock',
+                   'Aquarium'];
       var saver = /^saver (\d+)$/m.exec(text);
       var name = saver && names[+saver[1]];
       if (!name) return '';
-      return 'Your screen saver: ' + name + (/^cycle off$/m.test(text) ? ', kept on screen' : ', then the next every 30 s');
+      // The aquarium's fish (screensaver.Tank): "fish <species> <day> <meals> <name>".
+      var fish = text.match(/^fish \d+ \d+ \d+ \S+$/gm) || [];
+      return 'Your screen saver: ' + name + (/^cycle off$/m.test(text) ? ', kept on screen' : ', then the next every 30 s')
+        + (fish.length ? '; ' + fish.length + ' fish in your aquarium' : '');
     } },
     // The timer counts down against the wall clock, so a running one is still running (or has rung) on return.
     Clock: { file: '.clock.txt', show: function (text) {

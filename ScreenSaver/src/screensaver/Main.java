@@ -27,8 +27,8 @@ import javax.swing.Timer;
 
 /**
  * A full-screen gallery of screen savers: the original green circles and its two variants, then Starfield, Mystify,
- * Pipes, a bouncing logo and a dot clock. It moves on to the next one every 30 seconds unless one was picked, and
- * closes when the mouse moves.
+ * Pipes, a bouncing logo, a dot clock and an aquarium of fish that stay yours between runs. It moves on to the next one
+ * every 30 seconds unless one was picked, and closes when the mouse moves.
  */
 public class Main extends JFrame implements KeyListener, MouseListener, MouseMotionListener {
    static final double CYCLE_MILLIS = 30_000;
@@ -61,7 +61,8 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    public Main() {
       this.savers = Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
-         new Starfield(), new Mystify(), new Pipes(), new BouncingLogo(), new DotClock(Date::new));
+         new Starfield(), new Mystify(), new Pipes(), new BouncingLogo(), new DotClock(Date::new),
+         new Aquarium(this.settings.tank, Date::new, this.settings::save));
       this.setUndecorated(true);
       this.setSize(this.SCREEN_WIDTH, this.SCREEN_HEIGHT);
       this.setDefaultCloseOperation(3);
@@ -145,9 +146,15 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       String speed = Math.round(this.settings.speed * 10) / 10.0 + "x";
       String cycle = this.settings.cycle ? "C: stop cycling (next in " + (int)Math.ceil((CYCLE_MILLIS - this.shownFor) / 1000) + " s)"
          : "C: cycle every 30 s";
+      String head = this.saver.name() + "   " + (this.index() + 1) + " of " + this.savers.size();
+      String keys = "N / P: next, previous   1-" + this.savers.size() + ": pick   " + cycle;
+      if (this.saver instanceof Aquarium) {
+         return new String[] {head, ((Aquarium)this.saver).status(), keys,
+            "Left / Right: speed " + speed + "   H: names and these keys", "Esc or move the mouse to close"};
+      }
       return new String[] {
-         this.saver.name() + "   " + (this.index() + 1) + " of " + this.savers.size(),
-         "N / P: next, previous   1-" + this.savers.size() + ": pick   " + cycle,
+         head,
+         keys,
          "Left / Right: speed " + speed + (this.saver instanceof Tiles ? "   Up / Down: tile size" : "") + "   H: these keys",
          "Esc or move the mouse to close",
       };
@@ -219,6 +226,11 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
          this.settings.save();
       } else if (keyCode == KeyEvent.VK_H) {
          this.captionLeft = CAPTION_MILLIS;
+         if (this.saver instanceof Aquarium) {
+            ((Aquarium)this.saver).showNames();
+         }
+      } else if (keyCode == KeyEvent.VK_F && this.saver instanceof Aquarium) {
+         ((Aquarium)this.saver).feed();
       } else if (keyCode == KeyEvent.VK_LEFT || keyCode == KeyEvent.VK_RIGHT) {
          double factor = keyCode == KeyEvent.VK_RIGHT ? 1.1 : 1 / 1.1;
          this.settings.speed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, this.settings.speed * factor));

@@ -7,7 +7,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 
-/** The saver last shown, whether it cycles, the speed and the tile size, kept in ~/.screensaver.txt between runs. */
+/**
+ * The saver last shown, whether it cycles, the speed, the tile size and the Aquarium's fish, kept in ~/.screensaver.txt
+ * between runs.
+ */
 class Settings {
    private final File file;
    int saver = 0;
@@ -15,6 +18,7 @@ class Settings {
    double speed = 1.0;
    /** 0 picks a size from the screen. */
    double tileSize = 0;
+   final Tank tank = new Tank();
 
    Settings(File file) {
       this.file = file;
@@ -33,7 +37,7 @@ class Settings {
          String line;
          while ((line = in.readLine()) != null) {
             String[] parts = line.trim().split(" ");
-            if (parts.length != 2) {
+            if (this.tank.read(parts) || parts.length != 2) {
                continue;
             }
             try {
@@ -58,7 +62,7 @@ class Settings {
    void save() {
       try (Writer out = new FileWriter(this.file)) {
          out.write("saver " + this.saver + "\ncycle " + (this.cycle ? "on" : "off") + "\nspeed " + this.speed
-            + "\ntiles " + this.tileSize + "\n");
+            + "\ntiles " + this.tileSize + "\n" + this.tank.lines());
       } catch (IOException e) {
          System.out.println("Could not save " + this.file + ": " + e.getMessage());
       }
