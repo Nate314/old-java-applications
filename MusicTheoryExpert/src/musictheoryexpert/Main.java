@@ -1,14 +1,11 @@
 package musictheoryexpert;
 
+import java.awt.Component;
 import java.awt.KeyboardFocusManager;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.io.File;
 
-import javax.swing.JButton;
 import javax.swing.JFrame;
-import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -17,15 +14,14 @@ import javax.swing.UnsupportedLookAndFeelException;
 import synthesizer.MySynthesizer;
 
 @SuppressWarnings("serial")
-public class Main extends JFrame implements ActionListener{
+public class Main extends JFrame {
 
 	public static final long CLOCK_TICK = 500;
 	private MySynthesizer synth = new MySynthesizer(this);
 	private JTabbedPane tpane = new JTabbedPane();
 	private EarTrainer trainer;
 	private Songwriter songwriter;
-	private JPanel notesPanel = new JPanel();
-	private JButton button = new JButton("test");
+	private ChordFinder finder;
 
 	public Main(Boolean visibility) {
 		this.setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -33,17 +29,18 @@ public class Main extends JFrame implements ActionListener{
 		trainer = new EarTrainer(synth,
 				DrillRecords.load(new File(System.getProperty("user.home"), ".musictheory-drills.txt")));
 		songwriter = new Songwriter(synth, new File(System.getProperty("user.home"), ".musictheory-songwriter.txt"));
+		// The Chord finder took the place of the Notes tab, whose test button played the original demo; it still does.
+		finder = new ChordFinder(synth, () -> new Notes(synth), (position, minor, degrees) -> {
+			tpane.setSelectedIndex(1);
+			songwriter.takeChords(position, minor, degrees);
+		});
 		tpane.addTab("Ear training", trainer);
 		tpane.addTab("Songwriter", songwriter);
-		tpane.addTab("Notes", notesPanel);
-		notesPanel.add(button);
-		button.addActionListener(this);
+		tpane.addTab("Chord finder", finder);
 		this.add(tpane);
 		this.setSize(780, 600);
-		// Keys reach the Ear training or Songwriter tab whichever component has the focus, while that tab is showing.
-		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(event -> event.getID() == KeyEvent.KEY_PRESSED
-				&& this.isActive() && (tpane.getSelectedComponent() == trainer && trainer.keyPressed(event)
-						|| tpane.getSelectedComponent() == songwriter && songwriter.keyPressed(event)));
+		// Keys reach the showing tab whichever component has the focus.
+		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(event -> this.isActive() && dispatch(event));
 		this.setVisible(visibility);
 //		synth.playNotes(synthesizer.Notes.A4, 300, 0, 127, 0, 0);
 //		synth.playNotes(synthesizer.Notes.B4, 300, 0, 127, 0, 0);
@@ -77,10 +74,25 @@ public class Main extends JFrame implements ActionListener{
 		});
 	}
 
-	@Override
-	public void actionPerformed(ActionEvent e) {
-		if(e.getSource() == button) {
-			new Notes(synth);
+	private boolean dispatch(KeyEvent event) {
+		Component tab = tpane.getSelectedComponent();
+		if (event.getID() == KeyEvent.KEY_RELEASED && tab == finder) {
+			finder.keyReleased(event);
 		}
+		return event.getID() == KeyEvent.KEY_PRESSED && (tab == trainer && trainer.keyPressed(event)
+				|| tab == songwriter && songwriter.keyPressed(event) || tab == finder && finder.keyPressed(event));
+	}
+
+	/** The tabs, for self-checks. */
+	JTabbedPane tabs() {
+		return tpane;
+	}
+
+	ChordFinder finder() {
+		return finder;
+	}
+
+	Songwriter songwriter() {
+		return songwriter;
 	}
 }

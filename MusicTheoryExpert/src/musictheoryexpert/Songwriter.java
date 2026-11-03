@@ -189,6 +189,23 @@ public final class Songwriter extends JPanel {
 		changed();
 	}
 
+	/** Writes {@code degrees} (1 to 7, up to eight) as the progression in the given key and starts it playing. */
+	public void takeChords(int position, boolean minor, int[] degrees) {
+		song.setKey(position, minor);
+		song.clear();
+		for (int degree : degrees) {
+			song.add(degree);
+		}
+		selected = -1;
+		notice = "";
+		if (song.size() > 0) {
+			player.play(song);
+		} else {
+			player.stop();
+		}
+		changed();
+	}
+
 	public void changeTempo(int by) {
 		song.setTempo(song.tempo() + by);
 		changed();

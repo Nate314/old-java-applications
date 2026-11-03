@@ -72,6 +72,37 @@ final class Look {
 		}
 	}
 
+	/** The key of {@link #paintKeyboard} drawn in the same box under the point ({@code px}, {@code py}), or -1. */
+	static int keyAt(int x, int y, int width, int height, int px, int py) {
+		if (py < y || py >= y + height) {
+			return -1;
+		}
+		int whites = 0;
+		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
+			whites += isBlack(note) ? 0 : 1;
+		}
+		int keyWidth = Math.max(4, width / whites);
+		int left = x + (width - keyWidth * whites) / 2;
+		int blackWidth = keyWidth * 3 / 5;
+		int white = 0;
+		int under = -1;
+		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
+			if (isBlack(note)) {
+				int kx = left + white * keyWidth - blackWidth / 2;
+				if (py < y + height * 3 / 5 && px >= kx && px < kx + blackWidth) {
+					return note;
+				}
+			} else {
+				int kx = left + white * keyWidth;
+				if (px >= kx && px < kx + keyWidth) {
+					under = note;
+				}
+				white++;
+			}
+		}
+		return under;
+	}
+
 	/** A SansSerif font of {@code style}, shrunk from {@code size} until {@code text} fits in {@code width}. */
 	static Font fitFont(Graphics2D g, String text, int style, int size, int width) {
 		Font font = new Font("SansSerif", style, size);
