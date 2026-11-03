@@ -1987,7 +1987,8 @@
     SpriteFloatyStars: [
       { title: 'Star Catcher', tint: 'gold', dpad: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'], fire: 'Space', fireLabel: 'Catch' },
       { buttons: [{ k: 'N', label: 'Next' }, { k: 'R', label: 'Again' }, { k: 'M', label: 'Nights' },
-                  { k: 'ArrowUp', label: 'Add star' }, { k: 'ArrowDown', label: 'Remove star' }, { k: 'H', label: 'Help' }] }
+                  { k: 'ArrowUp', label: 'Add star' }, { k: 'ArrowDown', label: 'Remove star' }, { k: 'T', label: 'Trails' },
+                  { k: 'H', label: 'Help' }] }
     ]
   };
   var ARROWS = { ArrowUp: [38, '↑'], ArrowDown: [40, '↓'], ArrowLeft: [37, '←'], ArrowRight: [39, '→'] };
@@ -2179,7 +2180,7 @@
     SpriteFloatyStars: [{ stick: true, up: ['ArrowUp', 'Up'], down: ['ArrowDown', 'Down'], left: ['ArrowLeft', 'Left'],
                           right: ['ArrowRight', 'Right'], a: ['Space', 'Catch (stars: burst)'], b: ['M', 'Nights'],
                           x: ['N', 'Next (stars: next mode)'],
-                          y: ['R', 'Again'] }],
+                          y: ['R', 'Again'], start: ['T', 'Trails'] }],
     ScreenSaver: [{ stick: true, a: ['N', 'Next saver'], b: ['P', 'Previous'], x: ['C', 'Cycle'], y: ['H', 'Keys'],
                     left: ['ArrowLeft', 'Slower'], right: ['ArrowRight', 'Faster'], up: ['ArrowUp', 'Smaller tiles'],
                     down: ['ArrowDown', 'Bigger tiles'], start: ['F', 'Feed the fish'] }],
