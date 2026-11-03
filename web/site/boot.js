@@ -1589,7 +1589,8 @@
     SynthesizerKeyboard: [
       { piano: ['Z', 'S', 'X', 'D', 'C', 'V', 'G', 'B', 'H', 'N', 'J', 'M', ','] },
       { buttons: [{ k: 'T', label: 'Song' }, { k: 'L', label: 'Listen' }, { k: 'R', label: 'Restart' },
-                  { k: 'Space', label: 'Record' }, { k: 'Enter', label: 'Copy link' }, { k: 'I', label: 'Mic' }] },
+                  { k: 'Space', label: 'Record' }, { k: 'Enter', label: 'Copy link' }, { k: 'I', label: 'Mic' },
+                  { k: 'O', label: 'Looper' }, { k: 'P', label: 'Play loop' }] },
       { buttons: [{ k: 'ArrowLeft', label: 'Octave −' }, { k: 'ArrowRight', label: 'Octave +' },
                   { k: 'ArrowDown', label: 'Sound −' }, { k: 'ArrowUp', label: 'Sound +' }] }
     ],

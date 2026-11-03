@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import javax.swing.JFrame;
+import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
@@ -19,6 +20,7 @@ import javax.swing.Timer;
  * held. Picking a song starts a lesson that lights the next key to press, and Listen plays the song first. Space
  * records a tune of your own, which goes to the clipboard as a link (see Tune) for a friend to hear and learn.
  * With the microphone on (I, or its button), notes sung, whistled or played on a real instrument count like keys.
+ * The looper (O) records two bars at a time into up to four layers that play round and round under the keys.
  */
 public final class KeyboardWindow extends JFrame implements KeyListener {
    private static final int MOUSE = -1;
@@ -80,6 +82,25 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       }
    });
    private int mic = LessonBar.MIC_OFF;
+   private final LoopView loopView = new LoopView();
+   private final Looper looper = new Looper(this.midiPlayer, new File(System.getProperty("user.home"), ".synthesizer-loop.txt"),
+      () -> this.instrument, new Looper.Listener() {
+         @Override
+         public void changed() {
+            KeyboardWindow.this.loopChanged();
+         }
+
+         @Override
+         public void taken(int layer) {
+            KeyboardWindow.this.bar.setNotice(layer < 0 ? "Nothing played in that take: Space to try again"
+               : "Layer " + (layer + 1) + " is looping" + (KeyboardWindow.this.looper.loop().full() ? ": all four are full" : ": Space adds another"));
+            KeyboardWindow.this.loopChanged();
+         }
+      });
+   /** Whether the looper is on (the strip holds its buttons and its lanes sit over the keys). */
+   private boolean looping;
+   /** Whether Clear was pressed once and waits for a second press to delete every layer. */
+   private boolean clearArmed;
 
    /** {@code friendCode} is the code of a tune a friend sent (null for none); {@code page} as in the field. */
    public KeyboardWindow(String page, String friendCode) {
@@ -90,8 +111,18 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.setDefaultCloseOperation(3);
       this.addKeyListener(this);
       this.getContentPane().setLayout(new BorderLayout());
-      this.getContentPane().add(this.bar, BorderLayout.NORTH);
+      JPanel top = new JPanel(new BorderLayout());
+      top.setFocusable(false);
+      top.add(this.bar, BorderLayout.NORTH);
+      top.add(this.loopView, BorderLayout.CENTER);
+      this.getContentPane().add(top, BorderLayout.NORTH);
       this.getContentPane().add(this.piano, BorderLayout.CENTER);
+      this.loopView.addMouseListener(new MouseAdapter() {
+         @Override
+         public void mousePressed(MouseEvent event) {
+            KeyboardWindow.this.loopLaneClicked(KeyboardWindow.this.loopView.laneAt(event.getX(), event.getY()));
+         }
+      });
       this.piano.addMouseListener(new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent event) {
@@ -113,10 +144,14 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
             int chip = window.bar.chipAt(event.getX(), event.getY());
             if (window.bar.micAt(event.getX(), event.getY())) {
                window.toggleMic();
+            } else if (window.looping) {
+               window.loopButton(window.bar.loopChipAt(event.getX(), event.getY()));
             } else if (window.recorder != null) {
                window.stopRecording();
             } else if (chip == window.menu().length) {
                window.startRecording();
+            } else if (chip == window.menu().length + 1) {
+               window.startLooper();
             } else if (chip >= 0) {
                window.startSong(chip);
             }
@@ -193,6 +228,117 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       }
    }
 
+   /** Turns the looper on: the songs make way for its buttons, and its lanes open over the keys. */
+   private void startLooper() {
+      this.startSong(-1);
+      this.clearArmed = false;
+      this.bar.setLooper(this.looper);
+      this.loopView.setInstrument(this.instrument);
+      if (!this.looping) {
+         // The lanes get room of their own, so the keys keep their size.
+         this.setSize(this.getWidth(), this.getHeight() + LoopView.HEIGHT);
+      }
+      this.looping = true;
+      this.loopView.setLooper(this.looper);
+      this.bar.setNotice(this.looper.loop().layers().isEmpty() ? null : "Your loop is back: P plays it");
+   }
+
+   /** Stops the loop and goes back to the songs; the loop is kept for next time. */
+   private void stopLooper() {
+      this.looper.stop();
+      if (this.looping) {
+         this.setSize(this.getWidth(), this.getHeight() - LoopView.HEIGHT);
+      }
+      this.looping = false;
+      this.bar.setLooper(null);
+      this.loopView.setLooper(null);
+      this.bar.setNotice(null);
+   }
+
+   private void loopChanged() {
+      this.bar.repaint();
+      this.loopView.repaint();
+   }
+
+   /** A looper button in the strip (LessonBar.LOOP_PLAY and so on), or -1 for none. */
+   private void loopButton(int button) {
+      if (button < 0) {
+         return;
+      }
+      boolean clear = button == LessonBar.LOOP_CLEAR;
+      this.bar.setNotice(null);
+      if (button == LessonBar.LOOP_PLAY) {
+         this.looper.togglePlay();
+      } else if (button == LessonBar.LOOP_RECORD) {
+         this.recordLayer();
+      } else if (button == LessonBar.LOOP_SLOWER || button == LessonBar.LOOP_FASTER) {
+         this.looper.changeTempo(button == LessonBar.LOOP_SLOWER ? -Loop.TEMPO_STEP : Loop.TEMPO_STEP);
+      } else if (button == LessonBar.LOOP_CLICK) {
+         this.looper.toggleClick();
+      } else if (button == LessonBar.LOOP_UNDO) {
+         if (!this.looper.undo()) {
+            this.bar.setNotice("No layers to undo");
+         }
+      } else if (clear && this.clearArmed) {
+         this.looper.clear();
+         this.bar.setNotice("Every layer is gone: Space to start again");
+      } else if (clear) {
+         this.bar.setNotice(this.looper.loop().layers().isEmpty() ? "No layers to clear" : "Clear again to delete every layer");
+      } else if (button == LessonBar.LOOP_SONGS) {
+         this.stopLooper();
+      }
+      this.clearArmed = clear && !this.clearArmed && !this.looper.loop().layers().isEmpty();
+   }
+
+   private void recordLayer() {
+      if (this.looper.loop().full() && !this.looper.taking()) {
+         this.bar.setNotice("All four layers are full: Undo or mute one");
+         return;
+      }
+      this.looper.record();
+   }
+
+   /** A click on a lane: a layer's lane mutes or unmutes it, the empty lane records the next layer. */
+   private void loopLaneClicked(int lane) {
+      if (lane < 0) {
+         return;
+      }
+      if (lane < this.looper.loop().layers().size()) {
+         this.looper.toggleMute(lane);
+      } else {
+         this.loopButton(LessonBar.LOOP_RECORD);
+      }
+   }
+
+   /** The looper's own keys; false for any other key, which then works as usual. */
+   private boolean loopKey(int keyCode) {
+      if (keyCode == KeyEvent.VK_SPACE) {
+         if (!this.spaceDown) {
+            this.spaceDown = true;
+            this.loopButton(LessonBar.LOOP_RECORD);
+         }
+      } else if (keyCode == KeyEvent.VK_P) {
+         this.loopButton(LessonBar.LOOP_PLAY);
+      } else if (keyCode == KeyEvent.VK_MINUS) {
+         this.loopButton(LessonBar.LOOP_SLOWER);
+      } else if (keyCode == KeyEvent.VK_EQUALS || keyCode == KeyEvent.VK_PLUS) {
+         this.loopButton(LessonBar.LOOP_FASTER);
+      } else if (keyCode == KeyEvent.VK_K) {
+         this.loopButton(LessonBar.LOOP_CLICK);
+      } else if (keyCode == KeyEvent.VK_BACK_SPACE) {
+         this.loopButton(LessonBar.LOOP_UNDO);
+      } else if (keyCode == KeyEvent.VK_DELETE) {
+         this.loopButton(LessonBar.LOOP_CLEAR);
+      } else if (keyCode == KeyEvent.VK_O || keyCode == KeyEvent.VK_ESCAPE) {
+         this.loopButton(LessonBar.LOOP_SONGS);
+      } else if (keyCode >= KeyEvent.VK_1 && keyCode < KeyEvent.VK_1 + Loop.MAX_LAYERS) {
+         this.looper.toggleMute(keyCode - KeyEvent.VK_1);
+      } else {
+         return false;
+      }
+      return true;
+   }
+
    private int keyIndex(int keyCode) {
       for (int index = 0; index < this.keyCodes.length; index++) {
          if (this.keyCodes[index] == keyCode) {
@@ -226,6 +372,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.heldNotes.put(holder, new int[]{key, note});
       this.midiPlayer.noteOn(note);
       this.piano.setPressed(key, true);
+      if (this.looping) {
+         this.looper.press(note);
+      }
       this.played(key);
    }
 
@@ -233,6 +382,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    @Override
    public void dispose() {
       this.microphone.stop();
+      this.looper.stop();
       super.dispose();
    }
 
@@ -307,6 +457,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (held != null) {
          this.midiPlayer.noteOff(held[1]);
          this.piano.setPressed(held[0], false);
+         if (this.looping) {
+            this.looper.release(held[1]);
+         }
       }
    }
 
@@ -413,6 +566,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       int keyCode = event.getKeyCode();
       int songs = this.menu().length;
       boolean recording = this.recorder != null;
+      if (this.looping && this.loopKey(keyCode)) {
+         return;
+      }
       if (keyCode == KeyEvent.VK_SPACE) {
          // Holding Space auto-repeats it; only the first press counts.
          if (this.spaceDown) {
@@ -444,8 +600,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          }
 
          this.midiPlayer.setInstrument(this.instrument);
-      } else if (recording) {
-         // Song keys wait until the recording is stopped; the piano keys below are recorded.
+      } else if (recording || this.looping) {
+         // Song keys wait until the recording is stopped or the looper is off; the piano keys below still play.
+      } else if (keyCode == KeyEvent.VK_O) {
+         this.startLooper();
       } else if (keyCode == KeyEvent.VK_T) {
          this.startSong((this.songIndex() + 1) % songs);
       } else if (keyCode >= KeyEvent.VK_1 && keyCode < KeyEvent.VK_1 + songs) {
@@ -458,6 +616,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.listen();
       }
       this.updateTitle();
+      this.loopView.setInstrument(this.instrument);
 
       int index = this.keyIndex(keyCode);
       if (index >= 0) {
