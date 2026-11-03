@@ -114,12 +114,92 @@ public class SaverCheck {
       missing.load();
       check(missing.cycle && missing.speed == 1.0, "no file: defaults");
 
+      checkTank();
+
       System.out.println("SaverCheck passed");
    }
 
    private static List<Saver> savers() {
       return Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
-         new Starfield(), new Mystify(), new Pipes(), new BouncingLogo(), new DotClock(Date::new));
+         new Starfield(), new Mystify(), new Pipes(), new BouncingLogo(), new DotClock(Date::new),
+         new Aquarium(new Tank(), Date::new, () -> { }));
+   }
+
+   /** The aquarium's tank: arrivals by day, growth, feeding, and the saved lines. */
+   private static void checkTank() throws Exception {
+      check(Tank.civilDays(1970, 1, 1) == 0, "day 0 is 1970-01-01");
+      check(Tank.civilDays(2026, 11, 2) == java.time.LocalDate.of(2026, 11, 2).toEpochDay(), "2026-11-02");
+      check(Tank.civilDays(2024, 3, 1) - Tank.civilDays(2024, 2, 28) == 2, "2024 is a leap year");
+      check(Tank.dayNumber(new Date(2026 - 1900, 10, 2, 23, 59)) == Tank.dayNumber(new Date(2026 - 1900, 10, 2, 0, 1)),
+         "the day turns over at local midnight");
+
+      Tank tank = new Tank();
+      Random random = new Random(4);
+      check(tank.arrive(100, random).size() == Tank.FIRST_FISH, "three fish on the first look");
+      check(tank.arrive(100, random).isEmpty(), "none more the same day");
+      check(tank.arrive(99, random).isEmpty(), "none when the clock goes back");
+      check(tank.arrive(101, random).size() == 1, "one the next day");
+      check(tank.arrive(140, random).size() == 1, "one after a long gap, not one per missed day");
+      for (int day = 141; day < 160; day++) {
+         tank.arrive(day, random);
+      }
+      check(tank.fish.size() == Tank.MAX_FISH, "the tank fills up: " + tank.fish.size());
+      java.util.Set<String> names = new java.util.HashSet<>();
+      int[] species = new int[Tank.SPECIES.length];
+      for (Tank.Fish fish : tank.fish) {
+         names.add(fish.name);
+         species[fish.species]++;
+      }
+      check(names.size() == Tank.MAX_FISH, "every fish has its own name");
+      for (int count : species) {
+         check(count == Tank.MAX_FISH / Tank.SPECIES.length, "an even mix of species");
+      }
+      Tank.Fish first = tank.fish.get(0);
+      check(Tank.growth(first, 100) == 0 && Tank.growth(first, 107) == 0.5 && Tank.growth(first, 200) == 1, "grows over a fortnight");
+      first.meals = 8;
+      check(Tank.growth(first, 100) == 2 / 14.0, "flakes help it grow");
+
+      // Feeding: the flakes get eaten and counted against the fish that ate them.
+      Tank fed = new Tank();
+      int[] saves = {0};
+      Aquarium aquarium = new Aquarium(fed, () -> new Date(2026 - 1900, 10, 2, 12, 0), () -> saves[0]++);
+      aquarium.reset(1280, 720, new Random(9));
+      check(fed.fish.size() == Tank.FIRST_FISH && saves[0] == 1, "the first look moves fish in and saves");
+      aquarium.reset(1280, 720, new Random(9));
+      check(fed.fish.size() == Tank.FIRST_FISH && saves[0] == 1, "showing it again the same day changes nothing");
+      aquarium.feed();
+      check(aquarium.flakeCount() > 0, "F drops flakes");
+      for (int frame = 0; frame < 1500 && aquarium.flakeCount() > 0; frame++) {
+         aquarium.tick(16);
+      }
+      int meals = 0;
+      for (Tank.Fish fish : fed.fish) {
+         meals += fish.meals;
+      }
+      check(meals > 0 && saves[0] > 1, "the fish eat the flakes: " + meals + " eaten");
+      check(aquarium.flakeCount() == 0, "uneaten flakes do not stay forever");
+      Aquarium night = new Aquarium(new Tank(), () -> new Date(2026 - 1900, 10, 2, 23, 0), () -> { });
+      check(night.daylight() == 0 && aquarium.daylight() == 1, "dark at night, light at noon");
+
+      // The tank is saved with the settings and read back; damaged fish lines are skipped.
+      File file = File.createTempFile("screensaver-tank", ".txt");
+      file.deleteOnExit();
+      Settings settings = new Settings(file);
+      settings.tank.fish.addAll(fed.fish);
+      settings.tank.lastArrival = fed.lastArrival;
+      settings.save();
+      Settings loaded = new Settings(file);
+      loaded.load();
+      check(loaded.tank.fish.size() == fed.fish.size() && loaded.tank.lastArrival == fed.lastArrival, "fish round-trip");
+      Tank.Fish back = loaded.tank.fish.get(0);
+      check(back.name.equals(fed.fish.get(0).name) && back.meals == fed.fish.get(0).meals
+         && back.species == fed.fish.get(0).species && back.born == fed.fish.get(0).born, "a fish keeps name, meals, species, day");
+      try (java.io.FileWriter out = new java.io.FileWriter(file)) {
+         out.write("saver 8\nfish 9 1 1 Bad\nfish x 1 1 Bad\nfish 1 20000 3 Fin\nfish 2 20000 0 Fin\nfishday nope\n");
+      }
+      Settings damaged = new Settings(file);
+      damaged.load();
+      check(damaged.saver == 8 && damaged.tank.fish.size() == 1 && damaged.tank.lastArrival == -1, "damaged fish lines are skipped");
    }
 
    private static int litPixels(BufferedImage image) {
