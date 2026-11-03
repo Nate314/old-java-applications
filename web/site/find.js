@@ -271,8 +271,17 @@
       if (!dialog.contains(e.target)) input.focus({ preventScroll: true });
     }
     document.addEventListener('focusin', keepFocus);
+    // A frame that focuses itself (the player's next demo game loading) fires no focusin here, only a blur on
+    // this window: if the focus went into a frame, take it back.
+    function keepFocusFromFrames() {
+      setTimeout(function () {
+        if (box && document.activeElement && document.activeElement.tagName === 'IFRAME') input.focus({ preventScroll: true });
+      }, 0);
+    }
+    window.addEventListener('blur', keepFocusFromFrames);
     function close() {
       document.removeEventListener('focusin', keepFocus);
+      window.removeEventListener('blur', keepFocusFromFrames);
       scrim.remove();
       dialog.remove();
       box = null;
