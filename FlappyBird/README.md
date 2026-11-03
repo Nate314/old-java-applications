@@ -14,11 +14,20 @@ There are two courses, chosen on the title screen:
 - **Endless**: new random pipes every run (the original game).
 - **Today's course**: the pipes are seeded by the date, so every run on the same day meets the same pipes, and a new course starts each day. Your best run of the day is kept and flies beside you as a see-through ghost labelled with its score. Passing its score shows "You passed your ghost!", and a better run replaces it.
 
+## Rewind a crash
+
+Crashed? Press **Z** (or Backspace), or click or tap the **Rewind and fly on** button on the game over screen. The last 2.5 seconds of flight play backwards at three times speed, tinted like an old video tape winding back (scan lines, a rolling band and a blinking REWIND sign, with a quick falling run of bells). The game then waits, frozen, until you flap to fly on from there, and the same pipes come back, including the ones that had not appeared yet. While you fly on, the path you flew into the crash stays drawn as white dots, scrolling with the pipes, with a red cross where you crashed, so you can see what to fly around.
+
+A run with a rewind in it is practice: the score shows "Practice: 1 rewind" under it, and its game over screen says "(practice, not a record)". It does not set a best score, a "New best!", or today's best run and ghost. You can rewind again after each crash; each rewind goes back as far as you have flown since the last one, up to 2.5 seconds.
+
+## Medals and records
+
 The game over screen shows your score, best and today's best, and a medal: Bronze at 10 pipes, Silver at 20, Gold at 30 and Platinum at 40 (the thresholds of the original Flappy Bird), with how many more pipes the next medal needs. In endless mode, beating your best score shows "New best!" during the run.
 
 ## Controls / usage
 
 - **Space**, or a **click** or **tap** anywhere in the game: start from the title screen, flap, or (on the game over screen) go back to the title screen.
+- **Z** or **Backspace**: after a crash, rewind the last 2.5 seconds and fly on from there (practice). The game over screen's Rewind button does the same.
 - **M**: sound off / on.
 - **C**: on the title screen, switch between endless pipes and today's course.
 - **P**: pause / resume.
@@ -33,11 +42,12 @@ The game over screen shows your score, best and today's best, and a medal: Bronz
 ## Code layout
 
 - `src/flappyBird/Main.java`: the `JFrame`; sizes the window, parses the argument and wires the key listener.
-- `src/flappyBird/GamePanel.java`: loads images; a Swing timer runs fixed game steps based on elapsed time, then repaints. Draws the game, the ghost and the title, pause and game over screens (with the medal), the tilted bird, its puffs and feathers, the crash's flash and shake; checks collisions, handles keys, clicks and the saved best score, and records the run for today's course.
-- `src/flappyBird/Sounds.java`: the flap, pipe, crash and fall sounds on the MIDI synthesizer, opened on a background thread.
+- `src/flappyBird/GamePanel.java`: loads images; a Swing timer runs fixed game steps based on elapsed time, then repaints. Draws the game, the ghost and the title, pause and game over screens (with the medal), the tilted bird, its puffs and feathers, the crash's flash and shake; checks collisions, handles keys, clicks and the saved best score, records the run for today's course, and runs a rewind (tape, backwards playback, the frozen wait and the last flight's path).
+- `src/flappyBird/Rewind.java`: the rewind tape: the last 2.5 seconds as one moment per game step (what the bird, pipes and background remember), given back newest first, and the path into the crash.
+- `src/flappyBird/Sounds.java`: the flap, pipe, crash, fall and rewind sounds on the MIDI synthesizer, opened on a background thread.
 - `src/flappyBird/DailyCourse.java`: today's course: the date's pipe seed, today's best score and ghost, and its file.
 - `src/flappyBird/Bird.java`: bird position, gravity and flap, its tilt (nose up after a flap, diving as it falls) and the stretch of a flap.
-- `src/flappyBird/Pipes.java`: generates pipe pairs endlessly from a random source as they scroll in (a seeded one for today's course), drops them once off screen, and counts the pairs passed.
+- `src/flappyBird/Pipes.java`: generates pipe pairs endlessly from a random source as they scroll in (a seeded one for today's course), drops them once off screen, and counts the pairs passed. It keeps every gap it has made, so pipes put back by a rewind scroll on into the same pipes.
 - `src/flappyBird/Background.java`: two scrolling layers (sky and ground) that wrap around.
 - `src/flappyBird/Position.java`: x/y plus collision x/y.
 - `src/*.jpg`, `src/*.png`: the game images.
@@ -50,9 +60,10 @@ Images are loaded by relative path (`bg.jpg`, `bird.png`, ...), so the working d
 
 ## Self-check
 
-`test/flappyBird/CourseCheck.java` checks that the same day gives the same pipes and the next day different ones, that only a better run replaces today's ghost, that the ghost fills in the steps between samples and ends with its run, that the course file loads back the same ghost while a file from another day or a broken one is ignored, and the medal names and lines. From `FlappyBird/`:
+`test/flappyBird/CourseCheck.java` checks that the same day gives the same pipes and the next day different ones, that only a better run replaces today's ghost, that the ghost fills in the steps between samples and ends with its run, that the course file loads back the same ghost while a file from another day or a broken one is ignored, and the medal names and lines. `test/flappyBird/RewindCheck.java` checks that the rewind tape keeps only its latest moments and gives them back newest first with the path into the crash, that pipes put back from memory scroll on into exactly the same pipes (including pairs not yet made), and that a bird put back flies the same way again. From `FlappyBird/`:
 
 ```
 javac -d ../out/check/FlappyBird src/flappyBird/*.java test/flappyBird/*.java
 java -ea -cp ../out/check/FlappyBird flappyBird.CourseCheck
+java -ea -cp ../out/check/FlappyBird flappyBird.RewindCheck
 ```

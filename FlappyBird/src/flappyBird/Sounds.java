@@ -63,6 +63,13 @@ final class Sounds {
       this.note(3, 67, 50, 340, 160);
    }
 
+   /** A quick falling run of bells, like a tape winding back. */
+   void rewind() {
+      for (int i = 0; i < 6; i++) {
+         this.note(1, 96 - i * 4, 70 - i * 6, i * 45, 60);
+      }
+   }
+
    /** Plays a note on a channel after delayMillis, for lengthMillis. */
    private void note(int channel, int note, int velocity, int delayMillis, int lengthMillis) {
       MidiChannel[] all = this.channels;
