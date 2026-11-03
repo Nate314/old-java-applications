@@ -2,9 +2,11 @@
 
 This repo holds 20 small Java programs written more than ten years ago, recovered from what was left of them, fixed up, and then reworked into a browser arcade. This page tells that story in order. The per-app READMEs, [`web/README.md`](web/README.md) and the [pull requests](https://github.com/Nate314/old-java-applications/pulls?q=is%3Apr) have the details.
 
+The source of inspiration for this project is the YouTube video [I Told Claude to "Make it better" 100 Times (It Went Too Far)](https://www.youtube.com/watch?v=DByAR5Su1Yw) by Nate Herk | AI Automation.
+
 ## The originals (2016 and earlier)
 
-The apps were written by the author of this repo more than ten years ago, as Java Swing and AWT desktop programs: games (Minesweeper, Flappy Bird, Ultimate Tic-Tac-Toe, a tank game, a 2D Rubik's Cube), toys (a screen saver, floating stars, circles built out of windows, a fake desktop called NathaNOS), music tools (a synthesizer keyboard, a music theory helper) and small utilities (a clock, a stock checker, a group maker, a Bible downloader, a number guessing game, a set of algorithms, and two programs that press keys on Windows).
+The apps were written by the author of this repo more than ten years ago, in high school, while the author was learning programming concepts with Java. They are Java Swing and AWT desktop programs: games (Minesweeper, Flappy Bird, Ultimate Tic-Tac-Toe, a tank game, a 2D Rubik's Cube), toys (a screen saver, floating stars, circles built out of windows, a fake desktop called NathaNOS), music tools (a synthesizer keyboard, a music theory helper) and small utilities (a clock, a stock checker, a group maker, a Bible downloader, a number guessing game, a set of algorithms, and two programs that press keys on Windows).
 
 Fourteen of them were published as jars and zips on the author's site, https://nathangawith.com/applications/java, and are kept in the git history of its repo, https://github.com/Nate314/site, under `assets/javaApplications/`. Dated evidence that survives:
 
@@ -45,3 +47,24 @@ Roughly, the work went through three phases:
 3. **Across apps and the whole site** (#44 on): the Then and now switch (#44), game controllers (#47), keyboard and screen reader support (#48), instant replay (#55), the computer playing the games (#58), a site screen saver (#64), live previews in the gallery (#70) and site-wide Find (#80), alongside further app work such as RubiksCube2D in 3D with a coach (#59, #78) and SimpleAlgorithms' sorting race and path finding (#65, #80).
 
 The [pull request list](https://github.com/Nate314/old-java-applications/pulls?q=is%3Apr) has every change, each with what it did and how it was tested, and the home page's What's new section lists the changes app by app.
+
+## The run in numbers
+
+The 100 attempts are pull requests #10 to #78 (attempts 1 to 69, one at a time) and #79 to #90 (attempts 70 to 100, in eleven parallel rounds), with the one-off #83 between rounds 4 and 5. A final pull request on top of #90 adds this section, the jar downloads and the original art below, and carries all of it to master.
+
+![Timeline of the agents: 69 attempts one at a time, then eleven rounds of builders and an integrator, with the output tokens of each pull request](web/site/agents-timeline.svg)
+
+- **Model**: every agent, and the orchestrator session that started them and read their reports, ran on Claude Opus 5.5 (model id `claude-opus-5-5`) in Claude Code.
+- **Agents**: 124 finished agents, all of whose usage was found: 69 one-at-a-time attempts, 31 round builders, 11 round integrators, the one-off #83, and 12 agents on October 31 that helped with #1 to #8 before the chain. The agent making this final pull request is not counted (it was still running when the numbers were read).
+- **Tokens of the 124 agents**, summed over every model response in their transcripts: 7,769,877 output tokens; 21,752 input tokens not served from the prompt cache; 32,985,276 tokens written to the prompt cache; 1,510,951,972 tokens read from the prompt cache. That is 1,551,728,877 in all, almost all of it the same context read again from the cache on each turn. The 111 agents of the 100 attempts alone account for 6,978,117 output tokens and 1,353,738,248 in all.
+- **The orchestrator's own tokens**, counted the same way from its session (October 31 to November 3, up to the start of the final pull request), are not in the numbers above: 522,249 output tokens; 1,684 uncached input tokens; 1,838,268 written to and 179,600,754 read from the prompt cache; 181,962,955 in all. With them the whole session comes to 8,292,126 output tokens and 1,733,691,832 tokens in all.
+- **Tool calls**: 15,299 by the 124 agents, as reported when each finished.
+- **Time**: the chain ran from November 1, 2026 at 18:39 UTC to November 3 at 06:42 UTC, about 36 hours, including a pause of about 7.7 hours when attempt 35's agent stalled and was resumed. The agents' own working time adds up to about 42 hours, about 8 of which is that stalled agent's wait.
+
+These are the usage numbers Claude Code recorded for the session, not a bill: cache reads cost far less than fresh input, and the completion notices' own per-agent token figure (which counts differently) is not used here.
+
+## Original art
+
+Some of the pictures the apps loaded were not their own. FlappyBird's bird, pipes, sky and ground were the original Flappy Bird game's art, and BibleDownloader's icon was the YouVersion Bible App's icon. NathaNOS's desktop icons included Chrome's dinosaur (for DinoGame), a Windows Minesweeper mine and an unused Windows logo; its mouse pointer was a pointing hand from an icon set; and its other icons (Clock, NumberGuess, StockChecker, SynthesizerKeyboard, UltimateTicTacToe, plus unused calculator, converter and ping pong pictures) were clip art of unknown origin. Dino Game's pixel dinosaur and bird, drawn in its code, were modeled closely on Chrome's.
+
+The final pull request replaced them with original art drawn for this repo: SVG files in each app's `art/` folder, rendered by `web/art.ps1` with headless Chrome to the PNG and JPEG files the Java code reads (same names, so the code did not change), and a new pixel dinosaur and bird in Dino Game's code. The unused pictures were removed. The Then versions, on the site and in the desktop launcher, show the new art too. Kept as they were, since nothing ties them to another app: NathaNOS's own logos, its wallpaper photo (where it came from is not recorded) and RubiksCube2D's plain cube net. The old files are still in the repo's git history, which was not rewritten.

@@ -150,11 +150,14 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `then/`: 16 apps as they were first restored (see Then and now), each compiled to `<App>/then.js` with its page `<App>/then.html` (from the one template `then/then.html`) and its sources in `<App>/then-source/`.
 - `then-nathanos/`: NathaNOS as first restored, the same way, with that commit's apps and `assets/Clock.jar`.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
+- `jars/`: a runnable jar of each of the 20 apps for the desktop, in `downloads/` (see Download .jar), and `src/oldjava/jar/WorkFolder.java`, the launcher of the three that need files beside them.
 - `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `news.js` (What's new), `clockbar.js` (Clock follows you), `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), `clips/` (the gallery's preview clips), `cards/` (the link preview cards, see Share), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
 - `shots.ps1`: recaptures `site/shots/` from a built site, following a recipe per app (see Home page).
 - `clips.ps1`: records `site/clips/` from a built site (see Home page).
 - `cdp.ps1`: what those two share: the site's server, headless Chrome and a small DevTools protocol client that loads an app page and plays a recipe's steps (keys, clicks, page scripts, waits).
 - `cards.ps1` and `card.html`: render `site/cards/` and write the share tags into every page (see Share).
+- `art.ps1`: renders the apps' own pictures (FlappyBird's images, BibleDownloader's icon, NathaNOS's icons and cursor) from their SVG sources in each app's `art/` folder with headless Chrome, to the PNG and JPEG files the Java code loads. The SVGs are original art for this repo; they replaced pictures taken from the apps these imitate (see [HISTORY.md](../HISTORY.md#original-art)).
+- `site/agents-timeline.svg`: the timeline of the agents that made the 100 attempts, shown on the story page and in HISTORY.md.
 
 ## Home page
 
@@ -286,6 +289,7 @@ Checked with Chrome's accessibility tree and real key presses; not yet with NVDA
 
 Every app here was reworked many times after it was first restored, so the site also keeps each app as it was on master before those reworks, to play beside today's version. That is commit `5a28e4608fc254e9cc075768a598a965b7fe2d24` ("Generic example names, Modern as the default skin, and every app in NathaNOS (#9)"): the recovered code with the light bug fixes of "Modernize all 20 apps" (#6), as the TeaVM build (#7) first ran it, before the chain of changes from #10 on (see [HISTORY.md](../HISTORY.md)). The site calls it "as first restored".
 
+- The Then versions use today's original art (FlappyBird's pictures and NathaNOS's icons and cursor are shared with today's versions on the site, and the desktop launcher copies them over its unpacked copy), not the pictures taken from other apps that the commit had.
 - The `then` module (`web/then/pom.xml`) reads the sources at that commit out of the repo's git history with `git archive`, so no copy of them is kept in the tree, and compiles them with TeaVM on today's shim. The hash is pinned rather than `master`, so the Then versions stay the same when later work is merged into master. The build therefore needs `git` and the repo's history (a shallow clone fails; the GitHub Pages workflow checks out with `fetch-depth: 0`).
 - The `then-nathanos` module (`web/then-nathanos/pom.xml`) does the same for NathaNOS, which at that commit ran the 14 other browser apps of that commit and the old `assets/Clock.jar`, built as that commit's `web/nathanos` built it (including its `web.nathanos.Boot`). It is its own module because Clock.jar's `clock.Main` clashes with the Clock app's sources. Clock.jar comes from the working tree, since Maven resolves it before any sources are unpacked; it has not changed since that commit.
 - 17 apps have a Then version: the 16 that master's web build ran at that commit (all but BibleDownloader, DinoGame, Windows and WindowsE), plus WindowsE, which already had one and runs on the pretend Windows (see Pretend Windows) like today's. BibleDownloader, DinoGame and Windows have none, as before. NathaNOS is new to the list; Then on it opens the 2026 NathaNOS with that commit's apps.
@@ -523,14 +527,24 @@ Ctrl+K (Cmd+K on a Mac) on any page, / on the home page, the toolbar's Find butt
 
 ## The story
 
-`story.html` tells [HISTORY.md](../HISTORY.md) on the site, in four chapters, with the things each chapter talks about beside the words. A link under the home page's intro and a "The story" entry in Find lead to it. Before it, a visitor met 20 apps with no word on where they came from, and the history lived only in the repo.
+`story.html` tells [HISTORY.md](../HISTORY.md) on the site, in five chapters, with the things each chapter talks about beside the words. A link under the home page's intro and a "The story" entry in Find lead to it. Before it, a visitor met 20 apps with no word on where they came from, and the history lived only in the repo.
 
 - **The originals**: the 2016 quotes Stock Checker saved, read from `StockChecker/stockCheck.csv` (its five real quotes, and a note for the 95 empty rows after them), and all 20 apps grouped by where each was recovered from, linking to their pages.
 - **The recovery**: Flappy Bird's `Bird` class as decompiled (`b.java` in the first commit, 4fea701) and as #1 renamed it (`Bird.java`). Both files are in the page; split on identifiers they line up token for token, so Rename turns each obfuscated name into its English one in place, one name at a time, and Show decompiled turns them back.
 - **The first restoration**: the embeddable player (`play.html`) on any app's Then version, with a Then | Now switch and an app picker. It loads when the chapter comes near the screen and shows its poster until the visitor presses Play.
 - **The Claude Code chain**: the number of changes, the days from first to latest and the changes to each app's folder, counted in the browser from `history.txt` (the same file What's new reads), each bar a link to the app.
+- **The run in numbers**: the model, the agents and their token usage (copied from HISTORY.md), and `agents-timeline.svg`, a timeline of every agent and the output tokens of each pull request. The hero credits the video that inspired the project, and the first chapter says the apps were written in high school.
 - It wears the visitor's skin (Modern, Classic or Arcade, from `shim.css` and `oldjava.skin`; Yours shows as Modern), but does not load `boot.js`, which is for the home and app pages, so it has no toolbar, Find or site sounds. Its words stay beside the pictures on screens at least 820 px tall and stack above them below 760 px wide. It is in the offline file list with `play.html` and the quotes file.
 - The words come from HISTORY.md: when that changes, change `story.html` with it.
+
+## Download .jar
+
+Every app page's title screen has a **Download <App>.jar** link, and the Source panel a **Download .jar** link beside Raw: the app built from today's sources for the desktop, to run with `java -jar <App>.jar` (or a double click) on Java 17 or newer. The `jars` module (`web/jars/pom.xml`) builds them into `downloads/` on every `mvn -f web/pom.xml package`, so the GitHub Pages build publishes them too.
+
+- Each jar is what `run.ps1 <App> -Build` makes: the classes compiled with `--release 17` and the other files of `src/` (BibleDownloader's icon), with the app's main class in the manifest.
+- FlappyBird, StockChecker and NathaNOS read files from the folder they start in, so their jars also carry those files under `workfolder/` and start through `oldjava.jar.WorkFolder`: it unpacks them into `~/.oldjava/<App>/` (keeping `.txt` and `.csv` files already there, which the apps write) and runs the app there in a second Java process. NathaNOS's jar holds its assets and a jar of each app it opens, as `run.ps1 NathaNOS` stages them.
+- Windows, WindowsE and DinoGame's screen mode press real keys on the computer, so their links say so beside them (`JAR_KEYS` in `boot.js`). Then pages have no download (the jars are today's versions).
+- The service worker leaves `downloads/*.jar` alone, so a download is never kept in its cache.
 
 ## Instant open
 

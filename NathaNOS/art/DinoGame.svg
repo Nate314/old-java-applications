@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for DinoGame: a round green dinosaur with back spikes beside a cactus. Original art for
+       this repo, like the dinosaur the game draws in pixels. -->
+  <rect x="16" y="200" width="224" height="8" rx="4" fill="#5b4a3a"/>
+  <g fill="#3f9b52">
+    <path d="M196 200 V150 a10 10 0 0 1 20 0 V200 Z"/>
+    <path d="M216 176 h12 a8 8 0 0 0 8 -8 V156 a6 6 0 0 0 -12 0 V164 h-8 Z"/>
+    <path d="M196 184 h-10 a8 8 0 0 1 -8 -8 V166 a6 6 0 0 1 12 0 V172 h6 Z"/>
+  </g>
+  <g fill="#e8a33a">
+    <path d="M58 100 l10 -18 l10 18 Z"/><path d="M80 92 l10 -18 l10 18 Z"/><path d="M102 90 l10 -18 l10 18 Z"/>
+  </g>
+  <path d="M22 118 Q30 100 56 98 Q90 80 120 92 Q128 60 150 44 Q176 30 194 52 Q204 66 196 80 Q186 92 168 92 Q156 100 150 118
+           Q146 150 118 160 L120 196 h-16 l-2 -32 h-20 l2 32 h-16 l-4 -38 Q58 150 50 132 Q34 128 22 118 Z" fill="#59b86a"/>
+  <path d="M66 124 Q100 150 140 124" stroke="#9fdca9" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <circle cx="170" cy="60" r="9" fill="#ffffff"/><circle cx="173" cy="60" r="5" fill="#1c2430"/>
+  <path d="M176 78 Q186 82 192 74" stroke="#2b6b3a" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M150 110 l14 6 l-4 6" stroke="#2b6b3a" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

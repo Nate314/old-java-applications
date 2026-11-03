@@ -10,8 +10,9 @@
     The story page: the repo's HISTORY.md told on the site, chapter by chapter, with the things it talks about
     next to the words. The originals (the 2016 quotes StockChecker saved, read from StockChecker/stockCheck.csv),
     the recovery (Flappy Bird's Bird class as decompiled, renamed in place token by token), the first restoration
-    (the embeddable player, play.html, on a Then version with a Then | Now switch) and the chain (counted from
-    history.txt, the git log the build writes for What's new). It wears the visitor's skin from shim.css, read
+    (the embeddable player, play.html, on a Then version with a Then | Now switch), the chain (counted from
+    history.txt, the git log the build writes for What's new) and the run in numbers (agents-timeline.svg, drawn
+    from the session's usage numbers; the numbers in its text are copied from HISTORY.md). It wears the visitor's skin from shim.css, read
     from localStorage like boot.js does, but does not load boot.js (that file is for the home and app pages).
     The facts in the text come from HISTORY.md; keep the two in step. See web/README.md, The story.
   -->
@@ -41,6 +42,7 @@
     .kicker { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
     .hero h1 { margin: 0 0 14px; font-size: clamp(32px, 7vw, 56px); line-height: 1.05; letter-spacing: -0.02em; max-width: 14em; }
     .hero p { margin: 0; max-width: 40em; font-size: 18px; opacity: 0.85; }
+    .hero p.inspired { margin-top: 12px; font-size: 15px; }
     .chapters { display: flex; flex-wrap: wrap; gap: 10px; margin: 28px 0 0; padding: 0; list-style: none; counter-reset: ch; }
     .chapters a { display: block; padding: 10px 14px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-bg);
                   color: inherit; text-decoration: none; font-size: 14px; counter-increment: ch; }
@@ -124,6 +126,14 @@
     .phases li::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
     .phases b { display: block; }
 
+    /* 5. the run in numbers: the timeline graphic (agents-timeline.svg, dark in every skin) */
+    .timeline { display: block; background: #12162a; }
+    .timeline img { display: block; width: 100%; height: auto; }
+    .usage { margin: 0; padding: 0; list-style: none; font-size: 14px; }
+    .usage li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 12px; border-bottom: 1px solid var(--card-border); }
+    .usage li:last-child { border-bottom: 0; }
+    .usage b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
     /* the end */
     .finale { padding: 64px 0 0; border-top: 1px solid var(--card-border); text-align: center; }
     .finale h2 { margin: 0 0 10px; font-size: clamp(26px, 5vw, 40px); letter-spacing: -0.01em; }
@@ -154,7 +164,7 @@
 <header class="story-top">
   <a class="home" href="index.html">&larr; Old Java Applications</a>
   <nav aria-label="Chapters">
-    <a href="#originals">The originals</a><a href="#recovery">The recovery</a><a href="#restoration">The first restoration</a><a href="#chain">The chain</a>
+    <a href="#originals">The originals</a><a href="#recovery">The recovery</a><a href="#restoration">The first restoration</a><a href="#chain">The chain</a><a href="#numbers">In numbers</a>
   </nav>
   <span class="bar" id="bar" aria-hidden="true"></span>
 </header>
@@ -164,11 +174,15 @@
     <h1>Twenty old programs, brought back to play</h1>
     <p>These Java desktop programs were written more than ten years ago, and for most of them the source code was gone.
       This is how they were recovered from what was left, fixed up, and put in your browser, with the real code and the apps themselves along the way.</p>
+    <p class="inspired">The source of inspiration for this project is the YouTube video
+      <a href="https://www.youtube.com/watch?v=DByAR5Su1Yw">I Told Claude to &ldquo;Make it better&rdquo; 100 Times (It Went Too Far)</a>
+      by Nate Herk | AI Automation.</p>
     <ol class="chapters">
       <li><a href="#originals">The originals (2016 and earlier)</a></li>
       <li><a href="#recovery">The recovery (October 2026)</a></li>
       <li><a href="#restoration">The first restoration</a></li>
       <li><a href="#chain">The Claude Code chain</a></li>
+      <li><a href="#numbers">The run in numbers</a></li>
     </ol>
   </header>
 
@@ -176,7 +190,8 @@
     <div class="words">
       <p class="kicker">Chapter 1</p>
       <h2 id="h-originals">The originals</h2>
-      <p>The apps were written as Java Swing and AWT desktop programs: games, toys, music tools and small utilities.</p>
+      <p>The author wrote them in high school, while learning programming concepts with Java, as Java Swing and AWT
+        desktop programs: games, toys, music tools and small utilities.</p>
       <p>Fourteen of them were published as jars and zips on the author's site. The files inside carry timestamps from
         April 28 to May 16, 2016. ScreenSaver's are the oldest.</p>
       <p>The other six came from the author's own files, with no dates recorded. Four of those were still the original
@@ -283,9 +298,48 @@
     </div>
   </section>
 
+  <section class="chapter" id="numbers" aria-labelledby="h-numbers">
+    <div class="words">
+      <p class="kicker">Chapter 5</p>
+      <h2 id="h-numbers">The run in numbers</h2>
+      <p>The 100 attempts became pull requests #10 to #90: 69 made one at a time, then eleven rounds in which two or
+        three agents built at once and an integrator merged their work, plus the one-off #83 that wrote the history.</p>
+      <p>Every agent, and the orchestrator session that started them and read their reports, ran on
+        <b>Claude Opus 5.5</b> (<code>claude-opus-5-5</code>) in Claude Code. The usage of all 124 finished agents was
+        found in their transcripts.</p>
+      <p>Almost all of the tokens are the same context read again from the prompt cache on each turn; the output,
+        what the agents actually wrote, is the smaller number. The orchestrator is counted on its own line, and the
+        agent making the final pull request is not counted.</p>
+      <p>That final pull request also replaced the pictures some apps had taken from the apps they imitated (Flappy
+        Bird's art, a Bible app's icon, Chrome's dinosaur, a Windows mine) with original art, and added a
+        <b>Download .jar</b> link to every app page, to run each app on the desktop with Java 17 or newer.</p>
+    </div>
+    <div class="show">
+      <div class="panel">
+        <div class="panel-head"><strong>Who worked when</strong><a href="agents-timeline.svg">Full size</a></div>
+        <a class="timeline" href="agents-timeline.svg"><img src="agents-timeline.svg" width="1200" height="640" loading="lazy"
+          alt="Timeline from November 1 to 3, 2026: 69 agents one after another, then eleven rounds of builders and an integrator, the one-off #83, and the output tokens of each pull request, all on Claude Opus 5.5"></a>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-head"><strong>Tokens</strong><span>from the session's transcripts</span></div>
+        <ul class="usage">
+          <li><span>Agents (124)</span><b>7,769,877 output</b></li>
+          <li><span>&nbsp;&nbsp;of which the 100 attempts (111 agents)</span><b>6,978,117 output</b></li>
+          <li><span>Agents, all tokens incl. cache reads</span><b>1,551,728,877</b></li>
+          <li><span>Orchestrator</span><b>522,249 output</b></li>
+          <li><span>Orchestrator, all tokens incl. cache reads</span><b>181,962,955</b></li>
+          <li><span>Tool calls by the agents</span><b>15,299</b></li>
+          <li><span>From the first attempt to the last</span><b>about 36 hours</b></li>
+        </ul>
+      </div>
+      <p class="caption">The 36 hours include a pause of about 7.7 hours while attempt 35's agent was stalled. The
+        breakdown is in <a href="https://github.com/Nate314/old-java-applications/blob/master/HISTORY.md#the-run-in-numbers">HISTORY.md</a>.</p>
+    </div>
+  </section>
+
   <section class="finale" aria-labelledby="h-finale">
     <h2 id="h-finale">Now it's your turn</h2>
-    <p>All 20 are on the home page, ready to play. Each one keeps its Then version and its Java source a click away.</p>
+    <p>All 20 are on the home page, ready to play. Each one keeps its Then version, its Java source and a .jar for the desktop a click away.</p>
     <div class="go">
       <a class="btn primary" href="index.html#apps">Play all 20 apps</a>
       <a class="btn" id="pick" href="index.html">Pick one for me</a>

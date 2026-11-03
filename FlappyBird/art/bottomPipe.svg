@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="1200" viewBox="0 0 240 1200">
+  <!-- FlappyBird's bottom pipe (bottomPipe.png): topPipe.svg turned upside down, flange at the top. Original art. -->
+  <defs>
+    <linearGradient id="copper" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7a3d1c"/>
+      <stop offset="0.3" stop-color="#e8955a"/>
+      <stop offset="0.45" stop-color="#ffc79a"/>
+      <stop offset="0.7" stop-color="#c46a35"/>
+      <stop offset="1" stop-color="#6b3418"/>
+    </linearGradient>
+    <pattern id="bands" width="240" height="180" patternUnits="userSpaceOnUse" y="-20">
+      <rect x="22" y="0" width="196" height="16" fill="#000" opacity="0.18"/>
+      <circle cx="50" cy="8" r="4" fill="#ffe2c4" opacity="0.8"/>
+      <circle cx="120" cy="8" r="4" fill="#ffe2c4" opacity="0.8"/>
+      <circle cx="190" cy="8" r="4" fill="#ffe2c4" opacity="0.8"/>
+    </pattern>
+  </defs>
+  <g transform="translate(0 1200) scale(1 -1)">
+  <rect x="22" y="0" width="196" height="1120" fill="url(#copper)"/>
+  <rect x="22" y="0" width="196" height="1120" fill="url(#bands)"/>
+  <rect x="0" y="1112" width="240" height="88" rx="10" fill="url(#copper)" stroke="#5a2a12" stroke-width="6"/>
+  <rect x="0" y="1112" width="240" height="18" fill="#000" opacity="0.15"/>
+  <g fill="#5a2a12"><circle cx="30" cy="1160" r="8"/><circle cx="90" cy="1160" r="8"/><circle cx="150" cy="1160" r="8"/><circle cx="210" cy="1160" r="8"/></g>
+  </g>
+</svg>

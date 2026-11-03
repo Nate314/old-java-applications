@@ -1925,6 +1925,33 @@ canvas.paint.top {
   color: var(--accent);
 }
 
+/* Download .jar (boot.js jarLink): on the title screen, and in the Source panel's head beside Raw. */
+.shim-title-jar {
+  margin: 0;
+  font-size: 12.5px;
+  max-width: 46ch;
+}
+
+.shim-title-jar[hidden] {
+  display: none;
+}
+
+.shim-title-jar-link,
+.shim-source-jar {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.shim-title-jar-keys {
+  font-weight: 600;
+}
+
+.shim-source-jar {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .shim-source {
   --src-bg: #ffffff;
   --src-text: #1f2937;

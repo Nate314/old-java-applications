@@ -56,7 +56,9 @@ The game over screen shows your score, best and today's best, and a medal: Bronz
 
 From the repo root: `./run.ps1 FlappyBird` (or `./run.ps1 FlappyBird -Build` to build a jar).
 
-Images are loaded by relative path (`bg.jpg`, `bird.png`, ...), so the working directory must be `FlappyBird/src`.
+Images are loaded by relative path (`bg.jpg`, `bird.png`, ...), so the working directory must be `FlappyBird/src`. The downloadable `FlappyBird.jar` on the site carries them and unpacks them into `~/.oldjava/FlappyBird` before it starts (see [Download .jar](../web/README.md#download-jar)).
+
+The images are original art for this repo (a teal bird, copper pipes, hills at sunrise and a grassy ground strip), drawn as SVG in `art/` and rendered to these files by `web/art.ps1`. They replaced the original Flappy Bird game's art, which the recovered jar had used; the old files remain in the git history.
 
 ## Self-check
 

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!-- BibleDownloader's icon (src/assets/bible.png, also NathaNOS's assets/BibleDownloader.png): an open book on a
+       night-blue tile under a small gold cross. Original art for this repo. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d5597"/>
+      <stop offset="1" stop-color="#18325e"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="26" fill="url(#tile)"/>
+  <path d="M60 44 V18 M50 28 H70" stroke="#f2c14e" stroke-width="6" stroke-linecap="round"/>
+  <path d="M60 52 Q42 42 18 46 V94 Q42 90 60 100 Z" fill="#fbf6e9"/>
+  <path d="M60 52 Q78 42 102 46 V94 Q78 90 60 100 Z" fill="#efe6cf"/>
+  <path d="M60 52 V100" stroke="#c9b98f" stroke-width="2"/>
+  <g stroke="#b7a57a" stroke-width="2.5" stroke-linecap="round" fill="none">
+    <path d="M26 58 Q40 55 52 60"/><path d="M26 67 Q40 64 52 69"/><path d="M26 76 Q40 73 52 78"/>
+    <path d="M68 60 Q80 55 94 58"/><path d="M68 69 Q80 64 94 67"/><path d="M68 78 Q80 73 94 76"/>
+  </g>
+  <path d="M84 47 V66 L89 61 L94 66 V46" fill="#d64545"/>
+</svg>

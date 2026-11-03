@@ -58,7 +58,7 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 - `src/main/AppLauncher.java`: runs an app's `main` on its own thread, and keeps NathaNOS open when an app's window closes.
 - `src/main/FileGatherer.java`: scans `assets/` for jars and loads their main classes with `URLClassLoader`.
 - `src/main/GenericAppFrame.java`: the `JInternalFrame` wrapper an app's content is shown in.
-- `assets/`: background, cursor, logo and app icon images, plus `Clock.jar`. The original icons were renamed to the app names they now match (for example `minesqeeper.png` to `Minesweeper.png`, `piano.png` to `SynthesizerKeyboard.png`).
+- `assets/`: background, cursor, logo and app icon images, plus `Clock.jar`. The original icons were renamed to the app names they now match (for example `minesqeeper.png` to `Minesweeper.png`, `piano.png` to `SynthesizerKeyboard.png`). The app icons and the cursor are now original art drawn as SVG in `art/` and rendered by `web/art.ps1`: they replaced pictures taken from other apps (Chrome's dinosaur, a Windows Minesweeper mine, an icon set's pointing hand) and clip art of unknown origin. The unused `calculator.png`, `converter.png`, `pingPong.png` and `windowsLogo.png` were removed. The logos (`NathaNOS.png`, `NathaNOS.jpg`, `NOS.png`), the wallpaper photo and `RubiksCube2D.png` are as recovered.
 
 ## Self-check
 

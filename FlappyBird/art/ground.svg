@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="200" viewBox="0 0 1600 200">
+  <!-- FlappyBird's ground strip (ground.jpg): original art for this repo. Every pattern repeats a whole number of
+       times across the width, so the strip tiles. -->
+  <defs>
+    <pattern id="soil" width="64" height="64" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+      <rect width="64" height="64" fill="#c79059"/>
+      <rect width="64" height="20" fill="#b98250"/>
+    </pattern>
+    <pattern id="tufts" width="80" height="60" patternUnits="userSpaceOnUse">
+      <path d="M0 0 H80 V34 Q60 52 40 34 Q20 52 0 34 Z" fill="#69b14f"/>
+      <path d="M0 0 H80 V22 Q60 38 40 22 Q20 38 0 22 Z" fill="#86c95e"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="200" fill="#c79059"/>
+  <rect y="40" width="1600" height="160" fill="url(#soil)" opacity="0.6"/>
+  <rect width="1600" height="60" fill="url(#tufts)"/>
+  <rect width="1600" height="6" fill="#4d8a3a"/>
+  <g fill="#9c6b3e">
+    <ellipse cx="120" cy="120" rx="14" ry="8"/><ellipse cx="410" cy="160" rx="10" ry="6"/><ellipse cx="690" cy="110" rx="16" ry="9"/>
+    <ellipse cx="930" cy="170" rx="12" ry="7"/><ellipse cx="1210" cy="125" rx="15" ry="8"/><ellipse cx="1480" cy="165" rx="11" ry="6"/>
+  </g>
+</svg>

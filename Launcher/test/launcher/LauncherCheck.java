@@ -139,6 +139,17 @@ public class LauncherCheck {
          check(history.of("DinoGame").warning != null && history.of("DinoGame").warning.contains("Space"), "the first DinoGame was a screen bot");
          check(!history.of("Windows").changed && history.of("Windows").thenLines == history.of("Windows").nowLines, "Windows unchanged");
          check(LauncherWindow.historyText(find(apps, "Clock"), history.of("Clock"), utc).contains("## Changes since"), "history text");
+         // The first restored copy plays with today's original art, not the images taken from other apps.
+         Path thenDir = Files.createTempDirectory("launcher-then-art").resolve("then");
+         ThenCopy.ensure(Git.in(root), root, thenDir);
+         for (String art : ThenCopy.ART) {
+            check(java.util.Arrays.equals(Files.readAllBytes(thenDir.resolve(art)), Files.readAllBytes(root.resolve(art))), art + " is today's art");
+         }
+         check(!Files.exists(thenDir.resolve("NathaNOS/assets/windowsLogo.png")) && Files.isRegularFile(thenDir.resolve("FlappyBird/src/flappyBird/Main.java")), "old art gone, old code kept");
+         check(new String(Files.readAllBytes(thenDir.resolve(ThenCopy.MARKER)), StandardCharsets.UTF_8).equals(ThenCopy.STAMP), "marker");
+         try (java.util.stream.Stream<Path> walk = Files.walk(thenDir.getParent())) {
+            for (Path f : (Iterable<Path>) walk.sorted(java.util.Comparator.reverseOrder())::iterator) Files.delete(f);
+         }
       }
       check(History.sentences("One. Two. Three.", 2).equals("One. Two.") && History.sentences("One.", 2).equals("One."), "sentences");
       check(History.firstParagraph("# T\n\nA `b` **c** [d](e)\nmore.\n\nNext").equals("A b c d more."), "first paragraph");

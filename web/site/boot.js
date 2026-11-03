@@ -2508,6 +2508,26 @@
   // does). The band's Then | Now switch and the title screens go between the two pages, and the title screen of
   // then.html lists the quirks its README still listed at that commit.
   function isThen() { return document.body.hasAttribute('data-then'); }
+
+  // Download .jar: every app also runs on the desktop from downloads/<App>.jar (built by web/jars), with Java 17 or
+  // newer. Three of them press real keys on the computer, and say so beside the link.
+  var JAR_JAVA = 'Java 17 or newer';
+  var JAR_KEYS = {
+    Windows: 'It presses the Windows key on your computer as soon as it starts.',
+    WindowsE: 'It presses real Windows shortcuts on your computer when you ask it to.',
+    DinoGame: 'Its screen mode (java -jar DinoGame.jar screen) presses keys on your computer to play a game in another window.'
+  };
+  function jarLink(id, cls, text) {
+    var a = document.createElement('a');
+    a.className = cls;
+    a.href = root() + 'downloads/' + id + '.jar';
+    a.setAttribute('download', id + '.jar');
+    a.setAttribute('data-sound', 'none');
+    a.textContent = text;
+    a.title = 'The desktop version of this app: run it with java -jar ' + id + '.jar (' + JAR_JAVA + ')' +
+      (JAR_KEYS[id] ? '. ' + JAR_KEYS[id] : '');
+    return a;
+  }
   function sourceDir() { return isThen() ? 'then-source/' : 'source/'; }
   function programFile() { return isThen() ? 'then.js' : 'classes.js'; }
   function saveStore() { return appId() + (isThen() ? '.then' : ''); }
@@ -3163,6 +3183,9 @@
       if (opener && opener.focus && document.contains(opener)) opener.focus();
     }
     head.appendChild(title);
+    if (!isThen()) {
+      head.appendChild(jarLink(appId(), 'shim-source-jar', JAR_KEYS[appId()] ? 'Download .jar (presses real keys)' : 'Download .jar'));
+    }
     head.appendChild(raw);
     head.appendChild(closeButton(shut));
     panel.appendChild(head);
@@ -4245,6 +4268,18 @@
     watchLink.href = '?watch';
     watchLink.textContent = 'Watch the computer play it first';
     watchLink.hidden = !WATCH[appId()] || isThen();
+    // The app for the desktop, today's version only (the jars are built from today's sources).
+    var jarRow = document.createElement('p');
+    jarRow.className = 'shim-title-jar';
+    jarRow.hidden = isThen();
+    jarRow.appendChild(jarLink(appId(), 'shim-title-jar-link', 'Download ' + appId() + '.jar'));
+    jarRow.appendChild(document.createTextNode(' for the desktop, ' + JAR_JAVA + '.'));
+    if (JAR_KEYS[appId()]) {
+      var keys = document.createElement('strong');
+      keys.className = 'shim-title-jar-keys';
+      keys.textContent = ' ' + JAR_KEYS[appId()];
+      jarRow.appendChild(keys);
+    }
     // Screen Saver is also the site's screen saver (see showSaver): its title screen turns that on and off.
     var saverRow = document.createElement('p');
     saverRow.className = 'shim-title-saver';
@@ -4268,7 +4303,7 @@
     story.className = 'shim-title-story';
     story.hidden = true;
     if (!isThen()) newsScript().then(function (news) { news.story(appId(), story); });
-    [cat, name, hint, stamp, record, saverRow, play, press, read, watchLink, era, story].forEach(function (el) { text.appendChild(el); });
+    [cat, name, hint, stamp, record, saverRow, play, press, read, watchLink, era, jarRow, story].forEach(function (el) { text.appendChild(el); });
     card.appendChild(art);
     card.appendChild(text);
     card.appendChild(meter);

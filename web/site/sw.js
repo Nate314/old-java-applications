@@ -40,6 +40,7 @@ function offlinePage() {
 self.addEventListener('fetch', function (e) {
   var request = e.request;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  if (/\/downloads\/[^/]+\.jar$/.test(new URL(request.url).pathname)) return;   // the desktop jars are not kept
   e.respondWith(fetch(request).then(function (response) {
     if (response.status === 200 && response.type === 'basic') {
       var copy = response.clone();

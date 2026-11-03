@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for Minesweeper: grass and sand tiles with numbers and a red flag, the look of the game's
+       own board. Original art for this repo. -->
+  <g stroke="#2f6b2a" stroke-width="4">
+    <rect x="20" y="20" width="72" height="72" rx="10" fill="#7cc35a"/>
+    <rect x="92" y="20" width="72" height="72" rx="10" fill="#e9d29b"/>
+    <rect x="164" y="20" width="72" height="72" rx="10" fill="#e9d29b"/>
+    <rect x="20" y="92" width="72" height="72" rx="10" fill="#e9d29b"/>
+    <rect x="92" y="92" width="72" height="72" rx="10" fill="#e9d29b"/>
+    <rect x="164" y="92" width="72" height="72" rx="10" fill="#7cc35a"/>
+    <rect x="20" y="164" width="72" height="72" rx="10" fill="#7cc35a"/>
+    <rect x="92" y="164" width="72" height="72" rx="10" fill="#7cc35a"/>
+    <rect x="164" y="164" width="72" height="72" rx="10" fill="#7cc35a"/>
+  </g>
+  <g font-family="Verdana, Arial, sans-serif" font-weight="bold" font-size="46" text-anchor="middle">
+    <text x="128" y="72" fill="#2a62c9">1</text>
+    <text x="200" y="72" fill="#2f8f2f">2</text>
+    <text x="56" y="144" fill="#2a62c9">1</text>
+    <text x="128" y="144" fill="#c93a2a">3</text>
+  </g>
+  <path d="M190 112 V150" stroke="#5b4a3a" stroke-width="6" stroke-linecap="round"/>
+  <path d="M192 110 L224 123 L192 136 Z" fill="#e23b3b"/>
+  <ellipse cx="190" cy="152" rx="16" ry="5" fill="#2f6b2a" opacity="0.5"/>
+</svg>

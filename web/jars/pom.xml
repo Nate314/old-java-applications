@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>web</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>jars</artifactId>
+  <packaging>pom</packaging>
+  <name>A runnable jar of each app to download</name>
+
+  <!--
+    Download .jar (web/README.md): every app page links downloads/<App>.jar, the app compiled from today's sources
+    for the desktop (Java ${maven.compiler.release} or newer), the same way run.ps1 -Build makes it. Most are plain
+    jars. The three apps that read files from the folder they start in (FlappyBird's pictures, StockChecker's
+    quotes, NathaNOS's desktop and the apps it opens) carry those files under workfolder/ and start through
+    oldjava.jar.WorkFolder (src/ here), which unpacks them into ~/.oldjava/<App>/ and runs the app there.
+  -->
+  <properties>
+    <jars.work>${project.build.directory}/jars</jars.work>
+    <jars.out>${site.dir}/downloads</jars.out>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>app-jars</id>
+            <phase>package</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <property name="repo" location="${repo.dir}"/>
+                <property name="work" location="${jars.work}"/>
+                <property name="out" location="${jars.out}"/>
+                <delete dir="${work}"/>
+                <delete dir="${out}"/>
+                <mkdir dir="${work}/launcher"/>
+                <mkdir dir="${work}/plain"/>
+                <mkdir dir="${out}"/>
+                <javac srcdir="${project.basedir}/src" destdir="${work}/launcher" release="${maven.compiler.release}"
+                       encoding="UTF-8" includeantruntime="false"/>
+                <!-- An app's classes and the other files in its src/ (images, as on the classpath of the old jars),
+                     and a plain jar of them that runs its own main. -->
+                <macrodef name="plainjar">
+                  <attribute name="app"/>
+                  <attribute name="main"/>
+                  <sequential>
+                    <mkdir dir="${work}/@{app}/classes"/>
+                    <javac srcdir="${repo}/@{app}/src" destdir="${work}/@{app}/classes" release="${maven.compiler.release}"
+                           encoding="UTF-8" includeantruntime="false" nowarn="true">
+                      <compilerarg value="-Xlint:none"/>
+                    </javac>
+                    <copy todir="${work}/@{app}/classes">
+                      <fileset dir="${repo}/@{app}/src" excludes="**/*.java META-INF/**"/>
+                    </copy>
+                    <jar destfile="${work}/plain/@{app}.jar" basedir="${work}/@{app}/classes">
+                      <manifest><attribute name="Main-Class" value="@{main}"/></manifest>
+                    </jar>
+                  </sequential>
+                </macrodef>
+                <!-- An app that reads files from its working folder: its classes, the launcher, and the files. -->
+                <macrodef name="workjar">
+                  <attribute name="app"/>
+                  <attribute name="main"/>
+                  <element name="files"/>
+                  <sequential>
+                    <mkdir dir="${work}/@{app}/props"/>
+                    <echo file="${work}/@{app}/props/workfolder.properties">app=@{app}${line.separator}main=@{main}${line.separator}</echo>
+                    <jar destfile="${out}/@{app}.jar">
+                      <fileset dir="${work}/@{app}/classes"/>
+                      <fileset dir="${work}/launcher"/>
+                      <fileset dir="${work}/@{app}/props"/>
+                      <files/>
+                      <manifest><attribute name="Main-Class" value="oldjava.jar.WorkFolder"/></manifest>
+                    </jar>
+                  </sequential>
+                </macrodef>
+                <plainjar app="BibleDownloader" main="audiobibledownloader.Main"/>
+                <plainjar app="CircleSpawner" main="circlewindow.Main"/>
+                <plainjar app="Clock" main="clock.Main"/>
+                <plainjar app="DinoGame" main="dinosaurgameplayer.Main"/>
+                <plainjar app="FlappyBird" main="flappyBird.Main"/>
+                <plainjar app="GroupCreator" main="groupcreator.Main"/>
+                <plainjar app="Minesweeper" main="minesweeper.Main"/>
+                <plainjar app="MusicTheoryExpert" main="musictheoryexpert.Main"/>
+                <plainjar app="NathaNOS" main="main.Main"/>
+                <plainjar app="NumberGuess" main="numberguess.Main"/>
+                <plainjar app="RubiksCube2D" main="rubikscube.Main"/>
+                <plainjar app="ScreenSaver" main="screensaver.Main"/>
+                <plainjar app="SimpleAlgorithms" main="simplealgorithms.Main"/>
+                <plainjar app="SpriteFloatyStars" main="animate2.Animate2Main"/>
+                <plainjar app="StockChecker" main="stockchecker.Main"/>
+                <plainjar app="SynthesizerKeyboard" main="synthesizer.Main"/>
+                <plainjar app="TankGame" main="tankgame.Main"/>
+                <plainjar app="UltimateTicTacToe" main="ultimateticktacktoe.Main"/>
+                <plainjar app="Windows" main="test.Test"/>
+                <plainjar app="WindowsE" main="windowse.WindowsEMain"/>
+                <copy todir="${out}">
+                  <fileset dir="${work}/plain" excludes="FlappyBird.jar StockChecker.jar NathaNOS.jar"/>
+                </copy>
+                <workjar app="FlappyBird" main="flappyBird.Main">
+                  <files><zipfileset dir="${repo}/FlappyBird/src" includes="*.jpg *.png" prefix="workfolder"/></files>
+                </workjar>
+                <workjar app="StockChecker" main="stockchecker.Main">
+                  <files><zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/></files>
+                </workjar>
+                <!-- NathaNOS as run.ps1 stages it: its assets with a jar of each app it opens (Clock is the older
+                     assets/Clock.jar), and the files those apps read. Windows and WindowsE are left out (they press
+                     real keys), as in run.ps1. -->
+                <workjar app="NathaNOS" main="main.Main">
+                  <files>
+                    <zipfileset dir="${repo}/NathaNOS/assets" includes="*.png *.jpg Clock.jar"
+                                excludes="background.png NathaNOS.jpg NOS.png transparent.png" prefix="workfolder/assets"/>
+                    <zipfileset dir="${work}/plain" excludes="Clock.jar NathaNOS.jar Windows.jar WindowsE.jar" prefix="workfolder/assets"/>
+                    <zipfileset dir="${repo}/FlappyBird/src" includes="*.jpg *.png" prefix="workfolder"/>
+                    <zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/>
+                  </files>
+                </workjar>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

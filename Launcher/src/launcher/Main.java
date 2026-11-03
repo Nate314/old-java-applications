@@ -32,7 +32,7 @@ public final class Main {
          PlayLog log = new PlayLog(Paths.get(System.getProperty("user.home"), ".oldjava-launcher.txt"));
          Git git = Git.in(root);
          // Then: the apps as first restored, unpacked into out/then, with their own home folder for saves.
-         Runner then = Runner.then(shell, git, root.resolve("out/then"),
+         Runner then = Runner.then(shell, git, root, root.resolve("out/then"),
             Paths.get(System.getProperty("user.home"), ".oldjava-then"));
          LauncherWindow window = new LauncherWindow(apps, log, Runner.powerShell(shell, root), then, root,
             System::currentTimeMillis);

@@ -25,11 +25,11 @@ public interface Runner {
     * thread) and runs that commit's own {@code run.ps1 <App>} there. Its home folder is {@code thenHome}, so files
     * the old version saves in the home folder (FlappyBird's high score) stay apart from today's version's.
     */
-   static Runner then(String shell, Git git, Path thenRoot, Path thenHome) {
+   static Runner then(String shell, Git git, Path repoRoot, Path thenRoot, Path thenHome) {
       return appId -> CompletableFuture.supplyAsync(() -> {
          try {
             Files.createDirectories(thenHome);
-            return runScript(shell, ThenCopy.ensure(git, thenRoot), appId, thenHome);
+            return runScript(shell, ThenCopy.ensure(git, repoRoot, thenRoot), appId, thenHome);
          } catch (IOException e) {
             throw new UncheckedIOException(e);
          }

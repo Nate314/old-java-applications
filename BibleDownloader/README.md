@@ -89,7 +89,7 @@ The chapter counts of the 66 books in `Books.java` were checked against the serv
 - `src/audiobibledownloader/DownloadManager.java`: saving a chapter range as HTML on its own thread (the original class, now fetching through `BibleApi`).
 - `src/audiobibledownloader/WebpageDownloader.java`: reads a URL into a string as UTF-8 (the original class; its old Internet Explorer User-Agent header is gone, since a browser refuses to set it).
 - `src/audiobibledownloader/TextReader.java`: reads a whole text file into a string. Not used.
-- `src/assets/bible.png`: the window icon (also NathaNOS's icon for the app).
+- `src/assets/bible.png`: the window icon (also NathaNOS's icon for the app), an open book under a gold cross: original art, drawn as `art/bible.svg` and rendered by `web/art.ps1`. It replaced the YouVersion Bible App icon the recovered jar had used.
 - `src/META-INF/MANIFEST.MF`: the manifest from the original jar.
 
 ## Running

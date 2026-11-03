@@ -15,6 +15,7 @@
     <module>nathanos</module>
     <module>then</module>
     <module>then-nathanos</module>
+    <module>jars</module>
   </modules>
 
   <properties>

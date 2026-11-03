@@ -2,7 +2,7 @@
 
 A bot for a dinosaur jumping game. It watches one screen pixel and presses Space when that pixel's color matches an obstacle. Recovered from the git history of github.com/Nate314/site (`assets/javaApplications`), where the jar was named `DinoGame1920x1080.jar`.
 
-The bot now comes with its game. `./run.ps1 DinoGame` opens Dino Game: a dinosaur runner modeled on Chrome's, drawn in gray #535353 (red, green and blue all 83) on an off-white ground. It speeds up from 6 to 13 pixels a step, the jump goes higher while the key is held, and birds join once it passes speed 8.5. Press B and the bot plays it, using the original rule unchanged: read the pixel just left of a red marker, and when its blue value is 83 hold the jump key for 65 ms. You can try to beat its best score, or drag its marker somewhere else and see whether that makes it better or worse. The original screen bot is still there (see Original screen bot).
+The bot now comes with its game. `./run.ps1 DinoGame` opens Dino Game: a dinosaur runner modeled on Chrome's game (its dinosaur and birds are original pixel drawings, with a round head and back spikes), drawn in gray #535353 (red, green and blue all 83) on an off-white ground. It speeds up from 6 to 13 pixels a step, the jump goes higher while the key is held, and birds join once it passes speed 8.5. Press B and the bot plays it, using the original rule unchanged: read the pixel just left of a red marker, and when its blue value is 83 hold the jump key for 65 ms. You can try to beat its best score, or drag its marker somewhere else and see whether that makes it better or worse. The original screen bot is still there (see Original screen bot).
 
 ## Controls / usage
 
@@ -72,7 +72,7 @@ It sends real Space key presses via `java.awt.Robot` to whatever window has focu
 - `src/dinosaurgameplayer/Runner.java`: the game without drawing: the dinosaur's jump and duck, obstacles (small and large cactus groups, birds at three heights), gaps that widen with speed, collisions. One step is 1/60 s, and a seeded game always plays the same way.
 - `src/dinosaurgameplayer/RunnerPanel.java`: draws the game, takes keys and mouse, counts runs for you or the bot. With the bot on, each step is also drawn into an image, and the bot reads its pixel from that image.
 - `src/dinosaurgameplayer/PixelBot.java`: the bot inside the window: the marker, the 65 ms hold, and why a run ended.
-- `src/dinosaurgameplayer/Sprites.java`: the pixel drawings (dinosaur, ducking, birds, clouds, cacti).
+- `src/dinosaurgameplayer/Sprites.java`: the pixel drawings (dinosaur, ducking, birds, clouds, cacti). The dinosaur and birds were redrawn as original art; they had been close copies of Chrome's.
 - `src/dinosaurgameplayer/Sky.java`: day and night on a run: when night falls, how dark it is, the moon's phase, and the colors as night turns them (kept off blue 83 once dusk starts).
 - `src/dinosaurgameplayer/Dust.java`: the dust at the dinosaur's feet.
 - `src/dinosaurgameplayer/Sounds.java`: the beeps, on the MIDI synthesizer.

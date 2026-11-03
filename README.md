@@ -65,6 +65,8 @@ With no app name, `run.ps1` opens the [Launcher](Launcher/README.md): all 20 app
 
 The launcher's Then button (Alt+T) plays any app as it was first restored, the version the web site's Then pages run, on the desktop: it unpacks that commit from git history into `out/then` and runs it with that commit's own `run.ps1`, next to today's version if you like. In Then mode each app shows its lines of Java then and now, and History (Alt+H) lists every change since.
 
+Every app page on the site also offers the app as a runnable jar for the desktop (Java 17 or newer), built by the web build; see [Download .jar](web/README.md#download-jar).
+
 Run mode launches each app from the folder it expects (for example `FlappyBird/src` with argument `120`), with any non-Java files in `src/` on the classpath. Build mode prints the matching `java -jar` command. Build output goes to `out/`, which is git-ignored.
 
 ## Web (TeaVM)
