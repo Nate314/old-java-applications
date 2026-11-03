@@ -461,6 +461,16 @@ Going from one page of the site to another (Next, Switch app, an exit screen sug
 - The trip code is at the end of `boot.js`: on `pageswap` the old page works out the kind of trip from the two addresses (and the gallery order), names the clicked thumbnail or its stage `oldjava-hero`, and leaves the kind in `sessionStorage` (`oldjava.trip`); on `pagereveal` the new page adds it as a view transition type and names its own title card or player screen. The home page holds its first frame until the player is parsed (`<link rel="expect" href="#player-frame" blocking="render">`). Pages in the player (`?embed`) and the screen saver skip their own transitions.
 - Browsers without cross-document view transitions (Chrome and Edge 126 and later have them) change pages as before. Tested in Chrome by pausing the transitions' animations part way and checking which layers each trip made.
 
+## Find
+
+Ctrl+K (Cmd+K on a Mac) on any page, / on the home page, the toolbar's Find button or the search bar above the gallery opens one box for the whole site. Before it, reaching an app meant scrolling the gallery or opening Switch app, and most of the site's features (skins, replay, source, records, the passport, the Then versions, watching the computer play) sat behind their own buttons on some pages and not others.
+
+- It finds apps by name, hint or category (letters in order work for names: "msw" finds Minesweeper), each app's Then version ("Flappy Bird: as it was") and, for the four games in `WATCH`, watching the computer play. On the home page an app opens in the player, as the gallery's Play does (Shift+Enter opens its own page); elsewhere it opens the app's page.
+- It finds things to do on the current page by clicking the page's own controls: How to play, Read the source, Share, Instant replay, Fit or Actual size, Pop out, the controller, Switch app and All apps on an app page; Shuffle, Big screen, Restart and the Your arcade tabs on the home page; and anywhere the other two skins, site sounds and Surprise me (an app not played yet). Controls a page does not show are left out.
+- It finds every Java source file of every app, read from each app's `source/files.txt` the first time something is typed, and opens it in that app's Source panel (`#source:<path>`), on this page if it is that app's.
+- With nothing typed it offers the apps played last (`oldjava.lastPlayed`), some not played yet, and the page's things to do. Arrow keys move, Enter opens, Esc or the same shortcut closes; keys typed in the box never reach the app.
+- The code is `find.js`, which `boot.js` adds the first time the box opens (the end of `boot.js` has the shortcut, the toolbar button and what it lends through `window.oldjavaSite`). In the home page's player the shortcut is passed up to the home page, so the box opens over the whole page. The box keeps the focus while it is open, since the player focuses its iframe when it loads the next demo game. Off in the thumbnail, clip and screen saver modes. `find.js` is in the offline file list.
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".

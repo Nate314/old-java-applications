@@ -72,6 +72,8 @@ mvn -f web/pom.xml package                               # builds the static sit
 python -m http.server 8000 --directory web/target/site   # then open http://localhost:8000/
 ```
 
+Ctrl+K (Cmd+K on a Mac) on any page of the site opens Find: one box that finds any app (and its Then version, or the computer playing it), anything the page can do (skins, sound, share, replay, the source, records, an app not played yet) and any Java source file of any app, opened in its Source panel (see [Find](web/README.md#find)).
+
 The apps also play as they were recovered, before any fixes: 16 of them have a Then | Now switch (on their page and in the home page's player) that runs the original code, compiled from the repo's git history, with the known quirks its README listed back then (see [Then and now](web/README.md#then-and-now)). The build reads that history with `git`.
 
 On a phone the home page's player gives the app the phone's screen: it used to shrink a desktop-sized screen to a third of its size (Minesweeper's tiles 7 px wide), and now the app fits its windows to the phone's width and the height under a compact bar (see [Home page](web/README.md#home-page)). On a phone or tablet every app plays by touch: a tap clicks, a finger drags windows, dials and anything else the apps drag with the mouse, a quick double tap double-clicks, and a long press on Minesweeper's tiles is the right click that flags them (see [Touch](web/README.md#touch)).
