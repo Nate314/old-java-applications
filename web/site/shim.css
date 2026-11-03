@@ -5383,3 +5383,174 @@ html[data-saver] * {
     animation: none;
   }
 }
+
+/* ---- one-row toolbar (boot.js bandMore): controls that do not fit wait under More ----
+   The band keeps to one row (two on narrow pages, the name's row and the controls' row). The least needed
+   controls step out of it (.shim-more-out) and More at its end lists them in a menu that drops from the band. */
+
+.shim-toolbar > .shim-more-out,
+.shim-toolbar > .shim-more[hidden],
+.shim-toolbar > .shim-more-menu[hidden] {
+  display: none !important;
+}
+
+.shim-toolbar .shim-more {
+  flex: none;
+  white-space: nowrap;
+}
+
+.shim-toolbar .shim-more[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-more .shim-more-label {
+    display: none;
+  }
+}
+
+.shim-toolbar .shim-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  font: 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: left;
+  transform-origin: top right;
+  animation: shim-more-drop 0.16s ease-out;
+}
+
+@keyframes shim-more-drop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-toolbar .shim-more-menu {
+    animation: none;
+  }
+}
+
+.shim-toolbar .shim-more-menu .shim-more-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shim-toolbar .shim-more-menu .shim-more-item:hover,
+.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: none;
+}
+
+.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring, var(--accent));
+}
+
+.shim-more-what {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.shim-more-what span,
+.shim-more-what b {
+  display: inline !important;   /* the band hides some words on narrow pages; the menu has room for them */
+}
+
+.shim-more-what .shim-replay-dot {
+  display: inline-block !important;
+}
+
+.shim-more-item small {
+  grid-column: 1 / -1;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+  opacity: 0.7;
+  white-space: normal;
+}
+
+.shim-more-item kbd {
+  grid-row: 1;
+  grid-column: 2;
+  padding: 0 5px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  font: 11px ui-monospace, Consolas, monospace;
+  opacity: 0.8;
+}
+
+/* A toggle that is on, the worn skin and the version shown get a check on the right. */
+.shim-more-item[aria-checked="true"]::after {
+  content: "✓";
+  grid-row: 1;
+  grid-column: 2;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.shim-more-head {
+  margin: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.shim-more-head:first-child {
+  margin-top: 2px;
+}
+
+.shim-more-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.shim-more-swatch[data-swatch="modern"] { background: linear-gradient(135deg, #2563eb, #dfe7f3); }
+.shim-more-swatch[data-swatch="classic"] { background: linear-gradient(#4f6f91, #34506e); }
+.shim-more-swatch[data-swatch="arcade"] { background: linear-gradient(135deg, #ff2bd6, #110a22); }
+.shim-more-swatch[data-swatch="own"] { background: conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444); }
+
+:root[data-skin="classic"] .shim-toolbar .shim-more-menu {
+  border-radius: 0;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+:root[data-skin="classic"] .shim-toolbar .shim-more-menu .shim-more-item {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-more-menu {
+  border-color: #ff2bd6;
+  box-shadow: 0 0 18px rgba(255, 43, 214, 0.45);
+}
