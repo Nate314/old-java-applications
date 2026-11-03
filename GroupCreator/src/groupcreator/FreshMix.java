@@ -9,18 +9,27 @@ import java.util.Random;
  * Makes the next round of groups so people meet new partners. The group sizes come from
  * {@link GroupMaker#makeGroups}, as in a plain shuffle; then, from several random starts, names are swapped between
  * groups while a swap lowers the cost, and the cheapest result wins. A pair costs the square of the rounds it has
- * already shared, so a pair that has met twice is avoided before two pairs that met once.
+ * already shared, so a pair that has met twice is avoided before two pairs that met once. A pair with a keep-apart
+ * rule costs far more than any repeat, so it only shares a group when the group sizes leave no other way.
  */
 public final class FreshMix {
    static final int STARTS = 24;
+   /** The cost of two kept-apart names in one group: more than any number of repeated partners in a real class. */
+   static final int APART = 100000;
 
    private FreshMix() {
    }
 
    /** Throws IllegalArgumentException, as makeGroups does, when the names cannot be split between min and max. */
    public static List<List<String>> mix(List<String> names, int min, int max, PartnerHistory history, Random random) {
+      return mix(names, min, max, history, new ClassRules(), random);
+   }
+
+   /** The same, keeping the pairs of {@code rules} apart whenever the group sizes allow it. */
+   public static List<List<String>> mix(List<String> names, int min, int max, PartnerHistory history, ClassRules rules,
+         Random random) {
       List<List<String>> shuffled = GroupMaker.makeGroups(names, min, max, random);
-      if (history.isEmpty()) {
+      if (history.isEmpty() && rules.rules(names).isEmpty()) {
          return shuffled;
       }
       int n = names.size();
@@ -28,7 +37,7 @@ public final class FreshMix {
       for (int i = 0; i < n; i++) {
          for (int j = 0; j < n; j++) {
             int met = history.together(names.get(i), names.get(j));
-            weight[i][j] = met * met;
+            weight[i][j] = met * met + (i != j && rules.apart(names.get(i), names.get(j)) ? APART : 0);
          }
       }
       int[] sizes = new int[shuffled.size()];

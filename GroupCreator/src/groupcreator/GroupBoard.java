@@ -24,7 +24,8 @@ import javax.swing.Timer;
  * The board under the inputs. In Groups it deals the newest round onto one card per group, marks the people who were
  * together before, and swaps two names of different groups when they are clicked one after the other. Partner chart
  * shows, for every pair in the class, how many rounds put them in one group. Pick someone spins a wheel of the class
- * that lands on someone who has not had a turn yet. Its buttons run along the bottom, and change with the view.
+ * that lands on someone who has not had a turn yet. Roll call marks who is away today and which names are kept apart.
+ * Its buttons run along the bottom, and change with the view.
  */
 @SuppressWarnings("serial")
 public class GroupBoard extends JPanel {
@@ -69,6 +70,9 @@ public class GroupBoard extends JPanel {
 
       /** The wheel picked someone, or a pick was put back or forgotten: save the class. */
       void picksChanged();
+
+      /** Someone was marked away or here, or a keep-apart rule was added or removed: save the class. */
+      void rulesChanged();
    }
 
    private final class Button {
@@ -87,9 +91,12 @@ public class GroupBoard extends JPanel {
 
    private final PartnerHistory history;
    private final PickBag picks;
+   private final ClassRules rules;
    private final Actions actions;
    private final List<Button> groupButtons = new ArrayList<>();
    private final List<Button> pickButtons = new ArrayList<>();
+   private final List<Button> rollButtons = new ArrayList<>();
+   private final Button keepApartButton;
    private final Button reshuffle;
    private final Button chartButton;
    private final Button clear;
@@ -99,6 +106,18 @@ public class GroupBoard extends JPanel {
    private final PickWheel wheel;
    private final Random random = new Random();
    private boolean picking;
+   private boolean rollCall;
+
+   // Roll call: the name tiles, the keep-apart list beside them, and the keyboard's place among the tiles.
+   private boolean keepApart;
+   private String linkFrom;
+   private List<String> tileNames = Collections.emptyList();
+   private Rectangle[] tiles = new Rectangle[0];
+   private int tileColumns = 1;
+   private List<String[]> ruleList = Collections.emptyList();
+   private Rectangle[] ruleRows = new Rectangle[0];
+   private int focus = -1;
+   private boolean keyboard;
 
    private List<List<String>> groups = Collections.emptyList();
    /** The rounds before the one shown, for marking who meets again. */
@@ -119,9 +138,10 @@ public class GroupBoard extends JPanel {
    private int mouseX = -1;
    private int mouseY = -1;
 
-   public GroupBoard(PartnerHistory history, PickBag picks, Actions actions) {
+   public GroupBoard(PartnerHistory history, PickBag picks, ClassRules rules, Actions actions) {
       this.history = history;
       this.picks = picks;
+      this.rules = rules;
       this.actions = actions;
       setPreferredSize(new Dimension(WIDTH, HEIGHT));
       setFocusable(true);
@@ -138,6 +158,25 @@ public class GroupBoard extends JPanel {
       buttons.add(new Button("Pick someone", 'p', () -> {
          picking = true;
          unpick();
+      }));
+      buttons.add(new Button("Roll call", 'a', () -> {
+         rollCall = true;
+         unpick();
+      }));
+      rollButtons.add(new Button("Everyone here", 'e', () -> {
+         rules.everyoneHere();
+         actions.rulesChanged();
+      }));
+      keepApartButton = new Button("Keep apart", 'k', () -> {
+         keepApart = !keepApart;
+         linkFrom = null;
+      });
+      rollButtons.add(keepApartButton);
+      rollButtons.add(new Button("Make groups", 'n', actions::newRound));
+      rollButtons.add(new Button("Groups", 'a', () -> {
+         rollCall = false;
+         keepApart = false;
+         linkFrom = null;
       }));
       spin = new Button("Spin", 's', this::spin);
       pickButtons.add(spin);
@@ -177,6 +216,7 @@ public class GroupBoard extends JPanel {
          @Override
          public void mousePressed(MouseEvent event) {
             requestFocusInWindow();
+            keyboard = false;
             press(event.getX(), event.getY());
             repaint();
          }
@@ -212,6 +252,9 @@ public class GroupBoard extends JPanel {
       groups = history.last();
       if (deal) {
          picking = false;
+         rollCall = false;
+         keepApart = false;
+         linkFrom = null;
       }
       before = history.first(history.size() - 1);
       message = null;
@@ -249,7 +292,7 @@ public class GroupBoard extends JPanel {
    }
 
    private List<Button> buttons() {
-      return picking ? pickButtons : groupButtons;
+      return picking ? pickButtons : rollCall ? rollButtons : groupButtons;
    }
 
    /** Picks someone who has not had a turn yet, and spins the wheel to them. */
@@ -257,7 +300,7 @@ public class GroupBoard extends JPanel {
       if (wheel.spinning()) {
          return;
       }
-      List<String> names = actions.classNames();
+      List<String> names = rules.present(actions.classNames());
       List<String> pool = picks.pool(names);
       String name = picks.pick(names, random);
       if (name == null) {
@@ -282,6 +325,10 @@ public class GroupBoard extends JPanel {
       }
       clearArmed = false;
       message = null;
+      if (rollCall) {
+         pressRollCall(x, y);
+         return;
+      }
       if (picking) {
          if (wheel.spinning()) {
             wheel.finish();
@@ -325,6 +372,9 @@ public class GroupBoard extends JPanel {
    }
 
    private void key(KeyEvent event) {
+      if (rollCall && rollCallKey(event)) {
+         return;
+      }
       if (event.getKeyCode() == KeyEvent.VK_ESCAPE) {
          unpick();
          clearArmed = false;
@@ -375,12 +425,16 @@ public class GroupBoard extends JPanel {
       clear.enabled = !history.isEmpty();
       chartButton.label = chart ? "Groups" : "Partner chart";
       clear.label = clearArmed ? "Sure? Press again" : "Clear history";
-      spin.enabled = !wheel.spinning() && !actions.classNames().isEmpty();
-      putBack.enabled = !wheel.spinning() && !picks.picked(actions.classNames()).isEmpty();
+      List<String> present = rules.present(actions.classNames());
+      spin.enabled = !wheel.spinning() && !present.isEmpty();
+      putBack.enabled = !wheel.spinning() && !picks.picked(present).isEmpty();
+      keepApartButton.label = keepApart ? "Keep apart: on" : "Keep apart";
       startOver.enabled = putBack.enabled;
       String[] header;
       if (picking) {
          header = paintPick(g, w, h - BAR);
+      } else if (rollCall) {
+         header = paintRollCall(g, w, h - BAR);
       } else if (chart) {
          header = paintChart(g, w, h - BAR);
       } else {
@@ -454,6 +508,13 @@ public class GroupBoard extends JPanel {
          }
          paintChip(g, groups.get(c).get(k), x, y, slot.width, slot.height, landed ? metAgain(c, k) : false,
             c == pickedGroup && k == pickedIndex, c == hoverGroup && k == hoverIndex);
+         if (landed && clashes(c, k)) {
+            // Kept apart from someone in this group: a red ring.
+            g.setColor(ERROR);
+            g.setStroke(new BasicStroke(2f));
+            g.drawRoundRect(x, y, slot.width, slot.height, 8, 8);
+            g.setStroke(new BasicStroke(1f));
+         }
       }
       return summary();
    }
@@ -461,7 +522,7 @@ public class GroupBoard extends JPanel {
    /** The wheel on the left, and on the right who it picked, how far round the class it is, and the turns so far. */
    private String[] paintPick(Graphics2D g, int w, int bottom) {
       chips = new Rectangle[0][];
-      List<String> names = actions.classNames();
+      List<String> names = rules.present(actions.classNames());
       List<String> done = picks.picked(names);
       List<String> pool = picks.pool(names);
       List<String> toGo = picks.remaining(names);
@@ -508,8 +569,10 @@ public class GroupBoard extends JPanel {
       } else if (wheel.spinning() && under != null) {
          text(g, fit(g, under, big, width - 24), big, MUTED, left + 12, cardTop + 70);
       } else {
+         boolean allAway = names.isEmpty() && !actions.classNames().isEmpty();
          text(g, names.isEmpty() ? "Nobody yet" : "Spin the wheel", big, new Color(190, 186, 176), left + 12, cardTop + 70);
-         text(g, names.isEmpty() ? "Type the class in the names field." : "Space, S or a click on the wheel", SMALL, MUTED, left + 12, cardTop + 94);
+         text(g, allAway ? "Everyone is marked away in Roll call." : names.isEmpty() ? "Type the class in the names field."
+            : "Space, S or a click on the wheel", SMALL, MUTED, left + 12, cardTop + 94);
       }
 
       // How far round the class this time around.
@@ -549,10 +612,16 @@ public class GroupBoard extends JPanel {
          return new String[] {title, landed + " is up, and everyone has now had a turn. The next spin puts the whole class back on the wheel.", "fresh"};
       }
       if (landed != null) {
-         return new String[] {title, landed + " is up. Away today? Put back (B) puts them back on the wheel for later.", "fresh"};
+         return new String[] {title, landed + " is up. Away today? Put back (B), and mark them away in Roll call.", "fresh"};
       }
       if (!names.isEmpty() && toGo.isEmpty()) {
          return new String[] {title, "Everyone has had a turn. The next spin starts again with the whole class.", "fresh"};
+      }
+      List<String> away = new ArrayList<>(distinct(actions.classNames()));
+      away.removeAll(names);
+      if (!away.isEmpty()) {
+         return new String[] {title, "The wheel holds those here today who have not had a turn yet. Away today: "
+            + String.join(", ", away) + ".", ""};
       }
       return new String[] {title, "The wheel only holds people who have not had a turn yet, so everyone gets one before anyone gets two.", ""};
    }
@@ -596,6 +665,12 @@ public class GroupBoard extends JPanel {
       return false;
    }
 
+   /** True when name k of group c shares this group with someone they are kept apart from. */
+   private boolean clashes(int c, int k) {
+      List<String> group = groups.get(c);
+      return !rules.apartFrom(group.get(k), group).isEmpty();
+   }
+
    /** The header for the round shown, or for the name under the pointer or picked for a swap. */
    private String[] summary() {
       int round = history.size();
@@ -612,12 +687,26 @@ public class GroupBoard extends JPanel {
       if (hoverGroup >= 0) {
          return new String[] {title, describe(hoverGroup, hoverIndex), metAgain(hoverGroup, hoverIndex) ? "again" : "fresh"};
       }
+      List<String[]> broken = rules.broken(groups);
+      if (!broken.isEmpty()) {
+         String detail = broken.size() == 1
+            ? broken.get(0)[0] + " and " + broken.get(0)[1] + " should be kept apart, but share Group " + groupNumber(broken.get(0)[0])
+               + " (ringed in red)."
+            : broken.size() + " keep-apart pairs share a group (ringed in red). Swap a name by hand, or Reshuffle (R).";
+         return new String[] {title, detail, "error"};
+      }
+      int kept = rules.rules(flatten(groups)).size();
+      if (round == 1 && kept > 0) {
+         return new String[] {title, "A shuffle that keeps " + kept + (kept == 1 ? " pair" : " pairs")
+            + " apart. From the next round on, people also get partners they have not had yet.", "fresh"};
+      }
       if (round == 1) {
          return new String[] {title, "The first round is a plain shuffle. From the next one on, people get partners they have not had yet.", ""};
       }
       List<String[]> repeats = before.repeats(groups);
       if (repeats.isEmpty()) {
-         return new String[] {title, "Everyone has new partners: no two people in a group were together before.", "fresh"};
+         return new String[] {title, "Everyone has new partners: no two people in a group were together before"
+            + (kept > 0 ? ", and every keep-apart pair is apart." : "."), "fresh"};
       }
       String[] pair = repeats.get(0);
       String detail = repeats.size() == 1
@@ -643,6 +732,10 @@ public class GroupBoard extends JPanel {
             again.add(group.get(other) + " (round " + join(rounds) + ")");
          }
       }
+      List<String> clash = rules.apartFrom(name, group);
+      if (!clash.isEmpty()) {
+         return name + " should be kept apart from " + String.join(", ", clash) + ". Click a name, then one in another group, to swap.";
+      }
       if (again.isEmpty() && fresh.isEmpty()) {
          return name + " is on their own this round. Click a name, then a name in another group, to swap them.";
       }
@@ -654,6 +747,24 @@ public class GroupBoard extends JPanel {
          text.append(fresh.isEmpty() ? "" : "; ").append("again with ").append(String.join(", ", again));
       }
       return text.toString();
+   }
+
+   /** The number (from 1) of the group holding {@code name} in the round shown, or 0. */
+   private int groupNumber(String name) {
+      for (int c = 0; c < groups.size(); c++) {
+         if (groups.get(c).contains(name)) {
+            return c + 1;
+         }
+      }
+      return 0;
+   }
+
+   private static List<String> flatten(List<List<String>> groups) {
+      List<String> all = new ArrayList<>();
+      for (List<String> group : groups) {
+         all.addAll(group);
+      }
+      return all;
    }
 
    private static String join(List<Integer> numbers) {
@@ -849,14 +960,17 @@ public class GroupBoard extends JPanel {
       g.setColor(new Color(222, 214, 198));
       g.fillRect(0, top, w, BAR);
       int gap = 8;
-      int total = -gap;
       List<Button> buttons = buttons();
-      for (Button button : buttons) {
-         total += buttonWidth(g, button) + gap;
+      // Narrower padding when the buttons would not fit (the Groups bar with "Sure? Press again").
+      int pad = 12;
+      int total = barWidth(g, buttons, pad, gap);
+      if (total > w - 16) {
+         pad = 7;
+         total = barWidth(g, buttons, pad, gap);
       }
       int x = (w - total) / 2;
       for (Button button : buttons) {
-         int bw = buttonWidth(g, button);
+         int bw = buttonWidth(g, button, pad);
          button.bounds.setBounds(x, top + 10, bw, 30);
          boolean hover = button.enabled && button.bounds.contains(mouseX, mouseY);
          boolean armed = button == clear && clearArmed;
@@ -867,15 +981,283 @@ public class GroupBoard extends JPanel {
          g.drawRoundRect(x, top + 10, bw, 30, 14, 14);
          g.setStroke(new BasicStroke(1f));
          Color ink = armed ? Color.WHITE : button.enabled ? INK : new Color(170, 166, 158);
-         text(g, button.label, BOLD, ink, x + 12, top + 30);
+         text(g, button.label, BOLD, ink, x + pad, top + 30);
          String key = String.valueOf(Character.toUpperCase(button.key));
-         text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - 12 - width(g, key, SMALL), top + 30);
+         text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - pad - width(g, key, SMALL), top + 30);
          x += bw + gap;
       }
    }
 
-   private static int buttonWidth(Graphics2D g, Button button) {
-      return 12 + width(g, button.label, BOLD) + 10 + width(g, String.valueOf(Character.toUpperCase(button.key)), SMALL) + 12;
+   private static int barWidth(Graphics2D g, List<Button> buttons, int pad, int gap) {
+      int total = -gap;
+      for (Button button : buttons) {
+         total += buttonWidth(g, button, pad) + gap;
+      }
+      return total;
+   }
+
+   private static int buttonWidth(Graphics2D g, Button button, int pad) {
+      return pad + width(g, button.label, BOLD) + 10 + width(g, String.valueOf(Character.toUpperCase(button.key)), SMALL) + pad;
+   }
+
+   /** The class's names, each once, in the order typed. */
+   private static List<String> distinct(List<String> names) {
+      List<String> once = new ArrayList<>();
+      for (String name : names) {
+         if (!once.contains(name)) {
+            once.add(name);
+         }
+      }
+      return once;
+   }
+
+   /** A click in Roll call: a tile marks someone away or here (or links two names in Keep apart), a rule row removes it. */
+   private void pressRollCall(int x, int y) {
+      for (int i = 0; i < tiles.length; i++) {
+         if (tiles[i] != null && tiles[i].contains(x, y)) {
+            focus = i;
+            activateTile(i);
+            return;
+         }
+      }
+      for (int r = 0; r < ruleRows.length; r++) {
+         if (ruleRows[r] != null && ruleRows[r].contains(x, y)) {
+            rules.toggleApart(ruleList.get(r)[0], ruleList.get(r)[1]);
+            actions.rulesChanged();
+            return;
+         }
+      }
+      linkFrom = null;
+   }
+
+   private void activateTile(int i) {
+      String name = tileNames.get(i);
+      if (!keepApart) {
+         rules.toggleAway(name);
+         actions.rulesChanged();
+      } else if (linkFrom == null) {
+         linkFrom = name;
+      } else if (linkFrom.equals(name)) {
+         linkFrom = null;
+      } else {
+         rules.toggleApart(linkFrom, name);
+         actions.rulesChanged();
+      }
+   }
+
+   /** Arrow keys move among the tiles, Enter or Space acts on the one with the ring, Esc lets go. True when used. */
+   private boolean rollCallKey(KeyEvent event) {
+      int code = event.getKeyCode();
+      int n = tileNames.size();
+      int step = code == KeyEvent.VK_LEFT ? -1 : code == KeyEvent.VK_RIGHT ? 1
+         : code == KeyEvent.VK_UP ? -tileColumns : code == KeyEvent.VK_DOWN ? tileColumns : 0;
+      if (step != 0 && n > 0) {
+         keyboard = true;
+         focus = focus < 0 ? 0 : Math.max(0, Math.min(n - 1, focus + step));
+         return true;
+      }
+      if ((code == KeyEvent.VK_ENTER || code == KeyEvent.VK_SPACE) && n > 0) {
+         keyboard = true;
+         if (focus < 0 || focus >= n) {
+            focus = 0;
+         } else {
+            activateTile(focus);
+         }
+         return true;
+      }
+      if (code == KeyEvent.VK_ESCAPE) {
+         if (linkFrom != null) {
+            linkFrom = null;
+         } else {
+            keepApart = false;
+         }
+         return true;
+      }
+      return false;
+   }
+
+   /** Roll call: a tile per name, here or away, and the keep-apart rules in a card beside them. */
+   private String[] paintRollCall(Graphics2D g, int w, int bottom) {
+      chips = new Rectangle[0][];
+      List<String> people = distinct(actions.classNames());
+      tileNames = people;
+      int n = people.size();
+      if (focus >= n) {
+         focus = n - 1;
+      }
+      if (linkFrom != null && !people.contains(linkFrom)) {
+         linkFrom = null;
+      }
+      int side = 232;
+      int top = HEADER + 8;
+      int areaWidth = w - side - 3 * GAP;
+      int areaHeight = bottom - top - 8;
+      tiles = new Rectangle[n];
+      String hovered = null;
+      if (n == 0) {
+         centered(g, "Type the class in the names field above.", BOLD, MUTED, GAP + areaWidth / 2, (top + bottom) / 2);
+      } else {
+         int columns = Math.max(1, Math.min(n, (areaWidth + 8) / 118));
+         int rows = (n + columns - 1) / columns;
+         int tileHeight = Math.max(16, Math.min(48, (areaHeight - (rows - 1) * 6) / rows));
+         int tileWidth = (areaWidth - (columns - 1) * 8) / columns;
+         int y0 = top;
+         tileColumns = columns;
+         for (int i = 0; i < n; i++) {
+            tiles[i] = new Rectangle(GAP + (i % columns) * (tileWidth + 8), y0 + (i / columns) * (tileHeight + 6), tileWidth, tileHeight);
+            if (tiles[i].contains(mouseX, mouseY)) {
+               hovered = people.get(i);
+            }
+         }
+         for (int i = 0; i < n; i++) {
+            paintTile(g, people, i);
+         }
+         // Red threads from the name being linked (or under the pointer) to the names it is kept apart from.
+         String from = linkFrom != null ? linkFrom : hovered != null ? hovered : keyboard && focus >= 0 ? people.get(focus) : null;
+         if (from != null) {
+            Rectangle a = tiles[people.indexOf(from)];
+            g.setColor(new Color(ERROR.getRed(), ERROR.getGreen(), ERROR.getBlue(), 170));
+            g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            for (String other : rules.apartFrom(from, people)) {
+               Rectangle b = tiles[people.indexOf(other)];
+               dashed(g, a.x + a.width / 2, a.y + a.height / 2, b.x + b.width / 2, b.y + b.height / 2);
+            }
+            g.setStroke(new BasicStroke(1f));
+            for (String other : rules.apartFrom(from, people)) {
+               Rectangle b = tiles[people.indexOf(other)];
+               g.setColor(ERROR);
+               g.fillOval(b.x + b.width / 2 - 4, b.y + b.height / 2 - 4, 8, 8);
+            }
+         }
+      }
+      paintRules(g, people, w - side - GAP, top, side, bottom - top - 8);
+
+      int away = rules.awayCount(people);
+      int pairs = rules.rules(people).size();
+      String title = "Roll call: " + (n - away) + " of " + n + " here" + (pairs == 0 ? ""
+         : ", " + pairs + (pairs == 1 ? " pair" : " pairs") + " kept apart");
+      if (n == 0) {
+         return new String[] {title, "Mark who is away today, and who should not share a group.", ""};
+      }
+      if (keepApart && linkFrom != null) {
+         List<String> others = rules.apartFrom(linkFrom, people);
+         return new String[] {title, linkFrom + (others.isEmpty() ? " is linked to nobody yet" : " is kept apart from " + String.join(", ", others))
+            + ". Click names to add or remove; Esc when done.", "error"};
+      }
+      if (hovered != null) {
+         List<String> others = rules.apartFrom(hovered, people);
+         String state = hovered + (rules.isAway(hovered) ? " is away today: they sit out the groups and the wheel." : " is here.");
+         return new String[] {title, state + (others.isEmpty() ? "" : " Kept apart from " + String.join(", ", others) + "."), ""};
+      }
+      if (keepApart) {
+         return new String[] {title, "Keep apart: click a name, then each name they should never share a group with.", "error"};
+      }
+      return new String[] {title, "Click a name to mark them away today (again for here). Away names keep their history and turns.", ""};
+   }
+
+   /** A dashed line, drawn as short segments (the browser build's strokes have no dash pattern). */
+   private static void dashed(Graphics2D g, int x1, int y1, int x2, int y2) {
+      double length = Math.hypot(x2 - x1, y2 - y1);
+      for (double d = 0; d < length; d += 11) {
+         double e = Math.min(length, d + 6);
+         g.drawLine((int) Math.round(x1 + (x2 - x1) * d / length), (int) Math.round(y1 + (y2 - y1) * d / length),
+            (int) Math.round(x1 + (x2 - x1) * e / length), (int) Math.round(y1 + (y2 - y1) * e / length));
+      }
+   }
+
+   private void paintTile(Graphics2D g, List<String> people, int i) {
+      Rectangle t = tiles[i];
+      String name = people.get(i);
+      boolean away = rules.isAway(name);
+      boolean selected = name.equals(linkFrom);
+      boolean linked = linkFrom != null && rules.apart(linkFrom, name);
+      boolean hover = t.contains(mouseX, mouseY);
+      if (!away) {
+         g.setColor(new Color(0, 0, 0, 30));
+         g.fillRoundRect(t.x + 2, t.y + 3, t.width, t.height, 10, 10);
+      }
+      g.setColor(selected ? PICKED : away ? new Color(226, 220, 207) : Color.WHITE);
+      g.fillRoundRect(t.x, t.y, t.width, t.height, 10, 10);
+      if (!away) {
+         // A green strip down the left edge: here today.
+         g.setColor(FRESH);
+         g.fillRoundRect(t.x, t.y, 8, t.height, 8, 8);
+         g.setColor(selected ? PICKED : Color.WHITE);
+         g.fillRect(t.x + 5, t.y, 4, t.height);
+      }
+      boolean ring = keyboard && i == focus;
+      g.setColor(ring ? new Color(40, 100, 220) : linked ? ERROR : hover ? INK : away ? new Color(190, 184, 172) : new Color(205, 200, 190));
+      g.setStroke(new BasicStroke(ring ? 2.6f : hover || linked ? 1.8f : 1f));
+      g.drawRoundRect(t.x, t.y, t.width, t.height, 10, 10);
+      g.setStroke(new BasicStroke(1f));
+
+      int count = rules.apartFrom(name, people).size();
+      int room = t.width - 22 - (count > 0 ? 22 : 0);
+      boolean twoLines = t.height >= 34;
+      int nameY = twoLines ? t.y + t.height / 2 - 2 : t.y + t.height / 2 + 5;
+      text(g, fit(g, name, BOLD, room), BOLD, away ? MUTED : INK, t.x + 14, nameY);
+      if (twoLines) {
+         String status = away ? "Away today" : linked ? "Kept apart" : "Here";
+         text(g, status, SMALL, linked ? ERROR : away ? MUTED : FRESH, t.x + 14, nameY + 15);
+      }
+      if (away) {
+         // A line through the name.
+         g.setColor(MUTED);
+         g.drawLine(t.x + 12, nameY - 4, t.x + 16 + Math.min(room, width(g, name, BOLD)), nameY - 4);
+      }
+      if (count > 0) {
+         // A red badge: how many names this one is kept apart from.
+         int d = Math.min(18, t.height - 8);
+         int bx = t.x + t.width - d - 6;
+         int by = t.y + (t.height - d) / 2;
+         g.setColor(ERROR);
+         g.fillOval(bx, by, d, d);
+         centered(g, String.valueOf(count), SMALL, Color.WHITE, bx + d / 2, by + d / 2 + 4);
+      }
+   }
+
+   /** The keep-apart card: one row per rule, a click on a row removes it. */
+   private void paintRules(Graphics2D g, List<String> people, int x, int y, int width, int height) {
+      ruleList = rules.rules(people);
+      g.setColor(new Color(0, 0, 0, 30));
+      g.fillRoundRect(x + 2, y + 3, width, height, 14, 14);
+      g.setColor(Color.WHITE);
+      g.fillRoundRect(x, y, width, height, 14, 14);
+      g.setColor(ERROR);
+      g.fillRoundRect(x, y, width, 26, 14, 14);
+      g.fillRect(x, y + 14, width, 12);
+      text(g, "Keep apart", BOLD, Color.WHITE, x + 10, y + 18);
+      String count = ruleList.size() + (ruleList.size() == 1 ? " pair" : " pairs");
+      text(g, count, SMALL, Color.WHITE, x + width - 10 - width(g, count, SMALL), y + 18);
+      ruleRows = new Rectangle[ruleList.size()];
+      int rowY = y + 34;
+      if (ruleList.isEmpty()) {
+         String[] lines = {"Names that should never", "share a group: turn on", "Keep apart (K), then click", "two names. The mix keeps", "them apart whenever the", "group sizes allow."};
+         for (String line : lines) {
+            text(g, line, TEXT, MUTED, x + 12, rowY + 12);
+            rowY += 18;
+         }
+         return;
+      }
+      int fits = Math.max(1, (y + height - 8 - rowY) / 22);
+      for (int r = 0; r < ruleList.size(); r++) {
+         if (r == fits - 1 && ruleList.size() > fits) {
+            text(g, "... and " + (ruleList.size() - r) + " more", SMALL, MUTED, x + 12, rowY + 15);
+            break;
+         }
+         Rectangle row = new Rectangle(x + 6, rowY, width - 12, 20);
+         ruleRows[r] = row;
+         boolean hover = row.contains(mouseX, mouseY);
+         if (hover) {
+            g.setColor(new Color(255, 230, 226));
+            g.fillRoundRect(row.x, row.y, row.width, row.height, 8, 8);
+         }
+         String[] pair = ruleList.get(r);
+         String label = fit(g, pair[0] + "  /  " + pair[1], TEXT, row.width - 58);
+         text(g, label, TEXT, INK, row.x + 6, row.y + 15);
+         text(g, hover ? "remove" : "x", SMALL, hover ? ERROR : MUTED, row.x + row.width - 6 - width(g, hover ? "remove" : "x", SMALL), row.y + 14);
+         rowY += 22;
+      }
    }
 
    static void text(Graphics2D g, String text, Font font, Color color, int x, int y) {

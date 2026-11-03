@@ -3356,6 +3356,8 @@
       var parts = [];
       if (rounds) parts.push(rounds + (rounds === 1 ? ' round' : ' rounds') + ' of groups remembered');
       if (turns) parts.push(turns + ' of ' + count + ' picked by the wheel');
+      var apart = (text.match(/^apart=/mg) || []).length;
+      if (apart) parts.push(apart + (apart === 1 ? ' pair' : ' pairs') + ' kept apart');
       return 'Your class: ' + count + (count === 1 ? ' name, ' : ' names, ') + parts.join(', ');
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
