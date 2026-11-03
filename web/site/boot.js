@@ -1576,7 +1576,7 @@
   var PADS = {
     FlappyBird: [
       { buttons: [{ k: 'Space', label: 'Flap', big: true }] },
-      { buttons: [{ k: 'C', label: 'Course' }, { k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
+      { buttons: [{ k: 'Z', label: 'Rewind' }, { k: 'C', label: 'Course' }, { k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
     ],
     DinoGame: [
       { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'ArrowDown', label: 'Duck' }] },
@@ -1773,7 +1773,7 @@
   // RT and LT point, click and right-click in every app, and LB / RB go to the previous / next app. Back
   // shows the chart again. A second controller gets the map's second entry (TankGame's green tank).
   var GAMEPADS = {
-    FlappyBird: [{ a: ['Space', 'Flap'], up: ['Space', 'Flap'], x: ['C', 'Course'], y: ['R', 'Reset'], start: ['P', 'Pause'] }],
+    FlappyBird: [{ a: ['Space', 'Flap'], up: ['Space', 'Flap'], b: ['Z', 'Rewind a crash'], x: ['C', 'Course'], y: ['R', 'Reset'], start: ['P', 'Pause'] }],
     DinoGame: [{ a: ['Space', 'Jump'], up: ['Space', 'Jump'], down: ['ArrowDown', 'Duck'], b: ['ArrowDown', 'Duck'],
                  x: ['B', 'Bot'], y: ['X', 'Reset eye'], start: ['E', 'Evolve bots'] }],
     TankGame: [

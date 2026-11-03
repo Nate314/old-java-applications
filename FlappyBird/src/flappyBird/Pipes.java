@@ -17,6 +17,10 @@ public final class Pipes {
    /** Pairs whose right edge has passed the bird: the score. */
    public int passed = 0;
    private int dropped = 0;
+   /** Each pair's gap top, in the order made, so a rewound run meets the same pipes again (see remember / recall). */
+   private final List<Integer> gapTops = new ArrayList<>();
+   /** Pairs made so far: the next pair takes gapTops at this index. */
+   private int made = 0;
    private int gapHeight = 2 * PIPE_WIDTH;
    private int pipeSpacing = (int)((double)Main.FRAME_WIDTH / 3.5);
    private final Random random;
@@ -31,7 +35,10 @@ public final class Pipes {
    }
 
    private void addPair(float x) {
-      int gapTop = (int)(this.random.nextDouble() * (PIPE_HEIGHT - this.gapHeight - (Main.FRAME_HEIGHT - Background.groundY)));
+      if (this.made == this.gapTops.size()) {
+         this.gapTops.add((int)(this.random.nextDouble() * (PIPE_HEIGHT - this.gapHeight - (Main.FRAME_HEIGHT - Background.groundY))));
+      }
+      int gapTop = this.gapTops.get(this.made++);
       this.positions.add(new Position(x, (float)(gapTop - PIPE_HEIGHT)));
       this.positions.add(new Position(x, (float)(gapTop + this.gapHeight)));
    }
@@ -48,6 +55,38 @@ public final class Pipes {
          this.dropped++;
       }
 
+      this.countPassed();
+
+      float lastX = this.positions.get(this.positions.size() - 1).x;
+      if (lastX < Main.FRAME_WIDTH + PIPE_WIDTH) {
+         this.addPair(lastX + this.pipeSpacing);
+      }
+   }
+
+   /** The pipes as they are now: x and y of each on-screen pipe, then the pairs made and dropped. */
+   final float[] remember() {
+      float[] memory = new float[this.positions.size() * 2 + 2];
+      for (int i = 0; i < this.positions.size(); i++) {
+         memory[i * 2] = this.positions.get(i).x;
+         memory[i * 2 + 1] = this.positions.get(i).y;
+      }
+      memory[memory.length - 2] = this.made;
+      memory[memory.length - 1] = this.dropped;
+      return memory;
+   }
+
+   /** Puts the pipes back as {@link #remember} saw them; pairs made after that come back with the same gaps. */
+   final void recall(float[] memory) {
+      this.positions.clear();
+      for (int i = 0; i + 2 < memory.length; i += 2) {
+         this.positions.add(new Position(memory[i], memory[i + 1]));
+      }
+      this.made = (int)memory[memory.length - 2];
+      this.dropped = (int)memory[memory.length - 1];
+      this.countPassed();
+   }
+
+   private void countPassed() {
       int behindBird = 0;
       for (int i = 0; i < this.positions.size(); i += 2) {
          if (this.positions.get(i).x + PIPE_WIDTH < Main.FRAME_WIDTH / 4.0F) {
@@ -55,10 +94,5 @@ public final class Pipes {
          }
       }
       this.passed = this.dropped + behindBird;
-
-      float lastX = this.positions.get(this.positions.size() - 1).x;
-      if (lastX < Main.FRAME_WIDTH + PIPE_WIDTH) {
-         this.addPair(lastX + this.pipeSpacing);
-      }
    }
 }

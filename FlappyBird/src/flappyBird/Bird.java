@@ -45,6 +45,19 @@ public final class Bird {
       return this.squash;
    }
 
+   /** The bird as it is now: height, speed, tilt and stretch (for a rewind). */
+   final float[] remember() {
+      return new float[]{this.position.collisionY, this.velocity, this.rotation, this.squash};
+   }
+
+   /** Puts the bird back as {@link #remember} saw it. */
+   final void recall(float[] memory) {
+      this.position.set(new Position(this.position.collisionX, memory[0]));
+      this.velocity = memory[1];
+      this.rotation = memory[2];
+      this.squash = memory[3];
+   }
+
    public final void update() {
       this.velocity = this.velocity - this.flapStrength / 35.0F;
       this.squash = Math.max(0.0F, this.squash - 0.06F);

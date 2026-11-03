@@ -378,7 +378,7 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 
 | App | Controller |
 |---|---|
-| FlappyBird | Flap (Space), Course (C: endless pipes or today's course, on the game's title), Pause (P), Reset (R) |
+| FlappyBird | Flap (Space), Rewind (Z: after a crash, rewind and fly on), Course (C: endless pipes or today's course, on the game's title), Pause (P), Reset (R) |
 | TankGame | A cross (W A S D) and Fire (Q) for the red tank, a cross (arrow keys) and Fire (M) for the green tank. On the game's title, red's Fire starts a match against the computer and green's Fire a match for two players on one screen. Supply crates are turned on or off by tapping their line on the title card |
 | SynthesizerKeyboard | One octave of piano keys (Z S X D C V G B H N J M ,), each held for as long as it is touched, plus Song, Listen and Restart (T, L, R), Record (Space) and Copy link (Enter), Mic (I), Looper and Play loop (O, P), and Octave and Sound buttons (arrow keys) |
 | DinoGame | Jump (Space; held for a higher jump), Duck (Down), Bot (B), Reset eye (X), Evolve (E) and Speed (F, while evolving). A tap on the game also jumps |
@@ -403,7 +403,7 @@ Plug a game controller into the computer (or pair it with the phone), press any 
 
 | App | Buttons |
 |---|---|
-| FlappyBird | A or D-pad up: Flap (Space). X: Course (C), Y: Reset (R), Start: Pause (P) |
+| FlappyBird | A or D-pad up: Flap (Space). B: Rewind a crash (Z). X: Course (C), Y: Reset (R), Start: Pause (P) |
 | DinoGame | A or D-pad up: Jump (Space). B or D-pad down: Duck. X: Bot (B), Y: Reset eye (X), Start: Evolve bots (E) |
 | TankGame | The first controller drives the red tank (D-pad or left stick: W A S D, A: fire Q), a second controller the green tank (arrow keys, A: fire M). X on the first controller turns supply crates on or off. On the game's title, the first controller's A starts a match against the computer and the second's a match for two players |
 | SynthesizerKeyboard | The white keys C to high C, going round the D-pad (left, down, right, up: Z X C V) and then the face buttons (X, A, B, Y: B N M ,). Start: Record (Space) |

@@ -30,6 +30,28 @@ public final class Background {
       scrollLayer(this.layers.get(1), Pipes.scrollSpeed);
    }
 
+   /** The x of each tile, sky then ground (for a rewind). */
+   final float[] remember() {
+      float[] memory = new float[4];
+      int i = 0;
+      for (List<Position> tiles : this.layers) {
+         for (Position tile : tiles) {
+            memory[i++] = tile.x;
+         }
+      }
+      return memory;
+   }
+
+   /** Puts the tiles back where {@link #remember} saw them. */
+   final void recall(float[] memory) {
+      int i = 0;
+      for (List<Position> tiles : this.layers) {
+         for (Position tile : tiles) {
+            tile.set(new Position(memory[i++], tile.y));
+         }
+      }
+   }
+
    /** Moves each tile left; a tile that has fully left the screen jumps behind the other one. */
    private static void scrollLayer(List<Position> tiles, float speed) {
       for (Position tile : tiles) {

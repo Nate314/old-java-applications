@@ -29,6 +29,13 @@ public final class GamePanel extends JPanel implements KeyListener {
    private static final int GAME_OVER = 2;
    /** Between a crash and the game over screen: the bird drops to the ground. */
    private static final int DYING = 3;
+   /** After a crash: the last seconds play backwards. */
+   private static final int REWINDING = 4;
+   /** A rewind has ended: the world waits, frozen, for the next flap. */
+   private static final int REWOUND = 5;
+   /** How far a rewind goes back, and how many times faster than real time it plays. */
+   private static final double REWIND_SECONDS = 2.5;
+   private static final int REWIND_SPEED = 3;
    private static final File HIGH_SCORE_FILE = new File(System.getProperty("user.home", "."), ".flappybird-highscore.txt");
    private boolean debugMode = false;
    private boolean paused = false;
@@ -70,9 +77,14 @@ public final class GamePanel extends JPanel implements KeyListener {
    /** Puffs of air under each flap and feathers from a crash. */
    private final List<Puff> puffs = new ArrayList<>();
    private final Random puffRandom = new Random();
+   /** The last seconds of flight, for rewinding a crash. */
+   private final Rewind rewind;
+   /** Rewinds used this run; a run with any is practice and keeps no records. */
+   private int rewinds = 0;
 
    public GamePanel(int stepsPerSecond) {
       this.stepsPerSecond = stepsPerSecond;
+      this.rewind = new Rewind((int)Math.ceil(stepsPerSecond * REWIND_SECONDS));
       this.images.add(new ImageIcon("bg.jpg").getImage().getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT, 4));
       this.images.add(new ImageIcon("ground.jpg").getImage().getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8, 4));
       this.images.add(new ImageIcon("topPipe.png").getImage().getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
@@ -83,7 +95,16 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.addMouseListener(new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent event) {
-            if (event.getButton() == MouseEvent.BUTTON1) {
+            if (event.getButton() != MouseEvent.BUTTON1) {
+               return;
+            }
+            int[] button = GamePanel.this.rewindButton();
+            int x = event.getX();
+            int y = event.getY();
+            if (GamePanel.this.state == GAME_OVER && GamePanel.this.settled()
+               && x >= button[0] && x < button[0] + button[2] && y >= button[1] && y < button[1] + button[3]) {
+               GamePanel.this.startRewind();
+            } else {
                GamePanel.this.press();
             }
          }
@@ -94,15 +115,48 @@ public final class GamePanel extends JPanel implements KeyListener {
    /** Space, a click or a tap: start, flap, or (once the game over screen has settled) back to the title screen. */
    private void press() {
       if (this.state == GAME_OVER) {
-         if (this.stateSteps > this.stepsPerSecond / 2) {
+         if (this.settled()) {
             this.reset();
          }
-      } else if (this.state != DYING && !this.paused) {
+      } else if (this.state != DYING && this.state != REWINDING && !this.paused) {
          this.state = PLAYING;
          this.bird.flap();
          this.sounds.flap();
          this.puff(5, new Color(255, 255, 255), Bird.HEIGHT / 10.0F);
       }
+   }
+
+   /** The game over screen has been up long enough (half a second) that a press is not a flap from the crash. */
+   private boolean settled() {
+      return this.stateSteps > this.stepsPerSecond / 2;
+   }
+
+   /** Z, Backspace or the game over screen's button: play the last seconds backwards, then wait to fly on from there. */
+   private void startRewind() {
+      boolean crashed = this.state == DYING || this.state == GAME_OVER && this.settled();
+      if (!crashed || this.rewind.size() == 0) {
+         return;
+      }
+      this.state = REWINDING;
+      this.stateSteps = 0;
+      this.rewinds++;
+      this.target = 0;
+      this.collided = false;
+      this.flash = 0.0F;
+      this.shake = 0.0F;
+      this.noticeSteps = 0;
+      this.puffs.clear();
+      this.rewind.start();
+      this.sounds.rewind();
+   }
+
+   /** Puts the game back at a moment from the rewind tape. */
+   private void recall(Rewind.Moment moment) {
+      this.bird.recall(moment.bird);
+      this.pipes.recall(moment.pipes);
+      this.background.recall(moment.background);
+      this.steps = moment.steps;
+      this.lastScore = this.score();
    }
 
    /** Runs as many fixed game steps as the elapsed time calls for, then repaints. */
@@ -133,7 +187,19 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.scorePop = Math.max(0.0F, this.scorePop - fade);
       this.stepPuffs();
       this.stateSteps++;
-      if (this.state == GAME_OVER) {
+      if (this.state == GAME_OVER || this.state == REWOUND) {
+         return;
+      }
+      if (this.state == REWINDING) {
+         for (int i = 0; i < REWIND_SPEED; i++) {
+            Rewind.Moment moment = this.rewind.back();
+            if (moment == null) {
+               this.state = REWOUND;
+               this.stateSteps = 0;
+               break;
+            }
+            this.recall(moment);
+         }
          return;
       }
       if (this.state == DYING) {
@@ -152,6 +218,7 @@ public final class GamePanel extends JPanel implements KeyListener {
          return;
       }
 
+      this.rewind.record(new Rewind.Moment(this.steps, this.bird.remember(), this.pipes.remember(), this.background.remember()));
       this.bird.update();
       this.pipes.scroll();
       this.steps++;
@@ -180,11 +247,12 @@ public final class GamePanel extends JPanel implements KeyListener {
 
    /** The run is over: keep the records, flash, shake, and let the bird drop to the ground before the game over screen. */
    private void crash() {
-      if (this.score() > this.highScore) {
+      // A run with a rewind in it is practice: it keeps no best score and no ghost.
+      if (this.rewinds == 0 && this.score() > this.highScore) {
          this.highScore = this.score();
          saveHighScore(this.highScore);
       }
-      if (this.daily && this.course.offer(this.score(), this.samples)) {
+      if (this.rewinds == 0 && this.daily && this.course.offer(this.score(), this.samples)) {
          this.course.save(DailyCourse.FILE);
       }
       this.flash = 1.0F;
@@ -312,13 +380,17 @@ public final class GamePanel extends JPanel implements KeyListener {
          }
       }
 
-      if (this.daily && (this.state == READY || this.state == PLAYING) && this.course.hasGhost()) {
+      boolean rewound = this.state == REWINDING || this.state == REWOUND;
+      if (this.daily && (this.state == READY || this.state == PLAYING || rewound) && this.course.hasGhost()) {
          float ghostY = this.course.ghostY(this.steps);
          if (ghostY >= 0.0F) {
             this.drawGhost(g2, (int)this.bird.position.collisionX, (int)(ghostY * Main.FRAME_HEIGHT));
          }
       }
 
+      if (this.state == PLAYING || rewound) {
+         this.drawLastFlight(g2);
+      }
       this.drawPuffs(g2);
       this.drawBird(g2);
       if (this.debugMode) {
@@ -333,9 +405,17 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
 
       // The score shows in flight; the title and game over screens show it in their banners instead.
-      boolean flying = this.state == PLAYING || this.state == DYING;
+      boolean flying = this.state == PLAYING || this.state == DYING || rewound;
       if (flying) {
          this.drawScore(g2);
+         if (this.rewinds > 0) {
+            this.drawCaption(g2, "Practice: " + rewindCount(this.rewinds), Main.FRAME_HEIGHT * 5 / 24, new Color(200, 230, 255));
+         }
+      }
+      if (this.state == REWINDING) {
+         this.drawRewinding(g2);
+      } else if (this.state == REWOUND) {
+         this.drawCaption(g2, "Rewound. Space, click or tap to fly on", Main.FRAME_HEIGHT * 3 / 10, new Color(255, 255, 255));
       }
 
       if (this.noticeSteps > 0) {
@@ -355,7 +435,9 @@ public final class GamePanel extends JPanel implements KeyListener {
             this.drawBanner(g2, "Flappy Bird", "Endless: new pipes every run", "Space, click or tap to flap; C for today's course", records);
          }
       } else if (this.state == GAME_OVER) {
-         String scores = "Score " + this.score() + "     " + records;
+         String scores = this.rewinds > 0
+            ? "Score " + this.score() + " with " + rewindCount(this.rewinds) + " (practice, not a record)"
+            : "Score " + this.score() + "     " + records;
          // The game over screen rises into place over its first third of a second.
          float rise = Math.max(0.0F, 1.0F - this.stateSteps / (float)(this.stepsPerSecond / 3.0));
          int lift = Math.round(rise * rise * Main.FRAME_HEIGHT / 6.0F);
@@ -364,6 +446,9 @@ public final class GamePanel extends JPanel implements KeyListener {
          Color medal = medalColor(this.score());
          if (medal != null) {
             this.drawMedal(g2, medal, titleWidth);
+         }
+         if (this.rewind.size() > 0) {
+            this.drawRewindButton(g2);
          }
          g2.translate(0, -lift);
       } else if (this.paused) {
@@ -395,6 +480,113 @@ public final class GamePanel extends JPanel implements KeyListener {
             g2.drawString(debugLines[line], Main.FRAME_WIDTH - 11 * this.consoleFontSize, Main.FRAME_HEIGHT - this.consoleFontSize * 10 + this.consoleFontSize * line);
          }
       }
+   }
+
+   static String rewindCount(int rewinds) {
+      return rewinds + (rewinds == 1 ? " rewind" : " rewinds");
+   }
+
+   /** One line of text centered at height y on a dark strip, so it reads over the sky and the pipes. */
+   private void drawCaption(Graphics2D g2, String text, int y, Color color) {
+      int size = Main.FRAME_HEIGHT / 24;
+      int width = fitFont(g2, text, size, Main.FRAME_WIDTH * 9 / 10);
+      int x = (Main.FRAME_WIDTH - width) / 2;
+      int height = g2.getFont().getSize();
+      g2.setColor(new Color(0, 0, 0, 110));
+      g2.fillRoundRect(x - height / 2, y - height, width + height, height * 3 / 2, height, height);
+      g2.setColor(color);
+      g2.drawString(text, x, y);
+   }
+
+   /** The rewind as an old video tape winding back: a blue tint, scan lines, a rolling band and a rewind sign. */
+   private void drawRewinding(Graphics2D g2) {
+      g2.setColor(new Color(40, 80, 200, 50));
+      g2.fillRect(0, 0, Main.FRAME_WIDTH, Main.FRAME_HEIGHT);
+      int gap = Math.max(4, Main.FRAME_HEIGHT / 120);
+      g2.setColor(new Color(0, 0, 40, 35));
+      for (int y = 0; y < Main.FRAME_HEIGHT; y += gap) {
+         g2.fillRect(0, y, Main.FRAME_WIDTH, gap / 2);
+      }
+      int band = Main.FRAME_HEIGHT / 14;
+      int bandY = (int)((long)this.stateSteps * Main.FRAME_HEIGHT / Math.max(1L, (long)(this.stepsPerSecond / 2.0)) % Main.FRAME_HEIGHT);
+      g2.setColor(new Color(255, 255, 255, 40));
+      g2.fillRect(0, bandY, Main.FRAME_WIDTH, band);
+      int size = Main.FRAME_HEIGHT / 16;
+      int x = Main.FRAME_WIDTH / 30;
+      int y = Main.FRAME_HEIGHT / 12;
+      // Blink the sign about three times a second.
+      if (this.stateSteps * 6 / Math.max(1, (int)this.stepsPerSecond) % 2 == 0) {
+         g2.setColor(new Color(255, 255, 255, 230));
+         for (int i = 0; i < 2; i++) {
+            int left = x + i * size * 3 / 4;
+            g2.fillPolygon(new int[]{left, left + size * 3 / 4, left + size * 3 / 4}, new int[]{y + size / 2, y, y + size}, 3);
+         }
+         g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, size * 3 / 4));
+         g2.drawString("REWIND", x + size * 2, y + size * 4 / 5);
+      }
+   }
+
+   /** The game over screen's rewind button as {x, y, width, height}, under the banner. */
+   private int[] rewindButton() {
+      int small = Main.FRAME_HEIGHT / 20;
+      // Wide enough for its label on a narrow (portrait) browser page too.
+      int width = Math.min(Main.FRAME_WIDTH * 9 / 10, Math.max(Main.FRAME_WIDTH * 2 / 5, Main.FRAME_HEIGHT * 3 / 4));
+      return new int[]{(Main.FRAME_WIDTH - width) / 2, Main.FRAME_HEIGHT * 2 / 5 + small * 11 / 2, width, small * 2};
+   }
+
+   private void drawRewindButton(Graphics2D g2) {
+      int[] button = this.rewindButton();
+      int arc = button[3] / 2;
+      g2.setColor(new Color(0, 0, 0, 90));
+      g2.fillRoundRect(button[0] + 3, button[1] + 4, button[2], button[3], arc, arc);
+      g2.setColor(new Color(60, 120, 220));
+      g2.fillRoundRect(button[0], button[1], button[2], button[3], arc, arc);
+      g2.setColor(new Color(255, 255, 255));
+      g2.drawRoundRect(button[0], button[1], button[2], button[3], arc, arc);
+      String label = "Rewind and fly on (Z)";
+      int icon = button[3] / 2;
+      int width = fitFont(g2, label, button[3] / 2, button[2] - icon * 3);
+      int left = button[0] + (button[2] - width - icon * 2) / 2;
+      int top = button[1] + (button[3] - icon) / 2;
+      for (int i = 0; i < 2; i++) {
+         int tip = left + i * icon * 3 / 5;
+         g2.fillPolygon(new int[]{tip, tip + icon * 3 / 5, tip + icon * 3 / 5}, new int[]{top + icon / 2, top, top + icon}, 3);
+      }
+      g2.drawString(label, left + icon * 2, button[1] + button[3] * 2 / 3);
+   }
+
+   /**
+    * The path the bird flew into its last crash, as dots that scroll with the pipes, and a red cross where it crashed,
+    * so the next try can fly around it.
+    */
+   private void drawLastFlight(Graphics2D g2) {
+      List<float[]> path = this.rewind.path();
+      if (path.isEmpty()) {
+         return;
+      }
+      float birdX = this.bird.position.collisionX + Bird.WIDTH / 2.0F;
+      int dot = Math.max(3, Bird.HEIGHT / 8);
+      g2.setColor(new Color(255, 255, 255, 170));
+      for (int i = 0; i < path.size(); i += 8) {
+         float[] point = path.get(i);
+         int x = Math.round(birdX + (point[0] - this.steps) * Pipes.scrollSpeed);
+         if (x > -dot && x < Main.FRAME_WIDTH + dot) {
+            g2.fillOval(x - dot / 2, Math.round(point[1] + Bird.HEIGHT / 2.0F) - dot / 2, dot, dot);
+         }
+      }
+      float[] crash = path.get(0);
+      int x = Math.round(birdX + (crash[0] - this.steps) * Pipes.scrollSpeed);
+      int y = Math.round(crash[1] + Bird.HEIGHT / 2.0F);
+      int arm = Bird.HEIGHT / 3;
+      Graphics2D g = (Graphics2D)g2.create();
+      g.setStroke(new BasicStroke(Math.max(3.0F, Bird.HEIGHT / 10.0F), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+      g.setColor(new Color(0, 0, 0, 120));
+      g.drawLine(x - arm + 2, y - arm + 2, x + arm + 2, y + arm + 2);
+      g.drawLine(x - arm + 2, y + arm + 2, x + arm + 2, y - arm + 2);
+      g.setColor(new Color(230, 40, 40));
+      g.drawLine(x - arm, y - arm, x + arm, y + arm);
+      g.drawLine(x - arm, y + arm, x + arm, y - arm);
+      g.dispose();
    }
 
    /** The bird, tilted with its flight and stretched for a moment by each flap. */
@@ -550,6 +742,8 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.scorePop = 0.0F;
       this.puffs.clear();
       this.steps = 0;
+      this.rewind.clear();
+      this.rewinds = 0;
       this.samples.clear();
       this.samples.add(this.sample());
       this.target = this.daily ? this.course.bestScore() : this.highScore;
@@ -581,6 +775,10 @@ public final class GamePanel extends JPanel implements KeyListener {
       switch (event.getKeyCode()) {
          case KeyEvent.VK_SPACE:
             this.press();
+            return;
+         case KeyEvent.VK_Z:
+         case KeyEvent.VK_BACK_SPACE:
+            this.startRewind();
             return;
          case KeyEvent.VK_M:
             this.notice = this.sounds.toggle() ? "Sound on" : "Sound off";
