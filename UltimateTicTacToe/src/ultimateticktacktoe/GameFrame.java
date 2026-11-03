@@ -7,6 +7,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Random;
@@ -32,6 +33,8 @@ public final class GameFrame extends JFrame {
    private static final int WATCH_THINK_MILLIS = 150;
    /** Watch: the next game starts this long after one ends. */
    private static final int WATCH_NEXT_GAME_MILLIS = 3000;
+   /** Review: how long the search looks at each position of the game, one position per tick (the page waits that long). */
+   private static final int REVIEW_THINK_MILLIS = 120;
    private static final Color TEXT = new Color(230, 235, 245);
    private static final Color QUIET_TEXT = new Color(150, 162, 186);
    private static final Color BUTTON = new Color(46, 58, 86);
@@ -80,6 +83,21 @@ public final class GameFrame extends JFrame {
    /** The computer played X in this game, so it does not count in the record. */
    private boolean computerPlayedX;
    private final Timer nextGameTimer = new Timer(WATCH_NEXT_GAME_MILLIS, event -> this.newGame(this.mode));
+   /** Review (R, or the Review button once a game ends): the game looked over move by move; null while playing. */
+   private Review review;
+   /** The position on the board while reviewing: the game after this many moves. */
+   private int reviewAt;
+   /** Analyses one position of the review per tick, so the board can be stepped through while the rest are worked out. */
+   private final Timer reviewTimer = new Timer(30, event -> this.analyseStep());
+   private final JPanel modeBar;
+   private final ReviewGraph graph;
+   /** Review game: next to the record once a game ends, and in place of Open in the friend row. */
+   private final JButton reviewButton = new JButton("Review game");
+   private final JButton friendReviewButton = new JButton("Review");
+   private final JButton openButton = new JButton("Open");
+   private final JPanel reviewButtonHolder = new JPanel(new FlowLayout(FlowLayout.RIGHT, GAP, 4));
+   /** While reviewing, in place of the record line: step back and forward, the next mistake, and Done. */
+   private final JPanel reviewRow = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
 
    /** {@code page} and {@code code} come from the arguments (see Main); either may be null. */
    public GameFrame(String page, String code) {
@@ -108,7 +126,16 @@ public final class GameFrame extends JFrame {
          this.boards[board].layoutCells();
       }
 
-      this.add(this.modeBar(boardSize * 3), BorderLayout.NORTH);
+      // The mode buttons and the review's chart share the top slot; only one shows at a time.
+      this.modeBar = this.modeBar(boardSize * 3);
+      Dimension topSize = new Dimension(boardSize * 3, this.modeBar.getPreferredSize().height);
+      this.graph = new ReviewGraph(this, topSize);
+      JPanel top = new JPanel(new BorderLayout());
+      top.setPreferredSize(topSize);
+      top.add(this.modeBar, BorderLayout.CENTER);
+      top.add(this.graph, BorderLayout.NORTH);
+      this.graph.setVisible(false);
+      this.add(top, BorderLayout.NORTH);
       JPanel gridHolder = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
       gridHolder.add(grid);
       this.add(gridHolder, BorderLayout.CENTER);
@@ -124,6 +151,9 @@ public final class GameFrame extends JFrame {
       lower.setPreferredSize(new Dimension(boardSize * 3, this.friendRow.getPreferredSize().height));
       lower.add(this.tally, BorderLayout.CENTER);
       lower.add(this.friendRow, BorderLayout.SOUTH);
+      this.layoutReviewRow();
+      lower.add(this.reviewButtonHolder, BorderLayout.EAST);
+      lower.add(this.reviewRow, BorderLayout.NORTH);
       statusLines.add(lower, BorderLayout.SOUTH);
       this.add(statusLines, BorderLayout.SOUTH);
       // A friend's link or code from the arguments, unless it is this game before this side answered it (the page reloaded).
@@ -131,7 +161,7 @@ public final class GameFrame extends JFrame {
          this.openFriendGame(code);
       }
       // The whole window sits on the boards' dark color.
-      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), (JPanel) this.modeButtons[0].getParent(), gridHolder, grid, statusLines, lower, this.friendRow}) {
+      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), this.modeBar, top, gridHolder, grid, statusLines, lower, this.friendRow, this.reviewButtonHolder, this.reviewRow}) {
          panel.setBackground(CellButton.BACKGROUND);
       }
       this.refresh();
@@ -162,8 +192,8 @@ public final class GameFrame extends JFrame {
 
    /** The friend row: the field takes what the buttons leave of the board's width. Enter in the field opens it, like Open. */
    private void layoutFriendRow(int width) {
-      JButton open = new JButton("Open");
-      for (JButton button : new JButton[]{this.copyButton, open, this.takeBackButton}) {
+      JButton open = this.openButton;
+      for (JButton button : new JButton[]{this.copyButton, open, this.takeBackButton, this.friendReviewButton}) {
          button.setFocusable(false);
       }
       this.copyButton.addActionListener(event -> this.copyFriendLink());
@@ -171,13 +201,37 @@ public final class GameFrame extends JFrame {
       this.friendField.addActionListener(event -> this.openFriendGame(this.friendField.getText()));
       this.takeBackButton.addActionListener(event -> this.takeBack());
       this.friendField.setToolTipText("The " + this.thing() + " to send. Paste your friend's here and press Open.");
-      int buttons = this.copyButton.getPreferredSize().width + open.getPreferredSize().width + this.takeBackButton.getPreferredSize().width;
+      // Review takes Open's place once the game ends, so room is kept for the wider of the two.
+      int buttons = this.copyButton.getPreferredSize().width + Math.max(open.getPreferredSize().width, this.friendReviewButton.getPreferredSize().width)
+         + this.takeBackButton.getPreferredSize().width;
       int fieldWidth = Math.max(60, width - buttons - GAP * 5);
       this.friendField.setPreferredSize(new Dimension(fieldWidth, this.copyButton.getPreferredSize().height));
       this.friendRow.add(this.friendField);
       this.friendRow.add(this.copyButton);
       this.friendRow.add(open);
+      this.friendRow.add(this.friendReviewButton);
       this.friendRow.add(this.takeBackButton);
+      this.friendReviewButton.addActionListener(event -> this.startReview());
+   }
+
+   /** The Review game button, and the row that steps through a review: back, forward, the next mistake, and Done. */
+   private void layoutReviewRow() {
+      this.reviewButton.setFocusable(false);
+      this.reviewButton.addActionListener(event -> this.startReview());
+      this.reviewButtonHolder.add(this.reviewButton);
+      this.addReviewButton("<", "Back a move (left arrow)", () -> this.reviewJump(this.reviewAt - 1, false));
+      this.addReviewButton(">", "Forward a move (right arrow)", () -> this.reviewJump(this.reviewAt + 1, true));
+      this.addReviewButton("Next mistake", "The next mistake or blunder (N)", this::nextMistake);
+      this.addReviewButton("Done", "Back to the game (Esc)", this::endReview);
+   }
+
+   private void addReviewButton(String label, String name, Runnable action) {
+      JButton button = new JButton(label);
+      button.setFocusable(false);
+      button.setToolTipText(name);
+      button.getAccessibleContext().setAccessibleName(name);
+      button.addActionListener(event -> action.run());
+      this.reviewRow.add(button);
    }
 
    /** What a game is sent as: a link on the web, a code on the desktop. */
@@ -187,6 +241,7 @@ public final class GameFrame extends JFrame {
 
    /** Starts over in the given mode. */
    private void newGame(Mode choice) {
+      this.stopReview();
       this.computerTimer.stop();
       this.nextGameTimer.stop();
       this.computerPlayedX = this.watching;
@@ -211,6 +266,9 @@ public final class GameFrame extends JFrame {
     * a friend is only set aside. A game the computer played X in does not count in the record.
     */
    final void toggleWatch() {
+      if (this.review != null) {
+         return;
+      }
       if (!this.watching && !this.mode.vsComputer()) {
          this.newGame(Mode.EASY);
       }
@@ -300,11 +358,19 @@ public final class GameFrame extends JFrame {
     * board's big mark, then the end of the game.
     */
    private boolean play(int board, int cell) {
+      if (!this.drawIn(board, cell)) {
+         return false;
+      }
+      this.moves += FriendLink.moveCode(board * 9 + cell);
+      return true;
+   }
+
+   /** Plays a move on the board shown and starts it drawing in (see play); false if the move is not allowed. */
+   private boolean drawIn(int board, int cell) {
       String before = this.state.boardResults[board];
       if (!this.state.play(board, cell)) {
          return false;
       }
-      this.moves += FriendLink.moveCode(board * 9 + cell);
       long now = System.currentTimeMillis();
       this.placedAt[board * 9 + cell] = now;
       long end = now + CellButton.MARK_MS;
@@ -358,7 +424,7 @@ public final class GameFrame extends JFrame {
 
    /** True if the player at this screen may make that move now (not while the computer or a friend is to move). */
    private boolean canPreview(int move) {
-      return !this.watching && !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting) && this.state.canPlay(move / 9, move % 9);
+      return this.review == null && !this.watching && !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting) && this.state.canPlay(move / 9, move % 9);
    }
 
    /** The mouse (or, with {@code keyboard}, the arrow keys) is on that cell: show what playing there would do. */
@@ -424,6 +490,9 @@ public final class GameFrame extends JFrame {
 
    /** A cell was clicked: play there, or start over if the game has ended. Clicks wait while the computer thinks. */
    public final void cellClicked(int board, int cell) {
+      if (this.review != null) {
+         return;   // the board shows a past position; the review row and the keys step through it
+      }
       this.takeOver();
       if (this.state.winner != null) {
          this.newGame(this.mode);
@@ -490,6 +559,10 @@ public final class GameFrame extends JFrame {
       }
 
       String winner = this.state.winner;
+      if (this.review != null) {
+         this.refreshReview();
+         return;
+      }
       this.setTitle(this.watching ? "Ultimate Tic-Tac-Toe: the computer plays both sides"
          : winner == null ? "Ultimate Tic-Tac-Toe: " + (this.state.xTurn ? "X" : "O") + " to move"
          : GameState.DRAW.equals(winner) ? "Ultimate Tic-Tac-Toe: draw. Click to play again."
@@ -497,17 +570,243 @@ public final class GameFrame extends JFrame {
       this.statusLine = this.notice != null ? this.notice : this.statusText();
       this.notice = null;
       this.updatePreview();
+      // Once a game ends, Review game sits beside the record (shortened to leave it room), or in place of Open.
+      boolean reviewable = winner != null && !this.watching;
+      String level = this.mode == Mode.HARD ? "Hard" : "Easy";
       this.tally.setText(this.watching ? "Games the computer plays X in do not count."
-         : this.mode.vsComputer()
-         ? "Your record on " + (this.mode == Mode.HARD ? "Hard" : "Easy") + ": " + this.record.describe(this.mode)
+         : this.mode.vsComputer() ? (reviewable ? level : "Your record on " + level) + ": " + this.record.describe(this.mode)
          : " ");
       boolean friend = this.mode == Mode.FRIEND;
-      this.tally.setVisible(!friend);
-      this.friendRow.setVisible(friend);
+      this.showSlots(false, !friend, friend, reviewable && !friend);
+      this.openButton.setVisible(!reviewable);
+      this.friendReviewButton.setVisible(reviewable);
       this.friendField.setText(FriendLink.message(this.friendPage, this.moves));
       this.copyButton.setEnabled(!this.moves.isEmpty());
       this.takeBackButton.setEnabled(this.friendWaiting);
-      this.friendRow.getParent().validate();
+   }
+
+   /** Shows the review's chart and row, or the mode buttons with the record line, the friend row and Review game. */
+   private void showSlots(boolean reviewing, boolean tally, boolean friend, boolean reviewButton) {
+      this.modeBar.setVisible(!reviewing);
+      this.graph.setVisible(reviewing);
+      this.reviewRow.setVisible(reviewing);
+      this.tally.setVisible(tally && !reviewing);
+      this.friendRow.setVisible(friend && !reviewing);
+      this.reviewButtonHolder.setVisible(reviewButton && !reviewing);
+      this.getContentPane().validate();
+      this.graph.repaint();
+   }
+
+   // ---- review ----
+
+   /** The review being shown, or null. */
+   final Review review() {
+      return this.review;
+   }
+
+   /** The position on the board while reviewing (the game after this many moves). */
+   final int reviewAt() {
+      return this.reviewAt;
+   }
+
+   /** R or Review game, once a game has ended: look it over from the end, while the computer analyses each position. */
+   final void startReview() {
+      if (this.review != null || this.watching || this.state.winner == null) {
+         return;
+      }
+      this.review = Review.of(this.moves);
+      if (this.review == null || this.review.length() == 0) {
+         this.review = null;
+         return;
+      }
+      this.reviewAt = this.review.length();
+      this.previewMove = -1;
+      this.cursorMove = -1;
+      this.boards[4].cells[4].requestFocusInWindow();   // for the arrow keys
+      this.reviewTimer.start();
+      this.refresh();
+   }
+
+   /** Done (Esc, or R again): back to the finished game. */
+   final void endReview() {
+      if (this.review == null) {
+         return;
+      }
+      this.stopReview();
+      this.setState(FriendLink.replay(this.moves));
+      this.refresh();
+   }
+
+   private void stopReview() {
+      this.reviewTimer.stop();
+      this.review = null;
+   }
+
+   /** Shows the game after {@code at} moves; {@code drawIn} draws the last of them in, for stepping forward. */
+   final void reviewJump(int at, boolean drawIn) {
+      if (this.review == null) {
+         return;
+      }
+      at = Math.max(0, Math.min(this.review.length(), at));
+      if (at == this.reviewAt) {
+         return;
+      }
+      boolean animate = drawIn && at > 0 && at == this.reviewAt + 1;
+      this.reviewAt = at;
+      if (animate) {
+         this.setState(this.review.positions[at - 1].copy());
+         int move = this.review.moves[at - 1];
+         this.drawIn(move / 9, move % 9);
+      } else {
+         this.setState(this.review.positions[at].copy());
+      }
+      this.refresh();
+   }
+
+   /** Jumps to the next mistake or blunder (either side's), around to the first after the last. */
+   private void nextMistake() {
+      if (this.review == null) {
+         return;
+      }
+      int next = this.review.nextBad(this.reviewAt - 1);
+      if (next >= 0) {
+         this.reviewJump(next + 1, true);
+      } else {
+         this.notice = this.review.done() ? "No mistakes or blunders in this game." : "None found yet: still analysing.";
+         this.refresh();
+      }
+   }
+
+   /** The arrow keys, Home, End, N and Esc (or R) while reviewing, and R to start one; true if the key was used. */
+   final boolean reviewKey(int keyCode) {
+      if (this.review == null) {
+         if (keyCode == KeyEvent.VK_R && this.state.winner != null && !this.watching) {
+            this.startReview();
+            return true;
+         }
+         return false;
+      }
+      switch (keyCode) {
+         case KeyEvent.VK_LEFT:
+         case KeyEvent.VK_UP:
+            this.reviewJump(this.reviewAt - 1, false);
+            break;
+         case KeyEvent.VK_RIGHT:
+         case KeyEvent.VK_DOWN:
+            this.reviewJump(this.reviewAt + 1, true);
+            break;
+         case KeyEvent.VK_HOME:
+            this.reviewJump(0, false);
+            break;
+         case KeyEvent.VK_END:
+            this.reviewJump(this.review.length(), false);
+            break;
+         case KeyEvent.VK_N:
+            this.nextMistake();
+            break;
+         case KeyEvent.VK_ESCAPE:
+         case KeyEvent.VK_R:
+            this.endReview();
+            break;
+         case KeyEvent.VK_TAB:
+            return false;   // still moves focus
+         default:
+            break;   // Enter, Space and W do nothing on a past position
+      }
+      return true;
+   }
+
+   /** One position's search per tick; the chart, the badges and the status line fill in as it goes. */
+   private void analyseStep() {
+      if (this.review == null || !this.review.analyseNext(this.random, REVIEW_THINK_MILLIS)) {
+         this.reviewTimer.stop();
+      }
+      if (this.review != null) {
+         this.refresh();
+      }
+   }
+
+   /** The grade of the move that reached the position shown, or null. */
+   final Review.Grade reviewGrade() {
+      return this.review == null || this.reviewAt == 0 ? null : this.review.grade(this.reviewAt - 1);
+   }
+
+   /** Where the search would have played instead of the move shown, when that move was an inaccuracy or worse; else -1. */
+   final int reviewBetter() {
+      Review.Grade grade = this.reviewGrade();
+      return grade != null && grade.slip() ? this.review.better[this.reviewAt - 1] : -1;
+   }
+
+   private void refreshReview() {
+      this.statusLine = this.notice != null ? this.notice : this.reviewStatus();
+      this.notice = null;
+      this.status.setText(this.statusLine);
+      this.setTitle("Ultimate Tic-Tac-Toe review: " + (this.reviewBetter() >= 0 ? "the gold ring is a better move." : this.reviewSummary()));
+      this.showSlots(true, false, false, false);
+      this.repaintCells();
+   }
+
+   /** "Move 12, you: Mistake (62% to 41%)", kept short to fit over a phone-sized board: the line does not wrap. */
+   private String reviewStatus() {
+      Review review = this.review;
+      if (this.reviewAt == 0) {
+         return "The start. Step through with > or the arrows.";
+      }
+      int k = this.reviewAt - 1;
+      if (this.reviewAt == review.length() && review.done()) {
+         int turn = review.turningPoint();
+         return this.endText() + (turn >= 0 ? " Turning point: move " + (turn + 1) + "." : " No real mistakes.");
+      }
+      String text = "Move " + this.reviewAt + ", " + this.side(review.byX(k)) + ": ";
+      Review.Grade grade = review.grade(k);
+      if (grade == null) {
+         return text + "analysing...";
+      }
+      text += grade.label;
+      if (grade.slip()) {
+         text += " (" + percent(review.moverChancesAfter(k)) + ", best " + percent(review.moverChancesInstead(k)) + ")";
+      }
+      return text;
+   }
+
+   /** The result, as the review's last position shows it. */
+   private String endText() {
+      String winner = this.review.positions[this.review.length()].winner;
+      return GameState.DRAW.equals(winner) ? "A draw." : capital(this.side("X".equals(winner))) + " won.";
+   }
+
+   /** "You: 1 mistake. The computer: no slips." for the title bar; how far the analysis is until it is done. */
+   private String reviewSummary() {
+      if (!this.review.done()) {
+         return "analysing " + this.review.analysed() + " of " + (this.review.length() + 1) + " positions.";
+      }
+      return capital(this.side(true)) + ": " + this.slips(true) + ". " + capital(this.side(false)) + ": " + this.slips(false) + ".";
+   }
+
+   /** One side's inaccuracies, mistakes and blunders, like "2 mistakes, 1 blunder", or "no slips". */
+   private String slips(boolean x) {
+      int[] counts = this.review.count(x);
+      StringBuilder text = new StringBuilder();
+      for (Review.Grade grade : new Review.Grade[]{Review.Grade.INACCURACY, Review.Grade.MISTAKE, Review.Grade.BLUNDER}) {
+         int count = counts[grade.ordinal()];
+         if (count > 0) {
+            text.append(text.length() == 0 ? "" : ", ").append(count).append(' ').append(count == 1 ? grade.label.toLowerCase() : grade.plural);
+         }
+      }
+      return text.length() == 0 ? "no slips" : text.toString();
+   }
+
+   /** What the review calls a side: you and the computer in a game against it, else X and O. */
+   private String side(boolean x) {
+      return this.mode.vsComputer() && !this.computerPlayedX ? (x ? "you" : "the computer") : x ? "X" : "O";
+   }
+
+   private static String capital(String text) {
+      return Character.toUpperCase(text.charAt(0)) + text.substring(1);
+   }
+
+   private static String percent(double chances) {
+      return Math.round(chances * 100) + "%";
    }
 
    private String statusText() {

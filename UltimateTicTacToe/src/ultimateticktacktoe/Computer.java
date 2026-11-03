@@ -37,11 +37,31 @@ public final class Computer {
     * growing a tree of the most promising lines, and returns the move it explored most.
     */
    public static int hardMove(GameState state, Random random, long millis) {
+      return analyse(state, random, millis).move;
+   }
+
+   /**
+    * The search behind Hard, for a game in progress: the move it explored most and how well the side to move does with
+    * it, as the share of the search's games from there that it won (a draw counting half). A move that wins the game at
+    * once is taken without searching, and scores 1.
+    */
+   public static Verdict analyse(GameState state, Random random, long millis) {
       int[] moves = state.legalMoves();
       int win = winningMove(state, moves);
       if (win >= 0) {
-         return win;
+         return new Verdict(win, 1);
       }
+      Node root = search(state, random, millis, moves);
+      Node best = root.children.get(0);
+      for (Node child : root.children) {
+         if (child.visits > best.visits) {
+            best = child;
+         }
+      }
+      return new Verdict(best.move, best.score / best.visits);
+   }
+
+   private static Node search(GameState state, Random random, long millis, int[] moves) {
       Node root = new Node(null, -1, !state.xTurn, moves);
       long deadline = System.currentTimeMillis() + millis;
       for (int playouts = 0; playouts < MIN_PLAYOUTS || System.currentTimeMillis() < deadline; playouts++) {
@@ -76,13 +96,18 @@ public final class Computer {
             }
          }
       }
-      Node best = root.children.get(0);
-      for (Node child : root.children) {
-         if (child.visits > best.visits) {
-            best = child;
-         }
+      return root;
+   }
+
+   /** What a search found: its move, and the side to move's score with it (0 to 1). */
+   public static final class Verdict {
+      public final int move;
+      public final double score;
+
+      Verdict(int move, double score) {
+         this.move = move;
+         this.score = score;
       }
-      return best.move;
    }
 
    /** A move that wins the whole game right away, or -1. */

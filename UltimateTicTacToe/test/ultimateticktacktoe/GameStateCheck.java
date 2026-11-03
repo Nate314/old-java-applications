@@ -104,6 +104,49 @@ public class GameStateCheck {
       check(FriendLink.pageOf("e5a1") == null, "a code is no page");
       check(FriendLink.message(null, "e5").equals("e5") && FriendLink.message("https://h/p", "e5").equals("https://h/p?game=e5"), "messages");
 
+      // Review: every position of a whole game gets X's chances (exact at the end) and every move a grade.
+      Review review = Review.of(code.toString());
+      check(review != null && review.length() == code.length() / 2 && !review.done(), "a review of the whole game");
+      check(Review.of("e5e5") == null, "no review of a broken code");
+      check(review.grade(0) == null && Double.isNaN(review.loss(0)), "no grade before analysis");
+      int steps = 0;
+      while (review.analyseNext(random, 5)) {
+         steps++;
+      }
+      check(steps > review.length() && steps <= 2 * review.length() + 1 && review.done(), "one or two steps per position");
+      double end = "X".equals(game.winner) ? 1 : "O".equals(game.winner) ? 0 : 0.5;
+      check(review.chances[review.length()] == end && review.better[review.length()] == -1, "the end is exact");
+      int[] countX = review.count(true);
+      int[] countO = review.count(false);
+      int graded = 0;
+      for (int k = 0; k < review.length(); k++) {
+         check(review.chances[k] >= 0 && review.chances[k] <= 1, "chances in range at " + k);
+         check(review.grade(k) != null && review.loss(k) >= 0, "graded move " + k);
+         check(review.positions[k].canPlay(review.better[k] / 9, review.better[k] % 9), "the better move is legal at " + k);
+      }
+      for (int i = 0; i < countX.length; i++) {
+         graded += countX[i] + countO[i];
+      }
+      check(graded == review.length(), "every move counted once");
+      int bad = review.nextBad(-1);
+      check(bad == -1 || review.grade(bad).bad(), "next mistake is one");
+      check(Review.Grade.of(true, 0.9) == Review.Grade.BEST && Review.Grade.of(false, 0.05) == Review.Grade.GOOD
+         && Review.Grade.of(false, 0.12) == Review.Grade.INACCURACY && Review.Grade.of(false, 0.2) == Review.Grade.MISTAKE
+         && Review.Grade.of(false, 0.5) == Review.Grade.BLUNDER, "grade thresholds");
+
+      // Missing a game-winning move: the review's better move is the win, and taking it is the best move.
+      String setup = "a4d1a5e1a6f1b4d2b5e2b6f3c4d3c5e3";
+      check(FriendLink.replay(setup) != null && FriendLink.replay(setup).activeBoard == 2, "review setup");
+      for (String last : new String[]{"c7", "c6"}) {
+         review = Review.of(setup + last);
+         while (review.analyseNext(random, 20)) {
+            // analyse every position
+         }
+         int k = review.length() - 1;
+         check(review.better[k] == 2 * 9 + 5, "the better move wins the game");
+         check("c6".equals(last) == (review.grade(k) == Review.Grade.BEST), "grade of " + last + ": " + review.grade(k));
+      }
+
       System.out.println("GameStateCheck passed (hard beat easy " + hardWins + " of " + games + ")");
    }
 
