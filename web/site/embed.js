@@ -153,7 +153,7 @@
       if ((!watchable(a) || state.then) && state.watch) { state.watch = false; opens.set('play'); }
       var s = SIZES.filter(function (x) { return x.id === state.size; })[0];
       var url = src();
-      var title = a.name + (state.then ? ' (as recovered)' : '') + ', an old Java app you can play';
+      var title = a.name + (state.then ? ' (as first restored)' : '') + ', an old Java app you can play';
       var style = s.w ? 'border:0;border-radius:12px;max-width:100%' : 'width:100%;aspect-ratio:16/10;border:0;border-radius:12px';
       code.value = '<iframe src="' + escapeAttr(url) + '"' + (s.w ? ' width="' + s.w + '" height="' + s.h + '"' : '') +
         ' style="' + style + '" title="' + escapeAttr(title) + '" allow="autoplay; fullscreen; clipboard-write"' +

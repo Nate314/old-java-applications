@@ -13,7 +13,7 @@ The tiles draw themselves (`MineTile.paintComponent`) instead of being plain col
 - Openings ripple: each tile pops off (shrinks and fades) 22 ms after the ring of tiles inside it, so a big opening spreads out from the click. A lost game bursts the mines in outward from the one hit, keeps the flags that were right and crosses out the wrong ones; a won game plants a flag on every mine, outward from the last click.
 - The keyboard cursor is a blue ring on the tile.
 
-The original colors (bright green hidden tiles, blue revealed ones with a white number, red `b` for a mine, cyan `f` for a flag) can still be played on the site's "as recovered" page (see Then and now in `web/README.md`).
+The original colors (bright green hidden tiles, blue revealed ones with a white number, red `b` for a mine, cyan `f` for a flag) can still be played on the site's "Then" page, the game as first restored (see Then and now in `web/README.md`).
 
 ## No guessing, and hints that say why
 

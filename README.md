@@ -1,5 +1,7 @@
 # Java Applications
 
+Small Java Swing and AWT programs written more than ten years ago, recovered and now playable in a browser. [HISTORY.md](HISTORY.md) tells how they got here.
+
 Sources recovered from the jars published at https://nathangawith.com/applications/java, decompiled with Vineflower 1.10.1.
 
 CircleSpawner, DinoGame, StockChecker, SynthesizerKeyboard, Windows and WindowsE are no longer on the site. They were recovered from the git history of https://github.com/Nate314/site (`assets/javaApplications/`).
@@ -76,7 +78,9 @@ Next to Modern, Classic and Arcade, the skin picker has Yours: a skin the visito
 
 Ctrl+K (Cmd+K on a Mac) on any page of the site opens Find: one box that finds any app (and its Then version, or the computer playing it), anything the page can do (skins, sound, share, replay, the source, records, an app not played yet) and any Java source file of any app, opened in its Source panel (see [Find](web/README.md#find)).
 
-The apps also play as they were recovered, before any fixes: 16 of them have a Then | Now switch (on their page and in the home page's player) that runs the original code, compiled from the repo's git history, with the known quirks its README listed back then (see [Then and now](web/README.md#then-and-now)). The build reads that history with `git`.
+The apps also play as they were first restored, before the reworks: 17 of them have a Then | Now switch (on their page and in the home page's player) that runs the code as it was on master after #9 (the recovered code with the light bug fixes of #6), compiled from the repo's git history at a pinned commit, with the known quirks its README still listed then (see [Then and now](web/README.md#then-and-now)). The build reads that history with `git`.
+
+The site can be hosted on GitHub Pages at https://nate314.github.io/old-java-applications/: `.github/workflows/pages.yml` builds and deploys it on every push to `master`, once Settings > Pages > Source is set to GitHub Actions (see [GitHub Pages](web/README.md#github-pages)).
 
 On a phone the home page's player gives the app the phone's screen: it used to shrink a desktop-sized screen to a third of its size (Minesweeper's tiles 7 px wide), and now the app fits its windows to the phone's width and the height under a compact bar (see [Home page](web/README.md#home-page)). On a phone or tablet every app plays by touch: a tap clicks, a finger drags windows, dials and anything else the apps drag with the mouse, a quick double tap double-clicks, and a long press on Minesweeper's tiles is the right click that flags them (see [Touch](web/README.md#touch)).
 

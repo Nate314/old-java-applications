@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>web</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>then-nathanos</artifactId>
+  <name>NathaNOS as first restored, compiled to JavaScript</name>
+
+  <!--
+    Then and now (web/README.md) for NathaNOS: NathaNOS/then.html runs NathaNOS with the 14 other browser apps as
+    they were at commit ${then.commit} (the same commit as web/then), built the way web/nathanos built it at that
+    commit: NathaNOS, the apps and that commit's web/nathanos Boot class are read from git history with git archive.
+
+    Its own module for the same reason as web/nathanos: the old assets/Clock.jar's clock.Main clashes with the
+    Clock app's sources, which web/then compiles. Clock.jar comes from the working tree: Maven resolves it before
+    any sources are unpacked, and the file has not changed since that commit.
+  -->
+  <properties>
+    <then.commit>5a28e4608fc254e9cc075768a598a965b7fe2d24</then.commit>
+    <then.src>${project.build.directory}/then-src</then.src>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>shim</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-classlib</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-jso-apis</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>nathanos-clock-jar</artifactId>
+      <version>2016</version>
+      <scope>system</scope>
+      <systemPath>${repo.dir}/NathaNOS/assets/Clock.jar</systemPath>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>then-sources</id>
+            <phase>generate-sources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <delete dir="${then.src}"/>
+                <mkdir dir="${then.src}"/>
+                <exec executable="git" dir="${repo.dir}" failonerror="true">
+                  <arg line="archive --format=tar -o ${project.build.directory}/then-src.tar ${then.commit} NathaNOS/README.md NathaNOS/src CircleSpawner/src FlappyBird/src Minesweeper/src RubiksCube2D/src ScreenSaver/src SpriteFloatyStars/src StockChecker/src SynthesizerKeyboard/src UltimateTicTacToe/src GroupCreator/src MusicTheoryExpert/src NumberGuess/src SimpleAlgorithms/src TankGame/src web/nathanos/src"/>
+                </exec>
+                <untar src="${project.build.directory}/then-src.tar" dest="${then.src}"/>
+              </target>
+            </configuration>
+          </execution>
+          <!-- The page, the source viewer's files, and a manifest-only jar per app for the taskbar (as web/nathanos
+               did at that commit; the jars match today's, so both pages share NathaNOS/assets/). -->
+          <execution>
+            <id>then-page</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <copy file="${project.basedir}/../then/then.html" tofile="${site.dir}/NathaNOS/then.html" overwrite="true" encoding="UTF-8">
+                  <filterset>
+                    <filter token="APP" value="NathaNOS"/>
+                    <filter token="TITLE" value="NathaNOS"/>
+                    <filter token="BODY" value="data-files=&quot;assets/NOS.png assets/NathaNOS.jpg assets/NathaNOS.png assets/background.jpg assets/background.png assets/calculator.png assets/clock.png assets/converter.png assets/cursor.png assets/pingPong.png assets/transparent.png assets/windowsLogo.png assets/Clock.jar assets/CircleSpawner.jar assets/FlappyBird.jar assets/Minesweeper.jar assets/RubiksCube2D.jar assets/ScreenSaver.jar assets/SpriteFloatyStars.jar assets/StockChecker.jar assets/SynthesizerKeyboard.jar assets/UltimateTicTacToe.jar assets/GroupCreator.jar assets/MusicTheoryExpert.jar assets/NumberGuess.jar assets/SimpleAlgorithms.jar assets/TankGame.jar assets/Minesweeper.png assets/NumberGuess.png assets/RubiksCube2D.png assets/StockChecker.png assets/SynthesizerKeyboard.png assets/UltimateTicTacToe.png bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png myStocks.txt stockCheck.csv&quot;"/>
+                  </filterset>
+                </copy>
+                <!-- Fresh each build: git archive dates the files to their commit, older than any earlier copy. -->
+                <delete dir="${site.dir}/NathaNOS/then-source"/>
+                <copy todir="${site.dir}/NathaNOS/then-source" overwrite="true">
+                  <fileset dir="${then.src}/NathaNOS" includes="README.md src/**/*.java"/>
+                </copy>
+                <pathconvert property="then.files" pathsep="${line.separator}" dirsep="/">
+                  <fileset dir="${then.src}/NathaNOS" includes="README.md src/**/*.java"/>
+                  <globmapper from="${then.src}/NathaNOS/*" to="*" handledirsep="true"/>
+                </pathconvert>
+                <echo file="${site.dir}/NathaNOS/then-source/files.txt" message="${then.files}${line.separator}"/>
+                <macrodef name="appjar">
+                  <attribute name="app"/>
+                  <attribute name="main"/>
+                  <sequential>
+                    <jar destfile="${site.dir}/NathaNOS/assets/@{app}.jar" whenmanifestonly="create">
+                      <manifest><attribute name="Main-Class" value="@{main}"/></manifest>
+                    </jar>
+                  </sequential>
+                </macrodef>
+                <appjar app="CircleSpawner" main="circlewindow.Main"/>
+                <appjar app="FlappyBird" main="flappyBird.Main"/>
+                <appjar app="Minesweeper" main="minesweeper.Main"/>
+                <appjar app="RubiksCube2D" main="rubikscube.Main"/>
+                <appjar app="ScreenSaver" main="screensaver.Main"/>
+                <appjar app="SpriteFloatyStars" main="animate2.Animate2Main"/>
+                <appjar app="StockChecker" main="stockchecker.Main"/>
+                <appjar app="SynthesizerKeyboard" main="synthesizer.Main"/>
+                <appjar app="UltimateTicTacToe" main="ultimateticktacktoe.Main"/>
+                <appjar app="GroupCreator" main="groupcreator.Main"/>
+                <appjar app="MusicTheoryExpert" main="musictheoryexpert.Main"/>
+                <appjar app="NumberGuess" main="numberguess.Main"/>
+                <appjar app="SimpleAlgorithms" main="simplealgorithms.Main"/>
+                <appjar app="TankGame" main="tankgame.Main"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>then-app-sources</id>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>${then.src}/web/nathanos/src/main/java</source>
+                <source>${then.src}/NathaNOS/src</source>
+                <source>${then.src}/CircleSpawner/src</source>
+                <source>${then.src}/FlappyBird/src</source>
+                <source>${then.src}/Minesweeper/src</source>
+                <source>${then.src}/RubiksCube2D/src</source>
+                <source>${then.src}/ScreenSaver/src</source>
+                <source>${then.src}/SpriteFloatyStars/src</source>
+                <source>${then.src}/StockChecker/src</source>
+                <source>${then.src}/SynthesizerKeyboard/src</source>
+                <source>${then.src}/UltimateTicTacToe/src</source>
+                <source>${then.src}/GroupCreator/src</source>
+                <source>${then.src}/MusicTheoryExpert/src</source>
+                <source>${then.src}/NumberGuess/src</source>
+                <source>${then.src}/SimpleAlgorithms/src</source>
+                <source>${then.src}/TankGame/src</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.teavm</groupId>
+        <artifactId>teavm-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>NathaNOS</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <!-- That commit's web.nathanos.Boot: names every app class, then runs main.Main. -->
+              <mainClass>web.nathanos.Boot</mainClass>
+              <targetDirectory>${site.dir}/NathaNOS</targetDirectory>
+              <targetFileName>then.js</targetFileName>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

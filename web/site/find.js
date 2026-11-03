@@ -1,7 +1,7 @@
 /*
  * Find (Ctrl+K, or / on the home page): one box for the whole site, loaded by boot.js the first time it opens.
  * Type a few letters and it finds
- * - apps, by name, hint or category, and their other ways to play: as they were recovered (Then) and, for the four
+ * - apps, by name, hint or category, and their other ways to play: as they were first restored (Then) and, for the four
  *   games with a computer player, watching it play;
  * - things to do on this page or anywhere: skins, sound, fit, share, replay, the source, the passport, records,
  *   a random app not played yet;
@@ -108,8 +108,8 @@
         run: function (full) { playApp(app, full); }
       });
       if (app.then) items.push({
-        kind: 'then', app: app, name: app.name, title: app.name + ': as it was', sub: 'The version recovered from the old jar, before any fixes',
-        keys: 'then old original recovered 2016 jar version ' + app.id, pic: app.shot, tag: 'Then', boost: -8,
+        kind: 'then', app: app, name: app.name, title: app.name + ': as it was', sub: 'As first restored in 2026: light bug fixes, before the later reworks',
+        keys: 'then old original recovered restored first 2016 2026 jar version ' + app.id, pic: app.shot, tag: 'Then', boost: -8,
         current: app.id === here && thenHere,
         run: function () { go(site.root() + app.id + '/then.html'); }
       });

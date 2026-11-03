@@ -19,6 +19,20 @@ To build another checkout of the app sources (for example a branch checked out e
 mvn -f web/pom.xml package "-Drepo.dir=C:/path/to/other/checkout" "-Dsite.dir=C:/path/to/site"
 ```
 
+### GitHub Pages
+
+The site only uses relative addresses (pages find `boot.js`, each other, the service worker and its scope relative to where they are served), so it works from a sub-path such as https://nate314.github.io/old-java-applications/ as well as from a server root. To build it for Pages locally, pass the Pages address as `site.url`, so the link preview tags (`og:url`, `og:image`) become absolute:
+
+```powershell
+mvn -f web/pom.xml package "-Dsite.url=https://nate314.github.io/old-java-applications"
+```
+
+To try a sub-path locally, serve a folder that holds `web/target/site` under the name `old-java-applications` (a copy, or a directory junction made with `New-Item -ItemType Junction`) and open http://localhost:8000/old-java-applications/.
+
+`.github/workflows/pages.yml` does this on GitHub: on every push to `master` (and by hand from the Actions tab, `workflow_dispatch`) it checks out the full history (`fetch-depth: 0`, which the Then versions need), sets up JDK 21 (Temurin) and Maven 3.9.9, runs the build above, and publishes `web/target/site` with the official `actions/configure-pages`, `actions/upload-pages-artifact` and `actions/deploy-pages` actions.
+
+One-time setup, in the repository on GitHub: Settings > Pages > Build and deployment > Source: **GitHub Actions**. Until that is set the workflow's deploy step fails. Pushing to `master` (or running the workflow by hand) then publishes the site.
+
 ## Status
 
 | App | Status | Notes |
@@ -133,7 +147,8 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `pom.xml`: parent build (TeaVM version, shared plugin settings).
 - `shim/`: the compatibility layer and the TeaVM compiler extensions (`web.teavm`).
 - `apps/`: compiles every app except NathaNOS straight from `<App>/src`, one TeaVM run per app, and copies the static site and app files, plus every browser app's README and Java sources (NathaNOS included) into `<App>/source/` for the source viewer, and writes `history.txt` from the repo's git log (see What's new).
-- `then/`: 16 apps as they were recovered (see Then and now), each compiled to `<App>/then.js` with its page `<App>/then.html` (from the one template `then/then.html`) and its sources in `<App>/then-source/`.
+- `then/`: 16 apps as they were first restored (see Then and now), each compiled to `<App>/then.js` with its page `<App>/then.html` (from the one template `then/then.html`) and its sources in `<App>/then-source/`.
+- `then-nathanos/`: NathaNOS as first restored, the same way, with that commit's apps and `assets/Clock.jar`.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
 - `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `news.js` (What's new), `clockbar.js` (Clock follows you), `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), `clips/` (the gallery's preview clips), `cards/` (the link preview cards, see Share), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
 - `shots.ps1`: recaptures `site/shots/` from a built site, following a recipe per app (see Home page).
@@ -257,15 +272,18 @@ Checked with Chrome's accessibility tree and real key presses; not yet with NVDA
 
 ## Then and now
 
-Every app here was reworked after it was recovered, so the site also keeps the apps as they came out of the old jars (or the author's own Eclipse projects), bugs and all, to play beside today's versions:
+Every app here was reworked many times after it was first restored, so the site also keeps each app as it was on master before those reworks, to play beside today's version. That is commit `5a28e4608fc254e9cc075768a598a965b7fe2d24` ("Generic example names, Modern as the default skin, and every app in NathaNOS (#9)"): the recovered code with the light bug fixes of "Modernize all 20 apps" (#6), as the TeaVM build (#7) first ran it, before the chain of changes from #10 on (see [HISTORY.md](../HISTORY.md)). The site calls it "as first restored".
 
-- The `then` module (`web/then/pom.xml`) reads the sources at commit `b3d9f4e` ("Add six more apps from Downloads (#8)", the last commit before "Modernize all 20 apps") out of the repo's git history with `git archive`, so no copy of them is kept in the tree, and compiles them with TeaVM on today's shim. The build therefore needs `git` and the repo's history. 16 apps have a then version: all but NathaNOS, DinoGame (its original is only the screen bot), BibleDownloader (its original uses `JCheckBox`, which the shim lacks) and Windows (the original differs only by an unused `Robot` and an unused variable).
-- Each gets `<App>/then.html` (`<body data-then>`), which runs `then.js`. Its gallery card has `data-then`.
-- The app page's band has a Then | Now switch between `index.html` and `then.html`. The title screen of `then.html` says "As recovered" and shows, where today's page shows the thumbnail, the "Known quirks" list of the app's README as it was at that commit; today's title screen has a "Play it as recovered, bugs and all" link. On `then.html` the band's news line reads out those quirks instead of How to play, and the exit screen offers today's version.
-- Source on `then.html` shows the README and Java as recovered (from `then-source/`), so the code beside the app is again the code it runs.
-- The home page's player has a Then | Now switch next to the app's name (for apps with a then version): Then swaps `<App>/then.html?embed` into the player, and the bar shows the first known quirk with a link to the page that lists them all. `index.html#Minesweeper:then` opens the player on it.
-- A then version keeps its own saves (`oldjava.saves.<App>.then`, from `web.rt.Js.saveStore`), so the original never reads today's save files. Playing either version stamps the app's passport.
-- Save all for offline does not include the then versions; a page played once is cached by the service worker like any other.
+- The `then` module (`web/then/pom.xml`) reads the sources at that commit out of the repo's git history with `git archive`, so no copy of them is kept in the tree, and compiles them with TeaVM on today's shim. The hash is pinned rather than `master`, so the Then versions stay the same when later work is merged into master. The build therefore needs `git` and the repo's history (a shallow clone fails; the GitHub Pages workflow checks out with `fetch-depth: 0`).
+- The `then-nathanos` module (`web/then-nathanos/pom.xml`) does the same for NathaNOS, which at that commit ran the 14 other browser apps of that commit and the old `assets/Clock.jar`, built as that commit's `web/nathanos` built it (including its `web.nathanos.Boot`). It is its own module because Clock.jar's `clock.Main` clashes with the Clock app's sources. Clock.jar comes from the working tree, since Maven resolves it before any sources are unpacked; it has not changed since that commit.
+- 17 apps have a Then version: the 16 that master's web build ran at that commit (all but BibleDownloader, DinoGame, Windows and WindowsE), plus WindowsE, which already had one and runs on the pretend Windows (see Pretend Windows) like today's. BibleDownloader, DinoGame and Windows have none, as before. NathaNOS is new to the list; Then on it opens the 2026 NathaNOS with that commit's apps.
+- Each gets `<App>/then.html` (`<body data-then>`, from the one template `then/then.html` with the body attributes its page had at that commit), which runs `then.js`. Its gallery card has `data-then`.
+- The app page's band has a Then | Now switch between `index.html` and `then.html`. The title screen of `then.html` says "As first restored" and shows, where today's page shows the thumbnail, the "Known quirks" list of the app's README at that commit. #6 fixed the quirks the READMEs listed before it and removed them, so only five apps still list any (BibleDownloader, DinoGame, MusicTheoryExpert, SimpleAlgorithms, TankGame; three of those have a Then version); for the others it says none are left. Today's title screen has a "Play it as first restored, before the reworks" link. On `then.html` the band's news line reads out those quirks instead of How to play (or that there are none), and the exit screen offers today's version.
+- The Then versions run as master's web build ran them, so their old limits come back with them: for example the Then Clock reads `Calendar`, which is UTC in TeaVM, so it shows UTC time (today's Clock reads local time), and the Then StockChecker shows `$--` until refresh is clicked, when its quote download fails and it falls back to the bundled 2016 csv.
+- Source on `then.html` shows the README and Java at that commit (from `then-source/`), so the code beside the app is again the code it runs.
+- The home page's player has a Then | Now switch next to the app's name (for apps with a Then version): Then swaps `<App>/then.html?embed` into the player, and the bar shows the first known quirk, if any, with a link to the page that lists them all. `index.html#Minesweeper:then` opens the player on it.
+- A Then version keeps its own saves (`oldjava.saves.<App>.then`, from `web.rt.Js.saveStore`), so it never reads today's save files. Until this change the Then versions were the decompiled sources from before #6; saves they left under the same key are kept as they are. The only file those versions could write in the browser was GroupCreator's `output.txt` (StockChecker's download never succeeds there), which GroupCreator only writes, so nothing old gets misread. Playing either version stamps the app's passport.
+- Save all for offline does not include the Then versions; a page played once is cached by the service worker like any other.
 
 ## Pretend Windows
 
@@ -335,7 +353,7 @@ Save all for offline does not include the cards; a card shown once in the panel 
 
 Any app can be put on another site, so the arcade can be played where people already are (a blog post, a class page, a forum that allows iframes), with a way back here:
 
-- `play.html?app=<App>` is the embeddable player, one self-contained page (no `boot.js`). It first shows a poster: the app's thumbnail on a blurred backdrop of itself, its name, its hint and a Play button, so a page with the widget on it loads one picture and none of the app until the visitor asks. Play (or a click on the thumbnail) runs `<App>/index.html?embed` in a frame, as the home page's player does. Under it a slim bar names Old Java Applications and links to the app's full page and to all 20 apps, in a new tab, and a full screen button shows where the host page allows it (`allow="fullscreen"`). `&then` plays the app as recovered (its poster says so and leaves out today's thumbnail and hint), and `&watch` skips the poster and opens with the computer playing, for the four apps that can (see Watch the computer play). An unknown `app` says so and links to the home page.
+- `play.html?app=<App>` is the embeddable player, one self-contained page (no `boot.js`). It first shows a poster: the app's thumbnail on a blurred backdrop of itself, its name, its hint and a Play button, so a page with the widget on it loads one picture and none of the app until the visitor asks. Play (or a click on the thumbnail) runs `<App>/index.html?embed` in a frame, as the home page's player does. Under it a slim bar names Old Java Applications and links to the app's full page and to all 20 apps, in a new tab, and a full screen button shows where the host page allows it (`allow="fullscreen"`). `&then` plays the app as first restored (its poster says so and leaves out today's thumbnail and hint), and `&watch` skips the poster and opens with the computer playing, for the four apps that can (see Watch the computer play). An unknown `app` says so and links to the home page.
 - The app's page talks to the widget the way it talks to the home page's player, so picking a suggestion on its exit screen swaps that app into the widget. Share and Replay belong to the full page: asking for them in the widget lights the bar's Full page link instead.
 - The app's page gets a viewport of at least 640 x 520 (the home page player's height, which leaves the watch line room above the windows), or as much as its card asks for (`data-min-width`, `data-min-height`), scaled down into a smaller widget, so a 480 x 320 widget shows the same layout as a big one.
 - The poster lays the picture beside the words when the widget is wider than 520 px and above them when narrower, drops the picture in widgets under 300 px tall, and the bar drops the app's name under 560 px.

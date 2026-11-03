@@ -11,7 +11,7 @@
     your site" writes the tag, see embed.js and web/README.md, Embed). It shows a poster first (the app's
     thumbnail, name, hint and a Play button), so a page with the widget on it loads one picture and no Java until
     the visitor asks; Play runs <App>/index.html?embed in its own frame. A slim bar names the arcade and links to
-    the app's full page and to all 20 apps, in a new tab. Options: &then (the app as recovered, where it has a
+    the app's full page and to all 20 apps, in a new tab. Options: &then (the app as first restored, where it has a
     Then version) and &watch (no poster: the computer is already playing, for the apps that can watch). The app
     pages talk to their parent the way they talk to the home page's player, so an exit screen's suggestion swaps
     that app in here too.
@@ -186,7 +186,7 @@
     }
 
     function label(app) {
-      now.textContent = app.name + (then && app.then ? ' (Then: as recovered)' : '');
+      now.textContent = app.name + (then && app.then ? ' (Then: as first restored)' : '');
       full.href = app.id + '/' + (then && app.then ? 'then.html' : 'index.html');
       document.title = app.name + ' | Old Java Applications';
     }
@@ -200,9 +200,9 @@
       document.getElementById('poster-hint').textContent = app.hint;
       // The thumbnail and hint show today's app, so the Then poster keeps only a faded backdrop of it.
       if (then && app.then) {
-        document.getElementById('poster-kicker').textContent = 'Then: as it was recovered';
+        document.getElementById('poster-kicker').textContent = 'Then: as first restored';
         document.getElementById('poster-hint').textContent =
-          'The app as it came out of its old jar, before any fixes: bugs and all.';
+          'The recovered code with the light bug fixes of its 2026 restoration, before the later reworks.';
         shot.hidden = true;
         poster.classList.add('then');
       }

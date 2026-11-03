@@ -2108,18 +2108,19 @@
   function appId() { return document.body.getAttribute('data-app'); }
 
   // ---- then and now ----
-  // An app whose gallery card has data-then can also run as it was recovered, before it was modernized:
-  // <App>/then.html (<body data-then>) runs then.js, compiled by web/then from the sources at the commit before
-  // "Modernize all 20 apps", reads its source viewer files from then-source/ and keeps its own saves
-  // (oldjava.saves.<App>.then, as web.rt.Saves does). The band's Then | Now switch and the title screens go
-  // between the two pages, and the title screen of then.html lists the quirks its README listed back then.
+  // An app whose gallery card has data-then can also run as it was first restored: <App>/then.html
+  // (<body data-then>) runs then.js, compiled by web/then (web/then-nathanos) from master as it was after #9, the
+  // recovered code with the light bug fixes of "Modernize all 20 apps", before the reworks from #10 on. It reads
+  // its source viewer files from then-source/ and keeps its own saves (oldjava.saves.<App>.then, as web.rt.Saves
+  // does). The band's Then | Now switch and the title screens go between the two pages, and the title screen of
+  // then.html lists the quirks its README still listed at that commit.
   function isThen() { return document.body.hasAttribute('data-then'); }
   function sourceDir() { return isThen() ? 'then-source/' : 'source/'; }
   function programFile() { return isThen() ? 'then.js' : 'classes.js'; }
   function saveStore() { return appId() + (isThen() ? '.then' : ''); }
   function eraPage(then) { return (then ? 'then.html' : 'index.html') + (embedded ? '?embed' : ''); }
 
-  // The "## Known quirks" list of an app's README as recovered (this page's app unless `id` says otherwise):
+  // The "## Known quirks" list of an app's README as first restored (this page's app unless `id` says otherwise):
   // one entry per bullet, as [text, code, text, ...].
   var quirkLists = {};
   function quirks(id) {
@@ -2152,7 +2153,10 @@
     });
   }
 
-  // The home page's player shows the quirks of the app it plays as recovered.
+  // #6 fixed the quirks the READMEs listed before it, so most then.html pages have none to list.
+  var NO_QUIRKS = 'None left: its README at that commit lists no known quirks.';
+
+  // The home page's player shows the quirks of the app it plays as first restored.
   window.oldjavaThen = { quirks: quirks, nodes: quirkNodes };
 
   // Then | Now: two links, the current one marked. Hidden until the catalog says the app has a then.
@@ -2162,7 +2166,7 @@
     box.setAttribute('role', 'group');
     box.setAttribute('aria-label', 'Version');
     box.hidden = true;
-    [[true, 'Then', 'As it was recovered from the old jar, before any fixes'],
+    [[true, 'Then', 'As first restored in 2026: the recovered code with light bug fixes, before the later reworks'],
      [false, 'Now', 'Today, fixed and reworked']].forEach(function (o) {
       var a = document.createElement('a');
       a.href = eraPage(o[0]);
@@ -2906,7 +2910,7 @@
   }
 
   // The app's hint from the gallery, on the band's news line (the band's ? button shows it again).
-  // On then.html the line reads out the quirks the app was recovered with instead.
+  // On then.html the line reads out the quirks its README still listed then instead (or that there are none).
   function howToPlay() {
     Promise.all([catalog(), isThen() ? quirks() : []]).then(function (r) {
       var app = r[0][indexOf(r[0], appId())];
@@ -2920,7 +2924,8 @@
           if (i) text.appendChild(document.createTextNode(' · '));
           quirkNodes(parts).forEach(function (n) { text.appendChild(n); });
         });
-      } else text.textContent = app.hint;
+      } else if (isThen()) text.textContent = NO_QUIRKS;   // today's hint would describe today's app
+      else text.textContent = app.hint;
       news.show('hint', [tag], [text], [], 12000);
     });
   }
@@ -2967,7 +2972,7 @@
           var era = document.createElement('a');
           era.className = 'shim-exit-era';
           era.href = eraPage(!isThen());
-          era.textContent = isThen() ? 'Play today’s version' : 'Play it as recovered';
+          era.textContent = isThen() ? 'Play today’s version' : 'Play it as first restored';
           box.insertBefore(era, tell.nextSibling);
         }
       }
@@ -3515,7 +3520,7 @@
     window.addEventListener('storage', function (e) { if (e.key === CLOCK_SAVES) check(); });
     if (clockPage()) setInterval(check, 1000);   // this page's own saves raise no storage event
   }
-  function clockPage() { return appId() === 'Clock' && !isThen(); }   // the 2016 Clock has no timer
+  function clockPage() { return appId() === 'Clock' && !isThen(); }   // the first restored Clock has no timer
   // Clock running on this page (or in the home page's player) rings for itself, so the other pages stay quiet.
   function clockOpen() {
     function beat() { try { localStorage.setItem(CLOCK_OPEN, String(Date.now())); } catch (e) { /* they ring too */ } }
@@ -3599,12 +3604,12 @@
     read.className = 'shim-title-source';
     read.href = '#source';
     read.setAttribute('data-sound', 'none');
-    read.textContent = isThen() ? 'Read the source as recovered' : 'Read the source';
+    read.textContent = isThen() ? 'Read the source as first restored' : 'Read the source';
     // Then and now: the other version of the app, once the catalog says it has one.
     var era = document.createElement('a');
     era.className = 'shim-title-era';
     era.href = eraPage(!isThen());
-    era.textContent = isThen() ? 'Play today’s version' : 'Play it as recovered, bugs and all';
+    era.textContent = isThen() ? 'Play today’s version' : 'Play it as first restored, before the reworks';
     era.hidden = true;
     // The games that play themselves: a look before playing (see watch).
     var watchLink = document.createElement('a');
@@ -3695,20 +3700,21 @@
       }
     });
 
-    // then.html: the quirks its README listed when it was recovered, where today's page shows its picture.
+    // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.
     function thenTitle(app) {
       screen.classList.add('then');
-      cat.textContent = 'As recovered';
-      hint.textContent = app.origin === 'original'
-        ? 'The author’s own source as it was found, before any fixes: bugs and all.'
-        : 'The code as it came out of the old jar, before any fixes: bugs and all.';
+      cat.textContent = 'As first restored';
+      hint.textContent = (app.origin === 'original'
+        ? 'The author’s own source as it was found'
+        : 'The code as it came out of the old jar') +
+        ', with the light bug fixes of its 2026 restoration, before the later reworks.';
       var head = document.createElement('h2');
-      head.textContent = 'Known quirks, from its README back then';
+      head.textContent = 'Known quirks, from its README then';
       var list = document.createElement('ul');
       art.appendChild(head);
       art.appendChild(list);
       quirks().then(function (items) {
-        head.hidden = !items.length;
+        if (!items.length) items = [[NO_QUIRKS]];
         items.forEach(function (parts) {
           var li = document.createElement('li');
           quirkNodes(parts).forEach(function (n) { li.appendChild(n); });
