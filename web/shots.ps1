@@ -26,8 +26,8 @@ $ErrorActionPreference = 'Stop'
 # is on the desktop). The four games with a computer player get its key (W, C) instead of ?watch, which thumbnail
 # mode leaves out.
 $ShellUp = "!!document.querySelector('.shim-shell > *')"
-# WindowsE's own window, lower right in front of the File Explorer windows it opened.
-$WindowsEFront = "js:(function (d) { var w = d.firstElementChild; d.style.zIndex = 1000000; w.style.left = (innerWidth - w.offsetWidth - 24) + 'px'; w.style.top = (innerHeight - w.offsetHeight - 24) + 'px'; })(document.getElementById('desktop'))"
+# WindowsE's own window (its shortcut keyboard), lower right in front of the File Explorer windows it opened.
+$WindowsEFront = "js:(function (d) { var w = d.firstElementChild; d.style.zIndex = 1000000; document.querySelector('.shim-shell').style.zIndex = 1; w.style.left = (innerWidth - w.offsetWidth - 24) + 'px'; w.style.top = (innerHeight - w.offsetHeight - 24) + 'px'; })(document.getElementById('desktop'))"
 # SynthesizerKeyboard's looper: clear any old loop (Delete twice), record a melody layer after the count-in, then a
 # bass layer an octave down at the next bar. Keys are held (keydown, then keyup after ms) so notes get their lengths.
 function SynthHold([string]$key, [int]$code, [int]$ms) {
