@@ -383,6 +383,41 @@
     p.story-link { margin: -12px 0 20px; font-size: 14px; }
     p.story-link a { color: var(--accent); font-weight: 600; text-decoration: none; }
     p.story-link a:hover { text-decoration: underline; }
+
+    /* ---- the tour: all 20 apps in the player, one stop at a time (web/README.md, The tour) ---- */
+    p.tour-start { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -8px 0 20px; font-size: 14px; }
+    p.tour-start span { opacity: 0.75; }
+    .tour { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 14px 10px;
+            border-bottom: 1px solid var(--card-border); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    .tour[hidden] { display: none; }
+    .tour-steps { display: flex; gap: 3px; flex: 1 1 100%; margin: 0; padding: 0; list-style: none; }
+    .tour-steps li { flex: 1; }
+    .tour-steps button { display: block; width: 100%; height: 6px; padding: 0; border: 0; border-radius: 3px; cursor: pointer;
+                         background: color-mix(in srgb, currentColor 18%, transparent); }
+    .tour-steps button.seen { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+    .tour-steps button[aria-current="step"] { background: var(--accent); }
+    .tour-steps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .tour-line { flex: 1 1 320px; min-width: 0; margin: 0; font-size: 14px; }
+    .tour-count { font-weight: 700; color: var(--accent); white-space: nowrap; }
+    .tour-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .tour-actions .btn[hidden] { display: none; }
+    /* What is left of this stop before the next: thin, along the strip's bottom edge. */
+    .tour-time { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+    .tour-time span { display: block; height: 100%; width: calc(var(--t, 0) * 100%); background: var(--accent); opacity: 0.7; }
+    .tour.yours .tour-time { visibility: hidden; }
+    .tour.yours #tour-next { animation: tour-nudge 1.6s ease-in-out 3; }
+    @keyframes tour-nudge { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); } }
+    @media (prefers-reduced-motion: reduce) { .tour.yours #tour-next { animation: none; } }
+    @media (max-width: 640px) {
+      p.tour-start span { display: none; }
+      .tour { gap: 4px 10px; padding: 6px 10px 8px; }
+      .tour-line { flex: 1 1 100%; font-size: 13px; line-height: 1.4; }
+      .tour-actions { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; gap: 6px; scrollbar-width: none; }
+      .tour-actions .btn { flex: none; padding: 4px 10px; }
+    }
+    :root[data-skin="arcade"] .tour { background: rgba(255, 43, 214, 0.08); }
+    :root[data-skin="arcade"] .tour-count { color: #7df9ff; text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
+    :root[data-skin="arcade"] .tour-steps button[aria-current="step"] { box-shadow: 0 0 8px rgba(255, 43, 214, 0.8); }
   </style>
 </head>
 <body>
@@ -392,6 +427,8 @@
     Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page</span>.
     One is already running below: pick any other to swap it in.</p>
   <p class="story-link"><a href="story.html">How twenty old programs came back: read the story, with the real code &rarr;</a></p>
+  <p class="tour-start"><button class="btn primary" type="button" id="tour-start">&#9654; Take the tour</button>
+    <span id="tour-start-note">All 20 apps in the player, one at a time, with something to try in each.</span></p>
   <p class="offline-banner" id="offline-banner" role="status" hidden></p>
 
   <section class="player" id="player" aria-label="Now playing">
@@ -417,6 +454,18 @@
         <a class="btn" id="player-source" href="Minesweeper/index.html#source" title="Open the app's page with its Java source beside it">&lt;/&gt; Source</a>
         <a class="btn primary" id="player-full" href="Minesweeper/index.html">Full page</a>
       </div>
+    </div>
+    <div class="tour" id="tour" role="region" aria-label="Tour of the arcade" hidden>
+      <ol class="tour-steps" id="tour-steps"></ol>
+      <p class="tour-line"><span class="tour-count" id="tour-count"></span> <span id="tour-try" aria-live="polite"></span></p>
+      <div class="tour-actions">
+        <button class="btn" type="button" id="tour-back" aria-label="Previous stop">&lsaquo; Back</button>
+        <button class="btn primary" type="button" id="tour-next">Next stop &rsaquo;</button>
+        <button class="btn" type="button" id="tour-unplayed" hidden>Play one you haven't</button>
+        <a class="btn" id="tour-story" href="story.html" hidden>Read the story</a>
+        <button class="btn" type="button" id="tour-end">End tour</button>
+      </div>
+      <div class="tour-time" id="tour-time" aria-hidden="true"><span></span></div>
     </div>
     <div class="screen" id="screen">
       <iframe id="player-frame" title="Minesweeper" src="Minesweeper/index.html?embed&amp;watch" allow="autoplay; clipboard-write; microphone"></iframe>
@@ -782,6 +831,7 @@
     frame.addEventListener('load', syncPop);
 
     function choose(li, asThen) {
+      if (tour.on && li !== current) tourEnd();   // picking another app leaves the tour (it can be continued)
       firstView = false;
       history.replaceState(null, '', '#' + li.getAttribute('data-app') + (asThen ? ':then' : ''));
       play(li, true, asThen);
@@ -1027,10 +1077,206 @@
     window.addEventListener('resize', edge);
     new MutationObserver(edge).observe(actionRow, { attributes: true, subtree: true, attributeFilter: ['hidden'] });
     edge();
+
+    // The tour: Take the tour plays all 20 apps in the player, one stop at a time, each with one thing to try.
+    // The games that play themselves start watched. A stop moves on by itself after TOUR_MS unless the visitor
+    // touches the app, which hands it over to them: then the tour waits for Next stop. The stop reached is kept
+    // (oldjava.tour), so the tour can be continued on a later visit, and #tour in the address starts it.
+    var TOUR_MS = 30000;
+    var TOUR = [
+      ['Minesweeper', 'The computer is solving a board that never needs a guess. Click the board to take over, and Hint explains the next safe move.'],
+      ['FlappyBird', 'Click or press Space to flap. When you crash, press Z to rewind the last seconds and fly on.'],
+      ['CircleSpawner', 'Every shape here is made of real windows. Pick another shape and watch them morph, or click one to scatter it.'],
+      ['SynthesizerKeyboard', 'Play the keys with the mouse or the keyboard, or pick a song (1 to 5) and play each key as it lights up.'],
+      ['DinoGame', 'The old bot is playing by watching a single pixel. Press a key to take over, or E to breed bots that learn.'],
+      ['RubiksCube2D', 'Drag a square to turn its layer. Mix the cube, then press T and Teach me shows every turn of the solve.'],
+      ['Clock', 'Open the Timer tab and drag the red dial. A running timer follows you to every app page.'],
+      ['UltimateTicTacToe', 'Two computer players. The square you take picks the board your opponent plays next; click to take over.'],
+      ['ScreenSaver', 'Press N for the next of nine screen savers, 9 for the aquarium, and F to feed the fish.'],
+      ['MusicTheoryExpert', 'Open the Songwriter tab and click chords on the circle of fifths: it loops them into a song.'],
+      ['TankGame', 'The computer is driving both tanks. Press a key to take the red one: W A S D drive, Q fires.'],
+      ['SpriteFloatyStars', 'A thousand stars orbit a sun. Click to place up to four suns and watch them swing between them.'],
+      ['SimpleAlgorithms', 'Six sorting algorithms race on the same numbers. Click one to hear it work.'],
+      ['NumberGuess', 'Type a guess or click the number line: it lights what is still possible. Magic is a card trick that reads your mind.'],
+      ['GroupCreator', 'Deal a class into groups, then deal again: the next round gives people partners they have not had yet.'],
+      ['StockChecker', '$10,000 of play money in a market that opens at its last real 2016 quotes. B buys, S sells, R shows the race.'],
+      ['BibleDownloader', 'An open book in five public domain translations. Turn the page, or pick a reading plan.'],
+      ['NathaNOS', 'A whole fake desktop: open any app from its icons or the start menu, or paint a picture in Paint.'],
+      ['Windows', 'It presses the Windows key once, then quits. Here the key opens a pretend Start menu of every app: type to search.'],
+      ['WindowsE', 'Win+E as many times as you ask, on a pretend Windows: double-click a folder to play that app.']
+    ].filter(function (t) { return card(t[0]); });
+    var TOUR_KEY = 'oldjava.tour';
+    var tour = { on: false, stop: 0, touched: false, spent: 0, done: false, doc: null, timer: 0, last: 0 };
+    var tourBox = document.getElementById('tour');
+    var tourStart = document.getElementById('tour-start');
+    var tourTime = document.getElementById('tour-time');
+    var tourNext = document.getElementById('tour-next');
+    var tourBack = document.getElementById('tour-back');
+    var tourUnplayed = document.getElementById('tour-unplayed');
+    var tourStory = document.getElementById('tour-story');
+    var tourEndButton = document.getElementById('tour-end');
+    function tourSaved() {
+      try { return JSON.parse(localStorage.getItem(TOUR_KEY)) || {}; } catch (e) { return {}; }
+    }
+    function tourSave(o) {
+      try { localStorage.setItem(TOUR_KEY, JSON.stringify(o)); } catch (e) { /* private mode: not kept */ }
+    }
+    function tourName(i) { return card(TOUR[i][0]).querySelector('strong').textContent; }
+    var tourSteps = TOUR.map(function (t, i) {
+      var item = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.tabIndex = -1;   // Back and Next stop are the keyboard's way along; these are for pointing
+      b.title = 'Stop ' + (i + 1) + ': ' + tourName(i);
+      b.setAttribute('aria-label', b.title);
+      b.addEventListener('click', function () { tourGo(i, true); });
+      item.appendChild(b);
+      document.getElementById('tour-steps').appendChild(item);
+      return b;
+    });
+    // The intro's button says where a tour left off.
+    function tourLabel() {
+      var saved = tourSaved();
+      var note = document.getElementById('tour-start-note');
+      if (tour.on) {
+        tourStart.textContent = '▶ Back to the tour';
+        note.textContent = tour.done ? 'You have seen all ' + TOUR.length + '.' : 'Stop ' + (tour.stop + 1) + ' of ' + TOUR.length + ': ' + tourName(tour.stop) + '.';
+      } else if (saved.done) {
+        tourStart.textContent = '▶ Take the tour again';
+        note.textContent = 'You have seen all ' + TOUR.length + ' apps. Start again from the first.';
+      } else if (saved.stop > 0 && saved.stop < TOUR.length) {
+        tourStart.textContent = '▶ Continue the tour';
+        note.textContent = 'Stop ' + (saved.stop + 1) + ' of ' + TOUR.length + ': ' + tourName(saved.stop) + ', where you left off.';
+      } else {
+        tourStart.textContent = '▶ Take the tour';
+        note.textContent = 'All ' + TOUR.length + ' apps in the player, one at a time, with something to try in each.';
+      }
+    }
+    function tourRender() {
+      var i = tour.stop;
+      tourSteps.forEach(function (b, j) {
+        b.classList.toggle('seen', tour.done || j < i);
+        if (j === i && !tour.done) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      tourBox.classList.toggle('yours', tour.touched || tour.done);
+      tourNext.hidden = tour.done;
+      tourBack.disabled = !tour.done && i === 0;
+      tourEndButton.textContent = tour.done ? 'Close' : 'End tour';
+      tourStory.hidden = !tour.done;
+      if (tour.done) {
+        var left = cards.filter(function (li) { return !passport.has(li.getAttribute('data-app')); }).length;
+        document.getElementById('tour-count').textContent = 'Tour complete.';
+        document.getElementById('tour-try').textContent = 'That was all ' + TOUR.length + ' apps. ' +
+          (left === 0 ? 'You have played every one of them: the passport is full.'
+            : 'You have played ' + (cards.length - left) + ' of ' + cards.length + '; ' + left + (left === 1 ? ' is' : ' are') + ' still waiting for you.');
+        tourUnplayed.hidden = left === 0;
+      } else {
+        tourUnplayed.hidden = true;
+        document.getElementById('tour-count').textContent = 'Stop ' + (i + 1) + ' of ' + TOUR.length;
+        document.getElementById('tour-try').textContent = tour.touched
+          ? 'Your turn: play ' + tourName(i) + ' as long as you like, then Next stop.'
+          : TOUR[i][1];
+        tourNext.textContent = i === TOUR.length - 1 ? 'Finish ›' : 'Next stop ›';
+        tourNext.title = i === TOUR.length - 1 ? 'End of the tour' : 'Next: ' + tourName(i + 1);
+      }
+      tourTime.firstChild.style.setProperty('--t', String(tour.done || tour.touched ? 0 : Math.min(1, tour.spent / TOUR_MS)));
+      if (tour.on && !tour.done) document.documentElement.setAttribute('data-touring', '');
+      else document.documentElement.removeAttribute('data-touring');
+      tourLabel();
+    }
+    // The visitor touching the app (a click, key or touch inside the player's page, or the controller)
+    // hands the stop over to them.
+    function tourTouch(e) {
+      if (!tour.on || tour.done || tour.touched || (e && e.isTrusted === false)) return;
+      tour.touched = true;
+      tourRender();
+    }
+    function tourHook() {
+      var doc = null;
+      try { doc = frame.contentDocument; } catch (e) { /* not ours */ }
+      if (!doc || doc === tour.doc || doc.readyState !== 'complete' || doc.URL === 'about:blank') return;
+      tour.doc = doc;
+      ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(function (t) { doc.addEventListener(t, tourTouch, true); });
+    }
+    padBox.addEventListener('pointerdown', tourTouch);
+    function tourTick() {
+      tourHook();
+      var now = Date.now();
+      var dt = now - tour.last;
+      tour.last = now;
+      if (tour.done || tour.touched) return;
+      var box = screen.getBoundingClientRect();
+      var api = popApi();
+      var saverUp = window.oldjavaSaver && window.oldjavaSaver.showing();
+      if (document.visibilityState !== 'visible' || box.bottom < 0 || box.top > window.innerHeight || (api && api.popped()) || saverUp) return;
+      tour.spent += dt;
+      if (tour.spent >= TOUR_MS) { tourGo(tour.stop + 1, false); return; }
+      tourTime.firstChild.style.setProperty('--t', String(tour.spent / TOUR_MS));
+    }
+    // Stop i in the player (i === TOUR.length: the end card). byHand: a click, so a start sound may play.
+    function tourGo(i, byHand) {
+      var first = !tour.on;
+      tour.on = true;
+      tour.touched = false;
+      tour.spent = 0;
+      tour.last = Date.now();
+      if (i >= TOUR.length) {
+        tour.done = true;
+        tour.stop = TOUR.length - 1;
+        tourSave({ done: true });
+        tourRender();
+        return;
+      }
+      tour.done = false;
+      tour.stop = Math.max(0, i);
+      tourSave({ stop: tour.stop });
+      firstView = false;
+      tourBox.hidden = false;
+      clearInterval(tour.timer);
+      tour.timer = setInterval(tourTick, 250);
+      history.replaceState(null, '', '#tour');
+      var li = card(TOUR[tour.stop][0]);
+      var app = li.getAttribute('data-app');
+      play(li, false, false, !!(window.oldjavaWatch && window.oldjavaWatch.has(app)));
+      clearTimeout(reelTimer);   // the tour moves on, not the demo reel
+      tourRender();
+      fit();
+      if (byHand && window.oldjavaSound) window.oldjavaSound.play('start');
+      if (first && !isBig()) player.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function tourEnd() {
+      tour.on = false;
+      tour.done = false;
+      clearInterval(tour.timer);
+      tourBox.hidden = true;
+      tourRender();
+      fit();
+      if (/^#tour$/.test(location.hash)) history.replaceState(null, '', '#' + current.getAttribute('data-app'));
+    }
+    // Where a new start goes: the stop the last tour reached, or the first once it was finished.
+    function tourResume() {
+      var saved = tourSaved();
+      return saved.done || !(saved.stop > 0 && saved.stop < TOUR.length) ? 0 : saved.stop;
+    }
+    tourStart.addEventListener('click', function () {
+      if (tour.on) { if (!isBig()) player.scrollIntoView({ behavior: 'smooth', block: 'start' }); tourNext.focus({ preventScroll: true }); return; }
+      tourGo(tourResume(), true);
+      tourNext.focus({ preventScroll: true });
+    });
+    tourNext.addEventListener('click', function () { tourGo(tour.stop + 1, true); });
+    tourBack.addEventListener('click', function () { tourGo(tour.done ? TOUR.length - 1 : tour.stop - 1, true); });
+    tourEndButton.addEventListener('click', tourEnd);
+    tourUnplayed.addEventListener('click', function () { document.getElementById('passport-new').click(); });
+    passport.onChange(function () { if (tour.on) tourRender(); });
+    window.oldjavaTour = { start: function () { tourStart.click(); }, on: function () { return tour.on; } };
+    tourLabel();
+
     var hash = /^#([^:]*)(:then)?$/.exec(decodeURIComponent(location.hash)) || [];
     var start = card(hash[1]);
     if (start) play(start, false, !!hash[2]);
-    else { mark(card('Minesweeper')); fit(); demo = true; reel(); }   // the page's own frame: Minesweeper, watched
+    else if (hash[1] === 'tour') {   // #tour: the tour, from where it was left
+      tourGo(tourResume(), false);
+    } else { mark(card('Minesweeper')); fit(); demo = true; reel(); }   // the page's own frame: Minesweeper, watched
   })();
 </script>
 <script>

@@ -567,6 +567,17 @@ GitHub Pages matches addresses by case, so `.../old-java-applications/minesweepe
 - The page is shown at the missing address, at any depth, so it has no relative links: it finds the site's root by asking each folder above the address for `boot.js` (`HEAD` requests, in parallel; the nearest that has it wins), then reads the apps from that root's `index.html`, as `play.html` does. It works at a server root and under a sub-path alike. `noindex` keeps it out of search engines.
 - `python -m http.server` does not serve a `404.html`, so locally the page is only seen when opened by name. It was tested with a small server that serves the built site the way Pages does (under `/old-java-applications/`, matching case, `404.html` with status 404 for a miss).
 
+## The tour
+
+The site has 20 apps and many ways into each, but a first visitor met a gallery and a player already running Minesweeper, and had to guess what to try. Take the tour, a button under the home page's intro (and "Take the tour" in Find), turns the home page's player into a guided walk through all 20:
+
+- Each stop swaps the next app into the player, in an order that mixes games, music, toys and tools, and a strip between the player's bar and its screen says what to try there in one sentence ("Click or press Space to flap. When you crash, press Z to rewind the last seconds and fly on."). The four games in `WATCH` start with the computer playing, so the stop shows something happening before the visitor does anything.
+- A row of 20 segments shows the way (each one jumps to its stop), and a thin line along the strip's bottom fills over 30 seconds, after which the tour moves to the next stop by itself. It only counts while the page is visible, the player is on screen, the app is not popped out and the site's screen saver is not showing; the screen saver itself waits while a tour runs (`data-touring` on the page, read by `saverWanted` in `boot.js`).
+- A click, key, touch or wheel inside the player's page (listeners on its document, trusted events only), or a press on the touch controller, hands the stop to the visitor: the line goes, the strip says "Your turn", and the tour waits for Next stop. Back, Next stop and End tour are the strip's buttons; picking another app (the rail, a card, Shuffle, an exit screen suggestion) leaves the tour.
+- After the last stop the strip says how many of the 20 the visitor has played (passport stamps, so only apps they touched), with Play one you haven't and Read the story.
+- The stop reached is kept in `localStorage` (`oldjava.tour`), so the intro's button reads Continue the tour, with the stop and app, on a later visit, and Take the tour again once all 20 were seen. `index.html#tour` starts the tour where it was left, and so does the short link `/tour` (`/guide`).
+- The code is in the home page's player script (`index.html`); the tour plays apps through the player's own `play`, so Then | Now, Big screen, the controller, Fit and Pop out work at every stop.
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".

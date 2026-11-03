@@ -149,7 +149,8 @@
     };
     // Words for the site's other pages.
     var PAGES = { story: 'story.html', history: 'story.html', home: 'index.html', arcade: 'index.html', apps: 'index.html',
-                  index: 'index.html', gallery: 'index.html', embed: 'play.html', player: 'play.html' };
+                  index: 'index.html', gallery: 'index.html', embed: 'play.html', player: 'play.html',
+                  tour: 'index.html#tour', guide: 'index.html#tour' };
     // A second word picks how the app opens.
     var MODES = { then: 'then', old: 'then', original: 'then', watch: 'watch', demo: 'watch', source: 'source', code: 'source' };
 
@@ -251,7 +252,9 @@
         if (mode === 'source' && !hash) hash = '#source';
         return app.id + '/' + file + search + hash;
       }
-      return page ? page + search + hash : null;
+      if (!page) return null;
+      var at = page.indexOf('#');   // a page word with its own hash (tour: index.html#tour)
+      return at < 0 ? page + search + hash : page.slice(0, at) + search + (hash || page.slice(at));
     }
 
     function score(app, q) {
