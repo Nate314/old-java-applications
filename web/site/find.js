@@ -144,6 +144,7 @@
     var list = [];
     function add(a) { if (a) list.push(a); }
     if (onHome()) {
+      add(clickAction('#tour-start', 'Take the tour', 'All 20 apps in the player, one at a time, with something to try in each', '▶', 'tour guide walkthrough start begin all apps continue'));
       add(clickAction('#player-shuffle', 'Shuffle', 'Swap a random app into the player', '⇄', 'random shuffle any'));
       var big = shown('#player-big');
       add(clickAction('#player-big', big && big.getAttribute('aria-pressed') === 'true' ? 'Exit big screen' : 'Big screen',

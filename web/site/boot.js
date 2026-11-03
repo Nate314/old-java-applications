@@ -1868,6 +1868,7 @@
 
   function saverWanted() {
     if (!saverOn() || !document.body || document.visibilityState !== 'visible' || document.fullscreenElement) return false;
+    if (document.documentElement.hasAttribute('data-touring')) return false;   // the home page's tour is showing the apps
     var doc = shownAppDoc();
     if (!doc || !doc.body) return true;
     if (SAVER_SKIP[doc.body.getAttribute('data-app')] || doc.documentElement.hasAttribute('data-popped')) return false;
