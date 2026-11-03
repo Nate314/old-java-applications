@@ -381,7 +381,7 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 | FlappyBird | Flap (Space), Rewind (Z: after a crash, rewind and fly on), Course (C: endless pipes or today's course, on the game's title), Pause (P), Reset (R) |
 | TankGame | A cross (W A S D) and Fire (Q) for the red tank, a cross (arrow keys) and Fire (M) for the green tank. On the game's title, red's Fire starts a match against the computer and green's Fire a match for two players on one screen. Supply crates are turned on or off by tapping their line on the title card |
 | SynthesizerKeyboard | One octave of piano keys (Z S X D C V G B H N J M ,), each held for as long as it is touched, plus Song, Listen and Restart (T, L, R), Record (Space) and Copy link (Enter), Mic (I), Looper and Play loop (O, P), and Octave and Sound buttons (arrow keys) |
-| DinoGame | Jump (Space; held for a higher jump), Duck (Down), Bot (B), Reset eye (X), Evolve (E) and Speed (F, while evolving). A tap on the game also jumps |
+| DinoGame | Jump (Space; held for a higher jump), Duck (Down), Bot (B), Reset eye (X), Evolve (E), Speed (F, while evolving) and Sound (M). A tap on the game also jumps |
 | SpriteFloatyStars | A cross (arrow keys) and Catch (Space) for Star Catcher's net, Next (N), Again (R) and Nights (M), and Add star (Up), Remove star (Down) and Help (H) for an animation window, where Next (N) changes the mode and Catch (Space) bursts the stars. The cross and Catch are gold. Unlike TankGame's two crosses, which stay on one row, this pad wraps onto more rows on a narrow page |
 
 - Each button shows its key, and lights up when that key is pressed on a real keyboard, so the controller doubles as a key chart.

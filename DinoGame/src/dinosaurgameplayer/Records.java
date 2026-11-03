@@ -23,6 +23,8 @@ final class Records {
    int generations;
    int evolvedBest;
    Brain champion;
+   /** The game's beeps; M switches them. Saved only when off, as sound=off. */
+   boolean sound = true;
    final List<Integer> chart = new ArrayList<>();
 
    Records(File file) {
@@ -55,6 +57,8 @@ final class Records {
                   int gens = Math.max(0, Integer.parseInt(gb[0].trim()));
                   r.evolvedBest = Math.max(0, Integer.parseInt(gb[1].trim()));
                   r.generations = gens;
+               } else if (kv[0].equals("sound")) {
+                  r.sound = !kv[1].trim().equals("off");
                } else if (kv[0].equals("champion")) {
                   r.champion = Brain.decode(kv[1]);
                } else if (kv[0].equals("chart")) {
@@ -76,6 +80,9 @@ final class Records {
 
    void save() {
       StringBuilder text = new StringBuilder("best=" + this.best + "\nbot=" + this.botBest + "\nmarker=" + this.markerX + "," + this.markerY + "\n");
+      if (!this.sound) {
+         text.append("sound=off\n");
+      }
       if (this.champion != null && this.generations > 0) {
          text.append("evolved=").append(this.generations).append(',').append(this.evolvedBest).append('\n');
          text.append("champion=").append(this.champion.encode()).append('\n');

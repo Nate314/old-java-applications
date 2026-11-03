@@ -11,6 +11,7 @@ The bot now comes with its game. `./run.ps1 DinoGame` opens Dino Game: a dinosau
 - **B**: the bot on or off. With the bot on, a red 10 x 10 marker shows where it looks ("bot's eye") and a badge counts its jumps this run. From the ready screen it starts the run itself, holding the key for 70 ms as the original did when it launched. After a crash it waits 3 s, then runs again.
 - **Drag the red marker** (bot on) to move what the bot watches. It stays ahead of the dinosaur and above the ground. **X** puts it back (36 px ahead of the dinosaur's nose, 22 px above the ground).
 - After a crash, Space starts a new run (after a short pause, so a held key does not restart at once).
+- **M** (or the **Sound** button in the bottom strip): the game's beeps on or off.
 - **E** (or the **Evolve a bot** button at the right of the bottom strip): evolve bots (see Evolve a bot). E again, or **Back to the game**, returns to the ready screen. A run under way when you switch is dropped and counts for nobody.
 
 Score: the distance run. Top right shows the bot's best (red, BOT), your best (HI) and this run.
@@ -21,9 +22,21 @@ Score: the distance run. Top right shows the bot's best (red, BOT), your best (H
 
 With the marker where it starts, the bot clears cacti and low birds well and usually ends at the first middle bird it meets, usually somewhere between 400 and 650 points.
 
-Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`, and once a generation has been bred, `evolved=generations,record`, `champion=` (the record holder's six numbers, see below) and `chart=` (the best score of each of the last 60 generations).
+Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`, `sound=off` while the beeps are off, and once a generation has been bred, `evolved=generations,record`, `champion=` (the record holder's six numbers, see below) and `chart=` (the best score of each of the last 60 generations).
 
 On the web site, `?watch` on its page (and the home page's demo, see Watch the computer play in `web/README.md`) starts it with the bot playing (B), and the visitor's first press takes over.
+
+## Day and night
+
+A run now has a sky and a feel of its own:
+
+- **Night falls every 700 points** (at 700, 1400, ...) and lasts 12 seconds, with a second of dusk and a second of dawn. Every color turns to its inverse: black paper, pale gray ink, light clouds. A moon comes out, drifting slowly left, a thinner or fuller one each night (seven phases in turn), with three twinkling stars.
+- **The original bot is blind at night.** Its rule is one exact number: jump when the pixel's blue value is 83. At night the ink is blue 172, and the fading colors of dusk and dawn are kept off 83 too, so from the first moment of dusk it sees nothing and runs into the next obstacle. Its crash line says so: "Night fell and the ink turned pale. Its pixel only knows blue 83." With its marker where it starts it seldom gets that far, since a middle bird usually ends its run first. Evolved bots (E) are not affected: they race by day.
+- **Every 100 points** the score shows the round hundred and blinks for a second, with a two-note chime.
+- **Passing your best** during a run: NEW BEST blinks under the score, with a rising run of notes.
+- **Dust** puffs up as the dinosaur takes off and lands, and specks kick up behind it as it runs. It stays behind the dinosaur, out of the bot's sight.
+- **Beeps**: a blip for each jump (yours or the bot's), the chime, and a low buzz for a crash. M turns them off and on.
+- **A crash** shakes the picture for a moment (only on screen: the frame the bot reads stays still), and once Space can start a new run a round arrow under GAME OVER says so.
 
 ## Evolve a bot
 
@@ -60,6 +73,9 @@ It sends real Space key presses via `java.awt.Robot` to whatever window has focu
 - `src/dinosaurgameplayer/RunnerPanel.java`: draws the game, takes keys and mouse, counts runs for you or the bot. With the bot on, each step is also drawn into an image, and the bot reads its pixel from that image.
 - `src/dinosaurgameplayer/PixelBot.java`: the bot inside the window: the marker, the 65 ms hold, and why a run ended.
 - `src/dinosaurgameplayer/Sprites.java`: the pixel drawings (dinosaur, ducking, birds, clouds, cacti).
+- `src/dinosaurgameplayer/Sky.java`: day and night on a run: when night falls, how dark it is, the moon's phase, and the colors as night turns them (kept off blue 83 once dusk starts).
+- `src/dinosaurgameplayer/Dust.java`: the dust at the dinosaur's feet.
+- `src/dinosaurgameplayer/Sounds.java`: the beeps, on the MIDI synthesizer.
 - `src/dinosaurgameplayer/Records.java`: `~/.dinogame.txt`.
 - `src/dinosaurgameplayer/Brain.java`: an evolved bot's six numbers, its children and its saved form.
 - `src/dinosaurgameplayer/Evolution.java`: a generation of 20 dinosaurs (`Evolution.Dino`, a brain at the keys of its own `Runner`), ranking and breeding.
@@ -73,7 +89,7 @@ From the repo root: `./run.ps1 DinoGame` (or `./run.ps1 DinoGame -Build` to buil
 
 ## Self-check
 
-`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file. For the evolution: that `Runner.inkAt` agrees with the drawn frame on every pixel an eye can sit on, through a whole course with birds; that a known brain ducks and finishes a course; that a seeded 40-generation run starts with the original bot, keeps a chart of 40 bests and ends with a record over twice the original's score held by a brain that ducks; that it carries on from a saved champion; that damaged brains are refused and numbers kept in range; that in the window E drops the run under way and each generation is saved; and the saved evolution lines. From `DinoGame/`:
+`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file (with `sound=off`). For day and night: that night falls at 700 and 1400 and dawns 12 s later, that no color the game draws past the first moment of dusk has blue 83, that a course drawn through a whole night shows the bot no obstacle while the same course by day is full of them, the night crash line, and that the dust rises on take-off and landing, stays behind the marker and settles. For the evolution: that `Runner.inkAt` agrees with the drawn frame on every pixel an eye can sit on, through a whole course with birds; that a known brain ducks and finishes a course; that a seeded 40-generation run starts with the original bot, keeps a chart of 40 bests and ends with a record over twice the original's score held by a brain that ducks; that it carries on from a saved champion; that damaged brains are refused and numbers kept in range; that in the window E drops the run under way and each generation is saved; and the saved evolution lines. From `DinoGame/`:
 
 ```
 javac -encoding UTF-8 -d ../out/check/DinoGame src/dinosaurgameplayer/*.java test/dinosaurgameplayer/*.java

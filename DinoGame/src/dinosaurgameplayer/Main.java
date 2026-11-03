@@ -20,7 +20,7 @@ public final class Main extends JFrame {
       this.setResizable(false);
       // Read after the window exists, so the browser build has put the saved file back.
       Records records = Records.load(new File(System.getProperty("user.home"), ".dinogame.txt"));
-      RunnerPanel panel = new RunnerPanel(records, System.nanoTime());
+      RunnerPanel panel = new RunnerPanel(records, System.nanoTime(), Sounds.open(records.sound));
       this.add(panel);
       this.pack();
       this.setLocationRelativeTo(null);

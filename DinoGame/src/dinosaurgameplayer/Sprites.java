@@ -127,9 +127,8 @@ final class Sprites {
    private static final int[][] SMALL_CACTUS = { { 7, 0, 4, 1 }, { 6, 1, 6, 34 }, { 1, 6, 3, 10 }, { 13, 3, 3, 13 }, { 1, 12, 15, 4 } };
    private static final int[][] LARGE_CACTUS = { { 10, 0, 6, 2 }, { 9, 2, 8, 48 }, { 1, 12, 4, 18 }, { 20, 8, 4, 22 }, { 1, 26, 23, 4 } };
 
-   /** One cactus, 17 x 35 or (large) 25 x 50, with its top left at (x, y). */
+   /** One cactus, 17 x 35 or (large) 25 x 50, with its top left at (x, y), in the current color. */
    static void cactus(Graphics2D g, int x, int y, boolean large) {
-      g.setColor(RunnerPanel.INK);
       for (int[] r : large ? LARGE_CACTUS : SMALL_CACTUS) {
          g.fillRect(x + r[0], y + r[1], r[2], r[3]);
       }
