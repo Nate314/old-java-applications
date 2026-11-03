@@ -41,7 +41,7 @@ class HanoiPage extends Page {
 	private final Button speedButton;
 
 	HanoiPage() {
-		super("Tower of Hanoi");
+		super("Hanoi");
 		play = button("Pause", ' ', this::togglePlay);
 		button("Step", 's', this::step);
 		button("Reset", 'r', this::reset);

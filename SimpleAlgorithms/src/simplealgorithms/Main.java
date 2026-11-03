@@ -29,11 +29,11 @@ public class Main {
 		return lines;
 	}
 
-	/** The Algorithm Lab window: a race of six sorts, the algorithms above, and the Tower of Hanoi, drawn step by step. */
+	/** The Algorithm Lab window: a race of six sorts, the algorithms above, the Tower of Hanoi and five path searches, drawn step by step. */
 	private static void openLab() {
 		JFrame frame = new JFrame("Simple Algorithms: Algorithm Lab");
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		LabPanel lab = new LabPanel(new SortPage(), new HanoiPage(), new RootPage(), new TaylorPage(), new PrintoutPage());
+		LabPanel lab = new LabPanel(new SortPage(), new HanoiPage(), new RootPage(), new TaylorPage(), new PathPage(), new PrintoutPage());
 		frame.add(lab);
 		frame.pack();
 		frame.setResizable(false);

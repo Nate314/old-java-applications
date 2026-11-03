@@ -77,7 +77,7 @@ $Recipes = [ordered]@{
     ScreenSaver         = @{ Steps = @('wait:1500', 'rec') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'key:R', 'rec') }
     GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:P', 'wait:600', 'key:Space') }
-    SimpleAlgorithms    = @{ Steps = @('wait:800', 'rec') }
+    SimpleAlgorithms    = @{ Steps = @('wait:800', 'key:5', 'rec') }
 }
 if (-not $Apps) { $Apps = @($Recipes.Keys) }
 
