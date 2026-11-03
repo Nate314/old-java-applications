@@ -7,6 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import javax.swing.JButton;
@@ -47,15 +48,32 @@ public final class CubeFrame extends JFrame implements ActionListener {
          // Lines are broken by hand: the browser build's labels do not wrap.
          "<html>Click a square, then<br>press W A S D (or the<br>buttons) to turn its row,<br>column or ring.<br><br>"
                + "Each level mixes the cube<br>one move more while you<br>watch. Turn it back to<br>solved: at par for 3 stars.<br><br>"
-               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>T: Teach me how.</html>");
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>T: Teach me. G: patterns.</html>");
    private static final String HELP_3D =
          "<html>Drag a square to turn<br>its row, column or ring.<br>Drag around the cube<br>(or press the arrow keys)<br>to look at other sides.<br>"
                + "Or click a square, then<br>press W A S D.<br><br>"
-               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: the flat net. T: Teach<br>me how to solve it.</html>";
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: flat net. T: Teach me.<br>G: patterns to make.</html>";
    private final String helpNet;
    private final JButton viewButton = new JButton();
    private final JButton teachButton = new JButton("Teach me");
    private final CoachPanel coachPanel = new CoachPanel();
+   private final JButton patternButton = new JButton("Patterns");
+   private final PatternPanel patternPanel = new PatternPanel(this::patternClick);
+   /** The Patterns card is up in place of the message and help (and of Teach me). */
+   private boolean patterning = false;
+   /** The pattern on the card, or null for the list. */
+   private Patterns.Pattern pattern = null;
+   /** The pattern last shown or made on the cube, while the cube is still that run's (null after a level or Mix). */
+   private Patterns.Pattern onCube = null;
+   /** Make it is under way: the stickers after each of the pattern's turns from solved, and how many are made. */
+   private boolean making = false;
+   private final List<int[]> patternPath = new ArrayList<>();
+   private int patternDone = 0;
+   /** Turns made off the pattern since it was last on its way, to be turned back (last first). */
+   private final List<Integer> offTurns = new ArrayList<>();
+   /** The turn Show me is at, or -1 when it is not playing. */
+   private int showAt = -1;
+   private String patternStatus = "";
    /** Teach me is on: the coach card replaces the message and help, and every move is shown before it is made. */
    private boolean coaching = false;
    /** The coach's steps from the cube as it is (null until worked out again), the step and the turn in it now. */
@@ -145,6 +163,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.panel.add(this.teachButton);
       this.coachPanel.setVisible(false);
       this.panel.add(this.coachPanel);
+      this.patternButton.addActionListener(this);
+      this.panel.add(this.patternButton);
+      this.patternPanel.setVisible(false);
+      this.panel.add(this.patternPanel);
       // Last, so it lies under every other control.
       this.panel.add(this.view);
       this.showView(this.records.netView());
@@ -176,6 +198,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.helpLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
       this.helpLabel.setBounds(left, y + 92, leftWidth, 196);
       this.coachPanel.setBounds(left, y - 4, leftWidth + 8, 294);
+      this.patternPanel.setBounds(left, y - 4, leftWidth + 8, 294);
       for (JLabel label : new JLabel[]{this.levelLabel, this.goalLabel, this.movesLabel, this.bestLabel, this.totalLabel, this.messageLabel, this.helpLabel}) {
          this.panel.add(label);
       }
@@ -197,6 +220,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.viewButton.setText(net ? "3D cube" : "Flat net");
       this.viewButton.setBounds(this.frameWidth - 112, 10, 92, 28);
       this.teachButton.setBounds(12, 10, 116, 28);
+      this.patternButton.setBounds(134, 10, 124, 28);
       int keyWidth = (int)(2.75 * w / 3.0);
       int keyHeight = (int)(2.75 * h / 3.0);
       int keyX = net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
@@ -223,6 +247,8 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.helpLabel.setText(net ? this.helpNet : HELP_3D);
       if (this.coaching) {
          this.coachShow();
+      } else if (this.making) {
+         this.patternGuide();
       } else if (this.hinted != null) {
          this.hintMessage();
       }
@@ -302,6 +328,9 @@ public final class CubeFrame extends JFrame implements ActionListener {
       if (this.coaching) {
          this.coachAfterMove();
       }
+      if (this.making) {
+         this.patternAfterMove();
+      }
    }
 
    /** The player turned the cube back to solved. */
@@ -339,6 +368,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.freePlay = false;
       this.par = this.level;
       this.records.setLastLevel(this.level);
+      this.endPatternRun();
       this.resetRun();
       this.cube.reset();
       this.history.restart();
@@ -378,6 +408,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
          return;
       }
       List<Integer> layers = this.shorterThanHistory();
+      this.endPatternRun();
       this.clearHint();
       this.clock.stop();
       this.complete = true;
@@ -414,20 +445,20 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.coachShow();
          return;
       }
+      if (this.making) {
+         this.patternGuide();
+         return;
+      }
       List<Integer> layers = this.shorterThanHistory();
       String[] move = layers == null ? this.history.hint() : this.appMove(layers.get(0));
       if (move == null) {
          this.message(this.cube.isSolved() ? "Already solved." : "No hint here: try<br>Teach me (T).");
          return;
       }
-      this.clearHint();
-      this.hinted = move;
       if (!this.complete) {
          this.usedHint = true;
       }
-      this.select(move[0], Integer.parseInt(move[2]));
-      this.keyButton(move[1]).setBackground(HINT_KEY);
-      this.view.hint(move[0], Integer.parseInt(move[2]), move[1]);
+      this.pointAt(move);
       this.hintMessage();
       this.updateStatus();
    }
@@ -437,6 +468,15 @@ public final class CubeFrame extends JFrame implements ActionListener {
       String key = this.hinted[1].toUpperCase();
       this.message(this.view.isVisible() ? "Hint: drag the ringed<br>square along the arrow<br>(or press " + key + ")."
             : "Hint: press " + key + " on<br>the ringed square.");
+   }
+
+   /** Rings the square of a move on the cube, with its arrow in 3D, and lights its key in green. */
+   private void pointAt(String[] move) {
+      this.clearHint();
+      this.hinted = move;
+      this.select(move[0], Integer.parseInt(move[2]));
+      this.keyButton(move[1]).setBackground(HINT_KEY);
+      this.view.hint(move[0], Integer.parseInt(move[2]), move[1]);
    }
 
    private JButton keyButton(String key) {
@@ -503,7 +543,11 @@ public final class CubeFrame extends JFrame implements ActionListener {
       long seconds = this.startMillis == 0L ? 0L : (end - this.startMillis) / 1000L;
       String time = seconds / 60 + ":" + (seconds % 60 < 10 ? "0" : "") + seconds % 60;
       this.movesLabel.setText("Moves: " + moves + "    Time: " + time);
-      if (this.freePlay) {
+      if (this.onCube != null) {
+         this.levelLabel.setText("Pattern");
+         this.goalLabel.setText(this.onCube.name + ": " + this.onCube.turns.size() + " turns");
+         this.bestLabel.setText("Retry (R) for level " + this.level);
+      } else if (this.freePlay) {
          this.levelLabel.setText("Free play");
          this.goalLabel.setText("Mixed: solve it any way");
          this.bestLabel.setText("Retry (R) for level " + this.level);
@@ -528,7 +572,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       } else if (playerSolved) {
          this.setTitle("Rubik's Cube: solved in " + moves + (moves == 1 ? " move!" : " moves!"));
       } else {
-         this.setTitle("Rubik's Cube: " + (this.freePlay ? "free play" : "level " + this.level) + ", " + moves + (moves == 1 ? " move" : " moves"));
+         this.setTitle("Rubik's Cube: " + (this.onCube != null ? this.onCube.name : this.freePlay ? "free play" : "level " + this.level) + ", " + moves + (moves == 1 ? " move" : " moves"));
       }
    }
 
@@ -536,6 +580,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** T: turns Teach me on or off. */
    final void toggleCoach() {
+      if (this.patterning && !this.coaching) {
+         // One card at a time.
+         this.togglePatterns();
+      }
       this.coaching = !this.coaching;
       this.teachButton.setText(this.coaching ? "Stop teaching" : "Teach me");
       this.coachPanel.setVisible(this.coaching);
@@ -622,14 +670,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
       }
       int id = step.turns.get(this.coachTurn);
       String[] move = this.appMove(id);
-      this.clearHint();
-      this.hinted = move;
       if (!this.complete) {
          this.usedHint = true;
       }
-      this.select(move[0], Integer.parseInt(move[2]));
-      this.keyButton(move[1]).setBackground(HINT_KEY);
-      this.view.hint(move[0], Integer.parseInt(move[2]), move[1]);
+      this.pointAt(move);
       List<String> colors = new ArrayList<>();
       List<Boolean> clockwise = new ArrayList<>();
       for (int turn : step.turns) {
@@ -648,14 +692,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
    /** Teach me on a short mix: the way back along the moves made, one turn at a time. */
    private void coachBack(int back) {
       String[] move = this.history.hint();
-      this.clearHint();
-      this.hinted = move;
       if (!this.complete) {
          this.usedHint = true;
       }
-      this.select(move[0], Integer.parseInt(move[2]));
-      this.keyButton(move[1]).setBackground(HINT_KEY);
-      this.view.hint(move[0], Integer.parseInt(move[2]), move[1]);
+      this.pointAt(move);
       String key = move[1].toUpperCase();
       this.coachPanel.show(-1, "Turn the mix back", "This cube is only " + back + (back == 1 ? " turn" : " turns")
             + " from solved, so the quickest way is to undo the mix, one turn at a time. To learn the whole method,"
@@ -717,6 +757,247 @@ public final class CubeFrame extends JFrame implements ActionListener {
       return best;
    }
 
+   // ---- Patterns ----
+
+   /** What the card says before Show me or Make it. */
+   private String patternStart() {
+      int number = Patterns.ALL.indexOf(this.pattern) + 1;
+      return "Show me (or " + number + " again) makes it on a solved cube while you watch. Make it (M): you turn it,"
+            + " one turn at a time.";
+   }
+
+   /** G: the Patterns card in place of the message and help (closing Teach me), or back. */
+   final void togglePatterns() {
+      if (this.coaching && !this.patterning) {
+         this.toggleCoach();
+      }
+      if (this.patterning) {
+         this.stopPatternRun();
+      }
+      this.patterning = !this.patterning;
+      this.patternButton.setText(this.patterning ? "Close patterns" : "Patterns");
+      this.patternPanel.setVisible(this.patterning);
+      this.helpLabel.setVisible(!this.patterning);
+      this.messageLabel.setVisible(!this.patterning);
+      this.pattern = null;
+      this.patternPanel.list(this.records.patternsMade());
+      this.panel.repaint();
+   }
+
+   /** A click on the Patterns card: a pattern in the list, back to the list, Show me (or Stop) or Make it. */
+   private void patternClick(int action) {
+      if (action >= 0) {
+         this.pickPattern(action);
+      } else if (action == PatternPanel.BACK) {
+         this.stopPatternRun();
+         this.pattern = null;
+         this.patternPanel.list(this.records.patternsMade());
+      } else if (action == PatternPanel.SHOW) {
+         if (this.showAt >= 0 || this.making) {
+            this.stopPatternRun();
+         } else {
+            this.showPattern();
+         }
+      } else if (action == PatternPanel.MAKE) {
+         this.makePattern();
+      }
+   }
+
+   /** 1 to 7: that pattern's card (opening the Patterns card first). */
+   final void pickPattern(int index) {
+      if (index < 0 || index >= Patterns.ALL.size() || this.scrambler != null) {
+         return;
+      }
+      if (!this.patterning) {
+         this.togglePatterns();
+      }
+      if (this.pattern == Patterns.ALL.get(index)) {
+         // The same number again: Show me (or stop it).
+         this.patternClick(PatternPanel.SHOW);
+         return;
+      }
+      this.stopPatternRun();
+      this.pattern = Patterns.ALL.get(index);
+      this.patternStatus = this.patternStart();
+      this.patternCard();
+   }
+
+   /** M: Make it, on the pattern whose card is up. */
+   final void patternKey(char key) {
+      if (this.patterning && this.pattern != null && key == 'm') {
+         this.makePattern();
+      } else if (this.patterning && this.pattern != null && key == '\b') {
+         this.patternClick(PatternPanel.BACK);
+      }
+   }
+
+   /** Shows the card of the pattern picked: its turns as chips, the next ringed while Show me or Make it runs. */
+   private void patternCard() {
+      if (this.pattern == null) {
+         return;
+      }
+      List<String> colors = new ArrayList<>();
+      List<Boolean> clockwise = new ArrayList<>();
+      for (int turn : this.pattern.turns) {
+         colors.add(this.centerColor(Coach.faceOf(turn)));
+         clockwise.add(Coach.clockwise(turn));
+      }
+      int now = this.showAt >= 0 ? this.showAt : this.making ? this.patternDone : -1;
+      this.patternPanel.card(this.pattern, this.records.patternsMade(), colors, clockwise, now, this.patternStatus,
+            this.showAt >= 0, this.making);
+   }
+
+   /** A solved cube, out of any level, for the pattern on the card. */
+   private void startPatternRun() {
+      this.stopAll();
+      this.freePlay = true;
+      this.resetRun();
+      this.cube.reset();
+      this.history.restart();
+      this.onCube = this.pattern;
+      this.making = false;
+      this.showAt = -1;
+      this.coachSteps = null;
+   }
+
+   /** Show me: plays the pattern's turns on a solved cube, then turns the whole cube round to show it off. */
+   private void showPattern() {
+      if (this.scrambler != null || this.pattern == null) {
+         return;
+      }
+      this.startPatternRun();
+      this.showAt = 0;
+      this.patternStatus = "Watch: " + this.pattern.turns.size() + " turns from a solved cube...";
+      this.playback = new Timer(380, event -> {
+         if (this.showAt < this.pattern.turns.size()) {
+            String[] move = this.appMove(this.pattern.turns.get(this.showAt++));
+            Scrambler.apply(this.history, move);
+            this.markSquare(move[0], Integer.parseInt(move[2]));
+            this.cube.refresh();
+            this.patternCard();
+            return;
+         }
+         this.stopPlayback();
+         this.showAt = -1;
+         this.markSquare(null, 0);
+         this.patternStatus = "That is " + this.pattern.name + ". Now Make it yourself, or Solve to turn it back.";
+         this.view.spin();
+         this.patternCard();
+         this.updateStatus();
+      });
+      this.playback.start();
+      this.patternCard();
+      this.updateStatus();
+   }
+
+   /** Make it: from a solved cube, the player makes each of the pattern's turns, shown on the cube as for a hint. */
+   private void makePattern() {
+      if (this.scrambler != null || this.pattern == null) {
+         return;
+      }
+      this.startPatternRun();
+      this.making = true;
+      this.patternPath.clear();
+      int[] stickers = Patterns.solved();
+      this.patternPath.add(stickers);
+      for (int turn : this.pattern.turns) {
+         stickers = Patterns.apply(stickers, Arrays.asList(turn));
+         this.patternPath.add(stickers);
+      }
+      this.patternDone = 0;
+      this.offTurns.clear();
+      this.patternGuide();
+      this.updateStatus();
+   }
+
+   /** After a move while making a pattern: how far along it the cube is now, or the turn to take back. */
+   private void patternAfterMove() {
+      int[] now = this.stickers();
+      int along = -1;
+      for (int k = this.patternPath.size() - 1; k >= 0 && along < 0; k--) {
+         along = Arrays.equals(this.patternPath.get(k), now) ? k : -1;
+      }
+      if (along >= 0) {
+         this.patternDone = along;
+         this.offTurns.clear();
+      } else if (this.lastTurn >= 0) {
+         this.offTurns.add(this.lastTurn);
+      } else if (!this.offTurns.isEmpty()) {
+         // Undo took back the last turn off the pattern.
+         this.offTurns.remove(this.offTurns.size() - 1);
+      }
+      this.patternGuide();
+   }
+
+   /** Points at the next turn of the pattern (or the one that takes a wrong turn back), or celebrates it made. */
+   private void patternGuide() {
+      if (this.patternDone == this.pattern.turns.size()) {
+         this.making = false;
+         this.clearHint();
+         this.markSquare(null, 0);
+         boolean first = !this.records.patternsMade().contains(this.pattern.key);
+         this.records.madePattern(this.pattern.key);
+         int moves = this.userMoves.size();
+         this.patternStatus = "Made it! " + this.pattern.name + " in " + moves + (moves == 1 ? " turn." : " turns.")
+               + (first ? " " + this.records.patternsMade().size() + " of " + Patterns.ALL.size() + " made." : "");
+         this.view.spin();
+         this.patternCard();
+         this.updateStatus();
+         return;
+      }
+      boolean off = !this.offTurns.isEmpty();
+      int id = off ? Patterns.inverse(this.offTurns.get(this.offTurns.size() - 1)) : this.pattern.turns.get(this.patternDone);
+      String[] move = this.appMove(id);
+      this.pointAt(move);
+      String key = move[1].toUpperCase();
+      String how = this.view.isVisible() ? "Drag the ringed square along the arrow, or press " + key + "."
+            : "Press " + key + " on the ringed square.";
+      this.patternStatus = off ? "That turn is not in the pattern: turn it back (or Undo, Z). " + how
+            : "Turn " + (this.patternDone + 1) + " of " + this.pattern.turns.size() + ": " + this.turnWords(id) + ". " + how;
+      this.patternCard();
+   }
+
+   /** A quarter turn in words: "red clockwise", or "the middle layer" for one that turns no face. */
+   private String turnWords(int id) {
+      if (id % 6 / 2 == 1) {
+         return "the middle layer";
+      }
+      return this.centerColor(Coach.faceOf(id)) + (Coach.clockwise(id) ? " clockwise" : " back (counterclockwise)");
+   }
+
+   /** Stops Show me or Make it, leaving the cube as it is. */
+   private void stopPatternRun() {
+      if (this.showAt >= 0) {
+         this.stopPlayback();
+      }
+      boolean running = this.showAt >= 0 || this.making;
+      this.showAt = -1;
+      this.making = false;
+      if (running) {
+         this.clearHint();
+         this.markSquare(null, 0);
+         this.patternStatus = this.patternStart();
+         this.patternCard();
+         this.updateStatus();
+      }
+   }
+
+   /** A level, Mix or Solve takes the cube: no pattern run any more. */
+   private void endPatternRun() {
+      this.stopPatternRun();
+      this.onCube = null;
+   }
+
+   /** The face index of every sticker's color, as {@link Patterns} counts them. */
+   private int[] stickers() {
+      int[] state = new int[54];
+      Face[] faces = this.cube.faces();
+      for (int s = 0; s < 54; s++) {
+         state[s] = CubeGeometry.faceIndex(faces[s / 9].stickers[s % 9]);
+      }
+      return state;
+   }
+
    /** The level keys: Z undo, H hint, R retry, N next, P previous. */
    final void levelKey(char key) {
       switch (key) {
@@ -747,6 +1028,8 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.toggleView();
       } else if (source == this.teachButton) {
          this.toggleCoach();
+      } else if (source == this.patternButton) {
+         this.togglePatterns();
       } else if (source == this.undoButton) {
          this.levelKey('z');
       } else if (source == this.hintButton) {
@@ -772,6 +1055,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
             return;
          }
          this.stopAll();
+         this.endPatternRun();
          this.freePlay = true;
          this.resetRun();
          this.message("Mixing...");

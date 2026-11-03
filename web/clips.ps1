@@ -78,7 +78,7 @@ $Recipes = [ordered]@{
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', $FlappyPilot, 'wait:1000', 'rec') }
     DinoGame            = @{ Steps = @('key:E', 'wait:2500', 'rec') }
     UltimateTicTacToe   = @{ Query = 'watch'; Steps = @('wait:2500', 'rec') }
-    RubiksCube2D        = @{ Steps = @('wait:800', (Click '^Mix$'), 'wait:1500', 'key:T', 'wait:600', 'rec') + (Repeat 12 @($CoachTurn, 'wait:480')) }
+    RubiksCube2D        = @{ Steps = @('wait:800', 'key:G', 'key:2', 'wait:900', 'rec', 'key:2') }
     SynthesizerKeyboard = @{ Steps = $SynthLoop + @('wait:600', 'rec') }
     Clock               = @{ Steps = @('wait:800', 'key:F', 'wait:300', 'key:Space', 'wait:600', 'rec') }
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Pick 'Mode 6'), (Click '^OK$'), 'wait:3000', $StarsSuns, 'wait:7000', 'rec') }

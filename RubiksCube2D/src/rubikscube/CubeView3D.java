@@ -46,6 +46,9 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private double pitch = DEFAULT_PITCH;
    private double targetYaw = DEFAULT_YAW;
    private double targetPitch = DEFAULT_PITCH;
+   /** A showing-off lap of the whole cube (Patterns): when it began (0 for none) and the yaw it began from. */
+   private long spinStart = 0L;
+   private double spinFrom = 0.0;
    /**
     * A turn of the whole cube applied before yaw and pitch, as rows (world x, y and z of a point are its dot products
     * with them): Teach me stands the cube yellow side up with it. It never changes what a drag or key does.
@@ -145,8 +148,16 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.repaint();
    }
 
+   /** Turns the whole cube once round, slowly, so every side of it shows (a pattern just made). */
+   void spin() {
+      this.spinStart = System.currentTimeMillis();
+      this.spinFrom = this.targetYaw;
+      this.wake();
+   }
+
    /** Turns the view by a step: an arrow key. */
    void orbit(int right, int down) {
+      this.spinStart = 0L;
       this.targetYaw -= right * Math.PI / 4;
       this.targetPitch = clampPitch(this.targetPitch - down * Math.PI / 8);
       this.wake();
@@ -222,6 +233,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          }
          busy = true;
       }
+      if (this.spinStart != 0L) {
+         double t = Math.min(1.0, (System.currentTimeMillis() - this.spinStart) / 3600.0);
+         double eased = t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
+         this.yaw = this.targetYaw = this.spinFrom - 2 * Math.PI * eased;
+         this.spinStart = t >= 1.0 ? 0L : this.spinStart;
+         busy = true;
+      }
       double dy = this.targetYaw - this.yaw;
       double dp = this.targetPitch - this.pitch;
       if (Math.abs(dy) > 0.002 || Math.abs(dp) > 0.002) {
@@ -241,6 +259,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    // ---- the pointer ----
 
    private void pressed(int x, int y) {
+      this.spinStart = 0L;
       this.pressX = x;
       this.pressY = y;
       this.dragged = false;
