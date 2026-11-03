@@ -21,6 +21,9 @@ final class ClockState {
    static final String TIMER = "timer";
    static final String STOPWATCH = "stopwatch";
    static final String FOCUS = "focus";
+   static final String WORLD = "world";
+   /** The World tab's cities when the file names none. */
+   static final String[] DEFAULT_CITIES = {"London", "New York", "Tokyo"};
 
    private final File file;
    String mode = CLOCK;
@@ -29,6 +32,8 @@ final class ClockState {
    final Countdown countdown = new Countdown();
    final Stopwatch stopwatch = new Stopwatch();
    final Focus focus = new Focus();
+   /** The cities on the World tab, in the order they were picked. */
+   final List<Zone> cities = new ArrayList<>();
 
    ClockState(File file) {
       this.file = file;
@@ -37,6 +42,9 @@ final class ClockState {
    /** Reads the file; a missing file or an unknown line leaves the defaults. */
    static ClockState load(File file) {
       ClockState state = new ClockState(file);
+      for (String name : DEFAULT_CITIES) {
+         state.cities.add(Zone.named(name));
+      }
       state.read(file);
       return state;
    }
@@ -61,7 +69,7 @@ final class ClockState {
             String key = line.substring(0, split);
             String value = line.substring(split + 1).trim();
             try {
-               if (key.equals("mode") && (value.equals(CLOCK) || value.equals(TIMER) || value.equals(STOPWATCH) || value.equals(FOCUS))) {
+               if (key.equals("mode") && (value.equals(CLOCK) || value.equals(TIMER) || value.equals(STOPWATCH) || value.equals(FOCUS) || value.equals(WORLD))) {
                   this.mode = value;
                } else if (key.equals("face")) {
                   this.analog = !value.equals("digital");
@@ -94,6 +102,14 @@ final class ClockState {
                      String[] parts = day.trim().split(":");
                      if (parts.length == 3) {
                         this.focus.restoreDay(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+                     }
+                  }
+               } else if (key.equals("world")) {
+                  this.cities.clear();
+                  for (String name : value.split(",")) {
+                     Zone zone = Zone.named(name.trim());
+                     if (zone != null && !this.cities.contains(zone) && this.cities.size() < WorldView.MAX_CITIES) {
+                        this.cities.add(zone);
                      }
                   }
                } else if (key.equals("laps") && !value.isEmpty()) {
@@ -158,6 +174,11 @@ final class ClockState {
          days.add(day.getKey() + ":" + day.getValue()[0] + ":" + day.getValue()[1]);
       }
       text.append("focusLog=").append(String.join(",", days)).append('\n');
+      List<String> cities = new ArrayList<>();
+      for (Zone zone : this.cities) {
+         cities.add(zone.name);
+      }
+      text.append("world=").append(String.join(",", cities)).append('\n');
       return text.toString();
    }
 }

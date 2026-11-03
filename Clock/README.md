@@ -1,12 +1,12 @@
 # Clock
 
-A desktop clock window with four tabs. Clock is the original app: an analog clock face (hour, minute and red second hand) or a digital readout of the day, date and time, updated several times a second so the second hand sweeps smoothly. Timer is a kitchen timer on a 60-minute dial: drag the knob round and a red wedge shows the time set, then shrinks back to 12 as it counts down, and a bell rings when it runs out. Stopwatch times to the hundredth of a second, with laps. Focus runs work sessions the Pomodoro way: 25 minutes of focus, a 5-minute break that starts by itself, and a long break after every fourth session, with a bar for each of the last seven days showing the minutes focused.
+A desktop clock window with five tabs. Clock is the original app: an analog clock face (hour, minute and red second hand) or a digital readout of the day, date and time, updated several times a second so the second hand sweeps smoothly. Timer is a kitchen timer on a 60-minute dial: drag the knob round and a red wedge shows the time set, then shrinks back to 12 as it counts down, and a bell rings when it runs out. Stopwatch times to the hundredth of a second, with laps. Focus runs work sessions the Pomodoro way: 25 minutes of focus, a 5-minute break that starts by itself, and a long break after every fourth session, with a bar for each of the last seven days showing the minutes focused. World shows where your people are in their day: a 24-hour dial with a hand for here and each city you pick, and under it a strip of hours per city that rings in green the hours when everyone is at work, so you can find a time for a call.
 
 The timer, stopwatch and focus sessions count against the wall clock, not the window's ticks, and are saved as they change. Close the window with a timer running and open it again later: it is still counting, or it has rung, and says when.
 
 ## Controls / usage
 
-- **Tabs**: click Clock, Timer, Stopwatch or Focus at the top, or press **1**, **2**, **3**, **4** (or **C**, **T**, **S**, **F**). A running timer, stopwatch or focus session shows its time on its tab ("Timer 4:59", "Focus 18:22"), so it can be watched from the others. The line at the bottom lists the current tab's controls.
+- **Tabs**: click Clock, Timer, Stopwatch, Focus or World at the top, or press **1** to **5** (or **C**, **T**, **S**, **F**, **W**). A running timer, stopwatch or focus session shows its time on its tab ("Timer 4:59", "Focus 18:22"), so it can be watched from the others. The line at the bottom lists the current tab's controls.
 - **Clock**: left click (on mouse release) switches between analog and digital, right click between 12-hour and 24-hour time. While a focus session or break runs, the analog face shows it as a red (focus) or green (break) band round the rim, from the minute hand to when it ends.
 - **Timer**:
   - Drag the knob (or click anywhere on the dial) to set whole minutes from 1 to 60. The knob stops at 0 and at 60 instead of wrapping round past 12. Turning it while the timer runs keeps it running from the new time.
@@ -22,6 +22,12 @@ The timer, stopwatch and focus sessions count against the wall clock, not the wi
   - **R** goes back to the first session of a set. The lengths button (**L**) cycles 25 / 5, 50 / 10 and 15 / 3 minutes (focus / short break); changing it starts the current session or break over at its new length.
   - Under the ring, today's minutes and sessions, the total for the last seven days, and a bar per day (today in red, on the right). The window title shows a running session too ("Focus 18:22 - Clock", or "Break 3:10 - Clock" on a break).
   - A session or break that ended while the window was closed is logged at its own time; the bell rings only if it ended less than a minute ago.
+- **World**:
+  - The dial is a day of 24 hours with noon at the top and midnight at the bottom, its ring colored by the hour: dark blue for the night (10 pm to 7 am), light blue for the morning and evening, and yellow for working hours (9 am to 5 pm). Here has the thick red hand and each picked city a hand of its own color, named on the face. Beside the dial: the time and date here, and how far the time shown is from now.
+  - Under it, a row for here and each city: its name, how far ahead or behind here it is (and "tomorrow" or "yesterday" when its date differs), its time, and a strip of here's day from midnight to midnight, each hour cell showing that city's hour in the same colors. A white tick marks where the city's day changes. The hours when everyone is at work are ringed in green across the strips, and the line under them says when ("Everyone at work: 9:00 am to 11:00 am here"); when no working hour suits everyone it gives the hours everyone is awake, or failing that the hour with the most people awake.
+  - Drag along the strips to show any time of the day (in quarter hours): the red line, the dial's hands and every row follow. **Earlier** and **Later** (**Left** / **Right**) step a whole hour; **Now** (**Space**, **Enter**, **Home** or **Esc**) goes back to the time now.
+  - **Cities** (**A**) lists 54 cities with their time now; click one to add or remove it, up to five. **Done** (**Enter**, **Esc** or **A**) goes back. London, New York and Tokyo are picked to start with.
+  - Daylight saving is worked out from each city's rules (United States and Canada, Europe, south-east Australia, New Zealand, or none) in `Zone.java`, so the times agree on the desktop and in the browser. Here's own offset comes from the computer's clock.
 - No command-line arguments.
 - The window is a square one quarter of the screen width wide, but at least 380 pixels (and never bigger than the screen). The current time text is also printed to stdout each time it changes (once a second).
 
@@ -31,7 +37,7 @@ On the web site the clock follows you: while a timer, stopwatch or focus session
 
 ## Saved state
 
-`~/.clock.txt` (in `user.home`) keeps the tab, analog or digital, 12 or 24 hours, the timer (its length, and when it ends while running or the time left while paused) the stopwatch (when it started while running, the time banked before the last stop, and the laps), the focus session (the lengths, session or break, the sessions done in the set, and when it ends while running or the time left otherwise) and the minutes focused and sessions finished on each of the last 14 days. A missing or damaged file, or a damaged line, leaves the defaults: the Clock tab and a 5-minute timer.
+`~/.clock.txt` (in `user.home`) keeps the tab, analog or digital, 12 or 24 hours, the timer (its length, and when it ends while running or the time left while paused) the stopwatch (when it started while running, the time banked before the last stop, and the laps), the focus session (the lengths, session or break, the sessions done in the set, and when it ends while running or the time left otherwise) the minutes focused and sessions finished on each of the last 14 days, and the World tab's cities (`world=London,New York,Tokyo`). A missing or damaged file, or a damaged line, leaves the defaults: the Clock tab and a 5-minute timer.
 
 ## Code layout
 
@@ -43,6 +49,7 @@ On the web site the clock follows you: while a timer, stopwatch or focus session
 - `src/clock/TimerView.java` and `src/clock/Countdown.java`: the timer's dial and controls, and the countdown itself.
 - `src/clock/StopwatchView.java` and `src/clock/Stopwatch.java`: the stopwatch's ring, laps and controls, and the stopwatch itself.
 - `src/clock/FocusView.java` and `src/clock/Focus.java`: the focus ring, the week of bars and the controls, and the sessions, breaks and day log themselves.
+- `src/clock/WorldView.java` and `src/clock/Zone.java`: the world dial, the strips, the city picker and the hours that suit everyone, and the cities' time zones, their daylight saving rules and the calendar math behind them.
 - `src/clock/Chime.java`: the bell, played with Swing timers so the event thread never sleeps (a system beep where there is no synthesizer).
 - `src/clock/ClockState.java`: reads and writes `~/.clock.txt`.
 - `src/clock/Ui.java`: the shared colors (the original cyan, black, white and red), fonts, buttons and time formats.
@@ -55,9 +62,10 @@ From the repo root: `./run.ps1 Clock` (or `./run.ps1 Clock -Build` to build a ja
 
 ## Self-check
 
-`test/clock/TimerCheck.java` checks the countdown (start, pause, resume, running out exactly once, the one-hour cap, Up and Down while running), the stopwatch's laps, fastest and slowest, focus sessions (breaks starting by themselves, catching up after the window was closed, the long break after four, skips, lengths, the day log), the time formats, and that the state file round-trips a running timer, stopwatch and focus session, rings a timer that ran out while closed at its own time, and survives damaged lines. From `Clock/`:
+`test/clock/TimerCheck.java` checks the countdown (start, pause, resume, running out exactly once, the one-hour cap, Up and Down while running), the stopwatch's laps, fastest and slowest, focus sessions (breaks starting by themselves, catching up after the window was closed, the long break after four, skips, lengths, the day log), the time formats, and that the state file round-trips a running timer, stopwatch and focus session, rings a timer that ran out while closed at its own time, and survives damaged lines. `test/clock/WorldCheck.java` compares every city's offset with the JDK's time zone database every six hours from 2023 to 2030 and every quarter hour around each daylight saving change (about 640,000 instants), checks the calendar math day by day over 400 years, the hours that suit everyone, and that the saved cities round-trip, with unknown names, repeats and more than five dropped. From `Clock/`:
 
 ```
 javac -d ../out/check/Clock src/clock/*.java test/clock/*.java
 java -ea -cp ../out/check/Clock clock.TimerCheck
+java -ea -cp ../out/check/Clock clock.WorldCheck
 ```

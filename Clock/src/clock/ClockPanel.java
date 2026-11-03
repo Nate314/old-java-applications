@@ -13,11 +13,11 @@ import java.awt.event.MouseMotionListener;
 import javax.swing.JPanel;
 
 /**
- * The window's content: a strip of four tabs (Clock, Timer, Stopwatch, Focus) over the chosen tab and a line of help.
+ * The window's content: a strip of five tabs (Clock, Timer, Stopwatch, Focus, World) over the chosen tab and a line of help.
  * It routes the mouse and keys to that tab and saves the state after each change.
  */
 public final class ClockPanel extends JPanel implements MouseListener, MouseMotionListener {
-   private static final String[] MODES = {ClockState.CLOCK, ClockState.TIMER, ClockState.STOPWATCH, ClockState.FOCUS};
+   private static final String[] MODES = {ClockState.CLOCK, ClockState.TIMER, ClockState.STOPWATCH, ClockState.FOCUS, ClockState.WORLD};
 
    private final Main clock;
    private final Tab[] tabs;
@@ -32,7 +32,7 @@ public final class ClockPanel extends JPanel implements MouseListener, MouseMoti
 
    public ClockPanel(Main clock) {
       this.clock = clock;
-      this.tabs = new Tab[]{new ClockFace(clock), new TimerView(clock), new StopwatchView(clock), new FocusView(clock)};
+      this.tabs = new Tab[]{new ClockFace(clock), new TimerView(clock), new StopwatchView(clock), new FocusView(clock), new WorldView(clock)};
       this.addMouseListener(this);
       this.addMouseMotionListener(this);
       this.setFocusable(true);
@@ -140,12 +140,13 @@ public final class ClockPanel extends JPanel implements MouseListener, MouseMoti
    public final void mouseExited(MouseEvent event) {
    }
 
-   /** 1 2 3 4 (or C T S F) pick a tab; other keys go to the tab. */
+   /** 1 to 5 (or C T S F W) pick a tab; other keys go to the tab. */
    private void keyReleased(int keyCode) {
       int pick = keyCode == KeyEvent.VK_1 || keyCode == KeyEvent.VK_C ? 0
             : keyCode == KeyEvent.VK_2 || keyCode == KeyEvent.VK_T ? 1
             : keyCode == KeyEvent.VK_3 || keyCode == KeyEvent.VK_S ? 2
-            : keyCode == KeyEvent.VK_4 || keyCode == KeyEvent.VK_F ? 3 : -1;
+            : keyCode == KeyEvent.VK_4 || keyCode == KeyEvent.VK_F ? 3
+            : keyCode == KeyEvent.VK_5 || keyCode == KeyEvent.VK_W ? 4 : -1;
       if (pick >= 0) {
          this.show(MODES[pick]);
          this.changed();

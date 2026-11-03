@@ -80,7 +80,7 @@ $Recipes = [ordered]@{
     UltimateTicTacToe   = @{ Query = 'watch'; Steps = @('wait:2500', 'rec') }
     RubiksCube2D        = @{ Steps = @('wait:800', 'key:G', 'key:2', 'wait:900', 'rec', 'key:2') }
     SynthesizerKeyboard = @{ Steps = $SynthLoop + @('wait:600', 'rec') }
-    Clock               = @{ Steps = @('wait:800', 'key:F', 'wait:300', 'key:Space', 'wait:600', 'rec') }
+    Clock               = @{ Steps = @('wait:800', 'key:W', 'wait:300', (ClockAt 6), 'wait:300', 'rec') + (Repeat 10 @('wait:550', 'key:ArrowRight')) }
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Pick 'Mode 6'), (Click '^OK$'), 'wait:3000', $StarsSuns, 'wait:7000', 'rec') }
     TankGame            = @{ Query = 'watch'; Steps = @('wait:3000', 'rec') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:500', 'key:Space', 'wait:1200', 'rec') }

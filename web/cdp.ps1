@@ -67,6 +67,11 @@ function Pick([string]$option) {
 }
 # Rubik's Cube: makes the turn Teach me asks for next (presses the W/A/S/D key it lit).
 $CoachTurn = "js:(function () { var e = [].slice.call(document.querySelectorAll('#desktop span.text')).filter(function (e) { return /^[wasd]$/.test(e.textContent.trim()) && getComputedStyle(e.parentElement).backgroundColor === 'rgb(80, 220, 80)'; })[0]; if (!e) return; var k = e.textContent.trim(), c = k.toUpperCase().charCodeAt(0); ['keydown', 'keyup'].forEach(function (t) { (document.activeElement || document.body).dispatchEvent(new KeyboardEvent(t, { key: k, code: 'Key' + k.toUpperCase(), keyCode: c, which: c, bubbles: true })); }); })()"
+# Clock's World tab: a click on the strips at an hour of here's day (they span 44% to 97.6% of the panel's width).
+function ClockAt([double]$hour) {
+    $f = 0.442 + 0.534 * $hour / 24
+    "js:(function (c) { var r = c.getBoundingClientRect(), x = r.left + r.width * $f, y = r.top + r.height * 0.62, t = document.elementFromPoint(x, y); ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: 1, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); })([].slice.call(document.querySelectorAll('#desktop canvas.paint')).sort(function (a, b) { return b.width * b.height - a.width * a.height; })[0])"
+}
 function Repeat([int]$n, [string[]]$steps) { $out = @(); for ($i = 0; $i -lt $n; $i++) { $out += $steps }; $out }
 
 function Invoke-Steps([string[]]$steps, [scriptblock]$Other) {
