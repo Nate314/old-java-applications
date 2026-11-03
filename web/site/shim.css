@@ -4814,3 +4814,244 @@ html[data-saver] * {
     transition: none;
   }
 }
+
+/* ---- side by side (boot.js dockOpen): a second app in a panel on the right of an app page's stage ----
+   The stage, its title screen and its overlays end at the panel's edge (--dock-w, kept by boot.js), so both apps
+   have their own room. The panel sits between the toolbar band and the bottom panels, above windows dragged
+   past the stage, and under the page's own panels (Switch app, Source, Share, Find). */
+
+.shim-toolbar .shim-dock-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.shim-toolbar .shim-dock-open[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 1100px) {
+  .shim-toolbar .shim-dock-open .shim-dock-label {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .shim-toolbar .shim-dock-open,
+  .shim-dock {
+    display: none !important;
+  }
+}
+
+@media (min-width: 901px) {
+  :root[data-stage][data-dock] #desktop,
+  :root[data-stage][data-dock] .shim-popped,
+  :root[data-stage][data-dock] .shim-shell,
+  :root[data-dock] .shim-title,
+  :root[data-dock] .shim-overlay {
+    right: var(--dock-w, 40vw);
+  }
+
+  :root[data-stage][data-dock][data-source] #desktop,
+  :root[data-stage][data-dock][data-source] .shim-popped {
+    right: max(var(--dock-w, 40vw), min(860px, 58vw));
+  }
+}
+
+.shim-dock {
+  position: fixed;
+  top: var(--bar-h, 0px);
+  right: 0;
+  bottom: calc(var(--pad-h, 0px) + var(--out-h, 0px));
+  z-index: 1999999990;
+  display: flex;
+  flex-direction: column;
+  width: var(--dock-w, 40vw);
+  box-sizing: border-box;
+  background: var(--desk);
+  color: var(--page-text);
+  font: 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+  border-left: 1px solid var(--card-border);
+  box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18);
+  animation: shim-slide-in 0.18s ease-out;
+}
+
+.shim-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 4px 6px 4px 12px;
+  box-sizing: border-box;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--card-border);
+  transition: box-shadow 0.15s;
+}
+
+.shim-dock-pic {
+  flex: none;
+  width: 36px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--desk);
+}
+
+.shim-dock-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+/* Which app has the keys: the panel's head lights while its frame has the focus. */
+.shim-dock-keys {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  visibility: hidden;
+}
+
+.shim-dock-active .shim-dock-keys {
+  visibility: visible;
+}
+
+.shim-dock-active .shim-dock-head {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.shim-dock-head button:not(.shim-close),
+.shim-dock-head a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: 600 12px system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shim-dock-head button:not(.shim-close):hover,
+.shim-dock-head a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* A narrow panel keeps its buttons' glyphs and names them only in their titles. */
+@media (max-width: 1400px) {
+  .shim-dock-head .shim-dock-label {
+    display: none;
+  }
+}
+
+.shim-dock-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--desk);
+}
+
+.shim-dock-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  z-index: 1;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.shim-dock-edge::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 4px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 2px;
+  background: var(--card-border);
+  transition: background 0.15s;
+}
+
+.shim-dock-edge:hover::after,
+.shim-dock-edge:focus-visible::after,
+:root[data-dock-drag] .shim-dock-edge::after {
+  background: var(--accent);
+}
+
+.shim-dock-edge:focus-visible {
+  outline: none;
+}
+
+/* While the edge is dragged, the frames must not take the pointer. */
+:root[data-dock-drag],
+:root[data-dock-drag] * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+:root[data-dock-drag] iframe {
+  pointer-events: none;
+}
+
+.shim-dock-intro {
+  margin: 0;
+  padding: 10px 16px 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.8;
+}
+
+.shim-dock-heading {
+  margin: 8px 6px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+:root[data-skin="classic"] .shim-dock-head button:not(.shim-close),
+:root[data-skin="classic"] .shim-dock-head a,
+:root[data-skin="classic"] .shim-dock-keys {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-dock {
+  border-left-color: rgba(255, 43, 214, 0.6);
+  box-shadow: -2px 0 18px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-dock-name {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-dock {
+    animation: none;
+  }
+
+  .shim-dock-head,
+  .shim-dock-edge::after {
+    transition: none;
+  }
+}

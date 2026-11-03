@@ -531,6 +531,19 @@ Every app page used to load from scratch after its link was clicked: the page, `
 - A page that is never opened leaves no trace: until it is opened (`prerenderingchange`), `boot.js` holds back whatever reaches beyond the page (`whenShown`). An app that would start without a title screen (Run again, the Clock chip's link, the home page's player) waits, and with it its sounds, saves, replay recording and Clock's "open here" beat; `clockbar.js` waits too, so an unseen page cannot take Clock's bell from the one in view. Passport stamps and `oldjava.lastPlayed` already wait for the visitor's first click or key, and the screen saver's idle clock does not run on a page that is not visible. A link that skips the title screen (the Clock chip) is read again on opening, so a prerendered Clock page skips it too.
 - Tested in a plain Chrome window (DevTools turns prerendering off, so not over the DevTools protocol): the server log showed the next page requested when the rule fired and not again when it was opened, and the opened page's boot log had the new line with Play already lit, for an app page, a `then.html`, the home page and a Find result. Hover timing itself is Chrome's.
 
+## Side by side
+
+These were desktop programs, and a desktop runs more than one at a time. The Side by side button (◫) in an app page's toolbar opens a picker of a second app to run beside this one: "Good together" first (Clock, for a focus session, timer or stopwatch beside anything; ScreenSaver, for something to watch; MusicTheoryExpert and SynthesizerKeyboard for each other), then every other app.
+
+- The second app runs in a panel on the right of the stage: its page in an iframe with `?embed`, as in the home page's player, so it starts at once, keeps its own saves and fits its windows to the panel. The stage (and the title screen, overlays, the pretend Windows layer and a popped out card) ends at the panel's edge (`--dock-w`), so neither app covers the other.
+- The panel's head names the app and has Swap (this app becomes the main one, on its own page with no title screen, and the one that was main goes beside it), Change (the picker again), Full page and close. "Keys here" lights while the panel has the focus; a click in either app gives it the keys.
+- Its left edge drags (or takes Left and Right arrow keys) to share the page, from 15% to 75% of its width, with at least 320 px for the panel and 420 px for the stage.
+- `oldjava.dock` (localStorage) keeps the app and the width, so the panel opens again on every app page until it is closed. It does not open beside itself (the page of the docked app shows no panel) and, as an effect beyond the page, waits until a prerendered page is opened (`whenShown`).
+- What the docked app asks of the page around it (an exit screen's suggestions, Find, Share, Replay, Your skin) the page answers as the home page does for its player: a suggestion opens in the panel, and the rest open over the whole page.
+- Wide pages only: below 901 px the button and the panel are not shown (the setting is kept for a wider window). Find lists it as "Side by side" where it is offered.
+
+Find, Ctrl+K: keys typed right after the first Ctrl+K of a page, while `find.js` is still loading, used to reach the app behind the box (a title screen would start the app on them). They are now held and typed into the box once it has the focus, also from the home page's player and the panel beside. Keys typed in the open box no longer start the app behind it either: the title screen's any-key start now leaves keys in the box (`.shim-find`) alone, as it does for the toolbar and the other panels.
+
 ## Limitations
 
 - Only the AWT/Swing API these apps use is implemented. A new app, or a change that calls something missing, fails the build with "Method ... was not found".

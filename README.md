@@ -78,6 +78,8 @@ Next to Modern, Classic and Arcade, the skin picker has Yours: a skin the visito
 
 Ctrl+K (Cmd+K on a Mac) on any page of the site opens Find: one box that finds any app (and its Then version, or the computer playing it), anything the page can do (skins, sound, share, replay, the source, records, an app not played yet) and any Java source file of any app, opened in its Source panel (see [Find](web/README.md#find)).
 
+Two apps can run at once, the way they did on a desktop: Side by side in an app page's toolbar opens a second app in a panel beside the first (Clock's focus timer beside a game, the chord finder beside the keyboard), each with its own half of the screen. It stays open from app to app, Swap trades the two, and its edge drags to resize (see [Side by side](web/README.md#side-by-side)).
+
 Apps open without a wait: pointing at a link to an app (Switch app, Next, a gallery card, an exit suggestion, Find's highlighted result) gets that page ready in the background, so in Chrome and Edge the click shows its title screen already loaded with Play lit, and the home page's player fetches the app it is pointed at ahead of the click (see [Instant open](web/README.md#instant-open)).
 
 The apps also play as they were first restored, before the reworks: 17 of them have a Then | Now switch (on their page and in the home page's player) that runs the code as it was on master after #9 (the recovered code with the light bug fixes of #6), compiled from the repo's git history at a pinned commit, with the known quirks its README still listed then (see [Then and now](web/README.md#then-and-now)). The build reads that history with `git`.

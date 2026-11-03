@@ -162,6 +162,8 @@
       if (zoom) add(action(zoom.getAttribute('aria-pressed') === 'false' ? 'Fit to screen' : 'Actual size',
         'Zoom the app to the page, or back to its own size', '⤢', 'zoom fit actual size bigger smaller',
         function () { zoom.click(); }));
+      add(clickAction('.shim-dock-open', 'Side by side', 'Run a second app beside this one: a timer, the chord finder...', '◫',
+        'side by side split two apps beside dock companion multitask second'));
       add(clickAction('.shim-pop', 'Pop out', 'Keep the app in a small window on top of everything', '⧉', 'pop out picture in picture window'));
       var controls = toolbarButton('Controls');
       if (controls) add(action('On-screen controller', 'Show or hide the touch buttons', '✚', 'controls pad touch controller buttons', function () { controls.click(); }));
