@@ -5055,3 +5055,128 @@ html[data-saver] * {
     transition: none;
   }
 }
+
+/* ---- photo booth (boot.js snapPhoto, openPhoto) ----
+   Photo in the toolbar shows once the app runs. The shutter flashes white over the stage, then the print comes
+   up in the share dialog's frame, tilted a little like a print on a desk, developing from dark the first time. */
+
+.shim-toolbar .shim-photo-open {
+  display: none;
+  white-space: nowrap;
+}
+
+:root[data-photo] .shim-toolbar .shim-photo-open {
+  display: inline-block;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-photo-open span + span {
+    display: none;
+  }
+}
+
+.shim-photo-flash {
+  position: fixed;
+  z-index: 2000000001;
+  background: #fff;
+  pointer-events: none;
+  animation: shim-photo-flash 0.6s ease-out forwards;
+}
+
+@keyframes shim-photo-flash {
+  from { opacity: 0.95; }
+  to { opacity: 0; }
+}
+
+.shim-photo {
+  width: min(640px, calc(100vw - 24px));
+}
+
+.shim-photo [hidden] {
+  display: none;
+}
+
+.shim-photo-stage {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  padding: 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--page-text) 9%, transparent);
+}
+
+.shim-photo-print {
+  display: block;
+  max-width: 100%;
+  max-height: max(160px, calc(100vh - 360px));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+  transform: rotate(-1.2deg);
+}
+
+.shim-photo-print:not([src]) {
+  width: 60%;
+  aspect-ratio: 4 / 3;
+  background: #2a2733;
+}
+
+.shim-photo-print.developing {
+  animation: shim-photo-develop 1.6s ease-out;
+}
+
+@keyframes shim-photo-develop {
+  from { filter: brightness(0.2) sepia(0.7) contrast(0.6) blur(2px); }
+  55% { filter: brightness(0.85) sepia(0.2) contrast(0.9); }
+  to { filter: none; }
+}
+
+.shim-photo-frames {
+  display: flex;
+  gap: 8px;
+}
+
+.shim-photo-frames .shim-share-way {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.shim-photo-caption {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-photo-caption:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+:root[data-skin="classic"] .shim-photo-stage,
+:root[data-skin="classic"] .shim-photo-caption {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-photo-stage {
+  background: #0b0420;
+  box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-photo-caption {
+  background: #020a06;
+  color: #39ff88;
+  border-color: #39ff88;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-photo-print,
+  .shim-photo-print.developing {
+    transform: none;
+    animation: none;
+  }
+}
