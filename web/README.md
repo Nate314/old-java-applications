@@ -394,13 +394,14 @@ The other apps (Minesweeper, UltimateTicTacToe, CircleSpawner, BibleDownloader, 
 
 ## Skins
 
-The picker in the top-right corner switches between three skins:
+The picker in the top-right corner switches between four skins:
 
 - Modern (the default): flatter, rounded, follows the system dark mode.
 - Classic: close to Swing's default Metal look.
 - Arcade: every app as if on a CRT arcade cabinet. Windows get neon magenta frames with a glow, cyan title text and buttons, and phosphor-green text fields and output panels, on a dark purple desk with a faint grid. Fine scanlines and a vignette cover the page, and a faint bright band rolls down it. When an app starts, its windows open from a bright line like a tube warming up, so every app swapped into the home page's player powers on too. The home page turns into a neon cabinet as well (glowing title, player and buttons).
+- Yours: a skin the visitor makes and can send as a link (see [Your skin](#your-skin)).
 
-The home page's player bar has an Arcade mode button that switches every open page of the site to Arcade and back to the skin from before. The choice is remembered in `localStorage` (`oldjava.skin`). Skins only change colors and decoration; sizes and widget fonts come from Java, so the layout is the same in all three. Colors an app sets itself, and anything it draws (Minesweeper's grass and sand tiles, for example), are kept in every skin.
+The home page's player bar has an Arcade mode button that switches every open page of the site to Arcade and back to the skin from before. The choice is remembered in `localStorage` (`oldjava.skin`). Skins only change colors and decoration; sizes and widget fonts come from Java, so the layout is the same in every skin. Colors an app sets itself, and anything it draws (Minesweeper's grass and sand tiles, for example), are kept in every skin.
 
 In Arcade the scanlines and the rolling band are pseudo-elements of the page's `body` that never take pointer events. Pages in the home page's player leave them out (the home page draws them once over the player), and so does thumbnail mode. The power-on animates the CSS `scale` property of `#desktop`, so it does not disturb the `transform` that centers the windows in the player. The rolling band and the power-on are left out when the system asks for reduced motion. The thumbnails stay Modern screenshots in every skin.
 
