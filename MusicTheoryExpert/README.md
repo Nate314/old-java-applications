@@ -1,6 +1,6 @@
 # MusicTheoryExpert
 
-An ear trainer and a songwriting tool built on an early, unfinished music theory tool. The original code builds major and minor scales and triads as MIDI note numbers and plays a I-IV-V-I chord progression in G major; the Ear training tab now uses those scales and triads to quiz you by ear, and the Songwriter tab turns that one progression into any progression in any key. Original Eclipse source from the author's own files (only `src/` was kept).
+An ear trainer, a songwriting tool and a chord finder built on an early, unfinished music theory tool. The original code builds major and minor scales and triads as MIDI note numbers and plays a I-IV-V-I chord progression in G major; the Ear training tab now uses those scales and triads to quiz you by ear, the Songwriter tab turns that one progression into any progression in any key, and the Chord finder names whatever notes you hold. Original Eclipse source from the author's own files (only `src/` was kept).
 
 ## Ear training
 
@@ -40,6 +40,24 @@ The **Songwriter** tab is a sketchpad for chord progressions. It opens on the pr
 
 The song (key, chords, tempo, style and voicing) is saved to `.musictheory-songwriter.txt` in the user's home folder after every change, as `name=value` lines (for example `key=1`, `minor=false`, `chords=1,4,5,1`).
 
+## Chord finder
+
+The **Chord finder** tab (where the Notes tab and its test button used to be) answers "what chord is this?". It opens holding G major, the home chord of the original demo.
+
+- **Hold notes** by clicking keys on the keyboard (C3 to C7; click again to let go), or by typing on the computer keyboard as on a piano: A is C, W is C#, S is D, E is D#, D is E, F, T, G, Y, H, U, J, then K, O, L, P and ; for C to E an octave up. Typed keys start at C4; Z and X move them an octave down or up. A note sounds when it is pressed. Held notes are blue on the keyboard.
+- **The name**: the most usual chord name for the held notes, with the bass after a slash (for example `C/E`), and what it is in words ("C major, first inversion", "G dominant seventh, no fifth"). It knows 23 chord types: major, minor, diminished, augmented, sus2, sus4, power chords, 6, m6, 7, maj7, m7, m(maj7), m7b5, dim7, 7sus4, aug7, add9, m(add9), 9, maj9, m9 and 6/9; a seventh or ninth chord may leave out its fifth. Notes held in more than one octave count once.
+- **The notes**, lowest first, each spelled by letter for the chord (Ab major is Ab C Eb, never G# C D#; the root's name with fewer sharps or flats wins), with what each one is in the chord (`R`, `3`, `b3`, `5`, `#5`, `b7`, `bb7`, `9`...). **Also** lists up to three other names for the same notes (C6 is also Am7/C).
+- **Two notes** name the interval from the lower one ("Major 3rd: C up to E"); one note gives its name. Notes that make no chord ("No usual name") say what they would be without each note ("without Db it is C").
+- **The staff** on the right writes the held notes on a grand staff (treble from middle C up, bass below it), spelled as the name spells them, with sharps and flats, ledger lines, and a second set beside the note below it.
+- **In these keys**: every major and minor key the chord belongs to, with its numeral, the home chord first and then V, IV, vi, ii, iii and vii (for example `I in G major`, `V in C major`, `V7 in C minor`, `iiø7 in A minor`). Minor keys use natural minor, plus harmonic minor's V, V7, vii°, vii°7 and III+.
+- **Play** (Space) plays the held notes low to high, then together, lighting each one gold. **Clear** (Esc or Delete) lets them all go.
+- **Build** a chord: pick a root (C to B) and a type (maj, m, 7, maj7, m7, dim, aug, sus2, sus4, m7b5, dim7, 6, m6, add9, 9); the chord appears on the keyboard in root position, from its root between F3 and E4, and plays. The root and type of the chord held are lit.
+- **Your chords**: Add (Enter) puts the chord held into a row of up to eight, for example the chords of a song you know. Click one to hold and hear it again; its corner x, a right-click (a long press on touch screens) or Backspace for the last one takes it off.
+- Under them, the three keys that hold the most of those chords (ties go to a key whose home chord is the first or last chord, then to major keys and fewer sharps or flats), each marked with how many it holds, and each chord shows its numeral in the best key. **Clicking a key** writes those chords that are in it into the Songwriter tab, in that key, and plays them. The Songwriter plays a key's natural chords, so in a minor key a major V (from harmonic minor) is played as a minor v there.
+- **Original demo** (top right) plays the original I-IV-V-I demo, as the Notes tab's test button did (see below).
+
+Nothing on this tab is saved.
+
 ## Controls / usage
 
 On the Ear training tab:
@@ -47,16 +65,17 @@ On the Ear training tab:
 - **Space** or **Enter**: play the question, play it again, or (after a wrong answer) go to the next question. At the end of a round, start it again.
 - **1** to **9**, **0**, **-** and **=**: answers 1 to 12, in the order of the buttons (each button shows its key).
 - **Up / Down**: previous / next drill (a locked drill says which drill opens it). **R**: restart the drill. **N**: next drill.
-- **Notes** tab, **test** button: plays the original demo, two threads at once through the Java MIDI synthesizer, one second per step:
+- **Chord finder** tab, **Original demo** button (once the Notes tab's **test** button): plays the original demo, two threads at once through the Java MIDI synthesizer, one second per step:
   - the chords I, IV, V, I of G major (starting at G4, MIDI 67, each in root position) on MIDI channel 0;
   - the notes of the I chord (G, B, D) one at a time, then G5, on MIDI channel 1 (each note name is printed to stdout).
   The demo used to play on start; it now plays only from the button, so it does not talk over the first question.
+- On the Chord finder tab: piano keys (A W S E D F T G Y H U J K O L P ;) hold or let go of notes, Z / X move them an octave, Space plays, Enter adds the chord to Your chords, Backspace takes the last one off, Esc or Delete lets go of every note.
 - The window is 780x600 px and uses the system look and feel. Title "Music Theory Expert".
 - No command-line arguments.
 
 ## Code layout
 
-- `src/musictheoryexpert/Main.java`: entry point and window; owns the synthesizer, the three tabs and the test button, and passes key presses to the Ear training or Songwriter tab while it is showing.
+- `src/musictheoryexpert/Main.java`: entry point and window; owns the synthesizer and the three tabs, passes key presses to the tab showing, and opens the Songwriter when the Chord finder writes into it.
 - `src/musictheoryexpert/EarTrainer.java`: the Ear training tab; draws the drill list, round, answer buttons and keyboard, and handles the mouse and keys.
 - `src/musictheoryexpert/Drill.java`: the six drills, their answers and how each makes a question (using `Notes.getScale` and `Notes.getTriadByRomanNumeral`).
 - `src/musictheoryexpert/Round.java`: ten questions, score, streak and stars.
@@ -64,7 +83,9 @@ On the Ear training tab:
 - `src/musictheoryexpert/Songwriter.java`: the Songwriter tab; draws the circle of fifths, chord buttons, progression, controls and keyboard, and handles the mouse and keys.
 - `src/musictheoryexpert/Progression.java`: the song: key, chords as scale degrees, chord names and numerals, key signatures, the usual next chords, smooth voicing, the famous progressions, and saving.
 - `src/musictheoryexpert/ProgressionPlayer.java`: loops the progression, one eighth note per tick of a one-shot Swing timer set by the wall clock, in the three styles.
-- `src/musictheoryexpert/Look.java`: the colors, font fitting and keyboard drawing both tabs share.
+- `src/musictheoryexpert/ChordFinder.java`: the Chord finder tab; draws the name card, staff, keys, your chords, the build buttons and the keyboard, and handles the mouse and keys.
+- `src/musictheoryexpert/ChordNamer.java`: names held notes (chord types, inversions, intervals), spells them by letter, finds the keys a chord belongs to and the keys a list of chords fits, and builds a chord from a root and a type.
+- `src/musictheoryexpert/Look.java`: the colors, font fitting, keyboard drawing and keyboard hit test the tabs share.
 - `src/musictheoryexpert/StepPlayer.java`: plays a question's notes on MIDI channel 2, step by step on a Swing timer.
 - `src/musictheoryexpert/Notes.java`: sharp and flat note names, scale step patterns (major, natural, harmonic and melodic minor), scale and triad building, and the demo playback.
 - `src/synthesizer/MySynthesizer.java`: opens the MIDI synthesizer and plays timed notes and chords on a channel.
@@ -77,17 +98,18 @@ From the repo root: `./run.ps1 MusicTheoryExpert` (or `./run.ps1 MusicTheoryExpe
 
 ## Self-check
 
-`test/musictheoryexpert/NotesCheck.java` checks note name lookup (sharp and flat), scales and triads. `test/musictheoryexpert/DrillCheck.java` checks that every drill asks each of its answers, that what plays matches the answer (triad shape, interval size, scale steps, chord degree) and stays on the keyboard, the round's score, streak and star rules, and that the saved records keep the best score, skip bad lines and open drills in order. `test/musictheoryexpert/ProgressionCheck.java` checks the Songwriter's chord names, numerals and qualities in all 24 keys (and that the circle's neighbors hold each key's chords), key signatures, that smooth voicing keeps each chord's notes in range and never moves more than root position would, the presets, and saving and loading. From `MusicTheoryExpert/`:
+`test/musictheoryexpert/NotesCheck.java` checks note name lookup (sharp and flat), scales and triads. `test/musictheoryexpert/DrillCheck.java` checks that every drill asks each of its answers, that what plays matches the answer (triad shape, interval size, scale steps, chord degree) and stays on the keyboard, the round's score, streak and star rules, and that the saved records keep the best score, skip bad lines and open drills in order. `test/musictheoryexpert/ChordNamerCheck.java` checks the Chord finder's names (triads, sevenths, sixths, sus, add9, ninths, power chords, no-fifth chords, inversions and slash names, chords with no name), letter spelling, intervals, that every chord type on every root names itself back and builds in range, the keys of a chord (including harmonic minor's), and fitting a list of chords to a key. `test/musictheoryexpert/ProgressionCheck.java` checks the Songwriter's chord names, numerals and qualities in all 24 keys (and that the circle's neighbors hold each key's chords), key signatures, that smooth voicing keeps each chord's notes in range and never moves more than root position would, the presets, and saving and loading. From `MusicTheoryExpert/`:
 
 ```
 javac -d ../out/check/MusicTheoryExpert src/musictheoryexpert/*.java src/synthesizer/*.java test/musictheoryexpert/*.java
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.NotesCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.DrillCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.ProgressionCheck
+java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.ChordNamerCheck
 ```
 
 ## Known quirks
 
 - The `NoteNames` enum, the `transpose` method and the `Instruments` class are not used.
 - The Songwriter spells notes with the sharp or flat names of `Notes`, so the two six-sharp keys write E# as F (F# major's vii° shows as Fdim).
-- Clicking **test** while the demo is still playing starts a second copy on the same channels, so the two copies overlap.
+- Clicking **Original demo** while the demo is still playing starts a second copy on the same channels, so the two copies overlap.
