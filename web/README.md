@@ -430,7 +430,7 @@ Plug a game controller into the computer (or pair it with the phone), press any 
 | GroupCreator | X: New round (N), Y: Reshuffle (R), B: New round, or Spin on the wheel (Space), Start: Pick someone / back to Groups (P) |
 | SimpleAlgorithms | B: Play / pause (Space), D-pad right: one move (one step on the Sorting race), X: Reset (R; races the same numbers again), Y: Speed (F) |
 
-The other apps (Minesweeper, UltimateTicTacToe, CircleSpawner, BibleDownloader, NathaNOS, Windows, WindowsE) are played with the pointer alone.
+The other apps (Minesweeper, UltimateTicTacToe, CircleSpawner, BibleDownloader, NathaNOS, Windows) have no button table and are played with the controller's pointer alone. WindowsE has none either: point and A press its shortcut keycaps, count field and DO IT!!!, and its keycaps also take the keyboard (Tab to a key, then Space).
 
 - In the home page's player, the home page polls the controllers and passes each reading to the player's iframe (`postMessage`), which works its app from it as an app page does, so the pointer is drawn and clicks inside the player.
 - With the page hidden the readings stop, and every key held is released.
