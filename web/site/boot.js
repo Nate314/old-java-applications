@@ -3340,9 +3340,12 @@
       var r = starRows(text);
       return r.won ? 'Your ear training: ' + r.won + ' of 6 drills passed, ' + r.stars + ' of 18 stars' : '';
     } },
+    // Duels against the computer are a lower-case duel=won,lost,drawn row, which starRows passes by.
     NumberGuess: { file: '.numberguess-record.txt', show: function (text) {
-      var r = starRows(text);
-      return r.won ? 'Your ranges: ' + r.won + ' of 5 won, ' + r.stars + ' of 15 stars' : '';
+      var r = starRows(text), d = /^duel=(\d+),(\d+),(\d+)$/m.exec(text);
+      var parts = r.won ? ['Your ranges: ' + r.won + ' of 5 won, ' + r.stars + ' of 15 stars'] : [];
+      if (d) parts.push((parts.length ? 'duels' : 'Your duels') + ' vs the computer: ' + d[1] + ' won, ' + d[2] + ' lost' + (+d[3] ? ', ' + d[3] + ' drawn' : ''));
+      return parts.join('; ');
     } },
     SpriteFloatyStars: { file: '.spritefloatystars-nights.txt', show: function (text) {
       var r = starRows(text);

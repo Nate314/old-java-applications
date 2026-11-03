@@ -158,8 +158,8 @@ public class Main extends JFrame implements ActionListener {
 		try {
 			board.guess(Integer.parseInt(text));
 		} catch (NumberFormatException e) {
-			board.notice(text.isEmpty() ? "Type a guess, or click the lower line." : "Type a whole number from 1 to "
-					+ Level.commas(board.game().level().max()) + ".");
+			board.notice(text.isEmpty() ? (board.isDuel() ? "Type a number, or click the line." : "Type a guess, or click the lower line.") : "Type a whole number from 1 to "
+					+ Level.commas(board.max()) + ".");
 		}
 	}
 

@@ -18,6 +18,7 @@ public class Game {
 
 	private final Level level;
 	private final int number;
+	private final int limit;
 	private int low = 1;
 	private int high;
 	private boolean found;
@@ -29,8 +30,14 @@ public class Game {
 
 	/** A game with a known number, for the self-check. */
 	Game(Level level, int number) {
+		this(level, number, level.limit());
+	}
+
+	/** A game with a known number and its own number of guesses (a Duel lets each side guess until it finds it). */
+	Game(Level level, int number, int limit) {
 		this.level = level;
 		this.number = number;
+		this.limit = limit;
 		this.high = level.max();
 	}
 
@@ -86,7 +93,7 @@ public class Game {
 	}
 
 	public int guessesLeft() {
-		return level.limit() - guesses.size();
+		return limit - guesses.size();
 	}
 
 	public boolean isFound() {

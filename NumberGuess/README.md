@@ -1,10 +1,10 @@
 # NumberGuess
 
-A guess-the-number game, grown from the original one-label version (type a guess from 1 to 100, read "too low" or "too high") into five ranges with par, stars and a number line, plus a mode where the computer guesses your number and a card trick that reads your mind. Original Eclipse source from the author's own files (only `src/` was kept).
+A guess-the-number game, grown from the original one-label version (type a guess from 1 to 100, read "too low" or "too high") into five ranges with par, stars and a number line, a duel against the computer, a mode where the computer guesses your number, and a card trick that reads your mind. Original Eclipse source from the author's own files (only `src/` was kept).
 
 ## How it plays
 
-Tabs along the top pick the range: **1-10**, **1-100**, **1-1,000**, **1-10,000** and **1-1,000,000**, then **You pick** and **Magic**.
+Tabs along the top pick the range: **1-10**, **1-100**, **1-1,000**, **1-10,000** and **1-1,000,000**, then **Duel**, **You pick** and **Magic**.
 
 - Each range has a par: the most guesses a search that always guesses the middle of what is left can need (4, 7, 10, 14 and 20). You get par + 3 guesses; run out and the number is given away.
 - Finding it within par is three stars, within par + 2 two stars, and in the last guesses one star. Two stars opens the next range (a locked tab shows a padlock and says what opens it). Each tab shows its best stars.
@@ -13,20 +13,22 @@ Tabs along the top pick the range: **1-10**, **1-100**, **1-1,000**, **1-10,000*
 - Dots under the verdict count the guesses: grey up to par, orange for the three spare ones.
 - The guesses so far sit at the bottom as chips with an up or down arrow. When the number is found the stars show beside them, with "New best!" when it took fewer guesses than before.
 
+**Duel** is a race against the computer. You hide a number from 1 to 100 (click it on the line or type it) and the computer hides one too. Then each round you guess its number and it guesses yours, with every answer given straight away. Whoever finds the other's number in fewer guesses wins, and the same number of guesses is a draw: when you find its number the computer still gets that round's guess to tie, so going first is no advantage. The board shows two lanes. Yours, on top, is the whole range with what is left of its number lit, and below it a line of just that part to click a guess on. The computer's lane, below, shows your number with a gold diamond, what is left of it lit in purple, a marker for each of its guesses, and what it is thinking ("I guessed 51: too high. So yours is from 1 to 50."). The computer guesses a random number from the middle half of what is left: close to the best search, but with no hiding place it always finds last, so halving every time wins more duels than it loses, though not all of them. Wins, losses and draws are saved.
+
 **You pick** turns the game around: think of a number from 1 to 100, and the computer guesses it, always in the middle of what is left, so it never needs more than 7 guesses. Answer with **Lower**, **That's it!** or **Higher**. If your answers leave no number possible, it says so ("You said higher than 41 and lower than 42. Did your number change?").
 
 **Magic** is the binary card trick. Think of a number from 1 to 63; six cards of 32 numbers each come one at a time, and you only say whether your number is on the card (**Yes, it's there** or **No**). The six cards wait face down on the right and turn face up with your answer as you go. After the sixth, the last card pauses ("Let me see..."), turns over and shows your number in a burst of sparks. **How it works** then lists the cards from the biggest key down: each card's smallest number is its key (1, 2, 4, 8, 16, 32), the cards you said yes to add up to your number ("32 + 4 + 1 = 37"), and the yes/no column read as 1s and 0s is the number in binary. Every round shuffles the order of the cards and the numbers on them, so the pattern is hard to spot and you can perform it for someone else once you know the secret. Saying no to every card gets "Not on any card?", since every number from 1 to 63 is on at least one. Nothing is saved.
 
-The fewest guesses for each range is saved to `.numberguess-record.txt` in the user's home folder, one `LEVEL=stars,guesses` line per range won (for example `HUNDRED=3,6`).
+The fewest guesses for each range is saved to `.numberguess-record.txt` in the user's home folder, one `LEVEL=stars,guesses` line per range won (for example `HUNDRED=3,6`), and the duels as one `duel=won,lost,drawn` line (for example `duel=4,2,1`).
 
 ## Controls / usage
 
-- **Text field** and **SUBMIT** or **Enter**: guess a whole number (commas are allowed, as in `250,000`). After the number is found or given away, Enter starts a new one (in the next range, if that win just opened it).
-- **Mouse**: click a tab to switch range; click the lower number line to guess the number under the pointer, or after the game to start a new one.
-- **Page Up / Page Down**: previous / next tab.
+- **Text field** and **SUBMIT** or **Enter**: guess a whole number (commas are allowed, as in `250,000`). After the number is found or given away, Enter starts a new one (in the next range, if that win just opened it). In Duel the first number hides yours, the rest are guesses, and after the duel Enter starts a rematch.
+- **Mouse**: click a tab to switch range; click the lower number line to guess the number under the pointer, or after the game to start a new one. In Duel, click the line to hide your number, then your lane's lower line to guess; after the duel, a click on the board starts a rematch.
+- **Page Up / Page Down**: previous / next tab (passing over locked ranges).
 - **You pick**: **Up** or **H** for higher, **Down** or **L** for lower, **Enter**, **Space**, **C** or **Y** for "that's it". After the round, any of these starts again.
 - **Magic**: **Y** or **Up** for yes, **N** or **Down** for no. After the reveal, **S** shows or hides How it works and **Enter** or **Space** deals again (or the **How it works** and **Again** buttons).
-- The window is about 616x425 px (sized to fit the board). Title "Number Guess". The window opens on the first open range without three stars.
+- The window is about 656x425 px (sized to fit the board). Title "Number Guess". The window opens on the first open range without three stars.
 - No command-line arguments.
 
 ## Code layout
@@ -35,10 +37,12 @@ The fewest guesses for each range is saved to `.numberguess-record.txt` in the u
 - `src/numberguess/Board.java`: draws the tabs, verdict, guess dots, both number lines and the chips, and handles the mouse.
 - `src/numberguess/Game.java`: picks the secret number and narrows what is still possible with each guess.
 - `src/numberguess/Level.java`: the five ranges, their par, guess limit and stars.
+- `src/numberguess/Duel.java`: Duel; both hidden numbers, the turns, the computer's guesses and who won.
+- `src/numberguess/DuelView.java`: draws the line to hide your number on, then both lanes, the computer's thoughts and the duels won.
 - `src/numberguess/MindReader.java`: You pick; guesses the middle and notices answers that contradict each other.
 - `src/numberguess/MagicCards.java`: Magic; deals the six shuffled cards and adds up the key numbers of the cards you said yes to.
 - `src/numberguess/MagicView.java`: draws the card being asked, the six cards, the flip and sparks, and How it works.
-- `src/numberguess/Records.java`: reads and writes the fewest guesses per range, and which ranges are open.
+- `src/numberguess/Records.java`: reads and writes the fewest guesses per range, which ranges are open, and the duels won, lost and drawn.
 
 ## Running
 
@@ -46,7 +50,7 @@ From the repo root: `./run.ps1 NumberGuess` (or `./run.ps1 NumberGuess -Build` t
 
 ## Self-check
 
-`test/numberguess/GameCheck.java` checks each range's par and stars, that guessing the middle always wins within par (and finds 1 and the top number), that out-of-range and ruled-out guesses are not counted, running out of guesses, that You pick finds every number from 1 to 100 within 7 and catches contradicting answers, that Magic's cards each hold 32 numbers with their key as the smallest and that honest answers read every number from 0 to 63, and that the saved records keep the fewest guesses, skip bad lines and open ranges in order. From `NumberGuess/`:
+`test/numberguess/GameCheck.java` checks each range's par and stars, that guessing the middle always wins within par (and finds 1 and the top number), that out-of-range and ruled-out guesses are not counted, running out of guesses, that You pick finds every number from 1 to 100 within 7 and catches contradicting answers, that Magic's cards each hold 32 numbers with their key as the smallest and that honest answers read every number from 0 to 63, that a duel takes turns, ignores guesses out of range or ruled out, gives the computer its guess in the round you find its number, keeps the computer's guesses in the middle half, and that the computer finds every number while halving wins more duels than it loses (but not all), and that the saved records keep the fewest guesses, skip bad lines, open ranges in order and keep the duel tally beside them. From `NumberGuess/`:
 
 ```powershell
 javac -d ../out/check/NumberGuess src/numberguess/*.java test/numberguess/*.java

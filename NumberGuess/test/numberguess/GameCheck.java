@@ -130,7 +130,68 @@ public class GameCheck {
 		check(!records.add(slow), "a lost game is not a record");
 		Records again = Records.load(file);
 		check(again.best(Level.TEN) == 3 && again.best(Level.HUNDRED) == 5 && again.totalStars() == 6, "saved and read back");
+
+		checkDuels(file);
 		System.out.println("GameCheck: all checks passed");
+	}
+
+	/** Duel: turns, the same-round rule, the computer's guesses, its odds against halving, and the saved tally. */
+	private static void checkDuels(File file) throws IOException {
+		Random random = new Random(7);
+		Duel duel = new Duel(random, 40);
+		check(duel.isHiding() && !duel.isYourTurn() && duel.guess(50) == Game.Verdict.OVER, "hide first");
+		check(!duel.hide(0) && !duel.hide(101) && duel.hide(70) && !duel.hide(5) && duel.hidden() == 70, "hide once, in range");
+		check(duel.isYourTurn() && duel.round() == 1, "you start");
+		check(duel.guess(101) == Game.Verdict.OUT_OF_RANGE && duel.isYourTurn(), "out of range keeps the turn");
+		check(duel.guess(50) == Game.Verdict.TOO_HIGH && duel.isComputersTurn() && duel.guess(30) == Game.Verdict.OVER, "turns");
+		int guess = duel.computerGuess();
+		check(guess >= 26 && guess <= 75 && duel.isYourTurn() && duel.round() == 2, "the computer guesses the middle half");
+		check(duel.guess(60) == Game.Verdict.RULED_OUT && duel.isYourTurn(), "ruled out keeps the turn");
+		check(duel.guess(40) == Game.Verdict.CORRECT && !duel.isOver() && duel.isComputersTurn(), "it answers in the same round");
+		duel.computerGuess();
+		check(duel.isOver() && duel.result() == (duel.its().isFound() ? Duel.Result.DRAWN : Duel.Result.WON), "won or drawn");
+		check(duel.computerGuess() == 0 && duel.guess(40) == Game.Verdict.OVER, "nothing after the end");
+
+		// Played out: the computer always finds a number, and someone who halves wins more often than it does.
+		int[] results = new int[4];
+		for (int i = 0; i < 20000; i++) {
+			duel = new Duel(random);
+			duel.hide(random.nextInt(Duel.MAX) + 1);
+			while (!duel.isOver()) {
+				Game yours = duel.yours();
+				duel.guess((yours.low() + yours.high()) / 2);
+				int its = duel.computerGuess();
+				check(its >= 1 && its <= Duel.MAX, "a guess in range");
+			}
+			check(duel.yours().getGuesses() <= Level.HUNDRED.par(), "halving finds it within par");
+			results[duel.result().ordinal()]++;
+		}
+		check(results[Duel.Result.WON.ordinal()] > results[Duel.Result.LOST.ordinal()] && results[Duel.Result.LOST.ordinal()] > 4000,
+				"halving beats the computer, but not always");
+		// Only a computer left to guess: it finds every number.
+		for (int number = 1; number <= Duel.MAX; number++) {
+			duel = new Duel(random, 1);
+			duel.hide(number);
+			for (int i = 100; i > 1 && !duel.isOver(); i--) {
+				duel.guess(i);
+				duel.computerGuess();
+			}
+			check(duel.isOver() && duel.its().isFound(), "the computer finds " + number);
+		}
+
+		Records records = Records.load(file);
+		records.add(Duel.Result.WON);
+		records.add(Duel.Result.WON);
+		records.add(Duel.Result.LOST);
+		records.add(Duel.Result.NONE);
+		Records back = Records.load(file);
+		check(back.duels(Duel.Result.WON) == 2 && back.duels(Duel.Result.LOST) == 1 && back.duels(Duel.Result.DRAWN) == 0
+				&& back.best(Level.HUNDRED) == 5, "duels saved beside the ranges");
+		try (Writer writer = new FileWriter(file)) {
+			writer.write("duel=x,1,2\nTEN=3,3\n");
+		}
+		back = Records.load(file);
+		check(back.duels(Duel.Result.LOST) == 0 && back.best(Level.TEN) == 3, "a bad duel line is skipped");
 	}
 
 	private static void check(boolean condition, String what) {

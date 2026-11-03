@@ -22,33 +22,36 @@ import javax.swing.Timer;
  * The game board: tabs for the five ranges and You pick along the top, the verdict, and two number lines. The top
  * line is the whole range with what is still possible lit; the bottom one zooms in on just that part, so a click on
  * it guesses the number under the pointer, even in 1 to 1,000,000. The guesses so far sit underneath as chips.
- * The Magic tab is a card trick instead: see {@link MagicCards}, drawn by {@link MagicView}.
+ * The Magic tab is a card trick instead: see {@link MagicCards}, drawn by {@link MagicView}. The Duel tab is a race
+ * against the computer to find each other's number: see {@link Duel}, drawn by {@link DuelView}.
  */
 @SuppressWarnings("serial")
 public final class Board extends JPanel {
-	public static final int WIDTH = 600, HEIGHT = 350;
+	public static final int WIDTH = 640, HEIGHT = 350;
 
-	private static final Color BACKGROUND = new Color(22, 25, 36);
-	private static final Color CARD = new Color(36, 40, 56);
-	private static final Color CARD_HOVER = new Color(50, 55, 76);
-	private static final Color SELECTED = new Color(60, 70, 110);
-	private static final Color TEXT = new Color(236, 238, 245);
-	private static final Color SOFT = new Color(152, 158, 180);
-	private static final Color DIM = new Color(86, 92, 112);
-	private static final Color RULED_OUT = new Color(48, 52, 68);
-	private static final Color POSSIBLE = new Color(72, 196, 160);
-	private static final Color POSSIBLE_DARK = new Color(40, 120, 100);
-	private static final Color LOW = new Color(90, 150, 255);
-	private static final Color HIGH = new Color(240, 100, 96);
-	private static final Color GOLD = new Color(255, 198, 64);
-	private static final Color WARN = new Color(255, 170, 70);
-	private static final Color RIGHT = new Color(80, 205, 120);
+	static final Color BACKGROUND = new Color(22, 25, 36);
+	static final Color CARD = new Color(36, 40, 56);
+	static final Color CARD_HOVER = new Color(50, 55, 76);
+	static final Color SELECTED = new Color(60, 70, 110);
+	static final Color TEXT = new Color(236, 238, 245);
+	static final Color SOFT = new Color(152, 158, 180);
+	static final Color DIM = new Color(86, 92, 112);
+	static final Color RULED_OUT = new Color(48, 52, 68);
+	static final Color POSSIBLE = new Color(72, 196, 160);
+	static final Color POSSIBLE_DARK = new Color(40, 120, 100);
+	static final Color LOW = new Color(90, 150, 255);
+	static final Color HIGH = new Color(240, 100, 96);
+	static final Color GOLD = new Color(255, 198, 64);
+	static final Color WARN = new Color(255, 170, 70);
+	static final Color RIGHT = new Color(80, 205, 120);
 
 	private static final int MARGIN = 20;
 	private static final int TABS_Y = 10, TAB_HEIGHT = 44;
 	private static final int FULL_Y = 150, BAR_HEIGHT = 12;
 	private static final int ZOOM_Y = 198, ZOOM_HEIGHT = 36;
 	private static final int CHIPS_Y = 264;
+	/** The tabs after the five ranges. */
+	private static final int DUEL_TAB = Level.values().length, PICK_TAB = DUEL_TAB + 1, MAGIC_TAB = DUEL_TAB + 2;
 
 	private final Records records;
 	private final Random random = new Random();
@@ -58,6 +61,10 @@ public final class Board extends JPanel {
 	private MindReader reader;
 	private MagicCards magic;
 	private final MagicView magicView = new MagicView(this::repaint);
+	private Duel duel;
+	private final DuelView duelView = new DuelView(this::repaint);
+	/** Makes the computer's guess in a duel, a moment after yours. */
+	private final Timer computerTurn = new Timer(DuelView.thinkMillis(), event -> computerGuesses());
 	private String headline = "";
 	private String subline = "";
 	private Color headlineColor = TEXT;
@@ -102,6 +109,7 @@ public final class Board extends JPanel {
 		};
 		addMouseListener(mouse);
 		addMouseMotionListener(mouse);
+		computerTurn.setRepeats(false);
 		start(records.suggested());
 	}
 
@@ -115,13 +123,17 @@ public final class Board extends JPanel {
 		return magic != null;
 	}
 
-	public boolean isOver() {
-		return isMagic() ? magic.isDone() : isPicking() ? reader.isOver() : game.isOver();
+	public boolean isDuel() {
+		return duel != null;
 	}
 
-	/** The open tab: a range's ordinal, then You pick, then Magic. */
+	public boolean isOver() {
+		return isDuel() ? duel.isOver() : isMagic() ? magic.isDone() : isPicking() ? reader.isOver() : game.isOver();
+	}
+
+	/** The open tab: a range's ordinal, then Duel, You pick and Magic. */
 	private int tab() {
-		return isMagic() ? Level.values().length + 1 : isPicking() ? Level.values().length : level.ordinal();
+		return isDuel() ? DUEL_TAB : isMagic() ? MAGIC_TAB : isPicking() ? PICK_TAB : level.ordinal();
 	}
 
 	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic. */
@@ -146,6 +158,7 @@ public final class Board extends JPanel {
 		this.level = level;
 		reader = null;
 		magic = null;
+		endDuel();
 		game = new Game(level, random);
 		newBest = false;
 		opened = null;
@@ -161,6 +174,7 @@ public final class Board extends JPanel {
 		reader = new MindReader();
 		game = null;
 		magic = null;
+		endDuel();
 		askReader();
 		reset();
 		switched(before);
@@ -171,6 +185,7 @@ public final class Board extends JPanel {
 		magic = new MagicCards(random);
 		reader = null;
 		game = null;
+		endDuel();
 		magicView.dealt(false);
 		askMagic();
 		slide.stop();
@@ -178,9 +193,30 @@ public final class Board extends JPanel {
 		modeChanged.run();
 	}
 
-	/** The same game again: a new number in this range, or a new round of You pick. */
+	/** A new duel: you hide a number, the computer has hidden one. */
+	public void startDuel() {
+		int before = kind();
+		endDuel();
+		duel = new Duel(random);
+		reader = null;
+		game = null;
+		magic = null;
+		say("Duel: hide a number from 1 to " + Duel.MAX, TEXT, "Then race the computer to find each other's. You guess first each round.");
+		slide.stop();
+		repaint();
+		switched(before);
+	}
+
+	private void endDuel() {
+		computerTurn.stop();
+		duel = null;
+	}
+
+	/** The same game again: a new number in this range, a new duel, or a new round of You pick. */
 	public void again() {
-		if (isMagic()) {
+		if (isDuel()) {
+			startDuel();
+		} else if (isMagic()) {
 			if (!magicView.isFlipping()) {
 				startMagic();
 			}
@@ -194,7 +230,11 @@ public final class Board extends JPanel {
 	/** Page Up / Page Down: the tab before or after this one. */
 	public void moveTab(int by) {
 		int index = tab() + by;
-		if (index >= 0 && index <= Level.values().length + 1) {
+		// Locked ranges are passed over, so Duel, You pick and Magic can be reached from the keyboard from the start.
+		while (index > 0 && index < DUEL_TAB && !records.isOpen(Level.values()[index])) {
+			index += by;
+		}
+		if (index >= 0 && index <= MAGIC_TAB) {
 			openTab(index);
 		}
 	}
@@ -206,8 +246,9 @@ public final class Board extends JPanel {
 		repaint();
 	}
 
-	private int max() {
-		return isPicking() ? MindReader.MAX : level.max();
+	/** The top of the range being played. */
+	int max() {
+		return isDuel() ? Duel.MAX : isPicking() ? MindReader.MAX : level.max();
 	}
 
 	private int low() {
@@ -236,6 +277,10 @@ public final class Board extends JPanel {
 
 	/** A typed or clicked guess. */
 	public void guess(int number) {
+		if (isDuel()) {
+			duelGuess(number);
+			return;
+		}
 		if (isPicking() || isMagic()) {
 			return;
 		}
@@ -286,6 +331,89 @@ public final class Board extends JPanel {
 				: game.stars() < 3 ? " Par is " + level.par() + "." : " Press Enter for another.";
 		say("Got it: " + Level.commas(game.number()) + " in " + guesses + (guesses == 1 ? " guess" : " guesses"), RIGHT,
 				(newBest ? "New best! " : "") + more.trim());
+	}
+
+	// ---- Duel ----
+
+	private void duelGuess(int number) {
+		if (duel.isOver()) {
+			startDuel();
+			return;
+		}
+		if (duel.isHiding()) {
+			if (duel.hide(number)) {
+				say("Round 1: your guess", TEXT, "Its number is from 1 to " + Duel.MAX + ". Type a guess or click your line.");
+			} else {
+				notice("Hide a number from 1 to " + Duel.MAX + ".");
+			}
+			repaint();
+			return;
+		}
+		if (!duel.isYourTurn()) {
+			notice("Wait for the computer's guess.");
+			return;
+		}
+		Game yours = duel.yours();
+		String range = "Its number is from " + yours.low() + " to " + yours.high() + ".";
+		switch (duel.guess(number)) {
+		case OUT_OF_RANGE:
+			say("Out of range", WARN, "Guess a number from 1 to " + Duel.MAX + ". Not counted.");
+			break;
+		case RULED_OUT:
+			say(number + " is already ruled out", WARN, range + " Not counted.");
+			break;
+		case CORRECT:
+			say("Found it: " + number + " in " + guesses(yours.getGuesses()) + "!", RIGHT, "The computer has this round's guess to tie...");
+			computerThinks();
+			break;
+		default:
+			boolean low = number < yours.number();
+			say(number + (low ? " is too low" : " is too high"), low ? LOW : HIGH, "Its number is from " + yours.low() + " to "
+					+ yours.high() + ". The computer is guessing yours...");
+			computerThinks();
+			break;
+		}
+		repaint();
+	}
+
+	private void computerThinks() {
+		duelView.moved();
+		computerTurn.restart();
+	}
+
+	private void computerGuesses() {
+		if (!isDuel() || !duel.isComputersTurn()) {
+			return;
+		}
+		int guess = duel.computerGuess();
+		duelView.moved();
+		Game yours = duel.yours(), its = duel.its();
+		if (duel.isOver()) {
+			records.add(duel.result());
+			String rematch = " Enter or a click on the line for a rematch.";
+			switch (duel.result()) {
+			case WON:
+				say("You win! " + yours.number() + " in " + guesses(yours.getGuesses()), RIGHT,
+						"The computer had your " + duel.hidden() + " down to " + its.low() + "-" + its.high() + "." + rematch);
+				break;
+			case DRAWN:
+				say("A draw: both found in " + guesses(yours.getGuesses()), GOLD, "It guessed your " + duel.hidden() + " too." + rematch);
+				break;
+			default:
+				say("The computer found your " + duel.hidden() + " in " + guesses(its.getGuesses()), HIGH, "Its number was " + yours.number()
+						+ "." + rematch);
+				break;
+			}
+		} else {
+			String verdict = guess < duel.hidden() ? "too low" : "too high";
+			say("Round " + duel.round() + ": your guess", TEXT, "It guessed " + guess + ", " + verdict + ". Its number is from "
+					+ yours.low() + " to " + yours.high() + ".");
+		}
+		repaint();
+	}
+
+	private static String guesses(int count) {
+		return count + (count == 1 ? " guess" : " guesses");
 	}
 
 	// ---- You pick ----
@@ -407,12 +535,16 @@ public final class Board extends JPanel {
 	// ---- mouse ----
 
 	private void openTab(int index) {
-		if (index == Level.values().length + 1) {
+		if (index == MAGIC_TAB) {
 			startMagic();
 			return;
 		}
-		if (index == Level.values().length) {
+		if (index == PICK_TAB) {
 			startPicking();
+			return;
+		}
+		if (index == DUEL_TAB) {
+			startDuel();
 			return;
 		}
 		Level target = Level.values()[index];
@@ -433,6 +565,13 @@ public final class Board extends JPanel {
 				return;
 			}
 		}
+		if (isDuel()) {
+			int number = duelView.numberAt(duel, x, y);
+			if (number > 0 || duel.isOver() && y > TABS_Y + TAB_HEIGHT) {
+				guess(number);
+			}
+			return;
+		}
 		if (zoom.contains(x, y) && !isPicking() && !isMagic()) {
 			guess(numberAt(x));
 		}
@@ -446,6 +585,15 @@ public final class Board extends JPanel {
 				tab = i;
 			}
 		}
+		if (isDuel()) {
+			boolean changed = duelView.hover(duel, x, y);
+			if (tab != hoverTab || changed) {
+				hoverTab = tab;
+				setCursor(Cursor.getPredefinedCursor(tab >= 0 || duelView.hoverNumber(duel) > 0 ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+				repaint();
+			}
+			return;
+		}
 		int over = zoom.contains(x, y) ? x : -1;
 		if (tab != hoverTab || over != hoverX) {
 			hoverTab = tab;
@@ -457,7 +605,7 @@ public final class Board extends JPanel {
 
 	/** The number a click on the zoomed line would guess now, or 0. */
 	private int hoverNumber() {
-		return hoverX >= 0 && !isPicking() && !isMagic() && !isOver() ? numberAt(hoverX) : 0;
+		return hoverX >= 0 && game != null && !isOver() ? numberAt(hoverX) : 0;
 	}
 
 	/** The still possible number under {@code x} on the zoomed line. */
@@ -483,7 +631,7 @@ public final class Board extends JPanel {
 
 	private void layOut() {
 		int width = getWidth();
-		int count = Level.values().length + 2;
+		int count = MAGIC_TAB + 1;
 		int gap = 6;
 		int tabWidth = (width - 2 * MARGIN - gap * (count - 1)) / count;
 		tabs.clear();
@@ -515,6 +663,10 @@ public final class Board extends JPanel {
 			magicView.paint(g, magic, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
 			return;
 		}
+		if (isDuel()) {
+			duelView.paint(g, duel, records, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
+			return;
+		}
 		paintGuessMeter(g);
 		paintFullLine(g);
 		paintZoom(g);
@@ -524,9 +676,10 @@ public final class Board extends JPanel {
 	private void paintTabs(Graphics2D g) {
 		for (int i = 0; i < tabs.size(); i++) {
 			Rectangle tab = tabs.get(i);
-			boolean picking = i == Level.values().length;
-			boolean magicTab = i == Level.values().length + 1;
-			Level tabLevel = picking || magicTab ? null : Level.values()[i];
+			boolean duelTab = i == DUEL_TAB;
+			boolean picking = i == PICK_TAB;
+			boolean magicTab = i == MAGIC_TAB;
+			Level tabLevel = i < DUEL_TAB ? Level.values()[i] : null;
 			boolean selected = i == tab();
 			boolean open = tabLevel == null || records.isOpen(tabLevel);
 			g.setColor(selected ? SELECTED : i == hoverTab ? CARD_HOVER : CARD);
@@ -537,7 +690,7 @@ public final class Board extends JPanel {
 			}
 			g.setFont(new Font("SansSerif", Font.BOLD, 13));
 			g.setColor(open ? TEXT : DIM);
-			String label = picking ? "You pick" : magicTab ? "Magic" : tabLevel.label();
+			String label = duelTab ? "Duel" : picking ? "You pick" : magicTab ? "Magic" : tabLevel.label();
 			if (g.getFontMetrics().stringWidth(label) > tab.width - 6) {
 				g.setFont(new Font("SansSerif", Font.BOLD, 11));
 			}
@@ -547,7 +700,7 @@ public final class Board extends JPanel {
 			if (tabLevel == null) {
 				g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 				g.setColor(SOFT);
-				String sub = picking ? "I guess yours" : "Card trick";
+				String sub = duelTab ? "Race me" : picking ? "I guess yours" : "Card trick";
 				g.drawString(sub, centerX - g.getFontMetrics().stringWidth(sub) / 2, tab.y + 35);
 			} else if (!open) {
 				paintLock(g, centerX, tab.y + 31);
@@ -683,7 +836,7 @@ public final class Board extends JPanel {
 		}
 		paintZoomEnds(g, low == high ? "" : Level.commas(low), low == high ? "" : Level.commas(high));
 		if (hoverNumber() > 0) {
-			paintBubble(g, hoverNumber(), xOn(line, hoverNumber() - low + 0.5, 0, count));
+			paintBubble(g, hoverNumber(), xOn(line, hoverNumber() - low + 0.5, 0, count), zoom);
 		}
 	}
 
@@ -710,8 +863,8 @@ public final class Board extends JPanel {
 		g.drawString(middle, zoom.x + (zoom.width - g.getFontMetrics().stringWidth(middle)) / 2, y);
 	}
 
-	/** The number under the pointer, in a bubble above the zoomed line. */
-	private void paintBubble(Graphics2D g, int number, int x) {
+	/** The number under the pointer, in a bubble above {@code zoom}, the line it is on. */
+	static void paintBubble(Graphics2D g, int number, int x, Rectangle zoom) {
 		g.setFont(new Font("SansSerif", Font.BOLD, 14));
 		String text = Level.commas(number);
 		int width = g.getFontMetrics().stringWidth(text) + 16;
