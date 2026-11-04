@@ -1,19 +1,21 @@
 <#
 .SYNOPSIS
-    Compile and run one of the Java apps, or build it into a runnable jar, or serve the web site.
+    Compile and run one of the Java apps, or build it into a runnable jar, or serve the web site, natively or
+    in Docker through compose-launcher (https://github.com/Nate314/compose-launcher, the git submodule in
+    ./compose-launcher; its ports and printed URLs are in run.conf).
 .EXAMPLE
-    ./run.ps1                  # asks: the launcher (every app as a card, Enter plays one) or the site
+    ./run.ps1                  # asks: the launcher (every app as a card, Enter plays one), the site, or Docker
     ./run.ps1 Site             # serves the built site (built first if missing), asking for the port
     ./run.ps1 Site -Build      # builds the site again, then serves it
     ./run.ps1 Minesweeper      # runs Minesweeper
     ./run.ps1 FlappyBird -Build  # builds out/FlappyBird.jar
     ./run.ps1 DinoGame screen    # anything after the app name is passed to it
+    ./run.ps1 Docker             # Docker: builds and starts the site on a free port (docker compose up --build -d)
+    ./run.ps1 down               # anything that is not an app or Site goes to docker compose (logs -f, ps, ...)
+    ./run.ps1 share              # Docker: starts it, then gives it a public address through ngrok
 #>
-param(
-    [string]$App,
-    [switch]$Build,
-    [Parameter(ValueFromRemainingArguments)] [string[]]$AppArgs
-)
+# No param() block on purpose: $args keeps docker compose flags such as -d intact (a param() block would read
+# -d as PowerShell's own -Debug).
 $ErrorActionPreference = 'Stop'
 
 # WorkDir is where the app expects to be launched from, since some load files by relative path.
@@ -47,8 +49,39 @@ $apps = [ordered]@{
 }
 $names = @($apps.Keys)
 
+# Docker: everything that is not an app, Site or -Build goes to the shared launcher, which picks free ports into
+# .env and runs docker compose with those arguments. Docker alone (or D at the prompt) gives it none, which
+# means up --build -d and print the address; Docker before compose arguments is left out.
+function Invoke-Compose([object[]]$ComposeArgs) {
+    Set-Location $PSScriptRoot
+    if (-not (Test-Path compose-launcher/run.ps1)) {
+        git submodule update --init compose-launcher
+        if ($LASTEXITCODE -ne 0) {
+            [Console]::Error.WriteLine('run.ps1: could not fetch the compose-launcher submodule. This needs a git clone of the project (not a zip download) and network access.')
+            exit 1
+        }
+    }
+    & ./compose-launcher/run.ps1 @ComposeArgs
+    exit $LASTEXITCODE
+}
+
+# The app (or Site), -Build anywhere, and the rest for the app, as the old param() block read them.
+$App = $null
+$Build = $false
+$AppArgs = @()
+for ($i = 0; $i -lt $args.Count; $i++) {
+    $a = "$($args[$i])"
+    if ($a -ieq '-Build') { $Build = $true }
+    elseif ($a -ieq '-App' -and $i + 1 -lt $args.Count) { $App = "$($args[++$i])" }
+    elseif ($null -eq $App) { $App = $a }
+    else { $AppArgs += $a }
+}
+if ($App -ieq 'Docker') { Invoke-Compose @($args | Select-Object -Skip 1) }
+if ($null -ne $App -and $App -ine 'Site' -and -not ($names | Where-Object { $_ -ieq $App })) { Invoke-Compose $args }
+
 if (-not $App) {
-    $choice = Read-Host 'Open the [L]auncher or the [S]ite? (Enter for Launcher)'
+    $choice = Read-Host 'Open the [L]auncher, the [S]ite, or the site in [D]ocker? (Enter for Launcher)'
+    if ($choice -match '^\s*d') { Invoke-Compose @() }
     $App = if ($choice -match '^\s*s') { 'Site' } else { 'Launcher' }
 }
 
@@ -73,7 +106,6 @@ if ($App -ieq 'Site') {
 }
 
 $match = $names | Where-Object { $_ -ieq $App }
-if (-not $match) { throw "Unknown app '$App'. Choose one of: $($names -join ', ')" }
 $App = $match
 $cfg = $apps[$App]
 
