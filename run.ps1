@@ -57,6 +57,7 @@ if ($App -ieq 'Site') {
     $siteIndex = Join-Path $PSScriptRoot 'web/target/site/index.html'
     if ($Build -or -not (Test-Path $siteIndex)) {
         if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) { throw 'Building the site needs Maven (mvn) on the PATH.' }
+        if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Building the site needs Node.js (npm) on the PATH, for its React pages.' }
         Write-Host 'Building the site (web/target/site); this takes a few minutes...'
         & mvn -q -f (Join-Path $PSScriptRoot 'web/pom.xml') package
         if ($LASTEXITCODE -ne 0) { throw 'The site build failed.' }

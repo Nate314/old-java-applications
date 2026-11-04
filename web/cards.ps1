@@ -1,7 +1,7 @@
 # Makes the link previews: a 1200 x 630 share card per app (web/site/cards/<App>.jpg, plus index.jpg for the
 # home page), rendered from web/card.html with headless Chrome, and the description, Open Graph and Twitter
 # tags between <!-- share --> and <!-- /share --> in the head of every page. Names, hints, categories and
-# origins come from the gallery in web/site/index.html, so run this again after changing an app's entry there.
+# origins come from web/site/apps.json, so run this again after changing an app's entry there.
 # The tags point at the card and the page with relative addresses; build with -Dsite.url=https://... to make
 # them absolute, which most link preview services need (see web/README.md, Share).
 # Build first (mvn -f web/pom.xml package, for the thumbnails and the icon), then run from the repo root:
@@ -24,27 +24,27 @@ New-Item -ItemType Directory -Force $out | Out-Null
 function Attr([string]$s) { [Net.WebUtility]::HtmlEncode($s) }
 $utf8 = New-Object Text.UTF8Encoding($false)
 
-# The gallery: <li data-app="Id" data-origin="original" data-cat="game">...<strong>Name</strong><span>Hint</span>
-$homePage = Join-Path $src 'index.html'
-$gallery = [regex]::Matches([IO.File]::ReadAllText($homePage), '<li data-app="(\w+)"([^>]*)>.*?<strong>(.*?)</strong><span>(.*?)</span>')
-$entries = foreach ($m in $gallery) {
-    $attrs = $m.Groups[2].Value
+# The apps, from the one list the home page's gallery is rendered from. The home page's own tags are in the head
+# of its React page (web/react/index.html).
+$catalogFile = Join-Path $src 'apps.json'
+$homePage = Join-Path $PSScriptRoot 'react/index.html'
+$entries = foreach ($a in ([IO.File]::ReadAllText($catalogFile) | ConvertFrom-Json)) {
     [pscustomobject]@{
-        Id     = $m.Groups[1].Value
-        Cat    = if ($attrs -match 'data-cat="(\w+)"') { $Matches[1] } else { '' }
-        Origin = if ($attrs -match 'data-origin="(\w+)"') { $Matches[1] } else { 'decompiled' }
-        Name   = [Net.WebUtility]::HtmlDecode($m.Groups[3].Value)
-        Hint   = [Net.WebUtility]::HtmlDecode($m.Groups[4].Value)
+        Id     = $a.id
+        Cat    = $a.cat
+        Origin = if ($a.origin) { $a.origin } else { 'decompiled' }
+        Name   = $a.name
+        Hint   = $a.hint
     }
 }
-if (-not $entries) { throw "No apps found in the gallery of $homePage" }
+if (-not $entries) { throw "No apps found in $catalogFile" }
 $count = @($entries).Count
 
 # The block of tags for one page. $up is the way from the page to the site root ('' or '../').
 function Share-Tags([string]$title, [string]$description, [string]$page, [string]$card, [string]$alt, [string]$up) {
     $nl = "`r`n"
     $lines = @(
-        '<!-- share: written by web/cards.ps1 from the gallery in index.html -->',
+        '<!-- share: written by web/cards.ps1 from web/site/apps.json -->',
         "<meta name=`"description`" content=`"$(Attr $description)`">",
         '<meta property="og:type" content="website">',
         '<meta property="og:site_name" content="Old Java Applications">',

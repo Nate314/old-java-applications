@@ -10,8 +10,8 @@
 #   ./web/clips.ps1
 #   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8101
 # Apps without a recipe (NathaNOS, BibleDownloader, NumberGuess, Windows, WindowsE: nothing moves until the visitor
-# does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its <li> has
-# data-clip (web/site/index.html).
+# does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its app has
+# "clip": true in web/site/apps.json (its gallery card then has data-clip).
 param(
     [string[]]$Apps,
     [int]$Port = 8101,

@@ -19,7 +19,7 @@
  *   passport keeps when each app was last played (oldjava.lastPlayed) for the home page's What's new.
  * - Keeps visitors moving between apps: an app page's toolbar has a Switch app drawer and a Next link, a
  *   How to play line in the toolbar band (and its ? button) shows the app's hint, and when the app exits the Run again box suggests three apps to
- *   play next. The list of apps is read from the home page's gallery (../index.html), so it lives in one place.
+ *   play next. The list of apps is read from apps.json, which the home page's gallery is rendered from too.
  * - Gives the keyboard games an on-screen controller (window.oldjavaPad) for touch screens. Its buttons send
  *   the app's own keys; the home page docks it under its player and passes the presses into the iframe.
  * - Lets a game controller play every app (GAMEPADS): its buttons press the app's keys where it has them, and
@@ -2463,35 +2463,36 @@
   }
 
   // ---- app catalog and the ways to the next app ----
-  // The home page's gallery is the one list of apps (name, hint, category, thumbnail), in gallery order.
-  // App pages fetch it from ../index.html; the home page reads its own.
+  // apps.json is the one list of apps (name, hint, category, thumbnail), in gallery order: the home page's gallery
+  // is rendered from it, and every page reads it here. The home page's share tags (catalogDoc) are its own head,
+  // fetched from ../index.html on app pages.
   function root() { return document.body.hasAttribute('data-app') ? '../' : ''; }
 
   var catalogPromise = null;
   var catalogDoc = null;   // the home page, for its own share tags
   function catalog() {
     if (!catalogPromise) {
-      var source = root() ? fetch('../index.html').then(function (r) {
+      if (!root()) catalogDoc = document;
+      else fetch('../index.html').then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+        catalogDoc = new DOMParser().parseFromString(html, 'text/html');
+      }).catch(function () { /* the share panel then leaves out the home page's description */ });
+      catalogPromise = fetch(root() + 'apps.json').then(function (r) {
         if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-        return r.text();
-      }).then(function (html) {
-        return new DOMParser().parseFromString(html, 'text/html');
-      }) : Promise.resolve(document);
-      catalogPromise = source.then(function (doc) {
-        catalogDoc = doc;
-        return Array.prototype.map.call(doc.querySelectorAll('#apps li[data-app]'), function (li) {
+        return r.json();
+      }).then(function (apps) {
+        return apps.map(function (a) {
           return {
-            id: li.getAttribute('data-app'),
-            cat: li.getAttribute('data-cat'),
-            origin: li.getAttribute('data-origin') || 'decompiled',
-            then: li.hasAttribute('data-then'),
-            name: li.querySelector('strong').textContent,
-            hint: li.querySelector('.body > span').textContent,   // not the home page's New/Played badge
-            shot: root() + li.querySelector('img').getAttribute('src')
+            id: a.id,
+            cat: a.cat,
+            origin: a.origin || 'decompiled',
+            then: !!a.then,
+            name: a.name,
+            hint: a.hint,
+            shot: root() + a.shot
           };
         });
       }).catch(function (e) {
-        console.warn('Could not read the app list from ../index.html: ' + e.message);
+        console.warn('Could not read the app list from apps.json: ' + e.message);
         return [];
       });
     }

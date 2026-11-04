@@ -188,6 +188,29 @@
               </target>
             </configuration>
           </execution>
+          <!-- The React pages (web/react: the home page, play.html, story.html and the 404 page's script), built
+               with Vite into the same folder, next to the static files copied from web/site above. Needs Node.js
+               and npm on the PATH. -->
+          <execution>
+            <id>react-pages</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <property name="react.dir" location="${project.basedir}/../react"/>
+                <property name="react.out" location="${site.dir}"/>
+                <exec executable="cmd" dir="${react.dir}" osfamily="windows" failonerror="true">
+                  <arg line="/c npm ci --no-audit --no-fund &amp;&amp; npm run build"/>
+                  <env key="SITE_DIR" value="${react.out}"/>
+                </exec>
+                <exec executable="sh" dir="${react.dir}" osfamily="unix" failonerror="true">
+                  <arg value="-c"/>
+                  <arg value="npm ci --no-audit --no-fund &amp;&amp; npm run build"/>
+                  <env key="SITE_DIR" value="${react.out}"/>
+                </exec>
+              </target>
+            </configuration>
+          </execution>
           <!-- Link previews: the share tags web/cards.ps1 writes into every page point at the page and its card
                with relative addresses. Built with -Dsite.url=https://host/path, they become absolute, which
                most link preview services need. -->

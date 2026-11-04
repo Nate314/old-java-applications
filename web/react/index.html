@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Old Java Applications</title>
+  <!-- share: written by web/cards.ps1 from web/site/apps.json -->
+  <meta name="description" content="Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play 20 of them in the browser, installed as an app or offline.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Old Java Applications">
+  <meta property="og:title" content="Old Java Applications">
+  <meta property="og:description" content="Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play 20 of them in the browser, installed as an app or offline.">
+  <meta property="og:url" content="index.html">
+  <meta property="og:image" content="cards/index.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Thumbnails of six of the 20 apps">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- /share -->
+  <link rel="stylesheet" href="shim.css">
+  <!-- The first frame waits for the player, so an app page's stage can shrink into it (see boot.js, one machine). -->
+  <link rel="expect" href="#player-frame" blocking="render">
+  <script src="boot.js"></script>
+  <style>
+    body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1080px; margin: 0 auto; padding: 40px 16px 64px; }
+    h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: -0.01em; }
+    h2 { margin: 40px 0 12px; font-size: 18px; }
+    p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
+
+    /* ---- the player: a live app on the page ---- */
+    .player { border: 1px solid var(--card-border); border-radius: 14px; background: var(--card-bg); overflow: hidden;
+              box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18); scroll-margin-top: 12px; }
+    .player-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px;
+                  border-bottom: 1px solid var(--card-border); }
+    .player-bar .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+                        letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .player-bar .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+                                box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
+    .player-bar h3 { margin: 0; font-size: 17px; }
+    /* Then | Now: the app as first restored, or today's (web/README.md, Then and now). */
+    .era { display: inline-flex; border: 1px solid var(--card-border); border-radius: 999px; overflow: hidden; }
+    .era[hidden] { display: none; }
+    .era button { padding: 2px 12px; border: 0; background: transparent; color: inherit; font: 600 13px/1.5 inherit;
+                  font-family: inherit; cursor: pointer; }
+    .era button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+    .era button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .player-bar .hint { flex: 1 1 260px; min-width: 0; font-size: 14px; opacity: 0.75; }
+    .player-bar .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .btn { display: inline-block; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--card-border);
+           background: transparent; color: inherit; font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1.5;
+           text-decoration: none; cursor: pointer; white-space: nowrap; }
+    .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .screen { position: relative; overflow: hidden; background: var(--desk); }
+    /* The iframe keeps a desktop-sized viewport (the apps size their windows from it) and is scaled to fit. */
+    .screen iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+
+    /* ---- the channel rail: every app one click away, without leaving the player ---- */
+    .rail { display: flex; align-items: stretch; gap: 6px; padding: 8px; border-top: 1px solid var(--card-border); }
+    .rail .step { flex: none; width: 34px; padding: 0; font-size: 22px; line-height: 1; }
+    .rail ol { flex: 1; min-width: 0; display: flex; gap: 8px; margin: 0; padding: 2px; list-style: none;
+               overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
+    .rail li { flex: none; scroll-snap-align: start; }
+    .rail li button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 112px; padding: 4px;
+                      border: 2px solid transparent; border-radius: 8px; background: transparent; color: inherit;
+                      font: 600 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer; }
+    .rail li button:hover { border-color: var(--card-border); }
+    .rail li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .rail li button[aria-current="true"] { border-color: var(--accent); }
+    .rail .pic { display: flex; align-items: center; justify-content: center; width: 100%; height: 62px;
+                 border-radius: 5px; background: var(--desk); overflow: hidden; }
+    .rail .pic img { max-width: calc(100% - 10px); max-height: calc(100% - 10px); }
+    .rail .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ---- big screen: the player fills the monitor (Fullscreen API) or, where that is missing, the window ---- */
+    .player:fullscreen, .player.big { display: flex; flex-direction: column; width: 100%; height: 100%;
+                                      border: 0; border-radius: 0; box-shadow: none; }
+    .player.big { position: fixed; inset: 0; z-index: 2000000001; }
+    .player:fullscreen .screen, .player.big .screen { flex: 1; }
+    body.locked { overflow: hidden; }
+
+    /* ---- pocket player: on a phone the app gets the screen, not a postage stamp ----
+       Up to 640 px wide the iframe keeps the screen's own size (fit() in the script below), so the app's page
+       zooms and centers its windows for a phone as it does on its own page, and the screen takes the height the
+       bar and the rail leave. The bar shrinks to the name, two lines of hint (tap for the rest) and one row of
+       buttons that scrolls sideways, so the whole player fits in one phone screen. */
+    @media (max-width: 640px) {
+      main { padding-top: 40px; }   /* under the Sound and Skin controls */
+      .shim-toolbar { position: absolute; }   /* scrolls away, not over the player's bar */
+      h1 { font-size: 23px; }
+      p.lead { margin-bottom: 12px; font-size: 14px; }
+      p.lead .tech { display: none; }
+      .player-bar { gap: 4px 10px; padding: 8px 10px 6px; }
+      .player-bar h3 { font-size: 16px; }
+      .player-bar .hint { flex: 1 1 100%; font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical;
+                          -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; cursor: pointer; }
+      .player-bar .hint.open { display: block; }
+      .player-bar .actions { flex: 1 1 100%; flex-wrap: nowrap; gap: 6px; margin: 2px -10px 0; padding: 2px 10px 4px;
+                             overflow-x: auto; scrollbar-width: none;
+                             -webkit-mask-image: linear-gradient(to right, #000 82%, transparent);
+                             mask-image: linear-gradient(to right, #000 82%, transparent); }
+      .player-bar .actions.end { -webkit-mask-image: none; mask-image: none; }
+      .player-bar .actions::-webkit-scrollbar { display: none; }
+      .player-bar .actions .btn { flex: none; padding: 5px 11px; }
+      /* What a phone wants first: the app's own page, another app, the whole screen. */
+      #player-full { order: -3; }
+      #player-shuffle { order: -2; }
+      #player-big { order: -1; }
+      .rail { padding: 6px 4px; gap: 4px; }
+      .rail .step { width: 28px; }
+      .rail li button { width: 84px; }
+      .rail .pic { height: 46px; }
+    }
+
+    /* ---- gallery ---- */
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    .filters button { padding: 4px 14px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-bg);
+                      color: inherit; font: 600 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer; }
+    .filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    /* Find (boot.js, find.js): looks like a search field, opens the site's Find box. */
+    .find-bar { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; margin: 0 0 16px; padding: 9px 14px;
+                border: 1px solid var(--card-border); border-radius: 12px; background: var(--card-bg); color: inherit; text-align: left;
+                font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: text; }
+    .find-bar:hover { border-color: var(--accent); }
+    .find-bar .glass { font-size: 20px; line-height: 1; color: var(--accent); }
+    .find-bar .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; }
+    .find-bar kbd { padding: 0 6px; border: 1px solid var(--card-border); border-radius: 4px; font: 600 11px/18px system-ui, sans-serif; opacity: 0.8; }
+    :root[data-skin="classic"] .find-bar { border-radius: 0; border-color: var(--field-border); background: var(--field-bg); }
+    :root[data-skin="arcade"] .find-bar { border-color: #00e5ff; box-shadow: 0 0 10px rgba(0, 229, 255, 0.25); }
+    :root[data-skin="arcade"] .find-bar .glass { color: #7df9ff; }
+    ul.apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px;
+              grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    ul.apps li { border: 1px solid var(--card-border); border-radius: 12px; background: var(--card-bg); overflow: hidden;
+                 display: flex; flex-direction: column; transition: transform 0.15s, box-shadow 0.15s; }
+    ul.apps li[hidden] { display: none; }
+    ul.apps li.playing { outline: 2px solid var(--accent); outline-offset: -2px; }
+    ul.apps a.thumb { position: relative; display: block; aspect-ratio: 16 / 10; background: var(--desk); }
+    ul.apps a.thumb img { position: absolute; inset: 0; margin: auto; max-width: calc(100% - 24px); max-height: calc(100% - 24px);
+                          border-radius: var(--window-radius); box-shadow: var(--window-shadow); }
+    /* Preview clips (clips/<App>.mp4, made by web/clips.ps1): a card with data-clip plays a few seconds of its app
+       in the thumbnail while the pointer or keyboard focus is on it, or, on touch screens, while it is in the
+       middle of the screen. The still thumbnail stays underneath until the clip is playing. */
+    ul.apps a.thumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0;
+                            transition: opacity 0.3s; pointer-events: none; }
+    ul.apps li.previewing a.thumb video { opacity: 1; }
+    ul.apps li[data-clip] a.thumb .clip-cue { position: absolute; left: 8px; bottom: 8px; z-index: 1; padding: 1px 8px 1px 6px;
+                            border-radius: 999px; background: rgba(15, 23, 42, 0.72); color: #fff; font-size: 12px; font-weight: 600;
+                            opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+    ul.apps li.previewing a.thumb .clip-cue { opacity: 1; }
+    :root[data-skin="arcade"] ul.apps a.thumb .clip-cue { background: rgba(23, 10, 46, 0.85); color: #7df9ff; }
+    ul.apps .body { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px 14px; flex: 1; }
+    ul.apps strong { font-size: 16px; }
+    ul.apps span { opacity: 0.8; font-size: 14px; flex: 1; }
+    ul.apps .actions { display: flex; gap: 8px; }
+    @media (hover: hover) {
+      ul.apps li:not(.text):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); }
+    }
+
+    /* ---- arcade passport: a stamp for every app played (boot.js keeps the stamps) ---- */
+    .passport { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
+                background: var(--card-bg); }
+    .passport-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+    .ring { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
+            background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--card-border) 0); }
+    .ring span { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: var(--card-bg);
+                 font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+    .passport-head .text { flex: 1 1 240px; min-width: 0; }
+    .passport-head h2 { margin: 0; }
+    .passport-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
+    .passport-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .passport-head .btn[hidden], .player-bar .btn[hidden] { display: none; }
+    /* 20 stamps: two rows of 10, rows of 5 on smaller pages, or rows of 4 on narrow ones. */
+    .stamps { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 12px 10px;
+              margin: 16px 0 0; padding: 0; list-style: none; }
+    @media (max-width: 900px) { .stamps { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .stamps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    .stamps button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 0;
+                     border: 0; background: none; color: inherit; cursor: pointer;
+                     font: 600 11px/1.25 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .stamps .seal { position: relative; display: grid; place-items: center; width: 58px; height: 58px; box-sizing: border-box;
+                    border-radius: 50%; border: 2px dashed var(--card-border); background: var(--desk);
+                    transition: transform 0.2s; }
+    .stamps .seal img { max-width: 70%; max-height: 70%; filter: grayscale(1); opacity: 0.55; transition: filter 0.3s, opacity 0.3s; }
+    .stamps .label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; }
+    .stamps button:hover .seal, .stamps button:focus-visible .seal { transform: scale(1.08); }
+    .stamps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+    .stamps .played .seal { border: 3px solid #16a34a; transform: rotate(-8deg); }
+    .stamps .played:hover .seal { transform: rotate(-8deg) scale(1.08); }
+    .stamps .played .seal img { filter: none; opacity: 1; }
+    .stamps .played .label { opacity: 1; }
+    .stamps .played .seal::after, .rail li button.played .pic::after { content: "\2713"; position: absolute; right: -4px; bottom: -2px;
+                    width: 20px; height: 20px; border-radius: 50%; background: #16a34a; color: #fff;
+                    font: 700 12px/20px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+    .stamps .fresh .seal { animation: press 0.6s cubic-bezier(0.3, 1.6, 0.5, 1); }
+    @keyframes press { from { transform: scale(1.7) rotate(-25deg); opacity: 0; } }
+    .rail .pic { position: relative; }
+    .rail li button.played .pic::after { right: 3px; bottom: 3px; width: 16px; height: 16px; font-size: 10px; line-height: 16px; }
+    ul.apps .badge { position: absolute; top: 8px; left: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
+                     font-size: 12px; font-weight: 700; background: #f59e0b; color: #1f2937; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+    ul.apps li.played .badge { background: #16a34a; color: #fff; }
+
+    /* ---- what's new (news.js): the repo's history, newest first, with what changed since you played ---- */
+    .news { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
+            background: var(--card-bg); }
+    .news[hidden] { display: none; }
+    .news.fresh { border-color: #f59e0b; box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.35); }
+    .news-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+    .news-head .text { flex: 1 1 260px; min-width: 0; }
+    .news-head h2 { margin: 0; }
+    .news-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
+    .news.fresh .news-head p { opacity: 1; font-weight: 600; }
+    .news-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .news .btn[hidden] { display: none; }
+    .news-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 10px;
+                 margin: 14px 0 0; padding: 0; list-style: none; }
+    .news-list li { display: flex; gap: 12px; padding: 10px; border: 1px solid var(--card-border); border-radius: 10px;
+                    background: rgba(127, 127, 127, 0.06); }
+    .news-list li.updated { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+    .news-list .pic { flex: none; display: grid; place-items: center; width: 84px; height: 60px; border-radius: 6px;
+                      background: var(--desk); overflow: hidden; }
+    .news-list .pic img { max-width: 92%; max-height: 92%; object-fit: contain; }
+    .news-list .body { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0;
+                       font-size: 13px; line-height: 1.35; }
+    .news-list .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+    .news-list time { opacity: 0.65; font-variant-numeric: tabular-nums; }
+    .news-list .tag { padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+                      background: #f59e0b; color: #1f2937; }
+    .news-list .tag.site { background: rgba(127, 127, 127, 0.2); color: inherit; }
+    .news-list strong { font-size: 14px; }
+    .news-list .more { opacity: 0.8; }
+    .news-list .plays { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .news-list .plays .btn { padding: 2px 10px; font-size: 12px; }
+    ul.apps li.updated a.thumb::after { content: "Updated"; position: absolute; top: 8px; right: 8px; z-index: 1;
+                     padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700;
+                     background: #f59e0b; color: #1f2937; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+    :root[data-skin="arcade"] .news.fresh { border-color: #ffe14d; box-shadow: 0 0 16px rgba(255, 225, 77, 0.35); }
+    :root[data-skin="arcade"] .news-list li.updated { border-color: #ffe14d; }
+    :root[data-skin="arcade"] .news-list .tag, :root[data-skin="arcade"] ul.apps li.updated a.thumb::after { background: #ffe14d; }
+
+    /* ---- your records: what the apps saved here, and taking it to another browser or the desktop (saves.js) ---- */
+    .records { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
+               background: var(--card-bg); }
+    .records-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+    .records-head .text { flex: 1 1 260px; min-width: 0; }
+    .records-head h2 { margin: 0; }
+    .records-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
+    .records-head .count { font-weight: 700; }
+    .records .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .records .btn:disabled { opacity: 0.5; cursor: default; }
+    .records .status { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; font-size: 14px;
+                       background: rgba(127, 127, 127, 0.1); border-left: 4px solid var(--accent); }
+    .records .status[hidden], .records .empty[hidden], .records .phone[hidden], .records .qr[hidden] { display: none; }
+    .records .empty { margin: 14px 0 0; font-size: 14px; opacity: 0.75; }
+    .record-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;
+                   margin: 14px 0 0; padding: 0; list-style: none; }
+    .record-list:empty { display: none; }
+    .record-list button { display: flex; align-items: center; gap: 12px; width: 100%; height: 100%; padding: 8px 10px;
+                          box-sizing: border-box; border: 1px solid var(--card-border); border-radius: 10px; background: rgba(127, 127, 127, 0.08);
+                          color: inherit; text-align: left; cursor: pointer; font: 14px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .record-list button:hover { border-color: var(--accent); }
+    .record-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .record-list img { flex: none; width: 64px; height: 44px; object-fit: contain; }
+    .record-list span { display: flex; flex-direction: column; min-width: 0; }
+    .record-list strong { font-size: 14px; }
+    .record-list span span { font-size: 13px; opacity: 0.8; overflow-wrap: anywhere; }
+    .records .phone { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; margin: 14px 0 0; padding: 14px;
+                      border-radius: 10px; background: rgba(127, 127, 127, 0.1); }
+    .records .qr { flex: none; width: 220px; max-width: 100%; line-height: 0; border-radius: 6px; overflow: hidden; }
+    .records .qr svg { width: 100%; height: auto; }
+    .records .phone .text { flex: 1 1 240px; min-width: 0; font-size: 14px; }
+    .records .phone p { margin: 0 0 10px; }
+    .records .linkrow { display: flex; gap: 8px; }
+    .records .linkrow input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--card-border); border-radius: 6px;
+                              background: var(--card-bg); color: inherit; font: 12px ui-monospace, Consolas, monospace; }
+    .records .desktop { margin: 12px 0 0; font-size: 13px; opacity: 0.75; }
+    dialog.records-in { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); box-sizing: border-box;
+                        padding: 18px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card-bg);
+                        color: inherit; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4); }
+    dialog.records-in::backdrop { background: rgba(15, 23, 42, 0.55); }
+    dialog.records-in h2 { margin: 0 0 4px; }
+    dialog.records-in p { margin: 0 0 12px; font-size: 14px; opacity: 0.85; }
+    dialog.records-in ul { display: grid; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+    dialog.records-in label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px;
+                              background: rgba(127, 127, 127, 0.1); cursor: pointer; font-size: 14px; }
+    dialog.records-in label input { margin-top: 3px; }
+    dialog.records-in label span { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+    dialog.records-in .here { font-size: 13px; opacity: 0.7; }
+    dialog.records-in .buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    :root[data-skin="arcade"] dialog.records-in { border-color: #ff2bd6; box-shadow: 0 0 0 1px #ff2bd6, 0 0 32px rgba(255, 43, 214, 0.4); }
+
+    /* ---- take it with you: install the site as an app and save every app for offline play (sw.js) ---- */
+    .takeaway { position: relative; margin-top: 28px; padding: 18px; border-radius: 14px; overflow: hidden; color: #e6e0ff;
+                background: radial-gradient(120% 140% at 0% 0%, #3b1670 0%, #170a2e 55%, #0b0620 100%);
+                border: 1px solid #35205c; box-shadow: 0 14px 40px rgba(23, 10, 46, 0.35); }
+    .takeaway[hidden] { display: none; }
+    .takeaway-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+    .takeaway .app-icon { flex: none; width: 76px; height: 76px; filter: drop-shadow(0 6px 16px rgba(255, 43, 214, 0.35)); }
+    .takeaway .text { flex: 1 1 260px; min-width: 0; }
+    .takeaway h2 { margin: 0; color: #fff; }
+    .takeaway p { margin: 2px 0 0; font-size: 14px; opacity: 0.9; }
+    .takeaway .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .takeaway .btn { border-color: #7df9ff; color: #7df9ff; }
+    .takeaway .btn.primary { background: #ff2bd6; border-color: #ff2bd6; color: #fff; }
+    .takeaway .btn[hidden] { display: none; }
+    .takeaway .btn:disabled { opacity: 0.6; cursor: progress; }
+    .takeaway .meter { height: 6px; margin-top: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+    .takeaway .meter[hidden] { display: none; }
+    .takeaway .meter span { display: block; height: 100%; width: 0; border-radius: inherit;
+                            background: linear-gradient(90deg, #ff2bd6, #7df9ff); transition: width 0.2s; }
+    .takeaway .perks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; padding: 0; list-style: none;
+                       font-size: 13px; opacity: 0.85; }
+    .takeaway .perks li::before { content: "\2713"; margin-right: 6px; color: #7df9ff; font-weight: 700; }
+    .takeaway .note { margin-top: 10px; font-size: 13px; opacity: 0.7; }
+    .takeaway .note[hidden] { display: none; }
+    ul.apps .saved { position: absolute; top: 8px; right: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
+                     font-size: 12px; font-weight: 700; background: #170a2e; color: #7df9ff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+    ul.apps .saved[hidden] { display: none; }
+    /* Offline: the apps that are not saved cannot load, so they step back. */
+    .offline-banner { margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: #170a2e; color: #e6e0ff;
+                      font-size: 14px; border-left: 4px solid #ff2bd6; }
+    .offline-banner[hidden] { display: none; }
+    ul.apps li.unavailable { opacity: 0.45; }
+    ul.apps li.unavailable .saved { color: #fca5a5; }
+
+    /* ---- arcade skin (shim.css draws the scanlines): the page as a neon cabinet ---- */
+    :root[data-skin="arcade"] .takeaway { border-color: #ff2bd6; box-shadow: 0 0 0 1px #ff2bd6, 0 0 28px rgba(255, 43, 214, 0.35); }
+    .btn.arcade[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    :root[data-skin="arcade"] h1 { color: #fff; letter-spacing: 0.02em;
+      text-shadow: 0 0 6px #ff2bd6, 0 0 18px rgba(255, 43, 214, 0.75), 0 0 42px rgba(0, 229, 255, 0.45); }
+    :root[data-skin="arcade"] h2 { color: #7df9ff; text-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
+    :root[data-skin="arcade"] .player { border-color: #ff2bd6;
+      box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.5), 0 0 32px rgba(255, 43, 214, 0.35), 0 0 90px rgba(0, 229, 255, 0.15); }
+    :root[data-skin="arcade"] .player-bar .live { color: #7df9ff; text-shadow: 0 0 6px rgba(0, 229, 255, 0.8); }
+    :root[data-skin="arcade"] .player-bar .live::before { background: #ff2bd6; box-shadow: 0 0 8px 2px rgba(255, 43, 214, 0.8); }
+    :root[data-skin="arcade"] .btn { border-color: #00e5ff; box-shadow: 0 0 6px rgba(0, 229, 255, 0.3); }
+    :root[data-skin="arcade"] .btn.primary, :root[data-skin="arcade"] .btn[aria-pressed="true"] {
+      border-color: #ff2bd6; box-shadow: 0 0 10px rgba(255, 43, 214, 0.6); }
+    :root[data-skin="arcade"] ul.apps li { border-color: #35205c; }
+    @media (hover: hover) {
+      :root[data-skin="arcade"] ul.apps li:not(.text):hover { border-color: #ff2bd6;
+        box-shadow: 0 0 0 1px #ff2bd6, 0 0 24px rgba(255, 43, 214, 0.45); }
+    }
+    :root[data-skin="arcade"] .rail li button[aria-current="true"] { box-shadow: 0 0 12px rgba(255, 43, 214, 0.6); }
+
+    /* ---- your arcade: What's new, the passport, your records and Take it with you share one tabbed panel, so
+       the gallery starts right under it instead of four panels further down ---- */
+    /* section.arcade, not .arcade: the player bar's Arcade mode button is a .btn.arcade too. */
+    section.arcade { margin-top: 28px; }
+    .arcade-tabs { position: relative; display: flex; gap: 4px; padding: 0 10px; overflow-x: auto; scrollbar-width: none; }
+    .arcade-tabs::-webkit-scrollbar { display: none; }
+    .arcade-tabs [role="tab"] { flex: none; display: inline-flex; align-items: center; gap: 7px; margin-bottom: -1px;
+                                padding: 8px 16px; border: 1px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0;
+                                background: transparent; color: inherit; font: 700 15px/1.4 inherit; font-family: inherit;
+                                opacity: 0.7; cursor: pointer; white-space: nowrap; position: relative; z-index: 1; }
+    .arcade-tabs [role="tab"][hidden] { display: none; }
+    @media (max-width: 640px) {
+      .arcade-tabs { gap: 2px; padding: 0 4px; }
+      .arcade-tabs [role="tab"] { gap: 5px; padding: 8px 10px; font-size: 14px; }
+    }
+    .arcade-tabs [role="tab"]:hover { opacity: 1; }
+    .arcade-tabs [role="tab"][aria-selected="true"] { opacity: 1; border-color: var(--card-border); background: var(--card-bg);
+                                                      box-shadow: inset 0 3px 0 var(--accent); }
+    .arcade-tabs [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .arcade-tabs .badge { min-width: 8px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: #fff;
+                          font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+    .arcade-tabs .badge.new { background: #f59e0b; }
+    .arcade-tabs .badge[hidden] { display: none; }
+    /* The takeaway panel is dark in every skin, so its tab is too when chosen. */
+    .arcade-tabs #tab-takeaway[aria-selected="true"] { background: #2a1150; border-color: #35205c; color: #e6e0ff;
+                                                      box-shadow: inset 0 3px 0 #ff2bd6; }
+    .arcade:has(#news.fresh) #tab-news[aria-selected="true"] { border-color: #f59e0b; box-shadow: inset 0 3px 0 #f59e0b; }
+    :root[data-skin="arcade"] .arcade:has(#news.fresh) #tab-news[aria-selected="true"] { border-color: #ffe14d; box-shadow: inset 0 3px 0 #ffe14d; }
+    .arcade > [role="tabpanel"] { margin-top: 0; }
+    .arcade > [role="tabpanel"].off { display: none; }
+    /* The tabs name the panels; the headings stay for screen readers' heading lists. */
+    .arcade > [role="tabpanel"] h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+                                     white-space: nowrap; }
+    :root[data-skin="arcade"] .arcade-tabs .badge.new { background: #ffe14d; color: #170a2e; }
+    :root[data-skin="arcade"] .arcade-tabs [role="tab"][aria-selected="true"] { box-shadow: inset 0 3px 0 var(--accent), 0 -4px 14px rgba(255, 43, 214, 0.25); }
+    /* The story (story.html): HISTORY.md told with the real code and the apps. */
+    p.story-link { margin: -12px 0 20px; font-size: 14px; }
+    p.story-link a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    p.story-link a:hover { text-decoration: underline; }
+
+    /* ---- the tour: all 20 apps in the player, one stop at a time (web/README.md, The tour) ---- */
+    p.tour-start { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -8px 0 20px; font-size: 14px; }
+    p.tour-start span { opacity: 0.75; }
+    .tour { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 14px 10px;
+            border-bottom: 1px solid var(--card-border); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    .tour[hidden] { display: none; }
+    .tour-steps { display: flex; gap: 3px; flex: 1 1 100%; margin: 0; padding: 0; list-style: none; }
+    .tour-steps li { flex: 1; }
+    .tour-steps button { display: block; width: 100%; height: 6px; padding: 0; border: 0; border-radius: 3px; cursor: pointer;
+                         background: color-mix(in srgb, currentColor 18%, transparent); }
+    .tour-steps button.seen { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+    .tour-steps button[aria-current="step"] { background: var(--accent); }
+    .tour-steps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .tour-line { flex: 1 1 320px; min-width: 0; margin: 0; font-size: 14px; }
+    .tour-count { font-weight: 700; color: var(--accent); white-space: nowrap; }
+    .tour-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .tour-actions .btn[hidden] { display: none; }
+    /* What is left of this stop before the next: thin, along the strip's bottom edge. */
+    .tour-time { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+    .tour-time span { display: block; height: 100%; width: calc(var(--t, 0) * 100%); background: var(--accent); opacity: 0.7; }
+    .tour.yours .tour-time { visibility: hidden; }
+    .tour.yours #tour-next { animation: tour-nudge 1.6s ease-in-out 3; }
+    @keyframes tour-nudge { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); } }
+    @media (prefers-reduced-motion: reduce) { .tour.yours #tour-next { animation: none; } }
+    @media (max-width: 640px) {
+      p.tour-start span { display: none; }
+      .tour { gap: 4px 10px; padding: 6px 10px 8px; }
+      .tour-line { flex: 1 1 100%; font-size: 13px; line-height: 1.4; }
+      .tour-actions { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; gap: 6px; scrollbar-width: none; }
+      .tour-actions .btn { flex: none; padding: 4px 10px; }
+    }
+    :root[data-skin="arcade"] .tour { background: rgba(255, 43, 214, 0.08); }
+    :root[data-skin="arcade"] .tour-count { color: #7df9ff; text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
+    :root[data-skin="arcade"] .tour-steps button[aria-current="step"] { box-shadow: 0 0 8px rgba(255, 43, 214, 0.8); }
+  </style>
+</head>
+<body>
+<div id="root" style="display: contents"></div>
+<script type="module" src="./src/home/main.tsx"></script>
+<script defer src="qr.js"></script>
+<script defer src="saves.js"></script>
+<script defer src="news.js"></script>
+</body>
+</html>
