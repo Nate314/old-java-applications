@@ -7,7 +7,8 @@ import org.teavm.jso.JSObject;
 
 /**
  * Copies the files boot.js fetched before main() (listed in the page's data-files) into TeaVM's in-memory file
- * system, so the apps' java.io code finds them by the same relative paths it uses on the desktop.
+ * system, so the apps' java.io code finds them by the same relative paths it uses on the desktop. Then {@link Saves}
+ * writes back what the app saved on earlier visits.
  */
 public final class Files {
     private static boolean installed;
@@ -37,5 +38,6 @@ public final class Files {
                 Js.consoleError("Could not preload " + name + ": " + e);
             }
         }
+        Saves.install();
     }
 }

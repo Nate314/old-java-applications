@@ -1,30 +1,73 @@
 # NathaNOS
 
-A full-screen fake desktop. It draws a background image with a custom cursor, a taskbar along the bottom with a start menu button, and one taskbar button per `.jar` in `assets/`. Clicking a jar's button opens that app: inside the desktop as a closable internal window if the app supports it (Clock), otherwise in the app's own windows on top of the desktop.
+A full-screen fake desktop. It draws a background image with a custom cursor, a grid of app icons, a start menu that lists every app, and a taskbar along the bottom with the MENU button, a button for each open app window and a clock. The apps are the `.jar` files in `assets/`. An app opens inside the desktop as a closable internal window if it supports it (Clock), otherwise in its own windows on top of the desktop.
 
 ## Controls / usage
 
+- **Desktop icons**: one per `assets/*.jar`, on a grid of cells from the top-left corner, in alphabetical order down the columns. Click selects an icon, double-click opens the app. Clicking the empty desktop clears the selection and closes the menus.
+- **Moving icons**: drag an icon (press and move it at least 5 pixels) and it follows the pointer above every window, while a faint outline marks the cell it came from. Let go and it lands in the cell under its middle; an icon already there trades places with it. From then on every icon keeps its cell, so the gap a moved icon leaves stays a gap, as on a real desktop. Until the first move (and after Arrange icons by name) the icons fill the cells in alphabetical order.
+- **Desktop menu**: right-click the empty desktop (or long-press it on a touch screen) for:
+  - **Wallpaper**: Original photo (`assets/background.jpg`, the only background NathaNOS had), Night sky (stars, a crescent moon and hills), Sunset hills, Deep ocean (light rays and bubbles) and Aurora. Each row shows a small preview, and the current one is ticked. The painted ones are drawn in Java2D, once per screen size.
+  - **Arrange icons by name**: forgets where icons were moved and lines them all up alphabetically again.
+- **Paint**: NathaNOS's own app (an icon among the others, in alphabetical order, and a row in the start menu). It opens in an internal window and draws a 200 x 125 pixel picture in the 16 colors of the classic Windows Paint palette, with each pixel shown 1 to 4 screen pixels wide (as big as the desktop allows), so it is drawn sharp, never blurred.
+  - **Tools** (the column at the left, or keys 1 to 8 while Paint has the keyboard): Pencil (single pixels), Brush (round, 5 pixels), Spray can (dots while held), Eraser (white, 7 pixels), Line, Rectangle and Ellipse (drag from corner to corner; the shape follows the pointer until you let go) and Fill (an area of one color, up to its edges). When pixels are 2 or more screen pixels wide, the pixels the tool would paint are outlined under the pointer.
+  - **Colors**: click a palette color for the left button, right-click one for the right button. The two squares at the left show both; click them to swap.
+  - **Saving**: there is no Save step. A new picture is called "Picture 1" (or the next free number), and its first stroke puts it on the desktop as an icon showing the picture; every later stroke saves it again, and the icon follows. Double-click a picture's icon to open it in Paint. Up to 12 pictures fit; past that, Paint says so until one is deleted.
+  - **New**, **Undo** (also Ctrl+Z; the last 40 strokes of this window), **Wallpaper** (makes the picture the desktop's wallpaper, stretched to cover the screen with its edges cut, and the wallpaper changes with each stroke) and **Delete** (press twice; deleting the wallpaper's picture brings back the original photo). The line under the palette says what the tool does and what just happened.
+- On a narrow screen the icon tiles get narrower (down to 48 pixels) so every column of icons fits across it.
 - **MENU button** (left end of the taskbar): show / hide the start menu.
-- **Shut Down** (in the start menu): exit.
-- **App buttons**: one per `assets/*.jar`, labeled with the file name minus `.jar`, with icon `assets/<name>.png` (matched ignoring case). Clicking loads the jar's `Main-Class`, then:
+- **Start menu**: the NathaNOS logo, one row per app (click to open it) and **Shut Down** (exit). On a short screen the rows wrap into more columns.
+- **Taskbar buttons**: one per open app window, in the order they opened, with the app's name and icon. The button of the active window is lit. Clicking a button brings that window to the front. Borderless windows (ScreenSaver, CircleSpawner's circle slices) get no button.
+- **Clock**: the local time and date at the right end of the taskbar.
+- **Icons**: `assets/<name>.png` (matched ignoring case) on a light tile, or for an app without one, a colored tile with its initials (FlappyBird is "FB").
+- Opening an app loads the jar's `Main-Class`, then:
   - If it has a public `(Boolean)` constructor (Clock), calls it with `false`, moves that frame's content pane into a centered internal window and disposes the hidden frame. Internal app windows can be closed but not resized or maximized.
-  - Otherwise runs its `main(String[])` with no arguments on a thread of its own, as `java` would, and the app opens its own windows.
-  - Each click starts another copy. A jar that fails to load only disables its own button (the error is printed).
+  - Otherwise runs its `main(String[])` with no arguments on a thread of its own, as `java` would, and the app opens its own windows. A window that opens at the top-left corner of the screen (where most apps put theirs) is moved to the middle of the desktop, so it does not cover the icons.
+  - Each open starts another copy. Opening an app whose jar failed to load prints an error; the other apps still work.
 - Closing an app's window closes only that app. Apps use `EXIT_ON_CLOSE` when run alone, so NathaNOS switches every window opened after it starts to `DISPOSE_ON_CLOSE`. An app that calls `System.exit` itself still ends NathaNOS (ScreenSaver and Minesweeper's Esc close their window instead).
-- The desktop window never takes focus, so clicking the taskbar or background does not raise it over open apps.
+- The desktop window never takes focus, so clicking the taskbar or background does not raise it over open apps. That also means an internal window (Clock) stays behind app windows that cover it, even after its taskbar button brings it to the front of the desktop.
 - Closing an app's window does not stop timers or threads it started unless the app stops them itself, so they can keep running until NathaNOS exits.
-- No keyboard controls or command-line arguments. The window is undecorated and fills the screen.
+- No keyboard controls (apart from Paint's) or command-line arguments. The window is undecorated and fills the screen.
+
+## Saved state
+
+`~/.nathanos-pictures.txt` keeps Paint's pictures, one line each: `picture=Picture 1:` and the pixels, row by row, as runs of one color: a capital letter for the color (`A` is black, `I` white) followed by the run's length in base 36 when it is more than 1 (a blank picture is `Ijag`, 25,000 white pixels). A damaged line is skipped.
+
+`~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`, or `wallpaper=picture:Picture 1` for a picture from Paint) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
 - The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. `./run.ps1 NathaNOS` adds the other apps (see Running).
+
+The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint.
 
 ## Code layout
 
-- `src/main/Main.java`: the full-screen `JFrame` and `JDesktopPane` with the background image; creates the taskbar and start menu.
-- `src/main/LauncherWindow.java`: the taskbar; builds the buttons and launches apps.
+- `src/main/Main.java`: the full-screen `JFrame` and `JDesktopPane` with the background image; creates the launcher, taskbar, start menu and icons.
+- `src/main/Launcher.java`: the apps in `assets/`, their icons, and opening one (internal window or `main`).
+- `src/main/DesktopShortcuts.java`: the desktop icons on their grid, on a layer below every window: placing, dragging (an icon carried on the drag layer) and trading places, and the right click that opens the desktop menu.
+- `src/main/PaintWindow.java`: opens Paint in an internal window with its taskbar button, and draws Paint's icon.
+- `src/main/PaintPanel.java`: Paint itself: the tools, palette and buttons, the drawing on the picture (lines, shapes, fill, spray), Undo, and saving after each stroke.
+- `src/main/Picture.java`: a picture's pixels, drawn as runs of one color at any size, its thumbnail, and its text form.
+- `src/main/Pictures.java`: the saved pictures in `~/.nathanos-pictures.txt`, telling the desktop icons and the wallpaper when they change.
+- `src/main/DesktopMenu.java`: the right-click desktop menu with the wallpaper previews and Arrange icons by name.
+- `src/main/Wallpaper.java`: the five wallpapers; paints the four scenes into an image the size of the screen.
+- `src/main/DesktopSettings.java`: reads and writes `~/.nathanos.txt`.
+- `src/main/LauncherWindow.java`: the taskbar, with the MENU button, the window buttons and the clock.
+- `src/main/TaskList.java`: tracks the open app windows for the taskbar, and centers new windows that open in the top-left corner.
+- `src/main/StartMenu.java`: the start menu panel with the logo, the app list and Shut Down.
+- `src/main/FlatButton.java`: the flat icon-and-label button used by the taskbar and the start menu.
+- `src/main/AppIcon.java`: draws an app's icon, or its initials tile.
 - `src/main/AppLauncher.java`: runs an app's `main` on its own thread, and keeps NathaNOS open when an app's window closes.
-- `src/main/StartMenu.java`: the start menu panel with the logo and Shut Down button.
 - `src/main/FileGatherer.java`: scans `assets/` for jars and loads their main classes with `URLClassLoader`.
 - `src/main/GenericAppFrame.java`: the `JInternalFrame` wrapper an app's content is shown in.
-- `assets/`: background, cursor, logo and app icon images, plus `Clock.jar`. The original icons were renamed to the app names they now match (for example `minesqeeper.png` to `Minesweeper.png`, `piano.png` to `SynthesizerKeyboard.png`).
+- `assets/`: background, cursor, logo and app icon images, plus `Clock.jar`. The original icons were renamed to the app names they now match (for example `minesqeeper.png` to `Minesweeper.png`, `piano.png` to `SynthesizerKeyboard.png`). The app icons and the cursor are now original art drawn as SVG in `art/` and rendered by `web/art.ps1`: they replaced pictures taken from other apps (Chrome's dinosaur, a Windows Minesweeper mine, an icon set's pointing hand) and clip art of unknown origin. The unused `calculator.png`, `converter.png`, `pingPong.png` and `windowsLogo.png` were removed. The logos (`NathaNOS.png`, `NathaNOS.jpg`, `NOS.png`), the wallpaper photo and `RubiksCube2D.png` are as recovered.
+
+## Self-check
+
+`test/main/PictureCheck.java` checks that a picture reads back from its text and a damaged one is refused, that lines, rectangles, ellipses and the brush paint where they should, that a fill stays inside a closed ellipse, and that the pictures file keeps its pictures, names and limit. From `NathaNOS/`:
+
+```
+javac -d ../out/check/NathaNOS src/main/*.java test/main/*.java
+java -ea -cp ../out/check/NathaNOS main.PictureCheck
+```
 
 ## Running
 

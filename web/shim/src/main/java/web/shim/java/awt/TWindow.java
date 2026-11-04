@@ -261,4 +261,9 @@ public class TWindow extends TContainer {
             c.focusGained();
         }
     }
+
+    /** Sets the focus owner without moving the page's keyboard focus (a window's first focus owner, or one the page focused). */
+    public void setFocusOwnerQuietly(TComponent c) {
+        focusOwner = c;
+    }
 }

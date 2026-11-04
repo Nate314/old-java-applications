@@ -79,8 +79,43 @@ public final class Js {
             "var _o = document.createElement('option'); _o.textContent = text; el.appendChild(_o);")
     public static native void addOption(JSObject el, String text);
 
+    /** Puts text on the clipboard: navigator.clipboard, or a hidden text area and the copy command where that is refused. */
+    @JSBody(params = "text", script =
+            "function _f() { var _a = document.createElement('textarea'); _a.value = text; _a.setAttribute('readonly', '');"
+            + " _a.style.position = 'fixed'; _a.style.opacity = '0'; var _o = document.activeElement; document.body.appendChild(_a);"
+            + " _a.select(); try { document.execCommand('copy'); } catch (e) { } _a.remove(); if (_o && _o.focus) _o.focus({preventScroll: true}); }"
+            + " if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(_f); else _f();")
+    public static native void copyText(String text);
+
     @JSBody(params = "el", script = "el.focus({preventScroll: true});")
     public static native void focus(JSObject el);
+
+    /**
+     * Focuses a component drawn as a button, field or list; for any other, drops keyboard focus from the app's widgets.
+     * The focus ring shows only when the last input was a key: a button the app focuses after a click (Swing focuses
+     * a clicked button) gets no ring, a tile the arrow keys move to does.
+     */
+    @JSBody(params = "el", script = "if (!window.__shimKeyed) { window.__shimKeyed = { on: false };"
+            + " addEventListener('keydown', function () { window.__shimKeyed.on = true; }, true);"
+            + " addEventListener('pointerdown', function () { window.__shimKeyed.on = false; }, true); }"
+            + " if (el.matches('button, input, select, textarea')) {"
+            + " if (el.ownerDocument.activeElement !== el && el.isConnected)"
+            + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
+            + " var _a = el.ownerDocument.activeElement;"
+            + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a)) _a.blur();")
+    public static native void focusComponent(JSObject el);
+
+    /** Says the text to a screen reader through a polite live region (unseen on the page). */
+    @JSBody(params = "text", script = "var _D = window.__shimDoc || document, _r = _D.getElementById('shim-live');"
+            + " if (!_r) { _r = document.createElement('div'); _r.id = 'shim-live'; _r.className = 'shim-live';"
+            + " _r.setAttribute('aria-live', 'polite'); _r.setAttribute('role', 'status'); _D.body.appendChild(_r); }"
+            + " _r.textContent = text;")
+    public static native void announce(String text);
+
+    /** True when the event's target is the page itself or inside one of the app's windows, not the page's own controls. */
+    @JSBody(params = "e", script = "var _t = e.target; if (!_t) return true; var _d = _t.ownerDocument || document; return _t === _d.body || _t === _d.documentElement"
+            + " || !!(_t.closest && _t.closest('.window'));")
+    public static native boolean targetIsAppOrPage(JSObject e);
 
     @JSBody(params = { "el", "id" }, script = "el.__cid = id;")
     public static native void setComponentId(JSObject el, int id);
@@ -93,7 +128,15 @@ public final class Js {
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb);")
     public static native void listen(JSObject el, String type, EventCallback cb);
 
-    @JSBody(script = "return document.getElementById('desktop');")
+    /**
+     * Pop out (boot.js) moves the page desktop into a Picture-in-Picture window and back. While it is there,
+     * window.__shimDoc is that window's document, where the desktop, points and the focus are looked up, and boot.js
+     * passes the document to window.__shimListen so the app hears its mouse, keys and touches.
+     */
+    @JSBody(params = "cb", script = "window.__shimListen = cb;")
+    public static native void exportListen(EventCallback cb);
+
+    @JSBody(script = "return (window.__shimDoc || document).getElementById('desktop');")
     public static native JSObject desktopElement();
 
     @JSBody(script = "return document.body;")
@@ -103,13 +146,24 @@ public final class Js {
     public static native JSObject document();
 
 
-    @JSBody(script = "return window.innerWidth;")
+    /** The page desktop's size: on an app page, the stage between the toolbar and the controller. */
+    @JSBody(script = "var _D = window.__shimDoc || document, _d = _D.getElementById('desktop');"
+            + " return _d && _d.clientWidth ? _d.clientWidth : _D.defaultView.innerWidth;")
     public static native int viewportWidth();
 
-    @JSBody(script = "return window.innerHeight;")
+    @JSBody(script = "var _D = window.__shimDoc || document, _d = _D.getElementById('desktop');"
+            + " return _d && _d.clientHeight ? _d.clientHeight : _D.defaultView.innerHeight;")
     public static native int viewportHeight();
 
-    @JSBody(script = "return window.devicePixelRatio || 1;")
+    /** How far boot.js has scaled the page desktop down to fit the windows on the stage (1 = not scaled). */
+    @JSBody(script = "return window.__shimScale || 1;")
+    public static native double desktopScale();
+
+    /**
+     * Canvas pixels per CSS pixel: devicePixelRatio, or more while boot.js zooms the page desktop up to fit the
+     * stage (window.__shimRender), so the paint canvases stay sharp when they are shown bigger.
+     */
+    @JSBody(script = "return window.__shimRender || window.devicePixelRatio || 1;")
     public static native double pixelRatio();
 
     @JSBody(params = "el", script = "var _r = el.getBoundingClientRect(); return _r.left;")
@@ -131,6 +185,36 @@ public final class Js {
 
     @JSBody(params = "e", script = "return e.button;")
     public static native int button(JSObject e);
+
+    // ---- touch (pointer events from fingers and pens; the mouse keeps its mouse events) ----
+
+    @JSBody(params = "e", script = "return !!e.pointerType && e.pointerType !== 'mouse';")
+    public static native boolean isTouch(JSObject e);
+
+    @JSBody(params = "e", script = "return e.pointerId;")
+    public static native int pointerId(JSObject e);
+
+    /** The element under a pointer event's point (a touch's own target stays the element it went down on). */
+    @JSBody(params = "e", script = "return (window.__shimDoc || document).elementFromPoint(e.clientX, e.clientY);")
+    public static native JSObject elementAt(JSObject e);
+
+    @JSBody(script = "return performance.now();")
+    public static native double now();
+
+    @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb, true);")
+    public static native void listenCapture(JSObject el, String type, EventCallback cb);
+
+    @JSBody(params = "e", script = "e.preventDefault(); e.stopPropagation();")
+    public static native void swallow(JSObject e);
+
+    /** The ring that closes in on a finger held on something long-press opens like a right click. */
+    @JSBody(params = "e", script = "var _r = document.createElement('div'); _r.className = 'shim-press';"
+            + "_r.style.left = e.clientX + 'px'; _r.style.top = e.clientY + 'px'; (window.__shimDoc || document).body.appendChild(_r); return _r;")
+    public static native JSObject pressRing(JSObject e);
+
+    @JSBody(params = "ring", script = "ring.classList.add('done'); setTimeout(function () { ring.remove(); }, 400);"
+            + "try { if (navigator.vibrate) navigator.vibrate(12); } catch (x) { }")
+    public static native void pressRingDone(JSObject ring);
 
     @JSBody(params = "e", script = "return e.buttons;")
     public static native int buttons(JSObject e);
@@ -177,32 +261,41 @@ public final class Js {
 
     // ---- canvas ----
 
+    /**
+     * Notes that something drew on a canvas, for the page's instant replay (boot.js), which redraws the app into
+     * its video only after the app changed, so a still app costs it nothing but a frame a second.
+     */
+    @JSBody(script = "window.__shimPainted = true;")
+    public static native void painted();
+
     @JSBody(params = "canvas", script = "return canvas.getContext('2d');")
     public static native JSObject context2d(JSObject canvas);
 
-    /** Sets the canvas backing store to CSS size times devicePixelRatio. Returns true if it changed (which clears it). */
+    /** Sets the canvas backing store to CSS size times pixelRatio(). Returns true if it changed (which clears it). */
     @JSBody(params = { "canvas", "w", "h" }, script =
-            "var _r = window.devicePixelRatio || 1; var _bw = Math.max(1, Math.round(w * _r)), _bh = Math.max(1, Math.round(h * _r));"
+            "var _r = window.__shimRender || window.devicePixelRatio || 1; var _bw = Math.max(1, Math.round(w * _r)), _bh = Math.max(1, Math.round(h * _r));"
             + "canvas.style.width = w + 'px'; canvas.style.height = h + 'px';"
             + "if (canvas.width === _bw && canvas.height === _bh) return false;"
-            + "canvas.width = _bw; canvas.height = _bh; return true;")
+            + "canvas.width = _bw; canvas.height = _bh; window.__shimPainted = true; return true;")
     public static native boolean sizeCanvas(JSObject canvas, int w, int h);
 
     @JSBody(params = "canvas", script =
-            "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.clearRect(0, 0, canvas.width, canvas.height); _g.restore();")
+            "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.clearRect(0, 0, canvas.width, canvas.height); _g.restore();"
+            + " window.__shimPainted = true;")
     public static native void clearCanvas(JSObject canvas);
 
     @JSBody(params = { "canvas", "color" }, script =
             "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.fillStyle = color;"
-            + " _g.fillRect(0, 0, canvas.width, canvas.height); _g.restore();")
+            + " _g.fillRect(0, 0, canvas.width, canvas.height); _g.restore(); window.__shimPainted = true;")
     public static native void fillCanvas(JSObject canvas, String color);
 
     @JSBody(params = { "canvas", "w", "h" }, script = "canvas.width = w; canvas.height = h;")
     public static native void sizeCanvasExact(JSObject canvas, int w, int h);
 
     @JSBody(params = { "canvas", "img", "w", "h" }, script =
-            "var _g = canvas.getContext('2d'); var _r = window.devicePixelRatio || 1; _g.setTransform(_r, 0, 0, _r, 0, 0);"
-            + "_g.imageSmoothingQuality = 'high'; _g.drawImage(img, 0, 0, w, h);")
+            "var _g = canvas.getContext('2d'); var _r = window.__shimRender || window.devicePixelRatio || 1; _g.setTransform(_r, 0, 0, _r, 0, 0);"
+            + "_g.imageSmoothingQuality = 'high'; _g.drawImage(img, 0, 0, w, h);"
+            + " window.__shimPainted = true;")
     public static native void drawImageScaled(JSObject canvas, JSObject img, int w, int h);
 
     @JSBody(params = "canvas", script = "return canvas.toDataURL();")
@@ -213,7 +306,7 @@ public final class Js {
             "var _px = function (_c, _px0, _py0) { var _r = _c.getBoundingClientRect(); if (_px0 < _r.left || _py0 < _r.top || _px0 >= _r.right || _py0 >= _r.bottom || !_c.width) return -1;"
             + "  var _d = _c.getContext('2d').getImageData(Math.floor((_px0 - _r.left) * _c.width / _r.width), Math.floor((_py0 - _r.top) * _c.height / _r.height), 1, 1).data;"
             + "  return _d[3] === 0 ? -1 : (_d[0] << 16) | (_d[1] << 8) | _d[2]; };"
-            + "var _els = document.elementsFromPoint(x, y);"
+            + "var _els = (window.__shimDoc || document).elementsFromPoint(x, y);"
             + "for (var _i = 0; _i < _els.length; _i++) { var _e = _els[_i], _v;"
             + "  var _top = _e.querySelector(':scope > canvas.paint.top'); if (_top && (_v = _px(_top, x, y)) >= 0) return _v; }"
             + "for (var _i = 0; _i < _els.length; _i++) { var _e = _els[_i], _v;"
@@ -269,6 +362,48 @@ public final class Js {
     public static native String src(JSObject img);
 
 
+    // ---- saved files (see Saves) ----
+
+    /** The page's store name: its data-app, plus ".then" on an app's then.html (the app as recovered keeps its own saves). */
+    @JSBody(script = "var b = document.body, a = b && b.getAttribute('data-app');"
+            + " return a ? a + (b.hasAttribute('data-then') ? '.then' : '') : null;")
+    public static native String saveStore();
+
+    @JSBody(script = "try { return !!window.localStorage; } catch (e) { return false; }")
+    public static native boolean storageAvailable();
+
+    @JSBody(params = "key", script =
+            "try { var _s = JSON.parse(localStorage.getItem(key) || '{}'); window.__shimSaves = _s; return Object.keys(_s); }"
+            + " catch (e) { window.__shimSaves = {}; return []; }")
+    public static native String[] savedPaths(String key);
+
+    @JSBody(params = { "key", "path" }, script = "var _v = (window.__shimSaves || {})[path]; return typeof _v === 'string' ? _v : null;")
+    public static native String savedData(String key, String path);
+
+    /** Offers a file to the user as a browser download; data holds one byte per char. */
+    @JSBody(params = { "name", "data" }, script =
+            "var _b = new Uint8Array(data.length); for (var _i = 0; _i < data.length; _i++) _b[_i] = data.charCodeAt(_i);"
+            + "var _t = name.toLowerCase().endsWith('.html') ? 'text/html' : 'application/octet-stream';"
+            + "var _u = URL.createObjectURL(new Blob([_b], { type: _t }));"
+            + "var _a = document.createElement('a'); _a.href = _u; _a.download = name; document.body.appendChild(_a); _a.click();"
+            + "_a.remove(); setTimeout(function () { URL.revokeObjectURL(_u); }, 10000);")
+    public static native void download(String name, String data);
+
+    /** Replaces the app's saved files. A full localStorage logs an error and keeps the previous copy. */
+    @JSBody(params = { "key", "paths", "data" }, script =
+            "var _s = {}; for (var _i = 0; _i < paths.length; _i++) _s[paths[_i]] = data[_i];"
+            + "try { if (paths.length) localStorage.setItem(key, JSON.stringify(_s)); else localStorage.removeItem(key); }"
+            + " catch (e) { console.error('Could not keep the saved files: ' + e); }")
+    public static native void storeSaves(String key, String[] paths, String[] data);
+
+    @JSBody(params = { "ms", "cb" }, script = "setInterval(cb, ms);")
+    public static native void every(int ms, Callback cb);
+
+    @JSBody(params = "cb", script =
+            "window.addEventListener('pagehide', function () { cb(); });"
+            + "document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') cb(); });")
+    public static native void onPageHide(Callback cb);
+
     @JSBody(params = "o", script = "return o == null;")
     public static native boolean isNull(JSObject o);
 
@@ -277,4 +412,8 @@ public final class Js {
 
     @JSBody(params = "msg", script = "if (window.__shimExited) window.__shimExited(msg);")
     public static native void notifyExited(String msg);
+
+    /** A Windows key shortcut the Robot pressed: the page's pretend Windows (boot.js, &lt;body data-shell&gt;) takes it. */
+    @JSBody(params = "keycode", script = "if (window.__shimShell) window.__shimShell(keycode);")
+    public static native void shellShortcut(int keycode);
 }

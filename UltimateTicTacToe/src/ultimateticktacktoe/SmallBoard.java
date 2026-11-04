@@ -12,6 +12,7 @@ public final class SmallBoard extends JPanel {
       int boardSize = (int)(Toolkit.getDefaultToolkit().getScreenSize().getHeight() / 3.5);
       this.setSize(boardSize, boardSize);
       this.setLayout(null);
+      this.setBackground(CellButton.BACKGROUND);
 
       for (int cell = 0; cell < 9; cell++) {
          this.cells[cell] = new CellButton(game, boardIndex, cell);
@@ -21,6 +22,7 @@ public final class SmallBoard extends JPanel {
       this.layoutCells();
    }
 
+   /** Three by three cells filling the board; the cells draw their marks to fit. */
    public final void layoutCells() {
       this.cellWidth = this.getWidth() / 3;
       this.cellHeight = this.getHeight() / 3;

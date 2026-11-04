@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for UltimateTicTacToe: a big board of nine small boards, the middle one won by X.
+       Original art for this repo. -->
+  <rect x="12" y="12" width="232" height="232" rx="28" fill="#1d2433"/>
+  <g stroke="#7f8aa3" stroke-width="6" stroke-linecap="round"><path d="M92 28 V228"/><path d="M164 28 V228"/><path d="M28 92 H228"/><path d="M28 164 H228"/></g>
+  <g stroke="#4a5470" stroke-width="2">
+    <path d="M51 34 V86 M71 34 V86 M34 51 H86 M34 71 H86"/>
+    <path d="M195 106 V150 M215 106 V150 M178 120 H232 M178 136 H232"/>
+    <path d="M123 178 V230 M143 178 V230 M106 195 H158 M106 215 H158"/>
+  </g>
+  <g stroke="#4fa3ff" stroke-width="12" stroke-linecap="round"><path d="M108 108 L148 148 M148 108 L108 148"/></g>
+  <g stroke="#4fa3ff" stroke-width="5" stroke-linecap="round"><path d="M38 38 L48 48 M48 38 L38 48"/><path d="M182 182 L196 196 M196 182 L182 196"/></g>
+  <g fill="none" stroke="#ff6b6b" stroke-width="5"><circle cx="78" cy="78" r="7"/><circle cx="205" cy="128" r="8"/><circle cx="133" cy="205" r="8"/><circle cx="200" cy="54" r="16"/></g>
+</svg>

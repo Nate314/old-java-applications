@@ -3,6 +3,8 @@
  * colors, gradients, radii and shadows, never sizes or fonts.
  *   Classic: approximates Swing's default Metal (Ocean) look.
  *   Modern:  same layout, flatter colors, rounded corners, follows the system dark mode.
+ *   Arcade:  a CRT arcade cabinet: neon window chrome on a dark grid, scanlines over the page and a power-on
+ *            animation when an app starts (see "arcade skin" at the end).
  */
 
 :root,
@@ -100,6 +102,64 @@
   }
 }
 
+:root[data-skin="arcade"] {
+  --desk:
+    linear-gradient(rgba(0, 229, 255, 0.07) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(0, 229, 255, 0.07) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(ellipse at 50% 115%, #4a0f6e 0%, #150828 55%, #06030f 100%);
+  --control: #140b2a;
+  --control-text: #ece9ff;
+  --frame-bg: #0e0820;
+  --frame-border: #ff2bd6;
+  --frame-border-inactive: #4b2a6b;
+  --title-bg: linear-gradient(90deg, #3a0f5e, #120a2a);
+  --title-bg-inactive: #120a24;
+  --title-text: #7df9ff;
+  --window-radius: 6px;
+  --window-shadow: 0 0 0 1px rgba(255, 43, 214, 0.55), 0 0 22px rgba(255, 43, 214, 0.35), 0 0 60px rgba(0, 229, 255, 0.12);
+  --button-bg: linear-gradient(#2a1552, #170b33);
+  --button-border: #00e5ff;
+  --button-radius: 4px;
+  --button-pressed: #0b5566;
+  --field-bg: #03110a;
+  --field-text: #39ff88;
+  --field-border: #1f8f5a;
+  --field-focus: #39ff88;
+  --field-radius: 3px;
+  --desktop-pane: #170b33;
+  --focus-ring: #00e5ff;
+  --close-bg: transparent;
+  --close-border: #ff2bd6;
+  --page-bg: #07040f;
+  --page-text: #ece9ff;
+  --card-bg: #110a22;
+  --card-border: #35205c;
+  --accent: #ff2bd6;
+  color-scheme: dark;
+}
+
+/* Embedded in the home page's player: boot.js moves #desktop to center the windows, so the desk is painted
+   behind it on the page instead. */
+:root[data-embed] {
+  min-height: 100%;
+  background: var(--desk);
+}
+
+:root[data-embed] body {
+  background: none;
+}
+
+:root[data-embed] #desktop {
+  background: none;
+}
+
+/* Thumbnail mode (web/shots.ps1 crops the windows out of a flat magenta desktop). */
+:root[data-skin][data-shot] {
+  --desk: #ff00ff;
+  --window-radius: 0;
+  --window-shadow: none;
+}
+
 /* ---- page ---- */
 
 html, body {
@@ -156,6 +216,50 @@ canvas.paint.top {
 .window {
   background: var(--frame-bg);
   overflow: hidden;
+  /* A finger on a window works the app (TDesktop's touch input): no page pan or zoom, no callout, no flash. */
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Held on something a long press right-clicks (Minesweeper's tiles): a ring closes in on the finger, then
+   pops when the right click goes. It waits a moment so a quick tap shows nothing. */
+.shim-press {
+  position: fixed;
+  z-index: 2147483000;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 4px solid var(--focus-ring);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.6);
+  animation: shim-press-in 380ms 120ms linear forwards;
+}
+
+.shim-press.done {
+  animation: shim-press-pop 380ms ease-out forwards;
+}
+
+@keyframes shim-press-in {
+  to { opacity: 1; transform: scale(0.75); }
+}
+
+@keyframes shim-press-pop {
+  from { opacity: 1; transform: scale(0.75); }
+  to { opacity: 0; transform: scale(1.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-press { transform: none; animation: shim-press-show 1ms 150ms forwards; }
+  .shim-press.done { animation: none; opacity: 0; }
+}
+
+@keyframes shim-press-show {
+  to { opacity: 1; }
 }
 
 .window.decorated {
@@ -276,8 +380,12 @@ canvas.paint.top {
   background: var(--button-pressed) !important; /* Metal shows its select color even on colored buttons */
 }
 
+/* Keyboard focus (Tab, or an app moving it, like Minesweeper's arrow keys) shows as a ring with a light edge
+   inside it, so it reads on any tile color the app paints. */
 .button:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--focus-ring);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 4px #fff;
 }
 
 .button:disabled {
@@ -333,7 +441,18 @@ canvas.paint.top {
 }
 
 .combo:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--focus-ring);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+
+/* What the shim says to screen readers (Js.announce): read out, never seen. */
+.shim-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .c.no-border {
@@ -482,4 +601,4995 @@ canvas.paint.top {
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+}
+
+/* ---- ways to the next app (boot.js): Switch app drawer, exit screen ---- */
+
+.shim-toolbar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+}
+
+.shim-toolbar button {
+  font: inherit;
+  font-weight: 600;
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.shim-toolbar a[hidden] {
+  display: none;
+}
+
+/* Sound (boot.js, window.oldjavaSound): muted reads as struck through. Below 1000 px only the note shows,
+   to keep the toolbar off the app windows. */
+.shim-toolbar .shim-sound[aria-pressed="false"] {
+  opacity: 0.65;
+  text-decoration: line-through;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-sound span,
+  .shim-toolbar .shim-pop span,
+  .shim-toolbar .shim-zoom span {
+    display: none;
+  }
+}
+
+/* Fit (boot.js centerWindows): the zoom it picked, in a small chip. Actual size reads as off, like muted. */
+.shim-toolbar .shim-zoom b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.shim-toolbar .shim-zoom[aria-pressed="false"] {
+  opacity: 0.65;
+}
+
+.shim-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: 20px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+.shim-close:hover {
+  background: var(--card-border);
+}
+
+/* An app as a link: thumbnail on the desk color, name and hint. */
+.shim-app {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  text-align: left;
+}
+
+.shim-app:hover,
+.shim-app:focus-visible {
+  border-color: var(--card-border);
+  outline: none;
+}
+
+.shim-app:focus-visible {
+  border-color: var(--accent);
+}
+
+.shim-app.current {
+  border-color: var(--accent);
+}
+
+.shim-app-pic {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 60px;
+  border-radius: 6px;
+  background: var(--desk);
+  overflow: hidden;
+}
+
+.shim-app-pic img {
+  max-width: calc(100% - 8px);
+  max-height: calc(100% - 8px);
+}
+
+.shim-app-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.shim-app-text strong {
+  font-size: 14px;
+}
+
+.shim-app-text span {
+  opacity: 0.75;
+}
+
+.shim-app.current .shim-app-text span {
+  opacity: 1;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.shim-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2000000001;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.shim-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000000002;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, 100vw);
+  box-sizing: border-box;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3);
+  animation: shim-slide-in 0.18s ease-out;
+}
+
+@keyframes shim-slide-in {
+  from { transform: translateX(40px); opacity: 0; }
+}
+
+.shim-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 8px 16px;
+  font-size: 16px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shim-drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shim-exit {
+  width: min(560px, calc(100vw - 32px));
+  padding: 20px 22px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.shim-exit h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.shim-exit p {
+  margin: 0 0 14px;
+  opacity: 0.75;
+}
+
+.shim-exit button {
+  padding: 8px 22px;
+  font-weight: 600;
+}
+
+.shim-exit-home {
+  margin-left: 14px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.shim-exit h3 {
+  margin: 22px 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.shim-picks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.shim-picks .shim-app {
+  flex-direction: column;
+  align-items: stretch;
+  border-color: var(--card-border);
+}
+
+.shim-picks .shim-app:hover,
+.shim-picks .shim-app:focus-visible {
+  border-color: var(--accent);
+}
+
+.shim-picks .shim-app-pic {
+  width: auto;
+  height: 84px;
+}
+
+/* Narrow pages: the toolbar stays on one line. */
+@media (max-width: 560px) {
+  .shim-toolbar .shim-next {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .shim-picks {
+    grid-template-columns: 1fr;
+  }
+
+  .shim-picks .shim-app {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .shim-picks .shim-app-pic {
+    width: 96px;
+    height: 60px;
+  }
+}
+
+/* Leave out the output panel when the app has windows to show. */
+:root[data-shot] #desktop:has(.c) ~ .shim-console {
+  display: none;
+}
+
+/* ---- arcade passport (boot.js): stamp toast, badges, progress meter ---- */
+
+.shim-meter {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--card-border);
+  overflow: hidden;
+}
+
+.shim-meter::before {
+  content: "";
+  display: block;
+  height: 100%;
+  width: calc(var(--p, 0) * 100%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #22c55e);
+  transition: width 0.6s ease-out;
+}
+
+.shim-passport {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shim-exit .shim-passport {
+  margin-top: 16px;
+  padding: 0;
+  border: 0;
+  text-align: left;
+}
+
+.shim-app-pic {
+  position: relative;
+}
+
+.shim-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font: 700 11px/18px system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.shim-badge.played {
+  width: 18px;
+  padding: 0;
+  text-align: center;
+  background: #16a34a;
+}
+
+.shim-badge.new {
+  background: #f59e0b;
+  color: #1f2937;
+}
+
+/* Home page: top center, under the toolbar (app pages show stamps on the band's news line instead). */
+.shim-toast {
+  position: fixed;
+  left: 50%;
+  top: 48px;
+  z-index: 2000000003;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: 10px 8px 10px 10px;
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--card-border);
+  transform: translateX(-50%);
+  animation: shim-toast-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+  transition: opacity 0.5s;
+}
+
+.shim-toast.gone {
+  opacity: 0;
+}
+
+@keyframes shim-toast-in {
+  from { transform: translate(-50%, -30px) scale(0.9); opacity: 0; }
+}
+
+/* The thumbnail in a round seal, pressed in like a rubber stamp. */
+.shim-toast-seal {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid #16a34a;
+  background: var(--desk);
+  overflow: hidden;
+  animation: shim-stamp 0.6s 0.15s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+.shim-toast-seal img {
+  max-width: 80%;
+  max-height: 80%;
+}
+
+@keyframes shim-stamp {
+  from { transform: scale(1.8) rotate(-25deg); opacity: 0; }
+  to { transform: rotate(-8deg); }
+}
+
+.shim-toast-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
+
+.shim-toast-text strong {
+  font-size: 14px;
+}
+
+.shim-toast-text .shim-meter {
+  margin-top: 4px;
+}
+
+.shim-toast-go {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.shim-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 2000000004;
+  pointer-events: none;
+}
+
+/* Phones: one compact row at the very top (a smaller seal, the button beside the text), so the
+   toast stays over the page's heading instead of reaching down over the player's bar. */
+@media (max-width: 560px) {
+  .shim-toast {
+    top: max(6px, env(safe-area-inset-top));
+    width: calc(100vw - 12px);
+    max-width: calc(100vw - 12px);
+    gap: 8px;
+    padding: 6px 4px 6px 6px;
+    border-radius: 12px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .shim-toast-seal {
+    width: 38px;
+    height: 38px;
+    border-width: 2px;
+  }
+
+  .shim-toast-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .shim-toast-text strong {
+    font-size: 13px;
+  }
+
+  .shim-toast-text .shim-meter {
+    margin-top: 2px;
+  }
+
+  .shim-toast-go {
+    max-width: 40%;
+    padding: 5px 9px;
+    font-size: 12px;
+    line-height: 1.25;
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+/* ---- touch controller (boot.js PADS): a game pad for the keyboard games ----
+   Modern: a dark glass console with glossy buttons. Classic: a Metal panel with beveled buttons. */
+.shim-pad {
+  --pad-bg: rgba(15, 23, 42, 0.86);
+  --pad-text: #e5e7eb;
+  --pad-btn: radial-gradient(circle at 35% 30%, #475569, #1e293b 70%);
+  --pad-btn-border: rgba(255, 255, 255, 0.14);
+  --pad-btn-on: radial-gradient(circle at 50% 50%, #60a5fa, #2563eb 75%);
+  --pad-glow: 0 0 0 3px rgba(96, 165, 250, 0.45);
+  --pad-radius: 22px;
+  --pad-btn-radius: 14px;
+  --k: clamp(40px, 11vw, 52px);
+  position: fixed;
+  left: 50%;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 1999999998;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 10px 22px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: 10px 16px 12px;
+  border-radius: var(--pad-radius);
+  background: var(--pad-bg);
+  color: var(--pad-text);
+  font: 600 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+:root[data-skin="classic"] .shim-pad {
+  --pad-bg: linear-gradient(#eef3f9, #c9d8ea);
+  --pad-text: #333333;
+  --pad-btn: linear-gradient(#ffffff 0%, #eef3f9 40%, #b8cfe5 100%);
+  --pad-btn-border: #7a8a99;
+  --pad-btn-on: linear-gradient(#b8cfe5, #8da5c9);
+  --pad-glow: 0 0 0 2px #6382bf;
+  --pad-radius: 4px;
+  --pad-btn-radius: 3px;
+  border: 1px solid #8da5c9;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.shim-pad[hidden] {
+  display: none;
+}
+
+/* Docked under the home page's player, in the page flow instead of over the app. */
+.shim-pad.docked {
+  position: static;
+  transform: none;
+  width: auto;
+  max-width: none;
+  border: 0;
+  border-top: 1px solid var(--card-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.shim-pad-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.shim-pad-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.shim-pad-title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--tint, currentColor);
+}
+
+.tint-red { --tint: #ef4444; }
+.tint-green { --tint: #16a34a; }
+.tint-gold { --tint: #d97706; }
+
+.shim-pad-body {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.shim-pad-btn {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: var(--k);
+  height: var(--k);
+  padding: 0 14px;
+  border: 1px solid var(--pad-btn-border);
+  border-radius: var(--pad-btn-radius);
+  background: var(--pad-btn);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: none;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 0.05s, box-shadow 0.05s;
+}
+
+.shim-pad-btn kbd {
+  font: 10px ui-monospace, "Cascadia Mono", Consolas, monospace;
+  opacity: 0.7;
+}
+
+.shim-pad-btn.on,
+.shim-pad-btn.lit {
+  background: var(--pad-btn-on);
+  color: #fff;
+  box-shadow: var(--pad-glow);
+  transform: translateY(2px);
+}
+
+:root[data-skin="classic"] .shim-pad-btn.on,
+:root[data-skin="classic"] .shim-pad-btn.lit {
+  color: #111;
+}
+
+.shim-pad-btn.big {
+  min-width: calc(var(--k) * 2.6);
+  height: calc(var(--k) * 1.35);
+  border-radius: calc(var(--k) * 0.7);
+  font-size: 18px;
+}
+
+:root[data-skin="classic"] .shim-pad-btn.big {
+  border-radius: var(--pad-btn-radius);
+}
+
+/* The cross: four buttons on a 3 x 3 grid around an empty hub. */
+/* Two crosses and two fire buttons (TankGame) stay on one row, sized down to fit narrow pages. A pad with one
+   cross (Star Catcher) wraps like any other. */
+.shim-pad:has(.shim-pad-group + .shim-pad-group .shim-dpad) {
+  --k: clamp(30px, calc((100vw - 110px) / 9), 52px);
+  flex-wrap: nowrap;
+}
+
+.shim-pad:has(.shim-pad-group + .shim-pad-group .shim-dpad) .shim-pad-body {
+  flex-wrap: nowrap;
+}
+
+.shim-dpad {
+  display: grid;
+  grid-template: repeat(3, var(--k)) / repeat(3, var(--k));
+  gap: 2px;
+}
+
+.shim-dpad .shim-pad-btn {
+  min-width: 0;
+  padding: 0;
+}
+
+.shim-dpad .shim-pad-btn kbd {
+  font-size: 15px;
+  opacity: 0.95;
+}
+
+.shim-dpad .up { grid-area: 1 / 2; }
+.shim-dpad .left { grid-area: 2 / 1; }
+.shim-dpad .down { grid-area: 3 / 2; }
+.shim-dpad .right { grid-area: 2 / 3; }
+
+.shim-pad-btn.fire {
+  width: calc(var(--k) * 1.5);
+  height: calc(var(--k) * 1.5);
+  padding: 0;
+  border-radius: 50%;
+  border-color: rgba(0, 0, 0, 0.25);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tint) 55%, #fff), var(--tint) 70%);
+  color: #fff;
+  font-size: 15px;
+}
+
+.shim-pad-btn.fire kbd {
+  opacity: 0.9;
+}
+
+.shim-pad-btn.fire.on,
+.shim-pad-btn.fire.lit {
+  background: var(--tint);
+  color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tint) 45%, transparent);
+}
+
+/* One octave, C to C: eight white keys with the five black keys on the lines between them. */
+.shim-piano {
+  position: relative;
+  display: flex;
+  width: min(440px, calc(100vw - 48px));
+  height: calc(var(--k) * 2);
+}
+
+.shim-piano .white {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0 8px;
+  justify-content: flex-end;
+  border-color: #94a3b8;
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(#ffffff, #e5e7eb);
+  color: #334155;
+}
+
+.shim-piano .black {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 10%;
+  min-width: 0;
+  height: 60%;
+  padding: 0 0 6px;
+  justify-content: flex-end;
+  border-color: #000;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(#334155, #0f172a);
+  color: #e5e7eb;
+}
+
+.shim-piano .shim-pad-btn.on,
+.shim-piano .shim-pad-btn.lit {
+  background: var(--pad-btn-on);
+  color: #fff;
+}
+
+@media (max-width: 560px) {
+  .shim-pad {
+    gap: 8px 12px;
+    padding: 8px 10px 10px;
+  }
+}
+
+/* ---- arcade skin: neon chrome, scanlines and a CRT power-on ----
+   Only colors, shadows and overlays, like the other skins: sizes and widget fonts still come from Java. */
+
+:root[data-skin="arcade"] .titlebar {
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.8);
+  letter-spacing: 0.04em;
+}
+
+:root[data-skin="arcade"] .window:not(.active):not(.selected) > .titlebar {
+  color: #9b8cc4;
+  text-shadow: none;
+}
+
+:root[data-skin="arcade"] .titlebar .close {
+  color: #ff2bd6;
+  text-shadow: 0 0 6px rgba(255, 43, 214, 0.9);
+}
+
+:root[data-skin="arcade"] .titlebar .close:hover {
+  background: #ff2bd6;
+  color: #0e0820;
+  text-shadow: none;
+}
+
+:root[data-skin="arcade"] .button.opaque:not(.custom-bg) {
+  text-shadow: 0 0 5px rgba(125, 249, 255, 0.55);
+}
+
+:root[data-skin="arcade"] .button:hover:not(:disabled),
+:root[data-skin="arcade"] .combo:hover {
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.65), inset 0 0 6px rgba(0, 229, 255, 0.25);
+}
+
+:root[data-skin="arcade"] .textfield {
+  text-shadow: 0 0 5px rgba(57, 255, 136, 0.6);
+  caret-color: #39ff88;
+}
+
+:root[data-skin="arcade"] .textfield:focus {
+  box-shadow: 0 0 0 1px var(--field-focus), 0 0 10px rgba(57, 255, 136, 0.45);
+}
+
+:root[data-skin="arcade"] .tabbedpane > .tabs .tab.selected {
+  color: #7df9ff;
+  border-color: #00e5ff;
+}
+
+:root[data-skin="arcade"] .shim-console {
+  background: #020a06;
+  color: #39ff88;
+  text-shadow: 0 0 5px rgba(57, 255, 136, 0.55);
+}
+
+:root[data-skin="arcade"] .shim-overlay-box {
+  border: 1px solid #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 30px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-pad {
+  --pad-bg: rgba(10, 5, 25, 0.9);
+  --pad-text: #ece9ff;
+  --pad-btn: radial-gradient(circle at 35% 30%, #4a2a80, #1a0d38 70%);
+  --pad-btn-border: rgba(0, 229, 255, 0.55);
+  --pad-btn-on: radial-gradient(circle at 50% 50%, #ff8af0, #ff2bd6 75%);
+  --pad-glow: 0 0 14px rgba(255, 43, 214, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.55), 0 0 26px rgba(255, 43, 214, 0.3);
+}
+
+/* The screen: fine scanlines and a dark vignette over the whole page (not in the home page's player, whose
+   page draws them once over the player; not in thumbnail mode). The overlay never takes pointer events. */
+:root[data-skin="arcade"]:not([data-shot]):not([data-embed]) body::after,
+:root[data-skin="arcade"] .player:fullscreen::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.16) 2px 3px),
+    radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* A faint bright band rolls down the screen, as on an old tube. */
+:root[data-skin="arcade"]:not([data-shot]):not([data-embed]) body::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: -30vh;
+  height: 30vh;
+  z-index: 2147483000;
+  pointer-events: none;
+  background: linear-gradient(transparent, rgba(125, 249, 255, 0.045), transparent);
+  animation: arcade-roll 9s linear infinite;
+}
+
+@keyframes arcade-roll {
+  to { transform: translateY(160vh); }
+}
+
+/* Power-on: the app's windows open from a bright line, like a tube warming up. Every new app in the home
+   page's player gets one too. It animates the scale property, so it composes with the transform boot.js
+   uses to center the windows in the player. */
+:root[data-skin="arcade"]:not([data-shot]) #desktop {
+  animation: arcade-on 0.75s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+@keyframes arcade-on {
+  0% { scale: 0.02 0.004; filter: brightness(5) saturate(0); opacity: 0.2; }
+  35% { scale: 1 0.004; filter: brightness(4) saturate(0); opacity: 1; }
+  70% { scale: 1 1.03; filter: brightness(1.6); }
+  100% { scale: 1 1; filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin="arcade"] #desktop,
+  :root[data-skin="arcade"] body::before {
+    animation: none;
+  }
+
+  :root[data-skin="arcade"] body::before {
+    display: none;
+  }
+}
+
+/* ---- title screen: an app page opens on it while its files load, and the app starts on Play ----
+   Below the toolbar (so Switch app, Sound and the skin picker work on it), above everything else. */
+
+.shim-title {
+  position: fixed;
+  inset: 0;
+  z-index: 1999999998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 56px 16px 16px;
+  overflow: auto;
+  background: var(--desk);
+  color: var(--page-text);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: default;
+  transition: opacity 0.35s ease-out;
+}
+
+.shim-title.ready {
+  cursor: pointer;
+}
+
+.shim-title-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-areas: "art text" "meter meter" "log log";
+  gap: 18px 24px;
+  width: min(880px, 100%);
+  margin: auto;
+  box-sizing: border-box;
+  padding: 22px;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  background: var(--card-bg);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  transition: scale 0.35s ease-out, filter 0.35s ease-out;
+}
+
+.shim-title-art {
+  grid-area: art;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  max-height: 46vh;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--desk);
+  overflow: hidden;
+}
+
+.shim-title-art img {
+  max-width: 100%;
+  max-height: calc(46vh - 36px);
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.3));
+}
+
+.shim-title-text {
+  grid-area: text;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shim-title-cat {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shim-title-cat:empty {
+  display: none;
+}
+
+.shim-title h1 {
+  margin: 0;
+  font-size: clamp(28px, 4.6vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.shim-title-hint {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.85;
+}
+
+.shim-title-stamp {
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px dashed currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.shim-title-stamp:empty {
+  display: none;
+}
+
+.shim-title-stamp.played {
+  border-style: solid;
+  border-color: #22c55e;
+  color: #16a34a;
+}
+
+.shim-title-record {
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px solid #f59e0b;
+  border-radius: 999px;
+  color: #d97706;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shim-title-record::before {
+  content: "\2605  ";
+}
+
+.shim-title-record[hidden] {
+  display: none;
+}
+
+.shim-title-forget {
+  margin-left: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-left: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.shim-title-forget:hover,
+.shim-title-forget.confirm {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.shim-title-play {
+  margin-top: 6px;
+  padding: 10px 30px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: 700 18px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
+}
+
+.shim-title-play:disabled {
+  cursor: progress;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.shim-title.ready .shim-title-play {
+  animation: title-pulse 1.8s ease-in-out infinite;
+}
+
+.shim-title-play:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.shim-title-press {
+  font-size: 12px;
+  opacity: 0.6;
+  visibility: hidden;
+}
+
+.shim-title.ready .shim-title-press {
+  visibility: visible;
+}
+
+.shim-title-meter {
+  grid-area: meter;
+}
+
+.shim-title-log {
+  grid-area: log;
+  display: flex;
+  flex-direction: column;
+  height: 7.5em;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #cbd5e1;
+  font: 12px/1.5 ui-monospace, Consolas, "Courier New", monospace;
+  scrollbar-width: thin;
+}
+
+.shim-title-log .row {
+  display: flex;
+  gap: 12px;
+}
+
+.shim-title-log .row > :first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shim-title-log .row > :first-child::before {
+  content: "load ";
+  opacity: 0.5;
+}
+
+.shim-title-log .row > :last-child {
+  flex: none;
+  color: #86efac;
+}
+
+.shim-title-log .row.bad > :last-child {
+  color: #fca5a5;
+}
+
+.shim-title-log .row.ready > :first-child::before {
+  content: "";
+}
+
+.shim-title-log .row.ready {
+  color: #86efac;
+  font-weight: 700;
+}
+
+.shim-title.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shim-title.leaving .shim-title-card {
+  scale: 1.04;
+}
+
+/* While it shows, the controller and the Arcade power-on wait for the app to start. */
+:root[data-title] .shim-pad {
+  visibility: hidden;
+}
+
+:root[data-skin][data-title] #desktop {
+  animation: none;
+}
+
+@keyframes title-pulse {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.05; }
+}
+
+@keyframes title-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+
+@media (max-width: 680px) {
+  .shim-title-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "art" "text" "meter" "log";
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .shim-title-art {
+    min-height: 0;
+    max-height: 30vh;
+    padding: 12px;
+  }
+
+  .shim-title-art img {
+    max-height: calc(30vh - 24px);
+  }
+
+  .shim-title-log {
+    height: 4.5em;
+  }
+}
+
+@media (max-height: 560px) {
+  .shim-title-log {
+    height: 4.5em;
+  }
+}
+
+/* Classic: a Metal dialog, like a Java splash screen. */
+:root[data-skin="classic"] .shim-title-card {
+  border: 1px solid var(--frame-border);
+  border-top: 22px solid #b8cfe5;
+  border-radius: 0;
+  background: var(--frame-bg);
+  box-shadow: var(--window-shadow);
+}
+
+:root[data-skin="classic"] .shim-title-art {
+  border: 1px solid var(--field-border);
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-title-play {
+  border: 1px solid var(--button-border);
+  border-radius: 0;
+  background: var(--button-bg);
+  color: var(--control-text);
+  font-family: Dialog, Tahoma, sans-serif;
+  box-shadow: none;
+}
+
+:root[data-skin="classic"] .shim-title.ready .shim-title-play {
+  animation: none;
+}
+
+:root[data-skin="classic"] .shim-title-meter,
+:root[data-skin="classic"] .shim-title-meter::before {
+  height: 14px;
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-title-meter {
+  border: 1px solid var(--field-border);
+  background: #ffffff;
+}
+
+:root[data-skin="classic"] .shim-title-meter::before {
+  background: repeating-linear-gradient(90deg, #6382bf 0 10px, transparent 10px 12px);
+}
+
+:root[data-skin="classic"] .shim-title-log {
+  border: 1px solid var(--field-border);
+  border-radius: 0;
+  background: #ffffff;
+  color: #333333;
+}
+
+:root[data-skin="classic"] .shim-title-log .row > :last-child,
+:root[data-skin="classic"] .shim-title-log .row.ready {
+  color: #2c5b9a;
+}
+
+/* Arcade: a cabinet's attract screen, with a blinking PRESS ANY KEY. */
+:root[data-skin="arcade"] .shim-title-card {
+  border: 1px solid #ff2bd6;
+  border-radius: 8px;
+  background: rgba(14, 8, 32, 0.92);
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 40px rgba(255, 43, 214, 0.35), 0 0 90px rgba(0, 229, 255, 0.12);
+}
+
+:root[data-skin="arcade"] .shim-title-art {
+  border: 1px solid #35205c;
+  background: radial-gradient(circle at 50% 40%, #2a1552, #07040f 75%);
+}
+
+:root[data-skin="arcade"] .shim-title-art img {
+  filter: drop-shadow(0 0 16px rgba(255, 43, 214, 0.45));
+}
+
+:root[data-skin="arcade"] .shim-title h1 {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #ffd6fa;
+  text-shadow: 0 0 6px #ff2bd6, 0 0 18px #ff2bd6, 0 0 40px rgba(255, 43, 214, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-title-cat {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-title-stamp.played {
+  border-color: #39ff88;
+  color: #39ff88;
+}
+
+:root[data-skin="arcade"] .shim-title-record {
+  border-color: #ffe14d;
+  color: #ffe14d;
+  text-shadow: 0 0 8px rgba(255, 225, 77, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-title-play {
+  border: 2px solid #00e5ff;
+  border-radius: 4px;
+  background: linear-gradient(#2a1552, #170b33);
+  color: #7df9ff;
+  font-family: "Courier New", ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.8);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-title.ready .shim-title-press {
+  font: 700 14px "Courier New", ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff35c;
+  opacity: 1;
+  text-shadow: 0 0 8px rgba(255, 243, 92, 0.8);
+  animation: title-blink 1s steps(1) infinite;
+}
+
+:root[data-skin="arcade"] .shim-title-meter::before {
+  background: linear-gradient(90deg, #ff2bd6, #00e5ff);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-title-log {
+  border: 1px solid #1f8f5a;
+  background: #020a06;
+  color: #39ff88;
+  text-shadow: 0 0 5px rgba(57, 255, 136, 0.55);
+}
+
+:root[data-skin="arcade"] .shim-title-log .row > :last-child {
+  color: #7df9ff;
+}
+
+/* The tube switches off: the card collapses to a bright line as the app powers on behind it. */
+:root[data-skin="arcade"] .shim-title.leaving .shim-title-card {
+  scale: 1 0.004;
+  filter: brightness(4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-title,
+  .shim-title-card {
+    transition: none;
+  }
+
+  .shim-title.ready .shim-title-play,
+  :root[data-skin="arcade"] .shim-title.ready .shim-title-press {
+    animation: none;
+  }
+}
+
+/* ---- source viewer (boot.js): the app's README and Java sources in a panel docked on the right ----
+   No scrim: the app keeps running, and stays playable, on the left. Above the toolbar (the panel has its
+   own close button). Under 900 px the panel takes the whole page. */
+
+.shim-toolbar .shim-source-open {
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-source-open span {
+    display: none;
+  }
+}
+
+.shim-title-source {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* Download .jar (boot.js jarLink): on the title screen, and in the Source panel's head beside Raw. */
+.shim-title-jar {
+  margin: 0;
+  font-size: 12.5px;
+  max-width: 46ch;
+}
+
+.shim-title-jar[hidden] {
+  display: none;
+}
+
+.shim-title-jar-link,
+.shim-source-jar {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.shim-title-jar-keys {
+  font-weight: 600;
+}
+
+.shim-source-jar {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* On a narrow screen the warning goes under "Download .jar", so the header still fits. */
+@media (max-width: 600px) {
+  .shim-source-jar {
+    text-align: right;
+  }
+
+  .shim-source-jar-keys {
+    display: block;
+    font-weight: 400;
+  }
+}
+
+.shim-source {
+  --src-bg: #ffffff;
+  --src-text: #1f2937;
+  --src-gutter: #94a3b8;
+  --src-line: rgba(37, 99, 235, 0.12);
+  --src-k: #7c3aed;
+  --src-s: #047857;
+  --src-c: #6b7280;
+  --src-n: #b45309;
+  --src-t: #0e7490;
+  --src-a: #9d174d;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000000002;
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 58vw);
+  box-sizing: border-box;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  border-left: 1px solid var(--card-border);
+  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.28);
+  animation: shim-slide-in 0.18s ease-out;
+}
+
+@media (max-width: 900px) {
+  .shim-source {
+    left: 0;
+    width: auto;
+    border-left: 0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="modern"] .shim-source {
+    --src-bg: #0b1220;
+    --src-text: #e5e7eb;
+    --src-gutter: #475569;
+    --src-line: rgba(96, 165, 250, 0.16);
+    --src-k: #c084fc;
+    --src-s: #86efac;
+    --src-c: #94a3b8;
+    --src-n: #fbbf24;
+    --src-t: #67e8f9;
+    --src-a: #f9a8d4;
+  }
+}
+
+.shim-source-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 4px 16px;
+}
+
+.shim-source-title {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.shim-source-title strong {
+  font-size: 17px;
+}
+
+.shim-source-origin {
+  padding: 1px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shim-source-origin[hidden] {
+  display: none;
+}
+
+.shim-source-origin.original {
+  color: #16a34a;
+}
+
+.shim-source-raw {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.shim-source-sub {
+  margin: 0;
+  padding: 0 16px 10px;
+  font-size: 12.5px;
+  opacity: 0.75;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shim-source-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.shim-source-files {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  width: 250px;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  border-right: 1px solid var(--card-border);
+}
+
+.shim-source-files .dir {
+  margin: 8px 6px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  overflow-wrap: anywhere;
+}
+
+.shim-source-files button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: 13px/1.3 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.shim-source-files button:hover {
+  background: var(--card-border);
+}
+
+.shim-source-files button[aria-current="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.shim-source-view {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--src-bg);
+  color: var(--src-text);
+  outline: none;
+}
+
+.shim-source-path {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  padding: 6px 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  border-bottom: 1px solid var(--card-border);
+  font: 12px ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+}
+
+.shim-source-code {
+  display: table;
+  min-width: 100%;
+  padding: 8px 0 24px;
+  font: 12.5px/1.55 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.shim-source-code .l {
+  display: table-row;
+}
+
+.shim-source-code .l.on {
+  background: var(--src-line);
+}
+
+.shim-source-code .t {
+  display: table-cell;
+  padding-right: 16px;
+}
+
+.shim-source-code .n {
+  display: table-cell;
+  width: 1%;
+  padding: 0 14px 0 12px;
+  color: var(--src-gutter);
+  text-align: right;
+  user-select: none;
+  cursor: pointer;
+}
+
+.shim-source-code .n:hover {
+  color: var(--src-text);
+}
+
+.shim-source-code .l.on .n {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tk-k { color: var(--src-k); font-weight: 600; }
+.tk-s { color: var(--src-s); }
+.tk-c { color: var(--src-c); font-style: italic; }
+.tk-n { color: var(--src-n); }
+.tk-t { color: var(--src-t); }
+.tk-a { color: var(--src-a); }
+
+a.tk-t {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+a.tk-t:hover {
+  text-decoration-style: solid;
+}
+
+.shim-source-md {
+  max-width: 72ch;
+  padding: 6px 22px 28px;
+}
+
+.shim-source-md h2 { font-size: 22px; margin: 14px 0 8px; }
+.shim-source-md h3 { font-size: 16px; margin: 20px 0 6px; }
+.shim-source-md p,
+.shim-source-md ul { margin: 0 0 10px; }
+.shim-source-md ul { padding-left: 22px; }
+.shim-source-md li { margin: 3px 0; }
+.shim-source-md li > ul { margin: 3px 0 0; }
+
+.shim-source-md code,
+.shim-source-md a.file,
+.shim-source-md pre {
+  font: 0.9em ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+}
+
+.shim-source-md code,
+.shim-source-md a.file {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--src-line);
+  overflow-wrap: anywhere;
+}
+
+.shim-source-md a.file {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.shim-source-md pre {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--src-line);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* Narrow pages: the file list becomes a strip of tabs above the code. */
+@media (max-width: 640px) {
+  .shim-source-body {
+    flex-direction: column;
+  }
+
+  .shim-source-files {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+    padding: 6px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .shim-source-files .dir {
+    display: none;
+  }
+
+  .shim-source-files button {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .shim-source-md {
+    padding: 4px 16px 24px;
+  }
+}
+
+/* Classic: Metal chrome, and Eclipse's own Java colors (the original sources are Eclipse projects). */
+:root[data-skin="classic"] .shim-source {
+  --src-bg: #ffffff;
+  --src-text: #000000;
+  --src-gutter: #787878;
+  --src-line: #e8f2fe;
+  --src-k: #7f0055;
+  --src-s: #2a00ff;
+  --src-c: #3f7f5f;
+  --src-n: #000000;
+  --src-t: #000000;
+  --src-a: #646464;
+  border-left: 1px solid #7a8a99;
+  box-shadow: -2px 0 6px rgba(0, 0, 0, 0.35);
+  font-family: Dialog, Tahoma, "Segoe UI", sans-serif;
+}
+
+:root[data-skin="classic"] .shim-source-head {
+  padding-bottom: 8px;
+  background: linear-gradient(#dde8f3, #b8cfe5);
+  border-bottom: 1px solid #8da5c9;
+}
+
+:root[data-skin="classic"] .shim-source-sub {
+  padding-top: 6px;
+}
+
+:root[data-skin="classic"] .shim-source-files {
+  background: #eeeeee;
+}
+
+:root[data-skin="classic"] .shim-source-files button {
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-source-files button[aria-current="true"] {
+  background: #b8cfe5;
+  color: #000;
+  outline: 1px solid #6382bf;
+}
+
+:root[data-skin="classic"] .shim-source-code .n {
+  background: #f0f0f0;
+  border-right: 1px solid #d0d0d0;
+}
+
+:root[data-skin="classic"] .tk-c {
+  font-style: normal;
+}
+
+/* Arcade: a phosphor terminal in a neon frame. */
+:root[data-skin="arcade"] .shim-source {
+  --src-bg: #020a06;
+  --src-text: #39ff88;
+  --src-gutter: #1f6f4a;
+  --src-line: rgba(255, 43, 214, 0.16);
+  --src-k: #ff2bd6;
+  --src-s: #7df9ff;
+  --src-c: #1f8f5a;
+  --src-n: #ffe66d;
+  --src-t: #ece9ff;
+  --src-a: #ffa4f0;
+  border-left: 1px solid #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.55), -8px 0 32px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-source-title strong {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-source-origin.original {
+  color: #39ff88;
+}
+
+:root[data-skin="arcade"] .shim-source-view {
+  text-shadow: 0 0 4px rgba(57, 255, 136, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-source-view .tk-k {
+  text-shadow: 0 0 6px rgba(255, 43, 214, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-source-path {
+  text-shadow: none;
+}
+
+:root[data-skin="arcade"] .shim-source-files button[aria-current="true"] {
+  background: transparent;
+  color: #7df9ff;
+  box-shadow: inset 0 0 0 1px #00e5ff, 0 0 10px rgba(0, 229, 255, 0.45);
+}
+
+/* ---- share (boot.js openShare): the link preview card, a message, the link and ways to send it ----
+   A dialog in the middle of the page over a scrim, above the toolbar and the title screen. */
+
+.shim-toolbar .shim-share-open {
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-share-open span {
+    display: none;
+  }
+}
+
+.shim-share {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 2000000002;
+  display: flex;
+  flex-direction: column;
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  animation: shim-share-in 0.18s ease-out;
+}
+
+@keyframes shim-share-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)); }
+}
+
+.shim-share-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+}
+
+.shim-share-label {
+  margin: 0 0 -6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.shim-share-preview {
+  display: block;
+  flex: none;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+}
+
+.shim-share-preview:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-share-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  background: #1d0d3d;
+}
+
+.shim-share-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--card-border);
+  font-size: 13px;
+}
+
+.shim-share-cap small {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+.shim-share-cap span {
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shim-share-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shim-share-msg textarea,
+.shim-share-link input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  resize: vertical;
+}
+
+.shim-share-link {
+  display: flex;
+  gap: 8px;
+}
+
+.shim-share-link input {
+  flex: 1;
+  font-size: 13px;
+}
+
+.shim-share-copy,
+.shim-share-way {
+  flex: none;
+  padding: 6px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 600 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shim-share-copy,
+.shim-share-way.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.shim-share-way:hover {
+  border-color: var(--accent);
+}
+
+.shim-share-copy:focus-visible,
+.shim-share-way:focus-visible,
+.shim-share-msg textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.shim-share-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shim-share-ways .shim-share-way {
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+/* On the exit screen, next to All apps. */
+.shim-exit .shim-exit-share {
+  margin-left: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* The arcade-complete toast's Share it is a button styled as its link. */
+button.shim-toast-go {
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* A shared link's title screen: who sent it. */
+.shim-title-shared {
+  margin: 0 0 4px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+:root[data-skin="classic"] .shim-share {
+  border: 1px solid var(--frame-border);
+  border-radius: 0;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-skin="classic"] .shim-share .shim-drawer-head {
+  background: var(--title-bg);
+  font-size: 14px;
+}
+
+:root[data-skin="classic"] .shim-share-preview,
+:root[data-skin="classic"] .shim-share-copy,
+:root[data-skin="classic"] .shim-share-way,
+:root[data-skin="classic"] .shim-share-msg textarea,
+:root[data-skin="classic"] .shim-share-link input,
+:root[data-skin="classic"] .shim-title-shared {
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-share-way:not(.primary) {
+  background: var(--button-bg);
+  border-color: var(--button-border);
+  color: var(--control-text);
+}
+
+:root[data-skin="arcade"] .shim-share {
+  border: 1px solid #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 36px rgba(255, 43, 214, 0.4);
+}
+
+:root[data-skin="arcade"] .shim-share .shim-drawer-head strong {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-share-preview {
+  border-color: #00e5ff;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-share-msg textarea,
+:root[data-skin="arcade"] .shim-share-link input {
+  background: #020a06;
+  color: #39ff88;
+  border-color: #39ff88;
+}
+
+:root[data-skin="arcade"] .shim-share-way:not(.primary) {
+  border-color: #00e5ff;
+  color: #7df9ff;
+}
+
+:root[data-skin="arcade"] .shim-share-way:not(.primary):hover {
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-share-copy,
+:root[data-skin="arcade"] .shim-share-way.primary {
+  border-color: #ff2bd6;
+  background: #ff2bd6;
+  box-shadow: 0 0 12px rgba(255, 43, 214, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-title-shared {
+  border-color: #ff2bd6;
+  background: rgba(255, 43, 214, 0.14);
+  color: #ffd6f7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-share {
+    animation: none;
+  }
+}
+
+/* ---- instant replay (boot.js startReplay, openClip) ----
+   Replay in the toolbar shows once the app runs, with a red dot that breathes while it records. The clip
+   plays in the share dialog's frame. */
+
+.shim-toolbar .shim-replay {
+  display: none;
+  white-space: nowrap;
+}
+
+:root[data-replay] .shim-toolbar .shim-replay {
+  display: inline-block;
+}
+
+.shim-replay-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  vertical-align: 0;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  animation: shim-replay-rec 2s ease-in-out infinite;
+}
+
+@keyframes shim-replay-rec {
+  50% { opacity: 0.45; }
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-replay span:not(.shim-replay-dot) {
+    display: none;
+  }
+}
+
+.shim-clip {
+  width: min(720px, calc(100vw - 24px));
+}
+
+.shim-clip-video {
+  display: block;
+  flex: none;
+  width: 100%;
+  max-height: calc(100vh - 220px);
+  border-radius: 10px;
+  background: transparent;   /* a tall clip leaves the panel showing beside it, not black bars */
+}
+
+.shim-clip-note {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+:root[data-skin="classic"] .shim-clip-video {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-replay-dot {
+  background: #ff2bd6;
+  box-shadow: 0 0 8px 2px rgba(255, 43, 214, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-clip-video {
+  box-shadow: 0 0 0 1px #00e5ff, 0 0 14px rgba(0, 229, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-replay-dot {
+    animation: none;
+  }
+}
+
+/* ---- app-page stage (boot.js stageEdge): the toolbar is a band across the top, and #desktop fills the space
+   between it and the controller and output panel at the bottom. The shim reports that space to Java as the
+   screen and boot.js centers the windows in it, so no window sits under the toolbar or the controller.
+   --bar-h, --pad-h and --out-h are those elements' heights, kept current by boot.js. */
+
+:root[data-stage] #desktop {
+  top: var(--bar-h, 0px);
+  bottom: calc(var(--pad-h, 0px) + var(--out-h, 0px));
+  background: none;   /* boot.js moves it to center the windows, so the desk is painted on the page */
+}
+
+/* A desktop scaled down to fit (boot.js centerWindows) would clip its windows at its unscaled size. The
+   toolbar and the controller sit above anything dragged past the stage's edges. */
+:root[data-stage] #desktop,
+:root[data-embed] #desktop {
+  overflow: visible;
+}
+
+:root[data-stage] {
+  min-height: 100%;
+  background: var(--desk);
+}
+
+:root[data-stage] body {
+  background: none;
+}
+
+:root[data-stage] .shim-toolbar {
+  top: 0;
+  left: 0;
+  right: 0;
+  max-width: none;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 0;
+  justify-content: flex-end;
+  row-gap: 6px;
+  opacity: 1;
+  background: rgba(17, 24, 39, 0.94);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* The app's name on the left; the controls keep to the right. */
+.shim-toolbar .shim-bar-name {
+  display: block;
+  overflow: hidden;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A power light: green while the app runs, amber while the title screen waits. */
+.shim-toolbar .shim-bar-name::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  vertical-align: 1px;
+}
+
+:root[data-title] .shim-toolbar .shim-bar-name::before {
+  background: #f59e0b;
+  box-shadow: none;
+}
+
+/* ---- band news (boot.js bandNews): How to play and new stamps take the name's slot in the band for a few
+   seconds, so they never float over the stage and the stage never moves for them. The name slides up and the
+   news line slides in; a line too long for the slot scrolls through (boot.js), fading out at its right edge. */
+
+.shim-toolbar .shim-bar-slot {
+  position: relative;
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shim-bar-slot > .shim-bar-name,
+.shim-news {
+  transition: transform 0.35s cubic-bezier(0.3, 1.3, 0.5, 1), opacity 0.25s, visibility 0.35s;
+}
+
+.shim-bar-slot[data-news] > .shim-bar-name {
+  transform: translateY(-110%);
+  opacity: 0;
+}
+
+.shim-news {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateY(110%);
+  opacity: 0;
+  visibility: hidden;
+}
+
+.shim-bar-slot[data-news] > .shim-news {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+}
+
+.shim-news-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+}
+
+.shim-news-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 20px;   /* clear of the fade when scrolled to its end */
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.shim-news-tag {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The stamped app's thumbnail in a small round seal, pressed in like a rubber stamp. */
+.shim-news-seal {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid #22c55e;
+  background: var(--desk);
+  overflow: hidden;
+  animation: shim-stamp 0.6s 0.2s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+.shim-news-seal img {
+  max-width: 80%;
+  max-height: 80%;
+}
+
+.shim-news-track .shim-meter {
+  flex: none;
+  width: 72px;
+}
+
+.shim-toolbar .shim-news-go {
+  flex: none;
+  padding: 1px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shim-toolbar .shim-news .shim-close {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.shim-toolbar .shim-news .shim-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* The band's ? button, which shows How to play again: lit while it shows. */
+.shim-toolbar .shim-help {
+  width: 22px;
+  padding: 1px 0;
+}
+
+.shim-toolbar .shim-help[aria-pressed="true"] {
+  background: #fff;
+  color: #111827;
+}
+
+:root[data-skin="arcade"] .shim-news-tag,
+:root[data-skin="arcade"] .shim-toolbar .shim-news-go {
+  background: #ff2bd6;
+  box-shadow: 0 0 8px rgba(255, 43, 214, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-news-track {
+  color: #7df9ff;
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-bar-slot > .shim-bar-name,
+  .shim-news {
+    transition: opacity 0.25s, visibility 0.25s;
+  }
+
+  .shim-bar-slot[data-news] > .shim-bar-name,
+  .shim-news {
+    transform: none;
+  }
+
+  .shim-news-seal {
+    animation: none;
+  }
+}
+
+:root[data-stage] .shim-title {
+  padding-top: calc(var(--bar-h, 40px) + 16px);
+}
+
+/* Where the source panel docks beside the app (wider pages), the stage ends at its left edge, so the windows
+   stay in view next to their code. */
+@media (min-width: 901px) {
+  :root[data-stage][data-source] #desktop,
+  :root[data-stage][data-source] .shim-popped {
+    right: min(860px, 58vw);
+  }
+}
+
+/* Narrow pages: the band wraps to a second row, kept short. */
+@media (max-width: 560px) {
+  :root[data-stage] .shim-toolbar {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  /* The picker keeps its name for screen readers (the select is inside the label) but not its room. */
+  :root[data-stage] .shim-toolbar label {
+    font-size: 0;
+  }
+
+  :root[data-stage] .shim-toolbar label select {
+    font-size: 12px;
+  }
+
+  /* The name's slot takes the band's first row, beside only its ? button, so the news line has room to read. */
+  :root[data-stage] .shim-toolbar .shim-bar-slot {
+    flex-basis: calc(100% - 40px);
+    min-height: 24px;
+  }
+}
+
+:root[data-skin="classic"][data-stage] .shim-toolbar {
+  background: linear-gradient(#4f6f91, #34506e);
+  border-bottom: 1px solid #22384f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 4px rgba(0, 0, 0, 0.3);
+  backdrop-filter: none;
+}
+
+:root[data-skin="arcade"][data-stage] .shim-toolbar {
+  background: rgba(17, 10, 34, 0.96);
+  border-bottom: 1px solid #ff2bd6;
+  box-shadow: 0 0 14px rgba(255, 43, 214, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-bar-name {
+  color: #7df9ff;
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---- pretend Windows (boot.js pretendWindows, <body data-shell>): the Start menu and File Explorer windows
+   the Windows and Windows+E apps open with their Robot key presses. They live in a layer over the stage
+   (between the toolbar and the bottom panels), above the app's own windows and below the page's overlays,
+   and take the skin's window colors. */
+
+.shim-shell {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--bar-h, 0px);
+  bottom: calc(var(--pad-h, 0px) + var(--out-h, 0px));
+  z-index: 1500000000;
+  pointer-events: none;
+  overflow: hidden;
+  color: var(--control-text);
+  font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-shell > * {
+  pointer-events: auto;
+}
+
+.shim-shell button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shim-start,
+.shim-explorer,
+.shim-shell-tray {
+  box-sizing: border-box;
+  background: var(--frame-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--window-radius);
+  box-shadow: var(--window-shadow);
+}
+
+/* The folder icon: a tab and a front flap, with the app's picture as the paper inside. */
+.shim-folder-mini {
+  flex: none;
+  width: 16px;
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(#ffd66b, #f0b032);
+  box-shadow: inset 0 3px 0 #e2a22c;
+}
+
+.shim-folder {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 56px;
+  margin: 0 auto;
+}
+
+.shim-folder::before,
+.shim-folder::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 4px;
+}
+
+.shim-folder::before {
+  top: 4px;
+  bottom: 0;
+  background: #e2a22c;
+  clip-path: polygon(0 0, 38% 0, 46% 12%, 100% 12%, 100% 100%, 0 100%);
+}
+
+.shim-folder img {
+  position: absolute;
+  z-index: 1;
+  left: 8px;
+  top: 10px;
+  width: calc(100% - 16px);
+  height: 34px;
+  object-fit: cover;
+  object-position: top;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+.shim-folder::after {
+  z-index: 2;
+  top: 26px;
+  bottom: 0;
+  background: linear-gradient(#ffd66b, #f5b93c);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Start: a panel rising from the bottom center, as on Windows 11. */
+.shim-start {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(620px, calc(100% - 20px));
+  height: min(560px, calc(100% - 20px));
+  padding: 16px 16px 0;
+  z-index: 2000000;   /* over the File Explorer windows and their tray */
+  transform: translateX(-50%);
+  animation: shim-start-in 0.18s ease-out;
+}
+
+@keyframes shim-start-in {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+}
+
+.shim-start-search {
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-bg);
+  color: var(--field-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+:root[data-skin="modern"] .shim-start-search {
+  border-radius: 999px;
+}
+
+.shim-start-search:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.shim-start-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex: none;
+  padding: 0 4px;
+}
+
+.shim-start-head span,
+.shim-start-none {
+  opacity: 0.7;
+}
+
+.shim-start-none {
+  flex: 1;
+  margin: 0;
+  padding: 12px 4px;
+}
+
+.shim-start-none[hidden],
+.shim-start-grid[hidden] {
+  display: none;
+}
+
+.shim-start-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  align-content: start;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.shim-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--button-radius);
+  color: inherit;
+  text-decoration: none;
+  text-align: center;
+}
+
+.shim-tile[hidden] {
+  display: none;
+}
+
+.shim-tile:hover,
+.shim-tile:focus-visible,
+.shim-tile.first {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: none;
+}
+
+.shim-tile-pic {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--button-radius);
+  background: var(--desk);
+  overflow: hidden;
+}
+
+.shim-tile-pic img {
+  max-width: 88%;
+  max-height: 88%;
+}
+
+.shim-tile-pic .shim-badge {
+  top: auto;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.shim-tile-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.shim-start-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: none;
+  margin: 0 -16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--card-border);
+  background: color-mix(in srgb, var(--control) 70%, transparent);
+  border-radius: 0 0 var(--window-radius) var(--window-radius);
+}
+
+.shim-shell .shim-start-power {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--button-radius);
+  background: transparent;
+  font-size: 18px;
+}
+
+.shim-start-power:hover {
+  background: var(--card-border);
+}
+
+/* File Explorer: a window with an address bar, folders in a grid and a status bar. */
+.shim-explorer {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: shim-ex-in 0.14s ease-out;
+}
+
+@keyframes shim-ex-in {
+  from { opacity: 0; transform: scale(0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-start,
+  .shim-explorer {
+    animation: none;
+  }
+}
+
+.shim-ex-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 34px;
+  padding: 0 4px 0 12px;
+  background: var(--title-bg-inactive);
+  color: var(--title-text);
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.shim-explorer.active .shim-ex-title {
+  background: var(--title-bg);
+}
+
+.shim-ex-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shim-ex-address {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin: 6px 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-bg);
+  color: var(--field-text);
+}
+
+.shim-ex-sep {
+  opacity: 0.55;
+}
+
+.shim-ex-items {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  align-content: start;
+  gap: 2px;
+  padding: 6px 8px;
+  overflow: auto;
+  border-top: 1px solid var(--card-border);
+  border-bottom: 1px solid var(--card-border);
+  background: var(--field-bg);
+  color: var(--field-text);
+}
+
+.shim-ex-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--button-radius);
+  background: none;
+  text-align: center;
+}
+
+.shim-ex-item:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.shim-ex-item.sel,
+.shim-ex-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  outline: none;
+}
+
+.shim-ex-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.shim-ex-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 30px;
+  padding: 2px 6px 2px 12px;
+  font-size: 12px;
+}
+
+.shim-ex-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.shim-ex-status button,
+.shim-shell-tray button {
+  flex: none;
+  padding: 3px 12px;
+  border: 1px solid var(--button-border);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
+}
+
+.shim-ex-status button[hidden] {
+  display: none;
+}
+
+/* While File Explorer windows are open: how many, and Close all. */
+.shim-shell-tray {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 1000000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 20px);
+  padding: 5px 6px 5px 12px;
+  border-radius: max(var(--window-radius), 4px);
+}
+
+.shim-shell-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root[data-skin="arcade"] .shim-folder::before {
+  background: #a01e8c;
+}
+
+:root[data-skin="arcade"] .shim-folder::after,
+:root[data-skin="arcade"] .shim-folder-mini {
+  background: linear-gradient(#ff5ce1, #c41aa8);
+  box-shadow: 0 0 8px rgba(255, 43, 214, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-start-head strong,
+:root[data-skin="arcade"] .shim-ex-name {
+  color: #7df9ff;
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.7);
+}
+
+/* Windows+E's other shortcuts: minimized (Win+Down, Win+D) and snapping (Win+arrows) File Explorer windows, a
+   status line for a shortcut with nothing to act on, the Run box (Win+R) and task view (Win+Tab). */
+.shim-explorer.min {
+  display: none;
+}
+
+.shim-explorer.moving {
+  transition: left 0.22s ease, top 0.22s ease, width 0.22s ease, height 0.22s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-explorer.moving {
+    transition: none;
+  }
+}
+
+.shim-shell-note {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 1000002;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  padding: 7px 14px;
+  background: var(--frame-bg);
+  border: 1px solid var(--card-border);
+  border-radius: max(var(--window-radius), 4px);
+  box-shadow: var(--window-shadow);
+}
+
+.shim-run {
+  position: absolute;
+  left: 10px;
+  bottom: 54px;
+  width: min(400px, calc(100% - 20px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--frame-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--window-radius);
+  box-shadow: var(--window-shadow);
+  animation: shim-ex-in 0.14s ease-out;
+}
+
+.shim-run .shim-ex-title {
+  background: var(--title-bg);
+}
+
+.shim-run-icon {
+  flex: none;
+  width: 16px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-width: 4px;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+.shim-run-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.shim-run-body p {
+  margin: 0;
+}
+
+.shim-run-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shim-run-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-bg);
+  color: var(--field-text);
+  font: inherit;
+}
+
+.shim-run-row input:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.shim-run-error {
+  color: #d93025;
+  font-size: 12px;
+}
+
+.shim-run-error:empty {
+  display: none;
+}
+
+.shim-run-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.shim-run-buttons button {
+  min-width: 76px;
+  padding: 3px 12px;
+  border: 1px solid var(--button-border);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
+}
+
+.shim-tasks {
+  position: absolute;
+  inset: 0;
+  z-index: 1000001;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 16px;
+  box-sizing: border-box;
+  overflow: auto;
+  background: rgba(10, 14, 24, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: shim-start-in 0.18s ease-out;
+}
+
+.shim-tasks-head {
+  color: #fff;
+  font-size: 15px;
+  text-align: center;
+}
+
+.shim-tasks-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+}
+
+.shim-task {
+  position: relative;
+}
+
+.shim-shell .shim-task-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--frame-bg);
+  border: 2px solid transparent;
+  border-radius: max(var(--window-radius), 6px);
+  box-shadow: var(--window-shadow);
+}
+
+.shim-task-pick:hover,
+.shim-task-pick:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.shim-task-pic {
+  position: relative;
+  display: block;
+  width: 200px;
+  height: 130px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.shim-task-pic .shim-explorer {
+  transform-origin: 0 0;
+  pointer-events: none;
+  animation: none;
+}
+
+.shim-task-name {
+  text-align: left;
+}
+
+.shim-task .shim-close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: var(--frame-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-run,
+  .shim-tasks {
+    animation: none;
+  }
+}
+
+/* ---- then and now (boot.js eraSwitch, thenTitle): an app as it was recovered, before any fixes, runs on
+   <App>/then.html. The band's Then | Now switch goes between the two pages; the title screen of then.html shows
+   the quirks the README listed back then where today's page shows its picture. ---- */
+
+.shim-toolbar .shim-era {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.shim-toolbar .shim-era[hidden] {
+  display: none;
+}
+
+.shim-toolbar .shim-era a {
+  padding: 1px 10px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.shim-toolbar .shim-era a[aria-current] {
+  background: #fff;
+  color: #111827;
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-era {
+  border-color: #ff2bd6;
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-era a[aria-current] {
+  background: #ff2bd6;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(255, 43, 214, 0.6);
+}
+
+.shim-title-era,
+.shim-exit .shim-exit-era {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.shim-exit .shim-exit-era {
+  margin-left: 14px;
+}
+
+.shim-title-era[hidden] {
+  display: none;
+}
+
+/* ---- the site's screen saver (boot.js showSaver): Screen Saver fades in over a page left alone ---- */
+
+.shim-saver {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.4s ease-in;
+}
+
+.shim-saver.on {
+  opacity: 1;
+  transition: opacity 2s ease-out;
+}
+
+.shim-saver iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+html[data-saver] body {
+  background: #000;
+}
+
+html[data-saver],
+html[data-saver] * {
+  cursor: none !important;
+}
+
+.shim-title-saver {
+  font-size: 13px;
+}
+
+.shim-title-saver[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-saver,
+  .shim-saver.on {
+    transition: none;
+  }
+}
+
+/* ---- watch (boot.js watchApp): the computer plays; the first click or key takes over ---- */
+
+.shim-title-watch {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.shim-title-watch[hidden] {
+  display: none;
+}
+
+.shim-watch {
+  position: fixed;
+  top: calc(var(--bar-h, 0px) + 10px);
+  left: 50%;
+  z-index: 2000000001;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  font: 13px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  white-space: nowrap;
+  pointer-events: none;   /* clicks go to the app, where they take over */
+  transform: translateX(-50%);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.shim-watch span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+.shim-watch.gone {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
+.shim-watch-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e53935;
+  animation: shim-watch-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes shim-watch-blink {
+  50% { opacity: 0.25; }
+}
+
+@media (max-width: 480px) {
+  .shim-watch strong {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-watch-dot {
+    animation: none;
+  }
+}
+
+:root[data-skin="classic"] .shim-watch {
+  border-radius: 0;
+  border-color: #7a8a99;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-watch {
+  border-color: #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 20px rgba(255, 43, 214, 0.35);
+  font-family: "Courier New", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:root[data-skin="arcade"] .shim-watch-dot {
+  background: #39ff14;
+  box-shadow: 0 0 8px #39ff14;
+}
+
+/* then.html: the art box holds the known quirks, like a page of notes. */
+.shim-title.then .shim-title-art {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: auto;
+  text-align: left;
+}
+
+.shim-title-art h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shim-title-art h2[hidden] {
+  display: none;
+}
+
+.shim-title-art ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.shim-title-art li + li {
+  margin-top: 6px;
+}
+
+.shim-title-art code {
+  font: 12px ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.shim-title.then .shim-title-cat {
+  color: #b45309;
+}
+
+:root[data-skin="arcade"] .shim-title.then .shim-title-art {
+  color: #39ff14;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+:root[data-skin="arcade"] .shim-title.then .shim-title-cat,
+:root[data-skin="arcade"] .shim-title-art h2 {
+  color: #ff2bd6;
+}
+
+/* Classic: the notes on a white field (its desk is the blue the text would sit on). */
+:root[data-skin="classic"] .shim-title.then .shim-title-art {
+  background: var(--field-bg);
+  color: #1f2937;
+}
+
+/* ---- game controllers (boot.js, gamepadDriver) ---- */
+/* The controller's pointer: an arrow with a ring, drawn over everything and never in the way of a click. */
+.shim-gp-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2147483647;
+  width: 22px;
+  height: 22px;
+  margin: -3px 0 0 -3px;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Cpath d='M3 2l0 16 4.5-4.2 3 6.6 3-1.4-3-6.4 6.3-.4z' fill='%23fff' stroke='%23111' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+.shim-gp-cursor::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+}
+
+.shim-gp-cursor[hidden] {
+  display: none;
+}
+
+:root[data-skin="arcade"] .shim-gp-cursor::after {
+  border-color: #7df9ff;
+  box-shadow: 0 0 8px rgba(125, 249, 255, 0.8);
+}
+
+/* A button's name in the controller chart (the band's news line, or the home page player's hint). */
+.shim-gp-cap {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 11px/16px system-ui, sans-serif;
+  opacity: 0.9;
+}
+
+/* A button that paints itself (no skin border, no filled content area: Minesweeper's tiles) is square, as in
+   Swing, so its drawing reaches the corners and neighboring tiles meet. */
+.button.no-border:not(.opaque) {
+  border-radius: 0;
+}
+
+/* ---- pop out (boot.js popOut): the app plays in its own always-on-top window, and the stage says so ---- */
+
+.shim-toolbar .shim-pop[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.shim-popped {
+  position: fixed;
+  top: var(--bar-h, 0px);
+  bottom: calc(var(--pad-h, 0px) + var(--out-h, 0px));
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.shim-popped-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 480px;
+  max-height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px 28px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  font: 15px system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-popped h2 {
+  margin: 8px 0 0;
+  font-size: 22px;
+}
+
+.shim-popped p {
+  margin: 0;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+.shim-popped button {
+  margin-top: 6px;
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* A screen with a small window floating up off it, on top. */
+.shim-popped-art {
+  position: relative;
+  width: 168px;
+  height: 112px;
+}
+
+.shim-popped-art .screen {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 132px;
+  height: 84px;
+  box-sizing: border-box;
+  border: 2px dashed currentColor;
+  border-radius: 8px;
+  opacity: 0.35;
+}
+
+.shim-popped-art .float {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 92px;
+  height: 64px;
+  box-sizing: border-box;
+  border: 2px solid var(--accent);
+  border-top-width: 12px;
+  border-radius: 6px;
+  background: var(--card-bg);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
+  animation: shim-float 3s ease-in-out infinite alternate;
+}
+
+@keyframes shim-float {
+  to { translate: 0 -6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-popped-art .float {
+    animation: none;
+  }
+}
+
+/* ---- What's new (news.js): the app's story on its title screen, every change to it from the repo's history ---- */
+
+.shim-title-story {
+  width: 100%;
+  font-size: 13px;
+  cursor: auto;
+}
+
+.shim-title-story[hidden] {
+  display: none;
+}
+
+.shim-title-story summary {
+  padding: 6px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.shim-title-story summary:hover {
+  border-color: var(--accent);
+}
+
+.shim-title-story summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-title-story .shim-story-label {
+  margin-right: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shim-title-story.fresh .shim-story-label {
+  color: #d97706;
+}
+
+.shim-title-story .shim-story-count {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.shim-title-story[open] .shim-story-count {
+  display: none;
+}
+
+.shim-title-story ol {
+  max-height: 11em;
+  margin: 6px 0 0;
+  padding: 0 4px 0 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.shim-title-story li {
+  display: grid;
+  grid-template-columns: 4.2em minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--card-border);
+}
+
+.shim-title-story time {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.shim-title-story li.fresh time {
+  color: #d97706;
+  opacity: 1;
+  font-weight: 700;
+}
+
+:root[data-skin="arcade"] .shim-title-story.fresh .shim-story-label,
+:root[data-skin="arcade"] .shim-title-story li.fresh time {
+  color: #ffe14d;
+}
+
+/* ---- Clock follows you (clockbar.js): a running focus session, timer or stopwatch as a chip in the toolbar, a ring
+   that drains (--p is the part left) beside the time, linking back to Clock. Under 1000 px only the ring and the
+   time show. The last ten seconds blink. */
+
+.shim-toolbar .shim-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 1px 10px 1px 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.shim-toolbar .shim-clock:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.shim-clock-seg {
+  --ring: #ef4444;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.shim-clock-seg[data-kind="break"],
+.shim-clock-tag[data-kind="break"] { --ring: #22c55e; }
+.shim-clock-seg[data-kind="timer"],
+.shim-clock-tag[data-kind="timer"] { --ring: #38bdf8; }
+.shim-clock-seg[data-kind="watch"] { --ring: #a78bfa; }
+.shim-clock-tag[data-kind="back"] { --ring: #ef4444; }
+
+.shim-clock-ring {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: conic-gradient(var(--ring) calc(var(--p, 1) * 1turn), rgba(255, 255, 255, 0.18) 0);
+  -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+  mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+  filter: drop-shadow(0 0 3px var(--ring));
+}
+
+.shim-clock-seg b {
+  font-variant-numeric: tabular-nums;
+}
+
+.shim-clock-name {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.shim-toolbar .shim-clock[data-soon] .shim-clock-seg b {
+  animation: shim-clock-soon 1s steps(2, jump-none) infinite;
+}
+
+@keyframes shim-clock-soon {
+  50% { opacity: 0.35; }
+}
+
+@media (max-width: 1000px) {
+  .shim-clock-name {
+    display: none;
+  }
+}
+
+/* The band's news tag (and the home page's toast) in the moment's color: break green, back to focus red,
+   timer blue. */
+.shim-toolbar .shim-news-tag.shim-clock-tag,
+:root[data-skin="arcade"] .shim-toolbar .shim-news-tag.shim-clock-tag {
+  background: var(--ring, #ef4444);
+  box-shadow: 0 0 8px var(--ring, #ef4444);
+  color: #111827;
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-clock {
+  border-color: #7df9ff;
+  color: #7df9ff;
+  text-shadow: 0 0 6px rgba(125, 249, 255, 0.6);
+  box-shadow: 0 0 8px rgba(125, 249, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-toolbar .shim-clock[data-soon] .shim-clock-seg b {
+    animation: none;
+  }
+}
+
+/* ---- one machine: page-to-page transitions (the trip code at the end of boot.js says what kind of trip) ----
+   Every page of the site opts in to the browser's cross-document view transitions, except with reduced motion.
+   The app pages' toolbar band is its own layer, so it stays put while the stage under it changes; the element
+   named oldjava-hero (a clicked thumbnail, the home page's player, an app's title card) grows into its place on
+   the next page. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+:root {
+  --trip-ms: 420ms;
+}
+
+:root[data-skin="classic"] {
+  --trip-ms: 220ms;
+}
+
+:root[data-stage] .shim-toolbar {
+  view-transition-name: oldjava-band;
+}
+
+::view-transition-group(*) {
+  animation-duration: var(--trip-ms);
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-old(root) {
+  animation: var(--trip-ms) ease both oldjava-trip-out;
+}
+
+::view-transition-new(root) {
+  animation: var(--trip-ms) ease both oldjava-trip-in;
+}
+
+/* Next and Previous slide the stage sideways under the band. */
+:root:active-view-transition-type(forward)::view-transition-old(root) {
+  animation-name: oldjava-trip-left-out;
+}
+
+:root:active-view-transition-type(forward)::view-transition-new(root) {
+  animation-name: oldjava-trip-left-in;
+}
+
+:root:active-view-transition-type(back)::view-transition-old(root) {
+  animation-name: oldjava-trip-right-out;
+}
+
+:root:active-view-transition-type(back)::view-transition-new(root) {
+  animation-name: oldjava-trip-right-in;
+}
+
+/* Then and Now pass through an old photograph's sepia. */
+:root:active-view-transition-type(era)::view-transition-old(root) {
+  animation: calc(var(--trip-ms) * 1.5) ease both oldjava-trip-sepia-out;
+}
+
+:root:active-view-transition-type(era)::view-transition-new(root) {
+  animation: calc(var(--trip-ms) * 1.5) ease both oldjava-trip-sepia-in;
+}
+
+@keyframes oldjava-trip-out {
+  to { opacity: 0; transform: scale(0.97); }
+}
+
+@keyframes oldjava-trip-in {
+  from { opacity: 0; transform: scale(1.03); }
+}
+
+@keyframes oldjava-trip-left-out {
+  to { opacity: 0; transform: translateX(-14%); }
+}
+
+@keyframes oldjava-trip-left-in {
+  from { opacity: 0; transform: translateX(14%); }
+}
+
+@keyframes oldjava-trip-right-out {
+  to { opacity: 0; transform: translateX(14%); }
+}
+
+@keyframes oldjava-trip-right-in {
+  from { opacity: 0; transform: translateX(-14%); }
+}
+
+@keyframes oldjava-trip-sepia-out {
+  60% { opacity: 1; filter: sepia(1) contrast(0.85) brightness(1.08); }
+  to { opacity: 0; filter: sepia(1) contrast(0.85) brightness(1.08); }
+}
+
+@keyframes oldjava-trip-sepia-in {
+  from { opacity: 0; filter: sepia(1) contrast(0.85) brightness(1.08); }
+  40% { opacity: 0; filter: sepia(1) contrast(0.85) brightness(1.08); }
+}
+
+/* Arcade: every trip is a CRT changing channel. The old picture collapses into a bright line and goes dark, the
+   new one opens out of it (the skin's power-on, as a page change), and the band, the cabinet's marquee, stays lit. */
+:root[data-skin="arcade"]::view-transition {
+  background: #07020f;
+}
+
+:root[data-skin="arcade"]::view-transition-old(root) {
+  animation: 240ms cubic-bezier(0.6, 0, 1, 1) both oldjava-crt-off;
+}
+
+:root[data-skin="arcade"]::view-transition-new(root) {
+  animation: 320ms 220ms cubic-bezier(0, 0, 0.2, 1) both oldjava-crt-on;
+}
+
+@keyframes oldjava-crt-off {
+  60% { opacity: 1; transform: scale(1, 0.012); filter: brightness(3); }
+  to { opacity: 0; transform: scale(0, 0.004); filter: brightness(6); }
+}
+
+@keyframes oldjava-crt-on {
+  from { opacity: 0; transform: scale(0, 0.004); filter: brightness(6); }
+  10% { opacity: 1; }
+  40% { transform: scale(1, 0.012); filter: brightness(3); }
+  to { transform: none; filter: none; }
+}
+
+/* ---- Find (boot.js, find.js): Ctrl+K anywhere, / on the home page ----
+   A box near the top of the page: the query, then results in groups (apps, things to do, source files). */
+.shim-toolbar .shim-find-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.shim-find-open kbd,
+.shim-find kbd {
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 10px/16px system-ui, -apple-system, "Segoe UI", sans-serif;
+  opacity: 0.7;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-find-open .shim-find-label,
+  .shim-toolbar .shim-find-open kbd {
+    display: none;
+  }
+}
+
+.shim-find-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2000000003;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  animation: shim-find-fade 0.15s ease-out;
+}
+
+.shim-find {
+  position: fixed;
+  top: max(12px, 10vh);
+  left: 50%;
+  z-index: 2000000004;
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - 24px - max(12px, 10vh)));
+  max-height: min(560px, calc(100dvh - 24px - max(12px, 10vh)));
+  box-sizing: border-box;
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 14px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  animation: shim-find-in 0.16s ease-out;
+}
+
+@keyframes shim-find-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.98); }
+}
+
+@keyframes shim-find-fade {
+  from { opacity: 0; }
+}
+
+.shim-find-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shim-find-glass {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.shim-find-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: 18px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-find-input::placeholder {
+  color: inherit;
+  opacity: 0.5;
+}
+
+.shim-find-esc {
+  cursor: pointer;
+}
+
+.shim-find-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px 8px;
+  overscroll-behavior: contain;
+}
+
+.shim-find-group {
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.shim-find-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.shim-find-item[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.shim-find-pic {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--desk);
+  color: var(--accent);
+  font: 700 15px/1 ui-monospace, Consolas, monospace;
+}
+
+.shim-find-item.kind-do .shim-find-pic,
+.shim-find-item.kind-source .shim-find-pic {
+  background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+}
+
+.shim-find-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shim-find-item.kind-then .shim-find-pic img {
+  filter: sepia(0.85) contrast(0.95);
+}
+
+.shim-find-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shim-find-text strong,
+.shim-find-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shim-find-text span {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.shim-find-item.kind-source .shim-find-text strong {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+}
+
+.shim-find-tag {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.shim-find-tag.new {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shim-find-item.current .shim-find-tag {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.shim-find-status {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.shim-find-status:empty {
+  display: none;
+}
+
+.shim-find-status:not(:empty) {
+  padding-bottom: 10px;
+}
+
+.shim-find-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--card-border);
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+@media (max-width: 520px) {
+  .shim-find-foot {
+    display: none;
+  }
+
+  .shim-find-pic {
+    width: 52px;
+    height: 34px;
+  }
+
+  .shim-find-tag {
+    display: none;
+  }
+}
+
+:root[data-skin="classic"] .shim-find {
+  border-color: var(--frame-border);
+  border-radius: 0;
+  box-shadow: var(--window-shadow);
+}
+
+:root[data-skin="classic"] .shim-find-head {
+  background: var(--title-bg);
+}
+
+:root[data-skin="classic"] .shim-find-item,
+:root[data-skin="classic"] .shim-find-pic {
+  border-radius: 0;
+}
+
+:root[data-skin="classic"] .shim-find-item[aria-selected="true"] {
+  background: #b8cfe5;
+  box-shadow: none;
+}
+
+:root[data-skin="arcade"] .shim-find {
+  border-color: #ff2bd6;
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.4), 0 0 40px rgba(255, 43, 214, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-find-glass,
+:root[data-skin="arcade"] .shim-find-input {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+}
+
+:root[data-skin="arcade"] .shim-find-input {
+  caret-color: #ff2bd6;
+}
+
+:root[data-skin="arcade"] .shim-find-item[aria-selected="true"] {
+  background: rgba(255, 43, 214, 0.16);
+  box-shadow: inset 3px 0 0 #ff2bd6, 0 0 12px rgba(255, 43, 214, 0.25);
+}
+
+:root[data-skin="arcade"] .shim-find-group {
+  color: #39ff88;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-find,
+  .shim-find-scrim {
+    animation: none;
+  }
+}
+
+/* ---- Your skin (boot.js ownCss, skinmaker.js) ----
+   The skin's variables come from a <style> boot.js writes; these are the maker panel, the toolbar's Edit button
+   (shown while Yours is worn) and the box a shared skin's link opens with. The panel sits at the side, not over
+   the middle, so the page and the running app behind it show each choice as it is made. */
+.shim-toolbar .shim-own-edit {
+  display: none;
+}
+
+:root[data-skin="own"] .shim-toolbar .shim-own-edit {
+  display: inline-block;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-own-edit-label {
+    display: none;
+  }
+}
+
+.shim-own,
+.shim-own-offer {
+  position: fixed;
+  right: 12px;
+  z-index: 2000000003;
+  box-sizing: border-box;
+  border: 1px solid var(--card-border);
+  border-radius: max(var(--window-radius), 4px);
+  background: var(--card-bg);
+  color: var(--page-text);
+  font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  animation: shim-own-in 0.18s ease-out;
+}
+
+.shim-own {
+  top: 52px;
+  width: 336px;
+  max-height: calc(100vh - 64px);
+  max-height: calc(100dvh - 64px);
+  overflow: auto;
+  padding: 12px 14px 14px;
+}
+
+.shim-own-offer {
+  bottom: 16px;
+  width: min(380px, calc(100vw - 24px));
+  padding: 12px 14px;
+}
+
+@keyframes shim-own-in {
+  from { opacity: 0; transform: translateX(12px); }
+}
+
+.shim-own-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.shim-own-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.shim-own-x {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: 20px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.shim-own-x:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.shim-own-lead {
+  margin: 2px 0 8px;
+  opacity: 0.75;
+}
+
+.shim-own-row {
+  margin-top: 10px;
+}
+
+.shim-own-label {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.shim-own-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shim-own-option,
+.shim-own-btn,
+.shim-own-copy {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--button-radius);
+  background: var(--control);
+  color: var(--page-text);
+  cursor: pointer;
+}
+
+.shim-own-option[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+
+.shim-own-option:focus-visible,
+.shim-own-btn:focus-visible,
+.shim-own-copy:focus-visible,
+.shim-own-x:focus-visible,
+.shim-own-picker:focus-visible,
+.shim-own-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-own-options.base .shim-own-option,
+.shim-own-options.corners .shim-own-option,
+.shim-own-options.chromes .shim-own-option {
+  flex: 1;
+}
+
+.shim-own-options.colors {
+  gap: 4px;
+}
+
+.shim-own-options.colors .shim-own-option,
+.shim-own-picker {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--card-bg);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--card-border);
+}
+
+.shim-own-options.colors .shim-own-option[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--page-text);
+}
+
+.shim-own-picker {
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+}
+
+.shim-own-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+  opacity: 0;
+}
+
+.shim-own-options.desks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.shim-own-options.desks .shim-own-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px;
+  font-size: 12px;
+}
+
+.shim-own-options.desks .shim-own-option {
+  border-radius: min(var(--button-radius), 10px);
+}
+
+.shim-own-desk {
+  display: block;
+  height: 34px;
+  border-radius: min(var(--window-radius), 6px);
+  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.25);
+}
+
+.shim-own-share {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.shim-own-link {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-bg);
+  color: var(--field-text);
+  font: 12px ui-monospace, Consolas, monospace;
+}
+
+.shim-own-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.shim-own-foot .primary {
+  margin-left: auto;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Phones: a sheet along the bottom, so the top of the page (and the app) stays in view. */
+@media (max-width: 560px) {
+  .shim-own {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 58vh;
+    max-height: 58dvh;
+    border-radius: 14px 14px 0 0;
+    animation-name: shim-own-up;
+  }
+
+  .shim-own-offer {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  @keyframes shim-own-up {
+    from { opacity: 0; transform: translateY(16px); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-own,
+  .shim-own-offer {
+    animation: none;
+  }
+}
+
+/* ---- Put it on your site (embed.js): the Share panel's builder for the embeddable player, play.html ---- */
+.shim-embed {
+  border-top: 1px solid var(--card-border);
+  padding-top: 10px;
+}
+
+.shim-embed summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.shim-embed summary::-webkit-details-marker {
+  display: none;
+}
+
+.shim-embed summary::after {
+  content: "▸";
+  margin-left: auto;
+  opacity: 0.6;
+  transition: transform 0.15s ease;
+}
+
+.shim-embed[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.shim-embed summary span {
+  color: var(--accent);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+}
+
+.shim-embed summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.shim-embed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.shim-embed-intro {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.shim-embed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+}
+
+.shim-embed-pick,
+.shim-embed-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.shim-embed-pick,
+.shim-embed-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shim-embed-pick select {
+  padding: 5px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: inherit;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-embed-choice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shim-embed-choice button {
+  padding: 5px 12px;
+  border: 0;
+  border-left: 1px solid var(--card-border);
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+.shim-embed-choice button:first-child {
+  border-left: 0;
+}
+
+.shim-embed-choice button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.shim-embed-choice button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.shim-embed-choice button:focus-visible,
+.shim-embed-pick select:focus-visible,
+.shim-embed-code:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.shim-embed-view {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0f172a;
+}
+
+.shim-embed-view iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  transform-origin: 0 0;
+}
+
+.shim-embed-code {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  resize: vertical;
+}
+
+:root[data-skin="classic"] .shim-embed-choice,
+:root[data-skin="classic"] .shim-embed-pick select,
+:root[data-skin="classic"] .shim-embed-view,
+:root[data-skin="classic"] .shim-embed-code {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-embed summary span {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+:root[data-skin="arcade"] .shim-embed-view {
+  box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.5), 0 0 18px rgba(255, 43, 214, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-embed summary::after {
+    transition: none;
+  }
+}
+
+/* ---- side by side (boot.js dockOpen): a second app in a panel on the right of an app page's stage ----
+   The stage, its title screen and its overlays end at the panel's edge (--dock-w, kept by boot.js), so both apps
+   have their own room. The panel sits between the toolbar band and the bottom panels, above windows dragged
+   past the stage, and under the page's own panels (Switch app, Source, Share, Find). */
+
+.shim-toolbar .shim-dock-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.shim-toolbar .shim-dock-open[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 1100px) {
+  .shim-toolbar .shim-dock-open .shim-dock-label {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .shim-toolbar .shim-dock-open,
+  .shim-dock {
+    display: none !important;
+  }
+}
+
+@media (min-width: 901px) {
+  :root[data-stage][data-dock] #desktop,
+  :root[data-stage][data-dock] .shim-popped,
+  :root[data-stage][data-dock] .shim-shell,
+  :root[data-dock] .shim-title,
+  :root[data-dock] .shim-overlay {
+    right: var(--dock-w, 40vw);
+  }
+
+  :root[data-stage][data-dock][data-source] #desktop,
+  :root[data-stage][data-dock][data-source] .shim-popped {
+    right: max(var(--dock-w, 40vw), min(860px, 58vw));
+  }
+}
+
+.shim-dock {
+  position: fixed;
+  top: var(--bar-h, 0px);
+  right: 0;
+  bottom: calc(var(--pad-h, 0px) + var(--out-h, 0px));
+  z-index: 1999999990;
+  display: flex;
+  flex-direction: column;
+  width: var(--dock-w, 40vw);
+  box-sizing: border-box;
+  background: var(--desk);
+  color: var(--page-text);
+  font: 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+  border-left: 1px solid var(--card-border);
+  box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18);
+  animation: shim-slide-in 0.18s ease-out;
+}
+
+.shim-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 4px 6px 4px 12px;
+  box-sizing: border-box;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--card-border);
+  transition: box-shadow 0.15s;
+}
+
+.shim-dock-pic {
+  flex: none;
+  width: 36px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--desk);
+}
+
+.shim-dock-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+/* Which app has the keys: the panel's head lights while its frame has the focus. */
+.shim-dock-keys {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  visibility: hidden;
+}
+
+.shim-dock-active .shim-dock-keys {
+  visibility: visible;
+}
+
+.shim-dock-active .shim-dock-head {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.shim-dock-head button:not(.shim-close),
+.shim-dock-head a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: 600 12px system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shim-dock-head button:not(.shim-close):hover,
+.shim-dock-head a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* A narrow panel keeps its buttons' glyphs and names them only in their titles. */
+@media (max-width: 1400px) {
+  .shim-dock-head .shim-dock-label {
+    display: none;
+  }
+}
+
+.shim-dock-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--desk);
+}
+
+.shim-dock-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  z-index: 1;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.shim-dock-edge::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 4px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 2px;
+  background: var(--card-border);
+  transition: background 0.15s;
+}
+
+.shim-dock-edge:hover::after,
+.shim-dock-edge:focus-visible::after,
+:root[data-dock-drag] .shim-dock-edge::after {
+  background: var(--accent);
+}
+
+.shim-dock-edge:focus-visible {
+  outline: none;
+}
+
+/* While the edge is dragged, the frames must not take the pointer. */
+:root[data-dock-drag],
+:root[data-dock-drag] * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+:root[data-dock-drag] iframe {
+  pointer-events: none;
+}
+
+.shim-dock-intro {
+  margin: 0;
+  padding: 10px 16px 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.8;
+}
+
+.shim-dock-heading {
+  margin: 8px 6px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+:root[data-skin="classic"] .shim-dock-head button:not(.shim-close),
+:root[data-skin="classic"] .shim-dock-head a,
+:root[data-skin="classic"] .shim-dock-keys {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-dock {
+  border-left-color: rgba(255, 43, 214, 0.6);
+  box-shadow: -2px 0 18px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-dock-name {
+  color: #7df9ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-dock {
+    animation: none;
+  }
+
+  .shim-dock-head,
+  .shim-dock-edge::after {
+    transition: none;
+  }
+}
+
+/* ---- photo booth (boot.js snapPhoto, openPhoto) ----
+   Photo in the toolbar shows once the app runs. The shutter flashes white over the stage, then the print comes
+   up in the share dialog's frame, tilted a little like a print on a desk, developing from dark the first time. */
+
+.shim-toolbar .shim-photo-open {
+  display: none;
+  white-space: nowrap;
+}
+
+:root[data-photo] .shim-toolbar .shim-photo-open {
+  display: inline-block;
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-photo-open span + span {
+    display: none;
+  }
+}
+
+.shim-photo-flash {
+  position: fixed;
+  z-index: 2000000001;
+  background: #fff;
+  pointer-events: none;
+  animation: shim-photo-flash 0.6s ease-out forwards;
+}
+
+@keyframes shim-photo-flash {
+  from { opacity: 0.95; }
+  to { opacity: 0; }
+}
+
+.shim-photo {
+  width: min(640px, calc(100vw - 24px));
+}
+
+.shim-photo [hidden] {
+  display: none;
+}
+
+.shim-photo-stage {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  padding: 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--page-text) 9%, transparent);
+}
+
+.shim-photo-print {
+  display: block;
+  max-width: 100%;
+  max-height: max(160px, calc(100vh - 360px));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+  transform: rotate(-1.2deg);
+}
+
+.shim-photo-print:not([src]) {
+  width: 60%;
+  aspect-ratio: 4 / 3;
+  background: #2a2733;
+}
+
+.shim-photo-print.developing {
+  animation: shim-photo-develop 1.6s ease-out;
+}
+
+@keyframes shim-photo-develop {
+  from { filter: brightness(0.2) sepia(0.7) contrast(0.6) blur(2px); }
+  55% { filter: brightness(0.85) sepia(0.2) contrast(0.9); }
+  to { filter: none; }
+}
+
+.shim-photo-frames {
+  display: flex;
+  gap: 8px;
+}
+
+.shim-photo-frames .shim-share-way {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.shim-photo-caption {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shim-photo-caption:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+:root[data-skin="classic"] .shim-photo-stage,
+:root[data-skin="classic"] .shim-photo-caption {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-photo-stage {
+  background: #0b0420;
+  box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.45);
+}
+
+:root[data-skin="arcade"] .shim-photo-caption {
+  background: #020a06;
+  color: #39ff88;
+  border-color: #39ff88;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-photo-print,
+  .shim-photo-print.developing {
+    transform: none;
+    animation: none;
+  }
+}
+
+/* ---- one-row toolbar (boot.js bandMore): controls that do not fit wait under More ----
+   The band keeps to one row (two on narrow pages, the name's row and the controls' row). The least needed
+   controls step out of it (.shim-more-out) and More at its end lists them in a menu that drops from the band. */
+
+.shim-toolbar > .shim-more-out,
+.shim-toolbar > .shim-more[hidden],
+.shim-toolbar > .shim-more-menu[hidden] {
+  display: none !important;
+}
+
+.shim-toolbar .shim-more {
+  flex: none;
+  white-space: nowrap;
+}
+
+.shim-toolbar .shim-more[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@media (max-width: 1000px) {
+  .shim-toolbar .shim-more .shim-more-label {
+    display: none;
+  }
+}
+
+.shim-toolbar .shim-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--page-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  font: 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: left;
+  transform-origin: top right;
+  animation: shim-more-drop 0.16s ease-out;
+}
+
+@keyframes shim-more-drop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-toolbar .shim-more-menu {
+    animation: none;
+  }
+}
+
+.shim-toolbar .shim-more-menu .shim-more-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shim-toolbar .shim-more-menu .shim-more-item:hover,
+.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: none;
+}
+
+.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring, var(--accent));
+}
+
+.shim-more-what {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.shim-more-what span,
+.shim-more-what b {
+  display: inline !important;   /* the band hides some words on narrow pages; the menu has room for them */
+}
+
+.shim-more-what .shim-replay-dot {
+  display: inline-block !important;
+}
+
+.shim-more-item small {
+  grid-column: 1 / -1;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+  opacity: 0.7;
+  white-space: normal;
+}
+
+.shim-more-item kbd {
+  grid-row: 1;
+  grid-column: 2;
+  padding: 0 5px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  font: 11px ui-monospace, Consolas, monospace;
+  opacity: 0.8;
+}
+
+/* A toggle that is on, the worn skin and the version shown get a check on the right. */
+.shim-more-item[aria-checked="true"]::after {
+  content: "✓";
+  grid-row: 1;
+  grid-column: 2;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.shim-more-head {
+  margin: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.shim-more-head:first-child {
+  margin-top: 2px;
+}
+
+.shim-more-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.shim-more-swatch[data-swatch="modern"] { background: linear-gradient(135deg, #2563eb, #dfe7f3); }
+.shim-more-swatch[data-swatch="classic"] { background: linear-gradient(#4f6f91, #34506e); }
+.shim-more-swatch[data-swatch="arcade"] { background: linear-gradient(135deg, #ff2bd6, #110a22); }
+.shim-more-swatch[data-swatch="own"] { background: conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444); }
+
+:root[data-skin="classic"] .shim-toolbar .shim-more-menu {
+  border-radius: 0;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+:root[data-skin="classic"] .shim-toolbar .shim-more-menu .shim-more-item {
+  border-radius: 0;
+}
+
+:root[data-skin="arcade"] .shim-toolbar .shim-more-menu {
+  border-color: #ff2bd6;
+  box-shadow: 0 0 18px rgba(255, 43, 214, 0.45);
 }

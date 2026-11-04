@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for NumberGuess: a question mark over a number line with a guess marked. Original art for
+       this repo. -->
+  <rect x="16" y="16" width="224" height="224" rx="40" fill="#6c4bd1"/>
+  <path d="M96 92 Q96 52 130 52 Q164 52 164 84 Q164 104 140 116 Q128 122 128 140 V146" stroke="#ffffff" stroke-width="22"
+        fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="128" cy="176" r="12" fill="#ffffff"/>
+  <path d="M40 210 H216" stroke="#cbbcff" stroke-width="6" stroke-linecap="round"/>
+  <g stroke="#cbbcff" stroke-width="4"><path d="M40 202 V218"/><path d="M84 204 V216"/><path d="M128 204 V216"/><path d="M172 204 V216"/><path d="M216 202 V218"/></g>
+  <circle cx="150" cy="210" r="9" fill="#ffd34d"/>
+</svg>

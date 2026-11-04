@@ -1,0 +1,23 @@
+{
+  "name": "Old Java Applications",
+  "short_name": "Old Java",
+  "description": "Java Swing and AWT programs recovered from old jars, playable in the browser and offline.",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#170a2e",
+  "theme_color": "#170a2e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Minesweeper", "url": "./index.html#Minesweeper", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Flappy Bird", "url": "./index.html#FlappyBird", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "NathaNOS", "url": "./index.html#NathaNOS", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Synthesizer Keyboard", "url": "./index.html#SynthesizerKeyboard", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

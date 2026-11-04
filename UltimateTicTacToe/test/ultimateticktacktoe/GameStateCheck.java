@@ -1,5 +1,7 @@
 package ultimateticktacktoe;
 
+import java.util.Random;
+
 /** Self-check for the Ultimate Tic-Tac-Toe rules. Run with java -ea. */
 public class GameStateCheck {
    public static void main(String[] args) {
@@ -8,6 +10,9 @@ public class GameStateCheck {
       check("O".equals(GameState.result(new String[]{"", "", "O", "", "O", "", "O", "", ""})), "diagonal win");
       check(GameState.result(new String[]{"X", "O", "", "", "", "", "", "", ""}) == null, "open board");
       check(GameState.DRAW.equals(GameState.result(new String[]{"X", "O", "X", "X", "O", "O", "O", "X", "X"})), "full board draws");
+      // The line a win is struck through, for drawing.
+      check(java.util.Arrays.equals(GameState.winningLine(new String[]{"", "", "O", "", "O", "", "O", "", ""}), new int[]{2, 4, 6}), "winning line");
+      check(GameState.winningLine(new String[]{"X", "O", "X", "X", "O", "O", "O", "X", "X"}) == null, "no line in a draw");
       // Draws on the big board do not count as a line.
       check(GameState.result(new String[]{GameState.DRAW, GameState.DRAW, GameState.DRAW, null, null, null, null, null, null}) == null, "draw line");
 
@@ -36,7 +41,113 @@ public class GameStateCheck {
       check("X".equals(game.winner), "X wins the game, got " + game.winner);
       check(!game.canPlay(8, 8), "no moves after the game ends");
 
-      System.out.println("GameStateCheck passed");
+      // Copies are independent, and legal moves follow the active board.
+      game = new GameState();
+      game.play(4, 0);
+      GameState copy = game.copy();
+      copy.play(0, 4);
+      check(game.marks[0][4].isEmpty() && "O".equals(copy.marks[0][4]), "copy is independent");
+      check(game.legalMoves().length == 9 && game.legalMoves()[0] == 0, "nine moves on board 0");
+      check(game.lastMove == 4 * 9 && copy.lastMove == 4, "last move");
+      check(new GameState().legalMoves().length == 81, "81 first moves");
+
+      // Both computer levels take a game-winning move: X owns boards 0 and 1 and is sent to board 2 with 0 and 1 taken.
+      game = new GameState();
+      play(game,
+         0, 3, 3, 0, 0, 4, 4, 0, 0, 5, 5, 0,
+         1, 3, 3, 1, 1, 4, 4, 1, 1, 5,
+         5, 2, 2, 3, 3, 2, 2, 4, 4, 2);
+      check(game.xTurn && game.activeBoard == 2 && game.winner == null, "set up for the winning move");
+      Random random = new Random(1);
+      check(Computer.easyMove(game, random) == 2 * 9 + 5, "easy takes the win");
+      check(Computer.hardMove(game, random, 50) == 2 * 9 + 5, "hard takes the win");
+
+      // Full games: every computer move is legal, and Hard (a short search) beats Easy far more often than not.
+      int hardWins = 0;
+      int games = 10;
+      for (int round = 0; round < games; round++) {
+         game = new GameState();
+         boolean hardIsX = round % 2 == 0;
+         while (game.winner == null) {
+            boolean hardMoves = game.xTurn == hardIsX;
+            int move = hardMoves ? Computer.hardMove(game, random, 30) : Computer.easyMove(game, random);
+            check(game.play(move / 9, move % 9), "computer played an illegal move " + move);
+         }
+         if (game.winner.equals(hardIsX ? "X" : "O")) {
+            hardWins++;
+         }
+      }
+      check(hardWins >= 7, "hard won only " + hardWins + " of " + games + " games against easy");
+
+      // Friend by link: a game's code replays to the same position, and only legal games are codes.
+      game = new GameState();
+      StringBuilder code = new StringBuilder();
+      while (game.winner == null) {
+         int move = Computer.easyMove(game, random);
+         game.play(move / 9, move % 9);
+         code.append(FriendLink.moveCode(move));
+      }
+      GameState replayed = FriendLink.replay(code.toString());
+      check(replayed != null && game.winner.equals(replayed.winner) && replayed.lastMove == game.lastMove, "a whole game replays");
+      for (int board = 0; board < 9; board++) {
+         check(java.util.Arrays.equals(game.marks[board], replayed.marks[board]), "replayed marks on board " + board);
+      }
+      check(FriendLink.moveCode(4 * 9 + 4).equals("e5") && FriendLink.moveCode(0).equals("a1") && FriendLink.moveCode(80).equals("i9"), "move names");
+      check(FriendLink.replay("").legalMoves().length == 81, "the empty code is a new game");
+      check(FriendLink.replay("e5e5") == null, "a taken cell is not a code");
+      check(FriendLink.replay("e5a1") == null, "a move off the active board is not a code");
+      check(FriendLink.replay("e") == null && FriendLink.replay("j1") == null && FriendLink.replay("e0") == null, "malformed codes");
+      check(FriendLink.replay(code + "a1") == null, "no moves after the game ends");
+      check(FriendLink.codeIn("https://example.org/UltimateTicTacToe/index.html?game=e5a1&x=1#src").equals("e5a1"), "code in a link");
+      check(FriendLink.codeIn(" E5 A1 ").equals("e5a1"), "a pasted code");
+      check("https://example.org/UltimateTicTacToe/index.html".equals(FriendLink.pageOf("https://example.org/UltimateTicTacToe/index.html?embed#x")), "page of a link");
+      check(FriendLink.pageOf("e5a1") == null, "a code is no page");
+      check(FriendLink.message(null, "e5").equals("e5") && FriendLink.message("https://h/p", "e5").equals("https://h/p?game=e5"), "messages");
+
+      // Review: every position of a whole game gets X's chances (exact at the end) and every move a grade.
+      Review review = Review.of(code.toString());
+      check(review != null && review.length() == code.length() / 2 && !review.done(), "a review of the whole game");
+      check(Review.of("e5e5") == null, "no review of a broken code");
+      check(review.grade(0) == null && Double.isNaN(review.loss(0)), "no grade before analysis");
+      int steps = 0;
+      while (review.analyseNext(random, 5)) {
+         steps++;
+      }
+      check(steps > review.length() && steps <= 2 * review.length() + 1 && review.done(), "one or two steps per position");
+      double end = "X".equals(game.winner) ? 1 : "O".equals(game.winner) ? 0 : 0.5;
+      check(review.chances[review.length()] == end && review.better[review.length()] == -1, "the end is exact");
+      int[] countX = review.count(true);
+      int[] countO = review.count(false);
+      int graded = 0;
+      for (int k = 0; k < review.length(); k++) {
+         check(review.chances[k] >= 0 && review.chances[k] <= 1, "chances in range at " + k);
+         check(review.grade(k) != null && review.loss(k) >= 0, "graded move " + k);
+         check(review.positions[k].canPlay(review.better[k] / 9, review.better[k] % 9), "the better move is legal at " + k);
+      }
+      for (int i = 0; i < countX.length; i++) {
+         graded += countX[i] + countO[i];
+      }
+      check(graded == review.length(), "every move counted once");
+      int bad = review.nextBad(-1);
+      check(bad == -1 || review.grade(bad).bad(), "next mistake is one");
+      check(Review.Grade.of(true, 0.9) == Review.Grade.BEST && Review.Grade.of(false, 0.05) == Review.Grade.GOOD
+         && Review.Grade.of(false, 0.12) == Review.Grade.INACCURACY && Review.Grade.of(false, 0.2) == Review.Grade.MISTAKE
+         && Review.Grade.of(false, 0.5) == Review.Grade.BLUNDER, "grade thresholds");
+
+      // Missing a game-winning move: the review's better move is the win, and taking it is the best move.
+      String setup = "a4d1a5e1a6f1b4d2b5e2b6f3c4d3c5e3";
+      check(FriendLink.replay(setup) != null && FriendLink.replay(setup).activeBoard == 2, "review setup");
+      for (String last : new String[]{"c7", "c6"}) {
+         review = Review.of(setup + last);
+         while (review.analyseNext(random, 20)) {
+            // analyse every position
+         }
+         int k = review.length() - 1;
+         check(review.better[k] == 2 * 9 + 5, "the better move wins the game");
+         check("c6".equals(last) == (review.grade(k) == Review.Grade.BEST), "grade of " + last + ": " + review.grade(k));
+      }
+
+      System.out.println("GameStateCheck passed (hard beat easy " + hardWins + " of " + games + ")");
    }
 
    /** Plays (board, cell) pairs, failing if any is illegal. */

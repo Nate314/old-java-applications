@@ -39,8 +39,10 @@
             <goals><goal>add-source</goal></goals>
             <configuration>
               <sources>
+                <source>${repo.dir}/BibleDownloader/src</source>
                 <source>${repo.dir}/CircleSpawner/src</source>
                 <source>${repo.dir}/Clock/src</source>
+                <source>${repo.dir}/DinoGame/src</source>
                 <source>${repo.dir}/FlappyBird/src</source>
                 <source>${repo.dir}/Minesweeper/src</source>
                 <source>${repo.dir}/RubiksCube2D/src</source>
@@ -54,6 +56,8 @@
                 <source>${repo.dir}/NumberGuess/src</source>
                 <source>${repo.dir}/SimpleAlgorithms/src</source>
                 <source>${repo.dir}/TankGame/src</source>
+                <source>${repo.dir}/Windows/src</source>
+                <source>${repo.dir}/WindowsE/src</source>
               </sources>
             </configuration>
           </execution>
@@ -102,10 +106,126 @@
           </execution>
         </executions>
       </plugin>
+      <!-- The source viewer (boot.js): each app page gets its README and Java sources under source/, with
+           source/files.txt listing them. NathaNOS's page is built by the nathanos module, but its sources are
+           copied here with the others. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>app-sources-for-viewer</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <property name="repo" location="${repo.dir}"/>
+                <macrodef name="appsource">
+                  <attribute name="app"/>
+                  <sequential>
+                    <copy todir="${site.dir}/@{app}/source">
+                      <fileset dir="${repo}/@{app}" includes="README.md src/**/*.java"/>
+                    </copy>
+                    <pathconvert property="source.@{app}" pathsep="${line.separator}" dirsep="/">
+                      <fileset dir="${repo}/@{app}" includes="README.md src/**/*.java"/>
+                      <globmapper from="${repo}/@{app}/*" to="*" handledirsep="true"/>
+                    </pathconvert>
+                    <echo file="${site.dir}/@{app}/source/files.txt" message="${source.@{app}}${line.separator}"/>
+                  </sequential>
+                </macrodef>
+                <appsource app="BibleDownloader"/>
+                <appsource app="CircleSpawner"/>
+                <appsource app="Clock"/>
+                <appsource app="DinoGame"/>
+                <appsource app="FlappyBird"/>
+                <appsource app="Minesweeper"/>
+                <appsource app="NathaNOS"/>
+                <appsource app="RubiksCube2D"/>
+                <appsource app="ScreenSaver"/>
+                <appsource app="SpriteFloatyStars"/>
+                <appsource app="StockChecker"/>
+                <appsource app="SynthesizerKeyboard"/>
+                <appsource app="UltimateTicTacToe"/>
+                <appsource app="GroupCreator"/>
+                <appsource app="MusicTheoryExpert"/>
+                <appsource app="NumberGuess"/>
+                <appsource app="SimpleAlgorithms"/>
+                <appsource app="TankGame"/>
+                <appsource app="Windows"/>
+                <appsource app="WindowsE"/>
+              </target>
+            </configuration>
+          </execution>
+          <!-- What's new (site/news.js): the repo's history as history.txt, one "@@<commit time> <subject>" line
+               per commit, newest first, each followed by the top-level folders it changed (Clock, web, ...).
+               Squash merges' "(#N)" is left out of the subjects. -->
+          <execution>
+            <id>history</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <mkdir dir="${project.build.directory}"/>
+                <exec executable="git" dir="${repo.dir}" failonerror="true">
+                  <arg value="log"/>
+                  <arg value="--no-merges"/>
+                  <arg value="--format=@@%ct %s"/>
+                  <arg value="--name-only"/>
+                  <arg value="--output=${project.build.directory}/history-raw.txt"/>
+                </exec>
+                <copy file="${project.build.directory}/history-raw.txt" tofile="${site.dir}/history.txt"
+                      encoding="UTF-8" outputencoding="UTF-8" overwrite="true">
+                  <filterchain>
+                    <ignoreblank/>
+                    <tokenfilter>
+                      <replaceregex pattern="^([^@/][^/]*)/.*$" replace="\1"/>
+                      <replaceregex pattern="^(@@.*?)\s*\(#\d+\)$" replace="\1"/>
+                    </tokenfilter>
+                    <uniqfilter/>
+                  </filterchain>
+                </copy>
+              </target>
+            </configuration>
+          </execution>
+          <!-- Link previews: the share tags web/cards.ps1 writes into every page point at the page and its card
+               with relative addresses. Built with -Dsite.url=https://host/path, they become absolute, which
+               most link preview services need. -->
+          <execution>
+            <id>absolute-share-tags</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target xmlns:if="ant:if">
+                <condition property="share.absolute"><length string="${site.url}" when="greater" length="0" trim="true"/></condition>
+                <replaceregexp if:set="share.absolute" match="(&lt;meta (?:property=&quot;og:(?:url|image)&quot;) content=&quot;)(?:\.\./)?" replace="\1${site.url}/" flags="g" encoding="UTF-8">
+                  <fileset dir="${site.dir}" includes="index.html */index.html"/>
+                </replaceregexp>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.teavm</groupId>
         <artifactId>teavm-maven-plugin</artifactId>
         <executions>
+          <execution>
+            <id>BibleDownloader</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>audiobibledownloader.Main</mainClass>
+              <targetDirectory>${site.dir}/BibleDownloader</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>DinoGame</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>dinosaurgameplayer.Main</mainClass>
+              <targetDirectory>${site.dir}/DinoGame</targetDirectory>
+            </configuration>
+          </execution>
           <execution>
             <id>CircleSpawner</id>
             <goals><goal>compile</goal></goals>
@@ -224,6 +344,22 @@
             <configuration>
               <mainClass>tankgame.Main</mainClass>
               <targetDirectory>${site.dir}/TankGame</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Windows</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>test.Test</mainClass>
+              <targetDirectory>${site.dir}/Windows</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>WindowsE</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>windowse.WindowsEMain</mainClass>
+              <targetDirectory>${site.dir}/WindowsE</targetDirectory>
             </configuration>
           </execution>
         </executions>

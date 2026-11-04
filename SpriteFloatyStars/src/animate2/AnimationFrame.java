@@ -23,10 +23,23 @@ public final class AnimationFrame extends JFrame implements KeyListener {
 
    @Override
    public final void keyPressed(KeyEvent e) {
-      if (e.getKeyCode() == KeyEvent.VK_UP) {
+      int key = e.getKeyCode();
+      if (key == KeyEvent.VK_UP) {
          this.starField.addStar();
-      } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+      } else if (key == KeyEvent.VK_DOWN) {
          this.starField.removeStar();
+      } else if (key >= KeyEvent.VK_1 && key <= KeyEvent.VK_6) {
+         this.starField.setMode(key - KeyEvent.VK_1);
+      } else if (key >= KeyEvent.VK_NUMPAD1 && key <= KeyEvent.VK_NUMPAD6) {
+         this.starField.setMode(key - KeyEvent.VK_NUMPAD1);
+      } else if (key == KeyEvent.VK_N) {
+         this.starField.setMode(this.starField.mode() + 1);
+      } else if (key == KeyEvent.VK_SPACE) {
+         this.starField.burstCenter();
+      } else if (key == KeyEvent.VK_H) {
+         this.starField.toggleHint();
+      } else if (key == KeyEvent.VK_T) {
+         this.starField.toggleTrails();
       }
    }
 

@@ -15,6 +15,11 @@ public final class Net {
     private Net() {
     }
 
+    /** Class.getResource: the page has no class path, so nothing is found (BibleDownloader then skips its icon). */
+    public static URL resource(Class<?> cls, String name) {
+        return null;
+    }
+
     public static InputStream openStream(URL url) throws IOException {
         return getInputStream(url.openConnection());
     }

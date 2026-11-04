@@ -12,13 +12,12 @@ public final class GroupMaker {
 
    /** Throws IllegalArgumentException, with a message for the user, when the names cannot be split that way. */
    public static List<List<String>> makeGroups(String list, int min, int max, Random random) {
-      List<String> names = new ArrayList<>();
-      for (String name : list.split(",")) {
-         if (!name.trim().isEmpty()) {
-            names.add(name.trim());
-         }
-      }
+      return makeGroups(parseNames(list), min, max, random);
+   }
 
+   /** The same, for names already split; the list is not changed. */
+   public static List<List<String>> makeGroups(List<String> roster, int min, int max, Random random) {
+      List<String> names = new ArrayList<>(roster);
       if (names.isEmpty()) {
          throw new IllegalArgumentException("Enter at least one name.");
       }
@@ -46,6 +45,17 @@ public final class GroupMaker {
          start += size;
       }
       return groups;
+   }
+
+   /** The trimmed, non-empty names of a comma-separated list, in order. */
+   public static List<String> parseNames(String list) {
+      List<String> names = new ArrayList<>();
+      for (String name : list.split(",")) {
+         if (!name.trim().isEmpty()) {
+            names.add(name.trim());
+         }
+      }
+      return names;
    }
 
    /** True when count names fit in some number of groups of min to max names (zero names need no groups). */

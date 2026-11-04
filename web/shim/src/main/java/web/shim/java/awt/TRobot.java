@@ -9,18 +9,39 @@ import web.shim.java.awt.event.TKeyEvent;
 /**
  * A page-level Robot. Key presses become AWT key events for the focused component, queued like real OS input;
  * getPixelColor samples whatever canvas (or widget background) is drawn at that viewport point.
- * It cannot reach anything outside the page.
+ * It cannot reach anything outside the page. The Windows key and the keys pressed while it is held are the
+ * operating system's, not the app's: they go to the page's pretend Windows (Js.shellShortcut) as a shortcut,
+ * the Windows key alone when it is released with nothing pressed in between, or Win+key when that key goes down.
  */
 public class TRobot {
+    private static final int VK_WINDOWS = 524;   // java.awt.event.KeyEvent.VK_WINDOWS
+    private static boolean windowsDown;
+    private static boolean windowsCombo;
+
     public TRobot() throws TAWTException {
     }
 
     public void keyPress(int keycode) {
-        post(TKeyEvent.KEY_PRESSED, keycode);
+        if (keycode == VK_WINDOWS) {
+            windowsDown = true;
+            windowsCombo = false;
+        } else if (windowsDown) {
+            windowsCombo = true;
+            Js.shellShortcut(keycode);
+        } else {
+            post(TKeyEvent.KEY_PRESSED, keycode);
+        }
     }
 
     public void keyRelease(int keycode) {
-        post(TKeyEvent.KEY_RELEASED, keycode);
+        if (keycode == VK_WINDOWS) {
+            if (windowsDown && !windowsCombo) {
+                Js.shellShortcut(keycode);
+            }
+            windowsDown = false;
+        } else if (!windowsDown) {
+            post(TKeyEvent.KEY_RELEASED, keycode);
+        }
     }
 
     private static void post(int id, int keycode) {

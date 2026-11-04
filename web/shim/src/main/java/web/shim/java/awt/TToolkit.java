@@ -2,12 +2,14 @@ package web.shim.java.awt;
 
 import java.util.ArrayList;
 import java.util.List;
+import web.shim.java.awt.datatransfer.TClipboard;
 import web.shim.java.awt.event.TAWTEventListener;
 import web.shim.java.awt.web.TDesktop;
 
 public class TToolkit {
     private static final TToolkit INSTANCE = new TToolkit();
     private final TEventQueue eventQueue = new TEventQueue();
+    private final TClipboard clipboard = new TClipboard("System");
     private final List<TAWTEventListener> awtListeners = new ArrayList<>();
     private final List<Long> awtListenerMasks = new ArrayList<>();
 
@@ -29,6 +31,10 @@ public class TToolkit {
 
     public TImage getImage(String filename) {
         return TImage.load(filename);
+    }
+
+    public TImage getImage(java.net.URL url) {
+        return TImage.load(url.getPath());
     }
 
     public TImage createImage(String filename) {
@@ -62,6 +68,11 @@ public class TToolkit {
     }
 
     public void beep() {
+    }
+
+    /** The browser's clipboard (text only, write only). */
+    public TClipboard getSystemClipboard() {
+        return this.clipboard;
     }
 
     public void sync() {

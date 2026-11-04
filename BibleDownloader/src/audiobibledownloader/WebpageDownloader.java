@@ -26,7 +26,6 @@ public class WebpageDownloader {
       URLConnection connection = URI.create(urlString).toURL().openConnection();
       connection.setConnectTimeout(10000);
       connection.setReadTimeout(30000);
-      connection.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");
       return connection.getInputStream();
    }
 }

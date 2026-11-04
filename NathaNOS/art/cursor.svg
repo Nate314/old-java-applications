@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- NathaNOS's mouse pointer (assets/cursor.png): a rounded teal arrow with its tip, the hot spot, at the top left
+       corner. Original art for this repo. -->
+  <path d="M2 2 L2 24 L8 18.5 L12.5 28 L17 26 L12.8 17 L21 17 Z" fill="#2bb3a3" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M2 2 L2 24 L8 18.5 L12.5 28 L17 26 L12.8 17 L21 17 Z" fill="none" stroke="#0d3b37" stroke-width="0.8" stroke-linejoin="round"/>
+</svg>

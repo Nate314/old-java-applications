@@ -26,6 +26,7 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
     private String actionCommand;
     private boolean selected;
     private boolean contentAreaFilled = true;
+    private boolean borderPainted = true;
     private JSObject iconEl;
     private JSObject textEl;
 
@@ -57,6 +58,7 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
         super.syncAll();
         Js.setText(textEl, text);
         syncIcon();
+        Js.toggleClass(element(), "no-border", !borderPainted);
     }
 
     private void syncIcon() {
@@ -186,7 +188,9 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
     public void setFocusPainted(boolean b) {
     }
 
+    /** Kept, so a button told this before it is shown (Minesweeper's painted tiles) loses its skin border too. */
     public void setBorderPainted(boolean b) {
+        borderPainted = b;
         if (hasElement()) {
             Js.toggleClass(element(), "no-border", !b);
         }
@@ -195,6 +199,10 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
     public void setContentAreaFilled(boolean b) {
         contentAreaFilled = b;
         syncColors();
+    }
+
+    public boolean isBorderPainted() {
+        return borderPainted;
     }
 
     public boolean isContentAreaFilled() {

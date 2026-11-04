@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for StockChecker: a price chart with candles and a rising line. Original art for this
+       repo. -->
+  <rect x="16" y="28" width="224" height="200" rx="24" fill="#12233f"/>
+  <g stroke="#2c4268" stroke-width="2"><path d="M36 80 H220"/><path d="M36 128 H220"/><path d="M36 176 H220"/></g>
+  <g stroke-width="4">
+    <path d="M64 150 V200" stroke="#e05a5a"/><rect x="54" y="160" width="20" height="30" fill="#e05a5a"/>
+    <path d="M104 130 V190" stroke="#3fbf7f"/><rect x="94" y="140" width="20" height="36" fill="#3fbf7f"/>
+    <path d="M144 120 V176" stroke="#e05a5a"/><rect x="134" y="132" width="20" height="28" fill="#e05a5a"/>
+    <path d="M184 84 V160" stroke="#3fbf7f"/><rect x="174" y="96" width="20" height="50" fill="#3fbf7f"/>
+  </g>
+  <path d="M40 176 L92 130 L132 146 L200 74" stroke="#ffd34d" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M182 62 L216 56 L210 90 Z" fill="#ffd34d"/>
+</svg>

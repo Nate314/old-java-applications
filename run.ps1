@@ -1,33 +1,39 @@
 <#
 .SYNOPSIS
-    Compile and run one of the Java apps, or build it into a runnable jar.
+    Compile and run one of the Java apps, or build it into a runnable jar, or serve the web site.
 .EXAMPLE
-    ./run.ps1                  # prompts for an app, then runs it
+    ./run.ps1                  # asks: the launcher (every app as a card, Enter plays one) or the site
+    ./run.ps1 Site             # serves the built site (built first if missing), asking for the port
+    ./run.ps1 Site -Build      # builds the site again, then serves it
     ./run.ps1 Minesweeper      # runs Minesweeper
     ./run.ps1 FlappyBird -Build  # builds out/FlappyBird.jar
+    ./run.ps1 DinoGame screen    # anything after the app name is passed to it
 #>
 param(
     [string]$App,
-    [switch]$Build
+    [switch]$Build,
+    [Parameter(ValueFromRemainingArguments)] [string[]]$AppArgs
 )
 $ErrorActionPreference = 'Stop'
 
 # WorkDir is where the app expects to be launched from, since some load files by relative path.
 $apps = [ordered]@{
+    # The launcher lists the others and runs each with this script, in the PowerShell running it now.
+    Launcher          = @{ Main = 'launcher.Main';             WorkDir = '.'; Args = @((Get-Process -Id $PID).Path) }
     Clock             = @{ Main = 'clock.Main';                WorkDir = 'Clock' }
     FlappyBird        = @{ Main = 'flappyBird.Main';           WorkDir = 'FlappyBird/src'; Args = @('120') }
     Minesweeper       = @{ Main = 'minesweeper.Main';          WorkDir = 'Minesweeper' }
-    # Apps: built into NathaNOS's taskbar (assets/Clock.jar already ships; the Robot apps would drive the real desktop).
+    # Apps: built into NathaNOS's taskbar (assets/Clock.jar already ships; Windows and WindowsE would drive the real desktop).
     NathaNOS          = @{ Main = 'main.Main';                 WorkDir = 'NathaNOS'
                            Apps = @('Minesweeper', 'UltimateTicTacToe', 'RubiksCube2D', 'FlappyBird', 'SpriteFloatyStars',
                                     'ScreenSaver', 'CircleSpawner', 'StockChecker', 'SynthesizerKeyboard', 'BibleDownloader',
-                                    'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame') }
+                                    'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame', 'DinoGame') }
     RubiksCube2D      = @{ Main = 'rubikscube.Main';           WorkDir = 'RubiksCube2D' }
     ScreenSaver       = @{ Main = 'screensaver.Main';          WorkDir = 'ScreenSaver' }
     SpriteFloatyStars = @{ Main = 'animate2.Animate2Main';     WorkDir = 'SpriteFloatyStars' }
     UltimateTicTacToe = @{ Main = 'ultimateticktacktoe.Main';  WorkDir = 'UltimateTicTacToe' }
     CircleSpawner     = @{ Main = 'circlewindow.Main';         WorkDir = 'CircleSpawner' }
-    DinoGame          = @{ Main = 'dinosaurgameplayer.DinosaurGamePlayer'; WorkDir = 'DinoGame' }
+    DinoGame          = @{ Main = 'dinosaurgameplayer.Main';   WorkDir = 'DinoGame' }
     StockChecker      = @{ Main = 'stockchecker.Main';         WorkDir = 'StockChecker' }
     SynthesizerKeyboard = @{ Main = 'synthesizer.Main';        WorkDir = 'SynthesizerKeyboard' }
     Windows           = @{ Main = 'test.Test';                 WorkDir = 'Windows' }
@@ -42,10 +48,29 @@ $apps = [ordered]@{
 $names = @($apps.Keys)
 
 if (-not $App) {
-    for ($i = 0; $i -lt $names.Count; $i++) { Write-Host "  $($i + 1)) $($names[$i])" }
-    $choice = Read-Host 'Pick an app (number or name)'
-    $App = if ($choice -match '^\d+$' -and [int]$choice -ge 1 -and [int]$choice -le $names.Count) { $names[[int]$choice - 1] } else { $choice }
+    $choice = Read-Host 'Open the [L]auncher or the [S]ite? (Enter for Launcher)'
+    $App = if ($choice -match '^\s*s') { 'Site' } else { 'Launcher' }
 }
+
+# The web site: built with Maven (when missing, or with -Build) and served by web/serve.ps1.
+if ($App -ieq 'Site') {
+    $siteIndex = Join-Path $PSScriptRoot 'web/target/site/index.html'
+    if ($Build -or -not (Test-Path $siteIndex)) {
+        if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) { throw 'Building the site needs Maven (mvn) on the PATH.' }
+        Write-Host 'Building the site (web/target/site); this takes a few minutes...'
+        & mvn -q -f (Join-Path $PSScriptRoot 'web/pom.xml') package
+        if ($LASTEXITCODE -ne 0) { throw 'The site build failed.' }
+    }
+    do {
+        $answer = (Read-Host 'Port (Enter for 8000)').Trim()
+        if (-not $answer) { $answer = '8000' }
+        $valid = $answer -match '^\d{1,5}$' -and [int]$answer -ge 1 -and [int]$answer -le 65535
+        if (-not $valid) { Write-Host 'A port is a number from 1 to 65535.' }
+    } until ($valid)
+    & (Join-Path $PSScriptRoot 'web/serve.ps1') -Port ([int]$answer) -Open
+    return
+}
+
 $match = $names | Where-Object { $_ -ieq $App }
 if (-not $match) { throw "Unknown app '$App'. Choose one of: $($names -join ', ')" }
 $App = $match
@@ -70,7 +95,7 @@ Get-ChildItem -Recurse -File $src | Where-Object { $_.Extension -ne '.java' -and
 }
 
 $workDir = Join-Path $root $cfg.WorkDir
-$appArgs = @($cfg.Args | Where-Object { $_ })
+$appArgs = @(@($cfg.Args) + @($AppArgs) | Where-Object { $_ })
 
 # NathaNOS shows one taskbar button per jar in assets/. Stage a copy of its folder with a jar of each listed app,
 # plus the files those apps read from their own working folder (images, data), and run it from there.

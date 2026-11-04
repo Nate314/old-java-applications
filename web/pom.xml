@@ -13,6 +13,9 @@
     <module>shim</module>
     <module>apps</module>
     <module>nathanos</module>
+    <module>then</module>
+    <module>then-nathanos</module>
+    <module>jars</module>
   </modules>
 
   <properties>
@@ -22,6 +25,8 @@
     <!-- Resolved in each child module (all sit one level below web/). Every module writes into one static site folder. -->
     <site.dir>${project.basedir}/../target/site</site.dir>
     <repo.dir>${project.basedir}/../..</repo.dir>
+    <!-- The address the site is served from (https://host/path, no trailing slash), for absolute link preview tags. Optional. -->
+    <site.url></site.url>
   </properties>
 
   <dependencyManagement>

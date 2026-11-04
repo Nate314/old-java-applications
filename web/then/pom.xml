@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>web</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>then</artifactId>
+  <name>The apps as first restored, compiled to JavaScript</name>
+
+  <!--
+    Then and now (web/README.md): every app page with a "then" version can also run the app as it was first
+    restored, before the chain of reworks: the sources at commit ${then.commit}, read from the repo's git history
+    with git archive, so no copy of them is kept in the tree. Each app gets <App>/then.js (its page is
+    site/<App>/then.html) and <App>/then-source/ for the source viewer.
+
+    The package names clash with today's sources, so this is its own module.
+  -->
+  <properties>
+    <!-- master after "Generic example names, Modern as the default skin, and every app in NathaNOS (#9)": the
+         recovered apps with the bug fixes of "Modernize all 20 apps" (#6), before the reworks from #10 on. A pinned
+         hash, not master, so "then" stays put when later work is merged. web/then-nathanos uses the same commit. -->
+    <then.commit>5a28e4608fc254e9cc075768a598a965b7fe2d24</then.commit>
+    <then.src>${project.build.directory}/then-src</then.src>
+  </properties>
+
+  <!-- The shim must stay first: TeaVM tries class substitution rules in classpath order. -->
+  <dependencies>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>shim</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-classlib</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-jso-apis</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <!-- Unpack the sources as first restored, from git history. -->
+          <execution>
+            <id>then-sources</id>
+            <phase>generate-sources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <delete dir="${then.src}"/>
+                <mkdir dir="${then.src}"/>
+                <exec executable="git" dir="${repo.dir}" failonerror="true">
+                  <arg line="archive --format=tar -o ${project.build.directory}/then-src.tar ${then.commit} CircleSpawner Clock FlappyBird GroupCreator Minesweeper MusicTheoryExpert NumberGuess RubiksCube2D ScreenSaver SimpleAlgorithms SpriteFloatyStars StockChecker SynthesizerKeyboard TankGame UltimateTicTacToe WindowsE"/>
+                </exec>
+                <untar src="${project.build.directory}/then-src.tar" dest="${then.src}"/>
+              </target>
+            </configuration>
+          </execution>
+          <!-- The pages, and the source viewer's files: then.html reads then-source/ (README and Java as first restored). -->
+          <execution>
+            <id>then-sources-for-viewer</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <macrodef name="thensource">
+                  <attribute name="app"/>
+                  <sequential>
+                    <!-- Fresh each build: git archive dates the files to their commit, older than any earlier copy. -->
+                    <delete dir="${site.dir}/@{app}/then-source"/>
+                    <copy todir="${site.dir}/@{app}/then-source" overwrite="true">
+                      <fileset dir="${then.src}/@{app}" includes="README.md src/**/*.java"/>
+                    </copy>
+                    <pathconvert property="then.@{app}" pathsep="${line.separator}" dirsep="/">
+                      <fileset dir="${then.src}/@{app}" includes="README.md src/**/*.java"/>
+                      <globmapper from="${then.src}/@{app}/*" to="*" handledirsep="true"/>
+                    </pathconvert>
+                    <echo file="${site.dir}/@{app}/then-source/files.txt" message="${then.@{app}}${line.separator}"/>
+                  </sequential>
+                </macrodef>
+                <!-- Each app's then.html, from then.html here: its title as on its page today, and the body
+                     attributes its page needs (data-files, data-args, ...; see web/README.md). -->
+                <macrodef name="thenpage">
+                  <attribute name="app"/>
+                  <attribute name="title"/>
+                  <attribute name="body"/>
+                  <sequential>
+                    <copy file="${project.basedir}/then.html" tofile="${site.dir}/@{app}/then.html" overwrite="true" encoding="UTF-8">
+                      <filterset>
+                        <filter token="APP" value="@{app}"/>
+                        <filter token="TITLE" value="@{title}"/>
+                        <filter token="BODY" value="@{body}"/>
+                      </filterset>
+                    </copy>
+                  </sequential>
+                </macrodef>
+                <thenpage app="CircleSpawner" title="Circle Spawner" body="data-own-layout"/>
+                <thenpage app="Clock" title="Clock" body=""/>
+                <thenpage app="FlappyBird" title="Flappy Bird" body="data-files=&quot;bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png&quot; data-args=&quot;120&quot;"/>
+                <thenpage app="GroupCreator" title="Group Creator" body="data-console"/>
+                <thenpage app="Minesweeper" title="Minesweeper" body=""/>
+                <thenpage app="MusicTheoryExpert" title="Music Theory Expert" body=""/>
+                <thenpage app="NumberGuess" title="Number Guess" body=""/>
+                <thenpage app="RubiksCube2D" title="Rubik&apos;s Cube 2D" body=""/>
+                <thenpage app="ScreenSaver" title="Screen Saver" body=""/>
+                <thenpage app="SimpleAlgorithms" title="Simple Algorithms" body="data-console"/>
+                <thenpage app="SpriteFloatyStars" title="Sprite Floaty Stars" body=""/>
+                <thenpage app="StockChecker" title="Stock Checker" body="data-files=&quot;myStocks.txt stockCheck.csv&quot;"/>
+                <thenpage app="SynthesizerKeyboard" title="Synthesizer Keyboard" body=""/>
+                <thenpage app="TankGame" title="Tank Game" body=""/>
+                <thenpage app="UltimateTicTacToe" title="Ultimate Tic-Tac-Toe" body=""/>
+                <thenpage app="WindowsE" title="Windows+E" body="data-shell"/>
+                <thensource app="CircleSpawner"/>
+                <thensource app="Clock"/>
+                <thensource app="FlappyBird"/>
+                <thensource app="GroupCreator"/>
+                <thensource app="Minesweeper"/>
+                <thensource app="MusicTheoryExpert"/>
+                <thensource app="NumberGuess"/>
+                <thensource app="RubiksCube2D"/>
+                <thensource app="ScreenSaver"/>
+                <thensource app="SimpleAlgorithms"/>
+                <thensource app="SpriteFloatyStars"/>
+                <thensource app="StockChecker"/>
+                <thensource app="SynthesizerKeyboard"/>
+                <thensource app="TankGame"/>
+                <thensource app="UltimateTicTacToe"/>
+                <thensource app="WindowsE"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>then-app-sources</id>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>${then.src}/CircleSpawner/src</source>
+                <source>${then.src}/Clock/src</source>
+                <source>${then.src}/FlappyBird/src</source>
+                <source>${then.src}/GroupCreator/src</source>
+                <source>${then.src}/Minesweeper/src</source>
+                <source>${then.src}/MusicTheoryExpert/src</source>
+                <source>${then.src}/NumberGuess/src</source>
+                <source>${then.src}/RubiksCube2D/src</source>
+                <source>${then.src}/ScreenSaver/src</source>
+                <source>${then.src}/SimpleAlgorithms/src</source>
+                <source>${then.src}/SpriteFloatyStars/src</source>
+                <source>${then.src}/StockChecker/src</source>
+                <source>${then.src}/SynthesizerKeyboard/src</source>
+                <source>${then.src}/TankGame/src</source>
+                <source>${then.src}/UltimateTicTacToe/src</source>
+                <source>${then.src}/WindowsE/src</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.teavm</groupId>
+        <artifactId>teavm-maven-plugin</artifactId>
+        <configuration>
+          <targetFileName>then.js</targetFileName>
+        </configuration>
+        <executions>
+          <execution>
+            <id>CircleSpawner</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>circlewindow.Main</mainClass>
+              <targetDirectory>${site.dir}/CircleSpawner</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Clock</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>clock.Main</mainClass>
+              <targetDirectory>${site.dir}/Clock</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>FlappyBird</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>flappyBird.Main</mainClass>
+              <targetDirectory>${site.dir}/FlappyBird</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>GroupCreator</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>groupcreator.Main</mainClass>
+              <targetDirectory>${site.dir}/GroupCreator</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Minesweeper</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>minesweeper.Main</mainClass>
+              <targetDirectory>${site.dir}/Minesweeper</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>MusicTheoryExpert</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>musictheoryexpert.Main</mainClass>
+              <targetDirectory>${site.dir}/MusicTheoryExpert</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>NumberGuess</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>numberguess.Main</mainClass>
+              <targetDirectory>${site.dir}/NumberGuess</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>RubiksCube2D</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>rubikscube.Main</mainClass>
+              <targetDirectory>${site.dir}/RubiksCube2D</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>ScreenSaver</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>screensaver.Main</mainClass>
+              <targetDirectory>${site.dir}/ScreenSaver</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>SimpleAlgorithms</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>simplealgorithms.Main</mainClass>
+              <targetDirectory>${site.dir}/SimpleAlgorithms</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>SpriteFloatyStars</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>animate2.Animate2Main</mainClass>
+              <targetDirectory>${site.dir}/SpriteFloatyStars</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>StockChecker</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>stockchecker.Main</mainClass>
+              <targetDirectory>${site.dir}/StockChecker</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>SynthesizerKeyboard</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>synthesizer.Main</mainClass>
+              <targetDirectory>${site.dir}/SynthesizerKeyboard</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>TankGame</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>tankgame.Main</mainClass>
+              <targetDirectory>${site.dir}/TankGame</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>UltimateTicTacToe</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>ultimateticktacktoe.Main</mainClass>
+              <targetDirectory>${site.dir}/UltimateTicTacToe</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>WindowsE</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>windowse.WindowsEMain</mainClass>
+              <targetDirectory>${site.dir}/WindowsE</targetDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

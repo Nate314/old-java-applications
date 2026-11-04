@@ -23,7 +23,7 @@ import web.shim.java.awt.image.TImageObserver;
 /**
  * Graphics2D over a CanvasRenderingContext2D. The canvas is created lazily on the first drawing call, so
  * components whose paint() draws nothing never get one. Coordinates are CSS pixels; the backing store is
- * scaled by devicePixelRatio.
+ * scaled by Js.pixelRatio() (devicePixelRatio, times the zoom while the page desktop is zoomed up).
  */
 public final class TCanvasGraphics extends TGraphics2D {
     /** Supplies the 2D context on first use (creating and sizing the canvas). */
@@ -89,6 +89,7 @@ public final class TCanvasGraphics extends TGraphics2D {
     }
 
     private JSObject ctx() {
+        Js.painted();
         if (ctx == null) {
             ctx = surface.context();
         }
@@ -265,6 +266,15 @@ public final class TCanvasGraphics extends TGraphics2D {
     }
 
     @Override
+    public void drawArc(int x, int y, int width, int height, int startAngle, int arcAngle) {
+        if (width >= 0 && height >= 0) {
+            double o = strokeOffset();
+            arc(ctx(), color.css(), x + o + width / 2.0, y + o + height / 2.0, width / 2.0, height / 2.0,
+                    -Math.toRadians(startAngle), -Math.toRadians(startAngle + arcAngle), arcAngle > 0);
+        }
+    }
+
+    @Override
     public void fillOval(int x, int y, int width, int height) {
         if (width > 0 && height > 0) {
             ellipse(ctx(), color.css(), true, x + width / 2.0, y + height / 2.0, width / 2.0, height / 2.0);
@@ -347,6 +357,11 @@ public final class TCanvasGraphics extends TGraphics2D {
             "g.beginPath(); g.ellipse(cx, cy, Math.max(rx, 0), Math.max(ry, 0), 0, 0, 2 * Math.PI);"
             + "if (isFill) { g.fillStyle = s; g.fill(); } else { g.strokeStyle = s; g.stroke(); }")
     private static native void ellipse(JSObject g, String s, boolean fill, double cx, double cy, double rx, double ry);
+
+    /** Java angles turn counterclockwise with y up; the canvas's turn clockwise with y down, hence the negated angles. */
+    @JSBody(params = { "g", "s", "cx", "cy", "rx", "ry", "from", "to", "ccw" }, script =
+            "g.beginPath(); g.ellipse(cx, cy, Math.max(rx, 0), Math.max(ry, 0), 0, from, to, ccw); g.strokeStyle = s; g.stroke();")
+    private static native void arc(JSObject g, String s, double cx, double cy, double rx, double ry, double from, double to, boolean ccw);
 
     @JSBody(params = { "g", "s", "isFill", "x", "y", "w", "h", "rx", "ry" }, script =
             "g.beginPath(); g.roundRect(x, y, w, h, [Math.min(rx, ry)]);"

@@ -18,6 +18,15 @@ public final class Cube {
    protected Face backFace = null;
    protected Face leftFace = null;
    protected String selectedFaceColor = "";
+   /** Told about every turn and reset, to show them (the 3D view); may be null. */
+   Watcher watcher = null;
+
+   /** Hears the cube change. */
+   interface Watcher {
+      void turned(CubeGeometry.Turn turn);
+
+      void reset();
+   }
 
    public Cube(CubeFrame frame, JButton[][] faceButtons, int cellWidth, int cellHeight) {
       this.frame = frame;
@@ -45,6 +54,46 @@ public final class Cube {
          }
       }
       return true;
+   }
+
+   /** Puts every sticker back on its own face: the solved cube the app starts with. */
+   public final void reset() {
+      for (Face face : this.faces()) {
+         face.reset();
+      }
+      this.refresh();
+      if (this.watcher != null) {
+         this.watcher.reset();
+      }
+   }
+
+   /** A layer turn was just applied to the stickers. */
+   final void turned(CubeGeometry.Turn turn) {
+      this.refresh();
+      if (this.watcher != null) {
+         this.watcher.turned(turn);
+      }
+   }
+
+   /** The face with that color name, or null. */
+   public final Face face(String colorName) {
+      for (Face face : this.faces()) {
+         if (face.colorName().equals(colorName)) {
+            return face;
+         }
+      }
+      return null;
+   }
+
+   /** All 54 stickers in one string, so two positions of the cube can be compared. */
+   public final String snapshot() {
+      StringBuilder all = new StringBuilder();
+      for (Face face : this.faces()) {
+         for (String sticker : face.stickers) {
+            all.append(sticker).append(',');
+         }
+      }
+      return all.toString();
    }
 
    public final void refresh() {

@@ -15,6 +15,7 @@ import web.shim.java.awt.event.TMouseEvent;
 import web.shim.java.awt.event.TMouseListener;
 import web.shim.java.awt.event.TMouseMotionListener;
 import web.shim.java.awt.image.TImageObserver;
+import web.shim.javax.accessibility.TAccessibleContext;
 
 /**
  * Every component owns one absolutely positioned DOM element. Bounds, visibility, colors and fonts are kept
@@ -49,6 +50,7 @@ public class TComponent implements TImageObserver {
     private final List<TKeyListener> keyListeners = new ArrayList<>();
 
     private JSObject element;
+    private TAccessibleContext accessibleContext;
     /** Set during paint() when Swing's own background painting ran (JComponent.paintComponent). */
     protected boolean backgroundPainted;
     private JSObject canvas;
@@ -93,6 +95,8 @@ public class TComponent implements TImageObserver {
         syncFont();
         syncCursor();
         syncEnabled();
+        syncFocusable();
+        syncAccessible();
     }
 
     /** Default colors are left to the CSS skin; colors the app sets are applied inline. */
@@ -603,6 +607,18 @@ public class TComponent implements TImageObserver {
 
     public void setFocusable(boolean b) {
         focusable = b;
+        syncFocusable();
+    }
+
+    /** A component Swing's Tab would skip is left out of the browser's Tab order too. */
+    private void syncFocusable() {
+        if (element != null) {
+            if (focusable) {
+                Js.removeAttr(element, "tabindex");
+            } else {
+                Js.setAttr(element, "tabindex", "-1");
+            }
+        }
     }
 
     /** Whether Swing's focus traversal policy would give this component the keyboard focus. */
@@ -631,8 +647,41 @@ public class TComponent implements TImageObserver {
         return hasFocus();
     }
 
-    /** Called when this component becomes the focus owner, to move DOM focus if it has an input element. */
+    /**
+     * Called when this component becomes the focus owner. Keyboard focus on the page follows: a component drawn as a
+     * button, field or list gets it, so a screen reader and the focus ring follow Swing's focus; any other component
+     * (a painted panel) takes it off the app's buttons, so Space no longer presses the last one clicked.
+     */
     protected void focusGained() {
+        if (element != null) {
+            Js.focusComponent(element);
+        }
+    }
+
+    // ---- accessibility ----
+
+    public TAccessibleContext getAccessibleContext() {
+        if (accessibleContext == null) {
+            accessibleContext = new TAccessibleContext(this);
+        }
+        return accessibleContext;
+    }
+
+    /** Copies the accessible name and description to the element, where screen readers look for them. */
+    public void syncAccessible() {
+        if (element == null || accessibleContext == null) {
+            return;
+        }
+        setOrRemove("aria-label", accessibleContext.getAccessibleName());
+        setOrRemove("aria-description", accessibleContext.getAccessibleDescription());
+    }
+
+    private void setOrRemove(String attribute, String value) {
+        if (value == null || value.isEmpty()) {
+            Js.removeAttr(element, attribute);
+        } else {
+            Js.setAttr(element, attribute, value);
+        }
     }
 
     // ---- events ----

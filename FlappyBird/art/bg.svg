@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <!-- FlappyBird's sky (bg.jpg): original art for this repo. Tiles side by side, so both edges match. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6db7e8"/>
+      <stop offset="0.55" stop-color="#b9def0"/>
+      <stop offset="0.8" stop-color="#fbe3c4"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff4c9"/>
+      <stop offset="0.6" stop-color="#ffd98a"/>
+      <stop offset="1" stop-color="#ffd98a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <circle cx="1180" cy="560" r="170" fill="url(#sun)"/>
+  <circle cx="1180" cy="560" r="78" fill="#ffe9a8"/>
+  <g fill="#ffffff" opacity="0.85">
+    <ellipse cx="260" cy="190" rx="110" ry="34"/><ellipse cx="220" cy="168" rx="56" ry="40"/><ellipse cx="300" cy="160" rx="66" ry="50"/>
+    <ellipse cx="760" cy="300" rx="90" ry="26"/><ellipse cx="730" cy="282" rx="44" ry="30"/><ellipse cx="790" cy="276" rx="52" ry="38"/>
+    <ellipse cx="1330" cy="150" rx="120" ry="32"/><ellipse cx="1290" cy="128" rx="60" ry="42"/><ellipse cx="1375" cy="122" rx="70" ry="52"/>
+  </g>
+  <!-- far hills, then near hills: the paths start and end at the same height so the tiles join -->
+  <path fill="#a7cfb0" d="M0 700 C160 610 320 610 480 680 S800 760 960 660 S1300 600 1600 700 V1000 H0 Z"/>
+  <path fill="#7dbb86" d="M0 800 C200 730 380 740 560 790 S920 860 1100 780 S1420 740 1600 800 V1000 H0 Z"/>
+  <g fill="#4f8f5c">
+    <rect x="296" y="742" width="10" height="44"/><circle cx="301" cy="732" r="26"/>
+    <rect x="356" y="752" width="8" height="34"/><circle cx="360" cy="744" r="20"/>
+    <rect x="1026" y="770" width="10" height="44"/><circle cx="1031" cy="760" r="26"/>
+    <rect x="1446" y="758" width="8" height="34"/><circle cx="1450" cy="750" r="20"/>
+  </g>
+  <path fill="#5fa26c" d="M0 900 C260 860 520 870 800 900 S1340 940 1600 900 V1000 H0 Z"/>
+</svg>
