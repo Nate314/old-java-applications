@@ -7,6 +7,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseAdapter;
@@ -82,10 +83,13 @@ public final class GamePanel extends JPanel implements KeyListener {
    /** Rewinds used this run; a run with any is practice and keeps no records. */
    private int rewinds = 0;
 
-   /** A picture from the classpath (a jar of the app), or else from the folder the game is started in. */
+   /**
+    * A picture from the classpath (a jar of the app), or else from the folder the game is started in (as in the
+    * browser, where there is no classpath). ImageIcon waits for it to load either way.
+    */
    private static Image image(String name) {
       java.net.URL url = GamePanel.class.getResource("/" + name);
-      return (url != null ? new ImageIcon(url) : new ImageIcon(name)).getImage();
+      return (url != null ? new ImageIcon(Toolkit.getDefaultToolkit().getImage(url)) : new ImageIcon(name)).getImage();
    }
 
    public GamePanel(int stepsPerSecond) {

@@ -59,6 +59,13 @@ public class Main extends JFrame {
       this.desktopPane.add(this.startMenu, JLayeredPane.POPUP_LAYER);
       this.desktopMenu = new DesktopMenu(this, new DesktopShortcuts(this, launcher));
       this.desktopPane.add(this.desktopMenu, JLayeredPane.POPUP_LAYER);
+      // The window was shown before the desktop was added, so lay it out now; and since it never takes focus,
+      // raise it once, or it opens behind the window that started it.
+      this.revalidate();
+      this.repaint();
+      if (visibility) {
+         this.toFront();
+      }
    }
 
    /** The wallpaper the id names (a scene, or a Paint picture still on the desktop), else the original photo. */
