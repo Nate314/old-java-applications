@@ -2,7 +2,7 @@
 
 A bot for a dinosaur jumping game. It watches one screen pixel and presses Space when that pixel's color matches an obstacle. Recovered from the git history of github.com/Nate314/site (`assets/javaApplications`), where the jar was named `DinoGame1920x1080.jar`.
 
-The bot now comes with its game. `./run.ps1 DinoGame` opens Dino Game: a dinosaur runner modeled on Chrome's game (its dinosaur and birds are original pixel drawings, with a round head and back spikes), drawn in gray #535353 (red, green and blue all 83) on an off-white ground. It speeds up from 6 to 13 pixels a step, the jump goes higher while the key is held, and birds join once it passes speed 8.5. Press B and the bot plays it, using the original rule unchanged: read the pixel just left of a red marker, and when its blue value is 83 hold the jump key for 65 ms. You can try to beat its best score, or drag its marker somewhere else and see whether that makes it better or worse. The original screen bot is still there (see Original screen bot).
+The bot now comes with its game. `./run.ps1 old DinoGame` opens Dino Game: a dinosaur runner modeled on Chrome's game (its dinosaur and birds are original pixel drawings, with a round head and back spikes), drawn in gray #535353 (red, green and blue all 83) on an off-white ground. It speeds up from 6 to 13 pixels a step, the jump goes higher while the key is held, and birds join once it passes speed 8.5. Press B and the bot plays it, using the original rule unchanged: read the pixel just left of a red marker, and when its blue value is 83 hold the jump key for 65 ms. You can try to beat its best score, or drag its marker somewhere else and see whether that makes it better or worse. The original screen bot is still there (see Original screen bot).
 
 ## Controls / usage
 
@@ -56,7 +56,7 @@ Evolved bots stay in evolve mode; the bot behind B is still the original, with y
 
 ## Original screen bot
 
-`./run.ps1 DinoGame screen` runs the original program, which plays a dinosaur game in another window (such as Chrome's) by reading the real screen:
+`./run.ps1 old DinoGame screen` runs the original program, which plays a dinosaur game in another window (such as Chrome's) by reading the real screen:
 
 - Launch it with the game visible on screen. After 2.5 s it shows two 10x10 always-on-top marker squares, presses Space once to start the game, then checks the sensor pixel every 1 ms.
 - **Red marker**: the sensor, at (`screenWidth / 2.44`, `screenHeight / 4.5`). The pixel it reads is one to the left of the marker, so the marker does not cover it.
@@ -85,7 +85,7 @@ It sends real Space key presses via `java.awt.Robot` to whatever window has focu
 
 ## Running
 
-From the repo root: `./run.ps1 DinoGame` (or `./run.ps1 DinoGame -Build` to build a jar). `./run.ps1 DinoGame screen` for the original screen bot. It also runs in the browser (see [web/README.md](../web/README.md)).
+From the repo root: `./run.ps1 old DinoGame` (or `./run.ps1 old DinoGame -Build` to build a jar). `./run.ps1 old DinoGame screen` for the original screen bot. It also runs in the browser (see [web/README.md](../web/README.md)).
 
 ## Self-check
 

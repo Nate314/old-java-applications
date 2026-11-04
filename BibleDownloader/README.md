@@ -94,7 +94,7 @@ The chapter counts of the 66 books in `Books.java` were checked against the serv
 
 ## Running
 
-From the repo root: `./run.ps1 BibleDownloader` (or `./run.ps1 BibleDownloader -Build` to build a jar). It needs an internet connection to fetch chapters.
+From the repo root: `./run.ps1 old BibleDownloader` (or `./run.ps1 old BibleDownloader -Build` to build a jar). It needs an internet connection to fetch chapters.
 
 The icon is loaded from the classpath (`/assets/bible.png`), which `run.ps1` copies next to the compiled classes. In the browser build there is no class path, so the window has no icon there.
 

@@ -12,7 +12,7 @@ Presses and releases the Windows key once, then exits. It has no window. Recover
 
 ## Running
 
-From the repo root: `./run.ps1 Windows` (or `./run.ps1 Windows -Build` to build a jar).
+From the repo root: `./run.ps1 old Windows` (or `./run.ps1 old Windows -Build` to build a jar).
 
 It presses the Windows key via `java.awt.Robot` immediately on start, then exits.
 

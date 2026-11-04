@@ -48,7 +48,7 @@ The original was unfinished: tanks could drive and fire, but shells passed throu
 
 ## Running
 
-From the repo root: `./run.ps1 TankGame` (or `./run.ps1 TankGame -Build` to build a jar).
+From the repo root: `./run.ps1 old TankGame` (or `./run.ps1 old TankGame -Build` to build a jar).
 
 ## Self-check
 

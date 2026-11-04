@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
-# The web arcade in a container, for docker compose (docker-compose.yml, started by ./run.ps1 up).
+# The web arcade in a container, for docker compose (docker-compose.yml, started by ./run.ps1).
 # Stage 1 builds the site exactly as `mvn -f web/pom.xml package` does on the host; stage 2 serves it with nginx.
 
 FROM node:22-bookworm-slim AS node
 
 # --- Stage 1: build web/target/site (TeaVM apps, the React pages, the jars) ---
 FROM maven:3.9.9-eclipse-temurin-21 AS build
-# git: the build reads the repo's history (web/then's first restored sources, What's new). Node: web/react.
+# git: the build reads the repo's history (web/then's first restored sources, What's new). Node: the React pages (npm run build:pages).
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules

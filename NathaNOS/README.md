@@ -34,7 +34,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 `~/.nathanos-pictures.txt` keeps Paint's pictures, one line each: `picture=Picture 1:` and the pixels, row by row, as runs of one color: a capital letter for the color (`A` is black, `I` white) followed by the run's length in base 36 when it is more than 1 (a blank picture is `Ijag`, 25,000 white pixels). A damaged line is skipped.
 
 `~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`, or `wallpaper=picture:Picture 1` for a picture from Paint) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
-- The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. `./run.ps1 NathaNOS` adds the other apps (see Running).
+- The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. `./run.ps1 old NathaNOS` adds the other apps (see Running).
 
 The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint.
 
@@ -71,7 +71,7 @@ java -ea -cp ../out/check/NathaNOS main.PictureCheck
 
 ## Running
 
-From the repo root: `./run.ps1 NathaNOS` (or `./run.ps1 NathaNOS -Build` to build a jar).
+From the repo root: `./run.ps1 old NathaNOS` (or `./run.ps1 old NathaNOS -Build` to build a jar).
 
 `run.ps1` stages NathaNOS in `out/NathaNOS/desktop/` and runs it from there: a copy of `assets/`, a jar of each app listed under `Apps` in `run.ps1`, and the files those apps read from their working folder (FlappyBird's images, StockChecker's ticker list and csv). That is every app except NathaNOS itself and the three that drive the real desktop with `Robot` (DinoGame, Windows, WindowsE). Clock is the shipped `assets/Clock.jar`. Files the apps write (StockChecker's `myStocks.txt`, GroupCreator's `output.txt`) land in the staging folder, not in the repo.
 

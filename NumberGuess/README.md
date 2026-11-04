@@ -46,7 +46,7 @@ The fewest guesses for each range is saved to `.numberguess-record.txt` in the u
 
 ## Running
 
-From the repo root: `./run.ps1 NumberGuess` (or `./run.ps1 NumberGuess -Build` to build a jar).
+From the repo root: `./run.ps1 old NumberGuess` (or `./run.ps1 old NumberGuess -Build` to build a jar).
 
 ## Self-check
 

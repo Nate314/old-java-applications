@@ -14,7 +14,7 @@
 
   <!--
     Download .jar (web/README.md): every app page links downloads/<App>.jar, the app compiled from today's sources
-    for the desktop (Java ${maven.compiler.release} or newer), the same way run.ps1 -Build makes it. Most are plain
+    for the desktop (Java ${maven.compiler.release} or newer), the same way run.ps1 old <App> -Build makes it. Most are plain
     jars (FlappyBird's pictures are in its jar, which it reads first). The two apps that read files from the folder
     they start in (StockChecker's quotes, NathaNOS's desktop and the apps it opens) carry those files under
     workfolder/ and start through oldjava.jar.WorkFolder (src/ here), which unpacks them into ~/.oldjava/<App>/

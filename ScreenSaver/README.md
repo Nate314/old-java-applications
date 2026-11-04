@@ -53,4 +53,4 @@ The web site uses this app as its own screen saver: a page left alone for 3 minu
 
 ## Running
 
-From the repo root: `./run.ps1 ScreenSaver` (or `./run.ps1 ScreenSaver -Build` to build a jar).
+From the repo root: `./run.ps1 old ScreenSaver` (or `./run.ps1 old ScreenSaver -Build` to build a jar).
