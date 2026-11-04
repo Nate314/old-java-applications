@@ -1,6 +1,6 @@
 # Launcher
 
-The front door for the desktop: `./run.ps1` with no app name asks for it or the web site, and Enter opens it. Every app in this repo is a card with its picture, category and how often you have played it, and Enter plays the selected one. It replaces the numbered list `run.ps1` used to print and ask about. Unlike the other folders, this is not a recovered app: it was written for this repo.
+The front door for the desktop: `./run.ps1 old` with no app name asks for it or the web site, and Enter opens it. Every app in this repo is a card with its picture, category and how often you have played it, and Enter plays the selected one. It replaces the numbered list `run.ps1` used to print and ask about. Unlike the other folders, this is not a recovered app: it was written for this repo.
 
 ## Controls / usage
 
@@ -21,7 +21,7 @@ The front door for the desktop: `./run.ps1` with no app name asks for it or the 
 ## Where things come from
 
 - **Names, hints, categories, origins and thumbnails** of all 20 apps are read from `web/src/shared/apps.json` (the list the site's home page renders) and the screenshots in `web/public/shots/`, so that file stays the one place that describes an app. It describes what Windows and Windows+E do on the site's pretend Windows, so their hints here, and their warnings, come from `Catalog.java`, written from their READMEs. An app without a screenshot would get a drawn card with its initials.
-- **Playing an app** runs `run.ps1 <App>` in the PowerShell that started the launcher, from the repo root, so each app is compiled and started from its own working folder exactly as from the command line. Its output goes to the same console.
+- **Playing an app** runs `run.ps1 old <App>` in the PowerShell that started the launcher, from the repo root, so each app is compiled and started from its own working folder exactly as from the command line. Its output goes to the same console.
 - **Then** comes from the repo's git history, so it needs git on the PATH and a clone with history back to `5a28e46` (without them the Now and Then buttons and History are hidden). The stories (lines of Java counted with `git grep`, the commits with `git log --no-merges`, the old READMEs with `git show`) are read in the background when the launcher opens. The first Then play unpacks that commit (everything but `web/`) with `git archive` into `out/then`, which is git-ignored, and runs that commit's own `run.ps1 <App>` there, so the old app is compiled and started exactly as it was then. Today's original art is copied over the old pictures (`ThenCopy.ART`; the ones nothing reads any more are left out), so FlappyBird, BibleDownloader and NathaNOS look as they do today: the old pictures were taken from other apps. Its home folder is `~/.oldjava-then` (set through `JAVA_TOOL_OPTIONS`, which is why the console prints "Picked up JAVA_TOOL_OPTIONS"), so the only first restored app that saves, Flappy Bird's high score, keeps its own file apart from today's. Delete `out/then` to unpack again.
 - **The play record** (how many launches, and the last) is saved to `.oldjava-launcher.txt` in the user's home folder, one `App count lastLaunchMillis` line per app. It counts launches from the launcher only. Delete the file to start over.
 
@@ -43,7 +43,7 @@ The front door for the desktop: `./run.ps1` with no app name asks for it or the 
 
 ## Running
 
-From the repo root: `./run.ps1` (or `./run.ps1 Launcher`). It must run from the repo root, which `run.ps1` does.
+From the repo root: `./run.ps1 old` (or `./run.ps1 old Launcher`). It must run from the repo root, which `run.ps1` does.
 
 ## Self-check
 
