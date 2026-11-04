@@ -1,19 +1,22 @@
 <#
 .SYNOPSIS
-    Compile and run one of the Java apps, or build it into a runnable jar, or serve the web site.
+    Starts the web site in Docker through compose-launcher, as the other compose projects do
+    (https://github.com/Nate314/compose-launcher, the git submodule in ./compose-launcher; its ports and printed
+    URLs are in run.conf). With `old` first, it works natively instead: compile and run one of the Java apps,
+    build it into a runnable jar, or serve the web site.
 .EXAMPLE
-    ./run.ps1                  # asks: the launcher (every app as a card, Enter plays one) or the site
-    ./run.ps1 Site             # serves the built site (built first if missing), asking for the port
-    ./run.ps1 Site -Build      # builds the site again, then serves it
-    ./run.ps1 Minesweeper      # runs Minesweeper
-    ./run.ps1 FlappyBird -Build  # builds out/FlappyBird.jar
-    ./run.ps1 DinoGame screen    # anything after the app name is passed to it
+    ./run.ps1                    # docker compose up --build -d on a free port, then prints the site's address
+    ./run.ps1 down               # any other arguments go to docker compose (logs -f, ps, up --build -d, ...)
+    ./run.ps1 share              # starts it, then gives it a public address through ngrok
+    ./run.ps1 old                # asks: the launcher (every app as a card, Enter plays one) or the site
+    ./run.ps1 old Site           # serves the built site (built first if missing), asking for the port
+    ./run.ps1 old Site -Build    # builds the site again, then serves it
+    ./run.ps1 old Minesweeper    # runs Minesweeper
+    ./run.ps1 old FlappyBird -Build  # builds out/FlappyBird.jar
+    ./run.ps1 old DinoGame screen    # anything after the app name is passed to it
 #>
-param(
-    [string]$App,
-    [switch]$Build,
-    [Parameter(ValueFromRemainingArguments)] [string[]]$AppArgs
-)
+# No param() block on purpose: $args keeps docker compose flags such as -d intact (a param() block would read
+# -d as PowerShell's own -Debug).
 $ErrorActionPreference = 'Stop'
 
 # WorkDir is where the app expects to be launched from, since some load files by relative path.
@@ -46,6 +49,35 @@ $apps = [ordered]@{
     TankGame          = @{ Main = 'tankgame.Main';             WorkDir = 'TankGame' }
 }
 $names = @($apps.Keys)
+
+# Docker: anything without `old` first goes to the shared launcher, which picks free ports into .env and runs
+# docker compose with those arguments (up --build -d, then the address, when there are none).
+function Invoke-Compose([object[]]$ComposeArgs) {
+    Set-Location $PSScriptRoot
+    if (-not (Test-Path compose-launcher/run.ps1)) {
+        git submodule update --init compose-launcher
+        if ($LASTEXITCODE -ne 0) {
+            [Console]::Error.WriteLine('run.ps1: could not fetch the compose-launcher submodule. This needs a git clone of the project (not a zip download) and network access.')
+            exit 1
+        }
+    }
+    & ./compose-launcher/run.ps1 @ComposeArgs
+    exit $LASTEXITCODE
+}
+
+if (-not ($args.Count -and "$($args[0])" -ieq 'old')) { Invoke-Compose $args }
+
+# old: the app (or Site), -Build anywhere, and the rest for the app, as the param() block this script had read them.
+$App = $null
+$Build = $false
+$AppArgs = @()
+for ($i = 1; $i -lt $args.Count; $i++) {
+    $a = "$($args[$i])"
+    if ($a -ieq '-Build') { $Build = $true }
+    elseif ($a -ieq '-App' -and $i + 1 -lt $args.Count) { $App = "$($args[++$i])" }
+    elseif ($null -eq $App) { $App = $a }
+    else { $AppArgs += $a }
+}
 
 if (-not $App) {
     $choice = Read-Host 'Open the [L]auncher or the [S]ite? (Enter for Launcher)'
@@ -106,7 +138,7 @@ if ($cfg.Apps) {
     New-Item -ItemType Directory -Force $stage | Out-Null
     Copy-Item -Recurse (Join-Path $workDir 'assets') $stage
     foreach ($name in $cfg.Apps) {
-        & $PSCommandPath $name -Build 6>$null
+        & $PSCommandPath old $name -Build 6>$null
         Copy-Item (Join-Path $root "out/$name.jar") (Join-Path $stage 'assets')
         Get-ChildItem -File (Join-Path $root $apps[$name].WorkDir) | Where-Object Extension -ne '.md' | Copy-Item -Destination $stage
     }

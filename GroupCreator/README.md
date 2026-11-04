@@ -59,7 +59,7 @@ It has since become a tool for a class or team that is split into groups again a
 
 ## Running
 
-From the repo root: `./run.ps1 GroupCreator` (or `./run.ps1 GroupCreator -Build` to build a jar).
+From the repo root: `./run.ps1 old GroupCreator` (or `./run.ps1 old GroupCreator -Build` to build a jar).
 
 `output.txt` is written by relative path into the working directory (`GroupCreator/`).
 

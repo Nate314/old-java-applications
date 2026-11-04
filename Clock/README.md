@@ -58,7 +58,7 @@ The clock used to read the time from `Calendar`. It now reads `Date`'s local-tim
 
 ## Running
 
-From the repo root: `./run.ps1 Clock` (or `./run.ps1 Clock -Build` to build a jar).
+From the repo root: `./run.ps1 old Clock` (or `./run.ps1 old Clock -Build` to build a jar).
 
 ## Self-check
 

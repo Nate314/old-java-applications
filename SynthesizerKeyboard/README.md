@@ -88,7 +88,7 @@ The keys used to be `JButton`s (an empty `KeyButton` subclass) laid out in a `JL
 
 ## Running
 
-From the repo root: `./run.ps1 SynthesizerKeyboard` (or `./run.ps1 SynthesizerKeyboard -Build` to build a jar). To open a tune a friend sent: `./run.ps1 SynthesizerKeyboard e2c2a4` (a code or a whole link).
+From the repo root: `./run.ps1 old SynthesizerKeyboard` (or `./run.ps1 old SynthesizerKeyboard -Build` to build a jar). To open a tune a friend sent: `./run.ps1 old SynthesizerKeyboard e2c2a4` (a code or a whole link).
 
 ## Self-check
 

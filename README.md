@@ -21,7 +21,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 | [SpriteFloatyStars](SpriteFloatyStars/README.md) | Animated stars with five modes that you can pull in and fling with the mouse, a sixth, Orbits, where the stars fall round suns you place and drag, with light trails, and Star Catcher: click gold stars over those modes across six nights, dodging black holes |
 | [UltimateTicTacToe](UltimateTicTacToe/README.md) | Ultimate Tic-Tac-Toe on a painted board that shows where a move would send your opponent before you play it, against an Easy or Hard computer, for two players, or with a friend anywhere by sending a link (or code) after each move; after a game, Review game grades every move with the computer's search and shows a better one where a move slipped |
 | [CircleSpawner](CircleSpawner/README.md) | Builds a circle (the original), ring, heart, star, a typed word, a live clock or your own drawing out of borderless windows, which glide and stretch from one shape into the next (the clock into each new second), follow your pen on the drawing pad, and burst apart when clicked |
-| [DinoGame](DinoGame/README.md) | Once only a bot that played the Chrome dino game by watching a screen pixel; now the dinosaur game itself with that bot built in: press B to watch it play by its one pixel, beat its best, or drag its eye to tune it, or press E to evolve better bots: 20 at a time race the same course, the furthest breed the next generation, and they learn to duck. Night falls every 700 points, and the original bot, which only knows blue 83, goes blind in it. `./run.ps1 DinoGame screen` still runs the original screen bot |
+| [DinoGame](DinoGame/README.md) | Once only a bot that played the Chrome dino game by watching a screen pixel; now the dinosaur game itself with that bot built in: press B to watch it play by its one pixel, beat its best, or drag its eye to tune it, or press E to evolve better bots: 20 at a time race the same course, the furthest breed the next generation, and they learn to duck. Night falls every 700 points, and the original bot, which only knows blue 83, goes blind in it. `./run.ps1 old DinoGame screen` still runs the original screen bot |
 | [StockChecker](StockChecker/README.md) | Once a ticker list that fetched quotes from the retired Yahoo Finance CSV API; now a practice trading desk with $10,000 of play money in a simulated market that opens at its last saved real quotes, raced by four computer traders that each follow one plain rule |
 | [SynthesizerKeyboard](SynthesizerKeyboard/README.md) | One-octave MIDI piano keyboard played with the computer keyboard, with five song lessons that light the next key and award stars, and a recorder: play a tune of your own and send it as a link (or code) that plays it to a friend and teaches it to them. Sing, whistle or play a real instrument to the microphone and the lessons count your notes, with a tuner showing the note you are on. A looper records two bars at a time into up to four layers, each in its own sound, that play round and round while you play over them |
 | [Windows](Windows/README.md) | Presses the Windows key once (in the browser, on a pretend Windows whose Start menu holds every app) |
@@ -45,33 +45,47 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
   - `SynthesizerKeyboard/src/synthesizer/TickCounter.java`: added the outer `KeyboardWindow` field. `KeyboardWindow.java`: added `(Integer)` casts the decompiler dropped. Both were later replaced when click-to-play was fixed.
   - `Windows/src/test/Test.java`: added `throws Exception` to `main`, since javac requires the checked exceptions the bytecode leaves undeclared.
 - In BibleDownloader (`DownloadManager.java`) and GroupCreator (`Main.java`), the decompiler could not rebuild three try-with-resources blocks, so they were rewritten as `try (Writer writer = ...)`.
-- Windows sends a real Windows key press with `java.awt.Robot` as soon as it starts, and so does DinoGame's original screen bot (`./run.ps1 DinoGame screen`: Space, to play the Chrome dino game); plain `./run.ps1 DinoGame` opens its own game window instead. WindowsE presses the Windows shortcut picked on its keyboard (Win+E, opening File Explorer windows, unless another is picked) repeatedly when its button is clicked.
+- Windows sends a real Windows key press with `java.awt.Robot` as soon as it starts, and so does DinoGame's original screen bot (`./run.ps1 old DinoGame screen`: Space, to play the Chrome dino game); plain `./run.ps1 old DinoGame` opens its own game window instead. WindowsE presses the Windows shortcut picked on its keyboard (Win+E, opening File Explorer windows, unless another is picked) repeatedly when its button is clicked.
 - StockChecker no longer downloads quotes (the Yahoo Finance CSV API is retired). Its desk opens day 1 at the prices in the committed `stockCheck.csv`, saves ticker list edits back to `myStocks.txt`, and keeps the practice desk in `~/.stockchecker-desk.txt`.
 - FlappyBird and NathaNOS load images by relative path, so run them from the folder holding the images:
   - FlappyBird: run from `FlappyBird/src` with a numeric argument, e.g. `java flappyBird.Main 120` (the original `run.bat` used 120).
-  - NathaNOS: run from a folder holding its `assets/`. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset. `./run.ps1 NathaNOS` stages a copy in `out/NathaNOS/desktop/` with every other app except Windows and WindowsE on its desktop.
+  - NathaNOS: run from a folder holding its `assets/`. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset. `./run.ps1 old NathaNOS` stages a copy in `out/NathaNOS/desktop/` with every other app except Windows and WindowsE on its desktop.
 
 ## Build and run
 
-Requires a JDK (`java` and `javac` on PATH). From the repo root in PowerShell:
+`./run.ps1` on its own starts the web site in Docker, like the other compose projects (see [In Docker](#in-docker)). With `old` first it runs here instead, as it did before Docker. That needs a JDK (`java` and `javac` on PATH). From the repo root in PowerShell:
 
 ```powershell
-./run.ps1                      # asks: the launcher (Enter) or the web site (S)
-./run.ps1 Site                 # serves the web site, asking for the port (builds it first if missing)
-./run.ps1 Site -Build          # builds the web site again, then serves it
-./run.ps1 Minesweeper          # compiles and runs Minesweeper
-./run.ps1 Minesweeper -Build   # builds out/Minesweeper.jar instead of running
+./run.ps1 old                      # asks: the launcher (Enter) or the web site (S)
+./run.ps1 old Site                 # serves the web site, asking for the port (builds it first if missing)
+./run.ps1 old Site -Build          # builds the web site again, then serves it
+./run.ps1 old Minesweeper          # compiles and runs Minesweeper
+./run.ps1 old Minesweeper -Build   # builds out/Minesweeper.jar instead of running
 ```
 
-With no app name, `run.ps1` asks whether to open the launcher or the site. Enter opens the [Launcher](Launcher/README.md): all 20 apps as cards with their pictures, filters for games, music, toys, tools and the apps that press real keys, a search field that has the keyboard from the start, and Enter to play. It remembers what you launched (in `~/.oldjava-launcher.txt`), opens on the last one, marks the rest New, and Pick for me plays one you have not tried. Apps that press real keys (Windows, WindowsE) say so with a Real keys chip and ask first. It reads the apps' names, hints and thumbnails from the web gallery, so both front doors describe them the same way.
+With no app name, `./run.ps1 old` asks whether to open the launcher or the site. Enter opens the [Launcher](Launcher/README.md): all 20 apps as cards with their pictures, filters for games, music, toys, tools and the apps that press real keys, a search field that has the keyboard from the start, and Enter to play. It remembers what you launched (in `~/.oldjava-launcher.txt`), opens on the last one, marks the rest New, and Pick for me plays one you have not tried. Apps that press real keys (Windows, WindowsE) say so with a Real keys chip and ask first. It reads the apps' names, hints and thumbnails from `web/site/apps.json`, the list the web gallery is rendered from, so both front doors describe them the same way.
 
-S (or `./run.ps1 Site`) serves the [web site](web/README.md) instead: it builds `web/target/site` with Maven when it is missing (or with `-Build`), asks for the port (Enter for 8000), serves it with PowerShell (`web/serve.ps1`) and opens it in the browser. Ctrl+C stops the server.
+S (or `./run.ps1 old Site`) serves the [web site](web/README.md) instead: it builds `web/target/site` with Maven when it is missing (or with `-Build`), asks for the port (Enter for 8000), serves it with PowerShell (`web/serve.ps1`) and opens it in the browser. Ctrl+C stops the server.
 
 The launcher's Then button (Alt+T) plays any app as it was first restored, the version the web site's Then pages run, on the desktop: it unpacks that commit from git history into `out/then` and runs it with that commit's own `run.ps1`, next to today's version if you like. In Then mode each app shows its lines of Java then and now, and History (Alt+H) lists every change since.
 
 Every app page on the site also offers the app as a runnable jar for the desktop (Java 17 or newer), built by the web build; see [Download .jar](web/README.md#download-jar).
 
 Run mode launches each app from the folder it expects (for example `FlappyBird/src` with argument `120`), with any non-Java files in `src/` on the classpath. Build mode prints the matching `java -jar` command. Build output goes to `out/`, which is git-ignored.
+
+### In Docker
+
+Without `old`, `run.ps1` starts the web site in Docker through [compose-launcher](https://github.com/Nate314/compose-launcher), included as a git submodule in `compose-launcher/` (a plain `git clone` leaves it empty; the first run fetches it), the same way as the other projects that use it. It needs Docker, and nothing else on the host: the image builds the site with Maven, a JDK and Node.js (`web/Dockerfile`) and serves it with nginx. Any arguments go to `docker compose`:
+
+```powershell
+./run.ps1                      # builds the image and starts the site on a free port, then prints its address
+./run.ps1 up --build -d        # the same, spelled out
+./run.ps1 logs -f              # follows the site's logs
+./run.ps1 down                 # stops it
+./run.ps1 share                # starts it, then gives it a public HTTPS address through ngrok (Ctrl+C stops sharing)
+```
+
+The launcher picks the first free port from 8080 up, writes it to `.env` (git-ignored) as `SITE_PORT` and prints `Site: http://localhost:<port>` (`run.conf`), so the site can run next to other projects that also want 8080. `share` needs [ngrok](https://ngrok.com/download) on the PATH, signed in once with `ngrok config add-authtoken <token>`. A bare `docker compose up --build` works too, on port 8080. The first build takes several minutes (TeaVM compiles all 20 apps). The image is built from the checkout, `.git` included, because the build reads the repo's history.
 
 ## Web (TeaVM)
 

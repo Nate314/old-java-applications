@@ -53,7 +53,7 @@ On the Square root tab, the digit keys type the number, so switch tabs there by 
 
 ## Running
 
-From the repo root: `./run.ps1 SimpleAlgorithms` (or `./run.ps1 SimpleAlgorithms -Build` to build a jar).
+From the repo root: `./run.ps1 old SimpleAlgorithms` (or `./run.ps1 old SimpleAlgorithms -Build` to build a jar).
 
 ## Self-check
 
