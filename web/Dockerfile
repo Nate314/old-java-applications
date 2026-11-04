@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# The web arcade in a container, for docker compose (docker-compose.yml, started by ./run.ps1 up).
+# The web arcade in a container, for docker compose (docker-compose.yml, started by ./run.ps1).
 # Stage 1 builds the site exactly as `mvn -f web/pom.xml package` does on the host; stage 2 serves it with nginx.
 
 FROM node:22-bookworm-slim AS node

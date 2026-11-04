@@ -71,7 +71,7 @@ The moves are now the quarter turns of a real cube (`CubeGeometry`): the net is 
 
 ## Running
 
-From the repo root: `./run.ps1 RubiksCube2D` (or `./run.ps1 RubiksCube2D -Build` to build a jar).
+From the repo root: `./run.ps1 old RubiksCube2D` (or `./run.ps1 old RubiksCube2D -Build` to build a jar).
 
 ## Self-check
 

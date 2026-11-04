@@ -267,7 +267,7 @@ export function Home() {
           <ul className="record-list" id="records-list" />
           <p className="desktop">
             {"On the desktop: "}
-            <code>./run.ps1</code>
+            <code>./run.ps1 old</code>
             {" opens the launcher, whose Saves button loads a downloaded file into the desktop apps, or saves theirs as a file to Load here."}
           </p>
         </section>

@@ -41,4 +41,4 @@ java -ea -Djava.awt.headless=true -cp ../out/check/CircleSpawner circlewindow.Mo
 
 ## Running
 
-From the repo root: `./run.ps1 CircleSpawner` (or `./run.ps1 CircleSpawner -Build` to build a jar).
+From the repo root: `./run.ps1 old CircleSpawner` (or `./run.ps1 old CircleSpawner -Build` to build a jar).

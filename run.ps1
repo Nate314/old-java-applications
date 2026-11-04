@@ -1,18 +1,19 @@
 <#
 .SYNOPSIS
-    Compile and run one of the Java apps, or build it into a runnable jar, or serve the web site, natively or
-    in Docker through compose-launcher (https://github.com/Nate314/compose-launcher, the git submodule in
-    ./compose-launcher; its ports and printed URLs are in run.conf).
+    Starts the web site in Docker through compose-launcher, as the other compose projects do
+    (https://github.com/Nate314/compose-launcher, the git submodule in ./compose-launcher; its ports and printed
+    URLs are in run.conf). With `old` first, it works natively instead: compile and run one of the Java apps,
+    build it into a runnable jar, or serve the web site.
 .EXAMPLE
-    ./run.ps1                  # asks: the launcher (every app as a card, Enter plays one), the site, or Docker
-    ./run.ps1 Site             # serves the built site (built first if missing), asking for the port
-    ./run.ps1 Site -Build      # builds the site again, then serves it
-    ./run.ps1 Minesweeper      # runs Minesweeper
-    ./run.ps1 FlappyBird -Build  # builds out/FlappyBird.jar
-    ./run.ps1 DinoGame screen    # anything after the app name is passed to it
-    ./run.ps1 Docker             # Docker: builds and starts the site on a free port (docker compose up --build -d)
-    ./run.ps1 down               # anything that is not an app or Site goes to docker compose (logs -f, ps, ...)
-    ./run.ps1 share              # Docker: starts it, then gives it a public address through ngrok
+    ./run.ps1                    # docker compose up --build -d on a free port, then prints the site's address
+    ./run.ps1 down               # any other arguments go to docker compose (logs -f, ps, up --build -d, ...)
+    ./run.ps1 share              # starts it, then gives it a public address through ngrok
+    ./run.ps1 old                # asks: the launcher (every app as a card, Enter plays one) or the site
+    ./run.ps1 old Site           # serves the built site (built first if missing), asking for the port
+    ./run.ps1 old Site -Build    # builds the site again, then serves it
+    ./run.ps1 old Minesweeper    # runs Minesweeper
+    ./run.ps1 old FlappyBird -Build  # builds out/FlappyBird.jar
+    ./run.ps1 old DinoGame screen    # anything after the app name is passed to it
 #>
 # No param() block on purpose: $args keeps docker compose flags such as -d intact (a param() block would read
 # -d as PowerShell's own -Debug).
@@ -49,9 +50,8 @@ $apps = [ordered]@{
 }
 $names = @($apps.Keys)
 
-# Docker: everything that is not an app, Site or -Build goes to the shared launcher, which picks free ports into
-# .env and runs docker compose with those arguments. Docker alone (or D at the prompt) gives it none, which
-# means up --build -d and print the address; Docker before compose arguments is left out.
+# Docker: anything without `old` first goes to the shared launcher, which picks free ports into .env and runs
+# docker compose with those arguments (up --build -d, then the address, when there are none).
 function Invoke-Compose([object[]]$ComposeArgs) {
     Set-Location $PSScriptRoot
     if (-not (Test-Path compose-launcher/run.ps1)) {
@@ -65,23 +65,22 @@ function Invoke-Compose([object[]]$ComposeArgs) {
     exit $LASTEXITCODE
 }
 
-# The app (or Site), -Build anywhere, and the rest for the app, as the old param() block read them.
+if (-not ($args.Count -and "$($args[0])" -ieq 'old')) { Invoke-Compose $args }
+
+# old: the app (or Site), -Build anywhere, and the rest for the app, as the param() block this script had read them.
 $App = $null
 $Build = $false
 $AppArgs = @()
-for ($i = 0; $i -lt $args.Count; $i++) {
+for ($i = 1; $i -lt $args.Count; $i++) {
     $a = "$($args[$i])"
     if ($a -ieq '-Build') { $Build = $true }
     elseif ($a -ieq '-App' -and $i + 1 -lt $args.Count) { $App = "$($args[++$i])" }
     elseif ($null -eq $App) { $App = $a }
     else { $AppArgs += $a }
 }
-if ($App -ieq 'Docker') { Invoke-Compose @($args | Select-Object -Skip 1) }
-if ($null -ne $App -and $App -ine 'Site' -and -not ($names | Where-Object { $_ -ieq $App })) { Invoke-Compose $args }
 
 if (-not $App) {
-    $choice = Read-Host 'Open the [L]auncher, the [S]ite, or the site in [D]ocker? (Enter for Launcher)'
-    if ($choice -match '^\s*d') { Invoke-Compose @() }
+    $choice = Read-Host 'Open the [L]auncher or the [S]ite? (Enter for Launcher)'
     $App = if ($choice -match '^\s*s') { 'Site' } else { 'Launcher' }
 }
 
@@ -106,6 +105,7 @@ if ($App -ieq 'Site') {
 }
 
 $match = $names | Where-Object { $_ -ieq $App }
+if (-not $match) { throw "Unknown app '$App'. Choose one of: $($names -join ', ')" }
 $App = $match
 $cfg = $apps[$App]
 
@@ -138,7 +138,7 @@ if ($cfg.Apps) {
     New-Item -ItemType Directory -Force $stage | Out-Null
     Copy-Item -Recurse (Join-Path $workDir 'assets') $stage
     foreach ($name in $cfg.Apps) {
-        & $PSCommandPath $name -Build 6>$null
+        & $PSCommandPath old $name -Build 6>$null
         Copy-Item (Join-Path $root "out/$name.jar") (Join-Path $stage 'assets')
         Get-ChildItem -File (Join-Path $root $apps[$name].WorkDir) | Where-Object Extension -ne '.md' | Copy-Item -Destination $stage
     }

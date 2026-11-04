@@ -94,7 +94,7 @@ On the Ear training tab:
 
 ## Running
 
-From the repo root: `./run.ps1 MusicTheoryExpert` (or `./run.ps1 MusicTheoryExpert -Build` to build a jar).
+From the repo root: `./run.ps1 old MusicTheoryExpert` (or `./run.ps1 old MusicTheoryExpert -Build` to build a jar).
 
 ## Self-check
 

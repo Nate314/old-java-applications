@@ -11,7 +11,7 @@ mvn -f web/pom.xml package                          # builds web/target/site
 ./web/serve.ps1 -Port 8000 -Open                    # serves it with PowerShell; Ctrl+C stops it
 ```
 
-Then open http://localhost:8000/. `./run.ps1 Site` does both (building only when the site is missing, or with `-Build`) and asks for the port. The site is fully static, so any static file server works (`python -m http.server 8000 --directory web/target/site` too). `web/target/` is git-ignored.
+Then open http://localhost:8000/. `./run.ps1 old Site` does both (building only when the site is missing, or with `-Build`) and asks for the port. The site is fully static, so any static file server works (`python -m http.server 8000 --directory web/target/site` too). `web/target/` is git-ignored.
 
 To build another checkout of the app sources (for example a branch checked out elsewhere), point `repo.dir` at it and pick an output folder:
 
@@ -557,8 +557,8 @@ Ctrl+K (Cmd+K on a Mac) on any page, / on the home page, the toolbar's Find butt
 
 Every app page's title screen has a **Download <App>.jar** link, and the Source panel a **Download .jar** link beside Raw: the app built from today's sources for the desktop, to run with `java -jar <App>.jar` (or a double click) on Java 17 or newer. The `jars` module (`web/jars/pom.xml`) builds them into `downloads/` on every `mvn -f web/pom.xml package`, so the GitHub Pages build publishes them too.
 
-- Each jar is what `run.ps1 <App> -Build` makes: the classes compiled with `--release 17` and the other files of `src/` (BibleDownloader's icon), with the app's main class in the manifest.
-- StockChecker and NathaNOS read files from the folder they start in, so their jars also carry those files under `workfolder/` and start through `oldjava.jar.WorkFolder`: it unpacks them into `~/.oldjava/<App>/` (keeping `.txt` and `.csv` files already there, which the apps write, and skipping files that have not changed) and runs the app there in a second Java process with the same JVM options. FlappyBird reads its pictures from its own jar first, so its jar is a plain one. NathaNOS's jar holds its assets and a jar of each app it opens, as `run.ps1 NathaNOS` stages them.
+- Each jar is what `run.ps1 old <App> -Build` makes: the classes compiled with `--release 17` and the other files of `src/` (BibleDownloader's icon), with the app's main class in the manifest.
+- StockChecker and NathaNOS read files from the folder they start in, so their jars also carry those files under `workfolder/` and start through `oldjava.jar.WorkFolder`: it unpacks them into `~/.oldjava/<App>/` (keeping `.txt` and `.csv` files already there, which the apps write, and skipping files that have not changed) and runs the app there in a second Java process with the same JVM options. FlappyBird reads its pictures from its own jar first, so its jar is a plain one. NathaNOS's jar holds its assets and a jar of each app it opens, as `run.ps1 old NathaNOS` stages them.
 - Windows, WindowsE and DinoGame's screen mode press real keys on the computer, so their links say so beside them (`JAR_KEYS` in `boot.js`). Then pages have no download (the jars are today's versions).
 - The service worker leaves `downloads/*.jar` alone, so a download is never kept in its cache.
 

@@ -94,7 +94,7 @@ Closing the settings window or an animation window exits the program; closing th
 
 ## Running
 
-From the repo root: `./run.ps1 SpriteFloatyStars` (or `./run.ps1 SpriteFloatyStars -Build` to build a jar).
+From the repo root: `./run.ps1 old SpriteFloatyStars` (or `./run.ps1 old SpriteFloatyStars -Build` to build a jar).
 
 ## Self-check
 
