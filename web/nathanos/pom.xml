@@ -18,7 +18,7 @@
 
     Adding an app to the web NathaNOS: its sources (app-sources) and a jar naming its Main-Class (app-jars) below,
     its Main-Class in src/main/java/web/nathanos/Boot.java, and its jar plus any files it reads in data-files in
-    site/NathaNOS/index.html.
+    public/NathaNOS/index.html.
   -->
   <dependencies>
     <dependency>

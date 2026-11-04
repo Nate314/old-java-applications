@@ -14,7 +14,7 @@ public class LauncherCheck {
       Path root = Paths.get("").toAbsolutePath();
       String runScript = new String(Files.readAllBytes(root.resolve("run.ps1")), StandardCharsets.UTF_8);
 
-      // Every app comes from web/site/apps.json, in its order; each has a folder, a run.ps1 entry and a thumbnail.
+      // Every app comes from web/src/shared/apps.json, in its order; each has a folder, a run.ps1 entry and a thumbnail.
       List<Catalog.App> apps = Catalog.load(root);
       check(apps.size() == 20, "expected 20 apps, got " + apps.size());
       check(apps.get(0).id.equals("Minesweeper"), "gallery order: Minesweeper first");

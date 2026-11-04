@@ -1,7 +1,8 @@
-# Makes the link previews: a 1200 x 630 share card per app (web/site/cards/<App>.jpg, plus index.jpg for the
+# Makes the link previews: a 1200 x 630 share card per app (web/public/cards/<App>.jpg, plus index.jpg for the
 # home page), rendered from web/card.html with headless Chrome, and the description, Open Graph and Twitter
 # tags between <!-- share --> and <!-- /share --> in the head of every page. Names, hints, categories and
-# origins come from web/site/apps.json, so run this again after changing an app's entry there.
+# origins come from web/src/shared/apps.json, so run this again after changing an app's entry there. The home page's
+# own tags are written by the build (web/src/routes.tsx).
 # The tags point at the card and the page with relative addresses; build with -Dsite.url=https://... to make
 # them absolute, which most link preview services need (see web/README.md, Share).
 # Build first (mvn -f web/pom.xml package, for the thumbnails and the icon), then run from the repo root:
@@ -15,7 +16,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $site = Join-Path $PSScriptRoot 'target/site'
-$src = Join-Path $PSScriptRoot 'site'
+$src = Join-Path $PSScriptRoot 'public'
 $out = Join-Path $src 'cards'
 if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
 if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
@@ -24,10 +25,8 @@ New-Item -ItemType Directory -Force $out | Out-Null
 function Attr([string]$s) { [Net.WebUtility]::HtmlEncode($s) }
 $utf8 = New-Object Text.UTF8Encoding($false)
 
-# The apps, from the one list the home page's gallery is rendered from. The home page's own tags are in the head
-# of its React page (web/react/index.html).
-$catalogFile = Join-Path $src 'apps.json'
-$homePage = Join-Path $PSScriptRoot 'react/index.html'
+# The apps, from the one list the home page's gallery is rendered from.
+$catalogFile = Join-Path $PSScriptRoot 'src/shared/apps.json'
 $entries = foreach ($a in ([IO.File]::ReadAllText($catalogFile) | ConvertFrom-Json)) {
     [pscustomobject]@{
         Id     = $a.id
@@ -44,7 +43,7 @@ $count = @($entries).Count
 function Share-Tags([string]$title, [string]$description, [string]$page, [string]$card, [string]$alt, [string]$up) {
     $nl = "`r`n"
     $lines = @(
-        '<!-- share: written by web/cards.ps1 from web/site/apps.json -->',
+        '<!-- share: written by web/cards.ps1 from web/src/shared/apps.json -->',
         "<meta name=`"description`" content=`"$(Attr $description)`">",
         '<meta property="og:type" content="website">',
         '<meta property="og:site_name" content="Old Java Applications">',
@@ -104,9 +103,6 @@ try {
     Remove-Item -Recurse -Force $profileDir -ErrorAction SilentlyContinue
 }
 
-Write-Tags $homePage (Share-Tags 'Old Java Applications' `
-    "Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play $count of them in the browser, installed as an app or offline." `
-    'index.html' 'index.jpg' "Thumbnails of six of the $count apps" '')
 foreach ($e in $entries) {
     $from = if ($e.Origin -eq 'original') { 'Built from the original Java source' } else { 'Recovered from an old Java jar' }
     Write-Tags (Join-Path $src "$($e.Id)/index.html") (Share-Tags "$($e.Name) | Old Java Applications" `

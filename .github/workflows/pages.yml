@@ -37,12 +37,12 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # web/react (the home, play and story pages) is built with Vite during the Maven build.
+      # web/src (the React pages) and web/public are built with Vite during the Maven build.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: web/react/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Set up Maven ${{ env.MAVEN_VERSION }}
         run: |

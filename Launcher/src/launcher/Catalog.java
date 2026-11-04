@@ -12,7 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The apps the launcher lists, all 20 from web/site/apps.json (the one place the site describes them, and the
+ * The apps the launcher lists, all 20 from web/src/shared/apps.json (the one place the site describes them, and the
  * list its home page renders), so a name or hint changed there shows here too. The two that press real
  * keys with java.awt.Robot (Windows, WindowsE) get their desktop hint and a warning from below: in the browser
  * they press keys on a pretend Windows, here on the real one.
@@ -70,8 +70,10 @@ public final class Catalog {
 
    /** Every app, in gallery order. */
    public static List<App> load(Path repoRoot) throws IOException {
-      Path site = repoRoot.resolve("web/site");
-      return parse(new String(Files.readAllBytes(site.resolve("apps.json")), StandardCharsets.UTF_8), site);
+      Path web = repoRoot.resolve("web");
+      // Thumbnails are the site's static files (web/public/shots).
+      return parse(new String(Files.readAllBytes(web.resolve("src/shared/apps.json")), StandardCharsets.UTF_8),
+         web.resolve("public"));
    }
 
    /** The apps in apps.json; thumbnails resolve against the site folder. */

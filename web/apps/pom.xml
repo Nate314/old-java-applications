@@ -68,15 +68,6 @@
         <artifactId>maven-resources-plugin</artifactId>
         <executions>
           <execution>
-            <id>site-pages</id>
-            <phase>process-resources</phase>
-            <goals><goal>copy-resources</goal></goals>
-            <configuration>
-              <outputDirectory>${site.dir}</outputDirectory>
-              <resources><resource><directory>${project.basedir}/../site</directory></resource></resources>
-            </configuration>
-          </execution>
-          <execution>
             <id>flappybird-images</id>
             <phase>process-resources</phase>
             <goals><goal>copy-resources</goal></goals>
@@ -157,7 +148,7 @@
               </target>
             </configuration>
           </execution>
-          <!-- What's new (site/news.js): the repo's history as history.txt, one "@@<commit time> <subject>" line
+          <!-- What's new (public/news.js): the repo's history as history.txt, one "@@<commit time> <subject>" line
                per commit, newest first, each followed by the top-level folders it changed (Clock, web, ...).
                Squash merges' "(#N)" is left out of the subjects. -->
           <execution>
@@ -188,16 +179,15 @@
               </target>
             </configuration>
           </execution>
-          <!-- The React pages (web/react: the home page, play.html, story.html and the 404 page's script), built
-               with Vite into the same folder, next to the static files copied from web/site above. Needs Node.js
-               and npm on the PATH. -->
+          <!-- The site itself (web/src: the React pages, and web/public: boot.js, the app pages, pictures), built
+               with Vite into the same folder the apps are compiled into. Needs Node.js and npm on the PATH. -->
           <execution>
             <id>react-pages</id>
             <phase>process-resources</phase>
             <goals><goal>run</goal></goals>
             <configuration>
               <target>
-                <property name="react.dir" location="${project.basedir}/../react"/>
+                <property name="react.dir" location="${project.basedir}/.."/>
                 <property name="react.out" location="${site.dir}"/>
                 <exec executable="cmd" dir="${react.dir}" osfamily="windows" failonerror="true">
                   <arg line="/c npm ci --no-audit --no-fund &amp;&amp; npm run build"/>
