@@ -1952,6 +1952,18 @@ canvas.paint.top {
   white-space: nowrap;
 }
 
+/* On a narrow screen the warning goes under "Download .jar", so the header still fits. */
+@media (max-width: 600px) {
+  .shim-source-jar {
+    text-align: right;
+  }
+
+  .shim-source-jar-keys {
+    display: block;
+    font-weight: 400;
+  }
+}
+
 .shim-source {
   --src-bg: #ffffff;
   --src-text: #1f2937;

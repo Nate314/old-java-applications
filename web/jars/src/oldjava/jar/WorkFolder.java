@@ -1,10 +1,12 @@
 package oldjava.jar;
 
 import java.io.InputStream;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -14,11 +16,12 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * The Main-Class of a downloaded app jar whose app reads files from the folder it is started in (FlappyBird's
- * pictures, StockChecker's quotes, NathaNOS's desktop and the apps on it). It unpacks those files from the jar's
+ * The Main-Class of a downloaded app jar whose app reads files from the folder it is started in (StockChecker's
+ * quotes, NathaNOS's desktop and the apps on it). It unpacks those files from the jar's
  * {@code workfolder/} into {@code ~/.oldjava/<App>/} and runs the app there in a second Java process, so the jar
  * works when it is double-clicked or started from any folder. The app's own data files ({@code .txt}, {@code .csv})
- * are unpacked once and then left alone, so what the app saved in them stays.
+ * are unpacked once and then left alone, so what the app saved in them stays; the other files are unpacked again
+ * only when their size or time differs from the jar's. The second process gets this one's JVM options.
  */
 public final class WorkFolder {
    private static final String PREFIX = "workfolder/";
@@ -46,16 +49,23 @@ public final class WorkFolder {
             if (!to.startsWith(dir) || data && Files.exists(to)) {
                continue;
             }
+            if (Files.isRegularFile(to) && Files.size(to) == entry.getSize()
+               && Files.getLastModifiedTime(to).toMillis() == entry.getTime()) {
+               continue;
+            }
             Files.createDirectories(to.getParent());
             try (InputStream in = files.getInputStream(entry)) {
                Files.copy(in, to, StandardCopyOption.REPLACE_EXISTING);
             }
+            Files.setLastModifiedTime(to, FileTime.fromMillis(entry.getTime()));
          }
       }
       // The same java (or javaw, when the jar was double-clicked) that is running now.
       String java = ProcessHandle.current().info().command()
          .orElse(Paths.get(System.getProperty("java.home"), "bin", "java").toString());
-      List<String> command = new ArrayList<>(List.of(java, "-cp", jar.toString(), app.getProperty("main")));
+      List<String> command = new ArrayList<>(List.of(java));
+      command.addAll(ManagementFactory.getRuntimeMXBean().getInputArguments());
+      command.addAll(List.of("-cp", jar.toString(), app.getProperty("main")));
       command.addAll(Arrays.asList(args));
       Process process = new ProcessBuilder(command).directory(dir.toFile()).inheritIO().start();
       System.exit(process.waitFor());

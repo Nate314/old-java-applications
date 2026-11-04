@@ -82,14 +82,20 @@ public final class GamePanel extends JPanel implements KeyListener {
    /** Rewinds used this run; a run with any is practice and keeps no records. */
    private int rewinds = 0;
 
+   /** A picture from the classpath (a jar of the app), or else from the folder the game is started in. */
+   private static Image image(String name) {
+      java.net.URL url = GamePanel.class.getResource("/" + name);
+      return (url != null ? new ImageIcon(url) : new ImageIcon(name)).getImage();
+   }
+
    public GamePanel(int stepsPerSecond) {
       this.stepsPerSecond = stepsPerSecond;
       this.rewind = new Rewind((int)Math.ceil(stepsPerSecond * REWIND_SECONDS));
-      this.images.add(new ImageIcon("bg.jpg").getImage().getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT, 4));
-      this.images.add(new ImageIcon("ground.jpg").getImage().getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8, 4));
-      this.images.add(new ImageIcon("topPipe.png").getImage().getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
-      this.images.add(new ImageIcon("bottomPipe.png").getImage().getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
-      this.images.add(new ImageIcon("bird.png").getImage().getScaledInstance(Bird.WIDTH, Bird.HEIGHT, 4));
+      this.images.add(image("bg.jpg").getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT, 4));
+      this.images.add(image("ground.jpg").getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8, 4));
+      this.images.add(image("topPipe.png").getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
+      this.images.add(image("bottomPipe.png").getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
+      this.images.add(image("bird.png").getScaledInstance(Bird.WIDTH, Bird.HEIGHT, 4));
       this.reset();
       // Click or tap anywhere in the game to flap, as Space does.
       this.addMouseListener(new MouseAdapter() {

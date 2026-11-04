@@ -2517,6 +2517,18 @@
     WindowsE: 'It presses real Windows shortcuts on your computer when you ask it to.',
     DinoGame: 'Its screen mode (java -jar DinoGame.jar screen) presses keys on your computer to play a game in another window.'
   };
+  // The short form of JAR_KEYS for the Source panel's download link.
+  var JAR_KEYS_LABEL = { DinoGame: 'screen mode presses real keys' };
+  function sourceJarLink(id) {
+    var a = jarLink(id, 'shim-source-jar', 'Download .jar');
+    if (JAR_KEYS[id]) {
+      var keys = document.createElement('span');
+      keys.className = 'shim-source-jar-keys';
+      keys.textContent = ' (' + (JAR_KEYS_LABEL[id] || 'presses real keys') + ')';
+      a.appendChild(keys);
+    }
+    return a;
+  }
   function jarLink(id, cls, text) {
     var a = document.createElement('a');
     a.className = cls;
@@ -3184,7 +3196,7 @@
     }
     head.appendChild(title);
     if (!isThen()) {
-      head.appendChild(jarLink(appId(), 'shim-source-jar', JAR_KEYS[appId()] ? 'Download .jar (presses real keys)' : 'Download .jar'));
+      head.appendChild(sourceJarLink(appId()));
     }
     head.appendChild(raw);
     head.appendChild(closeButton(shut));

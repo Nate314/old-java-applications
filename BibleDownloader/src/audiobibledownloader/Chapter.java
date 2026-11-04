@@ -42,7 +42,7 @@ public final class Chapter {
          if (verseKey < 0) {
             break;
          }
-         int i = verseKey + "\"verse\":".length();
+         int i = skipSpace(json, verseKey + "\"verse\":".length());
          int end = i;
          while (end < json.length() && Character.isDigit(json.charAt(end))) {
             end++;
@@ -66,6 +66,14 @@ public final class Chapter {
          verseNumbers[k] = numbers.get(k);
       }
       return new Chapter(book, number, translation, verseNumbers, texts.toArray(new String[0]));
+   }
+
+   /** The index of the first character at or after {@code i} that is not JSON whitespace. */
+   static int skipSpace(String json, int i) {
+      while (i < json.length() && Character.isWhitespace(json.charAt(i))) {
+         i++;
+      }
+      return i;
    }
 
    /** Reads a JSON string body starting just after its opening quote; returns the index after the closing quote. */

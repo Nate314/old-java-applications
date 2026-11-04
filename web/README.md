@@ -150,7 +150,7 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `then/`: 16 apps as they were first restored (see Then and now), each compiled to `<App>/then.js` with its page `<App>/then.html` (from the one template `then/then.html`) and its sources in `<App>/then-source/`.
 - `then-nathanos/`: NathaNOS as first restored, the same way, with that commit's apps and `assets/Clock.jar`.
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
-- `jars/`: a runnable jar of each of the 20 apps for the desktop, in `downloads/` (see Download .jar), and `src/oldjava/jar/WorkFolder.java`, the launcher of the three that need files beside them.
+- `jars/`: a runnable jar of each of the 20 apps for the desktop, in `downloads/` (see Download .jar), and `src/oldjava/jar/WorkFolder.java`, the launcher of the two that need files beside them.
 - `site/`: `index.html`, one `<App>/index.html` per app, `boot.js`, `news.js` (What's new), `clockbar.js` (Clock follows you), `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), `clips/` (the gallery's preview clips), `cards/` (the link preview cards, see Share), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
 - `shots.ps1`: recaptures `site/shots/` from a built site, following a recipe per app (see Home page).
 - `clips.ps1`: records `site/clips/` from a built site (see Home page).
@@ -542,7 +542,7 @@ Ctrl+K (Cmd+K on a Mac) on any page, / on the home page, the toolbar's Find butt
 Every app page's title screen has a **Download <App>.jar** link, and the Source panel a **Download .jar** link beside Raw: the app built from today's sources for the desktop, to run with `java -jar <App>.jar` (or a double click) on Java 17 or newer. The `jars` module (`web/jars/pom.xml`) builds them into `downloads/` on every `mvn -f web/pom.xml package`, so the GitHub Pages build publishes them too.
 
 - Each jar is what `run.ps1 <App> -Build` makes: the classes compiled with `--release 17` and the other files of `src/` (BibleDownloader's icon), with the app's main class in the manifest.
-- FlappyBird, StockChecker and NathaNOS read files from the folder they start in, so their jars also carry those files under `workfolder/` and start through `oldjava.jar.WorkFolder`: it unpacks them into `~/.oldjava/<App>/` (keeping `.txt` and `.csv` files already there, which the apps write) and runs the app there in a second Java process. NathaNOS's jar holds its assets and a jar of each app it opens, as `run.ps1 NathaNOS` stages them.
+- StockChecker and NathaNOS read files from the folder they start in, so their jars also carry those files under `workfolder/` and start through `oldjava.jar.WorkFolder`: it unpacks them into `~/.oldjava/<App>/` (keeping `.txt` and `.csv` files already there, which the apps write, and skipping files that have not changed) and runs the app there in a second Java process with the same JVM options. FlappyBird reads its pictures from its own jar first, so its jar is a plain one. NathaNOS's jar holds its assets and a jar of each app it opens, as `run.ps1 NathaNOS` stages them.
 - Windows, WindowsE and DinoGame's screen mode press real keys on the computer, so their links say so beside them (`JAR_KEYS` in `boot.js`). Then pages have no download (the jars are today's versions).
 - The service worker leaves `downloads/*.jar` alone, so a download is never kept in its cache.
 

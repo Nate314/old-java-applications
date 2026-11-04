@@ -31,11 +31,20 @@ public final class PickBag {
    }
 
    /**
-    * The names the next pick draws from: the remaining ones, or the whole class again when everyone has had a turn.
+    * The names the next pick draws from: the remaining ones, or when everyone has had a turn, the whole class again
+    * except the last one picked, so no one is called twice in a row (unless they are the whole class).
     */
    public List<String> pool(List<String> names) {
       List<String> left = remaining(names);
-      return left.isEmpty() ? distinct(names) : left;
+      if (!left.isEmpty()) {
+         return left;
+      }
+      List<String> all = distinct(names);
+      List<String> done = picked(names);
+      if (all.size() > 1 && !done.isEmpty()) {
+         all.remove(done.get(done.size() - 1));
+      }
+      return all;
    }
 
    /** Picks one of {@link #pool}, starting a new time around first when everyone has had a turn. Null for no class. */

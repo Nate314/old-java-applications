@@ -146,10 +146,8 @@ public class LauncherCheck {
             check(java.util.Arrays.equals(Files.readAllBytes(thenDir.resolve(art)), Files.readAllBytes(root.resolve(art))), art + " is today's art");
          }
          check(!Files.exists(thenDir.resolve("NathaNOS/assets/windowsLogo.png")) && Files.isRegularFile(thenDir.resolve("FlappyBird/src/flappyBird/Main.java")), "old art gone, old code kept");
-         check(new String(Files.readAllBytes(thenDir.resolve(ThenCopy.MARKER)), StandardCharsets.UTF_8).equals(ThenCopy.STAMP), "marker");
-         try (java.util.stream.Stream<Path> walk = Files.walk(thenDir.getParent())) {
-            for (Path f : (Iterable<Path>) walk.sorted(java.util.Comparator.reverseOrder())::iterator) Files.delete(f);
-         }
+         check(new String(Files.readAllBytes(thenDir.resolve(ThenCopy.MARKER)), StandardCharsets.UTF_8).equals(ThenCopy.stamp(root)), "marker");
+         ThenCopy.deleteTree(thenDir.getParent());
       }
       check(History.sentences("One. Two. Three.", 2).equals("One. Two.") && History.sentences("One.", 2).equals("One."), "sentences");
       check(History.firstParagraph("# T\n\nA `b` **c** [d](e)\nmore.\n\nNext").equals("A b c d more."), "first paragraph");
@@ -173,6 +171,10 @@ public class LauncherCheck {
       Files.delete(unpack.resolve("App/ok.txt"));
       Files.delete(unpack.resolve("App"));
       Files.delete(unpack);
+
+      // The art the Then copy swaps in is the art web/art.ps1 renders, so the two lists cannot drift apart.
+      String artScript = new String(Files.readAllBytes(root.resolve("web/art.ps1")), StandardCharsets.UTF_8);
+      for (String art : ThenCopy.ART) check(artScript.contains("Out = '" + art + "'"), art + " is rendered by web/art.ps1");
 
       System.out.println("LauncherCheck: all checks passed");
    }

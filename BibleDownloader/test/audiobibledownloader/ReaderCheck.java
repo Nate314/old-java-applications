@@ -26,6 +26,8 @@ public class ReaderCheck {
       check(chapter.verses.length == 2 && chapter.verseNumbers[1] == 2, "two verses");
       check(chapter.verses[0].equals("Now there was a man"), "newline trimmed: " + chapter.verses[0]);
       check(chapter.verses[1].equals("He said, \"Rabbi\" \u2014 and more."), "escapes and spaces: " + chapter.verses[1]);
+      Chapter pretty = Chapter.parse(Books.find("JHN"), 3, "web", "{\n  \"verses\": [\n    { \"verse\": 16, \"text\": \"For God\" }\n  ]\n}");
+      check(pretty.verseNumbers[0] == 16 && pretty.verses[0].equals("For God"), "pretty-printed JSON");
       check(chapter.title().equals("John 3"), "title");
       boolean threw = false;
       try {

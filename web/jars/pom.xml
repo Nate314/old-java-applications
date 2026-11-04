@@ -15,9 +15,10 @@
   <!--
     Download .jar (web/README.md): every app page links downloads/<App>.jar, the app compiled from today's sources
     for the desktop (Java ${maven.compiler.release} or newer), the same way run.ps1 -Build makes it. Most are plain
-    jars. The three apps that read files from the folder they start in (FlappyBird's pictures, StockChecker's
-    quotes, NathaNOS's desktop and the apps it opens) carry those files under workfolder/ and start through
-    oldjava.jar.WorkFolder (src/ here), which unpacks them into ~/.oldjava/<App>/ and runs the app there.
+    jars (FlappyBird's pictures are in its jar, which it reads first). The two apps that read files from the folder
+    they start in (StockChecker's quotes, NathaNOS's desktop and the apps it opens) carry those files under
+    workfolder/ and start through oldjava.jar.WorkFolder (src/ here), which unpacks them into ~/.oldjava/<App>/
+    and runs the app there.
   -->
   <properties>
     <jars.work>${project.build.directory}/jars</jars.work>
@@ -104,11 +105,8 @@
                 <plainjar app="Windows" main="test.Test"/>
                 <plainjar app="WindowsE" main="windowse.WindowsEMain"/>
                 <copy todir="${out}">
-                  <fileset dir="${work}/plain" excludes="FlappyBird.jar StockChecker.jar NathaNOS.jar"/>
+                  <fileset dir="${work}/plain" excludes="StockChecker.jar NathaNOS.jar"/>
                 </copy>
-                <workjar app="FlappyBird" main="flappyBird.Main">
-                  <files><zipfileset dir="${repo}/FlappyBird/src" includes="*.jpg *.png" prefix="workfolder"/></files>
-                </workjar>
                 <workjar app="StockChecker" main="stockchecker.Main">
                   <files><zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/></files>
                 </workjar>
@@ -120,7 +118,6 @@
                     <zipfileset dir="${repo}/NathaNOS/assets" includes="*.png *.jpg Clock.jar"
                                 excludes="background.png NathaNOS.jpg NOS.png transparent.png" prefix="workfolder/assets"/>
                     <zipfileset dir="${work}/plain" excludes="Clock.jar NathaNOS.jar Windows.jar WindowsE.jar" prefix="workfolder/assets"/>
-                    <zipfileset dir="${repo}/FlappyBird/src" includes="*.jpg *.png" prefix="workfolder"/>
                     <zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/>
                   </files>
                 </workjar>

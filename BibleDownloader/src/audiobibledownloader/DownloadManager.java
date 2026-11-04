@@ -54,8 +54,17 @@ public class DownloadManager implements Runnable {
       return Books.NAMES[book].replace(" ", "");
    }
 
+   /** Downloads, and always ends with {@link Progress#finished}, so the window never waits on a thread that died. */
    @Override
    public void run() {
+      try {
+         download();
+      } catch (RuntimeException ex) {
+         this.window.finished("Download failed: " + ex);
+      }
+   }
+
+   private void download() {
       List<Integer> failed = new ArrayList<>();
       String lastError = "";
       StringBuilder text = new StringBuilder();
@@ -73,7 +82,7 @@ public class DownloadManager implements Runnable {
                writeHtml(name, Books.NAMES[this.book] + " " + chapter, body);
                written.add(name);
             }
-         } catch (IOException ex) {
+         } catch (IOException | RuntimeException ex) {
             failed.add(chapter);
             lastError = ex.getMessage();
          }

@@ -26,8 +26,10 @@ public class PickBagCheck {
             seen.add(name);
          }
          check(bag.remaining(twelve).isEmpty() && bag.picked(twelve).equals(seen), "everyone had a turn, in order");
-         check(bag.pool(twelve).size() == 12, "after everyone, the whole class is back on the wheel");
+         String last = seen.get(11);
+         check(bag.pool(twelve).size() == 11 && !bag.pool(twelve).contains(last), "after everyone, the class is back on the wheel but the last pick");
          String next = bag.pick(twelve, random);
+         check(!next.equals(last), "no one is picked twice in a row");
          check(bag.picked(twelve).equals(Arrays.asList(next)), "a new time around starts with the next pick");
       }
 
@@ -57,6 +59,9 @@ public class PickBagCheck {
       check(bag.picked(four).isEmpty() && bag.remaining(four).equals(four), "a name not in the class is ignored");
       check(new PickBag().pool(Arrays.asList("a", "b", "a")).equals(Arrays.asList("a", "b")), "duplicates count once");
       check(new PickBag().pick(new ArrayList<>(), random) == null, "no names, no pick");
+      PickBag alone = new PickBag();
+      alone.pick(Arrays.asList("solo"), random);
+      check("solo".equals(alone.pick(Arrays.asList("solo"), random)), "a class of one is picked again");
 
       // The class file keeps the picks, in order, and a file without them has none.
       File file = File.createTempFile("groupcreator", ".txt");

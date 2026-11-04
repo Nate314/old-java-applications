@@ -609,13 +609,13 @@ public class GroupBoard extends JPanel {
          return new String[] {title, "Round and round it goes... (a click stops it where it was heading)", ""};
       }
       if (landed != null && toGo.isEmpty()) {
-         return new String[] {title, landed + " is up, and everyone has now had a turn. The next spin puts the whole class back on the wheel.", "fresh"};
+         return new String[] {title, landed + " is up, and everyone has now had a turn. The next spin puts everyone else back on the wheel.", "fresh"};
       }
       if (landed != null) {
          return new String[] {title, landed + " is up. Away today? Put back (B), and mark them away in Roll call.", "fresh"};
       }
       if (!names.isEmpty() && toGo.isEmpty()) {
-         return new String[] {title, "Everyone has had a turn. The next spin starts again with the whole class.", "fresh"};
+         return new String[] {title, "Everyone has had a turn. The next spin starts again with everyone but the last pick.", "fresh"};
       }
       List<String> away = new ArrayList<>(distinct(actions.classNames()));
       away.removeAll(names);
