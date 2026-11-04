@@ -56,14 +56,14 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 Requires a JDK (`java` and `javac` on PATH). From the repo root in PowerShell:
 
 ```powershell
-./run.ps1                      # asks: the launcher (Enter) or the web site (S)
+./run.ps1                      # asks: the launcher (Enter), the web site (S) or the web site in Docker (D)
 ./run.ps1 Site                 # serves the web site, asking for the port (builds it first if missing)
 ./run.ps1 Site -Build          # builds the web site again, then serves it
 ./run.ps1 Minesweeper          # compiles and runs Minesweeper
 ./run.ps1 Minesweeper -Build   # builds out/Minesweeper.jar instead of running
 ```
 
-With no app name, `run.ps1` asks whether to open the launcher or the site. Enter opens the [Launcher](Launcher/README.md): all 20 apps as cards with their pictures, filters for games, music, toys, tools and the apps that press real keys, a search field that has the keyboard from the start, and Enter to play. It remembers what you launched (in `~/.oldjava-launcher.txt`), opens on the last one, marks the rest New, and Pick for me plays one you have not tried. Apps that press real keys (Windows, WindowsE) say so with a Real keys chip and ask first. It reads the apps' names, hints and thumbnails from the web gallery, so both front doors describe them the same way.
+With no app name, `run.ps1` asks whether to open the launcher, the site, or the site in Docker. Enter opens the [Launcher](Launcher/README.md): all 20 apps as cards with their pictures, filters for games, music, toys, tools and the apps that press real keys, a search field that has the keyboard from the start, and Enter to play. It remembers what you launched (in `~/.oldjava-launcher.txt`), opens on the last one, marks the rest New, and Pick for me plays one you have not tried. Apps that press real keys (Windows, WindowsE) say so with a Real keys chip and ask first. It reads the apps' names, hints and thumbnails from `web/site/apps.json`, the list the web gallery is rendered from, so both front doors describe them the same way.
 
 S (or `./run.ps1 Site`) serves the [web site](web/README.md) instead: it builds `web/target/site` with Maven when it is missing (or with `-Build`), asks for the port (Enter for 8000), serves it with PowerShell (`web/serve.ps1`) and opens it in the browser. Ctrl+C stops the server.
 
@@ -72,6 +72,20 @@ The launcher's Then button (Alt+T) plays any app as it was first restored, the v
 Every app page on the site also offers the app as a runnable jar for the desktop (Java 17 or newer), built by the web build; see [Download .jar](web/README.md#download-jar).
 
 Run mode launches each app from the folder it expects (for example `FlappyBird/src` with argument `120`), with any non-Java files in `src/` on the classpath. Build mode prints the matching `java -jar` command. Build output goes to `out/`, which is git-ignored.
+
+### In Docker
+
+`run.ps1` also starts the web site in Docker through [compose-launcher](https://github.com/Nate314/compose-launcher), included as a git submodule in `compose-launcher/` (a plain `git clone` leaves it empty; the first Docker command fetches it). It needs Docker, and nothing else on the host: the image builds the site with Maven, a JDK and Node.js (`web/Dockerfile`) and serves it with nginx. `./run.ps1 Docker` (or D at the prompt) starts it, and anything else that is not an app name, `Site` or `-Build` goes to `docker compose`:
+
+```powershell
+./run.ps1 Docker               # builds the image and starts the site on a free port, then prints its address
+./run.ps1 up --build -d        # the same, as docker compose arguments
+./run.ps1 logs -f              # follows the site's logs
+./run.ps1 down                 # stops it
+./run.ps1 share                # starts it, then gives it a public HTTPS address through ngrok (Ctrl+C stops sharing)
+```
+
+The launcher picks the first free port from 8080 up, writes it to `.env` (git-ignored) as `SITE_PORT` and prints `Site: http://localhost:<port>` (`run.conf`), so the site can run next to other projects that also want 8080. `share` needs [ngrok](https://ngrok.com/download) on the PATH, signed in once with `ngrok config add-authtoken <token>`. A bare `docker compose up --build` works too, on port 8080. The first build takes several minutes (TeaVM compiles all 20 apps). The image is built from the checkout, `.git` included, because the build reads the repo's history.
 
 ## Web (TeaVM)
 
