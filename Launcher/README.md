@@ -1,6 +1,6 @@
 # Launcher
 
-The front door for the desktop: `./run.ps1` with no app name opens it. Every app in this repo is a card with its picture, category and how often you have played it, and Enter plays the selected one. It replaces the numbered list `run.ps1` used to print and ask about. Unlike the other folders, this is not a recovered app: it was written for this repo.
+The front door for the desktop: `./run.ps1` with no app name asks for it or the web site, and Enter opens it. Every app in this repo is a card with its picture, category and how often you have played it, and Enter plays the selected one. It replaces the numbered list `run.ps1` used to print and ask about. Unlike the other folders, this is not a recovered app: it was written for this repo.
 
 ## Controls / usage
 

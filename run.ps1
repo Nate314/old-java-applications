@@ -1,8 +1,10 @@
 <#
 .SYNOPSIS
-    Compile and run one of the Java apps, or build it into a runnable jar.
+    Compile and run one of the Java apps, or build it into a runnable jar, or serve the web site.
 .EXAMPLE
-    ./run.ps1                  # opens the launcher: every app as a card, Enter plays one
+    ./run.ps1                  # asks: the launcher (every app as a card, Enter plays one) or the site
+    ./run.ps1 Site             # serves the built site (built first if missing), asking for the port
+    ./run.ps1 Site -Build      # builds the site again, then serves it
     ./run.ps1 Minesweeper      # runs Minesweeper
     ./run.ps1 FlappyBird -Build  # builds out/FlappyBird.jar
     ./run.ps1 DinoGame screen    # anything after the app name is passed to it
@@ -45,7 +47,30 @@ $apps = [ordered]@{
 }
 $names = @($apps.Keys)
 
-if (-not $App) { $App = 'Launcher' }
+if (-not $App) {
+    $choice = Read-Host 'Open the [L]auncher or the [S]ite? (Enter for Launcher)'
+    $App = if ($choice -match '^\s*s') { 'Site' } else { 'Launcher' }
+}
+
+# The web site: built with Maven (when missing, or with -Build) and served by web/serve.ps1.
+if ($App -ieq 'Site') {
+    $siteIndex = Join-Path $PSScriptRoot 'web/target/site/index.html'
+    if ($Build -or -not (Test-Path $siteIndex)) {
+        if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) { throw 'Building the site needs Maven (mvn) on the PATH.' }
+        Write-Host 'Building the site (web/target/site); this takes a few minutes...'
+        & mvn -q -f (Join-Path $PSScriptRoot 'web/pom.xml') package
+        if ($LASTEXITCODE -ne 0) { throw 'The site build failed.' }
+    }
+    do {
+        $answer = (Read-Host 'Port (Enter for 8000)').Trim()
+        if (-not $answer) { $answer = '8000' }
+        $valid = $answer -match '^\d{1,5}$' -and [int]$answer -ge 1 -and [int]$answer -le 65535
+        if (-not $valid) { Write-Host 'A port is a number from 1 to 65535.' }
+    } until ($valid)
+    & (Join-Path $PSScriptRoot 'web/serve.ps1') -Port ([int]$answer) -Open
+    return
+}
+
 $match = $names | Where-Object { $_ -ieq $App }
 if (-not $match) { throw "Unknown app '$App'. Choose one of: $($names -join ', ')" }
 $App = $match

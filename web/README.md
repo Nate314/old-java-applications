@@ -8,10 +8,10 @@ Requires a JDK (17 or newer) and Maven 3.9. From the repo root:
 
 ```powershell
 mvn -f web/pom.xml package                          # builds web/target/site
-python -m http.server 8000 --directory web/target/site
+./web/serve.ps1 -Port 8000 -Open                    # serves it with PowerShell; Ctrl+C stops it
 ```
 
-Then open http://localhost:8000/. The site is fully static, so any static file server works. `web/target/` is git-ignored.
+Then open http://localhost:8000/. `./run.ps1 Site` does both (building only when the site is missing, or with `-Build`) and asks for the port. The site is fully static, so any static file server works (`python -m http.server 8000 --directory web/target/site` too). `web/target/` is git-ignored.
 
 To build another checkout of the app sources (for example a branch checked out elsewhere), point `repo.dir` at it and pick an output folder:
 
