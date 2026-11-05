@@ -4,12 +4,15 @@ Runs the Swing/AWT apps in a browser. [TeaVM](https://teavm.org) 0.16.0 compiles
 
 ## Build and serve
 
-Requires a JDK (17 or newer), Maven 3.9 and Node.js (22 or newer, with npm) for the React pages. From the repo root:
+Requires a JDK (17 or newer), Maven 3.9 and Node.js (22 or newer, with npm). From `web/`:
 
 ```powershell
-mvn -f web/pom.xml package                          # builds web/target/site
-./web/serve.ps1 -Port 8000 -Open                    # serves it with PowerShell; Ctrl+C stops it
+npm ci                                              # once: the site's packages
+npm run build                                       # builds web/target/site from scratch: the apps and the pages
+./serve.ps1 -Port 8000 -Open                        # serves it with PowerShell; Ctrl+C stops it
 ```
+
+`npm run build` is `mvn clean package` on `web/pom.xml`: it empties `web/target` and builds everything into `web/target/site` (the Java apps compiled with TeaVM, their first restored versions, the desktop jars, and the React pages, which Maven builds with `npm run build:pages`). Arguments after `--` go to Maven, for example `npm run build -- "-Dsite.url=https://..."`. `mvn -f web/pom.xml package` from the repo root builds the same without emptying the folder first, and installs the packages itself when `web/node_modules` is missing.
 
 Then open http://localhost:8000/. `./run.ps1 Site` does both (building only when the site is missing, or with `-Build`) and asks for the port. The site is fully static, so any static file server works (`python -m http.server 8000 --directory web/target/site` too). `web/target/` is git-ignored.
 
@@ -181,12 +184,11 @@ The player is built to keep a visitor playing without scrolling back to the gall
 
 ## React pages
 
-The site is a React 19 and TypeScript app in `web/`, built with Vite: `mvn -f web/pom.xml package` runs `npm ci` and `npm run build` (which type-checks with `tsc` first) into the same folder the Java apps are compiled into. To rebuild only the site's own files into an already built site:
+The site is a React 19 and TypeScript app in `web/`, built with Vite into the same folder the Java apps are compiled into: `npm run build` (see Build and serve) builds both. To rebuild only the site's own files into an already built site, in seconds:
 
 ```powershell
 cd web
-npm ci
-npm run build          # writes index.html, play.html, story.html, 404.html, assets/ and public/ into web/target/site
+npm run build:pages    # type-checks, then writes index.html, play.html, story.html, 404.html, assets/ and public/ into web/target/site
 ```
 
 - `src/routes.tsx` lists the pages. Each route is a React page in `src/pages/<page>` with the head it is served with (title, description, share tags, `shim.css`, `boot.js`), written as React elements. There are no HTML files in the source: `vite/pages.ts` renders each route's document when the site is built. The home page's share tags are written there too, from `apps.json`; `cards.ps1` writes those of the app pages.
