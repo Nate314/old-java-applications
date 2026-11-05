@@ -4,6 +4,8 @@
 //    and bundles its module, as for a hand-written index.html.
 //  - The page served at any depth (404.html) is written after bundling, with its styles inlined and an inline
 //    loader that imports its module from the site root it finds (src/pages/notfound/loader.ts).
+//  - Each app's own page (<App>/index.html, src/pages/app/AppPage.tsx) is static HTML with no React on it, written
+//    from apps.json after bundling.
 // It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages, and
 // assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline.
 import { readFileSync } from 'node:fs';
@@ -13,6 +15,8 @@ import type { Plugin } from 'vite';
 import type { OutputBundle, OutputChunk } from 'rollup';
 import { ROUTES, type Route } from '../src/routes';
 import { loaderScript } from '../src/pages/notfound/loader';
+import { appPage } from '../src/pages/app/AppPage';
+import { APPS } from '../src/shared/catalog';
 
 const root = resolve(__dirname, '..');
 const htmlId = (r: Route) => resolve(root, r.file);
@@ -61,6 +65,7 @@ export function pages(): Plugin {
     },
     generateBundle(_options, bundle) {
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
+      for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: appPage(app) });
       const files = Object.keys(bundle).filter(name => name.startsWith('assets/')).sort();
       this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files) + '\n' });
       for (const r of ROUTES.filter(x => x.anyDepth)) {

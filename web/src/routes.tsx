@@ -28,8 +28,9 @@ const homeDescription = 'Java Swing and AWT programs recovered from old jars, co
 
 export const ROUTES: Route[] = [
   // The home page: the player, Your arcade and the gallery. boot.js (the site's shared runtime, as on every app
-  // page) runs before it; qr.js, saves.js and news.js after it. The share tags are the ones web/cards.ps1 writes
-  // into the app pages; -Dsite.url makes og:url and og:image absolute (web/apps/pom.xml).
+  // page) runs before it; qr.js, saves.js and news.js after it. The share tags point at the card web/cards.ps1
+  // renders, as the app pages' do (src/pages/app/AppPage.tsx); -Dsite.url makes og:url and og:image absolute
+  // (web/apps/pom.xml).
   {
     file: 'index.html',
     entry: 'src/pages/home/main.tsx',

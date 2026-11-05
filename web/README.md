@@ -143,7 +143,7 @@ NathaNOS loads the `Main-Class` of each jar in `assets/` with `URLClassLoader`, 
 - Each app gets a jar in `assets/` holding only a manifest that names its `Main-Class` (built with Ant's `jar` task), since NathaNOS lists jars to build its desktop icons and start menu and reads only their manifests. The page preloads those jars, plus FlappyBird's images and StockChecker's files.
 - NathaNOS's desktop window is not focusable, so `TDesktop` does not raise it when it is clicked, and apps stay in front. It also switches every app window to `DISPOSE_ON_CLOSE` through `Toolkit.addAWTEventListener` (`WINDOW_OPENED`), so closing an app does not run `System.exit`.
 
-Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in `Boot`, and its jar and files in `data-files` in `public/NathaNOS/index.html`.
+Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in `Boot`, and its jar and files in NathaNOS's `data-files` in `src/pages/app/AppPage.tsx`.
 
 ## Layout
 
@@ -155,11 +155,11 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `nathanos/`: NathaNOS plus `assets/Clock.jar` and the other browser apps, in one page (Clock.jar's `clock.Main` clashes with the Clock app's, so the Clock sources are left out).
 - `jars/`: a runnable jar of each of the 20 apps for the desktop, in `downloads/` (see Download .jar), and `src/oldjava/jar/WorkFolder.java`, the launcher of the two that need files beside them.
 - `src/`, `vite/`, `package.json`, `vite.config.ts`: the site's pages (the home page, `play.html`, `story.html`, `404.html`), a React and TypeScript app built with Vite (see React pages). `src/shared/apps.json` is the list of apps.
-- `public/`: the site's static files, copied into the build as they are: one `<App>/index.html` per app, `boot.js`, `news.js` (What's new), `clockbar.js` (Clock follows you), `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), `clips/` (the gallery's preview clips), `cards/` (the link preview cards, see Share), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
+- `public/`: the site's static files, copied into the build as they are: `boot.js`, `news.js` (What's new), `clockbar.js` (Clock follows you), `shim.css` (the Modern, Classic and Arcade skins), `shots/` (the home page thumbnails), `clips/` (the gallery's preview clips), `cards/` (the link preview cards, see Share), and `sw.js`, `manifest.webmanifest` and `icons/` (install and offline).
 - `shots.ps1`: recaptures `public/shots/` from a built site, following a recipe per app (see Home page).
 - `clips.ps1`: records `public/clips/` from a built site (see Home page).
 - `cdp.ps1`: what those two share: the site's server, headless Chrome and a small DevTools protocol client that loads an app page and plays a recipe's steps (keys, clicks, page scripts, waits).
-- `cards.ps1` and `card.html`: render `public/cards/` and write the share tags into every app page (see Share).
+- `cards.ps1` and `card.html`: render the link preview pictures in `public/cards/` (see Share).
 - `art.ps1`: renders the apps' own pictures (FlappyBird's images, BibleDownloader's icon, NathaNOS's icons and cursor) from their SVG sources in each app's `art/` folder with headless Chrome, to the PNG and JPEG files the Java code loads. The SVGs are original art for this repo; they replaced pictures taken from the apps these imitate (see [HISTORY.md](../HISTORY.md#original-art)).
 - `public/agents-timeline.svg`: the timeline of the agents that made the 100 attempts, shown on the story page and in HISTORY.md.
 
@@ -191,7 +191,8 @@ cd web
 npm run build:pages    # type-checks, then writes index.html, play.html, story.html, 404.html, assets/ and public/ into web/target/site
 ```
 
-- `src/routes.tsx` lists the pages. Each route is a React page in `src/pages/<page>` with the head it is served with (title, description, share tags, `shim.css`, `boot.js`), written as React elements. There are no HTML files in the source: `vite/pages.ts` renders each route's document when the site is built. The home page's share tags are written there too, from `apps.json`; `cards.ps1` writes those of the app pages.
+- `src/routes.tsx` lists the pages. Each route is a React page in `src/pages/<page>` with the head it is served with (title, description, share tags, `shim.css`, `boot.js`), written as React elements. There are no HTML files in the source: `vite/pages.ts` renders each route's document when the site is built. The home page's share tags are written there too, from `apps.json`.
+- Each app's own page (`<App>/index.html`) is written by the build too, from `src/pages/app/AppPage.tsx` and the app's entry in `apps.json`: its name, its share tags, `shim.css`, `boot.js` and its `classes.js`, and `<body data-app>` with the few attributes some apps need (`data-files`, `data-args` and the like, listed in that file). It is static HTML with no React on it: `boot.js` builds the page around the app, as before.
 - `src/shared/apps.json` is the one list of apps (id, name, hint, category, thumbnail, origin, Then version, preview clip, minimum player size), in gallery order. The pages import it, and the build writes it to the site as `apps.json` for `boot.js` on the app pages. `web/cards.ps1` and the desktop launcher read the same file. The gallery, the player's rail, the passport's stamps, the tour's stops, the story's 20 apps and its Then and now list are rendered from it.
 - Styles: each page imports its own stylesheet (`src/pages/<page>/<page>.css`), which `@import`s the rules it shares with other pages from `src/shared/styles` (the Then | Now frame, the kicker label, accent links, border-box sizing), so each page links one stylesheet with exactly the rules it had. The skins stay in `public/shim.css`, which the app pages and `boot.js` use too.
 - `boot.js` and the other shared scripts in `public/` stay plain JavaScript, since the 20 app pages load them too. They change the home page's markup directly (stamps, badges, What's new, your records), so the pages render once, synchronously (`mount` in `src/shared/dom.ts`), keep no React state, and then run their behavior from typed modules (`src/pages/home/player.ts`, `tabs.ts`, `takeaway.ts`, `clips.ts`, `src/pages/play/run.ts`, `src/pages/story/chapters.ts`), before `boot.js` and the deferred `qr.js`, `saves.js` and `news.js` look for it. `src/shared/globals.d.ts` types what `boot.js` puts on `window`. The lost page's search keeps its results in React state, since nothing else touches them.
@@ -365,17 +366,17 @@ The build (`apps/pom.xml`, an Ant `appsource` macro) copies `<App>/README.md` an
 
 Every app gets a reason and a way to be passed on, and a link that looks like something worth clicking when it is:
 
-- Link previews. Each page's head has a description and Open Graph and Twitter tags (`summary_large_image`) between `<!-- share -->` and `<!-- /share -->`, pointing at its own 1200 x 630 card in `cards/`: the app's thumbnail on a desk with a neon frame, its name, category, hint, a Decompiled jar or Original source chip and a Play in your browser button. The home page's card fans out six thumbnails.
+- Link previews. Each page's head, written by the build, has a description and Open Graph and Twitter tags (`summary_large_image`) pointing at its own 1200 x 630 card in `cards/`: the app's thumbnail on a desk with a neon frame, its name, category, hint, a Decompiled jar or Original source chip and a Play in your browser button. The home page's card fans out six thumbnails.
 - Share opens a panel: that preview as a chat or a feed shows it (card, host, title, description), an editable message, the link with Copy link, and Share... (the system share sheet, where the browser has `navigator.share`), X, Bluesky, Reddit and Email. The message carries the visitor's passport count ("I have played 7 of 16 apps in this arcade"), or "Arcade complete!" once all 16 are stamped.
 - It opens from Share in an app page's toolbar (the arrow, with the word on pages 1000 px wide or more), Share on the exit screen, Share in the home page's player bar (the app playing) and in the passport panel (the arcade), and Share it on the arcade-complete toast. In the player the exit screen asks the home page to show the panel, so it is full size; Big screen leaves fullscreen first.
 - A shared app link carries `?shared=N`, the sender's stamp count. The title screen it opens on says "Shared with you by a player with N of 20 stamps", and either the visitor's own count or an invitation to start a passport.
 - Keys typed in the panel stay out of the app and do not start it from the title screen; Esc, the close button or a click outside closes it. Each skin styles it: the site's card in Modern, Metal edges in Classic, neon frame and phosphor fields in Arcade.
 
-`web/cards.ps1` makes the cards and the app pages' tags from `src/shared/apps.json` (names, hints, categories, origins), so run it again after changing an app's entry. Build first (it uses the built thumbnails and icon), then from the repo root:
+`web/cards.ps1` makes the cards from `src/shared/apps.json` (names, hints, categories, origins), so run it again after changing an app's entry. The tags that point at them are written by the build (`src/routes.tsx` for the home page, `src/pages/app/AppPage.tsx` for each app's page). Build first (it uses the built thumbnails and icon), then from the repo root:
 
 ```powershell
-./web/cards.ps1                          # every card and every page's tags
-./web/cards.ps1 -Apps Minesweeper,Clock  # those cards only (the tags are always all rewritten)
+./web/cards.ps1                          # every card
+./web/cards.ps1 -Apps Minesweeper,Clock  # those cards only
 ```
 
 It serves the built site on port 8102 with Python, opens `card.html` (copied in for the run, then removed) in headless Chrome at 1200 x 630 with the app's entry in the query, and saves each screenshot as a JPEG (about 100 KB). The tags use relative addresses, which most link preview services do not follow: build with the address the site is served from to make `og:url` and `og:image` absolute.

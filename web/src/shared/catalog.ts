@@ -1,5 +1,6 @@
 // The one list of apps (web/src/shared/apps.json): the home page renders it, and boot.js, play.html, the 404 page,
-// web/cards.ps1 and the desktop launcher read the same file.
+// web/cards.ps1 and the desktop launcher read the same file. The build writes each app's page from it
+// (src/pages/app/AppPage.tsx).
 import apps from './apps.json';
 
 export interface App {

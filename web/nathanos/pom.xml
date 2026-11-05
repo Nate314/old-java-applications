@@ -17,8 +17,8 @@
     and every other browser app, since nothing can be loaded at run time.
 
     Adding an app to the web NathaNOS: its sources (app-sources) and a jar naming its Main-Class (app-jars) below,
-    its Main-Class in src/main/java/web/nathanos/Boot.java, and its jar plus any files it reads in data-files in
-    public/NathaNOS/index.html.
+    its Main-Class in src/main/java/web/nathanos/Boot.java, and its jar plus any files it reads in NathaNOS's
+    data-files in web/src/pages/app/AppPage.tsx.
   -->
   <dependencies>
     <dependency>
