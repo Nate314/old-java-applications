@@ -37,6 +37,13 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # web/src (the React pages) and web/public are built with Vite during the Maven build.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Set up Maven ${{ env.MAVEN_VERSION }}
         run: |
           curl -fsSL "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" | tar -xz -C "$RUNNER_TEMP"

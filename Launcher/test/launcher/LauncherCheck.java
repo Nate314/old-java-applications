@@ -14,7 +14,7 @@ public class LauncherCheck {
       Path root = Paths.get("").toAbsolutePath();
       String runScript = new String(Files.readAllBytes(root.resolve("run.ps1")), StandardCharsets.UTF_8);
 
-      // Every app comes from the gallery, in its order; each has a folder, a run.ps1 entry and a thumbnail.
+      // Every app comes from web/src/shared/apps.json, in its order; each has a folder, a run.ps1 entry and a thumbnail.
       List<Catalog.App> apps = Catalog.load(root);
       check(apps.size() == 20, "expected 20 apps, got " + apps.size());
       check(apps.get(0).id.equals("Minesweeper"), "gallery order: Minesweeper first");
@@ -30,8 +30,10 @@ public class LauncherCheck {
       }
       check(keys == 2, "two apps press real keys");
       Catalog.App rubik = find(apps, "RubiksCube2D");
-      check(rubik.name.equals("Rubik's Cube 2D"), "entities unescaped: " + rubik.name);
-      check(find(apps, "TankGame").original && !find(apps, "Minesweeper").original, "origin from data-origin");
+      check(rubik.name.equals("Rubik's Cube 2D"), "name read: " + rubik.name);
+      // The JSON text a\"b\\c, then an escaped e-acute, reads as a"b\c and the accented letter.
+      check(Catalog.unescape("a\\\"b\\\\c\\" + "u00e9").equals("a\"b\\c" + (char) 0xe9), "JSON escapes undone");
+      check(find(apps, "TankGame").original && !find(apps, "Minesweeper").original, "origin from \"origin\"");
       check(find(apps, "Windows").warning != null && find(apps, "WindowsE").warning != null
          && find(apps, "BibleDownloader").warning == null && find(apps, "DinoGame").warning == null, "Robot apps warn");
       check(find(apps, "Windows").hint.startsWith("Presses the Windows key once, then exits"),

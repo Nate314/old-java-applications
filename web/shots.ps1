@@ -1,4 +1,4 @@
-# Captures the home page thumbnails (web/site/shots/<App>.png) from a built site with headless Chrome.
+# Captures the home page thumbnails (web/public/shots/<App>.png) from a built site with headless Chrome.
 # Each app page is opened in thumbnail mode (?embed&shot: square, shadowless windows on a magenta desktop) and
 # driven over the DevTools protocol (web/cdp.ps1) through its recipe below, so every thumbnail shows its app in
 # play (a game under way, a lesson lit, a race half run) rather than a start screen, and can be taken again the
@@ -16,7 +16,7 @@ param(
     [int]$Width = 960,
     [int]$Height = 600,
     [int]$MaxWidth = 480,
-    [string]$Out = (Join-Path $PSScriptRoot 'site/shots')
+    [string]$Out = (Join-Path $PSScriptRoot 'public/shots')
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'cdp.ps1')

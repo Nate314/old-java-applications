@@ -40,7 +40,7 @@ public final class Main {
          CompletableFuture.supplyAsync(() -> History.load(git, ids))
             .thenAccept(h -> SwingUtilities.invokeLater(() -> window.setHistory(h)));
          try {
-            window.setIconImage(ImageIO.read(root.resolve("web/site/icons/icon-192.png").toFile()));   // the site's icon
+            window.setIconImage(ImageIO.read(root.resolve("web/public/icons/icon-192.png").toFile()));   // the site's icon
          } catch (IOException ignored) {
             // keep Java's default icon
          }

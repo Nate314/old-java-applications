@@ -52,7 +52,7 @@ The [pull request list](https://github.com/Nate314/old-java-applications/pulls?q
 
 The 100 attempts are pull requests #10 to #78 (attempts 1 to 69, one at a time) and #79 to #90 (attempts 70 to 100, in eleven parallel rounds), with the one-off #83 between rounds 4 and 5. A final pull request on top of #90 adds this section, the jar downloads and the original art below, and carries all of it to master.
 
-![Timeline of the agents: 69 attempts one at a time, then eleven rounds of builders and an integrator, with the output tokens of each pull request](web/site/agents-timeline.svg)
+![Timeline of the agents: 69 attempts one at a time, then eleven rounds of builders and an integrator, with the output tokens of each pull request](web/public/agents-timeline.svg)
 
 - **Model**: every agent, and the orchestrator session that started them and read their reports, ran on Claude Opus 5.5 (model id `claude-opus-5-5`) in Claude Code.
 - **Agents**: 124 finished agents, all of whose usage was found: 69 one-at-a-time attempts, 31 round builders, 11 round integrators, the one-off #83, and 12 agents on October 31 that helped with #1 to #8 before the chain. The agent making this final pull request is not counted (it was still running when the numbers were read).

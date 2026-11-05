@@ -68,15 +68,6 @@
         <artifactId>maven-resources-plugin</artifactId>
         <executions>
           <execution>
-            <id>site-pages</id>
-            <phase>process-resources</phase>
-            <goals><goal>copy-resources</goal></goals>
-            <configuration>
-              <outputDirectory>${site.dir}</outputDirectory>
-              <resources><resource><directory>${project.basedir}/../site</directory></resource></resources>
-            </configuration>
-          </execution>
-          <execution>
             <id>flappybird-images</id>
             <phase>process-resources</phase>
             <goals><goal>copy-resources</goal></goals>
@@ -157,7 +148,7 @@
               </target>
             </configuration>
           </execution>
-          <!-- What's new (site/news.js): the repo's history as history.txt, one "@@<commit time> <subject>" line
+          <!-- What's new (public/news.js): the repo's history as history.txt, one "@@<commit time> <subject>" line
                per commit, newest first, each followed by the top-level folders it changed (Clock, web, ...).
                Squash merges' "(#N)" is left out of the subjects. -->
           <execution>
@@ -185,6 +176,38 @@
                     <uniqfilter/>
                   </filterchain>
                 </copy>
+              </target>
+            </configuration>
+          </execution>
+          <!-- The site itself (web/src: the React pages, and web/public: boot.js, the app pages, pictures), built
+               with Vite into the same folder the apps are compiled into (npm run build:pages). Needs Node.js and npm
+               on the PATH. The packages are installed only when web/node_modules is missing, since npm run build
+               runs this build and must keep its own. -->
+          <execution>
+            <id>react-pages</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target xmlns:unless="ant:unless">
+                <property name="react.dir" location="${project.basedir}/.."/>
+                <property name="react.out" location="${site.dir}"/>
+                <available file="${react.dir}/node_modules" type="dir" property="react.installed"/>
+                <exec unless:set="react.installed" executable="cmd" dir="${react.dir}" osfamily="windows" failonerror="true">
+                  <arg line="/c npm ci --no-audit --no-fund"/>
+                </exec>
+                <exec unless:set="react.installed" executable="sh" dir="${react.dir}" osfamily="unix" failonerror="true">
+                  <arg value="-c"/>
+                  <arg value="npm ci --no-audit --no-fund"/>
+                </exec>
+                <exec executable="cmd" dir="${react.dir}" osfamily="windows" failonerror="true">
+                  <arg line="/c npm run build:pages"/>
+                  <env key="SITE_DIR" value="${react.out}"/>
+                </exec>
+                <exec executable="sh" dir="${react.dir}" osfamily="unix" failonerror="true">
+                  <arg value="-c"/>
+                  <arg value="npm run build:pages"/>
+                  <env key="SITE_DIR" value="${react.out}"/>
+                </exec>
               </target>
             </configuration>
           </execution>
