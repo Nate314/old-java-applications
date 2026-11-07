@@ -7,6 +7,19 @@
  * as it will look, and copies the <iframe> tag. The tag's address is absolute (the address this site is served
  * from), since it is pasted into someone else's page.
  */
+
+declare global {
+  interface Window {
+  oldjavaEmbed?: { build(box: HTMLElement, opts: OldjavaEmbedOptions): void };
+  }
+  /** What boot.js's embed.ts hands build(). */
+  interface OldjavaEmbedOptions {
+    apps: OldjavaCatalogApp[]; app: string | null; siteRoot: string; watchable: string[]; sound?(name: string): void;
+  }
+}
+// A row of choice() buttons, and the extras it puts on them.
+type ChoiceButton = HTMLButtonElement & { _id: string };
+type Choice = HTMLDivElement & { set(v: string): void; enable(id: string, on: boolean): void };
 (function () {
   'use strict';
 
@@ -17,24 +30,24 @@
     { id: 'l', label: '900 × 560', w: 900, h: 560 }
   ];
 
-  function el(tag, cls, text) {
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string | null, text?: string | null) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
     if (text) e.textContent = text;
     return e;
   }
 
-  function escapeAttr(s) {
+  function escapeAttr(s: string) {
     return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');   // a bare & before a word is fine in HTML
   }
 
   // A row of radio-like buttons (aria-pressed), the way the Share panel's other choices look.
-  function choice(name, items, value, onPick) {
-    var group = el('div', 'shim-embed-choice');
+  function choice(name: string, items: { id: string; label: string }[], value: string, onPick: (id: string) => void) {
+    var group = el('div', 'shim-embed-choice') as Choice;
     group.setAttribute('role', 'group');
     group.setAttribute('aria-label', name);
     var buttons = items.map(function (item) {
-      var b = el('button', null, item.label);
+      var b = el('button', null, item.label) as ChoiceButton;
       b.type = 'button';
       b.setAttribute('data-sound', 'none');
       b.addEventListener('click', function () {
@@ -46,23 +59,23 @@
       group.appendChild(b);
       return b;
     });
-    function set(v) {
+    function set(v: string) {
       buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b._id === v)); });
     }
     set(value);
     group.set = set;
-    group.enable = function (id, on) {
+    group.enable = function (id: string, on: boolean) {
       buttons.forEach(function (b) { if (b._id === id) { b.disabled = !on; b.title = on ? '' : 'Not for this app'; } });
     };
     return group;
   }
 
-  function build(box, opts) {
+  function build(box: HTMLElement, opts: OldjavaEmbedOptions) {
     var apps = opts.apps;
     var root = opts.siteRoot;   // absolute, ends in /
     var state = { app: opts.app || (apps[0] && apps[0].id), then: false, watch: false, size: 'fit' };
     function app() { return apps.filter(function (a) { return a.id === state.app; })[0] || apps[0]; }
-    function watchable(a) { return opts.watchable.indexOf(a.id) >= 0; }
+    function watchable(a: OldjavaCatalogApp) { return opts.watchable.indexOf(a.id) >= 0; }
 
     var intro = el('p', 'shim-embed-intro',
       'Paste this tag into a blog post, a class page or your own site, and visitors play the app right there. ' +
@@ -89,7 +102,7 @@
       function (v) { state.watch = v === 'watch'; update(); });
     var size = choice('Size', SIZES, 'fit', function (v) { state.size = v; update(); });
 
-    function labelled(text, control) {
+    function labelled(text: string, control: HTMLElement) {
       var wrap = el('div', 'shim-embed-field');
       wrap.appendChild(el('span', 'shim-embed-name', text));
       wrap.appendChild(control);
@@ -117,7 +130,7 @@
     copy.type = 'button';
     copy.setAttribute('data-sound', 'none');
     copy.addEventListener('click', function () {
-      function done(ok) {
+      function done(ok: boolean) {
         copy.textContent = ok ? 'Copied ✓' : 'Press Ctrl+C';
         if (opts.sound) opts.sound(ok ? 'saved' : 'tap');
         setTimeout(function () { copy.textContent = 'Copy embed code'; }, 2000);
@@ -181,3 +194,5 @@
 
   window.oldjavaEmbed = { build: build };
 })();
+
+export {};   // a module: built on its own into embed.js (vite/pages.ts)

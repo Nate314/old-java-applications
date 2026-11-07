@@ -9,7 +9,8 @@
 // It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages,
 // assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline, and the
 // plain scripts at the site root (SCRIPTS): the site's runtime (src/runtime) as boot.js, loaded in the head of the
-// home page and every app page before anything else, and the service worker (src/sw/sw.ts) as sw.js.
+// home page and every app page before anything else, the scripts it adds when they are needed, and the service
+// worker (src/sw/sw.ts) as sw.js.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -26,6 +27,12 @@ const root = resolve(__dirname, '..');
 /** Classic scripts written at the site root, each bundled from its TypeScript entry into one file. */
 const SCRIPTS: Record<string, string> = {
   'boot.js': 'src/runtime/main.ts',
+  // What boot.js adds to a page once it is needed (src/runtime/lazy), and the home page's What's new.
+  'find.js': 'src/runtime/lazy/find.ts',
+  'news.js': 'src/runtime/lazy/news.ts',
+  'clockbar.js': 'src/runtime/lazy/clockbar.ts',
+  'skinmaker.js': 'src/runtime/lazy/skinmaker.ts',
+  'embed.js': 'src/runtime/lazy/embed.ts',
   'sw.js': 'src/sw/sw.ts',
 };
 

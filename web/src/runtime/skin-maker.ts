@@ -12,7 +12,7 @@ declare global {
       offer(): typeof skinOffer;
       setSkin(v: string): void;
     };
-    make?(opener: Element | null): void;
+    make?(opener?: Element | null): void;
   }
 }
 
@@ -29,7 +29,7 @@ function makerScript() {
   return makerPromise;
 }
 
-export function openMaker(opener: Element | null) {
+export function openMaker(opener?: Element | null) {
   if (embedded && window.parent !== window) { window.parent.postMessage({ oldjavaSkinMaker: true }, location.origin); return; }
   makerScript().then(function (maker) { maker.open(opener); }, function (e: Error) { console.warn(e.message); });
 }

@@ -17,6 +17,16 @@
  *   old is not news, the rule Clock uses for what happened while it was closed.
  * - On the Clock page there is no chip (Clock shows its own time) and no bell, only the game for the break.
  */
+// Clock's saved state: the fields of ~/.clock.txt (ClockState.java) as numbers.
+interface ClockState {
+  plan: number; phase: number; done: number; focusEnd: number;
+  timer: number; timerEnd: number; timerDone: number; watchStart: number; watchBanked: number;
+}
+type Moment =
+  | { kind: 'break'; at: number; phase: number; done: number; ends: number }
+  | { kind: 'back'; at: number; next: number }
+  | { kind: 'timer'; at: number; length: number };
+
 (function () {
   'use strict';
   var site = window.oldjavaSite;
@@ -26,20 +36,20 @@
   var FOCUS = 0, SHORT = 1, LONG = 2;
   var QUICK = ['FlappyBird', 'DinoGame', 'Minesweeper', 'NumberGuess', 'SpriteFloatyStars'];
   var onClock = site.clockPage();
-  var shown = {};   // moments this page has told, by kind and time
+  var shown: Record<string, boolean> = {};   // moments this page has told, by kind and time
 
   // Clock's saved state, or null: the fields of ~/.clock.txt (ClockState.java) as numbers.
-  function read() {
-    var saves;
+  function read(): ClockState | null {
+    var saves: Record<string, unknown>;
     try { saves = JSON.parse(localStorage.getItem(SAVES) || '{}') || {}; } catch (e) { return null; }
     var path = Object.keys(saves).filter(function (p) { return p.split('/').pop() === '.clock.txt'; })[0];
     if (!path) return null;
-    var v = {};
+    var v: Record<string, number> = {};
     String(saves[path]).split('\n').forEach(function (line) {
       var i = line.indexOf('=');
       if (i > 0) v[line.slice(0, i)] = Number(line.slice(i + 1).trim());
     });
-    function n(key) { return v[key] > 0 ? v[key] : 0; }
+    function n(key: string) { return v[key] > 0 ? v[key] : 0; }
     return {
       plan: PLANS[n('focusPlan')] ? n('focusPlan') : 0,
       phase: n('focusPhase') === SHORT || n('focusPhase') === LONG ? n('focusPhase') : FOCUS,
@@ -50,14 +60,14 @@
     };
   }
 
-  function length(s, phase) {
+  function length(s: ClockState, phase: number) {
     var m = PLANS[s.plan];
     return (phase === FOCUS ? m[0] : phase === SHORT ? m[1] : 3 * m[1]) * MINUTE;
   }
 
   // Focus.update without the day log: plays the sessions forward to now, collecting the moments on the way.
-  function catchUp(s, now) {
-    var moments = [];
+  function catchUp(s: ClockState, now: number) {
+    var moments: Moment[] = [];
     while (s.focusEnd && now >= s.focusEnd) {
       var at = s.focusEnd;
       if (s.phase === FOCUS) {
@@ -77,16 +87,16 @@
     return moments.filter(function (m) { return now - m.at < FRESH; });
   }
 
-  function clock(ms) {
+  function clock(ms: number) {
     var t = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
     return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
   }
-  function at(ms) { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
-  function minutes(ms) { var m = Math.round(ms / MINUTE); return m + (m === 1 ? ' minute' : ' minutes'); }
+  function at(ms: number) { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+  function minutes(ms: number) { var m = Math.round(ms / MINUTE); return m + (m === 1 ? ' minute' : ' minutes'); }
 
   // ---- the chip ----
-  var chip = null;
-  function segment(kind, label, text, part) {
+  var chip: HTMLAnchorElement | null = null;
+  function segment(kind: string, label: string, text: string, part: number) {
     var seg = document.createElement('span');
     seg.className = 'shim-clock-seg';
     seg.setAttribute('data-kind', kind);
@@ -103,7 +113,7 @@
     seg.appendChild(time);
     return seg;
   }
-  function showChip(s, now) {
+  function showChip(s: ClockState, now: number) {
     var bar = document.querySelector('.shim-toolbar');
     if (!bar || onClock) return;
     var segs = [], words = [];
@@ -135,7 +145,7 @@
       bar.insertBefore(chip, bar.querySelector('.shim-sound'));
     }
     chip.textContent = '';
-    segs.forEach(function (seg) { chip.appendChild(seg); });
+    segs.forEach(function (seg) { chip!.appendChild(seg); });
     var soon = (s.focusEnd && s.focusEnd - now <= 10000) || (s.timerEnd > now && s.timerEnd - now <= 10000);
     chip.toggleAttribute('data-soon', !!soon);
     var label = words.join('. ') + '. Open Clock.';
@@ -144,7 +154,7 @@
 
   // ---- the moments ----
   // Rings once across every open page, and not while Clock runs somewhere (it rings for itself).
-  function ring(m) {
+  function ring(m: Moment) {
     if (onClock) return;
     var last = 0, open = 0;
     try {
@@ -158,7 +168,7 @@
   }
 
   // A game for the break: a quick one not played yet first, never the one on this page.
-  function breakGame(apps) {
+  function breakGame(apps: OldjavaCatalogApp[]) {
     var here = site.appId();
     var quick = apps.filter(function (a) { return QUICK.indexOf(a.id) >= 0 && a.id !== here; });
     var fresh = quick.filter(function (a) { return !window.oldjavaPassport.has(a.id); });
@@ -166,8 +176,8 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
-  function tell(m, apps) {
-    var here = site.appId(), app = null, title, line, label;
+  function tell(m: Moment, apps: OldjavaCatalogApp[]) {
+    var here = site.appId(), app: OldjavaCatalogApp | null = null, title: string, line: string, label: string | undefined;
     var clockApp = apps.filter(function (a) { return a.id === 'Clock'; })[0];
     var playing = here && apps.some(function (a) { return a.id === here && a.cat === 'game'; });
     if (m.kind === 'break') {
@@ -186,7 +196,7 @@
         : 'Your ' + Math.round(m.length / MINUTE) + '-minute timer rang at ' + at(m.at) + '.';
       label = m.kind === 'back' ? 'Back to focus' : 'Open Clock';
     }
-    function link(toast) {
+    function link(toast: HTMLElement | null) {
       if (!app || !label) return [];
       var go = toast ? site.toastLink(toast, app, label) : document.createElement('a');
       if (!toast) {
@@ -206,14 +216,14 @@
       tag.textContent = m.kind === 'break' ? 'Break' : m.kind === 'back' ? 'Focus' : 'Timer';
       news.show('clock', [tag], [document.createTextNode(title + '. ' + line)], link(null), 15000);
     } else {
-      var shot = (app || clockApp || {}).shot;
+      var shot = (app || clockApp || {} as Partial<OldjavaCatalogApp>).shot;
       if (shot) site.toast(shot, title, line, link);
     }
   }
 
   // Clock, running in this page or another, saves what follows a moment as soon as it happens (the break already
   // running), so the moments are also played forward from what this page saw a second ago.
-  var before = null;
+  var before: ClockState | null = null;
   function tick() {
     var s = read();
     if (!s) return;
@@ -240,3 +250,5 @@
   setInterval(tick, 1000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
 })();
+
+export {};   // a module: built on its own into clockbar.js (vite/pages.ts)

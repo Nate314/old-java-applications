@@ -12,16 +12,25 @@
  * "Last played" is kept per app in localStorage (oldjava.lastPlayed, written by boot.js when the passport
  * stamps a play); an app played before that existed counts from its first stamp (oldjava.played).
  */
+
+interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[] }
+interface NewsData { items: NewsItem[]; apps: OldjavaCatalogApp[] }
+
+declare global {
+  interface Window {
+  oldjavaNews?: { load(): Promise<NewsData>; story(id: string, box: HTMLElement): void; lastPlayed(id: string): number };
+  }
+}
 (function () {
   'use strict';
-  var BASE = new URL('.', document.currentScript.src).href;
+  var BASE = new URL('.', (document.currentScript as HTMLScriptElement).src).href;
   var LAST_KEY = 'oldjava.lastPlayed';
   var PLAYED_KEY = 'oldjava.played';
   var SHOWN = 6;        // cards before Show all
   var MANY = 4;         // a change to more apps than this is the whole arcade's, not one app's
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  function read(key) {
+  function read(key: string): Record<string, number> {
     try {
       var v = JSON.parse(localStorage.getItem(key) || '{}');
       return v && typeof v === 'object' ? v : {};
@@ -29,7 +38,7 @@
   }
 
   // [{ t: ms, title, more, apps: [catalog entries] }], newest first, and the catalog.
-  var dataPromise = null;
+  var dataPromise: Promise<NewsData> | null = null;
   function load() {
     if (!dataPromise) {
       dataPromise = Promise.all([
@@ -48,10 +57,10 @@
     return dataPromise;
   }
 
-  function parse(text, apps) {
-    var byId = {};
+  function parse(text: string, apps: OldjavaCatalogApp[]) {
+    var byId: Record<string, OldjavaCatalogApp> = {};
     apps.forEach(function (a) { byId[a.id] = a; });
-    var items = [];
+    var items: NewsItem[] = [];
     text.split(/\r?\n/).forEach(function (line) {
       var m = /^@@(\d+) (.*)$/.exec(line);
       if (m) {
@@ -71,17 +80,17 @@
     return items;
   }
 
-  function day(t) {
+  function day(t: number) {
     var d = new Date(t);
     var s = MONTHS[d.getMonth()] + ' ' + d.getDate();
     return d.getFullYear() === new Date().getFullYear() ? s : s + ', ' + d.getFullYear();
   }
 
   // When the visitor last played the app (0 if never).
-  function lastPlayed(id) { return read(LAST_KEY)[id] || read(PLAYED_KEY)[id] || 0; }
+  function lastPlayed(id: string) { return read(LAST_KEY)[id] || read(PLAYED_KEY)[id] || 0; }
 
   // The changes to an app since the visitor last played it ([] if never played).
-  function changedSince(items, id) {
+  function changedSince(items: NewsItem[], id: string) {
     var since = lastPlayed(id);
     if (!since) return [];
     return items.filter(function (it) {
@@ -89,35 +98,35 @@
     });
   }
 
-  function el(tag, cls, text) {
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
     if (text != null) e.textContent = text;
     return e;
   }
 
-  function open(id) {
+  function open(id: string) {
     var passport = window.oldjavaPassport;
     if (passport.open) passport.open(id);
     else location.href = BASE + id + '/index.html';
   }
 
-  function names(apps) {
+  function names(apps: OldjavaCatalogApp[]) {
     var n = apps.map(function (a) { return a.name; });
     return n.length < 2 ? n.join('') : n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1];
   }
 
   // ---- the home page ----
-  function home(section) {
-    var list = section.querySelector('#news-list');
-    var text = section.querySelector('#news-text');
-    var playButton = section.querySelector('#news-play');
-    var allButton = section.querySelector('#news-all');
+  function home(section: HTMLElement) {
+    var list = section.querySelector('#news-list') as HTMLElement;
+    var text = section.querySelector('#news-text') as HTMLElement;
+    var playButton = section.querySelector('#news-play') as HTMLElement;
+    var allButton = section.querySelector('#news-all') as HTMLElement;
     var all = false;
-    var data = null;
+    var data: NewsData | null = null;
 
     // `focus`: the app whose picture the card shows (the one the visitor played, for an update to several).
-    function card(it, updated, focus) {
+    function card(it: NewsItem, updated: boolean, focus?: OldjavaCatalogApp) {
       var li = el('li', updated ? 'updated' : '');
       var one = it.apps.length === 1 ? it.apps[0] : null;
       var site = !it.apps.length || it.apps.length > MANY;
@@ -154,8 +163,8 @@
     function render() {
       if (!data || !data.items.length) return;
       var items = data.items;
-      var changed = {};   // app id -> its changes since last played
-      var order = [];
+      var changed: Record<string, NewsItem[]> = {};   // app id -> its changes since last played
+      var order: OldjavaCatalogApp[] = [];
       data.apps.forEach(function (a) {
         var c = changedSince(items, a.id).filter(function (it) { return it.apps.length <= MANY; });
         if (c.length) { changed[a.id] = c; order.push(a); }
@@ -177,7 +186,7 @@
       section.classList.toggle('fresh', order.length > 0);
 
       // Updates to what the visitor played lead, then the rest, newest first.
-      var lead = [];
+      var lead: NewsItem[] = [];
       order.forEach(function (a) {
         changed[a.id].forEach(function (it) { if (lead.indexOf(it) < 0) lead.push(it); });
       });
@@ -194,8 +203,8 @@
       allButton.setAttribute('aria-expanded', String(all));
 
       // Updated tags on the gallery cards.
-      Array.prototype.forEach.call(document.querySelectorAll('#apps li[data-app]'), function (li) {
-        li.classList.toggle('updated', !!changed[li.getAttribute('data-app')]);
+      Array.prototype.forEach.call(document.querySelectorAll('#apps li[data-app]'), function (li: Element) {
+        li.classList.toggle('updated', !!changed[li.getAttribute('data-app')!]);
       });
       section.hidden = false;
     }
@@ -215,7 +224,7 @@
 
   // ---- an app page's title screen: the app's story ----
   // Fills `box` (a <details>) with every change to the app, newest first; hidden when there is none.
-  function story(id, box) {
+  function story(id: string, box: HTMLElement) {
     load().then(function (d) {
       var mine = d.items.filter(function (it) { return it.apps.some(function (a) { return a.id === id; }); });
       if (!mine.length) return;
@@ -248,3 +257,5 @@
   var section = document.getElementById('news');
   if (section) home(section);
 })();
+
+export {};   // a module: built on its own into news.js (vite/pages.ts)

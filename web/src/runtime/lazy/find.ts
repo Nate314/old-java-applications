@@ -9,15 +9,29 @@
  * With nothing typed it offers the apps played last, a few not played yet and what this page can do.
  * boot.js gives it what it needs through window.oldjavaSite (catalog, the passport, WATCH, sounds).
  */
+
+declare global {
+  interface Window {
+  oldjavaFind?: { open(opener?: Element | null): void; isOpen(): boolean; key: string };
+  }
+}
+// What boot.js's find.ts has lent window.oldjavaSite by the time this file runs.
+type FindSite = OldjavaSite & Required<Pick<OldjavaSite, 'catalog' | 'isThen' | 'played' | 'watchable' | 'sound'>>;
+// A row the box can show: an app, its Then or Watch version, a thing to do, or a source file.
+interface Item {
+  kind: string; app?: OldjavaCatalogApp; name?: string; title: string; sub: string; keys: string;
+  pic?: string; glyph?: string; tag: string; tagNew?: boolean; current?: boolean; boost?: number;
+  run(full?: boolean): void;
+}
 (function () {
   'use strict';
 
-  var site = window.oldjavaSite;
+  var site = window.oldjavaSite as FindSite;
   var MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   var KEY = MAC ? '⌘K' : 'Ctrl K';
-  var box = null;
+  var box: { close(): void } | null = null;
 
-  function el(tag, cls, text) {
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string | null, text?: string | null) {
     var n = document.createElement(tag);
     if (cls) n.className = cls;
     if (text != null) n.textContent = text;
@@ -25,12 +39,12 @@
   }
   function onHome() { return !document.body.hasAttribute('data-app'); }
   // A control of this page, if it is there and shown.
-  function shown(selector) {
-    var n = typeof selector === 'string' ? document.querySelector(selector) : selector;
+  function shown(selector: string | HTMLElement) {
+    var n = typeof selector === 'string' ? document.querySelector<HTMLElement>(selector) : selector;
     return n && !n.hidden && n.getClientRects().length ? n : null;
   }
-  function toolbarButton(text) {
-    var all = document.querySelectorAll('.shim-toolbar button');
+  function toolbarButton(text: string) {
+    var all = document.querySelectorAll<HTMLElement>('.shim-toolbar button');
     for (var i = 0; i < all.length; i++) if (all[i].textContent.trim() === text) return shown(all[i]);
     return null;
   }
@@ -39,11 +53,11 @@
   // A score for query q (lower case) in text: a prefix beats a word start beats anywhere, and letters in order
   // ("msw" for Minesweeper) count for less. 0 is no match.
   // A word starts at i of text: after a space or a mark, or a capital after a small letter (GameFrame).
-  function wordStart(text, i) {
+  function wordStart(text: string, i: number) {
     return i === 0 || /[^A-Za-z0-9]/.test(text[i - 1]) || (/[A-Z]/.test(text[i]) && /[a-z]/.test(text[i - 1]));
   }
   // Letters in order count only in a name (strict for the longer words: hints, paths).
-  function score(q, text, strict) {
+  function score(q: string, text: string | undefined, strict?: boolean) {
     if (!text) return 0;
     var t = text.toLowerCase();
     var i = t.indexOf(q);
@@ -61,7 +75,7 @@
     return Math.min(45, 15 + s * 3 / q.length);
   }
   // Every word of the query must match the item's name (full weight) or its other words (half).
-  function rank(item, words) {
+  function rank(item: Item, words: string[]) {
     var total = 0;
     for (var i = 0; i < words.length; i++) {
       var s = Math.max(score(words[i], item.name || item.title), score(words[i], item.title, true),
@@ -77,15 +91,15 @@
     try { return JSON.parse(localStorage.getItem('oldjava.lastPlayed') || '{}') || {}; } catch (e) { return {}; }
   }
 
-  function go(href) {
+  function go(href: string) {
     var u = new URL(href, location.href);
     if (u.pathname === location.pathname && u.search === location.search && u.hash) location.hash = u.hash;
     else location.href = u.href;
   }
 
   // Opens an app: on the home page in its player (as the gallery's Play does), elsewhere on its own page.
-  function playApp(app, full) {
-    var play = onHome() && !full && document.querySelector('#apps li[data-app="' + app.id + '"] a.play');
+  function playApp(app: OldjavaCatalogApp, full?: boolean) {
+    var play = onHome() && !full && document.querySelector<HTMLElement>('#apps li[data-app="' + app.id + '"] a.play');
     if (play) {
       play.click();
       var player = document.getElementById('player');
@@ -95,17 +109,17 @@
     go(site.root() + app.id + '/index.html');
   }
 
-  function appItems(apps) {
+  function appItems(apps: OldjavaCatalogApp[]) {
     var here = site.appId();
     var thenHere = site.isThen();
-    var items = [];
+    var items: Item[] = [];
     apps.forEach(function (app) {
-      var cat = { game: 'Game', music: 'Music', toy: 'Toy', tool: 'Tool' }[app.cat] || '';
+      var cat = ({ game: 'Game', music: 'Music', toy: 'Toy', tool: 'Tool' } as Record<string, string>)[app.cat] || '';
       items.push({
         kind: 'app', app: app, title: app.name, sub: app.id === here && !thenHere ? 'Playing now' : app.hint,
         keys: app.id + ' ' + cat + ' ' + app.hint, pic: app.shot, tag: site.played(app.id) ? 'Played' : 'New',
         tagNew: !site.played(app.id), current: app.id === here && !thenHere,
-        run: function (full) { playApp(app, full); }
+        run: function (full?: boolean) { playApp(app, full); }
       });
       if (app.then) items.push({
         kind: 'then', app: app, name: app.name, title: app.name + ': as it was', sub: 'As first restored in 2026: light bug fixes, before the later reworks',
@@ -122,27 +136,27 @@
     return items;
   }
 
-  function action(title, sub, glyph, keys, run) {
+  function action(title: string, sub: string, glyph: string, keys: string, run: (full?: boolean) => void): Item {
     return { kind: 'do', title: title, sub: sub, glyph: glyph, keys: keys, tag: 'Do', boost: 5, run: run };
   }
-  function clickAction(selector, title, sub, glyph, keys) {
+  function clickAction(selector: string, title: string, sub: string, glyph: string, keys: string) {
     var n = shown(selector);
-    return n ? action(title, sub, glyph, keys, function () { n.click(); }) : null;
+    return n ? action(title, sub, glyph, keys, function () { n!.click(); }) : null;
   }
   // A tab of the home page's Your arcade panel, opened and brought into view.
-  function tabAction(id, title, sub, glyph, keys) {
+  function tabAction(id: string, title: string, sub: string, glyph: string, keys: string) {
     var tab = document.getElementById(id);
     if (!tab || tab.hidden) return null;
     return action(title, sub, glyph, keys, function () {
-      tab.click();
-      tab.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      tab.focus({ preventScroll: true });
+      tab!.click();
+      tab!.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      tab!.focus({ preventScroll: true });
     });
   }
 
-  function actionItems(apps) {
-    var list = [];
-    function add(a) { if (a) list.push(a); }
+  function actionItems(apps: OldjavaCatalogApp[]) {
+    var list: Item[] = [];
+    function add(a: Item | null) { if (a) list.push(a); }
     if (onHome()) {
       add(clickAction('#tour-start', 'Take the tour', 'All 20 apps in the player, one at a time, with something to try in each', '▶', 'tour guide walkthrough start begin all apps continue'));
       add(clickAction('#player-shuffle', 'Shuffle', 'Swap a random app into the player', '⇄', 'random shuffle any'));
@@ -164,19 +178,19 @@
       var zoom = shown('.shim-zoom');
       if (zoom) add(action(zoom.getAttribute('aria-pressed') === 'false' ? 'Fit to screen' : 'Actual size',
         'Zoom the app to the page, or back to its own size', '⤢', 'zoom fit actual size bigger smaller',
-        function () { zoom.click(); }));
+        function () { zoom!.click(); }));
       add(clickAction('.shim-dock-open', 'Side by side', 'Run a second app beside this one: a timer, the chord finder...', '◫',
         'side by side split two apps beside dock companion multitask second'));
       add(clickAction('.shim-pop', 'Pop out', 'Keep the app in a small window on top of everything', '⧉', 'pop out picture in picture window'));
       var controls = toolbarButton('Controls');
-      if (controls) add(action('On-screen controller', 'Show or hide the touch buttons', '✚', 'controls pad touch controller buttons', function () { controls.click(); }));
+      if (controls) add(action('On-screen controller', 'Show or hide the touch buttons', '✚', 'controls pad touch controller buttons', function () { controls!.click(); }));
       var switcher = toolbarButton('Switch app');
-      if (switcher) add(action('Switch app', 'Every app in a panel on the right', '☰', 'switch drawer list apps', function () { switcher.click(); }));
+      if (switcher) add(action('Switch app', 'Every app in a panel on the right', '☰', 'switch drawer list apps', function () { switcher!.click(); }));
       add(action('All apps', 'Back to the home page', '⌂', 'home all apps gallery back index', function () { go(site.root() + 'index.html'); }));
     }
     if (window.oldjavaShare && window.oldjavaShare.embed) add(action('Put an app on your site',
       'The tag that plays it in your own page, blog or class site', '</>', 'embed iframe widget website blog html code site put',
-      function () { window.oldjavaShare.embed(site.appId() || null); }));
+      function () { window.oldjavaShare.embed!(site.appId() || null); }));
     add(action('The story', 'How these 20 old programs were recovered and brought to the browser', '❦',
       'story history about how recovered decompiled then origin 2016 chapter', function () { go(site.root() + 'story.html'); }));
     var notYet = apps.filter(function (a) { return !site.played(a.id) && a.id !== site.appId(); });
@@ -193,22 +207,22 @@
     });
     if (window.oldjavaSkin && window.oldjavaSkin.make) add(action(skin === 'own' ? 'Change your skin' : 'Make your own skin',
       'Pick a color, a desk, corners and windows for every page and app', '🎨', 'skin theme look style own custom yours color colour make design paint dark light wallpaper',
-      function () { window.oldjavaSkin.make(); }));
+      function () { window.oldjavaSkin.make!(); }));
     var sound = shown('.shim-sound');
     if (sound) add(action(sound.getAttribute('aria-pressed') === 'false' ? 'Turn site sounds on' : 'Turn site sounds off',
-      'The short sounds of the site\'s own buttons', '♪', 'sound mute audio quiet volume', function () { sound.click(); }));
+      'The short sounds of the site\'s own buttons', '♪', 'sound mute audio quiet volume', function () { sound!.click(); }));
     return list;
   }
 
   // Every app's source files, read once, the first time a search is typed.
-  var sources = null;
-  function sourceItems(apps) {
+  var sources: Promise<Item[]> | null = null;
+  function sourceItems(apps: OldjavaCatalogApp[]) {
     if (!sources) sources = Promise.all(apps.map(function (app) {
       return fetch(site.root() + app.id + '/source/files.txt').then(function (r) {
         return r.ok ? r.text() : '';
       }).catch(function () { return ''; }).then(function (text) {
         return text.split(/\r?\n/).filter(function (p) { return /\.java$/.test(p); }).map(function (path) {
-          var file = path.split('/').pop();
+          var file = path.split('/').pop()!;
           return {
             kind: 'source', app: app, title: file, sub: app.name + ' · ' + path, keys: path + ' ' + app.name,
             glyph: '{ }', tag: 'Source', boost: -15,
@@ -220,14 +234,14 @@
           };
         });
       });
-    })).then(function (lists) { return [].concat.apply([], lists); });
+    })).then(function (lists) { return ([] as Item[]).concat.apply([], lists); });
     return sources;
   }
 
   // ---- the box ----
-  function open(opener) {
+  function open(opener?: Element | null) {
     if (box) { box.close(); return; }
-    var returnTo = opener || document.activeElement;
+    var returnTo = (opener || document.activeElement) as HTMLElement | null;
     var scrim = el('div', 'shim-find-scrim');
     var dialog = el('div', 'shim-find');
     dialog.setAttribute('role', 'dialog');
@@ -269,11 +283,11 @@
     dialog.appendChild(status);
     dialog.appendChild(foot);
 
-    var apps = [], items = [], shownItems = [], active = 0, srcItems = [];
+    var apps: OldjavaCatalogApp[] = [], items: Item[] = [], shownItems: Item[] = [], active = 0, srcItems: Item[] = [];
     // The page may move the focus while the box is open (the home page's player focuses its iframe when it loads
     // the next demo game): the box takes it back, so typing and Enter stay here.
-    function keepFocus(e) {
-      if (!dialog.contains(e.target)) input.focus({ preventScroll: true });
+    function keepFocus(e: FocusEvent) {
+      if (!dialog.contains(e.target as Node | null)) input.focus({ preventScroll: true });
     }
     document.addEventListener('focusin', keepFocus);
     // A frame that focuses itself (the player's next demo game loading) fires no focusin here, only a blur on
@@ -294,13 +308,13 @@
       site.sound('close');
       if (returnTo && returnTo.isConnected && returnTo.focus) returnTo.focus({ preventScroll: true });
     }
-    function choose(item, full) {
+    function choose(item: Item | undefined, full?: boolean) {
       if (!item) return;
       close();
       item.run(full);
     }
 
-    function row(item, i) {
+    function row(item: Item, i: number) {
       var r = el('div', 'shim-find-item kind-' + item.kind + (item.current ? ' current' : ''));
       r.id = 'shim-find-' + i;
       r.setAttribute('role', 'option');
@@ -324,12 +338,12 @@
       r.addEventListener('click', function (e) { choose(item, e.shiftKey); });
       return r;
     }
-    function heading(text) {
+    function heading(text: string) {
       var h = el('div', 'shim-find-group', text);
       h.setAttribute('role', 'presentation');
       return h;
     }
-    function setActive(i, scroll) {
+    function setActive(i: number, scroll: boolean) {
       if (!shownItems.length) { input.removeAttribute('aria-activedescendant'); return; }
       active = (i + shownItems.length) % shownItems.length;
       var rows = list.querySelectorAll('.shim-find-item');
@@ -343,7 +357,7 @@
       }
     }
     // groups: [[heading, items], ...]
-    function render(groups) {
+    function render(groups: [string, Item[]][]) {
       list.textContent = '';
       shownItems = [];
       groups.forEach(function (g) {
@@ -361,9 +375,9 @@
     function suggestions() {
       var last = lastPlayed();
       var appRows = items.filter(function (it) { return it.kind === 'app' && !it.current; });
-      var recent = appRows.filter(function (it) { return last[it.app.id]; })
-        .sort(function (a, b) { return last[b.app.id] - last[a.app.id]; }).slice(0, 3);
-      var fresh = appRows.filter(function (it) { return !site.played(it.app.id); }).slice(0, recent.length ? 3 : 5);
+      var recent = appRows.filter(function (it) { return last[it.app!.id]; })
+        .sort(function (a, b) { return last[b.app!.id] - last[a.app!.id]; }).slice(0, 3);
+      var fresh = appRows.filter(function (it) { return !site.played(it.app!.id); }).slice(0, recent.length ? 3 : 5);
       var acts = actionItems(apps);
       render([['Jump back in', recent], ['Not played yet', fresh], [onHome() ? 'On this page' : 'This app and the site', acts]]);
       status.textContent = '';
@@ -374,21 +388,21 @@
       if (!q) { suggestions(); return; }
       var words = q.split(/\s+/);
       var scored = [items, actionItems(apps), srcItems].map(function (pool) {
-        return pool.map(function (it) { return [rank(it, words), it]; })
+        return pool.map(function (it): [number, Item] { return [rank(it, words), it]; })
           .filter(function (p) { return p[0] > 0; })
           .sort(function (a, b) { return b[0] - a[0]; });
       });
       // A close match anywhere hides the far-fetched ones (letters scattered through a name).
       var floor = Math.max.apply(null, scored.map(function (s) { return s.length ? s[0][0] : 0; })) * 0.5;
-      function best(i, max) {
+      function best(i: number, max: number) {
         return scored[i].filter(function (p) { return p[0] >= floor; }).slice(0, max).map(function (p) { return p[1]; });
       }
       var appHits = best(0, 8);
       var actHits = best(1, 6);
       var srcHits = best(2, 8);
       // The strongest kind leads: a query that names an action ("dark", "mute") shows it first.
-      var groups = [['Apps', appHits], ['Do', actHits], ['Source files', srcHits]];
-      var top = function (g) { return g[1].length ? rank(g[1][0], words) - (g[0] === 'Apps' ? 0 : 1) : -1; };
+      var groups: [string, Item[]][] = [['Apps', appHits], ['Do', actHits], ['Source files', srcHits]];
+      var top = function (g: [string, Item[]]) { return g[1].length ? rank(g[1][0], words) - (g[0] === 'Apps' ? 0 : 1) : -1; };
       groups.sort(function (a, b) { return top(b) - top(a); });
       render(groups);
       var n = shownItems.length;
@@ -431,3 +445,5 @@
 
   window.oldjavaFind = { open: open, isOpen: function () { return !!box; }, key: KEY };
 })();
+
+export {};   // a module: built on its own into find.js (vite/pages.ts)

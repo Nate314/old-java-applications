@@ -148,7 +148,7 @@
               </target>
             </configuration>
           </execution>
-          <!-- What's new (public/news.js): the repo's history as history.txt, one "@@<commit time> <subject>" line
+          <!-- What's new (src/runtime/lazy/news.ts): the repo's history as history.txt, one "@@<commit time> <subject>" line
                per commit, newest first, each followed by the top-level folders it changed (Clock, web, ...).
                Squash merges' "(#N)" is left out of the subjects. -->
           <execution>
