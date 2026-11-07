@@ -1,9 +1,10 @@
 // The pieces the runtime's panels share: an app's card and the passport line. The DOM versions in
 // then-and-now.ts (appCard, passportLine) stay for the parts not yet in React.
-import type { CSSProperties, MouseEvent } from 'react';
+import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { embedded } from '../skin';
 import { played } from '../passport';
-import { pageOf } from '../then-and-now';
+import { root } from '../catalog';
+import { JAR_JAVA, JAR_KEYS, pageOf } from '../then-and-now';
 
 /**
  * A link to an app's page. In the home page's player it asks the page to swap the app in instead, so the player's
@@ -50,5 +51,16 @@ export function PassportLine({ apps }: { apps: { id: string }[] }) {
       <span>{'Passport: ' + count + ' of ' + apps.length + ' apps played'}</span>
       <span className="shim-meter" style={{ '--p': String(count / apps.length) } as CSSProperties} />
     </div>
+  );
+}
+
+/** Download .jar: the app for the desktop (jarLink in then-and-now.tsx), with a note when it presses real keys. */
+export function JarLink({ id, className, children, keysNote }: { id: string; className: string; children: ReactNode; keysNote?: string }) {
+  return (
+    <a className={className} href={root() + 'downloads/' + id + '.jar'} download={id + '.jar'} data-sound="none"
+      title={'The desktop version of this app: run it with java -jar ' + id + '.jar (' + JAR_JAVA + ')' + (JAR_KEYS[id] ? '. ' + JAR_KEYS[id] : '')}>
+      {children}
+      {keysNote && <span className="shim-source-jar-keys">{keysNote}</span>}
+    </a>
   );
 }

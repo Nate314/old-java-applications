@@ -1,14 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createElement, Fragment, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { embedded } from './skin';
 import { news } from './band-news';
 import { replay, replayNow } from './replay';
 import { played } from './passport';
 import { appId, catalog, type CatalogApp } from './catalog';
-import { NO_QUIRKS, closeButton, eraPage, indexOf, isThen, ownKeys, picks, quirkNodes, quirks, sourceDir, sourceJarLink } from './then-and-now';
+import { JAR_KEYS, JAR_KEYS_LABEL, NO_QUIRKS, eraPage, indexOf, isThen, picks, quirkNodes, quirks, sourceDir } from './then-and-now';
 import { openShare } from './share';
 import { Overlay } from './ui/overlay';
-import { openLayer, useOwnKeys } from './ui/layer';
-import { AppCard, PassportLine } from './ui/cards';
+import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { AppCard, JarLink, PassportLine } from './ui/cards';
 import { playSound } from './sounds';
 
 let JAVA_KEYWORDS: string[];
@@ -50,115 +50,104 @@ function javaTokens(text: string) {
   return out;
 }
 
-// One element per line, with its number (tokens that span lines, like block comments, are split).
+/** A source file's lines, each a list of tokens: [class ('' for plain text), text, the file it links to]. */
+type CodeLine = [string, string, string | null][];
+
+// One row per line, with its number (tokens that span lines, like block comments, are split).
 // A class name that is a file of the app links to it.
-function codeLines(text: string, linkFor: (word: string) => string | null) {
-  var code = document.createElement('div');
-  code.className = 'shim-source-code';
-  var row: HTMLSpanElement | null = null;   // the current line's text cell
-  var n = 0;
-  function newLine() {
-    var line = document.createElement('div');
-    line.className = 'l';
-    line.id = 'L' + (++n);
-    var num = document.createElement('span');
-    num.className = 'n';
-    num.textContent = n as unknown as string;
-    row = document.createElement('span');
-    row.className = 't';
-    line.appendChild(num);
-    line.appendChild(row);
-    code.appendChild(line);
-  }
-  newLine();
+function codeLines(text: string, linkFor: (word: string) => string | null): CodeLine[] {
+  const lines: CodeLine[] = [[]];
   javaTokens(text.replace(/\r\n?/g, '\n').replace(/\n$/, '')).forEach(function (t) {
     t[1].split('\n').forEach(function (part, i) {
-      if (i) newLine();
+      if (i) lines.push([]);
       if (!part) return;
-      var target = t[0] === 't' && linkFor(part);
-      if (!t[0]) { row!.appendChild(document.createTextNode(part)); return; }
-      var el = document.createElement(target ? 'a' : 'span') as HTMLAnchorElement;
-      if (target) {
-        el.href = '#source:' + target;
-        el.setAttribute('data-file', target);
-        el.title = 'Open ' + target;
-      }
-      el.className = 'tk-' + t[0];
-      el.textContent = part;
-      row!.appendChild(el);
+      lines[lines.length - 1].push([t[0], part, t[0] === 't' ? linkFor(part) : null]);
     });
   });
-  return { el: code, lines: n };
+  return lines;
 }
+
+function Code({ lines, marked }: { lines: CodeLine[]; marked: number }) {
+  return (
+    <div className="shim-source-code">
+      {lines.map((tokens, i) => (
+        <div key={i} className={'l' + (i + 1 === marked ? ' on' : '')} id={'L' + (i + 1)}>
+          <span className="n">{i + 1}</span>
+          <span className="t">
+            {tokens.map(([cls, part, target], j) => !cls ? part
+              : target ? <a key={j} href={'#source:' + target} data-file={target} title={'Open ' + target} className={'tk-' + cls}>{part}</a>
+              : <span key={j} className={'tk-' + cls}>{part}</span>)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A README taken apart: elements as [tag, attributes, children], text as strings. */
+type MdNode = [string, Record<string, string>, (MdNode | string)[]];
 
 // The app READMEs use headings, paragraphs, two levels of lists, code fences, **bold** and `code`.
 // A `code` span naming one of the app's files opens it.
-function markdown(text: string, files: string[]) {
-  var root = document.createElement('div');
-  root.className = 'shim-source-md';
-  function inline(el: Node, s: string) {
+function markdown(text: string, files: string[]): MdNode {
+  const root: MdNode = ['div', { className: 'shim-source-md' }, []];
+  function inline(el: MdNode, s: string) {
     s.split(/(`[^`]+`|\*\*[^*]+\*\*)/).forEach(function (part) {
       if (!part) return;
-      var node;
       if (part[0] === '`') {
         var path = part.slice(1, -1);
-        var isFile = files.indexOf(path) >= 0;
-        node = document.createElement(isFile ? 'a' : 'code') as HTMLAnchorElement;
-        if (isFile) {
-          node.href = '#source:' + path;
-          node.setAttribute('data-file', path);
-          node.className = 'file';
-        }
-        node.textContent = path;
+        el[2].push(files.indexOf(path) >= 0 ? ['a', { href: '#source:' + path, 'data-file': path, className: 'file' }, [path]] : ['code', {}, [path]]);
       } else if (part.slice(0, 2) === '**') {
-        node = document.createElement('strong');
-        node.textContent = part.slice(2, -2);
+        el[2].push(['strong', {}, [part.slice(2, -2)]]);
       } else {
-        node = document.createTextNode(part);
+        el[2].push(part);
       }
-      el.appendChild(node);
     });
   }
+  const last = (el: MdNode) => el[2][el[2].length - 1] as MdNode;
   var lines = text.replace(/\r\n?/g, '\n').split('\n');
-  var para = null;
-  var lists: HTMLUListElement[] = [];   // the open <ul> elements, one per indent level
+  var para: MdNode | null = null;
+  var lists: MdNode[] = [];   // the open <ul> elements, one per indent level
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
     var m;
     if (/^```/.test(line)) {
-      var pre = document.createElement('pre');
       var body = [];
       while (++i < lines.length && !/^```/.test(lines[i])) body.push(lines[i]);
-      pre.textContent = body.join('\n');
-      root.appendChild(pre);
+      root[2].push(['pre', {}, [body.join('\n')]]);
       para = null; lists = [];
     } else if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) {
-      var h = document.createElement('h' + (m[1].length + 1));
+      var h: MdNode = ['h' + (m[1].length + 1), {}, []];
       inline(h, m[2]);
-      root.appendChild(h);
+      root[2].push(h);
       para = null; lists = [];
     } else if ((m = /^(\s*)- (.*)$/.exec(line))) {
       var depth = Math.min(m[1].length >> 1, lists.length);
       lists.length = Math.min(lists.length, depth + 1);
       if (lists.length === depth) {
-        var ul = document.createElement('ul');
-        (depth ? lists[depth - 1].lastChild! : root).appendChild(ul);
+        var ul: MdNode = ['ul', {}, []];
+        (depth ? last(lists[depth - 1]) : root)[2].push(ul);
         lists.push(ul);
       }
-      var li = document.createElement('li');
+      var li: MdNode = ['li', {}, []];
       inline(li, m[2]);
-      lists[depth].appendChild(li);
+      lists[depth][2].push(li);
       para = null;
     } else if (!line.trim()) {
       para = null; lists = [];
     } else if (lists.length) {
-      inline(lists[lists.length - 1].lastChild!, ' ' + line.trim());
+      inline(last(lists[lists.length - 1]), ' ' + line.trim());
     } else {
-      if (!para) { para = document.createElement('p'); root.appendChild(para); } else para.appendChild(document.createTextNode(' '));
+      if (!para) { para = ['p', {}, []]; root[2].push(para); } else para[2].push(' ');
       inline(para, line);
     }
   }
   return root;
+}
+
+function Markdown({ node }: { node: MdNode }) {
+  const [tag, attrs, children] = node;
+  return createElement(tag, attrs, ...children.map((c, i) => typeof c === 'string' ? c : <Markdown key={i} node={c} />));
 }
 
 function parseSourceHash() {
@@ -174,194 +163,196 @@ export function sourceFromHash() {
 function openSource(file: string | null, line: number) {
   if (sourcePanel) { sourcePanel.show(file as string, line); return; }
   var opener = document.activeElement as HTMLElement | null;
-  var panel = document.createElement('aside');
-  panel.className = 'shim-source';
-  panel.setAttribute('aria-label', 'Source code');
-  var head = document.createElement('div');
-  head.className = 'shim-source-head';
-  var title = document.createElement('div');
-  title.className = 'shim-source-title';
-  var name = document.createElement('strong');
-  name.textContent = document.title;
-  var origin = document.createElement('span');
-  origin.className = 'shim-source-origin';
-  origin.hidden = true;
-  title.appendChild(name);
-  title.appendChild(origin);
-  var raw = document.createElement('a');
-  raw.className = 'shim-source-raw';
-  raw.target = '_blank';
-  raw.rel = 'noopener';
-  raw.textContent = 'Raw';
-  var sub = document.createElement('p');
-  sub.className = 'shim-source-sub';
-  sub.textContent = 'Loading the source…';
-  var body = document.createElement('div');
-  body.className = 'shim-source-body';
-  var nav = document.createElement('nav');
-  nav.className = 'shim-source-files';
-  nav.setAttribute('aria-label', 'Files');
-  var view = document.createElement('div');
-  view.className = 'shim-source-view';
-  view.tabIndex = -1;
-  var path = document.createElement('div');
-  path.className = 'shim-source-path';
-  var page = document.createElement('div');
-  page.className = 'shim-source-page';
-  view.appendChild(path);
-  view.appendChild(page);
-  body.appendChild(nav);
-  body.appendChild(view);
-
   function shut() {
     playSound('close');
-    panel.remove();
+    close();
     document.documentElement.removeAttribute('data-source');
     sourcePanel = null;
     history.replaceState(null, '', location.pathname + location.search);
     if (opener && opener.focus && document.contains(opener)) opener.focus();
   }
-  head.appendChild(title);
-  if (!isThen()) {
-    head.appendChild(sourceJarLink(appId()!));
-  }
-  head.appendChild(raw);
-  head.appendChild(closeButton(shut));
-  panel.appendChild(head);
-  panel.appendChild(sub);
-  panel.appendChild(body);
-  ownKeys(panel, shut);
-  document.body.appendChild(panel);
+  const close = openLayer(<SourcePanel file={file} line={line} onClose={shut} onShow={show => { sourcePanel = { show }; }} />);
   document.documentElement.setAttribute('data-source', '');
   playSound('open');
+}
 
-  var files: string[] = [];
-  var texts: Record<string, Promise<string>> = {};
-  var current: string | null = null;
+/** What the page shows: a README, a Java file, why a file could not load, or nothing yet. */
+type Page = { md: MdNode } | { code: CodeLine[] } | { error: string } | null;
+
+function address(f: string | null, line: number) {
+  history.replaceState(null, '', location.pathname + location.search + '#source:' + f + (line ? ':' + line : ''));
+}
+
+/**
+ * The source panel: the app's README and every source file it was compiled from, with the files down the side
+ * (in folders), the open file highlighted with line numbers, and the line in the address marked.
+ */
+function SourcePanel({ file, line, onClose, onShow }: {
+  file: string | null; line: number; onClose: () => void; onShow: (show: (f: string, line: number) => void) => void;
+}) {
+  const panel = useRef<HTMLElement>(null);
+  const nav = useRef<HTMLElement>(null);
+  const view = useRef<HTMLDivElement>(null);
+  const [app, setApp] = useState<CatalogApp | null>(null);
+  const [files, setFiles] = useState<string[]>([]);
+  const [sub, setSub] = useState('Loading the source…');
+  // The file asked for (its button is marked, Raw opens it), and how many times, so its button is scrolled to each time.
+  const [tab, setTab] = useState<{ f: string; n: number } | null>(null);
+  const [path, setPath] = useState('');
+  const [page, setPage] = useState<Page>(null);
+  const [mark, setMark] = useState({ line: 0, seq: 0, top: false });   // top: the page is new, scroll it to the top first
+  // What show needs between renders: the list, the file loaded (null when it failed) and the files read.
+  const st = useRef({ files: [] as string[], current: null as string | null, texts: {} as Record<string, Promise<string>> }).current;
+  useOwnKeys(panel, onClose);
+
   function text(f: string) {
-    if (!texts[f]) {
-      texts[f] = fetch(sourceDir() + f).then(function (r) {
+    if (!st.texts[f]) {
+      st.texts[f] = fetch(sourceDir() + f).then(function (r) {
         if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
         return r.text();
       });
-      texts[f].catch(function () { delete texts[f]; });
+      st.texts[f].catch(function () { delete st.texts[f]; });
     }
-    return texts[f];
+    return st.texts[f];
   }
   // A class name in a file: the file of that class, preferring one in the same folder.
   function linkFor(from: string) {
     var dir = from.slice(0, from.lastIndexOf('/') + 1);
     return function (word: string) {
       var near = dir + word + '.java';
-      if (files.indexOf(near) >= 0) return near === from ? null : near;
-      for (var i = 0; i < files.length; i++) {
-        if (files[i].slice(files[i].lastIndexOf('/') + 1) === word + '.java') return files[i];
+      if (st.files.indexOf(near) >= 0) return near === from ? null : near;
+      for (var i = 0; i < st.files.length; i++) {
+        if (st.files[i].slice(st.files[i].lastIndexOf('/') + 1) === word + '.java') return st.files[i];
       }
       return null;
     };
   }
-  function mark(line: number) {
-    var old = page.querySelector('.l.on');
-    if (old) old.classList.remove('on');
-    var row = line && page.querySelector('#L' + line);
-    if (row) {
-      row.classList.add('on');
-      row.scrollIntoView({ block: 'center' });
-    }
-  }
-  function address(f: string | null, line: number) {
-    history.replaceState(null, '', location.pathname + location.search + '#source:' + f + (line ? ':' + line : ''));
-  }
+  function markLine(line: number, top = false) { setMark(m => ({ line, seq: m.seq + 1, top })); }
   function show(f: string, line: number) {
-    if (!files.length) return;
-    if (files.indexOf(f) < 0) f = files[0];
-    Array.prototype.forEach.call(nav.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-current', String(b.getAttribute('data-file') === f));
-    });
-    var tab = nav.querySelector<HTMLElement>('button[aria-current="true"]');
-    if (tab) nav.scrollTo({ left: tab.offsetLeft - nav.offsetLeft - 8, top: tab.offsetTop - nav.offsetTop - 40 });
-    raw.href = sourceDir() + f;
+    if (!st.files.length) return;
+    if (st.files.indexOf(f) < 0) f = st.files[0];
+    setTab(t => ({ f, n: (t ? t.n : 0) + 1 }));
     address(f, line);
-    if (current === f) { mark(line); return; }
-    current = f;
-    path.textContent = f;
-    page.textContent = '';
+    if (st.current === f) { markLine(line); return; }
+    st.current = f;
+    setPath(f);
+    setPage(null);
     text(f).then(function (t) {
-      if (current !== f) return;
+      if (st.current !== f) return;
       if (/\.md$/.test(f)) {
-        page.appendChild(markdown(t, files));
+        setPage({ md: markdown(t, st.files) });
       } else {
         var code = codeLines(t, linkFor(f));
-        page.appendChild(code.el);
-        path.textContent = f + ' · ' + code.lines + ' lines';
+        setPage({ code });
+        setPath(f + ' · ' + code.length + ' lines');
       }
-      view.scrollTop = 0;
-      mark(line);
+      markLine(line, true);
     }, function (e) {
-      if (current !== f) return;
-      page.textContent = 'Could not load ' + f + ' (' + e.message + ').';
-      current = null;
+      if (st.current !== f) return;
+      setPage({ error: 'Could not load ' + f + ' (' + e.message + ').' });
+      st.current = null;
     });
   }
-  panel.addEventListener('click', function (e) {
+  useLayoutEffect(() => { onShow(show); }, []);
+
+  useEffect(() => {
+    catalog().then(function (apps) {
+      var app = apps[indexOf(apps, appId())];
+      if (app) setApp(app);
+    });
+    sourceFiles().then(function (list) {
+      st.files = list;
+      setFiles(list);
+      var java = list.filter(function (f) { return /\.java$/.test(f); });
+      Promise.all(java.map(text)).then(function (all) {
+        var count = all.reduce(function (sum, t) { return sum + t.replace(/\r?\n$/, '').split('\n').length; }, 0);
+        setSub(java.length + ' Java file' + (java.length === 1 ? '' : 's') + ', ' + count +
+          ' lines. This is the code running on this page: TeaVM compiled it to JavaScript.');
+      }, function () { setSub('The Java this page was compiled from.'); });
+      show(file as string, line);
+      view.current!.focus({ preventScroll: true });
+    }, function (e) {
+      setSub('Could not load the source list (' + e.message + '). Build the site with Maven (see web/README.md), or go online.');
+    });
+  }, []);
+
+  // The marked file's button in view in the file list.
+  useLayoutEffect(() => {
+    const b = nav.current!.querySelector<HTMLElement>('button[aria-current="true"]');
+    if (b) nav.current!.scrollTo({ left: b.offsetLeft - nav.current!.offsetLeft - 8, top: b.offsetTop - nav.current!.offsetTop - 40 });
+  }, [tab, files]);
+  // A new page starts at the top; the marked line is scrolled to the middle.
+  useLayoutEffect(() => {
+    if (!mark.seq) return;
+    if (mark.top) view.current!.scrollTop = 0;
+    const row = mark.line && view.current!.querySelector('#L' + mark.line);
+    if (row) row.scrollIntoView({ block: 'center' });
+  }, [mark]);
+
+  function onClick(e: ReactMouseEvent) {
     var link = (e.target as Element).closest('[data-file]');
     if (link) {
       if (e.button || e.ctrlKey || e.metaKey || e.shiftKey) return;
       e.preventDefault();
       show(link.getAttribute('data-file')!, 0);
-      if (link.tagName === 'A') view.focus({ preventScroll: true });
+      if (link.tagName === 'A') view.current!.focus({ preventScroll: true });
       return;
     }
     var num = (e.target as Element).closest('.shim-source-code .n');
     if (num) {
-      var n = +num.textContent;
-      mark(n);
-      address(current, n);
+      var n = +num.textContent!;
+      markLine(n);
+      address(st.current, n);
     }
-  });
-  sourcePanel = { show: show };
+  }
 
-  catalog().then(function (apps) {
-    var app = apps[indexOf(apps, appId())];
-    if (!app) return;
-    name.textContent = app.name;
-    var original = app.origin === 'original';
-    origin.textContent = original ? 'Original source' : 'Decompiled';
-    origin.title = original ? 'The author’s own Eclipse source' : 'Recovered by decompiling the app’s jar';
-    origin.classList.add(original ? 'original' : 'decompiled');
-    origin.hidden = false;
-  });
-  sourceFiles().then(function (list) {
-    files = list;
-    var java = files.filter(function (f) { return /\.java$/.test(f); });
-    var dir = '';
-    files.forEach(function (f) {
-      var folder = f.indexOf('/') >= 0 ? f.slice(0, f.lastIndexOf('/')).replace(/^src\/?/, '') : '';
-      if (folder && folder !== dir) {
-        var label = document.createElement('span');
-        label.className = 'dir';
-        label.textContent = folder.replace(/\//g, '.');
-        nav.appendChild(label);
-      }
-      dir = folder;
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute('data-file', f);
-      b.setAttribute('data-sound', 'none');
-      b.title = f;
-      b.textContent = f.slice(f.lastIndexOf('/') + 1);
-      nav.appendChild(b);
-    });
-    Promise.all(java.map(text)).then(function (all) {
-      var count = all.reduce(function (sum, t) { return sum + t.replace(/\r?\n$/, '').split('\n').length; }, 0);
-      sub.textContent = java.length + ' Java file' + (java.length === 1 ? '' : 's') + ', ' + count +
-        ' lines. This is the code running on this page: TeaVM compiled it to JavaScript.';
-    }, function () { sub.textContent = 'The Java this page was compiled from.'; });
-    show(file as string, line);
-    view.focus({ preventScroll: true });
-  }, function (e) {
-    sub.textContent = 'Could not load the source list (' + e.message + '). Build the site with Maven (see web/README.md), or go online.';
-  });
+  const original = app && app.origin === 'original';
+  const id = appId()!;
+  let dir = '';
+  return (
+    <aside className="shim-source" aria-label="Source code" ref={panel} onClick={onClick}>
+      <div className="shim-source-head">
+        <div className="shim-source-title">
+          <strong>{app ? app.name : document.title}</strong>
+          <span className={'shim-source-origin' + (app ? (original ? ' original' : ' decompiled') : '')} hidden={!app}
+            title={app ? (original ? 'The author’s own Eclipse source' : 'Recovered by decompiling the app’s jar') : undefined}>
+            {app ? (original ? 'Original source' : 'Decompiled') : ''}
+          </span>
+        </div>
+        {!isThen() && (
+          <JarLink id={id} className="shim-source-jar" keysNote={JAR_KEYS[id] ? ' (' + (JAR_KEYS_LABEL[id] || 'presses real keys') + ')' : undefined}>
+            Download .jar
+          </JarLink>
+        )}
+        <a className="shim-source-raw" target="_blank" rel="noopener" href={tab ? sourceDir() + tab.f : undefined}>Raw</a>
+        <CloseButton onClick={onClose} />
+      </div>
+      <p className="shim-source-sub">{sub}</p>
+      <div className="shim-source-body">
+        <nav className="shim-source-files" aria-label="Files" ref={nav}>
+          {files.map(f => {
+            const folder = f.indexOf('/') >= 0 ? f.slice(0, f.lastIndexOf('/')).replace(/^src\/?/, '') : '';
+            const label = folder && folder !== dir ? <span className="dir">{folder.replace(/\//g, '.')}</span> : null;
+            dir = folder;
+            return (
+              <Fragment key={f}>
+                {label}
+                <button type="button" data-file={f} data-sound="none" title={f} aria-current={tab ? String(f === tab.f) as 'true' | 'false' : undefined}>
+                  {f.slice(f.lastIndexOf('/') + 1)}
+                </button>
+              </Fragment>
+            );
+          })}
+        </nav>
+        <div className="shim-source-view" tabIndex={-1} ref={view}>
+          <div className="shim-source-path">{path}</div>
+          <div className="shim-source-page">
+            {page && ('md' in page ? <Markdown node={page.md} /> : 'code' in page ? <Code lines={page.code} marked={mark.line} /> : page.error)}
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
 }
 
 // The app's hint from the gallery, on the band's news line (the band's ? button shows it again).

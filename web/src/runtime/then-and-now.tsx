@@ -27,19 +27,8 @@ export const JAR_KEYS: Record<string, string> = {
   DinoGame: 'Its screen mode (java -jar DinoGame.jar screen) presses keys on your computer to play a game in another window.'
 };
 
-// The short form of JAR_KEYS for the Source panel's download link.
-const JAR_KEYS_LABEL: Record<string, string> = { DinoGame: 'screen mode presses real keys' };
-
-export function sourceJarLink(id: string) {
-  var a = jarLink(id, 'shim-source-jar', 'Download .jar');
-  if (JAR_KEYS[id]) {
-    var keys = document.createElement('span');
-    keys.className = 'shim-source-jar-keys';
-    keys.textContent = ' (' + (JAR_KEYS_LABEL[id] || 'presses real keys') + ')';
-    a.appendChild(keys);
-  }
-  return a;
-}
+// The short form of JAR_KEYS for the Source panel's download link (SourcePanel in source-viewer.tsx).
+export const JAR_KEYS_LABEL: Record<string, string> = { DinoGame: 'screen mode presses real keys' };
 
 export function jarLink(id: string, cls: string, text: string) {
   var a = document.createElement('a');
