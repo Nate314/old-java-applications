@@ -1,8 +1,10 @@
-// An app's own page (<App>/index.html): the shell its TeaVM program runs in. It is static HTML, rendered from this
-// component once per app when the site is built (vite/pages.ts), with no React on the page: boot.js (the site's
-// shared runtime) builds the page around the app, and classes.js is the app compiled with TeaVM.
+// An app's own page (<App>/index.html) and, for the apps with a Then version, the page that runs it as first
+// restored (<App>/then.html): the shell its TeaVM program runs in. Each is static HTML, rendered from this file
+// once per app when the site is built (vite/pages.ts), with no React on the page: boot.js (the site's shared
+// runtime) builds the page around the app, and classes.js (then.js) is the app compiled with TeaVM.
 // Keep this file free of CSS imports: the build reads it in Node.
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReactElement } from 'react';
 import type { App } from '../../shared/catalog';
 
 const SITE = 'Old Java Applications';
@@ -65,11 +67,54 @@ function AppHead({ app }: { app: App }) {
   );
 }
 
+/**
+ * The body attributes of an app's Then page (web/then and web/then-nathanos compile its then.js): its program as
+ * first restored needs fewer of them, and two of the apps printed to System.out then (data-console).
+ */
+const THEN_BODY: Record<string, Record<string, string>> = {
+  CircleSpawner: { 'data-own-layout': '' },
+  FlappyBird: BODY.FlappyBird,
+  GroupCreator: { 'data-console': '' },
+  // NathaNOS as first restored: its pictures, the jars on its desktop then, their icons and the files they read.
+  NathaNOS: {
+    'data-files': [
+      'assets/NOS.png assets/NathaNOS.jpg assets/NathaNOS.png assets/background.jpg assets/background.png assets/clock.png assets/cursor.png assets/transparent.png',
+      'assets/Clock.jar assets/CircleSpawner.jar assets/FlappyBird.jar assets/Minesweeper.jar assets/RubiksCube2D.jar assets/ScreenSaver.jar assets/SpriteFloatyStars.jar assets/StockChecker.jar assets/SynthesizerKeyboard.jar assets/UltimateTicTacToe.jar assets/GroupCreator.jar assets/MusicTheoryExpert.jar assets/NumberGuess.jar assets/SimpleAlgorithms.jar assets/TankGame.jar',
+      'assets/Minesweeper.png assets/NumberGuess.png assets/RubiksCube2D.png assets/StockChecker.png assets/SynthesizerKeyboard.png assets/UltimateTicTacToe.png',
+      'bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png myStocks.txt stockCheck.csv',
+    ].join(' '),
+  },
+  SimpleAlgorithms: { 'data-console': '' },
+  StockChecker: BODY.StockChecker,
+  WindowsE: { 'data-shell': '' },
+};
+
+/** The head of an app's Then page. */
+function ThenHead({ app }: { app: App }) {
+  return (
+    <>
+      <meta charSet="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>{app.name + ', as first restored'}</title>
+      <meta name="description" content={app.name + ' as it was first restored in 2026: the recovered Java code with light bug fixes, before the later reworks, playable in the browser.'} />
+      <link rel="stylesheet" href="../shim.css" />
+      <script src="../boot.js" />
+      <script src="then.js" />
+    </>
+  );
+}
+
+function page(head: ReactElement, body: Record<string, string>): string {
+  const attrs = Object.entries(body).map(([name, value]) => ' ' + name + (value ? '="' + value + '"' : '')).join('');
+  return '<!doctype html>\n<html lang="en">\n<head>\n' + renderToStaticMarkup(head) + '\n</head>\n<body' + attrs + '>\n</body>\n</html>\n';
+}
+
 /** The whole document for one app. */
 export function appPage(app: App): string {
-  const body = Object.entries(BODY[app.id] ?? {})
-    .map(([name, value]) => ' ' + name + (value ? '="' + value + '"' : ''))
-    .join('');
-  return '<!doctype html>\n<html lang="en">\n<head>\n' + renderToStaticMarkup(<AppHead app={app} />) +
-    '\n</head>\n<body data-app="' + app.id + '"' + body + '>\n</body>\n</html>\n';
+  return page(<AppHead app={app} />, { 'data-app': app.id, ...BODY[app.id] });
+}
+
+/** The whole document for an app's Then page. */
+export function thenPage(app: App): string {
+  return page(<ThenHead app={app} />, { 'data-app': app.id, 'data-then': '', ...THEN_BODY[app.id] });
 }

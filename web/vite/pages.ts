@@ -4,8 +4,8 @@
 //    and bundles its module, as for a hand-written index.html.
 //  - The page served at any depth (404.html) is written after bundling, with its styles inlined and an inline
 //    loader that imports its module from the site root it finds (src/pages/notfound/loader.ts).
-//  - Each app's own page (<App>/index.html, src/pages/app/AppPage.tsx) is static HTML with no React on it, written
-//    from apps.json after bundling.
+//  - Each app's own page (<App>/index.html, src/pages/app/AppPage.tsx), and its Then page (<App>/then.html) if it
+//    has one, is static HTML with no React on it, written from apps.json after bundling.
 // It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages,
 // assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline, and the
 // plain scripts at the site root (SCRIPTS): the site's runtime (src/runtime) as boot.js, loaded in the head of the
@@ -19,7 +19,7 @@ import type { Plugin } from 'vite';
 import type { OutputBundle, OutputChunk } from 'rollup';
 import { ROUTES, type Route } from '../src/routes';
 import { loaderScript } from '../src/pages/notfound/loader';
-import { appPage } from '../src/pages/app/AppPage';
+import { appPage, thenPage } from '../src/pages/app/AppPage';
 import { APPS } from '../src/shared/catalog';
 
 const root = resolve(__dirname, '..');
@@ -87,6 +87,7 @@ export function pages(): Plugin {
     async generateBundle(_options, bundle) {
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
       for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: appPage(app) });
+      for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: thenPage(app) });
       for (const [fileName, entry] of Object.entries(SCRIPTS)) this.emitFile({ type: 'asset', fileName, source: await script(entry) });
       const files = Object.keys(bundle).filter(name => name.startsWith('assets/')).sort();
       this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files) + '\n' });
