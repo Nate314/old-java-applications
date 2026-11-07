@@ -6,6 +6,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import type { App } from '../../shared/catalog';
+import { EarlyScript, RuntimeScript } from '../../shared/EarlyScript';
 
 const SITE = 'Old Java Applications';
 
@@ -61,8 +62,10 @@ function AppHead({ app }: { app: App }) {
       <meta property="og:image:alt" content={app.name + ', running in the browser'} />
       <meta name="twitter:card" content="summary_large_image" />
       <link rel="stylesheet" href="../shim.css" />
-      <script src="../boot.js" />
-      <script src="classes.js" />
+      <EarlyScript />
+      <RuntimeScript src="../assets/boot.js" />
+      {/* Deferred, so it runs after the runtime module: TeaVM reads $rt_putStdoutCustom as it loads. */}
+      <script defer src="classes.js" />
     </>
   );
 }
@@ -98,8 +101,9 @@ function ThenHead({ app }: { app: App }) {
       <title>{app.name + ', as first restored'}</title>
       <meta name="description" content={app.name + ' as it was first restored in 2026: the recovered Java code with light bug fixes, before the later reworks, playable in the browser.'} />
       <link rel="stylesheet" href="../shim.css" />
-      <script src="../boot.js" />
-      <script src="then.js" />
+      <EarlyScript />
+      <RuntimeScript src="../assets/boot.js" />
+      <script defer src="then.js" />
     </>
   );
 }

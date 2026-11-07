@@ -2,15 +2,12 @@ import { playSound } from './sounds';
 
 let skin: string;
 let ownStyle: HTMLStyleElement;
-let sharedSkin: string | undefined;
 export let skinOffer: { code: string; skin: string; shared: string } | null;
 export let embedded: boolean;
 export let clipMode: boolean;
 
 // A "Your skin" code taken apart (ownParse).
 export interface OwnSkin { dark: boolean; color: string; desk: string; corners: number; chrome: string }
-
-'use strict';
 
 const SKIN_KEY = 'oldjava.skin';
 
@@ -152,18 +149,52 @@ export function setSkin(value: string) {
   playSound('skin');   // in the new skin's voice
 }
 
-export function init() {
-  SKINS.push(['own', 'Yours']);   // the visitor's own skin, made in skinmaker.js (see "Your skin" below)
-  skin = 'modern';
+/** What the head script (early.ts) decided before first paint, for init. */
+interface SkinStart { skin: string; style: HTMLStyleElement; offer: typeof skinOffer }
+
+declare global {
+  interface Window { __oldjavaSkinStart?: SkinStart }
+}
+
+// Before first paint, from the head script (src/runtime/early.ts, inlined in the page): the skin on <html>, Your
+// skin's <style>, a shared skin (?skin=) put on, and the attributes the stage's CSS needs from the address
+// (data-embed, data-shot, data-saver). The runtime itself is a module, run once the page is parsed.
+export function paintSkin(): SkinStart {
+  var html = document.documentElement;
+  var skin = 'modern';
   try {
     skin = localStorage.getItem(SKIN_KEY) || 'modern';
   } catch (e) { /* storage blocked: use the default */ }
-  if (!isSkin(skin)) skin = 'modern';
-  document.documentElement.setAttribute('data-skin', skin);
-  ownStyle = document.createElement('style');
-  ownStyle.id = 'oldjava-own-skin';
-  showOwn(ownSaved());
-  document.head.appendChild(ownStyle);
+  if (!isSkin(skin) && skin !== 'own') skin = 'modern';
+  html.setAttribute('data-skin', skin);
+  var style = document.createElement('style');
+  style.id = 'oldjava-own-skin';
+  style.textContent = ownCss(ownParse(ownSaved()) || ownParse(OWN_DEFAULT)!);
+  document.head.appendChild(style);
+  var shared = (/[?&]skin=([^&#]*)/.exec(location.search) || [])[1];
+  var offer: typeof skinOffer = null;   // what a shared skin replaced: { code, skin }, for skinmaker.js's Undo
+  if (shared && ownParse(shared) && !/[?&]embed(=|&|$)/.test(location.search) &&
+      !(skin === 'own' && shared.toLowerCase() === ownSaved())) {
+    offer = { code: ownSaved(), skin: skin, shared: shared.toLowerCase() };
+    style.textContent = ownCss(ownParse(offer.shared)!);
+    try { localStorage.setItem(OWN_KEY, offer.shared); } catch (e) { /* this page only */ }
+    skin = 'own';
+    html.setAttribute('data-skin', 'own');
+    try { localStorage.setItem(SKIN_KEY, 'own'); } catch (e) { /* this page only */ }
+  }
+  var embed = /[?&]embed(=|&|$)/.test(location.search);
+  if (embed) html.setAttribute('data-embed', '');
+  if (embed && /[?&]shot(=|&|$)/.test(location.search)) html.setAttribute('data-shot', '');
+  if (embed && /[?&]saver(=|&|$)/.test(location.search)) html.setAttribute('data-saver', '');
+  return window.__oldjavaSkinStart = { skin: skin, style: style, offer: offer };
+}
+
+export function init() {
+  SKINS.push(['own', 'Yours']);   // the visitor's own skin, made in skinmaker.js (see "Your skin" below)
+  var start = window.__oldjavaSkinStart || paintSkin();
+  skin = start.skin;
+  ownStyle = start.style;
+  skinOffer = start.offer;
   window.addEventListener('storage', function (e) { if (e.key === OWN_KEY && ownParse(e.newValue)) showOwn(e.newValue!); });
   // Keys pressed in the maker panel are its own: this listener comes before the app's and the title screen's
   // (they are added later), so they never see them. Escape closes the panel.
@@ -174,23 +205,11 @@ export function init() {
       if (type === 'keydown' && (e as KeyboardEvent).key === 'Escape' && window.oldjavaSkinMaker) window.oldjavaSkinMaker.close();
     }, true);
   });
-  sharedSkin = (/[?&]skin=([^&#]*)/.exec(location.search) || [])[1];
-  skinOffer = null;   // what a shared skin replaced: { code, skin }, for skinmaker.js's Undo
-  if (sharedSkin && ownParse(sharedSkin) && !/[?&]embed(=|&|$)/.test(location.search) &&
-      !(skin === 'own' && sharedSkin.toLowerCase() === ownSaved())) {
-    skinOffer = { code: ownSaved(), skin: skin, shared: sharedSkin.toLowerCase() };
-    wearOwn(skinOffer.shared);
-    skin = 'own';
-    document.documentElement.setAttribute('data-skin', 'own');
-    try { localStorage.setItem(SKIN_KEY, 'own'); } catch (e) { /* this page only */ }
-  }
   // Fires in every other same-origin page, including the player iframe on the home page.
   window.addEventListener('storage', function (e) {
     if (e.key === SKIN_KEY && isSkin(e.newValue)) showSkin(e.newValue!);
   });
   embedded = /[?&]embed(=|&|$)/.test(location.search);
-  if (embedded) document.documentElement.setAttribute('data-embed', '');
-  if (embedded && /[?&]shot(=|&|$)/.test(location.search)) document.documentElement.setAttribute('data-shot', '');
   // ?embed&clip is the preview mode web/clips.ps1 records the gallery's moving thumbnails in: the instant replay
   // recorder (startReplay) makes small, silent, fixed-size clips (CLIP_SIZE) that fill a gallery thumbnail.
   clipMode = embedded && /[?&]clip(=|&|$)/.test(location.search);

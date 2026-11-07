@@ -161,7 +161,7 @@ function welcomeBack() {
 }
 
 export function init() {
-  if (embedded && /[?&]saver(=|&|$)/.test(location.search)) document.documentElement.setAttribute('data-saver', '');
+  // data-saver (?embed&saver) is set before first paint, with the skin (paintSkin in skin.ts).
   saver = null;   // a top page's saver (window.oldjavaSaver); embedded pages hand their input to the parent's
   ['keydown', 'keyup', 'pointerdown', 'pointerup', 'pointercancel', 'pointermove', 'wheel'].forEach(function (type) {
     window.addEventListener(type, function (e) {

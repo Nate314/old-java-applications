@@ -157,7 +157,7 @@ export function toolbar(isApp: boolean) {
 export function init() {
   // ---- installable and offline: the web app manifest, icons and the service worker (sw.js) ----
   // Every page links them, so the arcade can be installed from any page and every page can be kept offline.
-  siteRoot = new URL('.', (document.currentScript as HTMLScriptElement).src).href;
+  siteRoot = new URL(/* @vite-ignore */ '..', import.meta.url).href;   // this module is assets/boot.js
   headLink('manifest', 'manifest.webmanifest');
   headLink('icon', 'icons/icon.svg', 'image/svg+xml');
   headLink('apple-touch-icon', 'icons/apple-touch-icon.png');

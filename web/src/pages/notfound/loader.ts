@@ -1,5 +1,5 @@
 // The lost page is served at the missing address, at any depth, so it has no relative links: this inline script
-// finds the site's root (the nearest folder above the address that has boot.js, asked with HEAD requests in
+// finds the site's root (the nearest folder above the address that has assets/boot.js, asked with HEAD requests in
 // parallel) and imports the page's module from there. The page's styles are inlined in 404.html by the build.
 export function loaderScript(entry: string): string {
   return `(function () {
@@ -9,7 +9,7 @@ export function loaderScript(entry: string): string {
   var dirs = [];
   for (var n = parts.length; n >= 1; n--) dirs.push(parts.slice(0, n).join('/') + '/');
   Promise.all(dirs.map(function (dir) {
-    return fetch(dir + 'boot.js', { method: 'HEAD', cache: 'no-store' })
+    return fetch(dir + 'assets/boot.js', { method: 'HEAD', cache: 'no-store' })
       .then(function (r) { return r.ok && /javascript/.test(r.headers.get('content-type') || 'javascript'); })
       .catch(function () { return false; });
   })).then(function (found) {
