@@ -264,7 +264,7 @@ export function initPlayer(): void {
   // the player's iframe; real key presses there come back to light its buttons. Shown unless turned off.
   const padBox = byId('player-pad');
   const padToggle = byId('player-pad-toggle');
-  let padLight: ((which: string, down: boolean) => void) | null = null;
+  let padLight: ((which: number, down: boolean) => void) | null = null;
   function showPad(app: string) {
     const pad = window.oldjavaPad;
     const has = pad.has(app);

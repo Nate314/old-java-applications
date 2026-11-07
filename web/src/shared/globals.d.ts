@@ -1,8 +1,9 @@
-// What boot.js (loaded before the pages, as a classic script) puts on window, as the pages use it.
-// The shapes follow boot.js; it stays plain JavaScript, shared with the 20 app pages.
+// What the site's runtime (src/runtime, built as boot.js and loaded before the pages as a classic script) puts on
+// window. Each API is a named interface, so the runtime module that builds it can add what only it uses
+// (declare global { interface OldjavaSkin { ... } }).
 
 /** An app in boot.js's catalog (read from apps.json). */
-interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: string; then: boolean; shot: string }
+interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: string; then: boolean; shot: string; origin: string }
 
 interface OldjavaPassport {
   has(id: string): boolean;
@@ -32,10 +33,13 @@ interface OldjavaReplay {
   take(): Promise<OldjavaClip | null>;
 }
 
+/** A photo booth print: the picture, its app and when it was taken. */
+interface OldjavaPhotoPrint { blob: Blob; app: string; at: number }
+
 interface OldjavaPhoto {
   can(): boolean;
-  take(): Promise<unknown>;
-  snap(take: () => Promise<unknown>, flashOn: Element, opener: Element): void;
+  take(): Promise<OldjavaPhotoPrint | null>;
+  snap(take: () => Promise<OldjavaPhotoPrint | null>, flashOn: Element | null, opener: HTMLElement | null): void;
 }
 
 interface OldjavaInstallPrompt { prompt(): void; userChoice: Promise<unknown> }
@@ -44,28 +48,38 @@ interface DocumentPictureInPicture {
   requestWindow(options: { width: number; height: number }): Promise<Window>;
 }
 
+interface OldjavaSound { play(name: string): void }
+interface OldjavaWatch { has(id: string): boolean }
+interface OldjavaThen { quirks(id: string): Promise<unknown[]>; nodes(item: unknown): Node[] }
+interface OldjavaPad {
+  has(id: string): boolean;
+  wanted(byDefault: boolean): boolean;
+  remember(on: boolean): void;
+  /** Builds the app's controller in el; returns the function that lights a button. */
+  render(el: HTMLElement, id: string, send: (type: string, key: string) => void): (which: number, down: boolean) => void;
+}
+interface OldjavaShare { open(id: string | null, opener: Element): void }
+interface OldjavaZoom { fit(): boolean; set(on: boolean): void; onChange(fn: () => void): void }
+interface OldjavaSkin { get(): string; set(skin: string): void }
+interface OldjavaSaver { showing(): boolean }
+/** The line an app's Records entry shows for its saved files ('' when it has none of its own). */
+interface OldjavaRecords { line(store: string, files: Record<string, string>): string }
+
 interface Window {
-  oldjavaSound: { play(name: string): void };
-  oldjavaWatch: { has(id: string): boolean };
-  oldjavaThen: { quirks(id: string): Promise<unknown[]>; nodes(item: unknown): Node[] };
-  oldjavaPad: {
-    has(id: string): boolean;
-    wanted(byDefault: boolean): boolean;
-    remember(on: boolean): void;
-    /** Builds the app's controller in el; returns the function that lights a button. */
-    render(el: HTMLElement, id: string, send: (type: string, key: string) => void): (which: string, down: boolean) => void;
-  };
-  oldjavaShare: { open(id: string | null, opener: Element): void };
+  oldjavaSound: OldjavaSound;
+  oldjavaWatch: OldjavaWatch;
+  oldjavaThen: OldjavaThen;
+  oldjavaPad: OldjavaPad;
+  oldjavaShare: OldjavaShare;
   oldjavaReplay: OldjavaReplay;
   oldjavaPhoto: OldjavaPhoto;
   oldjavaPassport: OldjavaPassport;
-  oldjavaZoom: { fit(): boolean; set(on: boolean): void; onChange(fn: () => void): void };
-  oldjavaSkin: { get(): string; set(skin: string): void };
-  oldjavaSaver?: { showing(): boolean };
+  oldjavaZoom: OldjavaZoom;
+  oldjavaSkin: OldjavaSkin;
+  oldjavaSaver?: OldjavaSaver;
   oldjavaInstall: OldjavaInstallPrompt | null | undefined;
   oldjavaPop?: OldjavaPop;
-  /** The line an app's Records entry shows for its saved files ('' when it has none of its own). */
-  oldjavaRecords: { line(store: string, files: Record<string, string>): string };
+  oldjavaRecords: OldjavaRecords;
   // Set by the home page for boot.js, find.js and Records.tsx.
   oldjavaTour: { start(): void; on(): boolean };
   oldjavaArcade: { show(id: string): void };

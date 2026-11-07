@@ -8,11 +8,13 @@
 //    from apps.json after bundling.
 // It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages,
 // assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline, and the
-// service worker (src/sw/sw.ts) as sw.js at the site root, a plain script as service workers are.
+// plain scripts at the site root (SCRIPTS): the site's runtime (src/runtime) as boot.js, loaded in the head of the
+// home page and every app page before anything else, and the service worker (src/sw/sw.ts) as sw.js.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { transformWithEsbuild, type Plugin } from 'vite';
+import { build } from 'esbuild';
+import type { Plugin } from 'vite';
 import type { OutputBundle, OutputChunk } from 'rollup';
 import { ROUTES, type Route } from '../src/routes';
 import { loaderScript } from '../src/pages/notfound/loader';
@@ -20,6 +22,17 @@ import { appPage } from '../src/pages/app/AppPage';
 import { APPS } from '../src/shared/catalog';
 
 const root = resolve(__dirname, '..');
+
+/** Classic scripts written at the site root, each bundled from its TypeScript entry into one file. */
+const SCRIPTS: Record<string, string> = {
+  'boot.js': 'src/runtime/main.ts',
+  'sw.js': 'src/sw/sw.ts',
+};
+
+async function script(entry: string): Promise<string> {
+  const out = await build({ entryPoints: [resolve(root, entry)], bundle: true, format: 'iife', target: 'es2020', write: false, logLevel: 'error' });
+  return out.outputFiles[0].text;
+}
 const htmlId = (r: Route) => resolve(root, r.file);
 const inputName = (r: Route) => r.file.replace(/\.html$/, '').replace(/^404$/, 'notfound');
 
@@ -67,9 +80,7 @@ export function pages(): Plugin {
     async generateBundle(_options, bundle) {
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
       for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: appPage(app) });
-      const swFile = resolve(root, 'src/sw/sw.ts');
-      const sw = await transformWithEsbuild(readFileSync(swFile, 'utf8'), swFile, { format: 'iife', target: 'es2020' });
-      this.emitFile({ type: 'asset', fileName: 'sw.js', source: sw.code });
+      for (const [fileName, entry] of Object.entries(SCRIPTS)) this.emitFile({ type: 'asset', fileName, source: await script(entry) });
       const files = Object.keys(bundle).filter(name => name.startsWith('assets/')).sort();
       this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files) + '\n' });
       for (const r of ROUTES.filter(x => x.anyDepth)) {
