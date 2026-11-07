@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "mvn -q -f pom.xml clean package",
-    "build:pages": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit"
+    "build:pages": "tsc --noEmit && tsc --noEmit -p src/sw && vite build",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/sw"
   },
   "dependencies": {
     "react": "^19.2.0",

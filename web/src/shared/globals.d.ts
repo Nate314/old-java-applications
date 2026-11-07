@@ -6,6 +6,7 @@ interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: strin
 
 interface OldjavaPassport {
   has(id: string): boolean;
+  reload(): void;
   reset(): void;
   onChange(fn: (fresh: string | null) => void): void;
   open: ((id: string) => void) | null;
@@ -63,7 +64,9 @@ interface Window {
   oldjavaSaver?: { showing(): boolean };
   oldjavaInstall: OldjavaInstallPrompt | null | undefined;
   oldjavaPop?: OldjavaPop;
-  // Set by the home page for boot.js, find.js and saves.js.
+  /** The line an app's Records entry shows for its saved files ('' when it has none of its own). */
+  oldjavaRecords: { line(store: string, files: Record<string, string>): string };
+  // Set by the home page for boot.js, find.js and Records.tsx.
   oldjavaTour: { start(): void; on(): boolean };
   oldjavaArcade: { show(id: string): void };
 }

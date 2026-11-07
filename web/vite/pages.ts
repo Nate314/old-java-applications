@@ -6,12 +6,13 @@
 //    loader that imports its module from the site root it finds (src/pages/notfound/loader.ts).
 //  - Each app's own page (<App>/index.html, src/pages/app/AppPage.tsx) is static HTML with no React on it, written
 //    from apps.json after bundling.
-// It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages, and
-// assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline.
+// It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages,
+// assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline, and the
+// service worker (src/sw/sw.ts) as sw.js at the site root, a plain script as service workers are.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { Plugin } from 'vite';
+import { transformWithEsbuild, type Plugin } from 'vite';
 import type { OutputBundle, OutputChunk } from 'rollup';
 import { ROUTES, type Route } from '../src/routes';
 import { loaderScript } from '../src/pages/notfound/loader';
@@ -63,9 +64,12 @@ export function pages(): Plugin {
       const after = (r.after ?? []).map(src => '<script defer src="' + src + '"></script>\n').join('');
       return document(r, '<script type="module" src="/' + r.entry + '"></script>\n' + after);
     },
-    generateBundle(_options, bundle) {
+    async generateBundle(_options, bundle) {
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
       for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: appPage(app) });
+      const swFile = resolve(root, 'src/sw/sw.ts');
+      const sw = await transformWithEsbuild(readFileSync(swFile, 'utf8'), swFile, { format: 'iife', target: 'es2020' });
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: sw.code });
       const files = Object.keys(bundle).filter(name => name.startsWith('assets/')).sort();
       this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files) + '\n' });
       for (const r of ROUTES.filter(x => x.anyDepth)) {

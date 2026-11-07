@@ -4131,7 +4131,7 @@
     return recordOf(id, saves);
   }
   // The record line for an app's saved files ({ path: contents }), wherever they came from: this browser's store, or
-  // saves brought from another device (the home page's Your records, saves.js).
+  // saves brought from another device (the home page's Your records, src/pages/home/Records.tsx).
   function recordOf(id, saves) {
     var paths = Object.keys(saves || {});
     var rule = RECORDS[id];

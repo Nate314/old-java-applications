@@ -1,5 +1,5 @@
 // ---- your arcade: one panel, four tabs ----
-// What's new (news.js), the passport, your records (saves.js) and Take it with you each keep their own code and
+// What's new (news.js), the passport, your records (Records.tsx) and Take it with you each keep their own code and
 // still show or hide themselves with `hidden`; this only picks which one is on view (the others get .off), names
 // each tab's news in a badge, and follows the ARIA tabs pattern (arrows, Home and End move between tabs).
 // The tab chosen last is remembered; fresh news (an app you played has changed) takes the panel once per visit.
@@ -86,6 +86,6 @@ export function initArcadeTabs(): void {
   });
   sync();
 
-  // For code that sends the visitor to a panel (saves.js, with saves from a link).
+  // For code that sends the visitor to a panel (Records.tsx, with saves from a link).
   window.oldjavaArcade = { show: id => { const t = tabFor(id); if (t && !t.hidden) select(t, false); } };
 }

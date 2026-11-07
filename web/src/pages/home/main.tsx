@@ -5,7 +5,7 @@ import { initTakeaway } from './takeaway';
 import { initClips } from './clips';
 import { initArcadeTabs } from './tabs';
 
-// In the order the page's scripts ran when it was static HTML; qr.js, saves.js and news.js follow (deferred).
+// In the order the page's scripts ran when it was static HTML; news.js follows (deferred).
 mount(<Home />);
 initPlayer();
 initTakeaway();

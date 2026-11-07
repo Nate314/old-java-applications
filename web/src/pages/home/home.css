@@ -215,7 +215,7 @@ ul.apps li.updated a.thumb::after { content: "Updated"; position: absolute; top:
 :root[data-skin="arcade"] .news-list li.updated { border-color: #ffe14d; }
 :root[data-skin="arcade"] .news-list .tag, :root[data-skin="arcade"] ul.apps li.updated a.thumb::after { background: #ffe14d; }
 
-/* ---- your records: what the apps saved here, and taking it to another browser or the desktop (saves.js) ---- */
+/* ---- your records: what the apps saved here, and taking it to another browser or the desktop (Records.tsx) ---- */
 .records { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
            background: var(--card-bg); }
 .records-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }

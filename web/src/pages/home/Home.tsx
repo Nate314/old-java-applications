@@ -3,6 +3,7 @@
 import './home.css';
 import { APPS, app } from '../../shared/catalog';
 import { TOUR } from './tour';
+import { Records } from './Records';
 
 // The app the player opens on when the address names none, with the computer playing.
 const FIRST = app('Minesweeper');
@@ -230,47 +231,7 @@ export function Home() {
           <Stamps />
         </section>
         <section className="records" id="records" role="tabpanel" aria-labelledby="tab-records">
-          <div className="records-head">
-            <div className="text">
-              <h2 id="records-title">Your records</h2>
-              <p>
-                <span className="count" id="records-count">Nothing saved yet</span>
-                . Best times, scores, stars and progress the apps saved in this browser. Take them to your phone, another browser or the desktop apps.
-              </p>
-            </div>
-            <div className="actions">
-              <button className="btn primary" type="button" id="records-send" aria-expanded="false" aria-controls="records-phone">
-                Send to my phone
-              </button>
-              {' '}
-              <button className="btn" type="button" id="records-download">Download</button>
-              {' '}
-              <button className="btn" type="button" id="records-load">Load</button>
-              {' '}
-              <input type="file" id="records-file" accept=".json,application/json" hidden />
-            </div>
-          </div>
-          <p className="status" id="records-status" role="status" hidden />
-          <div className="phone" id="records-phone" hidden>
-            <div className="qr" id="records-qr" role="img" aria-label="QR code of the link that carries your saves" />
-            <div className="text">
-              <p id="records-qr-text" />
-              <div className="linkrow">
-                <input type="text" id="records-link" readOnly aria-label="Link that carries your saves" />
-                {' '}
-                <button className="btn" type="button" id="records-copy" data-sound="none">Copy link</button>
-              </div>
-            </div>
-          </div>
-          <p className="empty" id="records-empty">
-            Play an app and what it keeps (Minesweeper's best times, your FlappyBird best, Rubik's Cube stars) shows up here.
-          </p>
-          <ul className="record-list" id="records-list" />
-          <p className="desktop">
-            {"On the desktop: "}
-            <code>./run.ps1</code>
-            {" opens the launcher, whose Saves button loads a downloaded file into the desktop apps, or saves theirs as a file to Load here."}
-          </p>
+          <Records />
         </section>
         <section className="takeaway" id="takeaway" role="tabpanel" aria-labelledby="tab-takeaway" hidden>
           <div className="takeaway-head">
@@ -290,19 +251,6 @@ export function Home() {
           <p className="note" id="takeaway-note" hidden>To install, use Install app or Add to Home Screen in your browser's menu.</p>
         </section>
       </section>
-      <dialog className="records-in" id="records-in" aria-labelledby="records-in-title">
-        <form id="records-in-form" method="dialog">
-          <h2 id="records-in-title">Bring your saves here?</h2>
-          <p id="records-in-text" />
-          <ul id="records-in-list" />
-          <p id="records-in-stamps" hidden />
-          <div className="buttons">
-            <button className="btn" type="button" id="records-in-cancel">Not now</button>
-            {' '}
-            <button className="btn primary" type="submit">Bring them in</button>
-          </div>
-        </form>
-      </dialog>
       <h2>Play in the browser</h2>
       <div className="filters" role="group" aria-label="Filter apps">
         <button type="button" data-filter="all" aria-pressed="true">All</button>

@@ -23,7 +23,7 @@ export function one<T extends Element = HTMLElement>(selector: string, root: Par
 
 /**
  * Renders the page into #root at once, not on a later frame: the page's own code and the classic scripts after it
- * (boot.js on DOMContentLoaded, saves.js, news.js) find the markup in place, as they did when it was static HTML.
+ * (boot.js on DOMContentLoaded, news.js) find the markup in place, as they did when it was static HTML.
  * The pages keep no React state after this, so nothing re-renders over what that code changes.
  */
 export function mount(page: ReactNode): void {
