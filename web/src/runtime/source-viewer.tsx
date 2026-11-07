@@ -1,11 +1,14 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { embedded } from './skin';
 import { news } from './band-news';
 import { replay, replayNow } from './replay';
 import { played } from './passport';
-import { appId, catalog } from './catalog';
-import { NO_QUIRKS, appCard, closeButton, eraPage, indexOf, isThen, ownKeys, passportLine, picks, quirkNodes, quirks, sourceDir, sourceJarLink } from './then-and-now';
+import { appId, catalog, type CatalogApp } from './catalog';
+import { NO_QUIRKS, closeButton, eraPage, indexOf, isThen, ownKeys, picks, quirkNodes, quirks, sourceDir, sourceJarLink } from './then-and-now';
 import { openShare } from './share';
-import { overlay } from './title-screen';
+import { Overlay } from './ui/overlay';
+import { openLayer, useOwnKeys } from './ui/layer';
+import { AppCard, PassportLine } from './ui/cards';
 import { playSound } from './sounds';
 
 let JAVA_KEYWORDS: string[];
@@ -385,60 +388,40 @@ export function howToPlay() {
 // The app called System.exit (for most apps: its window was closed). Offer it again, and three others.
 export function exitScreen(msg: string) {
   if (news && news.kind() === 'hint') news.clear();
-  var box = overlay(msg, 'Run again').firstChild as HTMLElement;
-  box.classList.add('shim-exit');
-  ownKeys(box);
+  openLayer(<ExitScreen msg={msg} replayLive={!!(replay && replay.live())} />);
   playSound('exit');
-  if (!embedded) {
-    var home = document.createElement('a');
-    home.className = 'shim-exit-home';
-    home.href = '../index.html';
-    home.textContent = 'All apps';
-    box.appendChild(home);
-  }
-  var tell = document.createElement('button');
-  tell.type = 'button';
-  tell.className = 'shim-exit-share';
-  tell.setAttribute('data-sound', 'none');
-  tell.textContent = '↗ Share';
-  tell.addEventListener('click', function () { openShare(appId(), tell); });
-  box.appendChild(tell);
-  if (replay && replay.live()) {   // the last moments before it closed
-    var again = document.createElement('button');
-    again.type = 'button';
-    again.className = 'shim-exit-share';
-    again.setAttribute('data-sound', 'none');
-    again.textContent = '⟲ Replay';
-    again.title = 'Watch, save or share the last moments of play';
-    again.addEventListener('click', function () { replayNow(again); });
-    box.appendChild(again);
-  }
-  box.querySelector('button')!.focus();
-  catalog().then(function (apps) {
-    var app = apps[indexOf(apps, appId())];
-    if (app) {
-      var h = document.createElement('h2');
-      h.textContent = app.name + ' has closed';
-      box.insertBefore(h, box.firstChild);
-      if (app.then && !embedded) {   // the player has its own Then | Now switch
-        var era = document.createElement('a');
-        era.className = 'shim-exit-era';
-        era.href = eraPage(!isThen());
-        era.textContent = isThen() ? 'Play today’s version' : 'Play it as first restored';
-        box.insertBefore(era, tell.nextSibling);
-      }
-    }
-    var next = picks(apps, appId());
-    if (!next.length) return;
-    var h3 = document.createElement('h3');
-    h3.textContent = played[next[0].id] ? 'Play something else' : 'Play something new';
-    var row = document.createElement('div');
-    row.className = 'shim-picks';
-    next.forEach(function (a) { row.appendChild(appCard(a, false, true)); });
-    box.appendChild(h3);
-    box.appendChild(row);
-    box.appendChild(passportLine(apps));
-  });
+}
+
+function ExitScreen({ msg, replayLive }: { msg: string; replayLive: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
+  const share = useRef<HTMLButtonElement>(null);
+  const again = useRef<HTMLButtonElement>(null);
+  const [found, setFound] = useState<{ apps: CatalogApp[]; next: CatalogApp[] } | null>(null);
+  useOwnKeys(box);
+  useLayoutEffect(() => { box.current!.querySelector('button')!.focus(); }, []);
+  useEffect(() => { catalog().then(apps => setFound({ apps, next: picks(apps, appId()) })); }, []);
+  const app = found ? found.apps[indexOf(found.apps, appId())] : null;
+  const next = found ? found.next : [];
+  return (
+    <Overlay text={msg} button="Run again" className="shim-exit" boxRef={box} before={app && <h2>{app.name + ' has closed'}</h2>}>
+      {!embedded && <a className="shim-exit-home" href="../index.html">All apps</a>}
+      <button type="button" className="shim-exit-share" data-sound="none" ref={share} onClick={() => openShare(appId(), share.current)}>{'↗ Share'}</button>
+      {app && app.then && !embedded && (   // the player has its own Then | Now switch
+        <a className="shim-exit-era" href={eraPage(!isThen())}>{isThen() ? 'Play today’s version' : 'Play it as first restored'}</a>
+      )}
+      {replayLive && (   // the last moments before it closed
+        <button type="button" className="shim-exit-share" data-sound="none" title="Watch, save or share the last moments of play"
+          ref={again} onClick={() => replayNow(again.current)}>{'⟲ Replay'}</button>
+      )}
+      {next.length > 0 && (
+        <>
+          <h3>{played[next[0].id] ? 'Play something else' : 'Play something new'}</h3>
+          <div className="shim-picks">{next.map(a => <AppCard key={a.id} app={a} showNew />)}</div>
+          <PassportLine apps={found!.apps} />
+        </>
+      )}
+    </Overlay>
+  );
 }
 
 export function init() {

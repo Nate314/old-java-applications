@@ -5,7 +5,7 @@ import { appId, catalog, type CatalogApp } from './catalog';
 import { JAR_JAVA, JAR_KEYS, NO_QUIRKS, eraPage, indexOf, isThen, jarLink, programFile, quirkNodes, quirks, saveStore } from './then-and-now';
 import { INVITE, SHARED } from './share';
 import { sourcePanel } from './source-viewer';
-import { AGAIN_KEY, CATS, newsScript, savedRecord, size } from './records';
+import { CATS, newsScript, savedRecord, size } from './records';
 
 export function titleScreen(files: string[]) {
   var html = document.documentElement;
@@ -248,29 +248,6 @@ export function titleScreen(files: string[]) {
     // Straight on, as if Play were pressed (now, or once the files are in).
     skip: function () { if (started) go(); else skipping = true; }
   };
-}
-
-export function overlay(text: string, button?: string) {
-  var o = document.createElement('div');
-  o.className = 'shim-overlay';
-  var box = document.createElement('div');
-  box.className = 'shim-overlay-box';
-  var p = document.createElement('p');
-  p.textContent = text;
-  box.appendChild(p);
-  if (button) {
-    var b = document.createElement('button');
-    b.textContent = button;
-    b.addEventListener('click', function () {
-      // The visitor already pressed start once: the reloaded page skips the title screen.
-      try { sessionStorage.setItem(AGAIN_KEY, appId()!); } catch (e) { /* the title screen shows again */ }
-      location.reload();
-    });
-    box.appendChild(b);
-  }
-  o.appendChild(box);
-  document.body.appendChild(o);
-  return o;
 }
 
 const IMAGE = /\.(png|jpe?g|gif|bmp|webp)$/i;

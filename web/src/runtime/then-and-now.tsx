@@ -1,7 +1,10 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { embedded } from './skin';
 import { played } from './passport';
-import { appId, catalog, root } from './catalog';
+import { appId, catalog, root, type CatalogApp } from './catalog';
 import { playSound } from './sounds';
+import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { AppCard, PassportLine } from './ui/cards';
 
 let drawer: HTMLElement | null;
 
@@ -229,42 +232,46 @@ export function ownKeys(el: HTMLElement, onEscape?: () => void) {
 
 export function openDrawer(opener: HTMLElement) {
   if (drawer) return;
-  var scrim = document.createElement('div');
-  scrim.className = 'shim-scrim';
-  var panel = document.createElement('aside');
-  panel.className = 'shim-drawer';
-  panel.setAttribute('aria-label', 'Switch app');
-  var head = document.createElement('div');
-  head.className = 'shim-drawer-head';
-  var title = document.createElement('strong');
-  title.textContent = 'Switch app';
-  var list = document.createElement('div');
-  list.className = 'shim-drawer-list';
   function shut() {
     playSound('close');
-    scrim.remove();
-    panel.remove();
+    close();
     drawer = null;
     opener.focus();
   }
-  var close = closeButton(shut);
-  head.appendChild(title);
-  head.appendChild(close);
-  panel.appendChild(head);
-  panel.appendChild(list);
-  scrim.addEventListener('click', shut);
-  ownKeys(panel, shut);
-  document.body.appendChild(scrim);
-  document.body.appendChild(panel);
-  drawer = panel;
+  const close = openLayer(<SwitchDrawer onClose={shut} onPanel={el => { drawer = el; }} />);
   playSound('open');
-  catalog().then(function (apps) {
-    if (apps.length) panel.insertBefore(passportLine(apps), list);
-    apps.forEach(function (app) { list.appendChild(appCard(app, app.id === appId())); });
-    var here = list.querySelector('.current');
+}
+
+/** Switch app: every app in gallery order, in a panel on the right, under the passport line. */
+function SwitchDrawer({ onClose, onPanel }: { onClose: () => void; onPanel: (el: HTMLElement) => void }) {
+  const panel = useRef<HTMLElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const [apps, setApps] = useState<CatalogApp[] | null>(null);
+  useOwnKeys(panel, onClose);
+  useLayoutEffect(() => { onPanel(panel.current!); }, [onPanel]);
+  useEffect(() => { catalog().then(setApps); }, []);
+  useLayoutEffect(() => {
+    if (!apps) return;
+    const here = list.current!.querySelector('.current');
     if (here) here.scrollIntoView({ block: 'nearest' });
-    (list.querySelector<HTMLElement>('.shim-app:not(.current)') || close).focus();
-  });
+    (list.current!.querySelector<HTMLElement>('.shim-app:not(.current)') || panel.current!.querySelector<HTMLElement>('.shim-close')!).focus();
+  }, [apps]);
+  const id = appId();
+  return (
+    <>
+      <div className="shim-scrim" onClick={onClose} />
+      <aside className="shim-drawer" aria-label="Switch app" ref={panel}>
+        <div className="shim-drawer-head">
+          <strong>Switch app</strong>
+          <CloseButton onClick={onClose} />
+        </div>
+        {apps && apps.length > 0 && <PassportLine apps={apps} />}
+        <div className="shim-drawer-list" ref={list}>
+          {apps && apps.map(app => <AppCard key={app.id} app={app} current={app.id === id} />)}
+        </div>
+      </aside>
+    </>
+  );
 }
 
 export function init() {
