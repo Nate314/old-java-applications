@@ -30,18 +30,6 @@ export const JAR_KEYS: Record<string, string> = {
 // The short form of JAR_KEYS for the Source panel's download link (SourcePanel in source-viewer.tsx).
 export const JAR_KEYS_LABEL: Record<string, string> = { DinoGame: 'screen mode presses real keys' };
 
-export function jarLink(id: string, cls: string, text: string) {
-  var a = document.createElement('a');
-  a.className = cls;
-  a.href = root() + 'downloads/' + id + '.jar';
-  a.setAttribute('download', id + '.jar');
-  a.setAttribute('data-sound', 'none');
-  a.textContent = text;
-  a.title = 'The desktop version of this app: run it with java -jar ' + id + '.jar (' + JAR_JAVA + ')' +
-    (JAR_KEYS[id] ? '. ' + JAR_KEYS[id] : '');
-  return a;
-}
-
 export function sourceDir() { return isThen() ? 'then-source/' : 'source/'; }
 
 export function programFile() { return isThen() ? 'then.js' : 'classes.js'; }
