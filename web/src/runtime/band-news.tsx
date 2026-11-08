@@ -1,7 +1,10 @@
-import { closeButton, ownKeys } from './then-and-now';
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { flushSync } from 'react-dom';
+import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 
 export interface BandNews {
-  show(k: string, lead: Node[], text: Node[], actions: Node[], ms: number): void;
+  /** kind: 'hint', 'stamp', ...; lead: kept at the start; text: may scroll; actions: links or buttons kept in view after it. */
+  show(k: string, lead: ReactNode, text: ReactNode, actions: ReactNode, ms: number): void;
   clear(): void;
   kind(): string | null;
   onKind(fn: (k: string | null) => void): void;
@@ -15,14 +18,17 @@ export let news: BandNews | null;
 // marquee, twice, then the name comes back. Pointing at the line holds it; x or Escape closes it.
 export function setNews(v: BandNews | null) { news = v; }
 
+/** What the line says: [kind, lead, text, actions]; it keeps saying it, hidden, once the slot's data-news goes. */
+type Said = [string, ReactNode, ReactNode, ReactNode];
+
+/** The parts of the line the band works with (the text's box and track exist once it has said something). */
+interface LineParts { line: RefObject<HTMLDivElement | null>; box: RefObject<HTMLSpanElement | null>; track: RefObject<HTMLSpanElement | null> }
+
 export function bandNews(slot: Element): BandNews {
-  var line = document.createElement('div');
-  line.className = 'shim-news';
-  line.setAttribute('role', 'status');
-  slot.appendChild(line);
   var timer: ReturnType<typeof setTimeout> | 0 = 0, deadline = 0, anim: Animation | null = null, listeners: ((k: string | null) => void)[] = [];
+  var say: ((s: Said) => void) | null = null, parts: LineParts | null = null;
   function told() { var k = kind(); listeners.forEach(function (fn) { fn(k); }); }
-  function kind() { return slot.hasAttribute('data-news') ? line.getAttribute('data-kind') : null; }
+  function kind() { return slot.hasAttribute('data-news') ? parts!.line.current!.getAttribute('data-kind') : null; }
   function clear() {
     clearTimeout(timer);
     if (anim) anim.cancel();
@@ -36,37 +42,26 @@ export function bandNews(slot: Element): BandNews {
     deadline = Date.now() + ms;
     timer = setTimeout(clear, ms);
   }
-  line.addEventListener('pointerenter', function () {
+  function enter() {
     if (!kind()) return;
     clearTimeout(timer);
     deadline = Math.max(0, deadline - Date.now());   // now the time that was left
     if (anim) anim.pause();
-  });
-  line.addEventListener('pointerleave', function () {
+  }
+  function leave() {
     if (!kind()) return;
     if (anim) anim.play();
     wait(Math.max(deadline, 3000));
-  });
-  ownKeys(line, clear);
+  }
+  openLayer(<NewsLine onEnter={enter} onLeave={leave} onClear={clear} onMount={(s, p) => { say = s; parts = p; }} />, slot);
   return {
-    // kind: 'hint' or 'stamp'; lead: nodes kept at the start; text: nodes that may scroll; actions: links or
-    // buttons kept in view after it.
-    show: function (k: string, lead: Node[], text: Node[], actions: Node[], ms: number) {
+    show: function (k: string, lead: ReactNode, text: ReactNode, actions: ReactNode, ms: number) {
       clear();
-      line.textContent = '';
-      line.setAttribute('data-kind', k);
-      lead.forEach(function (n) { line.appendChild(n); });
-      var box = document.createElement('span');
-      box.className = 'shim-news-text';
-      var track = document.createElement('span');
-      track.className = 'shim-news-track';
-      text.forEach(function (n) { track.appendChild(n); });
-      box.appendChild(track);
-      line.appendChild(box);
-      actions.forEach(function (n) { line.appendChild(n); });
-      line.appendChild(closeButton(clear));
+      say!([k, lead, text, actions]);
       slot.setAttribute('data-news', '');
       told();
+      var box = parts!.box.current!, track = parts!.track.current!;
+      box.removeAttribute('title');
       var over = track.scrollWidth - box.clientWidth;
       if (over > 4 && track.animate && !reducedMotion()) {
         var hold = 1500, ride = over / 45 * 1000, one = hold + ride + hold;
@@ -78,7 +73,7 @@ export function bandNews(slot: Element): BandNews {
         ], { duration: one, iterations: 2 });
         ms = Math.max(ms, 2 * one + 1000);
       } else if (over > 4) {
-        box.title = track.textContent;
+        box.title = track.textContent!;
       }
       wait(ms);
     },
@@ -86,6 +81,37 @@ export function bandNews(slot: Element): BandNews {
     kind: kind,
     onKind: function (fn: (k: string | null) => void) { listeners.push(fn); }
   };
+}
+
+function NewsLine({ onEnter, onLeave, onClear, onMount }: {
+  onEnter: () => void; onLeave: () => void; onClear: () => void; onMount: (say: (s: Said) => void, parts: LineParts) => void;
+}) {
+  const line = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLSpanElement>(null);
+  const track = useRef<HTMLSpanElement>(null);
+  const [said, setSaid] = useState<Said | null>(null);
+  useOwnKeys(line, onClear);
+  useLayoutEffect(() => {
+    // Drawn at once, so the band can measure the text for its marquee.
+    onMount(s => flushSync(() => setSaid(s)), { line, box, track });
+    // The pointer's own enter and leave (React's onPointerEnter is made from pointerover and pointerout).
+    const el = line.current!;
+    el.addEventListener('pointerenter', onEnter);
+    el.addEventListener('pointerleave', onLeave);
+    return () => { el.removeEventListener('pointerenter', onEnter); el.removeEventListener('pointerleave', onLeave); };
+  }, []);
+  return (
+    <div className="shim-news" role="status" data-kind={said ? said[0] : undefined} ref={line}>
+      {said && (
+        <>
+          {said[1]}
+          <span className="shim-news-text" ref={box}><span className="shim-news-track" ref={track}>{said[2]}</span></span>
+          {said[3]}
+          <CloseButton onClick={onClear} />
+        </>
+      )}
+    </div>
+  );
 }
 
 export function reducedMotion() {

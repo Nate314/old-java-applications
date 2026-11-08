@@ -75,3 +75,8 @@ export function JarLink({ id, className, children, keysNote }: { id: string; cla
     </a>
   );
 }
+
+/** A known quirk from a README as first restored, [text, code, text, ...]: its `code` spans as <code>. */
+export function Quirk({ parts }: { parts: string[] }) {
+  return <>{parts.map((p, i) => i % 2 ? <code key={i}>{p}</code> : p)}</>;
+}

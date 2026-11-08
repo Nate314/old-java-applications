@@ -1,6 +1,8 @@
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { news, reducedMotion } from './band-news';
 import { appId, catalog, type CatalogApp } from './catalog';
-import { closeButton, indexOf, isThen, ownKeys, pageOf, picks } from './then-and-now';
+import { indexOf, isThen, pageOf, picks } from './then-and-now';
+import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { openShare } from './share';
 import { playSound } from './sounds';
 
@@ -41,112 +43,101 @@ export function stampToast(id: string) {
     playSound(done ? 'complete' : 'stamp');
     if (done) confetti();
     if (news) { stampNews(app, count, apps.length, next); return; }
-    var meter = document.createElement('span');
-    meter.className = 'shim-meter';
-    meter.style.setProperty('--p', String(count / apps.length));
     floatToast(app.shot, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
       done ? 'You have played all ' + apps.length + ' apps.' : count + ' of ' + apps.length + ' apps played.',
-      [meter], function (toast) {
-        var actions: HTMLElement[] = [];
-        if (done) {
-          var brag = document.createElement('button');
-          brag.type = 'button';
-          brag.className = 'shim-toast-go';
-          brag.setAttribute('data-sound', 'none');
-          brag.textContent = 'Share it ›';
-          brag.addEventListener('click', function () { toast.remove(); openShare(null); });
-          actions.push(brag);
-        }
-        if (next) actions.push(toastLink(toast, next, 'Try ' + next.name + ' ›'));
-        return actions;
+      <Meter p={count / apps.length} />, function (close) {
+        return (
+          <>
+            {done && <button type="button" className="shim-toast-go" data-sound="none" onClick={() => { close(); openShare(null); }}>{'Share it ›'}</button>}
+            {next && toastLink(close, next, 'Try ' + next.name + ' ›')}
+          </>
+        );
       });
   });
 }
 
-// A toast floating at the top of the home page (an app page uses its band's news line instead): an app's
-// thumbnail as a seal, a title, a line, more nodes under them, and the buttons or links actions(toast) makes.
-// It replaces the toast before it and fades away after 9 seconds.
-export function floatToast(shot: string, titleText: string, lineText: string, more: Node[], actions: (toast: HTMLElement) => Node[]) {
-  var old = document.querySelector('.shim-toast');
-  if (old) old.remove();
-  var toast = document.createElement('div');
-  toast.className = 'shim-toast';
-  toast.setAttribute('role', 'status');
-  var seal = document.createElement('span');
-  seal.className = 'shim-toast-seal';
-  var img = document.createElement('img');
-  img.src = shot;
-  img.alt = '';
-  seal.appendChild(img);
-  var text = document.createElement('div');
-  text.className = 'shim-toast-text';
-  var title = document.createElement('strong');
-  var line = document.createElement('span');
-  title.textContent = titleText;
-  line.textContent = lineText;
-  ([title, line] as Node[]).concat(more).forEach(function (n) { text.appendChild(n); });
-  toast.appendChild(seal);
-  toast.appendChild(text);
-  actions(toast).forEach(function (n: Node) { toast.appendChild(n); });
-  toast.appendChild(closeButton(function () { toast.remove(); }));
-  ownKeys(toast);
-  document.body.appendChild(toast);
+function Meter({ p }: { p: number }) {
+  return <span className="shim-meter" style={{ '--p': String(p) } as CSSProperties} />;
+}
+
+/** The toast on screen, if one is. */
+let shownToast: { remove(): void } | null = null;
+
+// A toast in the page's corner (the home page, where there is no band news line): a picture, a title, a line,
+// more under it, and actions(close) after it. It goes by itself after 9 seconds; a new one replaces it.
+export function floatToast(shot: string, titleText: string, lineText: string, more: ReactNode, actions: (close: () => void) => ReactNode) {
+  if (shownToast) shownToast.remove();
+  var gone = false;
+  function remove() {
+    if (gone) return;
+    gone = true;
+    close();
+    if (shownToast === handle) shownToast = null;
+  }
+  var fade: (() => void) | null = null;
+  const close = openLayer(<Toast shot={shot} title={titleText} line={lineText} more={more} actions={actions(remove)} onClose={remove}
+    onMount={f => { fade = f; }} />);
+  const handle = { remove };
+  shownToast = handle;
   setTimeout(function () {
-    toast.classList.add('gone');
-    setTimeout(function () { toast.remove(); }, 600);
+    if (gone) return;
+    fade!();
+    setTimeout(remove, 600);
   }, 9000);
-  return toast;
+  return handle;
 }
 
-// A toast's link to an app: on the home page a plain click swaps the app into the player instead.
-export function toastLink(toast: HTMLElement, app: OldjavaCatalogApp, label: string) {
-  var go = document.createElement('a');
-  go.className = 'shim-toast-go';
-  go.href = pageOf(app);
-  go.textContent = label;
-  go.addEventListener('click', function (e) {
-    if (!passport.open || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-    e.preventDefault();
-    toast.remove();
-    passport.open(app.id);
-  });
-  return go;
+function Toast({ shot, title, line, more, actions, onClose, onMount }: {
+  shot: string; title: string; line: string; more: ReactNode; actions: ReactNode; onClose: () => void; onMount: (fade: () => void) => void;
+}) {
+  const toast = useRef<HTMLDivElement>(null);
+  const [going, setGoing] = useState(false);
+  useOwnKeys(toast);
+  useLayoutEffect(() => { onMount(() => setGoing(true)); }, []);
+  return (
+    <div className={'shim-toast' + (going ? ' gone' : '')} role="status" ref={toast}>
+      <span className="shim-toast-seal"><img src={shot} alt="" /></span>
+      <div className="shim-toast-text">
+        <strong>{title}</strong>
+        <span>{line}</span>
+        {more}
+      </div>
+      {actions}
+      <CloseButton onClick={onClose} />
+    </div>
+  );
 }
 
-// The same news on an app page, in the band: the thumbnail pressed in as a seal, the count, and where to go.
+// A toast's link to an app. On the home page (passport.open) it swaps the app into the player instead.
+export function toastLink(close: () => void, app: OldjavaCatalogApp, label: string) {
+  return (
+    <a className="shim-toast-go" href={pageOf(app)} onClick={e => {
+      if (!passport.open || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      close();
+      passport.open(app.id);
+    }}>{label}</a>
+  );
+}
+
 function stampNews(app: OldjavaCatalogApp, count: number, total: number, next: OldjavaCatalogApp | undefined) {
   var done = count >= total;
-  var seal = document.createElement('span');
-  seal.className = 'shim-news-seal';
-  var img = document.createElement('img');
-  img.src = app.shot;
-  img.alt = '';
-  seal.appendChild(img);
-  var title = document.createElement('strong');
-  title.textContent = done ? 'Arcade complete! ' : 'Stamp collected: ' + app.name + ' ';
-  var line = document.createElement('span');
-  line.textContent = done ? 'You have played all ' + total + ' apps.' : count + ' of ' + total + ' apps played.';
-  var meter = document.createElement('span');
-  meter.className = 'shim-meter';
-  meter.style.setProperty('--p', String(count / total));
-  var actions: HTMLElement[] = [];
-  if (done) {
-    var brag = document.createElement('button');
-    brag.type = 'button';
-    brag.className = 'shim-news-go';
-    brag.setAttribute('data-sound', 'none');
-    brag.textContent = 'Share it \u203a';
-    brag.addEventListener('click', function () { news!.clear(); openShare(null, brag); });
-    actions.push(brag);
-  }
-  if (next) {
-    var go = document.createElement('a');
-    go.className = 'shim-news-go';
-    go.href = pageOf(next);
-    go.textContent = 'Try ' + next.name + ' \u203a';
-    actions.push(go);
-  }
-  news!.show('stamp', [seal], [title, line, meter], actions, 9000);
+  var brag: HTMLButtonElement | null = null;
+  news!.show('stamp', <span className="shim-news-seal"><img src={app.shot} alt="" /></span>, (
+    <>
+      <strong>{done ? 'Arcade complete! ' : 'Stamp collected: ' + app.name + ' '}</strong>
+      <span>{done ? 'You have played all ' + total + ' apps.' : count + ' of ' + total + ' apps played.'}</span>
+      <Meter p={count / total} />
+    </>
+  ), (
+    <>
+      {done && (
+        <button type="button" className="shim-news-go" data-sound="none" ref={b => { brag = b; }}
+          onClick={() => { news!.clear(); openShare(null, brag); }}>{'Share it ›'}</button>
+      )}
+      {next && <a className="shim-news-go" href={pageOf(next)}>{'Try ' + next.name + ' ›'}</a>}
+    </>
+  ), 9000);
 }
 
 function confetti() {

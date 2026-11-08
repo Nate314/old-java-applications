@@ -9,7 +9,7 @@ import { INVITE, SHARED } from './share';
 import { sourcePanel } from './source-viewer';
 import { CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
-import { JarLink } from './ui/cards';
+import { JarLink, Quirk } from './ui/cards';
 
 /** A line of the boot log: [label, value, class]. */
 type LogLine = [string, string, string];
@@ -145,7 +145,7 @@ function TitleScreen({ total, onGo, onMount }: {
             // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.
             <>
               <h2>Known quirks, from its README then</h2>
-              <ul>{quirkList && quirkList.map((parts, i) => <li key={i}>{parts.map((p, j) => j % 2 ? <code key={j}>{p}</code> : p)}</li>)}</ul>
+              <ul>{quirkList && quirkList.map((parts, i) => <li key={i}><Quirk parts={parts} /></li>)}</ul>
             </>
           )}
         </div>

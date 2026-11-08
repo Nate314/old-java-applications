@@ -17,6 +17,7 @@
  *   old is not news, the rule Clock uses for what happened while it was closed.
  * - On the Clock page there is no chip (Clock shows its own time) and no bell, only the game for the break.
  */
+import type { ReactNode } from 'react';
 // Clock's saved state: the fields of ~/.clock.txt (ClockState.java) as numbers.
 interface ClockState {
   plan: number; phase: number; done: number; focusEnd: number;
@@ -196,25 +197,17 @@ type Moment =
         : 'Your ' + Math.round(m.length / MINUTE) + '-minute timer rang at ' + at(m.at) + '.';
       label = m.kind === 'back' ? 'Back to focus' : 'Open Clock';
     }
-    function link(toast: HTMLElement | null) {
-      if (!app || !label) return [];
-      var go = toast ? site.toastLink(toast, app, label) : document.createElement('a');
-      if (!toast) {
-        go.className = 'shim-news-go';
-        go.href = site.pageOf(app);
-        go.textContent = label;
-      }
+    // The way on: in the band a plain link (the Clock one skips its title screen), in a toast the toast's own.
+    function link(close: (() => void) | null): ReactNode {
+      if (!app || !label) return null;
+      if (close) return site.toastLink(close, app, label);
       // (the home page's link swaps Clock into its player instead, which has no title screen)
-      if (app.id === 'Clock' && !toast) go.addEventListener('click', function () { site.skipTitle('Clock'); });
-      return [go];
+      return <a className="shim-news-go" href={site.pageOf(app)} onClick={app.id === 'Clock' ? () => site.skipTitle('Clock') : undefined}>{label}</a>;
     }
     var news = site.news();
     if (news) {
-      var tag = document.createElement('span');
-      tag.className = 'shim-news-tag shim-clock-tag';
-      tag.setAttribute('data-kind', m.kind);
-      tag.textContent = m.kind === 'break' ? 'Break' : m.kind === 'back' ? 'Focus' : 'Timer';
-      news.show('clock', [tag], [document.createTextNode(title + '. ' + line)], link(null), 15000);
+      news.show('clock', <span className="shim-news-tag shim-clock-tag" data-kind={m.kind}>{m.kind === 'break' ? 'Break' : m.kind === 'back' ? 'Focus' : 'Timer'}</span>,
+        title + '. ' + line, link(null), 15000);
     } else {
       var shot = (app || clockApp || {} as Partial<OldjavaCatalogApp>).shot;
       if (shot) site.toast(shot, title, line, link);

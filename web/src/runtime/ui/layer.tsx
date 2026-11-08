@@ -6,10 +6,10 @@ import { useLayoutEffect } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 
-/** Puts node in the page's body; the function returned takes it out again. */
-export function openLayer(node: ReactNode): () => void {
+/** Puts node at the end of `into` (the page's body unless it says); the function returned takes it out again. */
+export function openLayer(node: ReactNode, into: Element = document.body): () => void {
   const root = createRoot(document.createElement('div'));
-  flushSync(() => root.render(createPortal(node, document.body)));
+  flushSync(() => root.render(createPortal(node, into)));
   return () => root.unmount();
 }
 

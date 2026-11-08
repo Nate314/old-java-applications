@@ -4,11 +4,11 @@ import { news } from './band-news';
 import { replay, replayNow } from './replay';
 import { played } from './passport';
 import { appId, catalog, type CatalogApp } from './catalog';
-import { JAR_KEYS, JAR_KEYS_LABEL, NO_QUIRKS, eraPage, indexOf, isThen, picks, quirkNodes, quirks, sourceDir } from './then-and-now';
+import { JAR_KEYS, JAR_KEYS_LABEL, NO_QUIRKS, eraPage, indexOf, isThen, picks, quirks, sourceDir } from './then-and-now';
 import { openShare } from './share';
 import { Overlay } from './ui/overlay';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
-import { AppCard, JarLink, PassportLine } from './ui/cards';
+import { AppCard, JarLink, PassportLine, Quirk } from './ui/cards';
 import { playSound } from './sounds';
 
 let JAVA_KEYWORDS: string[];
@@ -361,18 +361,12 @@ export function howToPlay() {
   Promise.all([catalog(), isThen() ? quirks() : []]).then(function (r) {
     var app = r[0][indexOf(r[0], appId())];
     if (!app || !news) return;
-    var tag = document.createElement('strong');
-    tag.className = 'shim-news-tag';
-    tag.textContent = isThen() ? 'Known quirks' : 'How to play';
-    var text = document.createElement('span');
-    if (isThen() && r[1].length) {
-      r[1].forEach(function (parts, i) {
-        if (i) text.appendChild(document.createTextNode(' · '));
-        quirkNodes(parts).forEach(function (n) { text.appendChild(n); });
-      });
-    } else if (isThen()) text.textContent = NO_QUIRKS;   // today's hint would describe today's app
-    else text.textContent = app.hint;
-    news.show('hint', [tag], [text], [], 12000);
+    const tag = <strong className="shim-news-tag">{isThen() ? 'Known quirks' : 'How to play'}</strong>;
+    const text = isThen() && r[1].length
+      ? r[1].map((parts, i) => <Fragment key={i}>{i ? ' · ' : null}<Quirk parts={parts} /></Fragment>)
+      : isThen() ? NO_QUIRKS   // today's hint would describe today's app
+      : app.hint;
+    news.show('hint', tag, <span>{text}</span>, null, 12000);
   });
 }
 

@@ -8,8 +8,9 @@ declare function main(args: string[], done: (result: unknown) => void): void;
 /** What boot.js lends the scripts it adds (window.oldjavaSite); find.ts and instant-open.ts add to it. */
 interface OldjavaSite {
   news(): import('./band-news').BandNews | null;
-  toast(shot: string, title: string, line: string, actions: (toast: HTMLElement) => Node[]): HTMLElement;
-  toastLink(toast: HTMLElement, app: OldjavaCatalogApp, label: string): HTMLAnchorElement;
+  /** A toast (floatToast in passport.tsx); actions gets the function that closes it. */
+  toast(shot: string, title: string, line: string, actions: (close: () => void) => import('react').ReactNode): { remove(): void };
+  toastLink(close: () => void, app: OldjavaCatalogApp, label: string): import('react').ReactNode;
   pageOf(app: { id: string }): string;
   root(): string;
   appId(): string | null;

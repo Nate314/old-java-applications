@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { embedded } from './skin';
 import { news } from './band-news';
 import { fireKey, keyOf } from './touch-pad';
@@ -85,6 +86,16 @@ function gamepadChart(id: string) {
   if ((GAMEPADS[id] || []).length > 1) add('2nd controller', 'player 2');
   add('LB / RB', 'other apps');
   add('Back', 'this chart');
+  return parts;
+}
+
+/** The chart for the band's news line: each button's cap, and what it does. */
+function GamepadChart({ parts }: { parts: string[][] }) {
+  return <>{parts.map((p, i) => <Fragment key={i}>{i ? ' · ' : null}<kbd className="shim-gp-cap">{p[0]}</kbd>{' ' + p[1]}</Fragment>)}</>;
+}
+
+/** The same chart as nodes, for the home page's player hint (src/pages/home/player.ts keeps that element itself). */
+function gamepadChartNodes(parts: string[][]) {
   var nodes: Node[] = [];
   parts.forEach(function (p, i) {
     if (i) nodes.push(document.createTextNode(' · '));
@@ -263,16 +274,16 @@ export function gamepads(isApp: boolean) {
   function chart() {
     var id = currentApp();
     if (!id) return;
+    if (news) { news.show('gamepad', <strong className="shim-news-tag">Controller</strong>, <GamepadChart parts={gamepadChart(id)} />, null, 15000); return; }
     var tag = document.createElement('strong');
     tag.className = 'shim-news-tag';
     tag.textContent = 'Controller';
-    if (news) { news.show('gamepad', [tag], gamepadChart(id), [], 15000); return; }
     var hint = document.getElementById('player-hint');
     if (!hint) return;
     // The app's hint comes back after a while, unless the player has put another app's hint there since.
     if (!hint.querySelector('.shim-gp-cap')) hintText = hint.innerHTML;
     hint.textContent = '';
-    ([tag, document.createTextNode(' ')] as Node[]).concat(gamepadChart(id)).forEach(function (n) { hint!.appendChild(n); });
+    ([tag, document.createTextNode(' ')] as Node[]).concat(gamepadChartNodes(gamepadChart(id))).forEach(function (n) { hint!.appendChild(n); });
     clearTimeout(hintTimer as ReturnType<typeof setTimeout>);
     hintTimer = setTimeout(function () { if (hint!.querySelector('.shim-gp-cap')) hint!.innerHTML = hintText; }, 15000);
   }

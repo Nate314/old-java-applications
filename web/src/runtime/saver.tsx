@@ -119,8 +119,6 @@ function saverDone() {
 // What that was, where to pick another saver, and how to turn it off: in the band on an app page, a toast on the
 // home page.
 function welcomeBack() {
-  function strong(t: string) { var n = document.createElement('strong'); n.textContent = t; return n; }
-  function span(t: string) { var n = document.createElement('span'); n.textContent = t; return n; }
   catalog().then(function (apps: OldjavaCatalogApp[]) {
     var app = apps[indexOf(apps, 'ScreenSaver')];
     if (!app) return;
@@ -129,33 +127,19 @@ function welcomeBack() {
     function off() {
       setSaverOn(false);
       var said = 'Screen saver off. ', how = app.name + '’s title screen turns it back on.';
-      if (news) news.show('saver', [], [strong(said), span(how)], [], 6000);
-      else floatToast(app.shot, said, how, [], function () { return []; });
+      if (news) news.show('saver', null, <><strong>{said}</strong><span>{how}</span></>, null, 6000);
+      else floatToast(app.shot, said, how, null, function () { return null; });
     }
     function offButton(cls: string, close: () => void) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = cls;
-      b.textContent = 'Turn it off';
-      b.addEventListener('click', function () { close(); off(); });
-      return b;
+      return <button type="button" className={cls} onClick={() => { close(); off(); }}>Turn it off</button>;
     }
     if (news) {
-      var seal = document.createElement('span');
-      seal.className = 'shim-news-seal';
-      var img = document.createElement('img');
-      img.src = app.shot;
-      img.alt = '';
-      seal.appendChild(img);
-      var go = document.createElement('a');
-      go.className = 'shim-news-go';
-      go.href = pageOf(app);
-      go.textContent = 'Pick your saver ›';
-      news.show('saver', [seal], [strong(title), span(line)], [go, offButton('shim-news-go', news.clear)], 10000);
+      news.show('saver', <span className="shim-news-seal"><img src={app.shot} alt="" /></span>, <><strong>{title}</strong><span>{line}</span></>,
+        <><a className="shim-news-go" href={pageOf(app)}>{'Pick your saver ›'}</a>{offButton('shim-news-go', news.clear)}</>, 10000);
       return;
     }
-    floatToast(app.shot, title, line, [], function (toast) {
-      return [toastLink(toast, app, 'Pick your saver ›'), offButton('shim-toast-go', function () { toast.remove(); })];
+    floatToast(app.shot, title, line, null, function (close) {
+      return <>{toastLink(close, app, 'Pick your saver ›')}{offButton('shim-toast-go', close)}</>;
     });
   });
 }

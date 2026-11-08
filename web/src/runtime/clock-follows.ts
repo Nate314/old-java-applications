@@ -41,7 +41,7 @@ export function clockOpen() {
 export function init() {
   window.oldjavaSite = {
     news: function () { return news; },   // the app page's band news line (null on the home page)
-    toast: function (shot, title, line, actions) { return floatToast(shot, title, line, [], actions); },
+    toast: function (shot, title, line, actions) { return floatToast(shot, title, line, null, actions); },
     toastLink: toastLink,
     pageOf: pageOf,
     root: root,
