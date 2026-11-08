@@ -1,8 +1,10 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { siteRoot } from './install';
 import { reducedMotion } from './band-news';
 import { drawDesk } from './replay';
 import { appId, catalog } from './catalog';
-import { closeButton, indexOf, ownKeys } from './then-and-now';
+import { indexOf } from './then-and-now';
+import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { playSound } from './sounds';
 
 /** A photo of the app's windows: the PNG, the app's id and when it was taken. */
@@ -224,171 +226,147 @@ function composePhoto(img: HTMLImageElement, frame: string, caption: string, inf
 function openPhoto(photo: Photo, opener: HTMLElement | null) {
   if (photoBox) return;
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
-  var srcUrl = URL.createObjectURL(photo.blob), outUrl: string | null = null, outBlob: Blob | null = null;
-  var img = new Image(), shot: HTMLImageElement | null = null;
-  var info: PhotoInfo = { name: photo.app, at: photo.at, shot: null };
-  var frame = 'instant';
-  try { frame = localStorage.getItem(PHOTO_FRAME_KEY) || frame; } catch (e) { /* the first frame */ }
-  if (!PHOTO_FRAMES.some(function (f) { return f[0] === frame; })) frame = 'instant';
-  var scrim = document.createElement('div');
-  scrim.className = 'shim-scrim';
-  var panel = document.createElement('div');
-  panel.className = 'shim-share shim-photo';
-  panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-modal', 'true');
-  var head = document.createElement('div');
-  head.className = 'shim-drawer-head';
-  var title = document.createElement('strong');
+  var urls: { src: string; out: string | null } = { src: URL.createObjectURL(photo.blob), out: null };
   function shut() {
     playSound('close');
-    URL.revokeObjectURL(srcUrl);
-    if (outUrl) URL.revokeObjectURL(outUrl);
-    scrim.remove();
-    panel.remove();
+    URL.revokeObjectURL(urls.src);
+    if (urls.out) URL.revokeObjectURL(urls.out);
+    close();
     photoBox = null;
     if (opener && opener.isConnected) opener.focus();
   }
-  head.appendChild(title);
-  head.appendChild(closeButton(shut));
-  panel.appendChild(head);
-  var body = document.createElement('div');
-  body.className = 'shim-share-body';
-  var stage = document.createElement('div');
-  stage.className = 'shim-photo-stage';
-  var print = document.createElement('img');
-  print.className = 'shim-photo-print';
-  stage.appendChild(print);
-  var frames = document.createElement('div');
-  frames.className = 'shim-photo-frames';
-  frames.setAttribute('role', 'group');
-  frames.setAttribute('aria-label', 'Frame');
-  var frameButtons = PHOTO_FRAMES.map(function (f) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'shim-share-way';
-    btn.textContent = f[1];
-    btn.addEventListener('click', function () {
-      frame = f[0];
-      try { localStorage.setItem(PHOTO_FRAME_KEY, frame); } catch (e) { /* not remembered */ }
-      develop();
-    });
-    frames.appendChild(btn);
-    return btn;
-  });
-  var capLabel = document.createElement('label');
-  capLabel.className = 'shim-share-msg';
-  capLabel.textContent = 'Caption';
-  var cap = document.createElement('input');
-  cap.type = 'text';
-  cap.maxLength = 60;
-  cap.className = 'shim-photo-caption';
-  capLabel.appendChild(cap);
-  var ways = document.createElement('div');
-  ways.className = 'shim-share-ways';
-  var save = document.createElement('a');
-  save.className = 'shim-share-way primary';
-  save.textContent = 'Save picture';
-  save.setAttribute('data-sound', 'none');
-  save.addEventListener('click', function (e) {
-    if (!outUrl) { e.preventDefault(); return; }
-    playSound('saved');
-  });
-  ways.appendChild(save);
-  var copy: HTMLButtonElement | null = null;
-  if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
-    copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'shim-share-way';
-    copy.textContent = 'Copy picture';
-    copy.addEventListener('click', function () {
-      if (!outBlob) return;
-      navigator.clipboard.write([new ClipboardItem({ 'image/png': outBlob })]).then(function () {
-        copy!.textContent = 'Copied';
-        playSound('saved');
-      }, function () { copy!.textContent = 'Could not copy'; });
-    });
-    ways.appendChild(copy);
-  }
-  var when = new Date(photo.at);   // the visitor's own clock
-  var stamp = [when.getFullYear(), when.getMonth() + 1, when.getDate(), '-', when.getHours(), when.getMinutes()]
-    .map(function (n) { return typeof n === 'number' && n < 10 ? '0' + n : n; }).join('');
-  save.download = photo.app + '-photo-' + stamp + '.png';
-  var native = null;
-  var link = siteRoot + photo.app + '/index.html';
-  function fileOf(blob: Blob) { return window.File ? new File([blob], save.download, { type: 'image/png' }) : null; }
-  if (navigator.canShare && window.File && navigator.canShare({ files: [fileOf(photo.blob)!] })) {
-    native = document.createElement('button');
-    native.type = 'button';
-    native.className = 'shim-share-way';
-    native.textContent = 'Share…';
-    native.addEventListener('click', function () {
-      if (!outBlob) return;
-      navigator.share({ files: [fileOf(outBlob)!], title: title.textContent, text: info.name + ', played in my browser: ' + link })
-        .catch(function () { /* closed */ });
-    });
-    ways.appendChild(native);
-  }
-  var note = document.createElement('p');
-  note.className = 'shim-clip-note';
-  note.textContent = 'The picture stays on this device until you save, copy or share it.';
-  [stage, frames, capLabel, ways, note].forEach(function (el) { body.appendChild(el); });
-  panel.appendChild(body);
-  scrim.addEventListener('click', shut);
-  ownKeys(panel, shut);
-  document.body.appendChild(scrim);
-  document.body.appendChild(panel);
-  photoBox = panel;
+  var save: HTMLElement | null = null;
+  const close = openLayer(<PhotoPanel photo={photo} urls={urls} onClose={shut} onPanel={(el, s) => { photoBox = el; save = s; }} />);
   playSound('open');
-  var pending = 0;
-  // Draws the print again (a new frame, a changed caption) and gets its file ready for the buttons.
+  save!.focus();
+}
+
+/** A developed print: its file, its address (Save picture) and what it shows. */
+interface Print { blob: Blob; url: string; alt: string }
+
+/**
+ * The print's panel: the photo in its frame, the frames to pick from, the caption, Save picture, Copy picture and
+ * Share... The print is drawn again (composePhoto) for a new frame, a changed caption, or once the app's thumbnail
+ * (the postcard's stamp) arrives.
+ */
+function PhotoPanel({ photo, urls, onClose, onPanel }: {
+  photo: Photo; urls: { src: string; out: string | null }; onClose: () => void; onPanel: (el: HTMLElement, save: HTMLElement) => void;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  const save = useRef<HTMLAnchorElement>(null);
+  const cap = useRef<HTMLInputElement>(null);
+  const [frame, setFrame] = useState(() => {
+    var f = 'instant';
+    try { f = localStorage.getItem(PHOTO_FRAME_KEY) || f; } catch (e) { /* the first frame */ }
+    return PHOTO_FRAMES.some(function (o) { return o[0] === f; }) ? f : 'instant';
+  });
+  const [name, setName] = useState(photo.app);   // the app's name, once the catalog says
+  const [print, setPrint] = useState<Print | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  // What drawing needs between renders: the photo, the stamp's thumbnail, the print's name and the latest request.
+  const lab = useRef({ img: new Image(), info: { name: photo.app, at: photo.at, shot: null } as PhotoInfo, pending: 0, typing: 0 as number | ReturnType<typeof setTimeout>, frame }).current;
+  lab.frame = frame;
+  useOwnKeys(panel, onClose);
+  useLayoutEffect(() => { onPanel(panel.current!, save.current!); }, []);
+
+  // Draws the print again and gets its file ready for the buttons.
   function develop() {
-    frameButtons.forEach(function (btn, i) {
-      var on = PHOTO_FRAMES[i][0] === frame;
-      btn.setAttribute('aria-pressed', String(on));
-      btn.classList.toggle('primary', on);
-    });
-    capLabel.hidden = frame === 'plain';
-    if (!img.naturalWidth) return;
-    var made = composePhoto(img, frame, cap.value.trim() || info.name, info);
-    var mine = ++pending;
+    if (!lab.img.naturalWidth) return;
+    var caption = cap.current!.value.trim() || lab.info.name;
+    var made = composePhoto(lab.img, lab.frame, caption, lab.info);
+    var mine = ++lab.pending, f = lab.frame;
     made.toBlob(function (blob) {
-      if (mine !== pending || !blob || photoBox !== panel) return;
-      if (outUrl) URL.revokeObjectURL(outUrl);
-      outBlob = blob;
-      outUrl = URL.createObjectURL(blob);
-      if (!print.src) print.classList.add('developing');   // the first print comes up as an instant print does
-      print.src = outUrl;
-      print.alt = 'Photo of ' + info.name + (frame === 'plain' ? '' : ': ' + (cap.value.trim() || info.name));
-      save.href = outUrl;
-      if (copy) copy.textContent = 'Copy picture';
+      if (mine !== lab.pending || !blob || !panel.current) return;
+      if (urls.out) URL.revokeObjectURL(urls.out);
+      urls.out = URL.createObjectURL(blob);
+      setPrint({ blob, url: urls.out, alt: 'Photo of ' + lab.info.name + (f === 'plain' ? '' : ': ' + caption) });
+      setCopied(null);
     }, 'image/png');
   }
-  var typing: number | ReturnType<typeof setTimeout> = 0;
-  cap.addEventListener('input', function () {
-    cap.dataset.touched = '1';
-    clearTimeout(typing);
-    typing = setTimeout(develop, 120);
-  });
   function describe(name: string) {
-    info.name = name;
-    title.textContent = 'Photo: ' + name;
-    panel.setAttribute('aria-label', title.textContent);
-    if (!cap.dataset.touched) cap.value = name + ', ' + photoDay(photo.at);
+    lab.info.name = name;
+    setName(name);
+    if (!cap.current!.dataset.touched) cap.current!.value = name + ', ' + photoDay(photo.at);
   }
-  describe(photo.app);
-  develop();
-  img.onload = develop;
-  img.src = srcUrl;
-  catalog().then(function (apps: OldjavaCatalogApp[]) {
-    var app = apps[indexOf(apps, photo.app)];
-    if (!app || photoBox !== panel) return;
-    describe(app.name);
-    shot = new Image();
-    shot.onload = function () { info.shot = shot; if (photoBox === panel) develop(); };
-    shot.src = app.shot;
-    develop();
-  });
-  save.focus();
+  useLayoutEffect(() => {
+    describe(photo.app);
+    lab.img.onload = develop;
+    lab.img.src = urls.src;
+    catalog().then(function (apps: OldjavaCatalogApp[]) {
+      var app = apps[indexOf(apps, photo.app)];
+      if (!app || !panel.current) return;
+      describe(app.name);
+      var shot = new Image();
+      shot.onload = function () { lab.info.shot = shot; if (panel.current) develop(); };
+      shot.src = app.shot;
+      develop();
+    });
+  }, []);
+  useLayoutEffect(develop, [frame]);
+
+  function pick(f: string) {
+    try { localStorage.setItem(PHOTO_FRAME_KEY, f); } catch (e) { /* not remembered */ }
+    setFrame(f);
+  }
+  const when = new Date(photo.at);   // the visitor's own clock
+  const stamp = [when.getFullYear(), when.getMonth() + 1, when.getDate(), '-', when.getHours(), when.getMinutes()]
+    .map(function (n) { return typeof n === 'number' && n < 10 ? '0' + n : n; }).join('');
+  const download = photo.app + '-photo-' + stamp + '.png';
+  const fileOf = (blob: Blob) => window.File ? new File([blob], download, { type: 'image/png' }) : null;
+  const canShare = useState(() => !!(navigator.canShare && window.File && navigator.canShare({ files: [fileOf(photo.blob)!] })))[0];
+  const canCopy = !!(navigator.clipboard && 'write' in navigator.clipboard && window.ClipboardItem);
+  const title = 'Photo: ' + name;
+  return (
+    <>
+      <div className="shim-scrim" onClick={onClose} />
+      <div className="shim-share shim-photo" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+        <div className="shim-drawer-head">
+          <strong>{title}</strong>
+          <CloseButton onClick={onClose} />
+        </div>
+        <div className="shim-share-body">
+          <div className="shim-photo-stage">
+            {/* The first print comes up as an instant print does. */}
+            <img className={'shim-photo-print' + (print ? ' developing' : '')} src={print ? print.url : undefined} alt={print ? print.alt : undefined} />
+          </div>
+          <div className="shim-photo-frames" role="group" aria-label="Frame">
+            {PHOTO_FRAMES.map(([f, label]) => (
+              <button key={f} type="button" className={'shim-share-way' + (f === frame ? ' primary' : '')} aria-pressed={f === frame} onClick={() => pick(f)}>{label}</button>
+            ))}
+          </div>
+          <label className="shim-share-msg" hidden={frame === 'plain'}>
+            Caption
+            <input type="text" maxLength={60} className="shim-photo-caption" ref={cap} onInput={() => {
+              cap.current!.dataset.touched = '1';
+              clearTimeout(lab.typing);
+              lab.typing = setTimeout(develop, 120);
+            }} />
+          </label>
+          <div className="shim-share-ways">
+            <a className="shim-share-way primary" href={print ? print.url : undefined} download={download} data-sound="none" ref={save}
+              onClick={e => { if (!print) { e.preventDefault(); return; } playSound('saved'); }}>Save picture</a>
+            {canCopy && (
+              <button type="button" className="shim-share-way" onClick={() => {
+                if (!print) return;
+                navigator.clipboard.write([new ClipboardItem({ 'image/png': print.blob })]).then(function () {
+                  setCopied('Copied');
+                  playSound('saved');
+                }, function () { setCopied('Could not copy'); });
+              }}>{copied || 'Copy picture'}</button>
+            )}
+            {canShare && (
+              <button type="button" className="shim-share-way" onClick={() => {
+                if (!print) return;
+                navigator.share({ files: [fileOf(print.blob)!], title, text: lab.info.name + ', played in my browser: ' + siteRoot + photo.app + '/index.html' })
+                  .catch(function () { /* closed */ });
+              }}>{'Share…'}</button>
+            )}
+          </div>
+          <p className="shim-clip-note">The picture stays on this device until you save, copy or share it.</p>
+        </div>
+      </div>
+    </>
+  );
 }
 
 export function init() {

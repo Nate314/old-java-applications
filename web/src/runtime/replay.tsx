@@ -1,8 +1,10 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clipMode, embedded } from './skin';
 import { siteRoot } from './install';
 import { popped } from './pop-out';
 import { appId, catalog } from './catalog';
-import { closeButton, indexOf, ownKeys } from './then-and-now';
+import { indexOf } from './then-and-now';
+import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { appOut, audio } from './midi';
 import { playSound } from './sounds';
 
@@ -340,87 +342,69 @@ export function openClip(clip: ReplayClip, opener: HTMLElement | null) {
   if (clipBox) return;
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
   var url = URL.createObjectURL(clip.blob);
-  var scrim = document.createElement('div');
-  scrim.className = 'shim-scrim';
-  var panel = document.createElement('div');
-  panel.className = 'shim-share shim-clip';
-  panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-modal', 'true');
-  panel.setAttribute('aria-label', 'Instant replay');
-  var head = document.createElement('div');
-  head.className = 'shim-drawer-head';
-  var title = document.createElement('strong');
-  title.textContent = 'Instant replay';
+  var video: HTMLVideoElement | null = null, save: HTMLElement | null = null;
   function shut() {
     playSound('close');
-    video.pause();
+    video!.pause();
     URL.revokeObjectURL(url);
-    scrim.remove();
-    panel.remove();
+    close();
     clipBox = null;
     if (opener && opener.isConnected) opener.focus();
   }
-  head.appendChild(title);
-  head.appendChild(closeButton(shut));
-  panel.appendChild(head);
-  var body = document.createElement('div');
-  body.className = 'shim-share-body';
-  var video = document.createElement('video');
-  video.className = 'shim-clip-video';
-  video.src = url;
-  video.controls = true;
-  video.loop = true;
-  video.playsInline = true;
-  var note = document.createElement('p');
-  note.className = 'shim-clip-note';
-  var ways = document.createElement('div');
-  ways.className = 'shim-share-ways';
-  var stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
-  var name = clip.app + '-replay-' + stamp + (/mp4/.test(clip.blob.type) ? '.mp4' : '.webm');
-  var save = document.createElement('a');
-  save.className = 'shim-share-way primary';
-  save.href = url;
-  save.download = name;
-  save.textContent = 'Save video';
-  save.setAttribute('data-sound', 'none');
-  save.addEventListener('click', function () { playSound('saved'); });
-  ways.appendChild(save);
-  var file = window.File ? new File([clip.blob], name, { type: clip.blob.type }) : null;
-  var link = siteRoot + clip.app + '/index.html';
-  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-    var native = document.createElement('button');
-    native.type = 'button';
-    native.className = 'shim-share-way';
-    native.textContent = 'Share…';
-    native.addEventListener('click', function () {
-      navigator.share({ files: [file!], title: title.textContent, text: note.dataset.share + ' ' + link })
-        .catch(function () { /* closed */ });
-    });
-    ways.appendChild(native);
-  }
-  [video, note, ways].forEach(function (el) { body.appendChild(el); });
-  panel.appendChild(body);
-  scrim.addEventListener('click', shut);
-  ownKeys(panel, shut);
-  document.body.appendChild(scrim);
-  document.body.appendChild(panel);
-  clipBox = panel;
+  const close = openLayer(<ClipPanel clip={clip} url={url} onClose={shut} onPanel={(el, v, s) => { clipBox = el; video = v; save = s; }} />);
   playSound('open');
   // Started by the visitor's click, so it may play with sound; muted if the browser says otherwise.
-  video.play().catch(function () { video.muted = true; video.play().catch(function () {}); });
-  save.focus();
-  function describe(app: string) {
-    title.textContent = 'Instant replay: ' + app;
-    panel.setAttribute('aria-label', title.textContent);
-    note.textContent = 'The last ' + clip.seconds + ' seconds of ' + app + '. The video stays on this device'
-      + ' until you save or share it.';
-    note.dataset.share = app + ', played in my browser:';
-  }
-  describe(clip.app);
-  catalog().then(function (apps: OldjavaCatalogApp[]) {
-    var app = apps[indexOf(apps, clip.app)];
-    if (app && clipBox === panel) describe(app.name);
-  });
+  video!.play().catch(function () { video!.muted = true; video!.play().catch(function () {}); });
+  save!.focus();
+}
+
+/** The replay panel: the clip playing on a loop, Save video and Share... (where the browser can share files). */
+function ClipPanel({ clip, url, onClose, onPanel }: {
+  clip: ReplayClip; url: string; onClose: () => void; onPanel: (el: HTMLElement, video: HTMLVideoElement, save: HTMLElement) => void;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  const video = useRef<HTMLVideoElement>(null);
+  const save = useRef<HTMLAnchorElement>(null);
+  const [app, setApp] = useState(clip.app);   // its name, once the catalog says
+  useOwnKeys(panel, onClose);
+  useLayoutEffect(() => { onPanel(panel.current!, video.current!, save.current!); }, []);
+  useEffect(() => {
+    catalog().then(function (apps: OldjavaCatalogApp[]) {
+      var found = apps[indexOf(apps, clip.app)];
+      if (found) setApp(found.name);
+    });
+  }, []);
+  const stamp = useState(() => new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-'))[0];
+  const name = clip.app + '-replay-' + stamp + (/mp4/.test(clip.blob.type) ? '.mp4' : '.webm');
+  const file = useState(() => window.File ? new File([clip.blob], name, { type: clip.blob.type }) : null)[0];
+  const title = 'Instant replay: ' + app;
+  const share = app + ', played in my browser:';
+  return (
+    <>
+      <div className="shim-scrim" onClick={onClose} />
+      <div className="shim-share shim-clip" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+        <div className="shim-drawer-head">
+          <strong>{title}</strong>
+          <CloseButton onClick={onClose} />
+        </div>
+        <div className="shim-share-body">
+          <video className="shim-clip-video" src={url} controls loop playsInline ref={video} />
+          <p className="shim-clip-note" data-share={share}>
+            {'The last ' + clip.seconds + ' seconds of ' + app + '. The video stays on this device until you save or share it.'}
+          </p>
+          <div className="shim-share-ways">
+            <a className="shim-share-way primary" href={url} download={name} data-sound="none" ref={save} onClick={() => playSound('saved')}>Save video</a>
+            {file && navigator.canShare && navigator.canShare({ files: [file] }) && (
+              <button type="button" className="shim-share-way"
+                onClick={() => navigator.share({ files: [file], title, text: share + ' ' + siteRoot + clip.app + '/index.html' }).catch(function () { /* closed */ })}>
+                {'Share…'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
 
 export function init() {
