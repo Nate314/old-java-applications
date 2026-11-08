@@ -14,8 +14,8 @@ export function openLayer(node: ReactNode): () => void {
 }
 
 /** The panel's × button. */
-export function CloseButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" className="shim-close" aria-label="Close" onClick={onClick}>{'×'}</button>;
+export function CloseButton({ onClick, label = 'Close', title }: { onClick: () => void; label?: string; title?: string }) {
+  return <button type="button" className="shim-close" aria-label={label} title={title} onClick={onClick}>{'×'}</button>;
 }
 
 /**

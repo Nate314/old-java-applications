@@ -1,5 +1,4 @@
-// The pieces the runtime's panels share: an app's card and the passport line. The DOM versions in
-// then-and-now.ts (appCard, passportLine) stay for the parts not yet in React.
+// The pieces the runtime's panels share: an app's card, the passport line and the desktop jar's link.
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { embedded } from '../skin';
 import { played } from '../passport';
@@ -9,12 +8,24 @@ import { JAR_JAVA, JAR_KEYS, pageOf } from '../then-and-now';
 /**
  * A link to an app's page. In the home page's player it asks the page to swap the app in instead, so the player's
  * title, rail and address stay in step. Played apps get a check on their thumbnail; with showNew, the others get a
- * New badge.
+ * New badge. text replaces the line under the name; onOpen, given, is what a plain click does instead (the Side by
+ * side picker docks the app), and current then marks it with aria-current="true".
  */
-export function AppCard({ app, current = false, showNew = false }: { app: OldjavaCatalogApp; current?: boolean; showNew?: boolean }) {
+export function AppCard({ app, current = false, showNew = false, text, onOpen }: {
+  app: OldjavaCatalogApp; current?: boolean; showNew?: boolean; text?: string; onOpen?: () => void;
+}) {
   const was = !!played[app.id];
+  const link = onOpen ? {
+    href: pageOf(app),
+    'data-sound': 'none',
+    onClick(e: MouseEvent) {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      onOpen();
+    },
+  } : playProps(app);
   return (
-    <a className={'shim-app' + (current ? ' current' : '')} aria-current={current ? 'page' : undefined} {...playProps(app)}>
+    <a className={'shim-app' + (current ? ' current' : '')} aria-current={current ? (onOpen ? 'true' : 'page') : undefined} {...link}>
       <span className="shim-app-pic">
         <img src={app.shot} alt="" />
         {(was || showNew) && (
@@ -23,7 +34,7 @@ export function AppCard({ app, current = false, showNew = false }: { app: Oldjav
       </span>
       <span className="shim-app-text">
         <strong>{app.name}</strong>
-        <span>{current ? 'Now playing' : app.hint}</span>
+        <span>{text ?? (current ? 'Now playing' : app.hint)}</span>
       </span>
     </a>
   );

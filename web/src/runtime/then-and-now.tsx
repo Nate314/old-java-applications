@@ -126,21 +126,6 @@ export function picks<T extends OldjavaCatalogApp>(apps: T[], id: string | null,
   return result.slice(0, count || 3);
 }
 
-// "4 of 16 apps played" and a bar, for the drawer and the exit screen.
-export function passportLine(apps: { id: string }[]) {
-  var count = apps.filter(function (a) { return played[a.id]; }).length;
-  var p = document.createElement('div');
-  p.className = 'shim-passport';
-  var text = document.createElement('span');
-  text.textContent = 'Passport: ' + count + ' of ' + apps.length + ' apps played';
-  var meter = document.createElement('span');
-  meter.className = 'shim-meter';
-  meter.style.setProperty('--p', String(count / apps.length));
-  p.appendChild(text);
-  p.appendChild(meter);
-  return p;
-}
-
 export function closeButton(onClick: () => void) {
   var b = document.createElement('button');
   b.type = 'button';
@@ -149,40 +134,6 @@ export function closeButton(onClick: () => void) {
   b.textContent = '\u00d7';
   b.addEventListener('click', onClick);
   return b;
-}
-
-// A link to an app's page. In the home page's player it asks the page to swap the app in instead,
-// so the player's title, rail and address stay in step.
-// Played apps get a check on their thumbnail; with showNew, the others get a New badge.
-export function appCard(app: OldjavaCatalogApp, current: boolean, showNew?: boolean) {
-  var a = document.createElement('a');
-  a.className = 'shim-app' + (current ? ' current' : '');
-  if (current) a.setAttribute('aria-current', 'page');
-  var pic = document.createElement('span');
-  pic.className = 'shim-app-pic';
-  var img = document.createElement('img');
-  img.src = app.shot;
-  img.alt = '';
-  pic.appendChild(img);
-  if (played[app.id] || showNew) {
-    var badge = document.createElement('span');
-    badge.className = 'shim-badge' + (played[app.id] ? ' played' : ' new');
-    badge.textContent = played[app.id] ? '✓' : 'New';
-    badge.title = played[app.id] ? 'Played' : 'Not played yet';
-    pic.appendChild(badge);
-  }
-  var text = document.createElement('span');
-  text.className = 'shim-app-text';
-  var name = document.createElement('strong');
-  name.textContent = app.name;
-  var hint = document.createElement('span');
-  hint.textContent = current ? 'Now playing' : app.hint;
-  text.appendChild(name);
-  text.appendChild(hint);
-  a.appendChild(pic);
-  a.appendChild(text);
-  playLink(a, app);
-  return a;
 }
 
 // Makes a link open the app: in the home page's player, by asking the page to swap it in.

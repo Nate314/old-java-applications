@@ -1,8 +1,12 @@
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { embedded } from './skin';
 import { openClip } from './replay';
 import { appId, catalog, root } from './catalog';
 import type { CatalogApp } from './catalog';
-import { appCard, closeButton, indexOf, ownKeys } from './then-and-now';
+import { indexOf } from './then-and-now';
+import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { AppCard } from './ui/cards';
 import { openShare } from './share';
 import { AGAIN_KEY } from './records';
 import { playSound } from './sounds';
@@ -10,7 +14,8 @@ import { findOff, openFind } from './find';
 import { openMaker } from './skin-maker';
 import { whenShown } from './toolbar-more';
 
-interface Dock { box: HTMLElement; frame: HTMLIFrameElement; pic: HTMLImageElement; label: HTMLElement; full: HTMLAnchorElement; id: string | null; name: string }
+/** The open panel: its frame, what shows another app in it, what takes it away, and the app it has. */
+interface Dock { frame: HTMLIFrameElement; show(app: CatalogApp): void; close(): void; id: string | null; name: string }
 interface DockSaved { app: string; w: number }
 
 let dockWide: Pick<MediaQueryList, 'matches' | 'addEventListener'>;
@@ -91,15 +96,9 @@ function dockOpen(id: string, focus: boolean) {
     dockSave({ app: id, w: dockFraction() });
     if (!dockWide.matches) return;
     if (dock && dock.id === id) { if (focus) dock.frame.focus(); return; }
-    if (!dock) dockBuild();
+    if (!dock) dockBuild(app); else dock.show(app);
     dock!.id = id;
     dock!.name = app.name;
-    dock!.label.textContent = app.name;
-    dock!.pic.src = app.shot;
-    dock!.full.href = root() + id + '/index.html';
-    dock!.frame.title = app.name + ', beside ' + document.title;
-    dock!.frame.src = root() + id + '/index.html?embed';
-    dock!.box.setAttribute('aria-label', app.name + ', side by side');
     document.documentElement.setAttribute('data-dock', '');
     dockSize(dockFraction());
     dockShowButton();
@@ -112,82 +111,87 @@ function dockOpen(id: string, focus: boolean) {
 
 function dockClose() {
   if (!dock) return;
-  dock.box.remove();
+  dock.close();
   dock = null;
   document.documentElement.removeAttribute('data-dock');
   document.documentElement.style.removeProperty('--dock-w');
   dockShowButton();
 }
 
-function dockBuild() {
-  var box = document.createElement('aside');
-  box.className = 'shim-dock';
-  var head = document.createElement('div');
-  head.className = 'shim-dock-head';
-  var pic = document.createElement('img');
-  pic.className = 'shim-dock-pic';
-  pic.alt = '';
-  var label = document.createElement('strong');
-  label.className = 'shim-dock-name';
-  var keys = document.createElement('span');
-  keys.className = 'shim-dock-keys';
-  keys.textContent = 'Keys here';
-  keys.title = 'Keys go to this app until you click the other one';
-  function tool(cls: string, glyph: string, text: string, title: string, onClick?: () => void) {
-    var b = document.createElement(onClick ? 'button' : 'a');
-    if (onClick) { b.type = 'button'; b.addEventListener('click', onClick); }
-    b.className = cls;
-    b.title = title;
-    b.innerHTML = '<span aria-hidden="true">' + glyph + '</span><span class="shim-dock-label"> ' + text + '</span>';
-    b.setAttribute('aria-label', text);
-    return b;
-  }
-  var swap = tool('shim-dock-swap', '⇄', 'Swap', 'Swap: make this the main app, with the other one beside it', function () {
+function dockBuild(app: CatalogApp) {
+  var show: ((app: CatalogApp) => void) | null = null, frame: HTMLIFrameElement | null = null;
+  const close = openLayer(<DockPanel app={app} onMount={(s, f) => { show = s; frame = f; }} />);
+  dock = { frame: frame!, show: show!, close, id: null, name: '' };
+}
+
+/** A tool in the panel's head: its glyph, and its name where there is room. */
+function DockTool({ glyph, text }: { glyph: string; text: string }) {
+  return <><span aria-hidden="true">{glyph}</span><span className="shim-dock-label">{' ' + text}</span></>;
+}
+
+/** The panel on the right of the stage: the docked app's page in an iframe, under a head of tools, with an edge. */
+function DockPanel({ app: first, onMount }: { app: CatalogApp; onMount: (show: (app: CatalogApp) => void, frame: HTMLIFrameElement) => void }) {
+  const box = useRef<HTMLElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const change = useRef<HTMLButtonElement>(null);
+  const [app, setApp] = useState(first);
+  const [active, setActive] = useState(false);
+  useOwnKeys(box);
+  useLayoutEffect(() => { onMount(a => flushSync(() => setApp(a)), frame.current!); }, []);
+  // Which app has the keys: the panel lights while its frame has the focus.
+  useEffect(() => {
+    const lit = () => setActive(document.activeElement === frame.current);
+    const blur = () => { setTimeout(lit, 0); };
+    window.addEventListener('blur', blur);
+    window.addEventListener('focus', lit);
+    document.addEventListener('focusin', lit);
+    return () => {
+      window.removeEventListener('blur', blur);
+      window.removeEventListener('focus', lit);
+      document.removeEventListener('focusin', lit);
+    };
+  }, []);
+  function swap() {
     if (!dock) return;
     var to = dock.id!;
     dockSave({ app: appId()!, w: dockFraction() });
     try { sessionStorage.setItem(AGAIN_KEY, to); } catch (e) { /* it opens on its title screen */ }
     location.href = root() + to + '/index.html';
-  });
-  var change = tool('shim-dock-change', '☰', 'Change', 'Pick another app for this side', function () { openDockPicker(change); });
-  var full = tool('shim-dock-full', '↗', 'Full page', 'Open it on its own page');
-  var close = closeButton(function () {
+  }
+  function close() {
     dockSave(null);
     dockClose();
     playSound('close');
     var b = dockButton();
     if (b) b.focus();
-  });
-  close.setAttribute('aria-label', 'Close the app beside');
-  close.title = 'Close it';
-  [pic, label, keys, swap, change, full, close].forEach(function (n) { head.appendChild(n); });
-  var frame = document.createElement('iframe');
-  frame.className = 'shim-dock-frame';
-  frame.setAttribute('allow', 'autoplay; clipboard-write; microphone');
-  var edge = document.createElement('div');
-  edge.className = 'shim-dock-edge';
-  edge.tabIndex = 0;
-  edge.setAttribute('role', 'separator');
-  edge.setAttribute('aria-orientation', 'vertical');
-  edge.setAttribute('aria-label', 'Resize the two apps (arrow keys)');
-  edge.title = 'Drag to give either app more room';
-  dockEdge(edge);
-  box.appendChild(edge);
-  box.appendChild(head);
-  box.appendChild(frame);
-  ownKeys(box);
-  // Which app has the keys: the panel lights while its frame has the focus.
-  function lit() { box.classList.toggle('shim-dock-active', document.activeElement === frame); }
-  window.addEventListener('blur', function () { setTimeout(lit, 0); });
-  window.addEventListener('focus', lit);
-  document.addEventListener('focusin', lit);
-  document.body.appendChild(box);
-  dock = { box: box, frame: frame, pic: pic, label: label, full: full as HTMLAnchorElement, id: null, name: '' };
+  }
+  return (
+    <aside className={'shim-dock' + (active ? ' shim-dock-active' : '')} aria-label={app.name + ', side by side'} ref={box}>
+      <DockEdge />
+      <div className="shim-dock-head">
+        <img className="shim-dock-pic" alt="" src={app.shot} />
+        <strong className="shim-dock-name">{app.name}</strong>
+        <span className="shim-dock-keys" title="Keys go to this app until you click the other one">Keys here</span>
+        <button type="button" className="shim-dock-swap" title="Swap: make this the main app, with the other one beside it" aria-label="Swap" onClick={swap}>
+          <DockTool glyph={'⇄'} text="Swap" />
+        </button>
+        <button type="button" className="shim-dock-change" title="Pick another app for this side" aria-label="Change" ref={change} onClick={() => openDockPicker(change.current!)}>
+          <DockTool glyph={'☰'} text="Change" />
+        </button>
+        <a className="shim-dock-full" title="Open it on its own page" aria-label="Full page" href={root() + app.id + '/index.html'}>
+          <DockTool glyph={'↗'} text="Full page" />
+        </a>
+        <CloseButton onClick={close} label="Close the app beside" title="Close it" />
+      </div>
+      <iframe className="shim-dock-frame" allow="autoplay; clipboard-write; microphone" title={app.name + ', beside ' + document.title}
+        src={root() + app.id + '/index.html?embed'} ref={frame} />
+    </aside>
+  );
 }
 
 // The panel's left edge: drag it, or use the arrow keys on it, to share the page between the two apps.
-function dockEdge(edge: HTMLElement) {
-  var dragging = false;
+function DockEdge() {
+  const dragging = useRef(false);
   function to(f: number) {
     f = Math.max(0.15, Math.min(0.75, f));
     dockSize(f);
@@ -197,109 +201,88 @@ function dockEdge(edge: HTMLElement) {
     var d = dockSaved();
     if (d) dockSave({ app: d.app, w: f });
   }
-  edge.addEventListener('pointerdown', function (e) {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    dragging = true;
-    edge.setPointerCapture(e.pointerId);
-    document.documentElement.setAttribute('data-dock-drag', '');
-  });
-  edge.addEventListener('pointermove', function (e) {
-    if (dragging) to((innerWidth - e.clientX) / innerWidth);
-  });
-  function stop(e: PointerEvent) {
-    if (!dragging) return;
-    dragging = false;
+  function stop(e: ReactPointerEvent) {
+    if (!dragging.current) return;
+    dragging.current = false;
     document.documentElement.removeAttribute('data-dock-drag');
     keep(to((innerWidth - e.clientX) / innerWidth));
   }
-  edge.addEventListener('pointerup', stop);
-  edge.addEventListener('pointercancel', stop);
-  edge.addEventListener('keydown', function (e) {
-    var step = e.key === 'ArrowLeft' ? 0.05 : e.key === 'ArrowRight' ? -0.05 : 0;
-    if (!step) return;
-    e.preventDefault();
-    var px = dock ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dock-w')) : 0;
-    keep(to((px || dockPixels(dockFraction())) / innerWidth + step));
-  });
+  return (
+    <div className="shim-dock-edge" tabIndex={0} role="separator" aria-orientation="vertical" aria-label="Resize the two apps (arrow keys)"
+      title="Drag to give either app more room"
+      onPointerDown={e => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dragging.current = true;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        document.documentElement.setAttribute('data-dock-drag', '');
+      }}
+      onPointerMove={e => { if (dragging.current) to((innerWidth - e.clientX) / innerWidth); }}
+      onPointerUp={stop}
+      onPointerCancel={stop}
+      onKeyDown={e => {
+        var step = e.key === 'ArrowLeft' ? 0.05 : e.key === 'ArrowRight' ? -0.05 : 0;
+        if (!step) return;
+        e.preventDefault();
+        var px = dock ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dock-w')) : 0;
+        keep(to((px || dockPixels(dockFraction())) / innerWidth + step));
+      }} />
+  );
 }
 
 // The picker: good companions for this app first, then every app, in the same cards as Switch app.
 function openDockPicker(opener: HTMLElement) {
   if (dockPicker) return;
-  var scrim = document.createElement('div');
-  scrim.className = 'shim-scrim';
-  var panel = document.createElement('aside');
-  panel.className = 'shim-drawer shim-dock-picker';
-  panel.setAttribute('aria-label', 'Side by side');
-  var head = document.createElement('div');
-  head.className = 'shim-drawer-head';
-  var title = document.createElement('strong');
-  title.textContent = 'Side by side';
-  var intro = document.createElement('p');
-  intro.className = 'shim-dock-intro';
-  intro.textContent = 'Run a second app beside this one, each in its own half. It stays open as you go from app to app.';
-  var list = document.createElement('div');
-  list.className = 'shim-drawer-list';
   function shut() {
     playSound('close');
-    scrim.remove();
-    panel.remove();
-    dockPicker = null;
+    gone();
     if (opener && opener.isConnected) opener.focus();
   }
-  var close = closeButton(shut);
-  head.appendChild(title);
-  head.appendChild(close);
-  panel.appendChild(head);
-  panel.appendChild(intro);
-  panel.appendChild(list);
-  scrim.addEventListener('click', shut);
-  ownKeys(panel, shut);
-  document.body.appendChild(scrim);
-  document.body.appendChild(panel);
-  dockPicker = panel;
+  function gone() {
+    close();
+    dockPicker = null;
+  }
+  const close = openLayer(<DockPicker onClose={shut} onPick={id => { gone(); dockOpen(id, true); }} onPanel={el => { dockPicker = el; }} />);
   playSound('open');
-  catalog().then(function (apps: CatalogApp[]) {
-    var here = appId(), open = dock && dock.id;
-    var good = (DOCK_PAIRS[here!] || []).concat(DOCK_EVERY).filter(function (id, i, all) {
-      return id !== here && all.indexOf(id) === i && indexOf(apps, id) >= 0;
-    });
-    function heading(text: string) {
-      var h = document.createElement('h3');
-      h.className = 'shim-dock-heading';
-      h.textContent = text;
-      list.appendChild(h);
-    }
-    function card(app: CatalogApp) {
-      var a = appCard(app, false);
-      if (app.id === open) {
-        a.classList.add('current');
-        a.setAttribute('aria-current', 'true');
-        a.querySelector('.shim-app-text span')!.textContent = 'Beside this app now';
-      } else if (DOCK_WHY[app.id] && good.indexOf(app.id) >= 0) {
-        a.querySelector('.shim-app-text span')!.textContent = DOCK_WHY[app.id];
-      }
-      a.setAttribute('data-sound', 'none');   // the panel plays its own open sound
-      a.addEventListener('click', function (e) {
-        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-        e.preventDefault();
-        scrim.remove();
-        panel.remove();
-        dockPicker = null;
-        dockOpen(app.id, true);
-      });
-      list.appendChild(a);
-    }
-    if (good.length) {
-      heading('Good together');
-      good.forEach(function (id) { card(apps[indexOf(apps, id)]); });
-      heading('Every app');
-    }
-    apps.forEach(function (app) { if (app.id !== here && good.indexOf(app.id) < 0) card(app); });
-    (list.querySelector<HTMLElement>('.shim-app:not(.current)') || close).focus();
-  });
+}
+
+function DockPicker({ onClose, onPick, onPanel }: { onClose: () => void; onPick: (id: string) => void; onPanel: (el: HTMLElement) => void }) {
+  const panel = useRef<HTMLElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const [apps, setApps] = useState<CatalogApp[] | null>(null);
+  useOwnKeys(panel, onClose);
+  useLayoutEffect(() => { onPanel(panel.current!); }, []);
+  useEffect(() => { catalog().then(setApps); }, []);
+  useLayoutEffect(() => {
+    if (apps) (list.current!.querySelector<HTMLElement>('.shim-app:not(.current)') || panel.current!.querySelector<HTMLElement>('.shim-close')!).focus();
+  }, [apps]);
+  const here = appId(), open = dock && dock.id;
+  const good = apps ? (DOCK_PAIRS[here!] || []).concat(DOCK_EVERY).filter(function (id, i, all) {
+    return id !== here && all.indexOf(id) === i && indexOf(apps, id) >= 0;
+  }) : [];
+  function card(app: CatalogApp) {
+    const text = app.id === open ? 'Beside this app now' : DOCK_WHY[app.id] && good.indexOf(app.id) >= 0 ? DOCK_WHY[app.id] : undefined;
+    return <AppCard key={app.id} app={app} current={app.id === open} text={text} onOpen={() => onPick(app.id)} />;
+  }
+  return (
+    <>
+      <div className="shim-scrim" onClick={onClose} />
+      <aside className="shim-drawer shim-dock-picker" aria-label="Side by side" ref={panel}>
+        <div className="shim-drawer-head">
+          <strong>Side by side</strong>
+          <CloseButton onClick={onClose} />
+        </div>
+        <p className="shim-dock-intro">Run a second app beside this one, each in its own half. It stays open as you go from app to app.</p>
+        <div className="shim-drawer-list" ref={list}>
+          {apps && good.length > 0 && <h3 className="shim-dock-heading">Good together</h3>}
+          {apps && good.map(id => card(apps[indexOf(apps, id)]))}
+          {apps && good.length > 0 && <h3 className="shim-dock-heading">Every app</h3>}
+          {apps && apps.filter(app => app.id !== here && good.indexOf(app.id) < 0).map(card)}
+        </div>
+      </aside>
+    </>
+  );
 }
 
 export function init() {
