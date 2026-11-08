@@ -40,7 +40,7 @@ export function AppCard({ app, current = false, showNew = false, text, onOpen }:
   );
 }
 
-/** What makes a link open the app (playLink in then-and-now.ts): in the home page's player, by asking it to. */
+/** What makes a link open the app: in the home page's player, by asking the page to swap it in. */
 export function playProps(app: { id: string }) {
   if (!(embedded && window.parent !== window)) return { href: pageOf(app) };
   return {
@@ -52,6 +52,12 @@ export function playProps(app: { id: string }) {
       window.parent.postMessage({ oldjavaPlay: app.id }, location.origin);
     },
   };
+}
+
+/** Opens the app, as a click on its playProps link does. */
+export function play(app: { id: string }) {
+  if (embedded && window.parent !== window) window.parent.postMessage({ oldjavaPlay: app.id }, location.origin);
+  else location.href = pageOf(app);
 }
 
 /** "Passport: 4 of 16 apps played" and a bar, for the drawer and the exit screen. */

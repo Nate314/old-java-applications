@@ -13,14 +13,15 @@ export function openLayer(node: ReactNode, into: Element = document.body): () =>
   return () => root.unmount();
 }
 
-/** The panel's × button. */
-export function CloseButton({ onClick, label = 'Close', title }: { onClick: () => void; label?: string; title?: string }) {
-  return <button type="button" className="shim-close" aria-label={label} title={title} onClick={onClick}>{'×'}</button>;
+/** The panel's × button. sound, given, is its data-sound (none: the click plays the panel's own sound instead). */
+export function CloseButton({ onClick, label = 'Close', title, sound }: { onClick: () => void; label?: string; title?: string; sound?: string }) {
+  return <button type="button" className="shim-close" aria-label={label} title={title} data-sound={sound} onClick={onClick}>{'×'}</button>;
 }
 
 /**
  * Keys pressed in a panel are its own: they stop at the panel, before the app's listeners and the title screen's
- * see them, and Escape closes it (ownKeys in then-and-now.ts, for the panels not yet in React).
+ * see them, and Escape closes it. They stop before
+ * React's own listener on the body sees them too, so a key handler inside such a panel is onKeyDownCapture.
  */
 export function useOwnKeys(ref: RefObject<HTMLElement | null>, onEscape?: () => void) {
   useLayoutEffect(() => {

@@ -221,7 +221,7 @@ function DockEdge() {
       onPointerMove={e => { if (dragging.current) to((innerWidth - e.clientX) / innerWidth); }}
       onPointerUp={stop}
       onPointerCancel={stop}
-      onKeyDown={e => {
+      onKeyDownCapture={e => {
         var step = e.key === 'ArrowLeft' ? 0.05 : e.key === 'ArrowRight' ? -0.05 : 0;
         if (!step) return;
         e.preventDefault();

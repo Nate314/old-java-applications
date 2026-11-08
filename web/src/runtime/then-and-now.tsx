@@ -126,38 +126,6 @@ export function picks<T extends OldjavaCatalogApp>(apps: T[], id: string | null,
   return result.slice(0, count || 3);
 }
 
-export function closeButton(onClick: () => void) {
-  var b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'shim-close';
-  b.setAttribute('aria-label', 'Close');
-  b.textContent = '\u00d7';
-  b.addEventListener('click', onClick);
-  return b;
-}
-
-// Makes a link open the app: in the home page's player, by asking the page to swap it in.
-export function playLink(a: HTMLAnchorElement, app: { id: string }) {
-  a.href = pageOf(app);
-  if (embedded && window.parent !== window) {
-    a.setAttribute('data-sound', 'none');   // the home page plays the new app's start
-    a.addEventListener('click', function (e) {
-      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-      e.preventDefault();
-      window.parent.postMessage({ oldjavaPlay: app.id }, location.origin);
-    });
-  }
-}
-
-// Keys typed in the page chrome must not reach the app (the shim listens on the document).
-export function ownKeys(el: HTMLElement, onEscape?: () => void) {
-  el.addEventListener('keydown', function (e) {
-    e.stopPropagation();
-    if (e.key === 'Escape' && onEscape) onEscape();
-  });
-  el.addEventListener('keyup', function (e) { e.stopPropagation(); });
-}
-
 export function openDrawer(opener: HTMLElement) {
   if (drawer) return;
   function shut() {
