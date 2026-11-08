@@ -23,7 +23,7 @@ declare global {
 }
 (function () {
   'use strict';
-  var BASE = new URL('.', (document.currentScript as HTMLScriptElement).src).href;
+  var BASE = new URL(/* @vite-ignore */ '..', import.meta.url).href;   // this module is assets/news.js
   var LAST_KEY = 'oldjava.lastPlayed';
   var PLAYED_KEY = 'oldjava.played';
   var SHOWN = 6;        // cards before Show all
@@ -258,4 +258,4 @@ declare global {
   if (section) home(section);
 })();
 
-export {};   // a module: built on its own into news.js (vite/pages.ts)
+export {};   // a module, imported when it is needed (its chunk is assets/news.js)

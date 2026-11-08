@@ -1,4 +1,3 @@
-import { root } from './catalog';
 
 interface RecordRule { file: string; show(text: string, saved: (name: string) => string | null): string }
 type NewsStory = Pick<NonNullable<Window['oldjavaNews']>, 'story'>;
@@ -87,12 +86,7 @@ function recordOf(id: string, saves: Record<string, string>) {
 
 export function newsScript() {
   if (!newsPromise) newsPromise = new Promise<NewsStory>(function (resolve, reject) {
-    if (window.oldjavaNews) { resolve(window.oldjavaNews); return; }
-    var tag = document.createElement('script');
-    tag.src = root() + 'news.js';
-    tag.onload = function () { resolve(window.oldjavaNews!); };
-    tag.onerror = function () { reject(new Error('news.js did not load')); };
-    document.head.appendChild(tag);
+    import('./lazy/news').then(function () { resolve(window.oldjavaNews!); }, function () { reject(new Error('news.js did not load')); });
   }).catch(function (e) { console.warn(e.message); return { story: function () {} }; });
   return newsPromise;
 }

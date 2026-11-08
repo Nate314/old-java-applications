@@ -46,10 +46,9 @@ export function initTakeaway(): void {
   const abs = (path: string) => new URL(path, location.href).href;
   // The pages' own scripts and stylesheets are listed by the build (assets/files.json, see vite/pages.ts).
   function shell(bundle: string[]) {
-    const files = ['./', 'index.html', 'news.js', 'clockbar.js', 'find.js', 'history.txt', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
+    const files = ['./', 'index.html', 'history.txt', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
                    'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'apps.json', 'assets/files.json'];
     files.push(...bundle);
-    files.push('skinmaker.js');   // Your skin's maker panel (boot.js adds it when it opens)
     files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg');   // the story page and what it shows
     cards.forEach(li => files.push(one('img', li).getAttribute('src') as string));
     return files.map(abs);

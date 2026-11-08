@@ -1,6 +1,6 @@
 // Builds the site's HTML pages from src/routes.tsx, so no HTML file is kept in the source.
 //  - A page served at a fixed address becomes a Vite HTML entry: its document is generated here (the route's head,
-//    rendered with React, a #root, its module and its deferred scripts) and Vite then adds the page's stylesheet
+//    rendered with React, a #root and its module) and Vite then adds the page's stylesheet
 //    and bundles its module, as for a hand-written index.html.
 //  - The page served at any depth (404.html) is written after bundling, with its styles inlined and an inline
 //    loader that imports its module from the site root it finds (src/pages/notfound/loader.ts).
@@ -11,8 +11,8 @@
 // (src/runtime/early.ts, the skin before first paint) is inlined in those pages where <EarlyScript /> stands.
 // It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages,
 // assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline, and the
-// plain scripts at the site root (SCRIPTS): the ones the runtime adds to a page when they are needed and the
-// service worker (src/sw/sw.ts) as sw.js.
+// service worker (src/sw/sw.ts) as sw.js, a plain script at the site root. What the runtime adds to a page once it is
+// needed (src/runtime/lazy) is imported, so Vite writes it as chunks of its own.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -26,17 +26,7 @@ import { APPS } from '../src/shared/catalog';
 
 const root = resolve(__dirname, '..');
 
-/** Classic scripts written at the site root, each bundled from its TypeScript entry into one file. */
-const SCRIPTS: Record<string, string> = {
-  // What boot.js adds to a page once it is needed (src/runtime/lazy), and the home page's What's new.
-  'find.js': 'src/runtime/lazy/find.ts',
-  'news.js': 'src/runtime/lazy/news.ts',
-  'clockbar.js': 'src/runtime/lazy/clockbar.ts',
-  'skinmaker.js': 'src/runtime/lazy/skinmaker.ts',
-  'embed.js': 'src/runtime/lazy/embed.ts',
-  'sw.js': 'src/sw/sw.ts',
-};
-
+/** A classic script bundled from its TypeScript entry into one file. */
 async function script(entry: string, minify = false): Promise<string> {
   const out = await build({ entryPoints: [resolve(root, entry)], bundle: true, format: 'iife', target: 'es2020', minify, write: false, logLevel: 'error' });
   return out.outputFiles[0].text;
@@ -93,8 +83,7 @@ export function pages(): Plugin {
     async load(id) {
       const r = byId.get(id);
       if (!r) return null;
-      const after = (r.after ?? []).map(src => '<script defer src="' + src + '"></script>\n').join('');
-      return withEarly(document(r, '<script type="module" src="/' + r.entry + '"></script>\n' + after));
+      return withEarly(document(r, '<script type="module" src="/' + r.entry + '"></script>\n'));
     },
     // Vite joins a page's module scripts into one entry script; a page that runs the runtime (<RuntimeScript />)
     // keeps it render-blocking, as the runtime's own script is on the app pages.
@@ -110,7 +99,7 @@ export function pages(): Plugin {
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
       for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: await withEarly(appPage(app)) });
       for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: await withEarly(thenPage(app)) });
-      for (const [fileName, entry] of Object.entries(SCRIPTS)) this.emitFile({ type: 'asset', fileName, source: await script(entry) });
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts') });
       const files = Object.keys(bundle).filter(name => name.startsWith('assets/')).sort();
       this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files) + '\n' });
       for (const r of ROUTES.filter(x => x.anyDepth)) {

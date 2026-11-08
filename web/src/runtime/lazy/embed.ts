@@ -195,4 +195,4 @@ type Choice = HTMLDivElement & { set(v: string): void; enable(id: string, on: bo
   window.oldjavaEmbed = { build: build };
 })();
 
-export {};   // a module: built on its own into embed.js (vite/pages.ts)
+export {};   // a module, imported when it is needed (its chunk is assets/embed.js)

@@ -1,6 +1,5 @@
 import { siteRoot } from './install';
 import { WATCH } from './watch';
-import { root } from './catalog';
 import { openShare, shareBox } from './share';
 import { playSound } from './sounds';
 import type { CatalogApp } from './catalog';
@@ -17,11 +16,7 @@ let embedOpenNext: boolean;
 
 function embedScript() {
   if (!embedPromise) embedPromise = new Promise(function (resolve, reject) {
-    var tag = document.createElement('script');
-    tag.src = root() + 'embed.js';
-    tag.onload = function () { resolve(window.oldjavaEmbed!); };
-    tag.onerror = function () { embedPromise = null; reject(new Error('embed.js did not load')); };
-    document.head.appendChild(tag);
+    import('./lazy/embed').then(function () { resolve(window.oldjavaEmbed!); }, function () { embedPromise = null; reject(new Error('embed.js did not load')); });
   });
   return embedPromise;
 }

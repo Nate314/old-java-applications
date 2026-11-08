@@ -239,4 +239,4 @@ interface Parts {
   window.oldjavaSkinMaker = { open: open, offer: offer, close: shut, isOpen: function () { return !!(panel && panel.isConnected); } };
 })();
 
-export {};   // a module: built on its own into skinmaker.js (vite/pages.ts)
+export {};   // a module, imported when it is needed (its chunk is assets/skinmaker.js)

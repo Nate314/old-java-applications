@@ -251,4 +251,4 @@ type Moment =
   document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
 })();
 
-export {};   // a module: built on its own into clockbar.js (vite/pages.ts)
+export {};   // a module, imported when it is needed (its chunk is assets/clockbar.js)

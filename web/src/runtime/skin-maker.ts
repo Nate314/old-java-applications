@@ -20,11 +20,7 @@ let makerPromise: Promise<OldjavaSkinMaker> | null;
 
 function makerScript() {
   if (!makerPromise) makerPromise = new Promise(function (resolve, reject) {
-    var tag = document.createElement('script');
-    tag.src = root() + 'skinmaker.js';
-    tag.onload = function () { resolve(window.oldjavaSkinMaker!); };
-    tag.onerror = function () { makerPromise = null; reject(new Error('skinmaker.js did not load')); };
-    document.head.appendChild(tag);
+    import('./lazy/skinmaker').then(function () { resolve(window.oldjavaSkinMaker!); }, function () { makerPromise = null; reject(new Error('skinmaker.js did not load')); });
   });
   return makerPromise;
 }

@@ -13,8 +13,6 @@ export interface Route {
   entry: string;
   /** What goes in <head>, before the page's own stylesheet, which the build adds. */
   head: ReactNode;
-  /** Classic scripts that run after the page's module, in order (deferred). */
-  after?: string[];
   /** Shown in #root until the page's module replaces it. */
   placeholder?: ReactNode;
   /** Served at any depth (the lost page): the build inlines its styles and loads its module from the site root. */
@@ -29,7 +27,7 @@ const homeDescription = 'Java Swing and AWT programs recovered from old jars, co
 
 export const ROUTES: Route[] = [
   // The home page: the player, Your arcade and the gallery. boot.js (the site's shared runtime, as on every app
-  // page) runs before it (its module imports it first); news.js after it. The share tags point at the card web/cards.ps1
+  // page) runs before it (its module imports it first), and What's new (src/runtime/lazy/news.ts) after it. The share tags point at the card web/cards.ps1
   // renders, as the app pages' do (src/pages/app/AppPage.tsx); -Dsite.url makes og:url and og:image absolute
   // (web/apps/pom.xml).
   {
@@ -58,7 +56,6 @@ export const ROUTES: Route[] = [
         <RuntimeScript src="/src/runtime/main.ts" />
       </>
     ),
-    after: ['news.js'],
   },
   // The embeddable player: play.html?app=<App> goes in an iframe on any other site (the Share panel's "Put it on
   // your site" writes the tag, see embed.js and web/README.md, Embed). It shows a poster first (the app's

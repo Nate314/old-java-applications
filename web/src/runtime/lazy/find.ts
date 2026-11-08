@@ -446,4 +446,4 @@ interface Item {
   window.oldjavaFind = { open: open, isOpen: function () { return !!box; }, key: KEY };
 })();
 
-export {};   // a module: built on its own into find.js (vite/pages.ts)
+export {};   // a module, imported when it is needed (its chunk is assets/find.js)

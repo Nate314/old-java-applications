@@ -21,9 +21,7 @@ export function clockFollows() {
     try { saved = localStorage.getItem(CLOCK_SAVES) || ''; } catch (e) { return; }
     if (added || !CLOCK_RUNNING.test(saved)) return;
     added = true;
-    var tag = document.createElement('script');
-    tag.src = root() + 'clockbar.js';
-    document.head.appendChild(tag);
+    import('./lazy/clockbar').catch(function () { console.warn('clockbar.js did not load'); });
   }
   check();
   window.addEventListener('storage', function (e) { if (e.key === CLOCK_SAVES) check(); });

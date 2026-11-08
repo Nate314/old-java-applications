@@ -15,11 +15,7 @@ let findHeldTimer: number | ReturnType<typeof setInterval>;
 
 function findScript() {
   if (!findPromise) findPromise = new Promise(function (resolve, reject) {
-    var tag = document.createElement('script');
-    tag.src = root() + 'find.js';
-    tag.onload = function () { resolve(window.oldjavaFind!); };
-    tag.onerror = function () { findPromise = null; reject(new Error('find.js did not load')); };
-    document.head.appendChild(tag);
+    import('./lazy/find').then(function () { resolve(window.oldjavaFind!); }, function () { findPromise = null; reject(new Error('find.js did not load')); });
   });
   return findPromise;
 }

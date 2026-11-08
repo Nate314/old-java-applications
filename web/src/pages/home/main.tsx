@@ -5,9 +5,10 @@ import { initTakeaway } from './takeaway';
 import { initClips } from './clips';
 import { initArcadeTabs } from './tabs';
 
-// In the order the page's scripts ran when it was static HTML; news.js follows (deferred).
+// In the order the page's scripts ran when it was static HTML; What's new follows (it was a deferred news.js).
 mount(<Home />);
 initPlayer();
 initTakeaway();
 initClips();
 initArcadeTabs();
+import('../../runtime/lazy/news');
