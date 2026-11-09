@@ -14,6 +14,7 @@ import { setSoundOn, soundOn } from './sounds';
 import { findMac, findOff, openFind } from './find';
 import { docked, openDockPicker } from './side-by-side';
 import { openMaker } from './skin-maker';
+import { More } from './toolbar-more';
 import { openLayer } from './ui/layer';
 
 export let siteRoot: string;
@@ -29,8 +30,8 @@ function headLink(rel: string, href: string, type?: string) {
 
 // The band at the top of every page but an embedded one: on an app page the app's name (where the band's news
 // line shows), its controls and a link to the next app; on every page Find, Sound, the skin picker and Edit (your
-// own skin), and the Clock chip while one of Clock's times runs (lazy/clockbar.tsx says what it shows). More adds
-// itself to it and hides what does not fit by a class.
+// own skin), and the Clock chip while one of Clock's times runs (lazy/clockbar.tsx says what it shows). At its end,
+// More (toolbar-more.tsx) hides what does not fit, by a class on the controls.
 let redraw: (() => void) | null = null;
 /** Draws the band's toggles again, so Sound, Fit and Pop out say what they are doing now. */
 export function redrawBar() { if (redraw) redraw(); }
@@ -173,6 +174,7 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
           <span aria-hidden="true">{'✎'}</span><span className="shim-own-edit-label"> Edit</span>
         </button>
       )}
+      {isApp && <More />}
     </div>
   );
 }
