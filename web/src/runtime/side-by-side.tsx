@@ -10,6 +10,7 @@ import { AppCard } from './ui/cards';
 import { openShare } from './share';
 import { AGAIN_KEY } from './records';
 import { playSound } from './sounds';
+import { redrawBar } from './install';
 import { findOff, openFind } from './find';
 import { openMaker } from './skin-maker';
 import { whenShown } from './toolbar-more';
@@ -80,13 +81,9 @@ function dockSize(f: number) {
 
 function dockButton() { return document.querySelector<HTMLElement>('.shim-toolbar .shim-dock-open'); }
 
-function dockShowButton() {
-  var b = dockButton();
-  if (!b) return;
-  b.setAttribute('aria-pressed', String(!!dock));
-  b.title = dock ? dock.name + ' is open beside this app. Click to pick another, or close it from its panel.'
-    : 'Side by side: run a second app beside this one';
-}
+/** The app open beside this one, for the toolbar's Side by side button: its name, or null. */
+export function docked() { return dock ? dock.name : null; }
+function dockShowButton() { redrawBar(); }
 
 function dockOpen(id: string, focus: boolean) {
   if (!id || id === appId()) return;
@@ -232,7 +229,7 @@ function DockEdge() {
 }
 
 // The picker: good companions for this app first, then every app, in the same cards as Switch app.
-function openDockPicker(opener: HTMLElement) {
+export function openDockPicker(opener: HTMLElement) {
   if (dockPicker) return;
   function shut() {
     playSound('close');
@@ -301,19 +298,7 @@ export function init() {
     else if (d.oldjavaSkinMaker) openMaker(dock.frame);
   });
   if (!embedded && !findOff) document.addEventListener('DOMContentLoaded', function () {
-    var bar = document.querySelector('.shim-toolbar');
-    if (!bar || !document.body.hasAttribute('data-app')) return;
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'shim-dock-open';
-    b.setAttribute('aria-pressed', 'false');
-    b.setAttribute('aria-label', 'Side by side');
-    b.setAttribute('data-sound', 'none');   // the picker plays its own open sound
-    b.innerHTML = '<span aria-hidden="true">◫</span><span class="shim-dock-label"> Side by side</span>';
-    b.addEventListener('click', function () { openDockPicker(b); b.blur(); });
-    var at = bar.querySelector('.shim-source-open');
-    bar.insertBefore(b, at || null);
-    dockShowButton();
+    if (!document.querySelector('.shim-toolbar') || !document.body.hasAttribute('data-app')) return;   // its button is the toolbar's
     // The app picked on an earlier page opens again here, once the page is in view (a prerendered page waits).
     whenShown(function () {
       var d = dockSaved();

@@ -11,6 +11,9 @@ import { EraSwitch, indexOf, openDrawer, pageOf } from './then-and-now';
 import { openShare } from './share';
 import { howToPlay } from './source-viewer';
 import { setSoundOn, soundOn } from './sounds';
+import { findMac, findOff, openFind } from './find';
+import { docked, openDockPicker } from './side-by-side';
+import { openMaker } from './skin-maker';
 import { openLayer } from './ui/layer';
 
 export let siteRoot: string;
@@ -25,9 +28,9 @@ function headLink(rel: string, href: string, type?: string) {
 }
 
 // The band at the top of every page but an embedded one: on an app page the app's name (where the band's news
-// line shows), its controls and a link to the next app; on every page Sound and the skin picker. Other parts add
-// buttons of their own to it (Find, Side by side, Edit, the Clock chip, More), and More hides the ones that do not
-// fit by a class, so the band's own children never come or go once it is drawn: they only show or hide.
+// line shows), its controls and a link to the next app; on every page Find, Sound, the skin picker and Edit (your
+// own skin). The Clock chip and More add themselves to it, and More hides what does not fit by a class, so the
+// band's own children never come or go once it is drawn: they only show or hide.
 let redraw: (() => void) | null = null;
 /** Draws the band's toggles again, so Sound, Fit and Pop out say what they are doing now. */
 export function redrawBar() { if (redraw) redraw(); }
@@ -60,17 +63,33 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
     });
   }, []);
   const blur = (e: { currentTarget: HTMLElement }) => e.currentTarget.blur();
-  const on = soundOn(), fit = zoomFit(), s = window.__shimScale || 1;
+  const on = soundOn(), fit = zoomFit(), s = window.__shimScale || 1, beside = docked(), key = findMac ? '⌘K' : 'Ctrl K';
+  // data-sound="none" on Find, Side by side and Edit too: what they open plays its own sound
+  const find = !findOff && (
+    <button type="button" className="shim-find-open" title={'Find an app, something to do or a source file (' + key + ')'}
+      aria-keyshortcuts={findMac ? 'Meta+K' : 'Control+K'} data-sound="none" onClick={e => { openFind(e.currentTarget); blur(e); }}>
+      <span aria-hidden="true">{'⌕'}</span><span className="shim-find-label"> Find</span><kbd>{key}</kbd>
+    </button>
+  );
   return (
     <div className="shim-toolbar" ref={bar}>
+      {!isApp && find}
       {isApp && (
         <>
           <div className="shim-bar-slot" ref={slot}><strong className="shim-bar-name">{document.title}</strong></div>
           <button type="button" className="shim-help" title="How to play: show the hint in this band" aria-label="How to play" aria-pressed={hint}
             onClick={e => { if (news!.kind() === 'hint') news!.clear(); else howToPlay(); blur(e); }}>?</button>
+          {find}
           <EraSwitch className="shim-era" />
           <a href="../index.html">All apps</a>
           <button type="button" className="shim-switch-open" onClick={e => openDrawer(e.currentTarget)}>Switch app</button>
+          {!findOff && (
+            <button type="button" className="shim-dock-open" aria-pressed={!!beside} aria-label="Side by side" data-sound="none"
+              title={beside ? beside + ' is open beside this app. Click to pick another, or close it from its panel.' : 'Side by side: run a second app beside this one'}
+              onClick={e => { openDockPicker(e.currentTarget); blur(e); }}>
+              <span aria-hidden="true">{'◫'}</span><span className="shim-dock-label"> Side by side</span>
+            </button>
+          )}
           {/* data-sound="none" on these three: the panel plays its own open sound */}
           <a href="#source" className="shim-source-open" title="Read the Java source of this app while it runs" data-sound="none">
             {'</>'}<span> Source</span>
@@ -119,10 +138,21 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
       <label>
         {'Skin '}
         {/* uncontrolled: the skin's own code sets its value when the skin changes */}
-        <select defaultValue={document.documentElement.getAttribute('data-skin')!} onChange={e => { setSkin(e.currentTarget.value); blur(e); }}>
+        <select defaultValue={document.documentElement.getAttribute('data-skin')!} onChange={e => {
+          const select = e.currentTarget;
+          setSkin(select.value);
+          blur(e);
+          if (!findOff && select.value === 'own') openMaker(select);
+        }}>
           {SKINS.map(o => <option key={o[0]} value={o[0]}>{o[1]}</option>)}
         </select>
       </label>
+      {!findOff && (
+        <button type="button" className="shim-own-edit" title="Change your skin: its color, desk, corners and windows" data-sound="none"
+          onClick={e => { openMaker(e.currentTarget); blur(e); }}>
+          <span aria-hidden="true">{'✎'}</span><span className="shim-own-edit-label"> Edit</span>
+        </button>
+      )}
     </div>
   );
 }

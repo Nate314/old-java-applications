@@ -51,18 +51,6 @@ export function init() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-skin-maker]'), function (b: Element) {
       b.addEventListener('click', function () { openMaker(b); });
     });
-    var select = document.querySelector('.shim-toolbar select') as HTMLSelectElement | null;
-    if (select && !embedded) {
-      select.addEventListener('change', function () { if (select!.value === 'own') openMaker(select); });
-      var edit = document.createElement('button');
-      edit.type = 'button';
-      edit.className = 'shim-own-edit';
-      edit.title = 'Change your skin: its color, desk, corners and windows';
-      edit.setAttribute('data-sound', 'none');   // the panel plays its own open sound
-      edit.innerHTML = '<span aria-hidden="true">✎</span><span class="shim-own-edit-label"> Edit</span>';
-      edit.addEventListener('click', function () { openMaker(edit); edit.blur(); });
-      select.parentNode!.parentNode!.insertBefore(edit, select.parentNode!.nextSibling);
-    }
     if (skinOffer) makerScript().then(function (maker) { maker.offer(); }, function (e: Error) { console.warn(e.message); });
   });
 }

@@ -8,7 +8,7 @@ import { playSound } from './sounds';
 type OldjavaFind = NonNullable<Window['oldjavaFind']>;
 
 let findPromise: Promise<OldjavaFind> | null;
-let findMac: boolean;
+export let findMac: boolean;
 export let findOff: boolean;
 let findHeld: string[] | null;
 let findHeldTimer: number | ReturnType<typeof setInterval>;
@@ -104,7 +104,7 @@ export function init() {
     if (e.origin !== location.origin || !e.data || !e.data.oldjavaFind || root()) return;
     openFind(document.getElementById('player-frame'));
   });
-  // A Find button in the toolbar, and any [data-find] button of the page (the home page has one by its gallery).
+  // Any [data-find] button of the page (the home page has one by its gallery); the toolbar draws its own.
   if (!findOff) document.addEventListener('DOMContentLoaded', function () {
     var key = findMac ? '⌘K' : 'Ctrl K';
     Array.prototype.forEach.call(document.querySelectorAll('[data-find]'), function (b: Element) {
@@ -112,17 +112,5 @@ export function init() {
       if (shortcut) shortcut.textContent = key;
       b.addEventListener('click', function () { openFind(b); });
     });
-    var bar = document.querySelector('.shim-toolbar');
-    if (!bar || embedded) return;
-    var find = document.createElement('button');
-    find.type = 'button';
-    find.className = 'shim-find-open';
-    find.title = 'Find an app, something to do or a source file (' + key + ')';
-    find.setAttribute('aria-keyshortcuts', findMac ? 'Meta+K' : 'Control+K');
-    find.setAttribute('data-sound', 'none');   // the box plays its own open sound
-    find.innerHTML = '<span aria-hidden="true">⌕</span><span class="shim-find-label"> Find</span><kbd>' + key + '</kbd>';
-    find.addEventListener('click', function () { openFind(find); find.blur(); });
-    var after = bar.querySelector('.shim-help') || bar.querySelector('.shim-bar-slot');
-    if (after) bar.insertBefore(find, after.nextSibling); else bar.insertBefore(find, bar.firstChild);
   });
 }
