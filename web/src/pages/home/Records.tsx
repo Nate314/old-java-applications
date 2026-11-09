@@ -8,6 +8,7 @@ import { APPS } from '../../shared/catalog';
 import { qr, type QrCode as Code } from '../../shared/qr';
 import { QrCode } from '../../shared/QrCode';
 import { byId } from '../../shared/dom';
+import { stopPlayer } from './player';
 import { PLAYED, PREFIX, check, collect, decode, encode, readJson, type Bundle, type Files } from './saves';
 
 const MAX_QR_VERSION = 30;   // bigger codes are too dense to scan from a screen
@@ -148,7 +149,7 @@ export function Records({ onCount }: { onCount?: (n: number) => void }) {
     };
     if (!frame || !chosen.length) { done(); return; }
     frame.addEventListener('load', function once() { frame.removeEventListener('load', once); done(); });
-    frame.src = 'about:blank';
+    stopPlayer();
   }
 
   const when = incoming?.bundle.at ? new Date(incoming.bundle.at) : null;

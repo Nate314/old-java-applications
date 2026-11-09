@@ -141,6 +141,12 @@ function play(a: App, focus: boolean, asThen?: boolean, watch?: boolean) {
   }
 }
 
+/** Closes the player's app (its frame goes blank), so it writes back what it keeps; Restart starts it again. */
+export function stopPlayer() {
+  H.frame = { ...H.frame, src: 'about:blank', focus: false };
+  draw();
+}
+
 /** The player's iframe has loaded a page. */
 export function frameLoaded() {
   syncPop();
