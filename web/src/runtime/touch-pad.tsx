@@ -1,7 +1,9 @@
 import type { CSSProperties } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { setPadLight } from './gamepads';
+import { flushSync } from 'react-dom';
 import { openLayer } from './ui/layer';
+import { redrawBar } from './install';
 import { appId } from './catalog';
 
 export let pad: OldjavaPad;
@@ -145,29 +147,45 @@ function PadButton({ name, cls, label, style, lit, send }: {
   );
 }
 
-// An app page's own controller, at the bottom of the page; Controls in the toolbar shows or hides it.
+// An app page's own controller, at the bottom of the page; Controls in the toolbar shows or hides it (togglePad).
 // It starts shown where the main pointer is a finger.
-export function padOnPage(toggle: HTMLElement) {
-  var el = document.createElement('div');
-  var light = pad.render(el, appId()!, fireKey);
+let onPage: { shown: boolean; el: HTMLDivElement; redraw: () => void } | null = null;
+/** Whether the app page's controller shows: Controls in the toolbar is pressed while it does. */
+export function padShown() { return !!onPage && onPage.shown; }
+
+export function padOnPage() {
+  var light!: (which: number, down: boolean) => void;
+  openLayer(<PadOnPage onMount={(el, redraw, l) => { onPage = { shown: true, el: el, redraw: redraw }; light = l; }} />);
   setPadLight(light);
-  document.body.appendChild(el);
-  function show(on: boolean) {
-    el.hidden = !on;
-    toggle.setAttribute('aria-pressed', String(on));
-    // From its top edge to the bottom of the page, so the gap under it is kept off the stage too.
-    document.documentElement.style.setProperty('--pad-h', on ? Math.ceil(innerHeight - el.getBoundingClientRect().top) + 'px' : '0px');
-  }
-  show(pad.wanted(!!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches)));
-  toggle.addEventListener('click', function () {
-    show(el.hidden);
-    pad.remember(!el.hidden);
-    toggle.blur();   // else Space (FlappyBird's flap) would press it again
-  });
-  addEventListener('resize', function () { if (!el.hidden) show(true); });
+  showPad(pad.wanted(!!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches)));
+  addEventListener('resize', function () { if (onPage!.shown) showPad(true); });
   ['keydown', 'keyup'].forEach(function (type) {
     document.addEventListener(type, function (e) { if (e.isTrusted) light((e as KeyboardEvent).keyCode, type === 'keydown'); }, true);
   });
+}
+function showPad(on: boolean) {
+  onPage!.shown = on;
+  onPage!.redraw();
+  redrawBar();
+  // From its top edge to the bottom of the page, so the gap under it is kept off the stage too.
+  document.documentElement.style.setProperty('--pad-h', on ? Math.ceil(innerHeight - onPage!.el.getBoundingClientRect().top) + 'px' : '0px');
+}
+/** Controls in the toolbar: shows or hides the app page's controller, and remembers which. */
+export function togglePad() {
+  showPad(!onPage!.shown);
+  pad.remember(onPage!.shown);
+}
+
+function PadOnPage({ onMount }: { onMount: (el: HTMLDivElement, redraw: () => void, light: (which: number, down: boolean) => void) => void }) {
+  const el = useRef<HTMLDivElement>(null);
+  const light = useRef<(which: number, down: boolean) => void>(null);
+  const [, setTick] = useState(0);
+  useLayoutEffect(() => { onMount(el.current!, () => flushSync(() => setTick(n => n + 1)), (w, d) => light.current!(w, d)); }, []);
+  return (
+    <div className="shim-pad" aria-label="Controller" hidden={!!onPage && !onPage.shown} ref={el}>
+      <Pad groups={PADS[appId()!]} send={fireKey} onMount={l => { light.current = l; }} />
+    </div>
+  );
 }
 
 // In the home page's player the controller lives on the home page: it sends presses here, and hears

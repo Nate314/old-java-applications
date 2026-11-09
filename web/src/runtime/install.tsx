@@ -5,7 +5,7 @@ import { bandNews, news, setNews, setZoomFit, stageEdge, zoomFit } from './band-
 import { popOut, poppable, popped } from './pop-out';
 import { replayNow } from './replay';
 import { snapPhoto, takePhoto } from './photo-booth';
-import { pad, padOnPage } from './touch-pad';
+import { pad, padOnPage, padShown, togglePad } from './touch-pad';
 import { appId, catalog, root } from './catalog';
 import { EraSwitch, indexOf, openDrawer, pageOf } from './then-and-now';
 import { openShare } from './share';
@@ -51,21 +51,20 @@ export function toolbar(isApp: boolean) {
   setNews(bandNews(parts.slot));
   news!.onKind(function (kind: string | null) { parts.help(kind === 'hint'); });
   stageEdge(parts.bar, '--bar-h');
-  if (parts.controls) padOnPage(parts.controls);
+  if (pad.has(appId()!)) padOnPage();
 }
 
-interface BarParts { bar: HTMLDivElement; slot: HTMLDivElement; controls: HTMLButtonElement | null; help: (on: boolean) => void }
+interface BarParts { bar: HTMLDivElement; slot: HTMLDivElement; help: (on: boolean) => void }
 
 function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts) => void }) {
   const bar = useRef<HTMLDivElement>(null);
   const slot = useRef<HTMLDivElement>(null);
-  const controls = useRef<HTMLButtonElement>(null);
   const [, setTick] = useState(0);
   const [hint, setHint] = useState(false);
   const [next, setNext] = useState<OldjavaCatalogApp | null>(null);
   useLayoutEffect(() => {
     redraw = () => flushSync(() => setTick(n => n + 1));
-    onMount({ bar: bar.current!, slot: slot.current!, controls: controls.current, help: on => flushSync(() => setHint(on)) });
+    onMount({ bar: bar.current!, slot: slot.current!, help: on => flushSync(() => setHint(on)) });
     if (isApp) catalog().then(apps => {
       const i = indexOf(apps, appId());
       if (i >= 0) setNext(apps[(i + 1) % apps.length]);
@@ -116,7 +115,9 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
             <span aria-hidden="true">{'📷'}</span><span> Photo</span>
           </button>
           {pad.has(appId()!) && (
-            <button type="button" className="shim-controls-open" title="Show or hide the on-screen controller" ref={controls}>Controls</button>
+            // blurred after, else Space (FlappyBird's flap) would press it again
+            <button type="button" className="shim-controls-open" title="Show or hide the on-screen controller" aria-pressed={padShown()}
+              onClick={e => { togglePad(); blur(e); }}>Controls</button>
           )}
           <a className="shim-next" hidden={!next} href={next ? pageOf(next) : undefined}>{next ? 'Next: ' + next.name + ' ›' : ''}</a>
         </>

@@ -5,6 +5,8 @@ import { fireKey, keyOf } from './touch-pad';
 import { appId } from './catalog';
 import { isThen } from './then-and-now';
 import { setAppMuted } from './midi';
+import { useLayoutEffect, useState } from 'react';
+import { openLayer } from './ui/layer';
 
 // ---- watch: the computer plays (?watch) ----
 // Four games can play themselves: Minesweeper's solver and Ultimate Tic-Tac-Toe's computer on both sides (W),
@@ -23,17 +25,8 @@ export function watchWanted() {
 
 export function watchApp(desktop: HTMLElement) {
   var key = WATCH[appId()!];
-  var note = document.createElement('div');
-  note.className = 'shim-watch';
-  note.setAttribute('role', 'status');
-  var dot = document.createElement('span');
-  dot.className = 'shim-watch-dot';
-  var strong = document.createElement('strong');
-  strong.textContent = 'The computer is playing';
-  var how = document.createElement('span');
-  how.textContent = 'Click or press any key to take over';
-  [dot, strong, how].forEach(function (el) { note.appendChild(el); });
-  document.body.appendChild(note);
+  var fade!: () => void;
+  const close = openLayer(<WatchNote onMount={f => { fade = f; }} />);
   setAppMuted(true);
   var pressed = false;
   function press() { fireKey('keydown', key); fireKey('keyup', key); }
@@ -52,8 +45,8 @@ export function watchApp(desktop: HTMLElement) {
     clearTimeout(wait);
     if (pressed && !ownKey) press();
     setAppMuted(false);
-    note.classList.add('gone');
-    setTimeout(function () { note.remove(); }, 400);
+    fade();
+    setTimeout(close, 400);
     // A reload now starts the app for the visitor.
     var search = location.search.replace(/([?&])watch(=[^&]*)?(&|$)/, function (m, lead, value, tail) { return tail ? lead : ''; });
     history.replaceState(history.state, '', location.pathname + search + location.hash);
@@ -72,6 +65,19 @@ export function watchApp(desktop: HTMLElement) {
   document.addEventListener('pointerdown', onInput, true);
   document.addEventListener('keydown', onInput, true);
   window.addEventListener('message', onMessage);
+}
+
+/** The line over the stage while the computer plays; onMount gets the function that fades it out. */
+function WatchNote({ onMount }: { onMount: (fade: () => void) => void }) {
+  const [going, setGoing] = useState(false);
+  useLayoutEffect(() => { onMount(() => setGoing(true)); }, []);
+  return (
+    <div className={'shim-watch' + (going ? ' gone' : '')} role="status">
+      <span className="shim-watch-dot" />
+      <strong>The computer is playing</strong>
+      <span>Click or press any key to take over</span>
+    </div>
+  );
 }
 
 export function init() {
