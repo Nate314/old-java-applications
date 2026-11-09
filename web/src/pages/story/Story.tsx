@@ -1,6 +1,7 @@
-// The story (story.html): HISTORY.md told with the real code and the apps. chapters.ts runs its panels.
+// The story (story.html): HISTORY.md told with the real code and the apps; its live panels are in panels.tsx.
 import './story.css';
 import { APPS } from '../../shared/catalog';
+import { ChainShow, EraPanel, PickLink, RenamePanel, StoryTop, Tape } from './panels';
 
 // Where each app came from (HISTORY.md, The recovery).
 const FROM: Record<string, string> = {
@@ -36,30 +37,10 @@ function Apps20() {
   );
 }
 
-/** The apps with a Then version, for the Then and now panel; Flappy Bird first shown. */
-function EraPick() {
-  const withThen = APPS.filter(a => a.then);
-  return (
-    <select id="era-app" aria-label="App" defaultValue="FlappyBird" hidden={!withThen.length}>
-      {withThen.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-    </select>
-  );
-}
-
 export function Story() {
   return (
     <>
-      <header className="story-top">
-        <a className="home" href="index.html">← Old Java Applications</a>
-        <nav aria-label="Chapters">
-          <a href="#originals">The originals</a>
-          <a href="#recovery">The recovery</a>
-          <a href="#restoration">The first restoration</a>
-          <a href="#chain">The chain</a>
-          <a href="#numbers">In numbers</a>
-        </nav>
-        <span className="bar" id="bar" aria-hidden="true" />
-      </header>
+      <StoryTop />
       <main>
         <header className="hero">
           <p className="kicker">The story</p>
@@ -96,15 +77,7 @@ export function Story() {
             <p>One date survives inside an app: Stock Checker saved its last quotes to a file, and they are from Friday, May 13, 2016.</p>
           </div>
           <div className="show">
-            <div className="panel">
-              <div className="panel-head"><strong>StockChecker/stockCheck.csv</strong><span id="tape-note">as the app saved it</span></div>
-              <div style={{ overflowX: "auto" }}>
-                <table className="tape" id="tape">
-                  <thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th>Date</th><th>Time</th></tr></thead>
-                  <tbody />
-                </table>
-              </div>
-            </div>
+            <Tape />
             <Apps20 />
           </div>
         </section>
@@ -135,16 +108,7 @@ export function Story() {
             </p>
           </div>
           <div className="show">
-            <div className="panel">
-              <div className="panel-head">
-                <strong id="code-file">flappyBird/b.java</strong>
-                {' '}
-                <span className="count" id="code-count" aria-live="polite" />
-                {' '}
-                <button className="btn primary" type="button" id="code-go">Rename</button>
-              </div>
-              <pre className="code" id="code" tabIndex={0} aria-label="Flappy Bird's Bird class" />
-            </div>
+            <RenamePanel />
             <p className="caption">
               {"From the repo's first commit (4fea701, decompiled) and "}
               <a href="https://github.com/Nate314/old-java-applications/pull/1">#1</a>
@@ -182,22 +146,7 @@ export function Story() {
             </p>
           </div>
           <div className="show">
-            <div className="panel">
-              <div className="panel-head">
-                <label htmlFor="era-app"><strong>Then and now</strong></label>
-                {' '}
-                <EraPick />
-                {' '}
-                <span className="era" role="group" aria-label="Version">
-                  <button className="btn" type="button" id="era-then" aria-pressed="true">Then</button>
-                  <button className="btn" type="button" id="era-now" aria-pressed="false">Now</button>
-                </span>
-              </div>
-              <div className="screen">
-                <iframe id="era-frame" title="Flappy Bird, then" loading="lazy" allow="autoplay; clipboard-write" data-src={"play.html?app=FlappyBird&then"} />
-              </div>
-            </div>
-            <p className="caption" id="era-note">Then: the recovered code with light bug fixes, as first restored.</p>
+            <EraPanel />
           </div>
         </section>
         <section className="chapter" id="chain" aria-labelledby="h-chain">
@@ -223,18 +172,7 @@ export function Story() {
             </ol>
             <p>The numbers on the right are counted from the repo's own history, the same one the home page's What's new reads.</p>
           </div>
-          <div className="show">
-            <div className="tiles">
-              <div className="tile"><b id="n-changes">–</b><span>changes</span></div>
-              <div className="tile"><b id="n-days">–</b><span id="n-days-label">days</span></div>
-              <div className="tile"><b id="n-apps">–</b><span>apps changed</span></div>
-            </div>
-            <div className="panel">
-              <div className="panel-head"><strong>Changes to each app's folder</strong><span>most first</span></div>
-              <ol className="bars" id="bars" />
-            </div>
-            <p className="caption" id="chain-note" />
-          </div>
+          <ChainShow />
         </section>
         <section className="chapter" id="numbers" aria-labelledby="h-numbers">
           <div className="words">
@@ -293,7 +231,7 @@ export function Story() {
           <div className="go">
             <a className="btn primary" href="index.html#apps">Play all 20 apps</a>
             {' '}
-            <a className="btn" id="pick" href="index.html">Pick one for me</a>
+            <PickLink />
             {' '}
             <a className="btn" href="https://github.com/Nate314/old-java-applications">The code on GitHub</a>
           </div>
