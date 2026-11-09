@@ -215,7 +215,7 @@ export function Records({ onCount }: { onCount?: (n: number) => void }) {
       </ul>
       <p className="desktop">
         {"On the desktop: "}
-        <code>./run.ps1</code>
+        <code>./run.ps1 old</code>
         {" opens the launcher, whose Saves button loads a downloaded file into the desktop apps, or saves theirs as a file to Load here."}
       </p>
       <dialog className="records-in" id="records-in" aria-labelledby="records-in-title" ref={dialog} onClose={() => setIncoming(null)}>

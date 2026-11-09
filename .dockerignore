@@ -1,0 +1,7 @@
+# Left out of the Docker build context (web/Dockerfile). .git stays in: the build reads the repo's history.
+.env
+compose-launcher
+out
+web/target
+web/*/target
+**/node_modules

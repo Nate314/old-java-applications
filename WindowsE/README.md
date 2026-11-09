@@ -40,7 +40,7 @@ java -cp ../out/check/WindowsE windowse.WindowsECheck
 
 ## Running
 
-From the repo root: `./run.ps1 WindowsE` (or `./run.ps1 WindowsE -Build` to build a jar).
+From the repo root: `./run.ps1 old WindowsE` (or `./run.ps1 old WindowsE -Build` to build a jar).
 
 DO IT!!! presses the picked shortcut on the real keyboard, Win+E ten times by default.
 

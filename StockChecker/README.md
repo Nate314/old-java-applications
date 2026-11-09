@@ -57,7 +57,7 @@ Mo, Val and Nell hold one stock at a time, buy nothing new after 3:30 PM and sel
 
 ## Running
 
-From the repo root: `./run.ps1 StockChecker` (or `./run.ps1 StockChecker -Build` to build a jar).
+From the repo root: `./run.ps1 old StockChecker` (or `./run.ps1 old StockChecker -Build` to build a jar).
 
 The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCheck.csv` are opened by relative path. If `myStocks.txt` is missing or empty, the desk watches the original five tickers. If `stockCheck.csv` is missing, every symbol starts at a made-up price.
 
