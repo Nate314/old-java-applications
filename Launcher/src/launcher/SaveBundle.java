@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The saves file shared with the web site's "Your records" (web/site/saves.js): what the apps keep in the home
+ * The saves file shared with the web site's "Your records" (web/public/saves.js): what the apps keep in the home
  * folder, so records can move between the desktop and a browser.
  *
  * <pre>{ "oldjava": "saves", "v": 1, "at": ISO time, "saves": { "App": { "/.file.txt": contents } },

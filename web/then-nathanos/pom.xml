@@ -69,21 +69,15 @@
               </target>
             </configuration>
           </execution>
-          <!-- The page, the source viewer's files, and a manifest-only jar per app for the taskbar (as web/nathanos
-               did at that commit; the jars match today's, so both pages share NathaNOS/assets/). -->
+          <!-- The source viewer's files and a manifest-only jar per app for the taskbar (as web/nathanos did at that
+               commit; the jars match today's, so both pages share NathaNOS/assets/). The page, NathaNOS/then.html,
+               is written by the site's build (web/src/pages/app/AppPage.tsx). -->
           <execution>
-            <id>then-page</id>
+            <id>then-files</id>
             <phase>process-resources</phase>
             <goals><goal>run</goal></goals>
             <configuration>
               <target>
-                <copy file="${project.basedir}/../then/then.html" tofile="${site.dir}/NathaNOS/then.html" overwrite="true" encoding="UTF-8">
-                  <filterset>
-                    <filter token="APP" value="NathaNOS"/>
-                    <filter token="TITLE" value="NathaNOS"/>
-                    <filter token="BODY" value="data-files=&quot;assets/NOS.png assets/NathaNOS.jpg assets/NathaNOS.png assets/background.jpg assets/background.png assets/clock.png assets/cursor.png assets/transparent.png assets/Clock.jar assets/CircleSpawner.jar assets/FlappyBird.jar assets/Minesweeper.jar assets/RubiksCube2D.jar assets/ScreenSaver.jar assets/SpriteFloatyStars.jar assets/StockChecker.jar assets/SynthesizerKeyboard.jar assets/UltimateTicTacToe.jar assets/GroupCreator.jar assets/MusicTheoryExpert.jar assets/NumberGuess.jar assets/SimpleAlgorithms.jar assets/TankGame.jar assets/Minesweeper.png assets/NumberGuess.png assets/RubiksCube2D.png assets/StockChecker.png assets/SynthesizerKeyboard.png assets/UltimateTicTacToe.png bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png myStocks.txt stockCheck.csv&quot;"/>
-                  </filterset>
-                </copy>
                 <!-- Fresh each build: git archive dates the files to their commit, older than any earlier copy. -->
                 <delete dir="${site.dir}/NathaNOS/then-source"/>
                 <copy todir="${site.dir}/NathaNOS/then-source" overwrite="true">

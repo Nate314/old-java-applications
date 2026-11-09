@@ -1,0 +1,23 @@
+{
+  "name": "old-java-applications-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "mvn -q -f pom.xml clean package",
+    "build:pages": "tsc --noEmit && tsc --noEmit -p src/sw && vite build",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/sw"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.12",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}
