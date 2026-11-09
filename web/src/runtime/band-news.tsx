@@ -22,20 +22,28 @@ export function setNews(v: BandNews | null) { news = v; }
 /** What the line says: [kind, lead, text, actions]; it keeps saying it, hidden, once the slot's data-news goes. */
 type Said = [string, ReactNode, ReactNode, ReactNode];
 
-/** The parts of the line the band works with (the text's box and track exist once it has said something). */
-interface LineParts { line: RefObject<HTMLDivElement | null>; box: RefObject<HTMLSpanElement | null>; track: RefObject<HTMLSpanElement | null> }
+/**
+ * The parts of the line the band works with (the text's box and track exist once it has said something), and title(t),
+ * which gives the text's box its title (the whole text, when it is too long to scroll) or takes it away.
+ */
+interface LineParts {
+  line: RefObject<HTMLDivElement | null>; box: RefObject<HTMLSpanElement | null>; track: RefObject<HTMLSpanElement | null>;
+  title(t: string | null): void;
+}
 
-export function bandNews(slot: Element): BandNews {
-  var timer: ReturnType<typeof setTimeout> | 0 = 0, deadline = 0, anim: Animation | null = null, listeners: ((k: string | null) => void)[] = [];
+// mark(on): the slot shows the line (its data-news, which the toolbar draws), at once, so the line can be measured.
+export function bandNews(slot: Element, mark: (on: boolean) => void): BandNews {
+  var on = false, timer: ReturnType<typeof setTimeout> | 0 = 0, deadline = 0, anim: Animation | null = null, listeners: ((k: string | null) => void)[] = [];
   var say: ((s: Said) => void) | null = null, parts: LineParts | null = null;
   function told() { var k = kind(); listeners.forEach(function (fn) { fn(k); }); }
-  function kind() { return slot.hasAttribute('data-news') ? parts!.line.current!.getAttribute('data-kind') : null; }
+  function kind() { return on ? parts!.line.current!.getAttribute('data-kind') : null; }
   function clear() {
     clearTimeout(timer);
     if (anim) anim.cancel();
     anim = null;
-    if (!slot.hasAttribute('data-news')) return;
-    slot.removeAttribute('data-news');
+    if (!on) return;
+    on = false;
+    mark(false);
     told();
   }
   function wait(ms: number) {
@@ -59,10 +67,11 @@ export function bandNews(slot: Element): BandNews {
     show: function (k: string, lead: ReactNode, text: ReactNode, actions: ReactNode, ms: number) {
       clear();
       say!([k, lead, text, actions]);
-      slot.setAttribute('data-news', '');
+      on = true;
+      mark(true);
       told();
       var box = parts!.box.current!, track = parts!.track.current!;
-      box.removeAttribute('title');
+      parts!.title(null);
       var over = track.scrollWidth - box.clientWidth;
       if (over > 4 && track.animate && !reducedMotion()) {
         var hold = 1500, ride = over / 45 * 1000, one = hold + ride + hold;
@@ -74,7 +83,7 @@ export function bandNews(slot: Element): BandNews {
         ], { duration: one, iterations: 2 });
         ms = Math.max(ms, 2 * one + 1000);
       } else if (over > 4) {
-        box.title = track.textContent!;
+        parts!.title(track.textContent!);
       }
       wait(ms);
     },
@@ -91,10 +100,11 @@ function NewsLine({ onEnter, onLeave, onClear, onMount }: {
   const box = useRef<HTMLSpanElement>(null);
   const track = useRef<HTMLSpanElement>(null);
   const [said, setSaid] = useState<Said | null>(null);
+  const [title, setTitle] = useState<string | null>(null);
   useOwnKeys(line, onClear);
   useLayoutEffect(() => {
     // Drawn at once, so the band can measure the text for its marquee.
-    onMount(s => flushSync(() => setSaid(s)), { line, box, track });
+    onMount(s => flushSync(() => setSaid(s)), { line, box, track, title: t => flushSync(() => setTitle(t)) });
     // The pointer's own enter and leave (React's onPointerEnter is made from pointerover and pointerout).
     const el = line.current!;
     el.addEventListener('pointerenter', onEnter);
@@ -106,7 +116,7 @@ function NewsLine({ onEnter, onLeave, onClear, onMount }: {
       {said && (
         <>
           {said[1]}
-          <span className="shim-news-text" ref={box}><span className="shim-news-track" ref={track}>{said[2]}</span></span>
+          <span className="shim-news-text" title={title ?? undefined} ref={box}><span className="shim-news-track" ref={track}>{said[2]}</span></span>
           {said[3]}
           <CloseButton onClick={onClear} />
         </>

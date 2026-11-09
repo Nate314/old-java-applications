@@ -48,23 +48,24 @@ export function toolbar(isApp: boolean) {
   var parts!: BarParts;
   openLayer(<Toolbar isApp={isApp} onMount={p => { parts = p; }} />);
   if (!isApp) return;
-  setNews(bandNews(parts.slot));
+  setNews(bandNews(parts.slot, parts.news));
   news!.onKind(function (kind: string | null) { parts.help(kind === 'hint'); });
   stageEdge(parts.bar, '--bar-h');
   if (pad.has(appId()!)) padOnPage();
 }
 
-interface BarParts { bar: HTMLDivElement; slot: HTMLDivElement; help: (on: boolean) => void }
+interface BarParts { bar: HTMLDivElement; slot: HTMLDivElement; help: (on: boolean) => void; news: (on: boolean) => void }
 
 function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts) => void }) {
   const bar = useRef<HTMLDivElement>(null);
   const slot = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
   const [hint, setHint] = useState(false);
+  const [newsOn, setNewsOn] = useState(false);   // the band's news line shows in the name's slot
   const [next, setNext] = useState<OldjavaCatalogApp | null>(null);
   useLayoutEffect(() => {
     redraw = () => flushSync(() => setTick(n => n + 1));
-    onMount({ bar: bar.current!, slot: slot.current!, help: on => flushSync(() => setHint(on)) });
+    onMount({ bar: bar.current!, slot: slot.current!, help: on => flushSync(() => setHint(on)), news: on => flushSync(() => setNewsOn(on)) });
     if (isApp) catalog().then(apps => {
       const i = indexOf(apps, appId());
       if (i >= 0) setNext(apps[(i + 1) % apps.length]);
@@ -86,7 +87,7 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
       {!isApp && find}
       {isApp && (
         <>
-          <div className="shim-bar-slot" ref={slot}><strong className="shim-bar-name">{document.title}</strong></div>
+          <div className="shim-bar-slot" data-news={newsOn ? '' : undefined} ref={slot}><strong className="shim-bar-name">{document.title}</strong></div>
           <button type="button" className="shim-help" title="How to play: show the hint in this band" aria-label="How to play" aria-pressed={hint}
             onClick={e => { if (news!.kind() === 'hint') news!.clear(); else howToPlay(); blur(e); }}>?</button>
           {find}

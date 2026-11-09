@@ -221,7 +221,6 @@ export function init() {
     render: function (el, id, send) {
       var was = drawn.get(el);
       if (was) was();
-      el.textContent = '';
       var light!: (which: number, down: boolean) => void;
       drawn.set(el, openLayer(<Pad groups={PADS[id]} send={send} onMount={l => { light = l; }} />, el));
       return function (which, down) { light(which, down); };
