@@ -1,3 +1,4 @@
+import { redrawBar } from './install';
 import { ctx } from './midi';
 
 declare global {
@@ -162,18 +163,8 @@ export function playSound(name: string) {
 
 export function setSoundOn(on: boolean) {
   try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch (e) { /* this page only */ }
-  showSound();
+  redrawBar();
   if (on) playSound('open');
-}
-
-export function showSound() {
-  var b = document.querySelector('.shim-toolbar .shim-sound') as HTMLElement | null;
-  if (!b) return;
-  var on = soundOn();
-  b.setAttribute('aria-pressed', String(on));
-  b.innerHTML = '♪ <span>' + (on ? 'Sound' : 'Muted') + '</span>';   // the word is hidden on narrow pages
-  b.setAttribute('aria-label', 'Site sounds');
-  b.title = on ? 'Site sounds are on (the apps keep their own sound). Click to mute.' : 'Site sounds are muted. Click to turn them on.';
 }
 
 export function init() {
@@ -181,7 +172,7 @@ export function init() {
   sfxOut = null;   // the site sounds' master gain, on the same AudioContext as the app voices
   noiseBuffer = null;
   tapPending = false;
-  window.addEventListener('storage', function (e) { if (e.key === SOUND_KEY || e.key === null) showSound(); });
+  window.addEventListener('storage', function (e) { if (e.key === SOUND_KEY || e.key === null) redrawBar(); });
   window.oldjavaSound = { play: playSound, on: soundOn, set: setSoundOn };
   // Any click on a site control (not in the app's windows or the controller, whose keys belong to the app)
   // taps, unless what it did made a sound of its own. data-sound="none" keeps a control silent.

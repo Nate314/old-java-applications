@@ -1,3 +1,4 @@
+import { redrawBar } from './install';
 import { windowsBox } from './band-news';
 import { passport } from './passport';
 import { appId } from './catalog';
@@ -26,16 +27,6 @@ export function poppable() {
   var body = document.body;
   return 'documentPictureInPicture' in window && !body.hasAttribute('data-shell')
     && !body.hasAttribute('data-own-layout');
-}
-
-export function showPop() {
-  var b = document.querySelector<HTMLElement>('.shim-toolbar .shim-pop');
-  if (!b) return;
-  b.setAttribute('aria-pressed', String(!!popped));
-  b.innerHTML = '⧉ <span>' + (popped ? 'Bring back' : 'Pop out') + '</span>';
-  b.setAttribute('aria-label', popped ? 'Bring back' : 'Pop out');
-  b.title = popped ? 'Bring the app back into this page'
-    : 'Pop out: play this app in its own small window that stays on top of your other windows';
 }
 
 export function popOut() {
@@ -102,7 +93,7 @@ function popInto(win: Window) {
   listen();
   passport.stamp(appId()!);
   playSound('open');
-  showPop();
+  redrawBar();
 }
 
 export function bringBack() {
@@ -116,7 +107,7 @@ export function bringBack() {
   document.documentElement.removeAttribute('data-popped');
   if (!p.win.closed) p.win.close();
   playSound('close');
-  showPop();
+  redrawBar();
 }
 
 // What the stage shows while the app is out: where it went, and the way back.

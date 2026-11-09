@@ -1,3 +1,4 @@
+import { redrawBar } from './install';
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
@@ -159,20 +160,7 @@ export function setZoomFit(on: boolean) {
 
 function zoomChanged() {
   zoomListeners.forEach(function (fn) { fn(zoomFit()); });
-  showZoom();
-}
-
-// The toolbar's button says what Fit is doing: the zoom it picked for these windows, or that it has room only
-// for their actual size.
-export function showZoom() {
-  var b = document.querySelector<HTMLElement>('.shim-toolbar .shim-zoom');
-  if (!b) return;
-  var on = zoomFit(), s = window.__shimScale || 1;
-  b.setAttribute('aria-pressed', String(on));
-  b.innerHTML = '⤢ <span>' + (on ? 'Fit' : 'Actual size') + '</span>' + (on && s > 1 ? ' <b>' + s + '×</b>' : '');
-  b.setAttribute('aria-label', on ? 'Fit to screen' + (s > 1 ? ', zoomed ' + s + ' times' : '') : 'Actual size');
-  b.title = on ? 'The app is zoomed to fit the screen' + (s > 1 ? ' (' + s + '×)' : '') + '. Click for its actual size.'
-    : 'The app is shown at its actual size. Click to zoom it to fit the screen.';
+  redrawBar();
 }
 
 // The open windows' sizes (a key that changes when one opens, closes or is resized) and the box around them
@@ -211,7 +199,7 @@ export function centerWindows(desktop: HTMLElement) {
     // Whole pixels keep unscaled and zoomed windows crisp; a group scaled down keeps the exact fit instead.
     desktop.style.transform = s < 1 ? 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')'
       : 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)' + (s > 1 ? ' scale(' + s + ')' : '');
-    showZoom();
+    redrawBar();
     var dpr = window.devicePixelRatio || 1;
     var render = Math.max(dpr, Math.min(dpr * s, ZOOM_MAX));   // capped: a canvas 9 times bigger paints slowly
     if (render !== (window.__shimRender || dpr)) {

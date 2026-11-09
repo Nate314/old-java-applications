@@ -30,10 +30,6 @@ function bandMore(bar: Element) {
   menu.hidden = true;
   bar.appendChild(more);
   bar.appendChild(menu);
-  // The switcher has no class of its own; it is the band's only plain "Switch app" button.
-  Array.prototype.forEach.call(bar.children, function (c) {
-    if (c.tagName === 'BUTTON' && c.textContent === 'Switch app') c.classList.add('shim-switch-open');
-  });
   var narrow: { matches: boolean; addEventListener?: MediaQueryList['addEventListener'] } = (window as Partial<Window>).matchMedia ? matchMedia('(max-width: 560px)') : { matches: false };
 
   function items() {   // the band's controls that can step out, in the order they leave

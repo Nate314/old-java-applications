@@ -76,26 +76,22 @@ export function quirkNodes(parts: string[]) {
 export const NO_QUIRKS = 'None left: its README at that commit lists no known quirks.';
 
 // Then | Now: two links, the current one marked. Hidden until the catalog says the app has a then.
-export function eraSwitch(className: string) {
-  var box = document.createElement('div');
-  box.className = className;
-  box.setAttribute('role', 'group');
-  box.setAttribute('aria-label', 'Version');
-  box.hidden = true;
-  ([[true, 'Then', 'As first restored in 2026: the recovered code with light bug fixes, before the later reworks'],
-   [false, 'Now', 'Today, fixed and reworked']] as [boolean, string, string][]).forEach(function (o) {
-    var a = document.createElement('a');
-    a.href = eraPage(o[0]);
-    a.textContent = o[1];
-    a.title = o[2];
-    if (o[0] === isThen()) a.setAttribute('aria-current', 'page');
-    box.appendChild(a);
-  });
-  catalog().then(function (apps) {
-    var app = apps[indexOf(apps, appId())];
-    box.hidden = !(app && app.then);
-  });
-  return box;
+export function EraSwitch({ className }: { className: string }) {
+  const [then, setThen] = useState(false);
+  useEffect(() => {
+    catalog().then(apps => {
+      const app = apps[indexOf(apps, appId())];
+      setThen(!!(app && app.then));
+    });
+  }, []);
+  return (
+    <div className={className} role="group" aria-label="Version" hidden={!then}>
+      {([[true, 'Then', 'As first restored in 2026: the recovered code with light bug fixes, before the later reworks'],
+        [false, 'Now', 'Today, fixed and reworked']] as [boolean, string, string][]).map(o => (
+        <a key={o[1]} href={eraPage(o[0])} title={o[2]} aria-current={o[0] === isThen() ? 'page' : undefined}>{o[1]}</a>
+      ))}
+    </div>
+  );
 }
 
 export function indexOf(apps: { id: string }[], id: string | null) {
