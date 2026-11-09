@@ -1,4 +1,7 @@
+import type { CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { setPadLight } from './gamepads';
+import { openLayer } from './ui/layer';
 import { appId } from './catalog';
 
 export let pad: OldjavaPad;
@@ -70,6 +73,78 @@ export function fireKey(type: string, name: string) {
 
 const PAD_KEY = 'oldjava.pad';
 
+/** The controllers drawn, by the element they are in, with what takes each out again. */
+const drawn = new WeakMap<HTMLElement, () => void>();
+
+/** An app's controller: its groups, each a D-pad and fire button, a piano or a row of buttons. */
+function Pad({ groups, send, onMount }: {
+  groups: PadGroup[]; send: (type: string, key: string) => void; onMount: (light: (which: number, down: boolean) => void) => void;
+}) {
+  const [lit, setLit] = useState<Record<number, boolean>>({});
+  useLayoutEffect(() => { onMount((which, down) => setLit(l => ({ ...l, [which]: down }))); }, []);
+  const button = (name: string, cls: string, label?: string, style?: CSSProperties) =>
+    <PadButton key={cls + name} name={name} cls={cls} label={label} style={style} lit={!!lit[keyOf(name).which]} send={send} />;
+  return (
+    <>
+      {groups.map((g, gi) => {
+        let white = 0;
+        return (
+          <div key={gi} className={'shim-pad-group' + (g.tint ? ' tint-' + g.tint : '')}>
+            {g.title && <span className="shim-pad-title">{g.title}</span>}
+            <div className="shim-pad-body">
+              {g.dpad && <div className="shim-dpad">{['up', 'left', 'down', 'right'].map((dir, i) => button(g.dpad![i], 'shim-pad-btn ' + dir))}</div>}
+              {g.dpad && g.fire && button(g.fire, 'shim-pad-btn fire', g.fireLabel || 'Fire')}
+              {g.piano && (
+                <div className="shim-piano">
+                  {g.piano.map((name, i) => {
+                    const black = [1, 3, 6, 8, 10].indexOf(i % 12) >= 0;
+                    if (!black) white++;
+                    // a black key stands on the line between two white keys
+                    return button(name, 'shim-pad-btn ' + (black ? 'black' : 'white'), undefined, black ? { left: 'calc(' + (white * 12.5) + '% - 5%)' } : undefined);
+                  })}
+                </div>
+              )}
+              {(g.buttons || []).map(o => button(o.k, 'shim-pad-btn' + (o.big ? ' big' : ''), o.label))}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** One of the controller's buttons: held, it holds its key down; lit, its key is down on the keyboard. */
+function PadButton({ name, cls, label, style, lit, send }: {
+  name: string; cls: string; label?: string; style?: CSSProperties; lit: boolean; send: (type: string, key: string) => void;
+}) {
+  const held = useRef(false);
+  const [on, setOn] = useState(false);
+  const k = keyOf(name);
+  function up() {
+    if (!held.current) return;
+    held.current = false;
+    setOn(false);
+    send('keyup', name);
+  }
+  // tabIndex -1: it never takes focus, so the app keeps the keyboard
+  return (
+    <button type="button" tabIndex={-1} className={cls + (on ? ' on' : '') + (lit ? ' lit' : '')} data-which={k.which} style={style}
+      title={(label ? label + ': ' : '') + k.cap + ' key'}
+      onPointerDown={e => {
+        e.preventDefault();   // no focus change, text selection or (on touch) emulated mouse events
+        if (held.current) return;
+        held.current = true;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) { /* released by pointerup anyway */ }
+        setOn(true);
+        send('keydown', name);
+      }}
+      onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up} onContextMenu={e => e.preventDefault()}>
+      {label && <span>{label}</span>}
+      <kbd>{k.cap}</kbd>
+    </button>
+  );
+}
+
 // An app page's own controller, at the bottom of the page; Controls in the toolbar shows or hides it.
 // It starts shown where the main pointer is a finger.
 export function padOnPage(toggle: HTMLElement) {
@@ -123,95 +198,17 @@ export function init() {
     remember: function (on) {
       try { localStorage.setItem(PAD_KEY, on ? 'on' : 'off'); } catch (e) { /* not remembered */ }
     },
-    // Builds app `id`'s controller in `el`. send(type, keyName) delivers each press and release.
-    // Returns light(keyCode, down), which shows a real key press on the matching buttons.
+    // Builds app `id`'s controller in `el` (in place of what it held). send(type, keyName) delivers each press and
+    // release. Returns light(keyCode, down), which shows a real key press on the matching buttons.
     render: function (el, id, send) {
+      var was = drawn.get(el);
+      if (was) was();
       el.textContent = '';
       el.classList.add('shim-pad');
       el.setAttribute('aria-label', 'Controller');
-      var buttons: HTMLButtonElement[] = [];
-      function button(name: string, cls: string, label?: string) {
-        var k = keyOf(name);
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.tabIndex = -1;   // never takes focus, so the app keeps the keyboard
-        b.className = cls;
-        b.setAttribute('data-which', String(k.which));
-        if (label) {
-          var l = document.createElement('span');
-          l.textContent = label;
-          b.appendChild(l);
-        }
-        var cap = document.createElement('kbd');
-        cap.textContent = k.cap;
-        b.appendChild(cap);
-        b.title = (label ? label + ': ' : '') + k.cap + ' key';
-        var held = false;
-        function up() {
-          if (!held) return;
-          held = false;
-          b.classList.remove('on');
-          send('keyup', name);
-        }
-        b.addEventListener('pointerdown', function (e) {
-          e.preventDefault();   // no focus change, text selection or (on touch) emulated mouse events
-          if (held) return;
-          held = true;
-          try { b.setPointerCapture(e.pointerId); } catch (x) { /* released by pointerup anyway */ }
-          b.classList.add('on');
-          send('keydown', name);
-        });
-        b.addEventListener('pointerup', up);
-        b.addEventListener('pointercancel', up);
-        b.addEventListener('lostpointercapture', up);
-        b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-        buttons.push(b);
-        return b;
-      }
-      PADS[id].forEach(function (g) {
-        var group = document.createElement('div');
-        group.className = 'shim-pad-group' + (g.tint ? ' tint-' + g.tint : '');
-        if (g.title) {
-          var t = document.createElement('span');
-          t.className = 'shim-pad-title';
-          t.textContent = g.title;
-          group.appendChild(t);
-        }
-        var body = document.createElement('div');
-        body.className = 'shim-pad-body';
-        if (g.dpad) {
-          var cross = document.createElement('div');
-          cross.className = 'shim-dpad';
-          ['up', 'left', 'down', 'right'].forEach(function (dir, i) {
-            cross.appendChild(button(g.dpad![i], 'shim-pad-btn ' + dir));
-          });
-          body.appendChild(cross);
-          if (g.fire) body.appendChild(button(g.fire, 'shim-pad-btn fire', g.fireLabel || 'Fire'));
-        }
-        if (g.piano) {
-          var keys = document.createElement('div');
-          keys.className = 'shim-piano';
-          var white = 0;
-          g.piano.forEach(function (name, i) {
-            var black = [1, 3, 6, 8, 10].indexOf(i % 12) >= 0;
-            var b = button(name, 'shim-pad-btn ' + (black ? 'black' : 'white'));
-            if (black) b.style.left = 'calc(' + (white * 12.5) + '% - 5%)';   // on the line between two white keys
-            else white++;
-            keys.appendChild(b);
-          });
-          body.appendChild(keys);
-        }
-        (g.buttons || []).forEach(function (o) {
-          body.appendChild(button(o.k, 'shim-pad-btn' + (o.big ? ' big' : ''), o.label));
-        });
-        group.appendChild(body);
-        el.appendChild(group);
-      });
-      return function light(which, down) {
-        buttons.forEach(function (b) {
-          if (b.getAttribute('data-which') === String(which)) b.classList.toggle('lit', down);
-        });
-      };
+      var light!: (which: number, down: boolean) => void;
+      drawn.set(el, openLayer(<Pad groups={PADS[id]} send={send} onMount={l => { light = l; }} />, el));
+      return function (which, down) { light(which, down); };
     }
   };
 }
