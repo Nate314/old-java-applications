@@ -1,3 +1,4 @@
+import { setClockChip } from './install';
 import { news } from './band-news';
 import { floatToast, toastLink } from './passport';
 import { appId, root } from './catalog';
@@ -48,6 +49,7 @@ export function init() {
     appId: appId,
     clockPage: clockPage,
     // A link to an app page that skips its title screen, as Run again does.
-    skipTitle: function (id) { try { sessionStorage.setItem(AGAIN_KEY, id); } catch (e) { /* it shows */ } }
+    skipTitle: function (id) { try { sessionStorage.setItem(AGAIN_KEY, id); } catch (e) { /* it shows */ } },
+    clockChip: setClockChip
   };
 }

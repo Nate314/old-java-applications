@@ -16,6 +16,8 @@ interface OldjavaSite {
   appId(): string | null;
   clockPage(): boolean;
   skipTitle(id: string): void;
+  /** The toolbar's Clock chip: what it shows, or null for none. */
+  clockChip(chip: import('./install').ClockChip | null): void;
   catalog?(): Promise<OldjavaCatalogApp[]>;
   isThen?(): boolean;
   played?(id: string): boolean;

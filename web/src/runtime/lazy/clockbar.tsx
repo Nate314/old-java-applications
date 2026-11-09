@@ -6,8 +6,8 @@
  * runs. It never writes Clock's file: Clock catches up on what happened when it opens again, as it does on the
  * desktop.
  *
- * - The toolbar gets a chip for each one running: a ring that drains (red for focus, green for a break, blue for
- *   the timer, violet for the stopwatch, once round a minute) and the time left. It links to Clock.
+ * - The toolbar gets a chip with a part for each one running: a ring that drains (red for focus, green for a break,
+ *   blue for the timer, violet for the stopwatch, once round a minute) and the time left. It links to Clock.
  * - A focus session that ends while the visitor is elsewhere rings the break phrase and offers a quick game for
  *   the break (one not played yet first); a break that ends rings back to work and links back to Clock, past its
  *   title screen; a timer that runs out rings its bell. On an app page the news shows in the toolbar band, on the
@@ -96,27 +96,12 @@ type Moment =
   function minutes(ms: number) { var m = Math.round(ms / MINUTE); return m + (m === 1 ? ' minute' : ' minutes'); }
 
   // ---- the chip ----
-  var chip: HTMLAnchorElement | null = null;
+  // The toolbar draws it (window.oldjavaSite.clockChip), before Sound.
   function segment(kind: string, label: string, text: string, part: number) {
-    var seg = document.createElement('span');
-    seg.className = 'shim-clock-seg';
-    seg.setAttribute('data-kind', kind);
-    var ring = document.createElement('i');
-    ring.className = 'shim-clock-ring';
-    ring.style.setProperty('--p', Math.max(0, Math.min(1, part)).toFixed(3));
-    var name = document.createElement('span');
-    name.className = 'shim-clock-name';
-    name.textContent = label + ' ';
-    var time = document.createElement('b');
-    time.textContent = text;
-    seg.appendChild(ring);
-    seg.appendChild(name);
-    seg.appendChild(time);
-    return seg;
+    return { kind: kind, label: label, text: text, part: Math.max(0, Math.min(1, part)) };
   }
   function showChip(s: ClockState, now: number) {
-    var bar = document.querySelector('.shim-toolbar');
-    if (!bar || onClock) return;
+    if (onClock) return;
     var segs = [], words = [];
     if (s.focusEnd) {
       var len = length(s, s.phase), left = s.focusEnd - now;
@@ -134,23 +119,9 @@ type Moment =
       segs.push(segment('watch', 'Stopwatch', clock(ran - ran % 1000), (ran % MINUTE) / MINUTE));
       words.push('Stopwatch: ' + clock(ran - ran % 1000));
     }
-    if (!segs.length) {
-      if (chip) { chip.remove(); chip = null; }
-      return;
-    }
-    if (!chip) {
-      chip = document.createElement('a');
-      chip.className = 'shim-clock';
-      chip.href = site.root() + 'Clock/index.html';
-      chip.addEventListener('click', function () { site.skipTitle('Clock'); });
-      bar.insertBefore(chip, bar.querySelector('.shim-sound'));
-    }
-    chip.textContent = '';
-    segs.forEach(function (seg) { chip!.appendChild(seg); });
+    if (!segs.length) { site.clockChip(null); return; }
     var soon = (s.focusEnd && s.focusEnd - now <= 10000) || (s.timerEnd > now && s.timerEnd - now <= 10000);
-    chip.toggleAttribute('data-soon', !!soon);
-    var label = words.join('. ') + '. Open Clock.';
-    if (chip.title !== label) { chip.title = label; chip.setAttribute('aria-label', label); }
+    site.clockChip({ segs: segs, soon: !!soon, label: words.join('. ') + '. Open Clock.' });
   }
 
   // ---- the moments ----

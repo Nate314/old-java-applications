@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { SKINS, setSkin } from './skin';
 import { bandNews, news, setNews, setZoomFit, stageEdge, zoomFit } from './band-news';
@@ -6,7 +6,7 @@ import { popOut, poppable, popped } from './pop-out';
 import { replayNow } from './replay';
 import { snapPhoto, takePhoto } from './photo-booth';
 import { pad, padOnPage } from './touch-pad';
-import { appId, catalog } from './catalog';
+import { appId, catalog, root } from './catalog';
 import { EraSwitch, indexOf, openDrawer, pageOf } from './then-and-now';
 import { openShare } from './share';
 import { howToPlay } from './source-viewer';
@@ -29,11 +29,19 @@ function headLink(rel: string, href: string, type?: string) {
 
 // The band at the top of every page but an embedded one: on an app page the app's name (where the band's news
 // line shows), its controls and a link to the next app; on every page Find, Sound, the skin picker and Edit (your
-// own skin). The Clock chip and More add themselves to it, and More hides what does not fit by a class, so the
-// band's own children never come or go once it is drawn: they only show or hide.
+// own skin), and the Clock chip while one of Clock's times runs (lazy/clockbar.tsx says what it shows). More adds
+// itself to it and hides what does not fit by a class.
 let redraw: (() => void) | null = null;
 /** Draws the band's toggles again, so Sound, Fit and Pop out say what they are doing now. */
 export function redrawBar() { if (redraw) redraw(); }
+
+/** The Clock chip: a ring and the time for each of Clock's times running (part: how much of it is left). */
+export interface ClockChip { segs: { kind: string; label: string; text: string; part: number }[]; soon: boolean; label: string }
+let chip: ClockChip | null = null;
+export function setClockChip(c: ClockChip | null) {
+  chip = c;
+  redrawBar();
+}
 
 export function toolbar(isApp: boolean) {
   var parts!: BarParts;
@@ -128,6 +136,18 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
           onClick={e => { popOut(); blur(e); }}>
           {'⧉ '}<span>{popped ? 'Bring back' : 'Pop out'}</span>
         </button>
+      )}
+      {chip && (
+        <a className="shim-clock" href={root() + 'Clock/index.html'} onClick={() => window.oldjavaSite.skipTitle('Clock')}
+          data-soon={chip.soon ? '' : undefined} title={chip.label} aria-label={chip.label}>
+          {chip.segs.map(seg => (
+            <span key={seg.kind} className="shim-clock-seg" data-kind={seg.kind}>
+              <i className="shim-clock-ring" style={{ '--p': seg.part.toFixed(3) } as CSSProperties} />
+              <span className="shim-clock-name">{seg.label + ' '}</span>
+              <b>{seg.text}</b>
+            </span>
+          ))}
+        </a>
       )}
       {/* the word is hidden on narrow pages */}
       <button type="button" className="shim-sound" data-sound="none" aria-pressed={on} aria-label="Site sounds"
