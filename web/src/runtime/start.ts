@@ -17,7 +17,7 @@ import { AGAIN_KEY, followTitle } from './records';
 import { clockFollows, clockOpen, clockPage } from './clock-follows';
 import { preload, titleScreen } from './title-screen';
 import { overlay } from './ui/overlay';
-import { outPanel, setOutPanel } from './system-out';
+import { showConsole } from './system-out';
 import { playSound } from './sounds';
 import { whenShown } from './toolbar-more';
 
@@ -47,10 +47,8 @@ export function init() {
     var saverMode = document.documentElement.hasAttribute('data-saver');
     if (embedded && window.parent !== window && !saverMode) padInPlayer();
     if (body.hasAttribute('data-console')) {
-      setOutPanel(document.createElement('pre'));
-      outPanel!.className = 'shim-console';
-      body.appendChild(outPanel!);
-      if (!embedded) stageEdge(outPanel!, '--out-h');
+      var out = showConsole();
+      if (!embedded) stageEdge(out, '--out-h');
     }
 
     var files = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
