@@ -2,7 +2,7 @@
 // one: a file (Download / Load, which the desktop launcher reads and writes too) or a link, shown as a QR code to
 // scan with a phone. Nothing is changed by opening a link or a file until the visitor picks what to bring in.
 // It renders inside <section id="records">, which stays in Home.tsx: the arcade tabs (tabs.ts) show and hide that
-// section, and read the saved count from #records-count.
+// section, and badge the Records tab with the count it reports (onCount).
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { APPS } from '../../shared/catalog';
 import { qr, type QrCode as Code } from '../../shared/qr';
@@ -25,7 +25,8 @@ const kb = (bytes: number) => bytes < 1024 ? bytes + ' bytes' : (bytes / 1024).t
 interface Phone { link: string; code: Code | null; text: string }
 interface Incoming { bundle: Bundle; from: string; stamps: string[]; key: number }
 
-export function Records() {
+/** onCount hears how many apps have saves here, for the Records tab's badge. */
+export function Records({ onCount }: { onCount?: (n: number) => void }) {
   const [saves, setSaves] = useState(() => collect().saves);
   const [status, say] = useState('');
   const [phone, setPhone] = useState<Phone | null>(null);
@@ -34,6 +35,7 @@ export function Records() {
   const dialog = useRef<HTMLDialogElement>(null);
   const stores = Object.keys(saves);
   const empty = !stores.length;
+  useEffect(() => { if (onCount) onCount(stores.length); }, [stores.length]);
 
   useEffect(() => {
     const refresh = () => setSaves(collect().saves);

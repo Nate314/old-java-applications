@@ -106,10 +106,7 @@ export function init() {
   });
   // Any [data-find] button of the page (the home page has one by its gallery); the toolbar draws its own.
   if (!findOff) document.addEventListener('DOMContentLoaded', function () {
-    var key = findMac ? '⌘K' : 'Ctrl K';
     Array.prototype.forEach.call(document.querySelectorAll('[data-find]'), function (b: Element) {
-      var shortcut = b.querySelector('kbd');
-      if (shortcut) shortcut.textContent = key;
       b.addEventListener('click', function () { openFind(b); });
     });
   });

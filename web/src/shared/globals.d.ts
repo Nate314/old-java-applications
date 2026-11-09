@@ -50,7 +50,7 @@ interface DocumentPictureInPicture {
 
 interface OldjavaSound { play(name: string): void }
 interface OldjavaWatch { has(id: string): boolean }
-interface OldjavaThen { quirks(id: string): Promise<unknown[]>; nodes(item: unknown): Node[] }
+interface OldjavaThen { quirks(id: string): Promise<unknown[]> }
 interface OldjavaPad {
   has(id: string): boolean;
   wanted(byDefault: boolean): boolean;
@@ -83,6 +83,8 @@ interface Window {
   // Set by the home page for boot.js, find.js and Records.tsx.
   oldjavaTour: { start(): void; on(): boolean };
   oldjavaArcade: { show(id: string): void };
+  /** The home page's player hint shows a controller's buttons for a while (the runtime's gamepads). */
+  oldjavaPlayerHint?: (parts: string[][]) => void;
 }
 
 interface Navigator {

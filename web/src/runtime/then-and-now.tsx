@@ -62,16 +62,6 @@ export function quirks(id?: string | null) {
   return quirkLists[id];
 }
 
-// A quirk as nodes: its `code` spans as <code>.
-export function quirkNodes(parts: string[]) {
-  return parts.map(function (part, i) {
-    if (!(i % 2)) return document.createTextNode(part);
-    var code = document.createElement('code');
-    code.textContent = part;
-    return code;
-  });
-}
-
 // #6 fixed the quirks the READMEs listed before it, so most then.html pages have none to list.
 export const NO_QUIRKS = 'None left: its README at that commit lists no known quirks.';
 
@@ -168,7 +158,7 @@ function SwitchDrawer({ onClose, onPanel }: { onClose: () => void; onPanel: (el:
 
 export function init() {
   // The home page's player shows the quirks of the app it plays as first restored.
-  window.oldjavaThen = { quirks: quirks, nodes: quirkNodes };
+  window.oldjavaThen = { quirks: quirks };
   // Switch app: every app in gallery order, in a panel on the right.
   drawer = null;
 }

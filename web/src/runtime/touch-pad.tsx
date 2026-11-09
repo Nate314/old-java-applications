@@ -222,8 +222,6 @@ export function init() {
       var was = drawn.get(el);
       if (was) was();
       el.textContent = '';
-      el.classList.add('shim-pad');
-      el.setAttribute('aria-label', 'Controller');
       var light!: (which: number, down: boolean) => void;
       drawn.set(el, openLayer(<Pad groups={PADS[id]} send={send} onMount={l => { light = l; }} />, el));
       return function (which, down) { light(which, down); };

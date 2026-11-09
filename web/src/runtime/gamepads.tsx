@@ -96,19 +96,6 @@ function GamepadChart({ parts }: { parts: string[][] }) {
   return <>{parts.map((p, i) => <Fragment key={i}>{i ? ' · ' : null}<kbd className="shim-gp-cap">{p[0]}</kbd>{' ' + p[1]}</Fragment>)}</>;
 }
 
-/** The same chart as nodes, for the home page's player hint (src/pages/home/player.ts keeps that element itself). */
-function gamepadChartNodes(parts: string[][]) {
-  var nodes: Node[] = [];
-  parts.forEach(function (p, i) {
-    if (i) nodes.push(document.createTextNode(' · '));
-    var k = document.createElement('kbd');
-    k.className = 'shim-gp-cap';
-    k.textContent = p[0];
-    nodes.push(k, document.createTextNode(' ' + p[1]));
-  });
-  return nodes;
-}
-
 /** The pointer a controller's stick moves: at() says where it is and whether it is hidden. */
 function GamepadCursor({ at, onMount }: { at: () => [number, number, boolean]; onMount: (draw: () => void) => void }) {
   const [, setTick] = useState(0);
@@ -273,7 +260,6 @@ export function gamepads(isApp: boolean) {
     return;
   }
   var running = false, shown = false, held: Record<string, boolean> = {};
-  var hintText = '', hintTimer: ReturnType<typeof setTimeout> | null = null;
   function currentApp() {
     if (isApp) return appId();
     var frame = document.getElementById('player-frame');
@@ -284,17 +270,8 @@ export function gamepads(isApp: boolean) {
     var id = currentApp();
     if (!id) return;
     if (news) { news.show('gamepad', <strong className="shim-news-tag">Controller</strong>, <GamepadChart parts={gamepadChart(id)} />, null, 15000); return; }
-    var tag = document.createElement('strong');
-    tag.className = 'shim-news-tag';
-    tag.textContent = 'Controller';
-    var hint = document.getElementById('player-hint');
-    if (!hint) return;
-    // The app's hint comes back after a while, unless the player has put another app's hint there since.
-    if (!hint.querySelector('.shim-gp-cap')) hintText = hint.innerHTML;
-    hint.textContent = '';
-    ([tag, document.createTextNode(' ')] as Node[]).concat(gamepadChartNodes(gamepadChart(id))).forEach(function (n) { hint!.appendChild(n); });
-    clearTimeout(hintTimer as ReturnType<typeof setTimeout>);
-    hintTimer = setTimeout(function () { if (hint!.querySelector('.shim-gp-cap')) hint!.innerHTML = hintText; }, 15000);
+    // The home page shows them in its player's hint for a while.
+    if (window.oldjavaPlayerHint) window.oldjavaPlayerHint(gamepadChart(id));
   }
   function step(by: number) {
     if (!isApp) {
