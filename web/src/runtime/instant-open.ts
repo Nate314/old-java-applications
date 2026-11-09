@@ -2,6 +2,7 @@ import { embedded } from './skin';
 import { siteRoot } from './install';
 import { tripPlace } from './one-machine';
 import { findOff } from './find';
+import { titleLog } from './title-screen';
 
 let padsNow: typeof navigator.getGamepads;
 let net: { saveData?: boolean; effectiveType?: string };
@@ -88,19 +89,9 @@ function prerenderOne(url: string) {
 function headStart() {
   var nav = performance.getEntriesByType && (performance.getEntriesByType('navigation')[0] as (PerformanceNavigationTiming & { activationStart: number }) | undefined);
   var ahead = (nav && nav.activationStart) as number;
-  var log = ahead > 0 && document.querySelector('.shim-title-log');
-  if (!log) return;
-  var row = document.createElement('span');
-  row.className = 'row ready';
-  var l = document.createElement('span');
-  l.textContent = 'Loaded ahead, while you chose it';
-  var v = document.createElement('span');
-  v.textContent = document.querySelector('.shim-title-play:not([disabled])') ? 'no wait'
-    : (ahead < 1000 ? Math.round(ahead) + ' ms' : (ahead / 1000).toFixed(1) + ' s') + ' head start';
-  row.appendChild(l);
-  row.appendChild(v);
-  log.appendChild(row);
-  log.scrollTop = log.scrollHeight;
+  if (!(ahead > 0) || !titleLog) return;
+  titleLog(['Loaded ahead, while you chose it', document.querySelector('.shim-title-play:not([disabled])') ? 'no wait'
+    : (ahead < 1000 ? Math.round(ahead) + ' ms' : (ahead / 1000).toFixed(1) + ' s') + ' head start', 'ready']);
 }
 
 export function init() {

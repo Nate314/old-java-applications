@@ -1,4 +1,6 @@
-import { Fragment } from 'react';
+import { Fragment, useLayoutEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { openLayer } from './ui/layer';
 import { embedded } from './skin';
 import { news } from './band-news';
 import { fireKey, keyOf } from './touch-pad';
@@ -107,6 +109,14 @@ function gamepadChartNodes(parts: string[][]) {
   return nodes;
 }
 
+/** The pointer a controller's stick moves: at() says where it is and whether it is hidden. */
+function GamepadCursor({ at, onMount }: { at: () => [number, number, boolean]; onMount: (draw: () => void) => void }) {
+  const [, setTick] = useState(0);
+  useLayoutEffect(() => { onMount(() => flushSync(() => setTick(n => n + 1))); }, []);
+  const [x, y, hidden] = at();
+  return <div className="shim-gp-cursor" aria-hidden="true" hidden={hidden} style={{ transform: 'translate(' + x + 'px, ' + y + 'px)' }} />;
+}
+
 // Works one page's app from controller snapshots ({ t, pads: [{ b: [pressed...], a: [axes...] }] }): presses
 // and releases the mapped keys, and moves and clicks the pointer. The page polls the controllers itself, or
 // (in the home page's player) gets the snapshots from the home page.
@@ -115,7 +125,7 @@ function gamepadDriver() {
   var eaten: Record<string, boolean>[] = [];      // per controller: inputs that pressed Play on the title screen, ignored until released
   var holders: Record<string, number> = {};    // key name -> how many inputs hold it down
   var lastT = 0;
-  var cursor: HTMLDivElement | null = null, cx = innerWidth / 2, cy = innerHeight / 2, hideTimer: ReturnType<typeof setTimeout> | null = null;
+  var cursor: { hidden: boolean; draw(): void } | null = null, cx = innerWidth / 2, cy = innerHeight / 2, hideTimer: ReturnType<typeof setTimeout> | null = null;
   var downEl: Element | null = null, downButton = -1;
 
   function lit(name: string, down: boolean) {
@@ -134,15 +144,13 @@ function gamepadDriver() {
 
   function showCursor() {
     if (!cursor) {
-      cursor = document.createElement('div');
-      cursor.className = 'shim-gp-cursor';
-      cursor.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(cursor);
+      var c = cursor = { hidden: false, draw: function () { /* until it is drawn */ } };
+      openLayer(<GamepadCursor at={() => [cx, cy, c.hidden]} onMount={draw => { c.draw = draw; }} />);
     }
     cursor.hidden = false;
-    cursor.style.transform = 'translate(' + cx + 'px, ' + cy + 'px)';
+    cursor.draw();
     clearTimeout(hideTimer as ReturnType<typeof setTimeout>);
-    hideTimer = setTimeout(function () { if (cursor && downButton < 0) cursor.hidden = true; }, 5000);
+    hideTimer = setTimeout(function () { if (cursor && downButton < 0) { cursor.hidden = true; cursor.draw(); } }, 5000);
   }
   // A real mouse takes over from the pointer.
   document.addEventListener('mousemove', function (e) {
@@ -150,6 +158,7 @@ function gamepadDriver() {
     cx = e.clientX;
     cy = e.clientY;
     cursor.hidden = true;
+    cursor.draw();
   }, true);
 
   function mouse(type: string, el: Element, button: number, buttons: number) {

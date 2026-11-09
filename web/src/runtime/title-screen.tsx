@@ -12,7 +12,10 @@ import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
 
 /** A line of the boot log: [label, value, class]. */
-type LogLine = [string, string, string];
+export type LogLine = [string, string, string];
+
+/** Adds a line to the title screen's boot log, while there is one. */
+export let titleLog: ((row: LogLine) => void) | null = null;
 
 /** What the page's start-up (start.ts) tells the title screen; set once it is in the page. */
 interface TitleControl { line(row: LogLine): void; done(n: number): void; ready(): void; leave(): void }
@@ -28,6 +31,7 @@ export function titleScreen(files: string[]) {
   var screen: HTMLElement | null = null;
   const close = openLayer(<TitleScreen total={files.length + 1} onGo={go} onMount={(c, el) => { control = c; screen = el; }} />);
   const ui = control as unknown as TitleControl;
+  titleLog = ui.line;
 
   // classes.js (then.js) has loaded by now (a deferred script, run before the page's DOMContentLoaded): the app,
   // compiled by TeaVM.
@@ -59,7 +63,7 @@ export function titleScreen(files: string[]) {
     var start = started;
     started = null;
     start();
-    setTimeout(close, 400);
+    setTimeout(function () { close(); titleLog = null; }, 400);
   }
 
   return {

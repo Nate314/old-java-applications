@@ -4,7 +4,7 @@ import { siteRoot } from './install';
 import { played } from './passport';
 import { catalog, catalogDoc, root, type CatalogApp } from './catalog';
 import { indexOf } from './then-and-now';
-import { embedSection } from './embed';
+import { EmbedSection } from './embed';
 import { playSound } from './sounds';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 
@@ -94,14 +94,9 @@ function ShareBody({ s, apps }: { s: ShareText; apps: CatalogApp[] }) {
   const copy = useRef<HTMLButtonElement>(null);
   const ways = useRef<HTMLDivElement>(null);
   const link = useRef<HTMLInputElement>(null);
-  const end = useRef<HTMLSpanElement>(null);
   const text = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     text.current!.value = s.message;   // its value, not a text node in it
-    // Put it on your site (embed.ts builds it) is the body's last child, in place of this marker.
-    const marker = end.current!;
-    if (apps.length) marker.replaceWith(embedSection(s.app ? s.app.id : null, apps));
-    else marker.remove();
     ((('share' in navigator) && ways.current!.firstChild as HTMLElement) || copy.current!).focus();
   }, []);
   function onCopy() {
@@ -154,7 +149,8 @@ function ShareBody({ s, apps }: { s: ShareText; apps: CatalogApp[] }) {
           </a>
         ))}
       </div>
-      <span ref={end} hidden />
+      {/* Put it on your site: the body's last child */}
+      {apps.length > 0 && <EmbedSection id={s.app ? s.app.id : null} apps={apps} />}
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { siteRoot } from './install';
 import { WATCH } from './watch';
 import { openShare, shareBox } from './share';
@@ -21,28 +22,29 @@ function embedScript() {
   return embedPromise;
 }
 
-export function embedSection(id: string | null, apps: CatalogApp[]) {
-  var box = document.createElement('details');
-  box.className = 'shim-embed';
-  var summary = document.createElement('summary');
-  summary.innerHTML = '<span aria-hidden="true">&lt;/&gt;</span> Put it on your site';
-  summary.setAttribute('data-sound', 'none');
-  box.appendChild(summary);
-  var built = false;
-  if (embedOpenNext) { embedOpenNext = false; box.open = true; }   // Find's "Put an app on your site"
-  box.addEventListener('toggle', function () {
-    if (!box.open || built) return;
-    built = true;
-    playSound('open');
-    embedScript().then(function (embed) {
-      var inner = document.createElement('div');
-      inner.className = 'shim-embed-body';
-      box.appendChild(inner);
-      embed.build(inner, { apps: apps, app: id, siteRoot: siteRoot, watchable: Object.keys(WATCH), sound: playSound });
-      box.scrollIntoView({ block: 'nearest' });
-    }, function (e) { built = false; console.warn(e.message); });
-  });
-  return box;
+/** Put it on your site, at the end of the Share panel: closed, and built (by embed.js) the first time it opens. */
+export function EmbedSection({ id, apps }: { id: string | null; apps: CatalogApp[] }) {
+  const box = useRef<HTMLDetailsElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const built = useRef(false);
+  const [open] = useState(() => { var o = embedOpenNext; embedOpenNext = false; return o; });   // Find's "Put an app on your site"
+  const [embed, setEmbed] = useState<NonNullable<Window['oldjavaEmbed']> | null>(null);
+  useLayoutEffect(() => {
+    if (!embed) return;
+    embed.build(body.current!, { apps: apps, app: id, siteRoot: siteRoot, watchable: Object.keys(WATCH), sound: playSound });
+    box.current!.scrollIntoView({ block: 'nearest' });
+  }, [embed]);
+  return (
+    <details className="shim-embed" open={open} ref={box} onToggle={() => {
+      if (!box.current!.open || built.current) return;
+      built.current = true;
+      playSound('open');
+      embedScript().then(setEmbed, function (e) { built.current = false; console.warn(e.message); });
+    }}>
+      <summary data-sound="none"><span aria-hidden="true">{'</>'}</span> Put it on your site</summary>
+      {embed && <div className="shim-embed-body" ref={body} />}
+    </details>
+  );
 }
 
 export function init() {
