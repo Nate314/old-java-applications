@@ -14,7 +14,7 @@ import { setSoundOn, soundOn } from './sounds';
 import { findMac, findOff, openFind } from './find';
 import { docked, openDockPicker } from './side-by-side';
 import { openMaker } from './skin-maker';
-import { More } from './toolbar-more';
+import { More, moreOut } from './toolbar-more';
 import { openLayer } from './ui/layer';
 
 export let siteRoot: string;
@@ -31,7 +31,7 @@ function headLink(rel: string, href: string, type?: string) {
 // The band at the top of every page but an embedded one: on an app page the app's name (where the band's news
 // line shows), its controls and a link to the next app; on every page Find, Sound, the skin picker and Edit (your
 // own skin), and the Clock chip while one of Clock's times runs (lazy/clockbar.tsx says what it shows). At its end,
-// More (toolbar-more.tsx) hides what does not fit, by a class on the controls.
+// More (toolbar-more.tsx) works out what does not fit, and those controls carry its class (more, moreOut).
 let redraw: (() => void) | null = null;
 /** Draws the band's toggles again, so Sound, Fit and Pop out say what they are doing now. */
 export function redrawBar() { if (redraw) redraw(); }
@@ -71,10 +71,12 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
     });
   }, []);
   const blur = (e: { currentTarget: HTMLElement }) => e.currentTarget.blur();
+  // A control's class, and More's mark when it has stepped out (toolbar-more.tsx).
+  const more = (sel: string, cls: string) => cls + (moreOut(sel) ? ' shim-more-out' : '');
   const on = soundOn(), fit = zoomFit(), s = window.__shimScale || 1, beside = docked(), key = findMac ? '⌘K' : 'Ctrl K';
   // data-sound="none" on Find, Side by side and Edit too: what they open plays its own sound
   const find = !findOff && (
-    <button type="button" className="shim-find-open" title={'Find an app, something to do or a source file (' + key + ')'}
+    <button type="button" className={more('.shim-find-open', 'shim-find-open')} title={'Find an app, something to do or a source file (' + key + ')'}
       aria-keyshortcuts={findMac ? 'Meta+K' : 'Control+K'} data-sound="none" onClick={e => { openFind(e.currentTarget); blur(e); }}>
       <span aria-hidden="true">{'⌕'}</span><span className="shim-find-label"> Find</span><kbd>{key}</kbd>
     </button>
@@ -88,42 +90,42 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
           <button type="button" className="shim-help" title="How to play: show the hint in this band" aria-label="How to play" aria-pressed={hint}
             onClick={e => { if (news!.kind() === 'hint') news!.clear(); else howToPlay(); blur(e); }}>?</button>
           {find}
-          <EraSwitch className="shim-era" />
-          <a href="../index.html">All apps</a>
-          <button type="button" className="shim-switch-open" onClick={e => openDrawer(e.currentTarget)}>Switch app</button>
+          <EraSwitch className={more('.shim-era', 'shim-era')} />
+          <a href="../index.html" className={moreOut('a[href="../index.html"]') ? 'shim-more-out' : undefined}>All apps</a>
+          <button type="button" className={more('.shim-switch-open', 'shim-switch-open')} onClick={e => openDrawer(e.currentTarget)}>Switch app</button>
           {!findOff && (
-            <button type="button" className="shim-dock-open" aria-pressed={!!beside} aria-label="Side by side" data-sound="none"
+            <button type="button" className={more('.shim-dock-open', 'shim-dock-open')} aria-pressed={!!beside} aria-label="Side by side" data-sound="none"
               title={beside ? beside + ' is open beside this app. Click to pick another, or close it from its panel.' : 'Side by side: run a second app beside this one'}
               onClick={e => { openDockPicker(e.currentTarget); blur(e); }}>
               <span aria-hidden="true">{'◫'}</span><span className="shim-dock-label"> Side by side</span>
             </button>
           )}
           {/* data-sound="none" on these three: the panel plays its own open sound */}
-          <a href="#source" className="shim-source-open" title="Read the Java source of this app while it runs" data-sound="none">
+          <a href="#source" className={more('.shim-source-open', 'shim-source-open')} title="Read the Java source of this app while it runs" data-sound="none">
             {'</>'}<span> Source</span>
           </a>
-          <button type="button" className="shim-share-open" title="Share this app: its link, with a preview card" data-sound="none"
+          <button type="button" className={more('.shim-share-open', 'shim-share-open')} title="Share this app: its link, with a preview card" data-sound="none"
             onClick={e => openShare(appId(), e.currentTarget)}>{'↗'}<span> Share</span></button>
           {/* Replay shows once the app runs and replay is recording */}
-          <button type="button" className="shim-replay" title="Instant replay: the last 10 to 20 seconds of play, as a video to watch, save or share"
+          <button type="button" className={more('.shim-replay', 'shim-replay')} title="Instant replay: the last 10 to 20 seconds of play, as a video to watch, save or share"
             aria-label="Instant replay" data-sound="none" onClick={e => replayNow(e.currentTarget)}>
             <span className="shim-replay-dot" aria-hidden="true" /><span> Replay</span>
           </button>
           {/* Photo shows once the app runs (data-photo); the shutter is its sound */}
-          <button type="button" className="shim-photo-open" title="Take a photo of the app: a picture to save, copy or share, in an instant print or postcard frame"
+          <button type="button" className={more('.shim-photo-open', 'shim-photo-open')} title="Take a photo of the app: a picture to save, copy or share, in an instant print or postcard frame"
             aria-label="Take a photo" data-sound="none" onClick={e => snapPhoto(takePhoto, document.getElementById('desktop'), e.currentTarget)}>
             <span aria-hidden="true">{'📷'}</span><span> Photo</span>
           </button>
           {pad.has(appId()!) && (
             // blurred after, else Space (FlappyBird's flap) would press it again
-            <button type="button" className="shim-controls-open" title="Show or hide the on-screen controller" aria-pressed={padShown()}
+            <button type="button" className={more('.shim-controls-open', 'shim-controls-open')} title="Show or hide the on-screen controller" aria-pressed={padShown()}
               onClick={e => { togglePad(); blur(e); }}>Controls</button>
           )}
-          <a className="shim-next" hidden={!next} href={next ? pageOf(next) : undefined}>{next ? 'Next: ' + next.name + ' ›' : ''}</a>
+          <a className={more('.shim-next', 'shim-next')} hidden={!next} href={next ? pageOf(next) : undefined}>{next ? 'Next: ' + next.name + ' ›' : ''}</a>
         </>
       )}
       {isApp && !document.body.hasAttribute('data-own-layout') && (
-        <button type="button" className="shim-zoom" aria-pressed={fit}
+        <button type="button" className={more('.shim-zoom', 'shim-zoom')} aria-pressed={fit}
           aria-label={fit ? 'Fit to screen' + (s > 1 ? ', zoomed ' + s + ' times' : '') : 'Actual size'}
           title={fit ? 'The app is zoomed to fit the screen' + (s > 1 ? ' (' + s + '×)' : '') + '. Click for its actual size.'
             : 'The app is shown at its actual size. Click to zoom it to fit the screen.'}
@@ -133,7 +135,7 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
       )}
       {/* only a top-level page may open the window; popOut and bringBack play their own sounds */}
       {isApp && poppable() && window.top === window && (
-        <button type="button" className="shim-pop" data-sound="none" aria-pressed={!!popped} aria-label={popped ? 'Bring back' : 'Pop out'}
+        <button type="button" className={more('.shim-pop', 'shim-pop')} data-sound="none" aria-pressed={!!popped} aria-label={popped ? 'Bring back' : 'Pop out'}
           title={popped ? 'Bring the app back into this page' : 'Pop out: play this app in its own small window that stays on top of your other windows'}
           onClick={e => { popOut(); blur(e); }}>
           {'⧉ '}<span>{popped ? 'Bring back' : 'Pop out'}</span>
@@ -152,12 +154,12 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
         </a>
       )}
       {/* the word is hidden on narrow pages */}
-      <button type="button" className="shim-sound" data-sound="none" aria-pressed={on} aria-label="Site sounds"
+      <button type="button" className={more('.shim-sound', 'shim-sound')} data-sound="none" aria-pressed={on} aria-label="Site sounds"
         title={on ? 'Site sounds are on (the apps keep their own sound). Click to mute.' : 'Site sounds are muted. Click to turn them on.'}
         onClick={e => { setSoundOn(!soundOn()); blur(e); }}>
         {'♪ '}<span>{on ? 'Sound' : 'Muted'}</span>
       </button>
-      <label>
+      <label className={moreOut('label') ? 'shim-more-out' : undefined}>
         {'Skin '}
         {/* uncontrolled: the skin's own code sets its value when the skin changes */}
         <select defaultValue={document.documentElement.getAttribute('data-skin')!} onChange={e => {
@@ -170,7 +172,7 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
         </select>
       </label>
       {!findOff && (
-        <button type="button" className="shim-own-edit" title="Change your skin: its color, desk, corners and windows" data-sound="none"
+        <button type="button" className={more('.shim-own-edit', 'shim-own-edit')} title="Change your skin: its color, desk, corners and windows" data-sound="none"
           onClick={e => { openMaker(e.currentTarget); blur(e); }}>
           <span aria-hidden="true">{'✎'}</span><span className="shim-own-edit-label"> Edit</span>
         </button>

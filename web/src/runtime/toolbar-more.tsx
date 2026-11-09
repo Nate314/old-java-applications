@@ -9,7 +9,8 @@ import { redrawBar } from './install';
 // Rather than wrap to a second row that pushes the stage down, the band keeps to one row (two on narrow pages,
 // where the app's name has a row of its own): the least needed controls step out, last of BAND_ORDER first, and
 // a More button at the end lists them in a menu. The controls stay where they are in the band, only hidden
-// (.shim-more-out), so their own code keeps working; a menu entry clicks the real one.
+// (.shim-more-out, which the toolbar draws on the ones moreOut names), so their own code keeps working; a menu
+// entry clicks the real one.
 // Which controls fit is measured in the page, so it is worked out here and the band (More, which the toolbar draws
 // at its end) is drawn again from what was found, at once, before the next measure.
 const BAND_ORDER = [   // kept the longest first
@@ -25,14 +26,18 @@ type Entry =
 
 /** What the More button and its menu show. */
 const state = { hidden: true, label: '', open: false, right: 0, maxHeight: 0, entries: [] as Entry[] };
+/** The BAND_ORDER selectors of the controls that have stepped out. */
+const out = new Set<string>();
+/** Whether the band's control that BAND_ORDER names `sel` has stepped out under More. */
+export function moreOut(sel: string) { return out.has(sel); }
 let bar: Element | null = null, button: HTMLButtonElement | null = null, menu: HTMLDivElement | null = null;
 let narrow: { matches: boolean; addEventListener?: MediaQueryList['addEventListener'] };
 
-function items() {   // the band's controls that can step out, in the order they leave
-  var list: Element[] = [];
+function items() {   // the band's controls that can step out, in the order they leave, each with its selector
+  var list: [string, Element][] = [];
   BAND_ORDER.forEach(function (sel) {
     Array.prototype.forEach.call(bar!.children, function (c: Element) {
-      if (c.matches(sel) && list.indexOf(c) < 0) list.push(c);
+      if (c.matches(sel) && !list.some(function (p) { return p[1] === c; })) list.push([sel, c]);
     });
   });
   return list.reverse();
@@ -54,19 +59,20 @@ function setHidden(h: boolean) {
   redrawBar();
 }
 function fit() {
-  var list = items(), out = [], allowed = narrow.matches ? 2 : 1;
-  list.forEach(function (c) { c.classList.remove('shim-more-out'); });
-  setHidden(true);
+  var list = items(), allowed = narrow.matches ? 2 : 1;
+  out.clear();
+  state.hidden = true;
+  redrawBar();
   if (rows() > allowed) {
     setHidden(false);
     for (var i = 0; i < list.length && rows() > allowed; i++) {
-      if (!list[i].getBoundingClientRect().width) continue;   // not showing anyway
-      list[i].classList.add('shim-more-out');
-      out.push(list[i]);
+      if (!list[i][1].getBoundingClientRect().width) continue;   // not showing anyway
+      out.add(list[i][0]);
+      redrawBar();
     }
   }
-  if (!out.length) state.hidden = true;
-  state.label = 'More: ' + out.length + (out.length === 1 ? ' control' : ' controls');
+  if (!out.size) state.hidden = true;
+  state.label = 'More: ' + out.size + (out.size === 1 ? ' control' : ' controls');
   if (state.open) build();
   redrawBar();
 }
