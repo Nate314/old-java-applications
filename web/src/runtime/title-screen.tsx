@@ -93,7 +93,7 @@ function TitleScreen({ total, onGo, onMount }: {
   const then = isThen();
   const screen = useRef<HTMLDivElement>(null);
   const log = useRef<HTMLPreElement>(null);
-  const story = useRef<HTMLDetailsElement>(null);
+  const [Story, setStory] = useState<NonNullable<Window['oldjavaNews']>['Story'] | null>(null);
   const [lines, setLines] = useState<LogLine[]>([]);
   const [done, setDone] = useState(1);
   const [ready, setReady] = useState(false);
@@ -123,8 +123,8 @@ function TitleScreen({ total, onGo, onMount }: {
       setFound({ app, apps });
       if (then) quirks().then(items => setQuirkList(items.length ? items : [[NO_QUIRKS]]));
     });
-    // What's new: the app's story, every change to it from the repo's history (news.js fills this <details>).
-    if (!then) newsScript().then(function (news) { news.story(id, story.current!); });
+    // What's new: the app's story, every change to it from the repo's history (news.js draws it).
+    if (!then) newsScript().then(function (news) { if (news.Story) setStory(() => news.Story); });
   }, []);
 
   const app = found && found.app;
@@ -198,7 +198,7 @@ function TitleScreen({ total, onGo, onMount }: {
             {' for the desktop, ' + JAR_JAVA + '.'}
             {JAR_KEYS[id] && <strong className="shim-title-jar-keys">{' ' + JAR_KEYS[id]}</strong>}
           </p>
-          <details className="shim-title-story" hidden ref={story} />
+          {Story ? <Story id={id} /> : <details className="shim-title-story" hidden />}
         </div>
         <span className="shim-meter shim-title-meter" style={{ '--p': String(done / total) } as CSSProperties} />
         <pre className="shim-title-log" aria-hidden="true" ref={log}>

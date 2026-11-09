@@ -13,14 +13,46 @@
  * stamps a play); an app played before that existed counts from its first stamp (oldjava.played).
  */
 
+import { useEffect, useState, type ComponentType } from 'react';
+
 interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[] }
 interface NewsData { items: NewsItem[]; apps: OldjavaCatalogApp[] }
 
 declare global {
   interface Window {
-  oldjavaNews?: { load(): Promise<NewsData>; story(id: string, box: HTMLElement): void; lastPlayed(id: string): number };
+    oldjavaNews?: { load(): Promise<NewsData>; Story: ComponentType<{ id: string }>; lastPlayed(id: string): number };
   }
 }
+let load!: () => Promise<NewsData>, day!: (t: number) => string, lastPlayed!: (id: string) => number;
+
+// ---- an app page's title screen: the app's story ----
+// Every change to the app, newest first, in a <details>; hidden when there is none (and until history.txt is read).
+function Story({ id }: { id: string }) {
+  const [data, setData] = useState<NewsData | null>(null);
+  useEffect(() => { load().then(setData); }, []);
+  const mine = data ? data.items.filter(it => it.apps.some(a => a.id === id)) : [];
+  if (!mine.length) return <details className="shim-title-story" hidden />;
+  const since = lastPlayed(id);
+  const fresh = since ? mine.filter(it => it.t > since).length : 0;
+  return (
+    <details className={'shim-title-story' + (fresh > 0 ? ' fresh' : '')}>
+      <summary>
+        <span className="shim-story-label">{fresh ? fresh + (fresh === 1 ? ' change' : ' changes') + ' since you played' : 'Latest change'}</span>
+        {' ' + mine[0].title + ' '}
+        <span className="shim-story-count">{'Its story (' + mine.length + ')'}</span>
+      </summary>
+      <ol>
+        {mine.map((it, i) => (
+          <li key={i} className={since && it.t > since ? 'fresh' : undefined}>
+            <time>{day(it.t)}</time>
+            <span><strong>{it.title}</strong>{it.more ? ': ' + it.more : null}</span>
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
 (function () {
   'use strict';
   var BASE = new URL(/* @vite-ignore */ '..', import.meta.url).href;   // this module is assets/news.js
@@ -39,7 +71,7 @@ declare global {
 
   // [{ t: ms, title, more, apps: [catalog entries] }], newest first, and the catalog.
   var dataPromise: Promise<NewsData> | null = null;
-  function load() {
+  load = function () {
     if (!dataPromise) {
       dataPromise = Promise.all([
         fetch(BASE + 'history.txt').then(function (r) {
@@ -55,7 +87,7 @@ declare global {
       });
     }
     return dataPromise;
-  }
+  };
 
   function parse(text: string, apps: OldjavaCatalogApp[]) {
     var byId: Record<string, OldjavaCatalogApp> = {};
@@ -80,14 +112,14 @@ declare global {
     return items;
   }
 
-  function day(t: number) {
+  day = function (t: number) {
     var d = new Date(t);
     var s = MONTHS[d.getMonth()] + ' ' + d.getDate();
     return d.getFullYear() === new Date().getFullYear() ? s : s + ', ' + d.getFullYear();
-  }
+  };
 
   // When the visitor last played the app (0 if never).
-  function lastPlayed(id: string) { return read(LAST_KEY)[id] || read(PLAYED_KEY)[id] || 0; }
+  lastPlayed = function (id: string) { return read(LAST_KEY)[id] || read(PLAYED_KEY)[id] || 0; };
 
   // The changes to an app since the visitor last played it ([] if never played).
   function changedSince(items: NewsItem[], id: string) {
@@ -222,38 +254,7 @@ declare global {
     load().then(function (d) { data = d; render(); });
   }
 
-  // ---- an app page's title screen: the app's story ----
-  // Fills `box` (a <details>) with every change to the app, newest first; hidden when there is none.
-  function story(id: string, box: HTMLElement) {
-    load().then(function (d) {
-      var mine = d.items.filter(function (it) { return it.apps.some(function (a) { return a.id === id; }); });
-      if (!mine.length) return;
-      var since = lastPlayed(id);
-      var fresh = since ? mine.filter(function (it) { return it.t > since; }).length : 0;
-      var summary = el('summary');
-      var latest = mine[0];
-      summary.appendChild(el('span', 'shim-story-label', fresh ? fresh + (fresh === 1 ? ' change' : ' changes') + ' since you played'
-        : 'Latest change'));
-      summary.appendChild(document.createTextNode(' ' + latest.title + ' '));
-      summary.appendChild(el('span', 'shim-story-count', 'Its story (' + mine.length + ')'));
-      var list = el('ol');
-      mine.forEach(function (it) {
-        var li = el('li', since && it.t > since ? 'fresh' : '');
-        li.appendChild(el('time', '', day(it.t)));
-        var t = el('span');
-        t.appendChild(el('strong', '', it.title));
-        if (it.more) t.appendChild(document.createTextNode(': ' + it.more));
-        li.appendChild(t);
-        list.appendChild(li);
-      });
-      box.appendChild(summary);
-      box.appendChild(list);
-      box.classList.toggle('fresh', fresh > 0);
-      box.hidden = false;
-    });
-  }
-
-  window.oldjavaNews = { load: load, story: story, lastPlayed: lastPlayed };
+  window.oldjavaNews = { load: load, Story: Story, lastPlayed: lastPlayed };
   var section = document.getElementById('news');
   if (section) home(section);
 })();

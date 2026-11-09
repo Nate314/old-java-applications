@@ -1,6 +1,6 @@
 
 interface RecordRule { file: string; show(text: string, saved: (name: string) => string | null): string }
-type NewsStory = Pick<NonNullable<Window['oldjavaNews']>, 'story'>;
+type NewsStory = { Story: NonNullable<Window['oldjavaNews']>['Story'] | null };
 
 let RECORDS: Record<string, RecordRule>;
 let newsPromise: Promise<NewsStory> | null;
@@ -87,7 +87,7 @@ function recordOf(id: string, saves: Record<string, string>) {
 export function newsScript() {
   if (!newsPromise) newsPromise = new Promise<NewsStory>(function (resolve, reject) {
     import('./lazy/news').then(function () { resolve(window.oldjavaNews!); }, function () { reject(new Error('news.js did not load')); });
-  }).catch(function (e) { console.warn(e.message); return { story: function () {} }; });
+  }).catch(function (e) { console.warn(e.message); return { Story: null }; });
   return newsPromise;
 }
 
