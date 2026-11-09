@@ -1,11 +1,12 @@
 import { redrawBar } from './install';
+import { openLayer } from './ui/layer';
 import { windowsBox } from './band-news';
 import { passport } from './passport';
 import { appId } from './catalog';
 import { playSound } from './sounds';
 
 /** The app while it is popped out. */
-export interface Popped { win: Window; desktop: HTMLElement; card: HTMLDivElement; watch: MutationObserver }
+export interface Popped { win: Window; desktop: HTMLElement; card: () => void; watch: MutationObserver }
 
 export let popped: Popped | null;
 
@@ -103,38 +104,32 @@ export function bringBack() {
   window.__shimDoc = null;
   p.watch.disconnect();
   document.body.insertBefore(p.desktop, document.body.firstChild);
-  p.card.remove();
+  p.card();
   document.documentElement.removeAttribute('data-popped');
   if (!p.win.closed) p.win.close();
   playSound('close');
   redrawBar();
 }
 
-// What the stage shows while the app is out: where it went, and the way back.
+// What the stage shows while the app is out: where it went, and the way back. Returns what takes it out again.
 function poppedCard() {
-  var card = document.createElement('div');
-  card.className = 'shim-popped';
-  var art = document.createElement('div');
-  art.className = 'shim-popped-art';
-  art.setAttribute('aria-hidden', 'true');
-  art.innerHTML = '<span class="screen"></span><span class="float"></span>';
-  var h = document.createElement('h2');
   var name = document.querySelector('.shim-bar-name');
-  h.textContent = (name ? name.textContent : document.title) + ' is in its own window';
-  var p = document.createElement('p');
-  p.textContent = 'It stays on top of your other windows, even outside the browser, and keeps running while you'
-    + ' do something else. Drag its corner to make it bigger. Close it, or press the button, to play it here again.';
-  var back = document.createElement('button');
-  back.type = 'button';
-  back.textContent = 'Bring it back';
-  back.setAttribute('data-sound', 'none');   // bringBack plays its own
-  back.addEventListener('click', bringBack);
-  var box = document.createElement('div');
-  box.className = 'shim-popped-box';
-  [art, h, p, back].forEach(function (el) { box.appendChild(el); });
-  card.appendChild(box);
-  document.body.appendChild(card);
-  return card;
+  return openLayer(<PoppedCard name={(name ? name.textContent : document.title) || ''} />);
+}
+
+function PoppedCard({ name }: { name: string }) {
+  return (
+    <div className="shim-popped">
+      <div className="shim-popped-box">
+        <div className="shim-popped-art" aria-hidden="true"><span className="screen" /><span className="float" /></div>
+        <h2>{name + ' is in its own window'}</h2>
+        <p>It stays on top of your other windows, even outside the browser, and keeps running while you do something else.
+          {' '}Drag its corner to make it bigger. Close it, or press the button, to play it here again.</p>
+        {/* bringBack plays its own sound */}
+        <button type="button" data-sound="none" onClick={bringBack}>Bring it back</button>
+      </div>
+    </div>
+  );
 }
 
 export function init() {

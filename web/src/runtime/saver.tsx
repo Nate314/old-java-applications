@@ -1,4 +1,7 @@
+import { useLayoutEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { embedded } from './skin';
+import { openLayer } from './ui/layer';
 import { siteRoot } from './install';
 import { news } from './band-news';
 import { floatToast, toastLink } from './passport';
@@ -15,7 +18,8 @@ declare global {
 }
 
 let saver: OldjavaSaver | null;
-let saverBox: HTMLDivElement | null;
+/** The saver on screen: fade() takes its on class away, faded() marks it faded, close() takes it out. */
+let saverBox: { fade(): void; faded(): void; isFaded: boolean; close(): void } | null;
 let saverPrev: HTMLElement | null;
 let saverDown: boolean;
 let saverFading: boolean;
@@ -83,32 +87,43 @@ function showSaver() {
   saverPrev = document.activeElement as HTMLElement | null;
   saverBase = null;
   saverFading = false;
-  saverBox = document.createElement('div');
-  saverBox.className = 'shim-saver';
-  var frame = document.createElement('iframe');
-  frame.src = siteRoot + 'ScreenSaver/index.html?embed&saver';
-  frame.title = 'Screen Saver: press a key or move the mouse to come back';
-  frame.tabIndex = -1;
-  saverBox.appendChild(frame);
-  document.body.appendChild(saverBox);
-  requestAnimationFrame(function () { requestAnimationFrame(function () { if (saverBox) saverBox.classList.add('on'); }); });
+  var set!: (s: { on: boolean; faded: boolean }) => void;
+  const close = openLayer(<SaverBox onMount={s => { set = s; }} />);
+  var box = saverBox = {
+    fade: function () { set({ on: false, faded: false }); },
+    faded: function () { box.isFaded = true; set({ on: false, faded: true }); },
+    isFaded: false as boolean,
+    close: close,
+  };
+  requestAnimationFrame(function () { requestAnimationFrame(function () { if (saverBox === box) set({ on: true, faded: false }); }); });
+}
+
+/** The Screen Saver app over the whole page, fading in once it is there (on) and out again. */
+function SaverBox({ onMount }: { onMount: (set: (s: { on: boolean; faded: boolean }) => void) => void }) {
+  const [s, setS] = useState({ on: false, faded: false });
+  useLayoutEffect(() => { onMount(v => flushSync(() => setS(v))); }, []);
+  return (
+    <div className={'shim-saver' + (s.on ? ' on' : '')} data-faded={s.faded ? '' : undefined}>
+      <iframe src={siteRoot + 'ScreenSaver/index.html?embed&saver'} title="Screen Saver: press a key or move the mouse to come back" tabIndex={-1} />
+    </div>
+  );
 }
 
 function wakeSaver() {
   saverFading = true;
-  saverBox!.classList.remove('on');
+  saverBox!.fade();
   var box = saverBox!;
   setTimeout(function () {
     if (saverBox !== box) return;
-    box.setAttribute('data-faded', '');
+    box.faded();
     saverDone();
   }, 400);
 }
 
 // Gone once it has faded and no button is held (the release would otherwise land on the app beneath).
 function saverDone() {
-  if (!saverBox || !saverBox.hasAttribute('data-faded') || saverDown) return;
-  saverBox.remove();
+  if (!saverBox || !saverBox.isFaded || saverDown) return;
+  saverBox.close();
   saverBox = null;
   saverFading = false;
   saverLast = Date.now();

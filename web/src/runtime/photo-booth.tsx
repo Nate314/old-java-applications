@@ -57,11 +57,8 @@ export function takePhoto() {
 function photoFlash(el: Element | null) {
   if (!el || el.ownerDocument !== document || reducedMotion()) return;
   var r = el.getBoundingClientRect();
-  var f = document.createElement('div');
-  f.className = 'shim-photo-flash';
-  f.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px';
-  document.body.appendChild(f);
-  setTimeout(function () { f.remove(); }, 700);
+  const close = openLayer(<div className="shim-photo-flash" style={{ left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' }} />);
+  setTimeout(close, 700);
 }
 
 // The shutter: flash, click, then the print. take: a function resolving to a photo (takePhoto, or the home page's
