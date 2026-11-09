@@ -10,6 +10,10 @@
  * boot.js gives it what it needs through window.oldjavaSite (catalog, the passport, WATCH, sounds).
  */
 
+import { Fragment, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { openLayer } from '../ui/layer';
+
 declare global {
   interface Window {
   oldjavaFind?: { open(opener?: Element | null): void; isOpen(): boolean; key: string };
@@ -23,20 +27,77 @@ interface Item {
   pic?: string; glyph?: string; tag: string; tagNew?: boolean; current?: boolean; boost?: number;
   run(full?: boolean): void;
 }
+/** What the box shows: its groups of rows, the row picked (-1 for none) and the line under them. */
+interface FindView { groups: [string, Item[]][]; active: number; status: string }
+
+const KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K';
+
+function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMount }: {
+  view: FindView; home: boolean; onSearch: () => void; onKey: (e: KeyboardEvent) => void; onClose: () => void;
+  onChoose: (item: Item, full: boolean) => void; onHover: (i: number) => void;
+  onMount: (parts: { dialog: HTMLElement; input: HTMLInputElement; list: HTMLElement; redraw: () => void }) => void;
+}) {
+  const dialog = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const [, setTick] = useState(0);
+  useLayoutEffect(() => {
+    onMount({ dialog: dialog.current!, input: input.current!, list: list.current!, redraw: () => flushSync(() => setTick(n => n + 1)) });
+    // On the input itself, as before: they stop there, before the page's own listeners (and React's) see them.
+    const el = input.current!;
+    const up = (e: KeyboardEvent) => e.stopPropagation();
+    el.addEventListener('keydown', onKey);
+    el.addEventListener('keyup', up);
+    return () => { el.removeEventListener('keydown', onKey); el.removeEventListener('keyup', up); };
+  }, []);
+  let n = 0;
+  return (
+    <>
+      <div className="shim-find-scrim" onClick={onClose} />
+      <div className="shim-find" role="dialog" aria-modal="true" aria-label="Find" ref={dialog}
+        onMouseDown={e => { if (e.target !== input.current) e.preventDefault(); }}>{/* the focus stays in the box */}
+        <div className="shim-find-head">
+          <span className="shim-find-glass" aria-hidden="true">{'⌕'}</span>
+          <input className="shim-find-input" type="text" autoComplete="off" spellCheck={false} placeholder="Apps, things to do, source files"
+            role="combobox" aria-expanded="true" aria-controls="shim-find-list" aria-autocomplete="list"
+            aria-activedescendant={view.active >= 0 ? 'shim-find-' + view.active : undefined} ref={input} onInput={onSearch} />
+          <kbd className="shim-find-esc" title="Close" onClick={onClose}>Esc</kbd>
+        </div>
+        <div className="shim-find-list" id="shim-find-list" role="listbox" aria-label="Results" ref={list}>
+          {view.groups.map(g => (
+            <Fragment key={g[0]}>
+              <div className="shim-find-group" role="presentation">{g[0]}</div>
+              {g[1].map(item => {
+              const i = n++;
+              return (
+                <div key={i} className={'shim-find-item kind-' + item.kind + (item.current ? ' current' : '')} id={'shim-find-' + i} role="option"
+                  aria-selected={view.active >= 0 ? i === view.active : undefined} onMouseMove={() => onHover(i)} onClick={e => onChoose(item, e.shiftKey)}>
+                  <span className="shim-find-pic" aria-hidden="true">{item.pic ? <img src={item.pic} alt="" loading="lazy" /> : item.glyph || ''}</span>
+                  <span className="shim-find-text"><strong>{item.title}</strong><span>{item.sub}</span></span>
+                  <span className={'shim-find-tag' + (item.tagNew ? ' new' : '')}>{item.current ? 'Here' : item.tag}</span>
+                </div>
+              );
+              })}
+            </Fragment>
+          ))}
+        </div>
+        <p className="shim-find-status" role="status">{view.status}</p>
+        <div className="shim-find-foot">
+          {[['↑↓', 'move'], ['Enter', 'open'], ['Shift Enter', 'full page'], [KEY, 'close']].map((k, i) => i === 2 && !home ? null : (
+            <span key={i}><kbd>{k[0]}</kbd>{' ' + k[1]}</span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 (function () {
   'use strict';
 
   var site = window.oldjavaSite as FindSite;
-  var MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-  var KEY = MAC ? '⌘K' : 'Ctrl K';
   var box: { close(): void } | null = null;
 
-  function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string | null, text?: string | null) {
-    var n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    return n;
-  }
   function onHome() { return !document.body.hasAttribute('data-app'); }
   // A control of this page, if it is there and shown.
   function shown(selector: string | HTMLElement) {
@@ -239,70 +300,32 @@ interface Item {
   }
 
   // ---- the box ----
+  // The box: what it shows is kept here (groups, active, status) and drawn by FindBox at once when it changes, so
+  // the rows are in place for the scrolling and focusing that follow.
   function open(opener?: Element | null) {
     if (box) { box.close(); return; }
     var returnTo = (opener || document.activeElement) as HTMLElement | null;
-    var scrim = el('div', 'shim-find-scrim');
-    var dialog = el('div', 'shim-find');
-    dialog.setAttribute('role', 'dialog');
-    dialog.setAttribute('aria-modal', 'true');
-    dialog.setAttribute('aria-label', 'Find');
-    var head = el('div', 'shim-find-head');
-    var glass = el('span', 'shim-find-glass', '⌕');
-    glass.setAttribute('aria-hidden', 'true');
-    var input = el('input', 'shim-find-input');
-    input.type = 'text';
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    input.placeholder = 'Apps, things to do, source files';
-    input.setAttribute('role', 'combobox');
-    input.setAttribute('aria-expanded', 'true');
-    input.setAttribute('aria-controls', 'shim-find-list');
-    input.setAttribute('aria-autocomplete', 'list');
-    var esc = el('kbd', 'shim-find-esc', 'Esc');
-    esc.title = 'Close';
-    head.appendChild(glass);
-    head.appendChild(input);
-    head.appendChild(esc);
-    var list = el('div', 'shim-find-list');
-    list.id = 'shim-find-list';
-    list.setAttribute('role', 'listbox');
-    list.setAttribute('aria-label', 'Results');
-    var foot = el('div', 'shim-find-foot');
-    [['↑↓', 'move'], ['Enter', 'open'], ['Shift Enter', 'full page'], [KEY, 'close']].forEach(function (k, i) {
-      if (i === 2 && !onHome()) return;
-      var span = el('span');
-      span.appendChild(el('kbd', null, k[0]));
-      span.appendChild(document.createTextNode(' ' + k[1]));
-      foot.appendChild(span);
-    });
-    var status = el('p', 'shim-find-status');
-    status.setAttribute('role', 'status');
-    dialog.appendChild(head);
-    dialog.appendChild(list);
-    dialog.appendChild(status);
-    dialog.appendChild(foot);
-
     var apps: OldjavaCatalogApp[] = [], items: Item[] = [], shownItems: Item[] = [], active = 0, srcItems: Item[] = [];
+    var view: FindView = { groups: [], active: -1, status: '' };
+    var parts!: { dialog: HTMLElement; input: HTMLInputElement; list: HTMLElement; redraw: () => void };
+    function draw() { parts.redraw(); }
+
     // The page may move the focus while the box is open (the home page's player focuses its iframe when it loads
     // the next demo game): the box takes it back, so typing and Enter stay here.
     function keepFocus(e: FocusEvent) {
-      if (!dialog.contains(e.target as Node | null)) input.focus({ preventScroll: true });
+      if (!parts.dialog.contains(e.target as Node | null)) parts.input.focus({ preventScroll: true });
     }
-    document.addEventListener('focusin', keepFocus);
     // A frame that focuses itself (the player's next demo game loading) fires no focusin here, only a blur on
     // this window: if the focus went into a frame, take it back.
     function keepFocusFromFrames() {
       setTimeout(function () {
-        if (box && document.activeElement && document.activeElement.tagName === 'IFRAME') input.focus({ preventScroll: true });
+        if (box && document.activeElement && document.activeElement.tagName === 'IFRAME') parts.input.focus({ preventScroll: true });
       }, 0);
     }
-    window.addEventListener('blur', keepFocusFromFrames);
     function close() {
       document.removeEventListener('focusin', keepFocus);
       window.removeEventListener('blur', keepFocusFromFrames);
-      scrim.remove();
-      dialog.remove();
+      shut();
       box = null;
       document.documentElement.removeAttribute('data-find');
       site.sound('close');
@@ -313,44 +336,14 @@ interface Item {
       close();
       item.run(full);
     }
-
-    function row(item: Item, i: number) {
-      var r = el('div', 'shim-find-item kind-' + item.kind + (item.current ? ' current' : ''));
-      r.id = 'shim-find-' + i;
-      r.setAttribute('role', 'option');
-      var pic = el('span', 'shim-find-pic');
-      if (item.pic) {
-        var img = el('img');
-        img.src = item.pic;
-        img.alt = '';
-        img.loading = 'lazy';
-        pic.appendChild(img);
-      } else pic.textContent = item.glyph || '';
-      pic.setAttribute('aria-hidden', 'true');
-      var text = el('span', 'shim-find-text');
-      text.appendChild(el('strong', null, item.title));
-      text.appendChild(el('span', null, item.sub));
-      var tag = el('span', 'shim-find-tag' + (item.tagNew ? ' new' : ''), item.current ? 'Here' : item.tag);
-      r.appendChild(pic);
-      r.appendChild(text);
-      r.appendChild(tag);
-      r.addEventListener('mousemove', function () { if (active !== i) setActive(i, false); });
-      r.addEventListener('click', function (e) { choose(item, e.shiftKey); });
-      return r;
-    }
-    function heading(text: string) {
-      var h = el('div', 'shim-find-group', text);
-      h.setAttribute('role', 'presentation');
-      return h;
-    }
     function setActive(i: number, scroll: boolean) {
-      if (!shownItems.length) { input.removeAttribute('aria-activedescendant'); return; }
+      if (!shownItems.length) { view.active = -1; draw(); return; }
       active = (i + shownItems.length) % shownItems.length;
-      var rows = list.querySelectorAll('.shim-find-item');
-      for (var k = 0; k < rows.length; k++) rows[k].setAttribute('aria-selected', String(k === active));
-      input.setAttribute('aria-activedescendant', 'shim-find-' + active);
+      view.active = active;
+      draw();
+      var rows = parts.list.querySelectorAll('.shim-find-item');
       if (scroll && rows[active]) rows[active].scrollIntoView({ block: 'nearest' });
-      // The highlighted app gets ready while the visitor reads (boot.js instant open), so Enter opens it at once.
+      // The highlighted app gets ready while the visitor reads (the runtime's instant open), so Enter opens it at once.
       var it = shownItems[active];
       if (site.ready && it.app && !it.current && (it.kind === 'app' || it.kind === 'then')) {
         site.ready(it.app.id, it.kind === 'then', it.kind === 'app' && onHome());
@@ -358,18 +351,11 @@ interface Item {
     }
     // groups: [[heading, items], ...]
     function render(groups: [string, Item[]][]) {
-      list.textContent = '';
-      shownItems = [];
-      groups.forEach(function (g) {
-        if (!g[1].length) return;
-        list.appendChild(heading(g[0]));
-        g[1].forEach(function (item) {
-          list.appendChild(row(item, shownItems.length));
-          shownItems.push(item);
-        });
-      });
+      view.groups = groups.filter(function (g) { return g[1].length > 0; });
+      shownItems = ([] as Item[]).concat.apply([], view.groups.map(function (g) { return g[1]; }));
+      draw();
       setActive(0, true);
-      list.scrollTop = 0;
+      parts.list.scrollTop = 0;
     }
 
     function suggestions() {
@@ -380,11 +366,12 @@ interface Item {
       var fresh = appRows.filter(function (it) { return !site.played(it.app!.id); }).slice(0, recent.length ? 3 : 5);
       var acts = actionItems(apps);
       render([['Jump back in', recent], ['Not played yet', fresh], [onHome() ? 'On this page' : 'This app and the site', acts]]);
-      status.textContent = '';
+      view.status = '';
+      draw();
     }
 
     function search() {
-      var q = input.value.trim().toLowerCase();
+      var q = parts.input.value.trim().toLowerCase();
       if (!q) { suggestions(); return; }
       var words = q.split(/\s+/);
       var scored = [items, actionItems(apps), srcItems].map(function (pool) {
@@ -406,15 +393,15 @@ interface Item {
       groups.sort(function (a, b) { return top(b) - top(a); });
       render(groups);
       var n = shownItems.length;
-      status.textContent = n ? n + (n === 1 ? ' result' : ' results') : 'Nothing matches “' + input.value.trim() + '”. Try a game, a skin, or a class name.';
+      view.status = n ? n + (n === 1 ? ' result' : ' results') : 'Nothing matches “' + parts.input.value.trim() + '”. Try a game, a skin, or a class name.';
+      draw();
       if (!srcItems.length) sourceItems(apps).then(function (s) {
         srcItems = s;
-        if (box && input.value.trim()) search();
+        if (box && parts.input.value.trim()) search();
       });
     }
 
-    input.addEventListener('input', search);
-    input.addEventListener('keydown', function (e) {
+    function key(e: KeyboardEvent) {
       // Keys typed here must not reach the app (the shim listens on the document).
       e.stopPropagation();
       if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1, true); }
@@ -424,18 +411,16 @@ interface Item {
       else if (e.key === 'Enter') { e.preventDefault(); choose(shownItems[active], e.shiftKey); }
       else if (e.key === 'Escape') { e.preventDefault(); close(); }
       else if (e.key === 'Tab') e.preventDefault();   // the box keeps the focus while it is open
-    });
-    input.addEventListener('keyup', function (e) { e.stopPropagation(); });
-    esc.addEventListener('click', close);
-    scrim.addEventListener('click', close);
-    dialog.addEventListener('mousedown', function (e) { if (e.target !== input) e.preventDefault(); });   // focus stays in the box
+    }
 
-    document.body.appendChild(scrim);
-    document.body.appendChild(dialog);
+    const shut = openLayer(<FindBox view={view} home={onHome()} onSearch={search} onKey={key} onClose={close} onChoose={choose}
+      onHover={function (i) { if (active !== i) setActive(i, false); }} onMount={function (p) { parts = p; }} />);
+    document.addEventListener('focusin', keepFocus);
+    window.addEventListener('blur', keepFocusFromFrames);
     document.documentElement.setAttribute('data-find', '');
     box = { close: close };
     site.sound('open');
-    input.focus({ preventScroll: true });
+    parts.input.focus({ preventScroll: true });
     site.catalog().then(function (list) {
       apps = list;
       items = appItems(apps);
