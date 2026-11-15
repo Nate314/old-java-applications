@@ -35,6 +35,10 @@ public class GroupBoard extends JPanel {
    private static final int BAR = 50;
    private static final int GAP = 12;
    private static final int FLY_MS = 260;
+   /** The height kept under the cards for the rounds timeline. */
+   private static final int TIMELINE = 24;
+   /** The key of the Newest button: Esc. */
+   private static final char ESC = 27;
 
    static final Color DESK = new Color(236, 230, 218);
    static final Color INK = new Color(40, 44, 52);
@@ -66,6 +70,9 @@ public class GroupBoard extends JPanel {
       void reshuffle();
 
       void clearHistory();
+
+      /** An earlier round's groups, dealt again as a new round (Look back's Use again). */
+      void reuse(List<List<String>> round);
 
       /** The newest round was changed by hand (two names swapped). */
       void edited(List<List<String>> groups);
@@ -112,6 +119,8 @@ public class GroupBoard extends JPanel {
    private final List<Button> groupButtons = new ArrayList<>();
    private final List<Button> pickButtons = new ArrayList<>();
    private final List<Button> rollButtons = new ArrayList<>();
+   private final List<Button> backButtons = new ArrayList<>();
+   private final Button earlier;
    private final Button keepApartButton;
    private final Button reshuffle;
    private final Button chartButton;
@@ -150,6 +159,13 @@ public class GroupBoard extends JPanel {
    private boolean keyboard;
 
    private List<List<String>> groups = Collections.emptyList();
+   /** Looking back: the number of the earlier round shown, or 0 while the newest is shown. */
+   private int shownRound;
+   /** The round the newest round's groups were taken from by Use again, or 0. */
+   private int reusedFrom;
+   /** The rounds timeline under the cards: the round number and place of each dot drawn. */
+   private int[] dotRounds = new int[0];
+   private Rectangle[] dots = new Rectangle[0];
    /** The rounds before the one shown, for marking who meets again. */
    private PartnerHistory before = new PartnerHistory();
    private List<String> names = Collections.emptyList();
@@ -217,6 +233,19 @@ public class GroupBoard extends JPanel {
          keepApart = false;
          linkFrom = null;
       }));
+      earlier = new Button("Earlier", '<', () -> lookAt(current() - 1));
+      backButtons.add(earlier);
+      backButtons.add(new Button("Later", '>', () -> lookAt(current() + 1)));
+      backButtons.add(new Button("Use again", 'u', () -> {
+         int from = shownRound;
+         int size = history.size();
+         actions.reuse(history.round(from));
+         if (history.size() > size) {
+            reusedFrom = from;
+         }
+      }));
+      backButtons.add(new Button("New round", 'n', actions::newRound));
+      backButtons.add(new Button("Newest", ESC, () -> lookAt(history.size())));
       spin = new Button("Spin", 's', this::spin);
       pickButtons.add(spin);
       putBack = new Button("Put back", 'b', () -> {
@@ -303,6 +332,8 @@ public class GroupBoard extends JPanel {
    public void showRound(List<String> roster, boolean deal) {
       names = new ArrayList<>(roster);
       groups = history.last();
+      shownRound = 0;
+      reusedFrom = 0;
       if (deal) {
          picking = false;
          rollCall = false;
@@ -335,6 +366,27 @@ public class GroupBoard extends JPanel {
       repaint();
    }
 
+   /** The number of the round shown (the newest when not looking back). */
+   private int current() {
+      return shownRound > 0 ? shownRound : history.size();
+   }
+
+   /** Looks back at round {@code n} (kept within 1 and the newest; the newest ends looking back). */
+   private void lookAt(int n) {
+      int newest = history.size();
+      if (newest == 0) {
+         return;
+      }
+      n = Math.max(1, Math.min(newest, n));
+      shownRound = n == newest ? 0 : n;
+      groups = history.round(n);
+      before = history.first(n - 1);
+      dealStart = 0;
+      message = null;
+      unpick();
+      repaint();
+   }
+
    private boolean dealing() {
       return dealStart > 0 && System.currentTimeMillis() - dealStart < (long) (dealOrder().size() - 1) * dealStep + FLY_MS;
    }
@@ -345,7 +397,7 @@ public class GroupBoard extends JPanel {
    }
 
    private List<Button> buttons() {
-      return picking ? pickButtons : rollCall ? rollButtons : groupButtons;
+      return picking ? pickButtons : rollCall ? rollButtons : shownRound > 0 ? backButtons : groupButtons;
    }
 
    /** Picks someone who has not had a turn yet, and spins the wheel to them. */
@@ -405,6 +457,15 @@ public class GroupBoard extends JPanel {
       if (chart) {
          return;
       }
+      for (int i = 0; i < dots.length; i++) {
+         if (dots[i].contains(x, y)) {
+            lookAt(dotRounds[i]);
+            return;
+         }
+      }
+      if (shownRound > 0) {
+         return;   // an earlier round is only looked at; Use again deals it as a new round
+      }
       for (int g = 0; g < chips.length; g++) {
          for (int k = 0; k < chips[g].length; k++) {
             if (chips[g][k] != null && chips[g][k].contains(x, y)) {
@@ -436,8 +497,14 @@ public class GroupBoard extends JPanel {
       if (rollCall && rollCallKey(event)) {
          return;
       }
+      if (!picking && !chart && (event.getKeyCode() == KeyEvent.VK_LEFT || event.getKeyCode() == KeyEvent.VK_RIGHT)) {
+         lookAt(current() + (event.getKeyCode() == KeyEvent.VK_LEFT ? -1 : 1));
+         return;
+      }
       if (event.getKeyCode() == KeyEvent.VK_ESCAPE) {
-         if (pickedGroup < 0 && presenting) {
+         if (shownRound > 0) {
+            lookAt(history.size());
+         } else if (pickedGroup < 0 && presenting) {
             present(false);
          }
          unpick();
@@ -542,6 +609,7 @@ public class GroupBoard extends JPanel {
       int bottom = presenting ? h : h - BAR;
       reshuffle.enabled = !history.isEmpty();
       clear.enabled = !history.isEmpty();
+      earlier.enabled = shownRound > 1;
       chartButton.label = chart ? "Groups" : "Partner chart";
       rolesButton.on = roles;
       clear.label = clearArmed ? "Sure? Press again" : "Clear history";
@@ -654,10 +722,17 @@ public class GroupBoard extends JPanel {
    private String[] paintGroups(Graphics2D g, int w, int bottom) {
       if (groups.isEmpty()) {
          chips = new Rectangle[0][];
+         dots = new Rectangle[0];
          paintEmptyDeck(g, w, bottom);
          return new String[] {"Group Creator", "Type the class above, then Make groups (or N) deals round 1. Later rounds mix in new partners and new roles.", ""};
       }
-      Rectangle[] cards = layoutCards(w, HEADER + 6, bottom - HEADER - 12);
+      boolean timeline = history.size() >= 2 && !presenting;
+      Rectangle[] cards = layoutCards(w, HEADER + 6, bottom - HEADER - 12 - (timeline ? TIMELINE : 0));
+      if (timeline) {
+         paintTimeline(g, w, bottom - TIMELINE / 2 - 4);
+      } else {
+         dots = new Rectangle[0];
+      }
       int rowHeight = rowHeight(cards);
       chips = new Rectangle[groups.size()][];
       for (int c = 0; c < groups.size(); c++) {
@@ -915,12 +990,12 @@ public class GroupBoard extends JPanel {
 
    /** The header for the round shown, or for the name under the pointer or picked for a swap. */
    private String[] summary() {
-      int round = history.size();
+      int round = current();
       int count = 0;
       for (List<String> group : groups) {
          count += group.size();
       }
-      String title = "Round " + round + ": " + count + (count == 1 ? " name" : " names") + " in " + groups.size()
+      String title = "Round " + round + (shownRound > 0 ? " of " + history.size() : "") + ": " + count + (count == 1 ? " name" : " names") + " in " + groups.size()
          + (groups.size() == 1 ? " group" : " groups");
       if (pickedGroup >= 0) {
          return new String[] {title, groups.get(pickedGroup).get(pickedIndex)
@@ -929,7 +1004,15 @@ public class GroupBoard extends JPanel {
       if (hoverGroup >= 0) {
          return new String[] {title, describe(hoverGroup, hoverIndex), metAgain(hoverGroup, hoverIndex) ? "again" : "fresh"};
       }
+      if (shownRound > 0) {
+         return new String[] {title, "As it was then. Use again (U) deals these groups as round " + (history.size() + 1)
+            + "; Esc goes back to round " + history.size() + ".", ""};
+      }
       List<String[]> broken = rules.broken(groups);
+      if (reusedFrom > 0) {
+         return new String[] {title, "Round " + reusedFrom + "'s groups again, with the roles rotated"
+            + (broken.isEmpty() ? "." : ", but a keep-apart pair shares a group (ringed in red)."), broken.isEmpty() ? "fresh" : "error"};
+      }
       if (!broken.isEmpty()) {
          String detail = broken.size() == 1
             ? broken.get(0)[0] + " and " + broken.get(0)[1] + " should be kept apart, but share Group " + groupNumber(broken.get(0)[0])
@@ -1243,7 +1326,7 @@ public class GroupBoard extends JPanel {
          Color ink = armed ? Color.WHITE : button.enabled ? INK : new Color(170, 166, 158);
          text(g, button.label, BOLD, ink, x + pad, top + 30);
          if (keys) {
-            String key = String.valueOf(Character.toUpperCase(button.key));
+            String key = keyName(button);
             text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - pad - width(g, key, SMALL), top + 30);
          }
          x += bw + gap;
@@ -1259,7 +1342,56 @@ public class GroupBoard extends JPanel {
    }
 
    private static int buttonWidth(Graphics2D g, Button button, int pad, boolean keys) {
-      return pad + width(g, button.label, BOLD) + (keys ? 10 + width(g, String.valueOf(Character.toUpperCase(button.key)), SMALL) : 0) + pad;
+      return pad + width(g, button.label, BOLD) + (keys ? 10 + width(g, keyName(button), SMALL) : 0) + pad;
+   }
+
+   private static String keyName(Button button) {
+      return button.key == ESC ? "Esc" : String.valueOf(Character.toUpperCase(button.key));
+   }
+
+   /**
+    * The rounds timeline under the cards, centered on y: a dot per round (as many as fit, around the one shown), the
+    * one shown drawn large with its number. A click on a dot looks back at that round.
+    */
+   private void paintTimeline(Graphics2D g, int w, int y) {
+      int n = history.size();
+      int shown = current();
+      int count = Math.min(n, Math.max(2, (w - 240) / 10));
+      int first = Math.max(1, Math.min(shown - count / 2, n - count + 1));
+      int step = Math.min(30, (w - 240) / count);
+      int x0 = (w - (count - 1) * step) / 2;
+      text(g, "Rounds", SMALL, MUTED, x0 - 20 - width(g, "Rounds", SMALL), y + 4);
+      g.setColor(new Color(200, 192, 176));
+      g.fillRect(x0, y - 1, (count - 1) * step, 2);
+      dotRounds = new int[count];
+      dots = new Rectangle[count];
+      for (int i = 0; i < count; i++) {
+         int round = first + i;
+         int x = x0 + i * step;
+         dotRounds[i] = round;
+         dots[i] = new Rectangle(x - step / 2, y - 10, step, 20);
+         if (round == shown) {
+            g.setColor(shownRound > 0 ? PICKED : INK);
+            g.fillOval(x - 9, y - 9, 18, 18);
+            g.setColor(INK);
+            g.drawOval(x - 9, y - 9, 18, 18);
+            centered(g, String.valueOf(round), SMALL, shownRound > 0 ? INK : Color.WHITE, x, y + 4);
+         } else if (step >= 22) {
+            // Room for numbers: a small numbered dot per round.
+            boolean hover = dots[i].contains(mouseX, mouseY);
+            g.setColor(hover ? Color.WHITE : new Color(246, 242, 234));
+            g.fillOval(x - 8, y - 8, 16, 16);
+            g.setColor(hover ? INK : new Color(180, 174, 162));
+            g.drawOval(x - 8, y - 8, 16, 16);
+            centered(g, String.valueOf(round), SMALL, hover ? INK : MUTED, x, y + 4);
+         } else {
+            boolean hover = dots[i].contains(mouseX, mouseY);
+            int r = hover ? 6 : 4;
+            g.setColor(hover ? INK : new Color(160, 154, 142));
+            g.fillOval(x - r, y - r, 2 * r, 2 * r);
+         }
+      }
+      text(g, shownRound > 0 ? "Left, Right or a dot" : "Left looks back", SMALL, MUTED, x0 + (count - 1) * step + 20, y + 4);
    }
 
    /** The class's names, each once, in the order typed. */
