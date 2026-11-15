@@ -11,7 +11,7 @@ import { LOST_APPS, type LostApp } from './match';
 const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData &&
   (navigator.connection?.effectiveType || '4g') === '4g' && !!document.createElement('video').canPlayType('video/mp4');
 
-function lastPlayed(): { app: LostApp; at: number } | null {
+export function lastPlayed(): { app: LostApp; at: number } | null {
   let times: Record<string, number> = {};
   try { times = JSON.parse(localStorage.getItem('oldjava.lastPlayed') || '{}') || {}; } catch (e) { /* storage blocked */ }
   let best: { app: LostApp; at: number } | null = null;
@@ -28,8 +28,8 @@ function ago(at: number): string {
 }
 
 /** match: the search's best app, or null (empty box, no match, or only the address's words in its hint); named: a word names it. */
-export function Spotlight({ root, match, named, query }: { root: string; match: LostApp | null; named: boolean; query: string }) {
-  const [recent] = useState(lastPlayed);
+export function Spotlight({ root, match, named, query, recent }:
+  { root: string; match: LostApp | null; named: boolean; query: string; recent: { app: LostApp; at: number } | null }) {
   const [live] = useState(moves);
   const want = match || recent?.app || LOST_APPS[0];
   // Follow the typing a moment late, so each key press does not start fetching another clip.
