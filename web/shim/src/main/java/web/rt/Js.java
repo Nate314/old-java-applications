@@ -98,6 +98,8 @@ public final class Js {
     @JSBody(params = "el", script = "if (!window.__shimKeyed) { window.__shimKeyed = { on: false };"
             + " addEventListener('keydown', function () { window.__shimKeyed.on = true; }, true);"
             + " addEventListener('pointerdown', function () { window.__shimKeyed.on = false; }, true); }"
+            + " var _k = el.ownerDocument.activeElement;" // the phone Keyboard's box (phone-keys.tsx) keeps the focus, or the phone's keyboard drops
+            + " if (_k && _k.classList.contains('shim-keys-box') && !el.matches('input, textarea')) return;"
             + " if (el.matches('button, input, select, textarea')) {"
             + " if (el.ownerDocument.activeElement !== el && el.isConnected)"
             + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"

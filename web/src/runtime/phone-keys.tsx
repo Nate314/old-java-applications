@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 // ---- Keyboard: a phone's own keyboard for the apps ----
 // Many apps take keys on a painted panel (SpriteFloatyStars' Sky writing, ScreenSaver's 0 to 9, Minesweeper's F,
@@ -45,6 +45,18 @@ export function PhoneKeys() {
   const was = useRef(BLANK);
   const composing = useRef(false);
   const [open, setOpen] = useState(false);
+  // While the phone's keyboard is up, a tap on the app (a tile, a button, the window) would take the focus off the
+  // box and drop the keyboard: the press still reaches the app, it just leaves the focus in the box. An app's own
+  // text field still takes it, for its own typing.
+  useEffect(() => {
+    if (!open) return;
+    function keep(e: MouseEvent) {
+      var t = e.target as Element;
+      if (t.closest && t.closest('.window') && !t.closest('input, textarea, select')) e.preventDefault();
+    }
+    document.addEventListener('mousedown', keep, true);
+    return () => document.removeEventListener('mousedown', keep, true);
+  }, [open]);
   if (!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches)) return null;
   function reset() {
     var el = box.current!;
