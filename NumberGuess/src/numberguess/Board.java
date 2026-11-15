@@ -45,6 +45,9 @@ public final class Board extends JPanel {
 	static final Color GOLD = new Color(255, 198, 64);
 	static final Color WARN = new Color(255, 170, 70);
 	static final Color RIGHT = new Color(80, 205, 120);
+	/** You pick with a lie allowed: a number that fits all but one answer. */
+	static final Color ONE_LIE = new Color(214, 142, 64);
+	static final Color ONE_LIE_DARK = new Color(122, 82, 42);
 
 	private static final int MARGIN = 20;
 	private static final int TABS_Y = 10, TAB_HEIGHT = 44;
@@ -60,6 +63,8 @@ public final class Board extends JPanel {
 	private Level level;
 	private Game game;
 	private MindReader reader;
+	/** You pick allows one lie. */
+	private boolean lying;
 	private MagicCards magic;
 	private final MagicView magicView = new MagicView(this::repaint);
 	private Duel duel;
@@ -193,7 +198,7 @@ public final class Board extends JPanel {
 	/** You think of a number and the computer guesses it. */
 	public void startPicking() {
 		int before = kind();
-		reader = new MindReader();
+		reader = new MindReader(lying ? 1 : 0);
 		game = null;
 		magic = null;
 		endDuel();
@@ -473,8 +478,22 @@ public final class Board extends JPanel {
 
 	// ---- You pick ----
 
+	/** You pick: allow one lie, or go back to the truth (a new round either way). */
+	public void toggleLies() {
+		if (isPicking()) {
+			lying = !lying;
+			startPicking();
+		}
+	}
+
+	public boolean isLying() {
+		return lying;
+	}
+
 	private void askReader() {
-		if (reader.isFound()) {
+		if (reader.allowsLie()) {
+			askLiar();
+		} else if (reader.isFound()) {
 			int guesses = reader.guesses().size();
 			say("Your number is " + reader.guess() + "!", RIGHT, "Found in " + guesses + (guesses == 1 ? " guess" : " guesses")
 					+ ". Guessing the middle never needs more than " + MindReader.par() + ".");
@@ -485,6 +504,23 @@ public final class Board extends JPanel {
 			say("Is it " + reader.guess() + "?", TEXT, number == 1
 					? "Think of a number from 1 to " + MindReader.MAX + ". Is yours lower, higher, or this one?"
 					: "Guess " + number + ". It is from " + reader.low() + " to " + reader.high() + ", if you told the truth.");
+		}
+	}
+
+	private void askLiar() {
+		int number = reader.guesses().size();
+		if (reader.isFound()) {
+			int lie = reader.lie();
+			int guess = reader.guess();
+			say("Your number is " + guess + "!", RIGHT, lie < 0 ? "Found in " + guesses(number) + ", and you told the truth every time."
+					: "Found in " + guesses(number) + ". Your lie was answer " + (lie + 1) + ": " + guess + " is not " + (reader.answers().get(lie) > 0 ? "higher" : "lower")
+							+ " than " + reader.guesses().get(lie) + ".");
+		} else if (reader.isCaught()) {
+			say("That's two lies!", HIGH, "Every number breaks at least two of your answers. One lie is allowed.");
+		} else {
+			say("Is it " + reader.guess() + "?", TEXT, number == 1
+					? "Think of a number from 1 to " + MindReader.MAX + ". Lie once if you like: I will still find it in " + MindReader.LIAR_PAR + "."
+					: "Guess " + number + ". Green fits every answer, orange all but one.");
 		}
 	}
 
@@ -816,7 +852,16 @@ public final class Board extends JPanel {
 		int left = xOn(line, shownLow - 1, 0, max);
 		int right = Math.max(left + 3, xOn(line, shownHigh, 0, max));
 		boolean caught = isPicking() && reader.isCaught();
-		if (!caught) {
+		if (isPicking() && reader.allowsLie() && !isOver()) {
+			// Not one stretch: numbers drop out only on their second broken answer.
+			for (int n = 1; n <= max; n++) {
+				if (reader.isPossible(n)) {
+					int x0 = xOn(line, n - 1, 0, max);
+					g.setColor(reader.broken(n) == 0 ? POSSIBLE : ONE_LIE);
+					g.fillRect(x0, line.y, Math.max(1, xOn(line, n, 0, max) - x0), line.height);
+				}
+			}
+		} else if (!caught) {
 			g.setColor(isOver() ? RIGHT : POSSIBLE);
 			g.fillRoundRect(left, line.y, right - left, line.height, 6, 6);
 		}
@@ -1017,6 +1062,9 @@ public final class Board extends JPanel {
 		if (isPicking() && number == reader.guess()) {
 			return SELECTED;
 		}
+		if (isPicking() && reader.allowsLie()) {
+			return !reader.isPossible(number) ? RULED_OUT : reader.broken(number) == 0 ? POSSIBLE_DARK : ONE_LIE_DARK;
+		}
 		return POSSIBLE_DARK;
 	}
 
@@ -1051,8 +1099,11 @@ public final class Board extends JPanel {
 		if (!isPicking()) {
 			return guess < game.number() ? LOW : guess > game.number() ? HIGH : RIGHT;
 		}
-		if (index + 1 < guesses.size()) {
-			return guesses.get(index + 1) > guess ? LOW : HIGH;
+		if (index == reader.lie()) {
+			return ONE_LIE;
+		}
+		if (index < reader.answers().size()) {
+			return reader.answers().get(index) > 0 ? LOW : HIGH;
 		}
 		return reader.isFound() ? RIGHT : reader.isCaught() ? WARN : GOLD;
 	}
@@ -1089,9 +1140,11 @@ public final class Board extends JPanel {
 			g.drawRoundRect(x, y, width - 1, height - 1, 10, 10);
 			g.drawString(label, x + 8, y + 16);
 			int arrowX = x + width - 11;
-			if (color == LOW) {
+			// The lie, in its own colour, still points the way it was told.
+			boolean up = color == LOW || color == ONE_LIE && reader.answers().get(i) > 0;
+			if (up) {
 				g.fillPolygon(new int[] { arrowX - 4, arrowX + 4, arrowX }, new int[] { y + 14, y + 14, y + 8 }, 3);
-			} else if (color == HIGH) {
+			} else if (color == HIGH || color == ONE_LIE) {
 				g.fillPolygon(new int[] { arrowX - 4, arrowX + 4, arrowX }, new int[] { y + 8, y + 8, y + 14 }, 3);
 			} else {
 				g.fillOval(arrowX - 3, y + 8, 7, 7);

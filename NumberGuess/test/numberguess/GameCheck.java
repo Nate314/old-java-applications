@@ -97,6 +97,41 @@ public class GameCheck {
 		}
 		check(reader.isCaught() && reader.low() == MindReader.MAX + 1, "higher than 100");
 
+		// Lie once: every number is found within LIAR_PAR, honest or with a lie at any one answer, and the lie is named.
+		int most = 0;
+		for (int number = 1; number <= MindReader.MAX; number++) {
+			for (int lieAt = -1; lieAt < MindReader.LIAR_PAR; lieAt++) {
+				for (int falseWay = -1; falseWay <= 1; falseWay += 2) {
+					reader = new MindReader(1);
+					while (!reader.isOver() && reader.guesses().size() <= MindReader.LIAR_PAR) {
+						int truth = Integer.compare(number, reader.guess());
+						int said = reader.guesses().size() - 1 == lieAt ? (truth == 0 ? falseWay : -truth) : truth;
+						if (said > 0) {
+							reader.higher();
+						} else if (said < 0) {
+							reader.lower();
+						} else {
+							reader.correct();
+						}
+					}
+					boolean lied = lieAt >= 0 && lieAt < reader.answers().size();
+					check(reader.isFound() && reader.guess() == number && reader.guesses().size() <= MindReader.LIAR_PAR, "liar " + number + " lie at " + lieAt);
+					check(reader.lie() == (lied ? lieAt : -1), "names the lie for " + number + " at " + lieAt);
+					most = Math.max(most, reader.guesses().size());
+				}
+			}
+		}
+		check(most == MindReader.LIAR_PAR, "liar par is tight: " + most);
+		reader = new MindReader(1);
+		reader.higher();
+		reader.lower();
+		check(!reader.isCaught() && reader.isPossible(50) == (reader.broken(50) <= 1), "one lie keeps numbers");
+		while (!reader.isOver()) {
+			reader.higher();
+			reader.lower();
+		}
+		check(reader.isCaught() && !reader.isFound(), "two lies caught");
+
 		// Magic: six cards of 32, each card's smallest number is its key, and honest answers add up to the number.
 		Random shuffle = new Random(7);
 		for (int number = 0; number <= MagicCards.MAX; number++) {
