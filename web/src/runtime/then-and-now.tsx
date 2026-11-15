@@ -5,6 +5,7 @@ import { appId, catalog, root, type CatalogApp } from './catalog';
 import { playSound } from './sounds';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { AppCard, PassportLine } from './ui/cards';
+import { fetchOk } from './fetch-ok';
 
 let drawer: HTMLElement | null;
 
@@ -45,10 +46,7 @@ const quirkLists: Record<string, Promise<string[][]>> = {};
 export function quirks(id?: string | null) {
   id = id || appId()!;
   if (!quirkLists[id]) {
-    quirkLists[id] = fetch(root() + id + '/then-source/README.md').then(function (r) {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.text();
-    }).then(function (text) {
+    quirkLists[id] = fetchOk(root() + id + '/then-source/README.md').then(function (r) { return r.text(); }).then(function (text) {
       var section = /^## Known quirks[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n?/g, '\n'));
       if (!section) return [];
       return section[1].split(/^- /m).slice(1).map(function (item) {
