@@ -310,6 +310,15 @@ The apps can be played without a mouse, and a screen reader can tell what is on 
 
 Checked with Chrome's accessibility tree and real key presses; not yet with NVDA, JAWS or VoiceOver themselves.
 
+### High contrast
+
+With Windows' Contrast themes (or any browser setting that forces the page's colors), the browser repaints every element in a few system colors and drops backgrounds. That lost two kinds of meaning, so `shim.css` imports `public/forced-colors.css` only while colors are forced (`@media (forced-colors: active)`, on the home page and every app page):
+- **Inside the apps, their own colors stay.** The app windows are a picture the program draws, and most of it is on canvases, which are never forced, so the windows keep the program's colors on their widgets too (`forced-color-adjust: none`). Before, Minesweeper's lit Classic and No guess buttons looked like the others, and text over a painted canvas could turn light on a light picture.
+- **Around them, the on toggle is filled.** The site marked which toggle is on (Then | Now, the gallery filters, the arcade tabs, Fit, Sound, the item picked in Find) with a background color alone, which forced colors removed. A control with `aria-pressed`, `aria-selected`, `aria-checked` or `aria-current` set is now filled with the system's `Highlight` color, its text in `HighlightText`, with no forced backplate behind the text.
+- Keyboard focus is a 3 px `Highlight` outline everywhere, since many controls drew theirs as a shadow, which forced colors drop. Replay's recording dot is drawn in the text color (on a narrow toolbar it is all the button shows), and the embeddable player's Play triangle (made of borders) no longer turns into a box.
+
+Checked in headless Chrome with forced colors emulated (DevTools protocol, `Emulation.setEmulatedMedia`), not with a real Windows Contrast theme turned on.
+
 ## Then and now
 
 Every app here was reworked many times after it was first restored, so the site also keeps each app as it was on master before those reworks, to play beside today's version. That is commit `5a28e4608fc254e9cc075768a598a965b7fe2d24` ("Generic example names, Modern as the default skin, and every app in NathaNOS (#9)"): the recovered code with the light bug fixes of "Modernize all 20 apps" (#6), as the TeaVM build (#7) first ran it, before the chain of changes from #10 on (see [HISTORY.md](../HISTORY.md)). The site calls it "as first restored".
