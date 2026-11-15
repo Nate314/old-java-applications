@@ -1,5 +1,6 @@
 import { redrawBar } from './install';
 import { ctx } from './midi';
+import { store, stored } from './stored';
 
 declare global {
   interface OldjavaSound { on(): boolean; set(on: boolean): void }
@@ -51,7 +52,7 @@ const TUNES: Record<string, Tune> = {
 const ARCADE_TUNES: Record<string, Tune> = { start: ['power', 7, 12], stamp: ['thump', 7, 12] };
 
 export function soundOn() {
-  try { return localStorage.getItem(SOUND_KEY) !== 'off'; } catch (e) { return true; }
+  return stored(SOUND_KEY) !== 'off';
 }
 
 function tone(a: AudioContext, v: Voice, semi: number, at: number, len: number, vol: number) {
@@ -162,7 +163,7 @@ export function playSound(name: string) {
 }
 
 export function setSoundOn(on: boolean) {
-  try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch (e) { /* this page only */ }
+  store(SOUND_KEY, on ? 'on' : 'off');
   redrawBar();
   if (on) playSound('open');
 }

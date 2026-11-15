@@ -6,6 +6,7 @@ import { siteRoot } from './install';
 import { news } from './band-news';
 import { floatToast, toastLink } from './passport';
 import { catalog } from './catalog';
+import { store, stored } from './stored';
 import { indexOf, pageOf } from './then-and-now';
 
 declare global {
@@ -42,11 +43,11 @@ const SAVER_KEY = 'oldjava.saver';
 const SAVER_SKIP: Record<string, boolean> = { ScreenSaver: true, BibleDownloader: true, Clock: true };
 
 export function saverOn() {
-  try { return localStorage.getItem(SAVER_KEY) !== 'off'; } catch (e) { return true; }
+  return stored(SAVER_KEY) !== 'off';
 }
 
 export function setSaverOn(on: boolean) {
-  try { localStorage.setItem(SAVER_KEY, on ? 'on' : 'off'); } catch (e) { /* this visit only */ }
+  store(SAVER_KEY, on ? 'on' : 'off');
 }
 
 export function saverHost() {

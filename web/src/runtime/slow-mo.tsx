@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { appId } from './catalog';
+import { store, stored } from './stored';
 import { embedded } from './skin';
 
 // ---- Slow-mo: the real-time apps at half or a quarter of their speed ----
@@ -63,7 +64,7 @@ export function SlowMo({ className }: { className: string }) {
         var to = RATES[(RATES.indexOf(rate) + 1) % RATES.length];   // from the clock itself: two quick clicks step twice
         setRate(to);
         setR(to);
-        try { localStorage.setItem(key(), String(to)); } catch (err) { /* this visit only */ }
+        store(key(), String(to));
         e.currentTarget.blur();   // else Space (FlappyBird's flap) would press it again
       }}>
       <span aria-hidden="true">{'🐢'}</span><span> Slow-mo</span><b>{FACES[r]}</b>
@@ -73,7 +74,6 @@ export function SlowMo({ className }: { className: string }) {
 
 export function init() {
   if (!shown()) return;
-  var saved = 1;
-  try { saved = Number(localStorage.getItem(key())) || 1; } catch (e) { /* full speed */ }
+  var saved = Number(stored(key())) || 1;
   if (RATES.indexOf(saved) > 0) setRate(saved);
 }

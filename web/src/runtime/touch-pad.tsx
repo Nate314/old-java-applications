@@ -5,6 +5,7 @@ import { flushSync } from 'react-dom';
 import { openLayer } from './ui/layer';
 import { redrawBar } from './install';
 import { appId } from './catalog';
+import { store, stored } from './stored';
 
 export let pad: OldjavaPad;
 
@@ -209,12 +210,11 @@ export function init() {
     has: function (id) { return !!PADS[id]; },
     // Shown or not: the visitor's last choice, else `byDefault`.
     wanted: function (byDefault) {
-      var v = null;
-      try { v = localStorage.getItem(PAD_KEY); } catch (e) { /* not remembered */ }
+      var v = stored(PAD_KEY);
       return v === 'on' || (v !== 'off' && byDefault);
     },
     remember: function (on) {
-      try { localStorage.setItem(PAD_KEY, on ? 'on' : 'off'); } catch (e) { /* not remembered */ }
+      store(PAD_KEY, on ? 'on' : 'off');
     },
     // Builds app `id`'s controller in `el` (in place of what it held). send(type, keyName) delivers each press and
     // release. Returns light(keyCode, down), which shows a real key press on the matching buttons.
