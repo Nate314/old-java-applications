@@ -47,6 +47,7 @@ public final class BattleCheck
         cratesFallAndAreTaken();
         suppliesSetting();
         computerAgainstComputerWithSupplies();
+        pointerDrivesAndFires();
         System.out.println("BattleCheck: all checks passed");
     }
 
@@ -489,5 +490,47 @@ public final class BattleCheck
                             + " in " + ticks / 60 + " s");
         }
         assert redWins > 0 && redWins < 6 : "one side won every match with crates: " + redWins;
+    }
+
+    /** The mouse or a finger: holding drives to the pointer, a tap turns and fires there, a tap on the title starts. */
+    private static void pointerDrivesAndFires()
+    {
+        PointerControls pointer = new PointerControls(new Script());
+        Tank red = new Tank("Red", Color.RED, pointer, 100, 250, 90);
+        pointer.drive(red);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
+        List<Shell> shells = new ArrayList<>();
+        // Hold at a spot up and to the right: it turns, drives there and stops, without firing.
+        pointer.press(300, 100);
+        for (int i = 0; i < 120; i++) red.update(W, H, shells, green);
+        assert Math.hypot(red.x() - 300, red.y() - 100) <= PointerControls.ARRIVED + Tank.SPEED : red.x() + "," + red.y();
+        assert shells.isEmpty();
+        double x = red.x(), y = red.y();
+        red.update(W, H, shells, green);
+        assert red.x() == x && red.y() == y : "stops at the pointer";
+        pointer.release(300, 100);
+        assert shells.isEmpty() : "a long hold is not a tap";
+        // A tap straight below: it turns to face down (180) without moving, and fires once.
+        pointer.press(red.x(), 400);
+        pointer.release(red.x(), 400);
+        for (int i = 0; i < 60; i++) red.update(W, H, shells, green);
+        assert red.rotation() == 180 : red.rotation();
+        assert red.x() == x && red.y() == y : "a tap does not drive";
+        assert shells.size() == 1 : shells.size();
+        // A tap on the tank fires along the barrel at once.
+        shells.clear();
+        pointer.press(red.x(), red.y());
+        pointer.release(red.x(), red.y());
+        red.update(W, H, shells, green);
+        assert shells.size() == 1 && red.rotation() == 180;
+        // On the title card a tap starts a match against the computer.
+        Tank red2 = new Tank("Red", Color.RED, pointer, 100, 250, 90);
+        pointer.drive(red2);
+        Battle battle = new Battle(red2, green, new ComputerControls(new Random(3)), null);
+        battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.TITLE;
+        pointer.tapToStart();
+        battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.ROUND_START && battle.vsComputer();
     }
 }

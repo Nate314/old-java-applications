@@ -21,8 +21,11 @@ public class Main extends JFrame
         int width = Math.min(500, Toolkit.getDefaultToolkit().getScreenSize().width);
         this.setSize(width, 500);
         this.setTitle("TankGame");
-        Tank red = new Tank("Red", new Color(214, 58, 46), new KeyControls(this, KeyEvent.VK_W, KeyEvent.VK_A,
-                        KeyEvent.VK_S, KeyEvent.VK_D, KeyEvent.VK_Q), 100, 250, 90);
+        // Red also follows the mouse or a finger on the field (PointerControls).
+        PointerControls pointer = new PointerControls(new KeyControls(this, KeyEvent.VK_W, KeyEvent.VK_A,
+                        KeyEvent.VK_S, KeyEvent.VK_D, KeyEvent.VK_Q));
+        Tank red = new Tank("Red", new Color(214, 58, 46), pointer, 100, 250, 90);
+        pointer.drive(red);
         Tank green = new Tank("Green", new Color(66, 170, 64), new KeyControls(this, KeyEvent.VK_UP, KeyEvent.VK_LEFT,
                         KeyEvent.VK_DOWN, KeyEvent.VK_RIGHT, KeyEvent.VK_M), width - 120, 250, 270);
         // Read after the window exists: in the browser, saved files are restored once the first window is made.
