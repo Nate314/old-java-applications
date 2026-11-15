@@ -675,7 +675,7 @@ The site has 20 apps and many ways into each, but a first visitor met a gallery 
 - A click, key, touch or wheel inside the player's page (listeners on its document, trusted events only), or a press on the touch controller, hands the stop to the visitor: the line goes, the strip says "Your turn", and the tour waits for Next stop. Back, Next stop and End tour are the strip's buttons; picking another app (the rail, a card, Shuffle, an exit screen suggestion) leaves the tour.
 - After the last stop the strip says how many of the 20 the visitor has played (passport stamps, so only apps they touched), with Play one you haven't and Read the story.
 - The stop reached is kept in `localStorage` (`oldjava.tour`), so the intro's button reads Continue the tour, with the stop and app, on a later visit, and Take the tour again once all 20 were seen. `index.html#tour` starts the tour where it was left, and so does the short link `/tour` (`/guide`).
-- The code is in the home page's player (`src/pages/home/player.ts`, the stops in `tour.ts`); the tour plays apps through the player's own `play`, so Then | Now, Big screen, the controller, Fit and Pop out work at every stop.
+- The code is in the home page's player (`src/pages/home/player.ts`, the stops in `tour.ts`, the strip and the intro's button in `TourBox.tsx`); the tour plays apps through the player's own `play`, so Then | Now, Big screen, the controller, Fit and Pop out work at every stop.
 
 ## Limitations
 

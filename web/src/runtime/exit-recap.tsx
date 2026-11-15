@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { replay, openClip, type ReplayClip } from './replay';
 import { saveStore } from './then-and-now';
 import { storedJson } from './stored';
+import { watchWanted } from './watch';
 
 let since = 0;        // when the app started: Play on the title screen, or the page's start when there is none
 let before = '';      // the record line the page opened with
@@ -48,7 +49,7 @@ export function ExitRecap({ name, replayLive }: { name: string | null; replayLiv
       )}
       <div className="shim-recap-text">
         <h2>{name ? name + ' has closed' : 'It has closed'}</h2>
-        <p className="shim-recap-ran">{'You played for ' + ran + '.'}</p>
+        <p className="shim-recap-ran">{(watchWanted() ? 'You watched the computer play for ' : 'You played for ') + ran + '.'}</p>
         {now && (
           <p className={'shim-recap-record' + (moved ? ' moved' : '')}>
             {moved && <strong>{before ? 'Updated' : 'New'}</strong>}
@@ -59,6 +60,9 @@ export function ExitRecap({ name, replayLive }: { name: string | null; replayLiv
     </div>
   );
 }
+
+/** The visitor took over from the computer (watch.tsx): their play starts now. */
+export function playFrom() { since = Date.now(); }
 
 export function init() {
   since = Date.now();

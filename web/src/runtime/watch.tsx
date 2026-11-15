@@ -7,6 +7,7 @@ import { isThen } from './then-and-now';
 import { setAppMuted } from './midi';
 import { useLayoutEffect, useState } from 'react';
 import { openLayer } from './ui/layer';
+import { playFrom } from './exit-recap';
 
 // ---- watch: the computer plays (?watch) ----
 // Four games can play themselves: Minesweeper's solver and Ultimate Tic-Tac-Toe's computer on both sides (W),
@@ -46,6 +47,7 @@ export function watchApp(desktop: HTMLElement, taken: () => void) {
     clearTimeout(wait);
     if (pressed && !ownKey) press();
     setAppMuted(false);
+    playFrom();
     taken();
     fade();
     setTimeout(close, 400);
