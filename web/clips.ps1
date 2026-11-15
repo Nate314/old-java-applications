@@ -74,7 +74,7 @@ $SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Dele
 # SpriteFloatyStars Orbits: two more suns, clicked into the biggest window's field (upper left and lower right).
 $StarsSuns = "js:(function (c) { var r = c.getBoundingClientRect(); [[0.27, 0.3], [0.72, 0.7]].forEach(function (p) { var x = r.left + r.width * p[0], y = r.top + r.height * p[1], t = document.elementFromPoint(x, y); ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: 1, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }); })([].slice.call(document.querySelectorAll('#desktop canvas.paint')).sort(function (a, b) { return b.width * b.height - a.width * a.height; })[0])"
 $Recipes = [ordered]@{
-    Minesweeper         = @{ Query = 'watch'; Steps = @('wait:1500', 'rec') }
+    Minesweeper         = @{ Steps = @('wait:800', 'key:O', 'key:W', 'wait:1500', 'rec') }
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', $FlappyPilot, 'wait:1000', 'rec') }
     DinoGame            = @{ Steps = @('key:E', 'wait:2500', 'rec') }
     UltimateTicTacToe   = @{ Query = 'watch'; Steps = @('wait:2500', 'rec') }

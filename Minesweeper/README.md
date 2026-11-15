@@ -27,6 +27,17 @@ Classic Minesweeper often ends on a coin flip: two tiles, one mine, nothing on t
 - Between hints the two lines say what kind of board it is and where the help is ("No guess: logic alone clears every board." and "Stuck? Hint (H) shows the next step and why.").
 - While the computer plays (W) the same lines and marks narrate each of its moves: the numbers it read, the reason, and "Computer: safe, so it opens it." or "Computer: a mine, so it flags it." (or "Computer: nothing is certain, so it guesses." on a random board).
 
+## Odds
+
+A hint says what is certain. **Odds** (the button at the right of the top row, or **O**) shows what is likely: every hidden tile gets its chance of being a mine, in percent, and the board turns into a map of risk.
+
+- A tile that is certainly safe glows light with a green **0%**; the likelier a mine, the redder the tile, up to **100%**. On tiles too small to read (under 22 px) only the color shows. Flagged and question-marked tiles keep their mark and get the color under it, so a flag on a glowing tile is a wrong flag.
+- The two lines under the status line say what the odds show: "Odds: the 0% tiles are safe to open." or, when nothing is certain, "Odds: no tile is safe for certain." and "The safest is 9% likely to be a mine."
+- The odds are exact for what a player can see: `Odds` counts every way of placing the mines that fits all the numbers on the board (and the mine count), and a tile's chance is the share of those ways with a mine on it. Tiles touching no number share what is left of the mines. Like a hint, it works from the numbers alone and does not trust your flags. A percent between 0 and 1 shows as 1%, and one between 99 and 100 as 99%, so 0% and 100% always mean certain.
+- The odds update after every move (and while the computer plays, W). They show from the first click on: before it, the first click is safe anyway. Screen readers hear them in each hidden tile's name ("hidden, 6% chance of a mine, row 1, column 1").
+- Odds stay on for the next game until turned off (they are not saved between runs). A game played with the odds showing counts as one hint, so a win sets no best time ("Cleared with the odds showing.").
+- Counting stops after a million steps, in which case the line says "Too many ways to count the odds here." That never happened in the self-check's Expert games; it takes many scattered openings on a large board.
+
 ## Controls / usage
 
 - **Level buttons** (top of the window): Beginner (9x9, 10 mines), Classic (15x15, 18 mines, the original game's board) and Expert (16x16, 40 mines). The current level is lit. Picking one starts a new game on it. Keys **1**, **2** and **3** do the same, and **F2** starts a new game on the current level.
@@ -38,6 +49,7 @@ Classic Minesweeper often ends on a coin flip: two tiles, one mine, nothing on t
 - **Keyboard play**: Tab into the board (in the browser), or start playing on the first tile (on the desktop, where it has the focus). The **arrow keys** move a cursor from tile to tile (the tile under it has a blue ring), **Space** or **Enter** reveals it, and **F** (or the menu key, or Shift+F10) cycles its flag like a right click. A new game started from the keyboard keeps the cursor where it was. A mouse click hides the cursor until a key is used again.
 - **Screen readers** hear each tile's state and place ("hidden, row 3, column 5", "2 mines near, ...", "flag, ...", "mine, ...", and after a loss "mine, hit, ..." and "wrong flag, ..."), through Swing's accessible names (the Java Access Bridge on the desktop, `aria-label` in the browser). In the browser the title bar's changes are read out too: the mines left after a flag, a mine hit, a win.
 - **Shift+arrow keys**: move the window by 30 px per press (plain arrows did this before keyboard play; they still do while the window itself, not a tile, has the focus).
+- **O** or **Odds**: every hidden tile's chance of being a mine (see Odds above).
 - **H** or **Hint**: the next step that can be worked out, and why; **G** or **No guess**: deal boards that need no guess, or random ones (see above).
 - **W**: watch the computer play. It plays the board as it stands (or a new one) about three moves a second, with the cursor ring on the tile it plays and the reason under the status line: it plays whatever `Logic` works out (taking its own flags as mines), and when nothing is certain reveals the tile least likely to be a mine (so it can lose, on a random board). A finished game is followed by a new one after about 2.5 s. W again, a click on a tile, or Space, Enter or F on one takes over the board as it stands; 1, 2, 3 and F2 keep it playing on the new board. A game the computer played in records no best time: the status line says "The computer cleared it" (or "You and the computer cleared it") instead.
 - **Esc**: close the window, like its close button. Run alone that exits; inside NathaNOS it closes only Minesweeper.
@@ -50,6 +62,7 @@ Classic Minesweeper often ends on a coin flip: two tiles, one mine, nothing on t
 - `src/minesweeper/GameFrame.java`: the window; builds the level buttons, the grid of tiles and the status line, holds game state, and handles reveals, loss, win, the clock and the mine counter.
 - `src/minesweeper/Level.java`: the three board sizes and mine counts.
 - `src/minesweeper/Logic.java`: what can be worked out for certain from the board as a player sees it, one step at a time, with the reason in words; also the hints (which do not trust the player's flags).
+- `src/minesweeper/Odds.java`: each hidden tile's chance of being a mine, by counting every placement of the mines that fits the numbers, group by group of tiles that share numbers.
 - `src/minesweeper/FairBoard.java`: deals no-guess boards, checking each random board by playing it with `Logic` from the first click.
 - `src/minesweeper/Solver.java`: the computer's next move for W: a step from `Logic`, or the least risky guess.
 - `src/minesweeper/BestTimes.java`: reads and writes the best times, the last level and the No guess setting.
@@ -64,7 +77,7 @@ From the repo root: `./run.ps1 old Minesweeper` (or `./run.ps1 old Minesweeper -
 
 ## Self-check
 
-`test/minesweeper/MineFieldCheck.java` checks board generation on every level, the flood reveal, opening around a number (including a wrong flag), the win check, the best times file (and the No guess setting), and the computer (W) playing 200 games on each level: a move it is sure of never hits a mine or flags a safe tile, it never plays a revealed or flagged tile, and it wins more than 70% of Beginner games (it prints its wins per level: 187, 199 and 169 of 200). It also checks each `Logic` rule and its reason on small boards, that over 300 random games with careless (often wrong) flags a hint never calls a mine safe or a safe tile a mine, and that 50 no-guess boards per level have the right mines, open on the first click and are cleared by `Logic` alone (it prints how long they took). From `Minesweeper/`:
+`test/minesweeper/MineFieldCheck.java` checks board generation on every level, the flood reveal, opening around a number (including a wrong flag), the win check, the best times file (and the No guess setting), and the computer (W) playing 200 games on each level: a move it is sure of never hits a mine or flags a safe tile, it never plays a revealed or flagged tile, and it wins more than 70% of Beginner games (it prints its wins per level: 187, 199 and 169 of 200). It also checks each `Logic` rule and its reason on small boards, that over 300 random games with careless (often wrong) flags a hint never calls a mine safe or a safe tile a mine, and that 50 no-guess boards per level have the right mines, open on the first click and are cleared by `Logic` alone (it prints how long they took). For Odds it checks 60 small boards (5x5, 6 mines, with some random flags that must be ignored) against counting every placement of the mines one by one, and 40 Expert games played by the computer: at every move the odds add up to 40 mines, no mine is at 0% and no safe tile at 100%; it prints the slowest move (a few ms). From `Minesweeper/`:
 
 ```
 javac -d ../out/check/Minesweeper src/minesweeper/*.java test/minesweeper/*.java
