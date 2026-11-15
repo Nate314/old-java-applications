@@ -284,6 +284,58 @@ public final class RunnerCheck {
       assert gp.ghost() == null && gp.runner().course() != kept.course : "G again: new courses";
       gfile.delete();
 
+      // Two players (P): one course for both, started together, P2 ahead of P1 and clear of it; the further one wins
+      // the round, and duel runs count for nobody's best.
+      File dfile = File.createTempFile("dinogame", ".txt");
+      dfile.delete();
+      Records dr = Records.load(dfile);
+      RunnerPanel dp = new RunnerPanel(dr, 11);
+      dp.setBot(true);
+      dp.togglePlayers();
+      Duel duel = dp.duel();
+      assert duel != null && !dp.bot().isOn() : "P turns the bot off";
+      assert duel.p2.dinoX() >= Runner.DINO_X + Runner.DUCK_W : "P2 stands clear of P1";
+      key(dp, java.awt.event.KeyEvent.VK_UP, true);
+      assert duel.p1.state() == Runner.State.RUNNING && duel.p2.state() == Runner.State.RUNNING : "one key starts both";
+      assert !duel.p1.isJumping() && !duel.p2.isJumping() : "the start is not a jump";
+      assert duel.p1.course() == duel.p2.course();
+      dp.step();
+      key(dp, java.awt.event.KeyEvent.VK_W, true);
+      assert duel.p1.isJumping() && !duel.p2.isJumping() : "W jumps P1 only";
+      key(dp, java.awt.event.KeyEvent.VK_W, false);
+      while (duel.p1.isJumping()) {
+         dp.step();
+      }
+      runYou(dp);   // P1 plays, P2 never jumps
+      for (int i = 0; i < 60 * 600 && duel.running(); i++) {
+         dp.step();
+      }
+      assert duel.over() && duel.winner() == 1 && duel.wins(1) == 1 && duel.wins(2) == 0 : duel.p1.score() + " vs " + duel.p2.score();
+      assert dp.crashLines()[0].equals("P1 wins, " + duel.p1.score() + " to " + duel.p2.score() + ".") : dp.crashLines()[0];
+      assert duel.p2.crashedInto() != null && duel.p2.score() > 0;
+      assert dr.best == 0 && dr.ghost == null && !dfile.exists() : "duel runs do not count";
+      key(dp, java.awt.event.KeyEvent.VK_UP, true);
+      assert duel.over() : "a held key does not start the next round at once";
+      for (int i = 0; i < 30; i++) {
+         dp.step();
+      }
+      long lastCourse = duel.p1.course();
+      key(dp, java.awt.event.KeyEvent.VK_SPACE, true);
+      dp.step();
+      assert duel.running() && dp.crashLines().length == 0 && duel.p1.course() != lastCourse : "the next round, a new course";
+      dp.togglePlayers();
+      assert dp.duel() == null && dp.runner().state() == Runner.State.READY : "P again: one player";
+      dp.runner().press();
+      assert dp.runner().course() != duel.p2.course() : "back to new courses";
+      // Neither jumps: both fall at the first obstacle, P2 first since it stands ahead, and that is a dead heat.
+      dp.togglePlayers();
+      key(dp, java.awt.event.KeyEvent.VK_SPACE, true);
+      for (int i = 0; i < 60 * 60 && dp.duel().running(); i++) {
+         dp.step();
+      }
+      assert dp.duel().over() && dp.duel().winner() == 0 && dp.duel().wins(1) + dp.duel().wins(2) == 0
+         && dp.duel().p2.score() < dp.duel().p1.score() && dp.crashLines()[0].startsWith("A dead heat") : dp.crashLines()[0];
+
       // The file keeps both bests and the marker; damaged lines are skipped.
       Records r = Records.load(file);
       r.best = 812;
@@ -370,6 +422,18 @@ public final class RunnerCheck {
             r.release();
          }
          p.step();
+      }
+   }
+
+   private static void key(RunnerPanel p, int code, boolean down) {
+      java.awt.event.KeyEvent e = new java.awt.event.KeyEvent(p, down ? java.awt.event.KeyEvent.KEY_PRESSED : java.awt.event.KeyEvent.KEY_RELEASED,
+         0, 0, code, java.awt.event.KeyEvent.CHAR_UNDEFINED);
+      for (java.awt.event.KeyListener l : p.getKeyListeners()) {
+         if (down) {
+            l.keyPressed(e);
+         } else {
+            l.keyReleased(e);
+         }
       }
    }
 

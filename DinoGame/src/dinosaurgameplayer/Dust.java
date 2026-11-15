@@ -47,11 +47,11 @@ final class Dust {
       boolean jumping = runner.isJumping();
       double feet = Runner.GROUND - 2;
       if (jumping && !this.wasJumping) {
-         this.burst(Runner.DINO_X + 14, feet, 5, 0.8);
+         this.burst(runner.dinoX() + 14, feet, 5, 0.8);
       } else if (!jumping && this.wasJumping) {
-         this.burst(Runner.DINO_X + 18, feet, 8, 1.3);
+         this.burst(runner.dinoX() + 18, feet, 8, 1.3);
       } else if (!jumping && runner.state() == Runner.State.RUNNING && runner.steps() % 9 == 0) {
-         this.puffs.add(new Puff(Runner.DINO_X + 8, feet, -0.6 - this.random.nextDouble(), -0.3 - this.random.nextDouble() * 0.4, 14, 2));
+         this.puffs.add(new Puff(runner.dinoX() + 8, feet, -0.6 - this.random.nextDouble(), -0.3 - this.random.nextDouble() * 0.4, 14, 2));
       }
       this.wasJumping = jumping;
       double drift = runner.speed() * 0.35;
