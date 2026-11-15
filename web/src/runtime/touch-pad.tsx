@@ -51,7 +51,7 @@ const PADS: Record<string, PadGroup[]> = {
     { title: 'Star Catcher', tint: 'gold', dpad: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'], fire: 'Space', fireLabel: 'Catch' },
     { buttons: [{ k: 'N', label: 'Next' }, { k: 'R', label: 'Again' }, { k: 'M', label: 'Nights' },
                 { k: 'ArrowUp', label: 'Add star' }, { k: 'ArrowDown', label: 'Remove star' }, { k: 'T', label: 'Trails' },
-                { k: 'H', label: 'Help' }] }
+                { k: 'S', label: 'Music' }, { k: 'H', label: 'Help' }] }
   ]
 };
 

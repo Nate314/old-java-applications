@@ -56,6 +56,8 @@ public final class AnimationFrame extends JFrame implements KeyListener {
          this.starField.toggleHint();
       } else if (key == KeyEvent.VK_T) {
          this.starField.toggleTrails();
+      } else if (key == KeyEvent.VK_S) {
+         this.starField.toggleMusic();
       }
    }
 

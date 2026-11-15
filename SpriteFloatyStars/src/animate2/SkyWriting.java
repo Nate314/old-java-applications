@@ -251,7 +251,14 @@ final class SkyWriting {
          double[] goal = this.goal(star);
          double x = this.field.centerX(star);
          double y = this.field.centerY(star);
-         this.field.moveStar(star, x + (goal[0] - x) * share, y + (goal[1] - y) * share);
+         double nextX = x + (goal[0] - x) * share;
+         double nextY = y + (goal[1] - y) * share;
+         this.field.moveStar(star, nextX, nextY);
+         // Star music: a star coming within half a dot of its place rings a note, higher further along the message.
+         double near = 0.5 * this.dot;
+         if (!Double.isNaN(this.placeX[star]) && Math.hypot(goal[0] - x, goal[1] - y) > near && Math.hypot(goal[0] - nextX, goal[1] - nextY) <= near) {
+            this.field.ring((this.placeX[star] - this.left) / Math.max(1.0, this.right - this.left), 0.6, nextX, nextY);
+         }
       }
    }
 
