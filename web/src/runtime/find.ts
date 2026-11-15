@@ -4,21 +4,14 @@ import { WATCH } from './watch';
 import { catalog, root } from './catalog';
 import { isThen } from './then-and-now';
 import { playSound } from './sounds';
+import { lazyScript } from './lazy-script';
 
-type OldjavaFind = NonNullable<Window['oldjavaFind']>;
-
-let findPromise: Promise<OldjavaFind> | null;
 export let findMac: boolean;
 export let findOff: boolean;
 let findHeld: string[] | null;
 let findHeldTimer: number | ReturnType<typeof setInterval>;
 
-function findScript() {
-  if (!findPromise) findPromise = new Promise(function (resolve, reject) {
-    import('./lazy/find').then(function () { resolve(window.oldjavaFind!); }, function () { findPromise = null; reject(new Error('find.js did not load')); });
-  });
-  return findPromise;
-}
+const findScript = lazyScript(() => import('./lazy/find'), () => window.oldjavaFind, 'find.js');
 
 export function openFind(opener: Element | null) {
   findScript().then(function (find) { find.open(opener); }, function (e: Error) { console.warn(e.message); });
@@ -54,7 +47,6 @@ export function init() {
   window.oldjavaSite.played = function (id) { return !!played[id]; };
   window.oldjavaSite.watchable = Object.keys(WATCH);
   window.oldjavaSite.sound = function (name) { playSound(name); };
-  findPromise = null;
   findMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   findOff = clipMode || document.documentElement.hasAttribute('data-shot') || document.documentElement.hasAttribute('data-saver');
   // The first Ctrl+K of a page loads find.js before the box can take the focus: keys typed in that moment are held

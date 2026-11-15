@@ -1,3 +1,4 @@
+import { lazyScript } from './lazy-script';
 
 interface RecordRule { file: string; show(text: string, saved: (name: string) => string | null): string }
 type NewsStory = { Story: NonNullable<Window['oldjavaNews']>['Story'] | null };
@@ -84,10 +85,10 @@ function recordOf(id: string, saves: Record<string, string>) {
   return paths.length ? 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ') : '';
 }
 
+const newsLoad = lazyScript(() => import('./lazy/news'), () => window.oldjavaNews, 'news.js');
+
 export function newsScript() {
-  if (!newsPromise) newsPromise = new Promise<NewsStory>(function (resolve, reject) {
-    import('./lazy/news').then(function () { resolve(window.oldjavaNews!); }, function () { reject(new Error('news.js did not load')); });
-  }).catch(function (e) { console.warn(e.message); return { Story: null }; });
+  if (!newsPromise) newsPromise = newsLoad().catch(function (e): NewsStory { console.warn(e.message); return { Story: null }; });
   return newsPromise;
 }
 
