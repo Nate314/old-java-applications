@@ -23,6 +23,7 @@ public class Main extends JFrame {
    };
    public LauncherWindow launcherWindow;
    public StartMenu startMenu;
+   CalendarFlyout calendar;
    DesktopMenu desktopMenu;
    final Zoom zoom = new Zoom();
    Power power;
@@ -57,9 +58,11 @@ public class Main extends JFrame {
       this.launcherWindow = new LauncherWindow(this, tasks);
       this.power = new Power(this, tasks);
       this.startMenu = new StartMenu(this, launcher);
+      this.calendar = new CalendarFlyout(this);
       // The taskbar and its menu stay above internal app windows (Clock), as on a real desktop.
       this.desktopPane.add(this.launcherWindow, JLayeredPane.PALETTE_LAYER);
       this.desktopPane.add(this.startMenu, JLayeredPane.POPUP_LAYER);
+      this.desktopPane.add(this.calendar, JLayeredPane.POPUP_LAYER);
       this.desktopMenu = new DesktopMenu(this, new DesktopShortcuts(this, launcher));
       this.desktopPane.add(this.desktopMenu, JLayeredPane.POPUP_LAYER);
       this.desktopPane.add(this.zoom, JLayeredPane.DRAG_LAYER);

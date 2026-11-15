@@ -21,7 +21,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 - **Show desktop**: the thin strip at the right end of the taskbar, past the clock, as on Windows. A click minimizes every window on the taskbar; when they are all minimized, a click brings them all back.
 - **Window outlines**: a window flies between the desktop and the taskbar as a few light outlines that grow or shrink in about a fifth of a second, slowing as they land. Opening an app sends them from the icon or start menu row that opened it to the new window, minimizing sends them from the window into its button, and restoring sends them out of the button, after which the window shows. They are drawn on the desktop, so a window that is already up (an app opened in its own window) covers the part of them inside it.
 - **Restart and Shut Down**: every app window closes at once (borderless ones too), its outlines flying into the middle of the screen, while the whole desktop, taskbar included, fades to black over about half a second with "Restarting" or "Shutting down" and a ring of chasing dots. Shut Down then ends NathaNOS, as it always did (in the browser, the page's exit screen follows). Restart instead shows the recovered NathaNOS logo (`assets/NathaNOS.png`, byte for byte the same file as the `NathaNOS.jpg` the original never displayed) with "Starting NathaNOS" for about two seconds, then fades back to the desktop, about four seconds in all. Icons, wallpaper and Paint pictures stay as they were. Clicks during the sequence do nothing. With reduced motion (in the browser) the fades and outlines are skipped and each step shows at once.
-- **Clock**: the local time and date at the right end of the taskbar.
+- **Clock**: the local time and date at the right end of the taskbar. Click it for the calendar, as on Windows: a panel opens above it with an analog clock and the time to the second, the day and the date, and a month calendar starting on Sunday, today in a blue circle and the days of the months either side dimmed. The arrows go back and forward a month, and the month's name comes back to this month. Click a day to see how far it is from today ("Friday, December 25: in 40 days", "14 days ago", tomorrow, yesterday); click it again to clear it. With no day picked, the line at the bottom says which day of the year it is ("Day 319 of 365"). Click the clock again, the desktop, an icon or MENU to close it.
 - **Icons**: `assets/<name>.png` (matched ignoring case) on a light tile, or for an app without one, a colored tile with its initials (FlappyBird is "FB").
 - Opening an app loads the jar's `Main-Class`, then:
   - If it has a public `(Boolean)` constructor (Clock), calls it with `false`, moves that frame's content pane into a centered internal window and disposes the hidden frame. Internal app windows can be closed but not resized or maximized.
@@ -40,7 +40,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 `~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`, or `wallpaper=picture:Picture 1` for a picture from Paint) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
 - The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. `./run.ps1 old NathaNOS` adds the other apps (see Running).
 
-The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines, then Restart and the shut down screen.
+The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines, then Restart and the shut down screen, then the calendar on the clock.
 
 ## Code layout
 
@@ -57,6 +57,7 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 - `src/main/LauncherWindow.java`: the taskbar, with the MENU button, the window buttons, the clock and Show desktop.
 - `src/main/TaskList.java`: tracks the open app windows for the taskbar, minimizes and restores them, and centers new windows that open in the top-left corner.
 - `src/main/Zoom.java`: the outlines that fly between a window and its icon or taskbar button.
+- `src/main/CalendarFlyout.java`: the calendar that opens above the taskbar clock, and its date sums (day numbers, weekdays, the month grid).
 - `src/main/StartMenu.java`: the start menu panel with the logo, the app list, Restart and Shut Down.
 - `src/main/Power.java`: Restart and Shut Down: closing every window, the fade to black, the logo and the fade back.
 - `src/main/FlatButton.java`: the flat icon-and-label button used by the taskbar and the start menu.
@@ -75,9 +76,10 @@ javac -d ../out/check/NathaNOS src/main/*.java test/main/*.java
 java -ea -cp ../out/check/NathaNOS main.PictureCheck
 java -ea -cp ../out/check/NathaNOS main.ZoomCheck
 java -ea -cp ../out/check/NathaNOS main.PowerCheck
+java -ea -cp ../out/check/NathaNOS main.CalendarCheck
 ```
 
-`test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land. `test/main/PowerCheck.java` checks the Restart and Shut Down timeline: the fade to black, the logo shown only on Restart and only on black, the fade back to the desktop, and the steps shown at once with reduced motion.
+`test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land. `test/main/PowerCheck.java` checks the Restart and Shut Down timeline: the fade to black, the logo shown only on Restart and only on black, the fade back to the desktop, and the steps shown at once with reduced motion. `test/main/CalendarCheck.java` checks the calendar's date sums: day numbers read back to their dates over about 4,400 years, known weekdays, leap years (2000 and 2024 but not 2100), months rolling into the next year, the grid starting on the Sunday before the 1st, and the lines a picked day and today give.
 
 ## Running
 

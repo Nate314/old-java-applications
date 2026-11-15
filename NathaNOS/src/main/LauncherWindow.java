@@ -53,6 +53,7 @@ public class LauncherWindow extends JInternalFrame {
          new ImageIcon("assets/NathaNOS.png").getImage(), "NathaNOS", "MENU", new Color(0, 120, 215), new Color(0, 150, 255), null,
          () -> {
             screen.desktopMenu.hideMenu();
+            screen.calendar.hideMenu();
             screen.startMenu.toggleVisibility();
          }
       );
@@ -158,13 +159,46 @@ public class LauncherWindow extends JInternalFrame {
       }
    }
 
-   /** The time and date at the right end of the taskbar. */
-   private static final class TrayClock extends JComponent {
+   /** The time and date at the right end of the taskbar; a click opens the calendar above it. */
+   private final class TrayClock extends JComponent {
+      private boolean hovered;
+
+      TrayClock() {
+         this.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+               TrayClock.this.hovered = true;
+               TrayClock.this.repaint();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+               TrayClock.this.hovered = false;
+               TrayClock.this.repaint();
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+               if (e.getButton() == MouseEvent.BUTTON1) {
+                  LauncherWindow.this.screen.startMenu.hideMenu();
+                  LauncherWindow.this.screen.desktopMenu.hideMenu();
+                  LauncherWindow.this.screen.calendar.toggleVisibility();
+                  TrayClock.this.repaint();
+               }
+            }
+         });
+      }
+
       @Override
       @SuppressWarnings("deprecation")
       protected void paintComponent(Graphics g) {
          super.paintComponent(g);
          AppIcon.smooth(g);
+         boolean open = LauncherWindow.this.screen.calendar != null && LauncherWindow.this.screen.calendar.isVisible();
+         if (open || this.hovered) {
+            g.setColor(open ? ON : HOVER);
+            g.fillRoundRect(2, 3, this.getWidth() - 4, this.getHeight() - 6, 8, 8);
+         }
          // Date's local-time getters, not Calendar: in the browser (TeaVM) Calendar's default time zone is UTC.
          Date now = new Date();
          int hour = now.getHours() % 12 == 0 ? 12 : now.getHours() % 12;
