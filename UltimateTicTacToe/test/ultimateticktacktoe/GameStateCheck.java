@@ -147,7 +147,45 @@ public class GameStateCheck {
          check("c6".equals(last) == (review.grade(k) == Review.Grade.BEST), "grade of " + last + ": " + review.grade(k));
       }
 
+      checkLesson();
       System.out.println("GameStateCheck passed (hard beat easy " + hardWins + " of " + games + ")");
+   }
+
+   /**
+    * Every How to play step starts as a live game with X to move, as many X's as O's and the last move O's (on the board
+    * cell it sends X to); some legal move does the task, and every step but the "play where you were sent" one also
+    * turns some legal move away.
+    */
+   private static void checkLesson() {
+      for (int i = 0; i < Lesson.STEPS.length; i++) {
+         Lesson.Step step = Lesson.STEPS[i];
+         GameState start = step.start();
+         int x = 0;
+         int o = 0;
+         for (String[] board : start.marks) {
+            for (String mark : board) {
+               x += "X".equals(mark) ? 1 : 0;
+               o += "O".equals(mark) ? 1 : 0;
+            }
+         }
+         check(start.winner == null && start.xTurn && x == o, "lesson step " + i + " position");
+         if (start.lastMove >= 0) {
+            int sentTo = start.lastMove % 9;
+            check("O".equals(start.marks[start.lastMove / 9][sentTo]), "lesson step " + i + " last move is O's");
+            check(start.activeBoard == (start.boardResults[sentTo] == null ? sentTo : -1), "lesson step " + i + " sent to the last move's board");
+         }
+         int right = 0;
+         int wrong = 0;
+         for (int move : start.legalMoves()) {
+            String why = step.wrong(start, move);
+            right += why == null ? 1 : 0;
+            wrong += why == null ? 0 : 1;
+         }
+         check(right > 0, "lesson step " + i + " can be done");
+         check(i == 1 ? wrong == 0 : wrong > 0, "lesson step " + i + " turns a move away");
+      }
+      check(Lesson.STEPS[4].wrong(Lesson.STEPS[4].start(), 5 * 9 + 1) != null, "sending O to its two in a row is turned away");
+      check(Lesson.STEPS[5].wrong(Lesson.STEPS[5].start(), 8 * 9 + 8) == null, "the winning move wins the lesson game");
    }
 
    /** Plays (board, cell) pairs, failing if any is illegal. */
