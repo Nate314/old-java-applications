@@ -27,7 +27,7 @@ import javax.swing.Timer;
 
 /**
  * A full-screen gallery of screen savers: the original green circles and its two variants, then Starfield, Mystify,
- * Pipes, a bouncing logo, a dot clock and an aquarium of fish that stay yours between runs. It moves on to the next one
+ * Pipes, a bouncing logo, a dot clock, an aquarium of fish that stay yours between runs and a brick maze walked in first person. It moves on to the next one
  * every 30 seconds unless one was picked, and closes when the mouse moves.
  */
 public class Main extends JFrame implements KeyListener, MouseListener, MouseMotionListener {
@@ -62,7 +62,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    public Main() {
       this.savers = Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
          new Starfield(), new Mystify(), new Pipes(), new BouncingLogo(), new DotClock(Date::new),
-         new Aquarium(this.settings.tank, Date::new, this.settings::save));
+         new Aquarium(this.settings.tank, Date::new, this.settings::save), new Maze());
       this.setUndecorated(true);
       this.setSize(this.SCREEN_WIDTH, this.SCREEN_HEIGHT);
       this.setDefaultCloseOperation(3);
@@ -147,7 +147,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       String cycle = this.settings.cycle ? "C: stop cycling (next in " + (int)Math.ceil((CYCLE_MILLIS - this.shownFor) / 1000) + " s)"
          : "C: cycle every 30 s";
       String head = this.saver.name() + "   " + (this.index() + 1) + " of " + this.savers.size();
-      String keys = "N / P: next, previous   1-" + this.savers.size() + ": pick   " + cycle;
+      String keys = "N / P: next, previous   1-9, 0: pick   " + cycle;
       if (this.saver instanceof Aquarium) {
          return new String[] {head, ((Aquarium)this.saver).status(), keys,
             "Left / Right: speed " + speed + "   H: names and these keys", "Esc or move the mouse to close"};
@@ -215,10 +215,10 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
          this.show((this.index() + 1) % count, true);
       } else if (keyCode == KeyEvent.VK_P) {
          this.show((this.index() + count - 1) % count, true);
-      } else if (keyCode >= KeyEvent.VK_1 && keyCode < KeyEvent.VK_1 + count) {
-         // Picking a saver keeps it on screen.
+      } else if (keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_9) {
+         // Picking a saver keeps it on screen; 0 is the tenth.
          this.settings.cycle = false;
-         this.show(keyCode - KeyEvent.VK_1, true);
+         this.show(keyCode == KeyEvent.VK_0 ? 9 : keyCode - KeyEvent.VK_1, true);
       } else if (keyCode == KeyEvent.VK_C) {
          this.settings.cycle = !this.settings.cycle;
          this.shownFor = 0;

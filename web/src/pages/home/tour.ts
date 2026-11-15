@@ -10,7 +10,7 @@ export const TOUR: [app: string, tryThis: string][] = ([
   ['RubiksCube2D', 'Drag a square to turn its layer. Mix the cube, then press T and Teach me shows every turn of the solve.'],
   ['Clock', 'Open the Timer tab and drag the red dial (it follows you to every app page), or open World and find an hour that suits three cities.'],
   ['UltimateTicTacToe', 'Two computer players. The square you take picks the board your opponent plays next; click to take over.'],
-  ['ScreenSaver', 'Press N for the next of nine screen savers, 9 for the aquarium, and F to feed the fish.'],
+  ['ScreenSaver', 'Press N for the next of ten screen savers, 9 for the aquarium (F feeds the fish), and 0 for the maze.'],
   ['MusicTheoryExpert', 'Open the Songwriter tab and click chords on the circle of fifths: it loops them into a song.'],
   ['TankGame', 'The computer is driving both tanks. Press a key to take the red one: W A S D drive, Q fires.'],
   ['SpriteFloatyStars', 'A thousand stars orbit a sun. Click to place up to four suns and watch them swing between them.'],
