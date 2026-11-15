@@ -5635,3 +5635,10 @@ html[data-saver] * {
   border-color: var(--accent);
   color: #fff;
 }
+
+/* ---- Slow-mo (slow-mo.tsx): the app's clock at half or a quarter speed ---- */
+.shim-toolbar .shim-slowmo[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

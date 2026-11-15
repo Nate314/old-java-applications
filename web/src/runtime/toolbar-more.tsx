@@ -14,7 +14,7 @@ import { redrawBar } from './install';
 // Which controls fit is measured in the page, so it is worked out here and the band (More, which the toolbar draws
 // at its end) is drawn again from what was found, at once, before the next measure.
 const BAND_ORDER = [   // kept the longest first
-  '.shim-find-open', 'a[href="../index.html"]', '.shim-switch-open', '.shim-controls-open', '.shim-era',
+  '.shim-find-open', 'a[href="../index.html"]', '.shim-switch-open', '.shim-controls-open', '.shim-slowmo', '.shim-era',
   '.shim-next', '.shim-share-open', '.shim-source-open', '.shim-sound', '.shim-zoom', 'label',
   '.shim-dock-open', '.shim-own-edit', '.shim-replay', '.shim-pop', '.shim-photo-open'
 ];
