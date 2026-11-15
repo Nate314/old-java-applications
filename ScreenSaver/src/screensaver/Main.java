@@ -6,6 +6,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
@@ -58,6 +59,13 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    private double captionLeft = CAPTION_MILLIS;
    /** Where the mouse was first seen after the grace period. */
    private Point firstMouse = null;
+   /** All the savers at once (G), or null. */
+   private Gallery gallery;
+   /** A saver picked from the gallery grows from its little screen to the whole one. */
+   private Rectangle zoomFrom;
+   private double zoomLeft;
+   /** When a saver was last picked from the gallery: the mouse that picked it needs a moment to come to rest. */
+   private long pickedMillis;
 
    public Main() {
       this.savers = Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
@@ -116,8 +124,15 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       long now = System.nanoTime();
       double millis = Math.min(100, (now - this.lastTick) / 1e6);
       this.lastTick = now;
-      double speed = this.saver instanceof Tiles ? this.settings.speed : Math.min(MAX_MOTION_SPEED, this.settings.speed);
-      this.saver.tick(millis * speed);
+      if (this.gallery != null) {
+         for (Saver s : this.savers) {
+            s.tick(millis * this.speedFor(s));
+         }
+         this.screen.repaint();
+         return;
+      }
+      this.zoomLeft = Math.max(0, this.zoomLeft - millis);
+      this.saver.tick(millis * this.speedFor(this.saver));
       this.shownFor += millis;
       this.fadeLeft = Math.max(0, this.fadeLeft - millis);
       this.captionLeft = Math.max(0, this.captionLeft - millis);
@@ -127,11 +142,65 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       this.screen.repaint();
    }
 
+   private double speedFor(Saver s) {
+      return s instanceof Tiles ? this.settings.speed : Math.min(MAX_MOTION_SPEED, this.settings.speed);
+   }
+
+   /** G: every saver at once. The ones not on screen start over at full size, to be painted small. */
+   private void openGallery() {
+      for (Saver s : this.savers) {
+         if (s != this.saver) {
+            s.reset(this.SCREEN_WIDTH, this.SCREEN_HEIGHT, this.random);
+         }
+      }
+      this.gallery = new Gallery(this.savers, this.index());
+      this.captionLeft = 0;
+      this.fadeLeft = 0;
+   }
+
+   /** Leaves the gallery on saver index, growing it from its cell; picking one (stay) stops the cycling, as 1-9 do. */
+   private void pick(int index, boolean stay) {
+      this.zoomFrom = this.gallery.cell(index);
+      this.zoomLeft = this.zoomFrom == null ? 0 : Gallery.ZOOM_MILLIS;
+      this.gallery = null;
+      this.saver = this.savers.get(index);
+      this.settings.saver = index;
+      if (stay) {
+         this.settings.cycle = false;
+      }
+      this.shownFor = 0;
+      this.captionLeft = CAPTION_MILLIS;
+      this.pickedMillis = System.currentTimeMillis();
+      this.firstMouse = null;
+      this.settings.save();
+   }
+
+   private boolean justPicked() {
+      return System.currentTimeMillis() - this.pickedMillis < GRACE_MILLIS;
+   }
+
    private void paintScreen(Graphics2D g, int width, int height) {
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
       g.setColor(Color.BLACK);
       g.fillRect(0, 0, width, height);
-      this.saver.paint(g);
+      if (this.gallery != null) {
+         this.gallery.paint(g, width, height, this.SCREEN_WIDTH, this.SCREEN_HEIGHT);
+         return;
+      }
+      if (this.zoomLeft > 0) {
+         double t = 1 - this.zoomLeft / Gallery.ZOOM_MILLIS;
+         t = t * t * (3 - 2 * t);
+         Rectangle from = this.zoomFrom;
+         Graphics2D z = (Graphics2D)g.create();
+         z.translate(from.x * (1 - t), from.y * (1 - t));
+         double w = from.width + (width - from.width) * t;
+         double h = from.height + (height - from.height) * t;
+         z.scale(w / this.SCREEN_WIDTH, h / this.SCREEN_HEIGHT);
+         this.saver.paint(z);
+         z.dispose();
+      } else {
+         this.saver.paint(g);
+      }
       if (this.fadeLeft > 0) {
          g.setColor(new Color(0, 0, 0, (int)(255 * this.fadeLeft / FADE_MILLIS)));
          g.fillRect(0, 0, width, height);
@@ -147,7 +216,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       String cycle = this.settings.cycle ? "C: stop cycling (next in " + (int)Math.ceil((CYCLE_MILLIS - this.shownFor) / 1000) + " s)"
          : "C: cycle every 30 s";
       String head = this.saver.name() + "   " + (this.index() + 1) + " of " + this.savers.size();
-      String keys = "N / P: next, previous   1-9, 0: pick   " + cycle;
+      String keys = "N / P: next, previous   1-9, 0: pick   G: see all   " + cycle;
       if (this.saver instanceof Aquarium) {
          return new String[] {head, ((Aquarium)this.saver).status(), keys,
             "Left / Right: speed " + speed + "   H: names and these keys", "Esc or move the mouse to close"};
@@ -211,6 +280,10 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       int count = this.savers.size();
       if (keyCode == KeyEvent.VK_ESCAPE) {
          this.kill();
+      } else if (this.gallery != null) {
+         this.galleryKey(keyCode);
+      } else if (keyCode == KeyEvent.VK_G) {
+         this.openGallery();
       } else if (keyCode == KeyEvent.VK_N || keyCode == KeyEvent.VK_SPACE) {
          this.show((this.index() + 1) % count, true);
       } else if (keyCode == KeyEvent.VK_P) {
@@ -249,23 +322,52 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       }
    }
 
+   private void galleryKey(int keyCode) {
+      Gallery g = this.gallery;
+      if (keyCode == KeyEvent.VK_G) {
+         this.pick(this.index(), false);
+      } else if (keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE) {
+         this.pick(g.selected, true);
+      } else if (keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_9) {
+         this.pick(keyCode == KeyEvent.VK_0 ? 9 : keyCode - KeyEvent.VK_1, true);
+      } else if (keyCode == KeyEvent.VK_LEFT || keyCode == KeyEvent.VK_P) {
+         g.move(-1, 0);
+      } else if (keyCode == KeyEvent.VK_RIGHT || keyCode == KeyEvent.VK_N) {
+         g.move(1, 0);
+      } else if (keyCode == KeyEvent.VK_UP || keyCode == KeyEvent.VK_DOWN) {
+         g.move(0, keyCode == KeyEvent.VK_UP ? -1 : 1);
+      }
+   }
+
    @Override
    public void keyTyped(KeyEvent e) {
    }
 
+   /** Any click closes the saver, except in the gallery (where letting go picks) and just after a pick. */
+   private void clicked(MouseEvent e, boolean release) {
+      if (this.gallery != null) {
+         int index = release ? this.gallery.at(e.getX(), e.getY()) : -1;
+         if (index >= 0) {
+            this.pick(index, true);
+         }
+      } else if (!this.justPicked()) {
+         this.kill();
+      }
+   }
+
    @Override
    public void mouseClicked(MouseEvent e) {
-      this.kill();
+      this.clicked(e, false);
    }
 
    @Override
    public void mousePressed(MouseEvent e) {
-      this.kill();
+      this.clicked(e, false);
    }
 
    @Override
    public void mouseReleased(MouseEvent e) {
-      this.kill();
+      this.clicked(e, true);
    }
 
    @Override
@@ -274,18 +376,24 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    @Override
    public void mouseExited(MouseEvent e) {
-      if (!this.inGrace()) {
+      if (!this.inGrace() && this.gallery == null) {
          this.kill();
       }
    }
 
    private boolean inGrace() {
-      return System.currentTimeMillis() - this.startMillis < GRACE_MILLIS;
+      return System.currentTimeMillis() - this.startMillis < GRACE_MILLIS || this.justPicked();
    }
 
    /** Closes once the mouse has really moved after the grace period. */
-   private void mouseMovedTo(Point point) {
-      if (this.firstMouse == null || this.inGrace()) {
+   private void mouseMovedTo(MouseEvent e) {
+      Point point = e.getLocationOnScreen();
+      if (this.gallery != null) {
+         int index = this.gallery.at(e.getX(), e.getY());
+         if (index >= 0) {
+            this.gallery.selected = index;
+         }
+      } else if (this.firstMouse == null || this.inGrace()) {
          this.firstMouse = point;
       } else if (this.firstMouse.distance(point) > 5.0) {
          this.kill();
@@ -298,11 +406,11 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    @Override
    public void mouseDragged(MouseEvent e) {
-      this.mouseMovedTo(e.getLocationOnScreen());
+      this.mouseMovedTo(e);
    }
 
    @Override
    public void mouseMoved(MouseEvent e) {
-      this.mouseMovedTo(e.getLocationOnScreen());
+      this.mouseMovedTo(e);
    }
 }
