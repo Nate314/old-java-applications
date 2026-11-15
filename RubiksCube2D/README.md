@@ -20,6 +20,7 @@ Level n starts from a solved cube and mixes it with n moves while you watch (eac
 - **Undo** (Z): turns your last move back and takes it off the count.
 - **Teach me** (top left, or T): coaches you through solving the cube from where it is, the way people learn to (see Teach me below). Click it again (**Stop teaching**) to go back to the message and help.
 - **Patterns** (top, or G): the Patterns card in place of the message and help (see Patterns below). **1** to **7** pick a pattern, the same number again plays Show me, **M** is Make it and **Backspace** goes back to the list.
+- **My cube** (top, or C): paint the cube to match a real one in your hands, then Teach me solves that one (see My cube below). **1** to **6** pick the color to paint with while it is up; C again (or Cancel) puts the cube back as it was.
 - **Hint** (H): rings the square of the next move back toward solved and lights its key in green. In 3D an arrow on the square shows which way to drag it, and the cube turns by itself to show the square when it is on a side out of view.
 - **Solve**: plays the way back to solved, one move at a time. A level solved this way is not counted. After a long Mix it solves the cube layer by layer the Teach me way instead, when that takes fewer moves than turning back every move of the mix (about 150 against up to 1000). Hint gives that way's next move too.
 - **Mix** with **Moves** (default 1000) and **Secs** (default 0.5): free play, scrambling with that many random moves (any face, any square, any of the four directions) spread over that many seconds in total. Hint and Solve also work after a Mix.
@@ -41,6 +42,15 @@ Teach me solves the cube from any position, a long Mix included, by the beginner
 - The faces are the colors of the centers wherever they are, so a cube whose centers a middle-layer move has carried around is solved the same way.
 - A cube fewer turns from solved than the method would take (a level's short mix) is not worth the whole method: the card says so, and the arrow turns the mix back one turn at a time. Mix a cube (any number of moves) to learn the method. Coaching a level counts as using a hint (one star at most). Nothing new is saved.
 
+## My cube
+
+For someone holding a mixed-up real cube: copy it into the app and be taken through solving it.
+
+- My cube turns every square gray except the six centers. Hold the real cube with the blue center on top and the red center facing you (the colors are the usual ones: white opposite yellow, blue opposite green, red opposite orange), pick a color on the card (or press 1 to 6: blue, red, yellow, green, orange, white) and click each square to match. In 3D, drag around the cube to reach its other sides; in the flat net the back face is the one at the bottom. A click on a center only says that the centers stay as they are.
+- The card counts the squares painted (of 48) and, under each color, how many of its nine are left to paint (a tick when all nine are, in red below zero).
+- Once no square is gray, the card checks that the painting is a cube that turning could make (`RealCube`): nine of each color, every corner and edge a real piece's colors, each piece once, no corner with its colors in mirror order, the corners' twists adding up to whole turns, an even number of flipped edges, and as many swaps among the corners as among the edges (both odd or both even). If not, it says what is wrong in red ("A cube has 9 squares of each color. This one has 10 white but 8 yellow.", "Two edges are blue and red, so one of them has a wrong square.", "One corner is twisted in its place. Turning never does that...").
+- **Teach me** on the card makes the painting the cube and turns Teach me on (see above). The level panel says Your cube; Hint and Solve take the coach's way, since there are no recorded moves to turn back. Make each turn the card shows on the real cube too, and both end solved. **Cancel** puts back the cube from before painting. While painting, the level and move controls wait. Nothing new is saved.
+
 ## Patterns
 
 
@@ -59,13 +69,16 @@ The moves are now the quarter turns of a real cube (`CubeGeometry`): the net is 
 - `src/rubikscube/Face.java`: one face's nine sticker buttons and colors; reports which square was clicked and rings the selected one.
 - `src/rubikscube/Coach.java`: Teach me's solver: the beginner's method from any position as steps (stage, words, the side to hold in front, quarter turns). The white cross comes from a breadth-first search over where the cross edges can be; the other stages place one piece at a time (the one needing fewest turns first) or try the stage's move pattern from each side until the stage is done.
 - `src/rubikscube/CoachPanel.java`: the Teach me card: the stage bar, wrapped words, the turn chips and the turn in words, painted by hand so it wraps the same on the desktop and in the browser.
-- `src/rubikscube/CardPaint.java`: what the Teach me and Patterns cards share: their colors, words wrapped by hand and the turn chips.
+- `src/rubikscube/CardPaint.java`: what the Teach me, Patterns and My cube cards share: their colors, words wrapped by hand, the turn chips and the buttons.
 - `src/rubikscube/Patterns.java`: the seven patterns as face notation, read into quarter turns, and applying turns to a cube's stickers.
 - `src/rubikscube/PatternPanel.java`: the Patterns card: the list with a small cube drawn wearing each pattern, and one pattern's card with its chips, status and Show me / Make it buttons.
+- `src/rubikscube/RealCube.java`: My cube's check: whether 54 painted colors are a position a real cube can be turned into, and if not, why in words.
+- `src/rubikscube/PaintPanel.java`: the My cube card: how to hold the cube, the six colors with the squares left of each, the check's word, and Cancel and Teach me.
+- `src/rubikscube/ClickCard.java`: what the Patterns and My cube cards share: places to click laid out at each paint, the one under the mouse, and their buttons.
 - `src/rubikscube/MoveHistory.java`: the path of positions from the solved cube; applies and records moves and gives the next move back (Hint, Solve).
 - `src/rubikscube/LevelRecords.java`: the 20 levels' best stars and moves, the last level and the patterns made, read from and saved to `~/.rubikscube-levels.txt`; the star rule.
 - `src/rubikscube/Move.java`: applies a W/A/S/D move for the selected face and square as a layer turn (see A real cube).
-- `src/rubikscube/MoveKeyDispatcher.java`: global key dispatcher that turns W/A/S/D presses into moves, Z/H/R/N/P into the level keys, T into Teach me, G, 1 to 7, M and Backspace into Patterns, V into the view switch and the arrow keys into turning the 3D cube, except while typing in a text field.
+- `src/rubikscube/MoveKeyDispatcher.java`: global key dispatcher that turns W/A/S/D presses into moves, Z/H/R/N/P into the level keys, T into Teach me, C into My cube (1 to 6 then pick its colors), G, 1 to 7, M and Backspace into Patterns, V into the view switch and the arrow keys into turning the 3D cube, except while typing in a text field.
 - `src/rubikscube/Scrambler.java`: the Mix feature; applies random moves through the `MoveHistory` on a Swing timer. Also makes the random moves for a level's mix.
 - `src/rubikscube/ColorPalette.java`: maps color names to `Color`s.
 
@@ -94,6 +107,13 @@ java -ea -cp ../out/check/RubiksCube2D rubikscube.CoachCheck
 ```
 javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
 java -ea -cp ../out/check/RubiksCube2D rubikscube.PatternCheck
+```
+
+`test/rubikscube/RealCubeCheck.java` checks My cube's check: that a solved cube and 2000 cubes mixed with up to 60 outer turns pass (and Teach me solves every tenth one), and that gray squares, a changed center, a tenth square of one color, a twisted corner, a corner in mirror order, a flipped edge, two edges swapped, a doubled edge and an edge no cube has are each caught and named, while two edges and two corners swapped together pass; and that trading any two squares of different colors on a mixed cube is always caught. From `RubiksCube2D/`:
+
+```
+javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
+java -ea -cp ../out/check/RubiksCube2D rubikscube.RealCubeCheck
 ```
 
 The check found that `d` on the yellow and white faces turned the top or bottom face the wrong way (so `a` then `d` did not undo), which is now fixed.
