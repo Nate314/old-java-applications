@@ -635,8 +635,9 @@ public final class ChordFinder extends JPanel {
 		}
 		g.drawLine(left, trebleTop, left, bassTop + 4 * gap);
 		g.drawLine(right, trebleTop, right, bassTop + 4 * gap);
-		paintTrebleClef(g, left + 14, trebleTop, gap);
-		paintBassClef(g, left + 8, bassTop, gap);
+		g.setColor(TEXT);
+		Look.paintTrebleClef(g, left + 14, trebleTop, gap);
+		Look.paintBassClef(g, left + 8, bassTop, gap);
 
 		List<Integer> notes = held();
 		String[] spelled = ChordNamer.spellings(notes);
@@ -685,31 +686,6 @@ public final class ChordFinder extends JPanel {
 		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 		String caption = notes.isEmpty() ? "Held notes show here" : guitar ? "As written for guitar, an octave up" : "As written";
 		g.drawString(caption, staff.x + (staff.width - g.getFontMetrics().stringWidth(caption)) / 2, staff.y + staff.height - 14);
-	}
-
-	/** A treble clef drawn from arcs: the curl round the G line, the stem, and the hook at the foot. */
-	private void paintTrebleClef(Graphics2D g, int x, int top, int gap) {
-		g.setColor(TEXT);
-		g.setStroke(new BasicStroke(2f));
-		int gLine = top + 3 * gap;
-		g.drawArc(x - gap, gLine - gap, 2 * gap, 2 * gap, 90, 300);
-		g.drawArc(x - gap - 3, gLine - 2 * gap, 2 * gap + 9, 3 * gap, 300, 220);
-		g.drawLine(x + 2, top - 2 * gap + 2, x - 1, top + 5 * gap + 2);
-		g.drawArc(x - 2, top - 2 * gap - 1, gap + 2, 2 * gap, 200, -220);
-		g.fillOval(x - gap + 1, top + 5 * gap - 2, 5, 5);
-		g.setStroke(new BasicStroke(1f));
-	}
-
-	/** A bass clef: the dot on the F line, the curve and the two dots either side of it. */
-	private void paintBassClef(Graphics2D g, int x, int top, int gap) {
-		g.setColor(TEXT);
-		g.fillOval(x - 1, top + gap - 3, 7, 7);
-		g.setStroke(new BasicStroke(2f));
-		g.drawArc(x, top, 2 * gap + 2, 2 * gap + 4, 180, -200);
-		g.drawLine(x + 2 * gap + 1, top + gap + 6, x + 2, top + 4 * gap - 2);
-		g.setStroke(new BasicStroke(1f));
-		g.fillOval(x + 2 * gap + 8, top + gap / 2 - 2, 4, 4);
-		g.fillOval(x + 2 * gap + 8, top + gap + gap / 2 - 2, 4, 4);
 	}
 
 	/** One row: the keys the chord belongs to. */

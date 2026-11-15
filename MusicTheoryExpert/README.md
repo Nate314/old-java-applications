@@ -54,6 +54,13 @@ The song (key, chords, tempo, style, voicing and melody) is saved to `.musictheo
 - Opening a link (or starting the desktop app with a code or a link, see Running) opens the Songwriter on the friend's song and plays it. The header says **From a friend** with two buttons: **Keep it** (K) makes it your song and saves it over the one you had; **Mine** (Y) goes back to your own saved song. Until then the friend's song can be played and changed, and sent on, but nothing is saved, so your own song is safe. In melody mode K and Y play notes, so use the buttons there.
 - A code the app did not write (a wrong character, too many chords, a tempo outside 60 to 180, a note off the end of the keyboard) is ignored, and the app opens on your own song.
 
+**Sheet music** (I, or the button under the circle) writes the song out as a lead sheet, on a paper-colored page over the circle and the buttons:
+
+- A treble staff with the key's signature and 4/4, the chord names over their bars, the tempo as a quarter note "= 100", and the key. The title is the famous progression's name while the song is one of them and has no melody, "A friend's song" for a song a link brought, and "Your song" otherwise.
+- The melody is written as notes and rests: eighths, quarters, halves and wholes, dotted ones, and tied notes for lengths no single note has and for notes held over a bar line. Notes that start together share a stem; a note still sounding when the next one starts is written up to it. Sharps, flats and naturals are written where the note differs from the key signature, or from an earlier sign on that line in the same bar. With no melody yet, each bar has a slash a beat, as a rhythm part is written.
+- Four bars a line (two while a song of up to four bars has a melody, so its notes have room), the last bar ending in a repeat sign, since the song loops. The music is drawn as large as the page allows, up to 1.3 times.
+- While the song plays, its bar is shaded and the chord name and the notes sounding turn gold. Everything still works over the sheet: Space plays, 1 to 7 add chords, R and the keys write a melody, and the sheet follows at once. I, Esc or **Back to the circle** go back.
+
 ## Chord finder
 
 The **Chord finder** tab (where the Notes tab and its test button used to be) answers "what chord is this?". It opens holding G major, the home chord of the original demo.
@@ -105,11 +112,12 @@ On the Ear training tab:
 - `src/musictheoryexpert/DrillRecords.java`: reads and writes the best score per drill, and which drills are open.
 - `src/musictheoryexpert/Songwriter.java`: the Songwriter tab; draws the circle of fifths, chord buttons, progression, controls and keyboard, and handles the mouse and keys; sends the song, and holds a friend's song unsaved until it is kept.
 - `src/musictheoryexpert/Progression.java`: the song: key, chords as scale degrees, the melody, chord names and numerals, key signatures, the usual next chords, smooth voicing, the famous progressions, saving, and the song's link code (`code`, `fromCode`).
+- `src/musictheoryexpert/LeadSheet.java`: the Songwriter's sheet music: the melody as written notes, rests and ties, the key signature and accidentals, and the drawing.
 - `src/musictheoryexpert/ProgressionPlayer.java`: loops the progression, one eighth note per tick of a one-shot Swing timer set by the wall clock, in the three styles, with the melody; plays melody notes by hand and says which eighth a note played now belongs to.
 - `src/musictheoryexpert/ChordFinder.java`: the Chord finder tab; draws the name card, staff, keys, your chords, the build buttons and the keyboard, and handles the mouse and keys.
 - `src/musictheoryexpert/ChordNamer.java`: names held notes (chord types, inversions, intervals), spells them by letter, finds the keys a chord belongs to and the keys a list of chords fits, and builds a chord from a root and a type.
 - `src/musictheoryexpert/Guitar.java`: the guitar in standard tuning: finds the easiest shape for a chord, or the way to finger exact notes, with its fingers and barre.
-- `src/musictheoryexpert/Look.java`: the colors, font fitting, keyboard drawing and keyboard hit test the tabs share.
+- `src/musictheoryexpert/Look.java`: the colors, font fitting, keyboard drawing and keyboard hit test the tabs share, and the treble and bass clefs.
 - `src/musictheoryexpert/StepPlayer.java`: plays a question's notes on MIDI channel 2, step by step on a Swing timer.
 - `src/musictheoryexpert/Notes.java`: sharp and flat note names, scale step patterns (major, natural, harmonic and melodic minor), scale and triad building, and the demo playback.
 - `src/synthesizer/MySynthesizer.java`: opens the MIDI synthesizer and plays timed notes and chords on a channel.
@@ -122,7 +130,7 @@ From the repo root: `./run.ps1 old MusicTheoryExpert` (or `./run.ps1 old MusicTh
 
 ## Self-check
 
-`test/musictheoryexpert/NotesCheck.java` checks note name lookup (sharp and flat), scales and triads. `test/musictheoryexpert/DrillCheck.java` checks that every drill asks each of its answers, that what plays matches the answer (triad shape, interval size, scale steps, chord degree) and stays on the keyboard, the round's score, streak and star rules, and that the saved records keep the best score, skip bad lines and open drills in order. `test/musictheoryexpert/ChordNamerCheck.java` checks the Chord finder's names (triads, sevenths, sixths, sus, add9, ninths, power chords, no-fifth chords, inversions and slash names, chords with no name), letter spelling, intervals, that every chord type on every root names itself back and builds in range, the keys of a chord (including harmonic minor's), and fitting a list of chords to a key. `test/musictheoryexpert/ProgressionCheck.java` checks the Songwriter's chord names, numerals and qualities in all 24 keys (and that the circle's neighbors hold each key's chords), key signatures, that smooth voicing keeps each chord's notes in range and never moves more than root position would, the presets, the melody (notes replacing one another, lengths capped at a bar, moving with the key and staying put for the relative minor), saving and loading, melody included, and the song's link code: the demo's code, a song with a melody arriving the same, and broken or overlong codes refused. `test/musictheoryexpert/GuitarCheck.java` checks the guitar shapes of the usual open and barre chords, barres and finger counts, that 15 chord types on all 12 roots each get a playable shape that rings just their notes with the root in the bass and names back to the same chord, and placing exact notes (or none, when a hand cannot hold them). From `MusicTheoryExpert/`:
+`test/musictheoryexpert/NotesCheck.java` checks note name lookup (sharp and flat), scales and triads. `test/musictheoryexpert/DrillCheck.java` checks that every drill asks each of its answers, that what plays matches the answer (triad shape, interval size, scale steps, chord degree) and stays on the keyboard, the round's score, streak and star rules, and that the saved records keep the best score, skip bad lines and open drills in order. `test/musictheoryexpert/ChordNamerCheck.java` checks the Chord finder's names (triads, sevenths, sixths, sus, add9, ninths, power chords, no-fifth chords, inversions and slash names, chords with no name), letter spelling, intervals, that every chord type on every root names itself back and builds in range, the keys of a chord (including harmonic minor's), and fitting a list of chords to a key. `test/musictheoryexpert/ProgressionCheck.java` checks the Songwriter's chord names, numerals and qualities in all 24 keys (and that the circle's neighbors hold each key's chords), key signatures, that smooth voicing keeps each chord's notes in range and never moves more than root position would, the presets, the melody (notes replacing one another, lengths capped at a bar, moving with the key and staying put for the relative minor), saving and loading, melody included, and the song's link code: the demo's code, a song with a melody arriving the same, and broken or overlong codes refused. `test/musictheoryexpert/GuitarCheck.java` checks the guitar shapes of the usual open and barre chords, barres and finger counts, that 15 chord types on all 12 roots each get a playable shape that rings just their notes with the root in the bass and names back to the same chord, and placing exact notes (or none, when a hand cannot hold them). `test/musictheoryexpert/LeadSheetCheck.java` checks the sheet music: whole rests for empty bars, dotted and tied lengths, ties over the bar line, notes cut where the next starts and chords sharing a stem, that 500 random melodies fill every bar exactly in written lengths without crossing a bar line, spelling on the staff, key signatures, and the sharps, flats and naturals (kept for the bar, one per octave, none on a tied note). From `MusicTheoryExpert/`:
 
 ```
 javac -d ../out/check/MusicTheoryExpert src/musictheoryexpert/*.java src/synthesizer/*.java test/musictheoryexpert/*.java
@@ -131,10 +139,12 @@ java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.DrillCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.ProgressionCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.ChordNamerCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.GuitarCheck
+java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.LeadSheetCheck
 ```
 
 ## Known quirks
 
 - The `NoteNames` enum, the `transpose` method and the `Instruments` class are not used.
-- The Songwriter spells notes with the sharp or flat names of `Notes`, so the two six-sharp keys write E# as F (F# major's vii° shows as Fdim).
+- The Songwriter spells notes with the sharp or flat names of `Notes`, so the two six-sharp keys write E# as F (F# major's vii° shows as Fdim, and the sheet music writes E# as F with a natural sign).
+- The sheet music spaces notes by time, an eighth note to a column, and gives eighth notes flags rather than beams.
 - Clicking **Original demo** while the demo is still playing starts a second copy on the same channels, so the two copies overlap.

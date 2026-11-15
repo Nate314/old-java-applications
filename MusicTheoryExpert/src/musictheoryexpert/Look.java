@@ -1,5 +1,6 @@
 package musictheoryexpert;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -122,5 +123,28 @@ final class Look {
 			text = text.substring(0, text.length() - 1);
 		}
 		return text + "...";
+	}
+
+	/** A treble clef drawn from arcs in the current color: the curl round the G line, the stem, and the hook at the foot. */
+	static void paintTrebleClef(Graphics2D g, int x, int top, int gap) {
+		g.setStroke(new BasicStroke(2f));
+		int gLine = top + 3 * gap;
+		g.drawArc(x - gap, gLine - gap, 2 * gap, 2 * gap, 90, 300);
+		g.drawArc(x - gap - 3, gLine - 2 * gap, 2 * gap + 9, 3 * gap, 300, 220);
+		g.drawLine(x + 2, top - 2 * gap + 2, x - 1, top + 5 * gap + 2);
+		g.drawArc(x - 2, top - 2 * gap - 1, gap + 2, 2 * gap, 200, -220);
+		g.fillOval(x - gap + 1, top + 5 * gap - 2, 5, 5);
+		g.setStroke(new BasicStroke(1f));
+	}
+
+	/** A bass clef in the current color: the dot on the F line, the curve and the two dots either side of it. */
+	static void paintBassClef(Graphics2D g, int x, int top, int gap) {
+		g.fillOval(x - 1, top + gap - 3, 7, 7);
+		g.setStroke(new BasicStroke(2f));
+		g.drawArc(x, top, 2 * gap + 2, 2 * gap + 4, 180, -200);
+		g.drawLine(x + 2 * gap + 1, top + gap + 6, x + 2, top + 4 * gap - 2);
+		g.setStroke(new BasicStroke(1f));
+		g.fillOval(x + 2 * gap + 8, top + gap / 2 - 2, 4, 4);
+		g.fillOval(x + 2 * gap + 8, top + gap + gap / 2 - 2, 4, 4);
 	}
 }
