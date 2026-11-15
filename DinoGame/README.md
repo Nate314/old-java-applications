@@ -12,6 +12,7 @@ The bot now comes with its game. `./run.ps1 old DinoGame` opens Dino Game: a din
 - **Drag the red marker** (bot on) to move what the bot watches. It stays ahead of the dinosaur and above the ground. **X** puts it back (36 px ahead of the dinosaur's nose, 22 px above the ground).
 - After a crash, Space starts a new run (after a short pause, so a held key does not restart at once).
 - **M** (or the **Sound** button in the bottom strip): the game's beeps on or off.
+- **G** (or the **Race your ghost** button, once you have run once): race your best run (see Race your ghost). G again, or **New courses**, goes back to a new course each run.
 - **E** (or the **Evolve a bot** button at the right of the bottom strip): evolve bots (see Evolve a bot). E again, or **Back to the game**, returns to the ready screen. A run under way when you switch is dropped and counts for nobody.
 
 Score: the distance run. Top right shows the bot's best (red, BOT), your best (HI) and this run.
@@ -22,9 +23,22 @@ Score: the distance run. Top right shows the bot's best (red, BOT), your best (H
 
 With the marker where it starts, the bot clears cacti and low birds well and usually ends at the first middle bird it meets, usually somewhere between 400 and 650 points.
 
-Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`, `sound=off` while the beeps are off, and once a generation has been bred, `evolved=generations,record`, `champion=` (the record holder's six numbers, see below) and `chart=` (the best score of each of the last 60 generations).
+Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`, `sound=off` while the beeps are off, and once a generation has been bred, `evolved=generations,record`, `champion=` (the record holder's six numbers, see below) and `chart=` (the best score of each of the last 60 generations), and `ghost=` (see Race your ghost).
 
 On the web site, `?watch` on its page (and the home page's demo, see Watch the computer play in `web/README.md`) starts it with the bot playing (B), and the visitor's first press takes over.
+
+## Race your ghost
+
+Every run is now its own course, and the game keeps your best one: its course and each key you pressed, step by step. The game always plays the same way for the same course and the same keys, so playing those keys back runs that run again exactly, jump for jump.
+
+- **G** races it. Every run is then the ghost's course, and the ghost runs beside you as a see-through dinosaur, labeled "ghost" when it is in the air and you are not (or the other way round). Top left shows its score.
+- **If the ghost crashes first**, it stays where it fell, with its score, and slides away behind you.
+- **If you crash first**, the ghost runs on over the obstacles still on the screen until it is out of sight, so you can watch how it got past the one that stopped you. The crash line says how far it went.
+- **Run further and you are the ghost**: the new run replaces it at once (and the next race is against it). A run the bot played or helped with is never kept as a ghost.
+- The ghost is your best run since ghosts were kept, so after an update your first run becomes the ghost, whatever your old best. G is in the bottom strip once there is a ghost.
+- Runs on the ghost's course count for your best like any other. The ghost is not drawn while the bot plays (B), so the bot's pixel never sees it.
+
+Saved in `~/.dinogame.txt` as `ghost=course,score,` then each input as `step * 4 + key` (0 jump down, 1 jump up, 2 duck down, 3 duck up), only the presses that changed something, so a held key's repeats are not kept.
 
 ## Day and night
 
@@ -77,6 +91,7 @@ It sends real Space key presses via `java.awt.Robot` to whatever window has focu
 - `src/dinosaurgameplayer/Dust.java`: the dust at the dinosaur's feet.
 - `src/dinosaurgameplayer/Sounds.java`: the beeps, on the MIDI synthesizer.
 - `src/dinosaurgameplayer/Records.java`: `~/.dinogame.txt`.
+- `src/dinosaurgameplayer/Ghost.java`: a run kept to race: its course and inputs, played back on a `Runner` of its own. `Runner` picks each run's course and logs its inputs.
 - `src/dinosaurgameplayer/Brain.java`: an evolved bot's six numbers, its children and its saved form.
 - `src/dinosaurgameplayer/Evolution.java`: a generation of 20 dinosaurs (`Evolution.Dino`, a brain at the keys of its own `Runner`), ranking and breeding.
 - `src/dinosaurgameplayer/EvolveView.java`: draws the evolution: ghosts, eyes, badge, record and chart.
@@ -89,7 +104,7 @@ From the repo root: `./run.ps1 old DinoGame` (or `./run.ps1 old DinoGame -Build`
 
 ## Self-check
 
-`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file (with `sound=off`). For day and night: that night falls at 700 and 1400 and dawns 12 s later, that no color the game draws past the first moment of dusk has blue 83, that a course drawn through a whole night shows the bot no obstacle while the same course by day is full of them, the night crash line, and that the dust rises on take-off and landing, stays behind the marker and settles. For the evolution: that `Runner.inkAt` agrees with the drawn frame on every pixel an eye can sit on, through a whole course with birds; that a known brain ducks and finishes a course; that a seeded 40-generation run starts with the original bot, keeps a chart of 40 bests and ends with a record over twice the original's score held by a brain that ducks; that it carries on from a saved champion; that damaged brains are refused and numbers kept in range; that in the window E drops the run under way and each generation is saved; and the saved evolution lines. From `DinoGame/`:
+`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file (with `sound=off`). For day and night: that night falls at 700 and 1400 and dawns 12 s later, that no color the game draws past the first moment of dusk has blue 83, that a course drawn through a whole night shows the bot no obstacle while the same course by day is full of them, the night crash line, and that the dust rises on take-off and landing, stays behind the marker and settles. For the evolution: that `Runner.inkAt` agrees with the drawn frame on every pixel an eye can sit on, through a whole course with birds; that a known brain ducks and finishes a course; that a seeded 40-generation run starts with the original bot, keeps a chart of 40 bests and ends with a record over twice the original's score held by a brain that ducks; that it carries on from a saved champion; that damaged brains are refused and numbers kept in range; that in the window E drops the run under way and each generation is saved; and the saved evolution lines. For the ghost: that a run played by keys is kept as the ghost and its replay crashes at the same step with the same score, that the saved form reads back and damaged ones are refused, that the next run is a new course, that G drops the run under way and races on the ghost's course, that the ghost runs on after you crash and a worse run keeps it, and that G again goes back to new courses. From `DinoGame/`:
 
 ```
 javac -encoding UTF-8 -d ../out/check/DinoGame src/dinosaurgameplayer/*.java test/dinosaurgameplayer/*.java

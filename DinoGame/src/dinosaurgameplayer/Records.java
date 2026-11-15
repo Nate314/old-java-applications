@@ -12,7 +12,8 @@ import java.util.List;
 
 /**
  * Your best run, the bot's best run and where its marker sits, kept in ~/.dinogame.txt, with the evolution's
- * progress: generations bred, the best score and the brain that ran it, and each generation's best for the chart.
+ * progress: generations bred, the best score and the brain that ran it, and each generation's best for the chart, and
+ * the ghost of your best run.
  */
 final class Records {
    private final File file;
@@ -23,6 +24,8 @@ final class Records {
    int generations;
    int evolvedBest;
    Brain champion;
+   /** Your best run of your own since ghosts were kept, to race (G). */
+   Ghost ghost;
    /** The game's beeps; M switches them. Saved only when off, as sound=off. */
    boolean sound = true;
    final List<Integer> chart = new ArrayList<>();
@@ -61,6 +64,8 @@ final class Records {
                   r.sound = !kv[1].trim().equals("off");
                } else if (kv[0].equals("champion")) {
                   r.champion = Brain.decode(kv[1]);
+               } else if (kv[0].equals("ghost")) {
+                  r.ghost = Ghost.decode(kv[1]);
                } else if (kv[0].equals("chart")) {
                   List<Integer> chart = new ArrayList<>();
                   for (String n : kv[1].split(",")) {
@@ -91,6 +96,9 @@ final class Records {
             chart.append(chart.length() > 0 ? "," : "").append(n);
          }
          text.append("chart=").append(chart).append('\n');
+      }
+      if (this.ghost != null) {
+         text.append("ghost=").append(this.ghost.encode()).append('\n');
       }
       try (OutputStream out = new FileOutputStream(this.file)) {
          out.write(text.toString().getBytes(StandardCharsets.UTF_8));
