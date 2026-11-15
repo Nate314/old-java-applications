@@ -3,6 +3,7 @@ import { siteRoot } from './install';
 import { tripPlace } from './one-machine';
 import { findOff } from './find';
 import { titleLog } from './title-screen';
+import { fetchOk } from './fetch-ok';
 
 let padsNow: typeof navigator.getGamepads;
 let net: { saveData?: boolean; effectiveType?: string };
@@ -40,8 +41,7 @@ const warmed: Record<string, Promise<string | ArrayBuffer | null> | undefined> =
 
 function warmFile(url: string): Promise<string | ArrayBuffer | null> {
   if (warmed[url]) return warmed[url];
-  warmed[url] = fetch(url, { priority: 'low' } as RequestInit).then(function (r): Promise<string | ArrayBuffer> {
-    if (!r.ok) throw new Error(r.status as unknown as string);
+  warmed[url] = fetchOk(url, { priority: 'low' } as RequestInit).then(function (r): Promise<string | ArrayBuffer> {
     return r.headers.get('Content-Type') && /html/.test(r.headers.get('Content-Type')!) ? r.text() : r.arrayBuffer();
   }).catch(function () { delete warmed[url]; return null; });
   return warmed[url]!;

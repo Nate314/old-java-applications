@@ -10,6 +10,7 @@ import { sourcePanel } from './source-viewer';
 import { CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
+import { fetchOk } from './fetch-ok';
 
 /** A line of the boot log: [label, value, class]. */
 export type LogLine = [string, string, string];
@@ -216,10 +217,7 @@ const IMAGE = /\.(png|jpe?g|gif|bmp|webp)$/i;
 export function preload(name: string) {
   window.__shimFiles = window.__shimFiles || {};
   window.__shimImages = window.__shimImages || {};
-  var bytes = fetch(name).then(function (r) {
-    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-    return r.arrayBuffer();
-  }).then(function (buf) {
+  var bytes = fetchOk(name).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
     window.__shimFiles[name] = new Uint8Array(buf);
   });
   var image = !IMAGE.test(name) ? Promise.resolve() : new Promise<void>(function (resolve, reject) {

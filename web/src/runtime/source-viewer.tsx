@@ -10,6 +10,7 @@ import { Overlay } from './ui/overlay';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { AppCard, JarLink, PassportLine, Quirk } from './ui/cards';
 import { playSound } from './sounds';
+import { fetchOk } from './fetch-ok';
 
 let JAVA_KEYWORDS: string[];
 // The open source panel: show opens a file (the first when it is not one of the app's) at a line.
@@ -20,10 +21,7 @@ const JAVA_TOKEN = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\
 
 function sourceFiles() {
   if (!sourceList) {
-    sourceList = fetch(sourceDir() + 'files.txt').then(function (r) {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.text();
-    }).then(function (text) {
+    sourceList = fetchOk(sourceDir() + 'files.txt').then(function (r) { return r.text(); }).then(function (text) {
       return text.split(/\r?\n/).filter(Boolean).sort(function (a, b) {
         return (a === 'README.md' ? -1 : b === 'README.md' ? 1 : 0) || (a < b ? -1 : a > b ? 1 : 0);
       });
@@ -207,10 +205,7 @@ function SourcePanel({ file, line, onClose, onShow }: {
 
   function text(f: string) {
     if (!st.texts[f]) {
-      st.texts[f] = fetch(sourceDir() + f).then(function (r) {
-        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-        return r.text();
-      });
+      st.texts[f] = fetchOk(sourceDir() + f).then(function (r) { return r.text(); });
       st.texts[f].catch(function () { delete st.texts[f]; });
     }
     return st.texts[f];

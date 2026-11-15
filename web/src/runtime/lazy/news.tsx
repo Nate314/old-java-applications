@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState, type ComponentType } from 'react';
+import { fetchOk } from '../fetch-ok';
 
 interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[] }
 interface NewsData { items: NewsItem[]; apps: OldjavaCatalogApp[] }
@@ -70,10 +71,7 @@ function Story({ id }: { id: string }) {
   load = function () {
     if (!dataPromise) {
       dataPromise = Promise.all([
-        fetch(BASE + 'history.txt').then(function (r) {
-          if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-          return r.text();
-        }),
+        fetchOk(BASE + 'history.txt').then(function (r) { return r.text(); }),
         window.oldjavaPassport.catalog()
       ]).then(function (res) {
         return { items: parse(res[0], res[1]), apps: res[1] };
