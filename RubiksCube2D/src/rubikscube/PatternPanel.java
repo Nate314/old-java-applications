@@ -4,33 +4,24 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.Rectangle;
 import java.awt.RenderingHints;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.function.IntConsumer;
-import javax.swing.JPanel;
 
 /**
  * The Patterns card, in place of the message and help: a list of the {@link Patterns}, each with a small picture of
  * the cube wearing it and a tick once made by hand, or one pattern's card: its picture, what it is, its turns as
  * chips, a line on what is happening, and Show me and Make it buttons. Painted by hand like the Teach me card.
  */
-final class PatternPanel extends JPanel {
+final class PatternPanel extends ClickCard {
    /** What a click asks for: {@link #BACK} to the list, {@link #SHOW} or {@link #MAKE}; 0 and up pick that pattern. */
    static final int BACK = -1;
    static final int SHOW = -2;
    static final int MAKE = -3;
    private static final Color GOLD = new Color(214, 160, 30);
-   private static final Color BUTTON = new Color(40, 96, 220);
    private static final int ROW = 33;
-   private final IntConsumer onClick;
-   private final List<Rectangle> targets = new ArrayList<>();
-   private final List<Integer> actions = new ArrayList<>();
    private Set<String> made = Collections.emptySet();
    /** The pattern on the card, or null for the list. */
    private Patterns.Pattern pattern = null;
@@ -41,38 +32,9 @@ final class PatternPanel extends JPanel {
    private String status = "";
    private boolean showing = false;
    private boolean making = false;
-   private int hover = Integer.MIN_VALUE;
 
    PatternPanel(IntConsumer onClick) {
-      this.onClick = onClick;
-      this.setLayout(null);
-      this.setOpaque(false);
-      MouseAdapter mouse = new MouseAdapter() {
-         @Override
-         public void mousePressed(MouseEvent event) {
-            int action = PatternPanel.this.actionAt(event.getX(), event.getY());
-            if (action != Integer.MIN_VALUE) {
-               PatternPanel.this.onClick.accept(action);
-            }
-         }
-
-         @Override
-         public void mouseMoved(MouseEvent event) {
-            int action = PatternPanel.this.actionAt(event.getX(), event.getY());
-            if (action != PatternPanel.this.hover) {
-               PatternPanel.this.hover = action;
-               PatternPanel.this.repaint();
-            }
-         }
-
-         @Override
-         public void mouseExited(MouseEvent event) {
-            PatternPanel.this.hover = Integer.MIN_VALUE;
-            PatternPanel.this.repaint();
-         }
-      };
-      this.addMouseListener(mouse);
-      this.addMouseMotionListener(mouse);
+      super(onClick);
    }
 
    /** The list of patterns, ticking those in {@code made}. */
@@ -99,20 +61,6 @@ final class PatternPanel extends JPanel {
       this.repaint();
    }
 
-   private int actionAt(int x, int y) {
-      for (int i = 0; i < this.targets.size(); i++) {
-         if (this.targets.get(i).contains(x, y)) {
-            return this.actions.get(i);
-         }
-      }
-      return Integer.MIN_VALUE;
-   }
-
-   private void target(int x, int y, int width, int height, int action) {
-      this.targets.add(new Rectangle(x, y, width, height));
-      this.actions.add(action);
-   }
-
    @Override
    protected void paintComponent(Graphics graphics) {
       Graphics2D g = (Graphics2D) graphics;
@@ -120,8 +68,7 @@ final class PatternPanel extends JPanel {
       int width = this.getWidth();
       int height = this.getHeight();
       CardPaint.card(g, width, height);
-      this.targets.clear();
-      this.actions.clear();
+      this.clearTargets();
       if (this.pattern == null) {
          this.paintList(g, width, height);
       } else {
@@ -207,20 +154,6 @@ final class PatternPanel extends JPanel {
       int half = (inner - 6) / 2;
       this.button(g, x, buttonY, half, this.showing || this.making ? "Stop" : "Show me", SHOW, false);
       this.button(g, x + half + 6, buttonY, half, this.making ? "Start again" : "Make it", MAKE, true);
-   }
-
-   private void button(Graphics2D g, int x, int y, int width, String label, int action, boolean primary) {
-      boolean over = this.hover == action;
-      Color fill = primary ? (over ? BUTTON.darker() : BUTTON) : over ? new Color(222, 230, 246) : Color.WHITE;
-      g.setColor(fill);
-      g.fillRoundRect(x, y, width, 26, 10, 10);
-      g.setColor(primary ? BUTTON.darker() : CardPaint.EDGE);
-      g.drawRoundRect(x, y, width - 1, 25, 10, 10);
-      g.setFont(new Font("Dialog", Font.BOLD, 12));
-      g.setColor(primary ? Color.WHITE : CardPaint.INK);
-      int textWidth = g.getFontMetrics().stringWidth(label);
-      g.drawString(label, x + (width - textWidth) / 2, y + 17);
-      this.target(x, y, width, 26, action);
    }
 
    /**

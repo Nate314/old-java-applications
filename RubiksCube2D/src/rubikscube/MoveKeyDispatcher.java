@@ -6,7 +6,7 @@ import javax.swing.JTextField;
 
 /**
  * Global keys: W/A/S/D turn the selected square, Z/H/R/N/P are the level keys, T turns Teach me on or off, G the
- * Patterns card (1 to 7 pick a pattern, M makes it, Backspace goes back to the list), V switches between the 3D cube and the flat net and the arrow keys turn the 3D cube to look around. Typing in the Mix fields is left alone.
+ * Patterns card (1 to 7 pick a pattern, M makes it, Backspace goes back to the list), C paints the cube to match a real one, V switches between the 3D cube and the flat net and the arrow keys turn the 3D cube to look around. Typing in the Mix fields is left alone.
  */
 public final class MoveKeyDispatcher implements KeyEventDispatcher {
    private CubeFrame frame = null;
@@ -47,6 +47,8 @@ public final class MoveKeyDispatcher implements KeyEventDispatcher {
             this.frame.patternKey('m');
          } else if (keyCode == KeyEvent.VK_BACK_SPACE) {
             this.frame.patternKey('\b');
+         } else if (keyCode == KeyEvent.VK_C) {
+            this.frame.togglePaint();
          } else if (keyCode == KeyEvent.VK_V) {
             this.frame.toggleView();
          } else if (keyCode == KeyEvent.VK_LEFT) {
