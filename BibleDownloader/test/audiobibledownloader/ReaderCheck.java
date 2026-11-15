@@ -150,6 +150,7 @@ public class ReaderCheck {
       shelf.verse = 4;
       shelf.size = 2;
       shelf.compare = "asv";
+      shelf.night = true;
       shelf.markRead(Books.find("PSA"), 23);
       shelf.markRead(Books.find("REV"), 22);
       check(shelf.toggleMark(Books.find("JHN"), 3, 16), "highlight on");
@@ -158,6 +159,7 @@ public class ReaderCheck {
       Shelf again = Shelf.load(file);
       check(again.translation.equals("kjv") && again.book == Books.find("PSA") && again.chapter == 23 && again.verse == 4 && again.size == 2, "place kept");
       check(again.compare.equals("asv") && Shelf.load(new File(file.getPath() + ".missing")).compare.isEmpty(), "side by side kept");
+      check(again.night && !Shelf.load(new File(file.getPath() + ".missing")).night, "night pages kept, day by default");
       check(again.readCount() == 2 && again.isRead(Books.find("REV"), 22) && again.readCount(Books.find("PSA")) == 1, "read chapters kept");
       check(again.isMarked(Books.find("JHN"), 3, 16) && again.markCount() == 2, "highlights kept");
       int[] next = again.nextMark(Books.find("JHN"), 3, 16);

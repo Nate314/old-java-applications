@@ -30,21 +30,65 @@ import javax.swing.Timer;
 public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private static final long serialVersionUID = 1L;
 
-   private static final Color LEATHER = new Color(0x2f2219);
-   private static final Color LEATHER_LIGHT = new Color(0x3d2c20);
-   private static final Color PAPER = new Color(0xfbf5e6);
-   static final Color PAPER_EDGE = new Color(0xe3d5b5);
-   static final Color INK = new Color(0x2b2118);
-   static final Color RUBRIC = new Color(0x9e2a2b);
-   static final Color MUTED = new Color(0x8a7a66);
-   private static final Color MARK = new Color(0xf6dc7c);
-   static final Color HOVER = new Color(0xefe4c6);
+   // The palette, set by palette(): ink on cream paper by day; by night (D) cream on dark paper, as under a lamp.
+   private static Color LEATHER;
+   private static Color LEATHER_LIGHT;
+   private static Color PAPER;
+   static Color PAPER_EDGE;
+   /** The darker stripes of the page edges under the book. */
+   private static Color EDGE_SHADE;
+   /** The shadow toward the fold between two pages. */
+   private static Color SPINE;
+   static Color INK;
+   static Color RUBRIC;
+   /** Text and marks on a red (or muted) fill. */
+   static Color ON_RUBRIC;
+   static Color MUTED;
+   private static Color MARK;
+   static Color HOVER;
+   /** A picked row or plan. */
+   static Color PICKED;
+   /** By heart's stage chips and Show word. */
+   static Color CHIP;
+   /** By heart's slips. */
+   static Color SLIP;
    /** The second translation's words when both share one page. */
-   private static final Color ALT_INK = new Color(0x5e4a36);
+   private static Color ALT_INK;
+   /** A plan's calendar day that passed unread: its fill, its outline and its number. */
+   private static Color MISSED_FILL;
+   private static Color MISSED_LINE;
+   private static Color MISSED_INK;
    private static final Color BUTTON = new Color(0x4a3828);
    private static final Color BUTTON_HOVER = new Color(0x654b34);
    private static final Color BUTTON_TEXT = new Color(0xf3e7cf);
    static final Color GOLD = new Color(0xd8b45e);
+
+   static {
+      palette(false);
+   }
+
+   /** Day pages, or night pages: the same book with its paper dark and its ink light. */
+   static void palette(boolean night) {
+      LEATHER = new Color(night ? 0x17110c : 0x2f2219);
+      LEATHER_LIGHT = new Color(night ? 0x2a1f17 : 0x3d2c20);
+      PAPER = new Color(night ? 0x241d16 : 0xfbf5e6);
+      PAPER_EDGE = new Color(night ? 0x3b3127 : 0xe3d5b5);
+      EDGE_SHADE = new Color(night ? 0x2c241c : 0xcdbd98);
+      SPINE = night ? new Color(0, 0, 0) : new Color(120, 90, 50);
+      INK = new Color(night ? 0xe9dcc3 : 0x2b2118);
+      RUBRIC = new Color(night ? 0xe07a6c : 0x9e2a2b);
+      ON_RUBRIC = night ? PAPER : Color.WHITE;
+      MUTED = new Color(night ? 0xa39178 : 0x8a7a66);
+      MARK = new Color(night ? 0x5c4a1e : 0xf6dc7c);
+      HOVER = new Color(night ? 0x352b20 : 0xefe4c6);
+      PICKED = new Color(night ? 0x3d3224 : 0xf3e6c4);
+      CHIP = new Color(night ? 0x2e261d : 0xf1e8d2);
+      SLIP = new Color(night ? 0xf0705e : 0xc0392b);
+      ALT_INK = new Color(night ? 0xc7b597 : 0x5e4a36);
+      MISSED_FILL = new Color(night ? 0x4d2b26 : 0xe7b9a9);
+      MISSED_LINE = new Color(night ? 0x8c4b43 : 0xc98f80);
+      MISSED_INK = new Color(night ? 0xd98a7e : 0xb0645a);
+   }
    static final Font UI = new Font("SansSerif", Font.BOLD, 13);
    private static final Font UI_SMALL = new Font("SansSerif", Font.PLAIN, 11);
    static final Font HEAD = new Font("SansSerif", Font.BOLD, 10);
@@ -126,6 +170,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    public ReaderPanel(Shelf shelf) {
       this.shelf = shelf;
       this.pickedBook = shelf.book;
+      palette(shelf.night);
       this.setPreferredSize(new Dimension(900, 600));
       this.setFocusable(true);
       this.flashTimer = new Timer(2600, e -> {
@@ -358,6 +403,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }
    }
 
+   private void toggleNight() {
+      this.shelf.night = !this.shelf.night;
+      palette(this.shelf.night);
+      this.shelf.save();
+      this.say(this.shelf.night ? "Night pages: light ink on dark paper (D: day)" : "Day pages (D: night)");
+   }
+
    private void toggleMark(int verse) {
       boolean on = this.shelf.toggleMark(this.shelf.book, this.shelf.chapter, verse);
       this.shelf.save();
@@ -497,6 +549,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             break;
          case 'l':
             this.showLearn();
+            break;
+         case 'd':
+            this.toggleNight();
             break;
          case 'g':
          case '/':
@@ -734,7 +789,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          Rectangle r = new Rectangle(area.x - 8, y + i * rowH, area.width + 16, rowH - 6);
          boolean over = r.contains(this.mouseX, this.mouseY);
          if (i == this.pickedPlan || over) {
-            g.setColor(i == this.pickedPlan ? new Color(0xf3e6c4) : HOVER);
+            g.setColor(i == this.pickedPlan ? PICKED : HOVER);
             g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
          }
          if (i == this.pickedPlan) {
@@ -801,7 +856,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             String label = (plan.behind(done, day) > 0 ? "Catch up: " : plan.dayDone(done, day) ? "Read ahead: " : "Read today's: ")
                + chapterName(plan, first) + " ›";
             go = new Rectangle(area.x, y, g.getFontMetrics().stringWidth(label) + 30, 32);
-            this.pill(g, go, label, RUBRIC, Color.WHITE);
+            this.pill(g, go, label, RUBRIC, ON_RUBRIC);
             this.hits.add(new Hit(go, () -> this.open(plan.bookAt(first), plan.chapterAt(first), false), 0));
          }
          String stop = first < 0 ? ("restart".equals(this.confirm) ? "Click again to start over" : "Start over")
@@ -847,7 +902,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.setFont(UI);
          String label = current == null ? "Start today ›" : key.equals(this.confirm) ? "Click again to switch" : "Switch to this plan";
          Rectangle start = new Rectangle(area.x, y, g.getFontMetrics().stringWidth(label) + 30, 32);
-         this.pill(g, start, label, RUBRIC, Color.WHITE);
+         this.pill(g, start, label, RUBRIC, ON_RUBRIC);
          this.hits.add(new Hit(start, () -> {
             if (current == null || key.equals(this.confirm)) {
                this.startPlan(plan);
@@ -890,7 +945,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.fillRoundRect(chip.x, chip.y, chip.width, chip.height, 24, 24);
          g.setColor(done.get(i) ? RUBRIC : PAPER_EDGE.darker());
          g.drawRoundRect(chip.x, chip.y, chip.width, chip.height, 24, 24);
-         g.setColor(done.get(i) ? Color.WHITE : INK);
+         g.setColor(done.get(i) ? ON_RUBRIC : INK);
          g.drawString(label, chip.x + 10, chip.y + 17);
          int index = i;
          this.hits.add(new Hit(chip, () -> this.open(plan.bookAt(index), plan.chapterAt(index), false), 0));
@@ -929,10 +984,10 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.fillRoundRect(r.x, r.y, r.width, r.height, arc, arc);
          if (read > 0 && !full) {
             int h = r.height * read / size;
-            g.setColor(new Color(0xe7b9a9));
+            g.setColor(MISSED_FILL);
             g.fillRect(r.x + 1, r.y + r.height - h, r.width - 1, h);
          }
-         g.setColor(full ? RUBRIC : missed ? new Color(0xc98f80) : PAPER_EDGE.darker());
+         g.setColor(full ? RUBRIC : missed ? MISSED_LINE : PAPER_EDGE.darker());
          g.drawRoundRect(r.x, r.y, r.width, r.height, arc, arc);
          if (d == today) {
             g.setColor(GOLD);
@@ -941,7 +996,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          }
          if (cell >= 18) {
             String label = String.valueOf(d + 1);
-            g.setColor(full ? Color.WHITE : missed ? new Color(0xb0645a) : MUTED);
+            g.setColor(full ? ON_RUBRIC : missed ? MISSED_INK : MUTED);
             g.drawString(label, r.x + (r.width - fm.stringWidth(label)) / 2, r.y + (r.height + fm.getAscent() - fm.getDescent()) / 2);
          }
          if (over) {
@@ -1027,21 +1082,32 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private void paintPaper(Graphics2D g, Rectangle book, Rectangle[] sheets) {
       // Page edges under the book, like the stack of paper in a thick book.
       for (int i = 3; i >= 1; i--) {
-         g.setColor(i % 2 == 0 ? PAPER_EDGE : new Color(0xcdbd98));
+         g.setColor(i % 2 == 0 ? PAPER_EDGE : EDGE_SHADE);
          g.fillRoundRect(book.x - i, book.y + i, book.width + 2 * i, book.height, 6, 6);
       }
       g.setColor(PAPER);
       g.fillRect(book.x, book.y, book.width, book.height);
+      if (this.shelf.night) {
+         // A reading lamp: warm light pooling over each page, brightest in the middle (ovals, as the browser has no gradients).
+         for (Rectangle sheet : sheets) {
+            for (int i = 0; i < 12; i++) {
+               int ow = sheet.width * (12 - i) / 12;
+               int oh = sheet.height * (12 - i) / 12;
+               g.setColor(new Color(200, 180, 110, 4));
+               g.fillOval(sheet.x + (sheet.width - ow) / 2, sheet.y + (sheet.height - oh) / 2, ow, oh);
+            }
+         }
+      }
       if (sheets.length == 2) {
          // The spine: shading that deepens toward the fold.
          int fold = sheets[1].x;
          for (int i = 0; i < 26; i++) {
             int a = (26 - i) * 3;
-            g.setColor(new Color(120, 90, 50, a / 2));
+            g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), a / 2));
             g.fillRect(fold - i - 1, book.y, 1, book.height);
             g.fillRect(fold + i, book.y, 1, book.height);
          }
-         g.setColor(new Color(120, 90, 50, 110));
+         g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), 110));
          g.drawLine(fold, book.y, fold, book.y + book.height - 1);
       }
    }
@@ -1258,7 +1324,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.setFont(UI);
          int bw = g.getFontMetrics().stringWidth(button) + 28;
          this.lastButton = new Rectangle(area.x + (area.width - bw) / 2, cy + 46, bw, 30);
-         this.pill(g, this.lastButton, button, RUBRIC, Color.WHITE);
+         this.pill(g, this.lastButton, button, RUBRIC, ON_RUBRIC);
       }
    }
 
@@ -1295,12 +1361,23 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.setFont(UI);
          String label = (this.shelf.plan != null ? "Your reading plan" : "Reading plans") + " \u203a";
          Rectangle plans = new Rectangle(list.x, list.y + list.height + 8, g.getFontMetrics().stringWidth(label) + 30, 30);
-         this.pill(g, plans, label, RUBRIC, Color.WHITE);
+         this.pill(g, plans, label, RUBRIC, ON_RUBRIC);
          this.hits.add(new Hit(plans, this::showPlan, 0));
          String heart = "By heart \u203a";
          Rectangle learning = new Rectangle(plans.x + plans.width + 8, plans.y, g.getFontMetrics().stringWidth(heart) + 30, 30);
          this.pill(g, learning, heart, PAPER_EDGE, INK);
          this.hits.add(new Hit(learning, this::showLearn, 0));
+         // Night pages too, shortened or left to D when the page is too narrow for it.
+         int room = list.x + list.width - (learning.x + learning.width + 8) - 30;
+         String light = this.shelf.night ? "Day pages" : "Night pages";
+         if (g.getFontMetrics().stringWidth(light) > room) {
+            light = this.shelf.night ? "Day" : "Night";
+         }
+         if (g.getFontMetrics().stringWidth(light) <= room) {
+            Rectangle lamp = new Rectangle(learning.x + learning.width + 8, plans.y, g.getFontMetrics().stringWidth(light) + 30, 30);
+            this.pill(g, lamp, light, PAPER_EDGE, INK);
+            this.hits.add(new Hit(lamp, this::toggleNight, 0));
+         }
       }
       g.setFont(HEAD);
       g.setColor(MUTED);
@@ -1378,7 +1455,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setFont(UI);
       String go = (read == 0 || read == Books.CHAPTERS[b] ? "Start reading" : "Continue at " + start) + " \u203a";
       Rectangle goButton = new Rectangle(info.x, info.y + 80, g.getFontMetrics().stringWidth(go) + 30, 32);
-      this.pill(g, goButton, go, RUBRIC, Color.WHITE);
+      this.pill(g, goButton, go, RUBRIC, ON_RUBRIC);
       this.hits.add(new Hit(goButton, () -> this.open(b, start, false), 0));
       String save = "Save as a web page";
       Rectangle saveButton = new Rectangle(goButton.x + goButton.width + 10, goButton.y, g.getFontMetrics().stringWidth(save) + 30, 32);
@@ -1423,7 +1500,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             g.drawRoundRect(r.x - 2, r.y - 2, r.width + 4, r.height + 4, 8, 8);
          }
          String label = String.valueOf(c);
-         g.setColor(isRead ? Color.WHITE : INK);
+         g.setColor(isRead ? ON_RUBRIC : INK);
          g.drawString(label, r.x + (r.width - fm.stringWidth(label)) / 2, r.y + (r.height + fm.getAscent() - fm.getDescent()) / 2);
          int chosen = c;
          this.hits.add(new Hit(r, () -> this.open(b, chosen, false), 0));
@@ -1460,7 +1537,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setFont(UI);
       String label = this.saving ? "Saving..." : "Save " + (count == 1 ? "1 chapter" : count + " chapters");
       Rectangle button = new Rectangle(area.x, y + 146, g.getFontMetrics().stringWidth(label) + 30, 32);
-      this.pill(g, button, label, this.saving ? MUTED : RUBRIC, Color.WHITE);
+      this.pill(g, button, label, this.saving ? MUTED : RUBRIC, ON_RUBRIC);
       if (!this.saving) {
          this.hits.add(new Hit(button, this::startSave, 0));
       }
@@ -1531,7 +1608,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setColor(on ? RUBRIC : MUTED);
       g.drawRoundRect(x, y, 18, 18, 4, 4);
       if (on) {
-         g.setColor(Color.WHITE);
+         g.setColor(ON_RUBRIC);
          g.drawLine(x + 4, y + 9, x + 8, y + 13);
          g.drawLine(x + 8, y + 13, x + 14, y + 5);
          g.drawLine(x + 4, y + 10, x + 8, y + 14);
@@ -1584,6 +1661,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       right = this.barButtonRight(g, right, y, bh, wide ? "Next \u203a" : "\u203a", this::next, reading);
       if (wide) {
          right = this.barButtonRight(g, right, y, bh, "Save", () -> this.showSave(this.shelf.book), true);
+         right = this.barButtonRight(g, right, y, bh, this.shelf.night ? "Day" : "Night", this::toggleNight, true);
          right = this.barButtonRight(g, right, y, bh, "A+", () -> this.resize(1), this.shelf.size < Shelf.SIZES.length - 1);
          right = this.barButtonRight(g, right, y, bh, "A\u2212", () -> this.resize(-1), this.shelf.size > 0);
       }
