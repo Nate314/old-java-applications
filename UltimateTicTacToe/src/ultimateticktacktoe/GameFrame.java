@@ -98,6 +98,17 @@ public final class GameFrame extends JFrame {
    private final JPanel reviewButtonHolder = new JPanel(new FlowLayout(FlowLayout.RIGHT, GAP, 4));
    /** While reviewing, in place of the record line: step back and forward, the next mistake, and Done. */
    private final JPanel reviewRow = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
+   /** How to play (L, or the button beside the record before the first move): the lesson step shown, or -1 while playing. */
+   private int lessonStep = -1;
+   /** The step's task is done; a click (or Next) goes on. */
+   private boolean lessonDone;
+   /** The game set aside while the lesson borrows the board. */
+   private GameState lessonSaved;
+   private final JButton learnButton = new JButton("How to play");
+   /** While the lesson runs, in place of the mode buttons: Back, Again, Next (Play after the last step) and Done. */
+   private final JPanel lessonBar = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
+   private final JButton lessonBack = new JButton("Back");
+   private final JButton lessonNext = new JButton("Next");
 
    /** {@code page} and {@code code} come from the arguments (see Main); either may be null. */
    public GameFrame(String page, String code) {
@@ -134,6 +145,8 @@ public final class GameFrame extends JFrame {
       top.setPreferredSize(topSize);
       top.add(this.modeBar, BorderLayout.CENTER);
       top.add(this.graph, BorderLayout.NORTH);
+      this.layoutLessonBar();
+      top.add(this.lessonBar, BorderLayout.SOUTH);
       this.graph.setVisible(false);
       this.add(top, BorderLayout.NORTH);
       JPanel gridHolder = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
@@ -161,7 +174,7 @@ public final class GameFrame extends JFrame {
          this.openFriendGame(code);
       }
       // The whole window sits on the boards' dark color.
-      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), this.modeBar, top, gridHolder, grid, statusLines, lower, this.friendRow, this.reviewButtonHolder, this.reviewRow}) {
+      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), this.modeBar, top, gridHolder, grid, statusLines, lower, this.friendRow, this.reviewButtonHolder, this.reviewRow, this.lessonBar}) {
          panel.setBackground(CellButton.BACKGROUND);
       }
       this.refresh();
@@ -219,19 +232,39 @@ public final class GameFrame extends JFrame {
       this.reviewButton.setFocusable(false);
       this.reviewButton.addActionListener(event -> this.startReview());
       this.reviewButtonHolder.add(this.reviewButton);
+      this.learnButton.setFocusable(false);
+      this.learnButton.setToolTipText("Learn the rules in six moves (L)");
+      this.learnButton.addActionListener(event -> this.startLesson());
+      this.reviewButtonHolder.add(this.learnButton);
       this.addReviewButton("<", "Back a move (left arrow)", () -> this.reviewJump(this.reviewAt - 1, false));
       this.addReviewButton(">", "Forward a move (right arrow)", () -> this.reviewJump(this.reviewAt + 1, true));
       this.addReviewButton("Next mistake", "The next mistake or blunder (N)", this::nextMistake);
       this.addReviewButton("Done", "Back to the game (Esc)", this::endReview);
    }
 
+   private void layoutLessonBar() {
+      this.addBarButton(this.lessonBack, "The step before", () -> this.lessonGo(this.lessonStep - 1), this.lessonBar);
+      this.addBarButton(new JButton("Again"), "This step from the start", () -> this.lessonGo(this.lessonStep), this.lessonBar);
+      this.addBarButton(this.lessonNext, "The next step", this::lessonNext, this.lessonBar);
+      this.addBarButton(new JButton("Done"), "Back to the game (Esc)", this::endLesson, this.lessonBar);
+      // Dressed like the mode buttons they stand in for; Next lights up once the step is done (refreshLesson).
+      for (java.awt.Component button : this.lessonBar.getComponents()) {
+         button.setBackground(BUTTON);
+         button.setForeground(TEXT);
+      }
+      this.lessonBar.setVisible(false);
+   }
+
    private void addReviewButton(String label, String name, Runnable action) {
-      JButton button = new JButton(label);
+      this.addBarButton(new JButton(label), name, action, this.reviewRow);
+   }
+
+   private void addBarButton(JButton button, String name, Runnable action, JPanel row) {
       button.setFocusable(false);
       button.setToolTipText(name);
       button.getAccessibleContext().setAccessibleName(name);
       button.addActionListener(event -> action.run());
-      this.reviewRow.add(button);
+      row.add(button);
    }
 
    /** What a game is sent as: a link on the web, a code on the desktop. */
@@ -242,6 +275,7 @@ public final class GameFrame extends JFrame {
    /** Starts over in the given mode. */
    private void newGame(Mode choice) {
       this.stopReview();
+      this.lessonStep = -1;
       this.computerTimer.stop();
       this.nextGameTimer.stop();
       this.computerPlayedX = this.watching;
@@ -266,7 +300,7 @@ public final class GameFrame extends JFrame {
     * a friend is only set aside. A game the computer played X in does not count in the record.
     */
    final void toggleWatch() {
-      if (this.review != null) {
+      if (this.review != null || this.lessonStep >= 0) {
          return;
       }
       if (!this.watching && !this.mode.vsComputer()) {
@@ -424,7 +458,9 @@ public final class GameFrame extends JFrame {
 
    /** True if the player at this screen may make that move now (not while the computer or a friend is to move). */
    private boolean canPreview(int move) {
-      return this.review == null && !this.watching && !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting) && this.state.canPlay(move / 9, move % 9);
+      boolean ours = this.lessonStep >= 0 ? !this.lessonDone
+         : this.review == null && !this.watching && !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting);
+      return ours && this.state.canPlay(move / 9, move % 9);
    }
 
    /** The mouse (or, with {@code keyboard}, the arrow keys) is on that cell: show what playing there would do. */
@@ -481,15 +517,19 @@ public final class GameFrame extends JFrame {
 
    /** Who moves after the player previewing a move, as the status line names them. */
    private String opponent() {
-      return this.mode.vsComputer() ? "the computer" : this.mode == Mode.FRIEND ? "your friend" : this.state.xTurn ? "O" : "X";
+      return this.lessonStep >= 0 ? "O" : this.mode.vsComputer() ? "the computer" : this.mode == Mode.FRIEND ? "your friend" : this.state.xTurn ? "O" : "X";
    }
 
    private boolean computerToMove() {
-      return this.state.winner == null && (this.watching || this.mode.vsComputer() && !this.state.xTurn);
+      return this.lessonStep < 0 && this.state.winner == null && (this.watching || this.mode.vsComputer() && !this.state.xTurn);
    }
 
    /** A cell was clicked: play there, or start over if the game has ended. Clicks wait while the computer thinks. */
    public final void cellClicked(int board, int cell) {
+      if (this.lessonStep >= 0) {
+         this.lessonClick(board, cell);
+         return;
+      }
       if (this.review != null) {
          return;   // the board shows a past position; the review row and the keys step through it
       }
@@ -559,6 +599,10 @@ public final class GameFrame extends JFrame {
       }
 
       String winner = this.state.winner;
+      if (this.lessonStep >= 0) {
+         this.refreshLesson();
+         return;
+      }
       if (this.review != null) {
          this.refreshReview();
          return;
@@ -571,13 +615,17 @@ public final class GameFrame extends JFrame {
       this.notice = null;
       this.updatePreview();
       // Once a game ends, Review game sits beside the record (shortened to leave it room), or in place of Open.
+      // Before the first move, How to play sits there instead.
       boolean reviewable = winner != null && !this.watching;
+      boolean fresh = winner == null && this.moves.isEmpty() && !this.watching;
       String level = this.mode == Mode.HARD ? "Hard" : "Easy";
       this.tally.setText(this.watching ? "Games the computer plays X in do not count."
-         : this.mode.vsComputer() ? (reviewable ? level : "Your record on " + level) + ": " + this.record.describe(this.mode)
+         : this.mode.vsComputer() ? (reviewable || fresh ? level : "Your record on " + level) + ": " + this.record.describe(this.mode)
          : " ");
       boolean friend = this.mode == Mode.FRIEND;
-      this.showSlots(false, !friend, friend, reviewable && !friend);
+      this.reviewButton.setVisible(reviewable);
+      this.learnButton.setVisible(!reviewable);
+      this.showSlots(false, !friend, friend, (reviewable || fresh) && !friend);
       this.openButton.setVisible(!reviewable);
       this.friendReviewButton.setVisible(reviewable);
       this.friendField.setText(FriendLink.message(this.friendPage, this.moves));
@@ -587,7 +635,8 @@ public final class GameFrame extends JFrame {
 
    /** Shows the review's chart and row, or the mode buttons with the record line, the friend row and Review game. */
    private void showSlots(boolean reviewing, boolean tally, boolean friend, boolean reviewButton) {
-      this.modeBar.setVisible(!reviewing);
+      this.modeBar.setVisible(!reviewing && this.lessonStep < 0);
+      this.lessonBar.setVisible(this.lessonStep >= 0);
       this.graph.setVisible(reviewing);
       this.reviewRow.setVisible(reviewing);
       this.tally.setVisible(tally && !reviewing);
@@ -595,6 +644,90 @@ public final class GameFrame extends JFrame {
       this.reviewButtonHolder.setVisible(reviewButton && !reviewing);
       this.getContentPane().validate();
       this.graph.repaint();
+   }
+
+   // ---- how to play ----
+
+   /** L or How to play: the six steps of the lesson on this board; the game is set aside until Done. */
+   final void startLesson() {
+      if (this.lessonStep >= 0 || this.review != null) {
+         return;
+      }
+      this.takeOver();
+      this.computerTimer.stop();
+      this.nextGameTimer.stop();
+      this.lessonSaved = this.state;
+      this.boards[4].cells[4].requestFocusInWindow();   // for Esc and the arrow keys
+      this.lessonGo(0);
+   }
+
+   /** Shows a step from its start. */
+   private void lessonGo(int step) {
+      if (step < 0 || step >= Lesson.STEPS.length) {
+         return;
+      }
+      this.lessonStep = step;
+      this.lessonDone = false;
+      this.setState(Lesson.STEPS[step].start());
+      this.previewMove = -1;
+      this.cursorMove = -1;
+      this.refresh();
+   }
+
+   /** The next step; after the last, Play starts a game against the computer (on Easy unless one was on). */
+   private void lessonNext() {
+      if (this.lessonStep + 1 < Lesson.STEPS.length) {
+         this.lessonGo(this.lessonStep + 1);
+      } else {
+         this.endLesson();
+         this.newGame(this.mode.vsComputer() ? this.mode : Mode.EASY);
+      }
+   }
+
+   /** Done (Esc, or L again): the game that was set aside is back as it was. */
+   final void endLesson() {
+      if (this.lessonStep < 0) {
+         return;
+      }
+      this.lessonStep = -1;
+      this.setState(this.lessonSaved);
+      this.refresh();
+      this.moveSoon();
+   }
+
+   /** A move that does the step's task is played; any other is turned away, with why. Once done, a click goes on. */
+   private void lessonClick(int board, int cell) {
+      if (this.lessonDone) {
+         this.lessonNext();
+         return;
+      }
+      String wrong = !this.state.canPlay(board, cell) ? "Not there: an empty square on an outlined board."
+         : Lesson.STEPS[this.lessonStep].wrong(this.state, board * 9 + cell);
+      if (wrong != null) {
+         this.notice = wrong;
+      } else {
+         this.drawIn(board, cell);
+         this.lessonDone = true;
+      }
+      this.refresh();
+   }
+
+   private void refreshLesson() {
+      Lesson.Step step = Lesson.STEPS[this.lessonStep];
+      String wrong = this.notice;
+      this.notice = null;
+      this.statusLine = this.lessonDone ? step.done : step.task;
+      this.updatePreview();
+      if (wrong != null) {
+         this.status.setText(wrong);   // over the preview of the cell just clicked, until the mouse moves on
+      }
+      this.setTitle("Ultimate Tic-Tac-Toe: how to play, step " + (this.lessonStep + 1) + " of " + Lesson.STEPS.length);
+      this.tally.setText(step.rule);
+      this.lessonBack.setEnabled(this.lessonStep > 0);
+      this.lessonNext.setText(this.lessonStep + 1 < Lesson.STEPS.length ? "Next" : "Play");
+      this.lessonNext.setBackground(this.lessonDone ? CellButton.X_COLOR : BUTTON);
+      this.lessonNext.setForeground(this.lessonDone ? Color.BLACK : TEXT);
+      this.showSlots(false, true, false, false);
    }
 
    // ---- review ----
@@ -611,7 +744,7 @@ public final class GameFrame extends JFrame {
 
    /** R or Review game, once a game has ended: look it over from the end, while the computer analyses each position. */
    final void startReview() {
-      if (this.review != null || this.watching || this.state.winner == null) {
+      if (this.review != null || this.lessonStep >= 0 || this.watching || this.state.winner == null) {
          return;
       }
       this.review = Review.of(this.moves);
@@ -679,9 +812,20 @@ public final class GameFrame extends JFrame {
 
    /** The arrow keys, Home, End, N and Esc (or R) while reviewing, and R to start one; true if the key was used. */
    final boolean reviewKey(int keyCode) {
+      if (this.lessonStep >= 0) {
+         if (keyCode == KeyEvent.VK_ESCAPE || keyCode == KeyEvent.VK_L) {
+            this.endLesson();
+            return true;
+         }
+         return keyCode == KeyEvent.VK_W || keyCode == KeyEvent.VK_R;   // not while the lesson has the board; the arrows and Enter still play
+      }
       if (this.review == null) {
          if (keyCode == KeyEvent.VK_R && this.state.winner != null && !this.watching) {
             this.startReview();
+            return true;
+         }
+         if (keyCode == KeyEvent.VK_L) {
+            this.startLesson();
             return true;
          }
          return false;
