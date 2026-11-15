@@ -5655,6 +5655,15 @@ html[data-saver] * {
   color: #fff;
 }
 
+/* A finger needs a bigger target than a mouse: on a touch screen the band's controls are at least 32 px across. */
+@media (pointer: coarse) {
+  .shim-toolbar button,
+  .shim-toolbar select {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
 /* ---- Slow-mo (slow-mo.tsx): the app's clock at half or a quarter speed ---- */
 .shim-toolbar .shim-slowmo[aria-pressed="true"] {
   background: var(--accent);

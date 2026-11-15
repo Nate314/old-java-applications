@@ -73,7 +73,9 @@ export function pretendWindows() {
     draw();
     document.addEventListener('pointerdown', outside, true);
     playSound('open');
-    layer.querySelector<HTMLInputElement>('.shim-start-search')!.focus({ preventScroll: true });
+    // A focused text box raises a phone's keyboard over the menu, so on a touch screen the menu itself takes the focus.
+    var touch = !!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches);
+    layer.querySelector<HTMLElement>(touch ? '.shim-start' : '.shim-start-search')!.focus({ preventScroll: true });
     need();
   }
 
@@ -347,7 +349,7 @@ function StartMenu({ shell, query }: { shell: ShellModel; query: string }) {
   const hit = (app: CatalogApp) => !q || (app.name + ' ' + app.id + ' ' + app.hint).toLowerCase().indexOf(q) >= 0;
   const hits = apps ? apps.filter(hit) : [];
   return (
-    <div className="shim-start" role="dialog" aria-label="Start" ref={box}>
+    <div className="shim-start" role="dialog" aria-label="Start" ref={box} tabIndex={-1}>
       <input className="shim-start-search" type="search" placeholder="Type here to search" aria-label="Search apps"
         onInput={e => shell.filter(e.currentTarget.value)}
         onKeyDownCapture={e => {
