@@ -22,9 +22,9 @@ import javax.swing.Timer;
 
 /**
  * The board under the inputs. In Groups it deals the newest round onto one card per group, marks the people who were
- * together before, and swaps two names of different groups when they are clicked one after the other. Partner chart
- * shows, for every pair in the class, how many rounds put them in one group. Pick someone spins a wheel of the class
- * that lands on someone who has not had a turn yet. Roll call marks who is away today and which names are kept apart.
+ * together before, labels each member's role, and swaps two names of different groups when they are clicked one after
+ * the other. Partner chart shows, for every pair in the class, how many rounds put them in one group. Pick someone
+ * spins a wheel of the class that lands on someone who has not had a turn yet. Roll call marks who is away today and which names are kept apart.
  * Its buttons run along the bottom, and change with the view.
  */
 @SuppressWarnings("serial")
@@ -49,6 +49,10 @@ public class GroupBoard extends JPanel {
       new Color(230, 160, 30), new Color(40, 150, 170), new Color(210, 80, 140), new Color(110, 120, 60)
    };
 
+   /** Soft fills for the role tags, in the order of {@link Roles#NAMES}. */
+   private static final Color[] ROLE_COLORS = {
+      new Color(255, 224, 140), new Color(190, 222, 255), new Color(196, 236, 200), new Color(226, 208, 250), new Color(255, 206, 214),
+   };
    private static final Font TITLE = new Font("SansSerif", Font.BOLD, 15);
    private static final Font TEXT = new Font("SansSerif", Font.PLAIN, 13);
    static final Font BOLD = new Font("SansSerif", Font.BOLD, 13);
@@ -73,6 +77,9 @@ public class GroupBoard extends JPanel {
 
       /** Someone was marked away or here, or a keep-apart rule was added or removed: save the class. */
       void rulesChanged();
+
+      /** The roles were shown or hidden: save the class. */
+      void rolesShown(boolean shown);
    }
 
    private final class Button {
@@ -81,6 +88,8 @@ public class GroupBoard extends JPanel {
       final Rectangle bounds = new Rectangle();
       String label;
       boolean enabled = true;
+      /** A switch that is on: drawn filled. */
+      boolean on;
 
       Button(String label, char key, Runnable action) {
          this.label = label;
@@ -100,6 +109,7 @@ public class GroupBoard extends JPanel {
    private final Button reshuffle;
    private final Button chartButton;
    private final Button clear;
+   private final Button rolesButton;
    private final Button spin;
    private final Button putBack;
    private final Button startOver;
@@ -107,6 +117,8 @@ public class GroupBoard extends JPanel {
    private final Random random = new Random();
    private boolean picking;
    private boolean rollCall;
+   /** Whether the cards label each member's role (see {@link Roles}). */
+   boolean roles;
 
    // Roll call: the name tiles, the keep-apart list beside them, and the keyboard's place among the tiles.
    private boolean keepApart;
@@ -196,6 +208,11 @@ public class GroupBoard extends JPanel {
          wheel.finish();
          picking = false;
       }));
+      rolesButton = new Button("Roles", 'o', () -> {
+         roles = !roles;
+         actions.rolesShown(roles);
+      });
+      buttons.add(rolesButton);
       clear = new Button("Clear history", 'x', () -> {
          if (clearArmed) {
             clearArmed = false;
@@ -424,6 +441,7 @@ public class GroupBoard extends JPanel {
       reshuffle.enabled = !history.isEmpty();
       clear.enabled = !history.isEmpty();
       chartButton.label = chart ? "Groups" : "Partner chart";
+      rolesButton.on = roles;
       clear.label = clearArmed ? "Sure? Press again" : "Clear history";
       List<String> present = rules.present(actions.classNames());
       spin.enabled = !wheel.spinning() && !present.isEmpty();
@@ -458,7 +476,7 @@ public class GroupBoard extends JPanel {
       if (groups.isEmpty()) {
          chips = new Rectangle[0][];
          paintEmptyDeck(g, w, bottom);
-         return new String[] {"Group Creator", "Type the class above, then Make groups (or N) deals round 1. Later rounds mix in new partners.", ""};
+         return new String[] {"Group Creator", "Type the class above, then Make groups (or N) deals round 1. Later rounds mix in new partners and new roles.", ""};
       }
       Rectangle[] cards = layoutCards(w, HEADER + 6, bottom - HEADER - 12);
       int rowHeight = rowHeight(cards);
@@ -476,7 +494,9 @@ public class GroupBoard extends JPanel {
          g.fillRect(card.x, card.y + 14, card.width, 12);
          text(g, "Group " + (c + 1), BOLD, Color.WHITE, card.x + 10, card.y + 18);
          String size = groups.get(c).size() + (groups.get(c).size() == 1 ? " name" : " names");
-         text(g, size, SMALL, Color.WHITE, card.x + card.width - 10 - width(g, size, SMALL), card.y + 18);
+         if (card.width >= 30 + width(g, "Group " + (c + 1), BOLD) + width(g, size, SMALL)) {
+            text(g, size, SMALL, Color.WHITE, card.x + card.width - 10 - width(g, size, SMALL), card.y + 18);
+         }
          for (int k = 0; k < groups.get(c).size(); k++) {
             chips[c][k] = new Rectangle(card.x + 8, card.y + 32 + k * rowHeight, card.width - 16, rowHeight - 3);
             g.setColor(new Color(244, 242, 236));
@@ -506,7 +526,9 @@ public class GroupBoard extends JPanel {
             hoverGroup = c;
             hoverIndex = k;
          }
-         paintChip(g, groups.get(c).get(k), x, y, slot.width, slot.height, landed ? metAgain(c, k) : false,
+         int role = roles ? Roles.of(k, groups.get(c).size()) : -1;
+         paintChip(g, groups.get(c).get(k), role, landed && role >= 0 && hadRole(c, k), x, y, slot.width, slot.height,
+            landed ? metAgain(c, k) : false,
             c == pickedGroup && k == pickedIndex, c == hoverGroup && k == hoverIndex);
          if (landed && clashes(c, k)) {
             // Kept apart from someone in this group: a red ring.
@@ -636,7 +658,9 @@ public class GroupBoard extends JPanel {
       return null;
    }
 
-   private void paintChip(Graphics2D g, String name, int x, int y, int width, int height, boolean again, boolean picked, boolean hover) {
+   /** A name on a card, with its role's tag (ringed in orange when they had that role before) when role is not -1. */
+   private void paintChip(Graphics2D g, String name, int role, boolean hadRole, int x, int y, int width, int height,
+         boolean again, boolean picked, boolean hover) {
       g.setColor(picked ? PICKED : again ? AGAIN_FILL : Color.WHITE);
       g.fillRoundRect(x, y, width, height, 8, 8);
       g.setColor(picked ? AGAIN : hover ? INK : new Color(205, 200, 190));
@@ -646,12 +670,38 @@ public class GroupBoard extends JPanel {
       Font font = height >= 16 ? TEXT : SMALL;
       int baseline = y + height / 2 + (height >= 16 ? 5 : 4);
       int room = width - 16 - (again ? 14 : 0);
+      if (role >= 0 && height >= 12) {
+         // The role's tag at the right; only its first letter when the name would be squeezed.
+         String tag = Roles.NAMES[role];
+         if (room - width(g, tag, SMALL) - 16 < Math.min(60, width(g, name, font))) {
+            tag = tag.substring(0, 1);
+         }
+         int tagWidth = width(g, tag, SMALL) + 10;
+         int tagHeight = Math.min(16, height - 4);
+         int tagX = x + 8 + room - tagWidth;
+         int tagY = y + (height - tagHeight) / 2;
+         g.setColor(ROLE_COLORS[role]);
+         g.fillRoundRect(tagX, tagY, tagWidth, tagHeight, tagHeight, tagHeight);
+         if (hadRole) {
+            g.setColor(AGAIN);
+            g.setStroke(new BasicStroke(1.4f));
+            g.drawRoundRect(tagX, tagY, tagWidth, tagHeight, tagHeight, tagHeight);
+            g.setStroke(new BasicStroke(1f));
+         }
+         centered(g, tag, SMALL, INK, tagX + tagWidth / 2, tagY + tagHeight / 2 + 4);
+         room -= tagWidth + 6;
+      }
       text(g, fit(g, name, font, room), font, INK, x + 8, baseline);
       if (again) {
          int dot = Math.min(8, height - 6);
          g.setColor(AGAIN);
          g.fillOval(x + width - 8 - dot, y + (height - dot) / 2, dot, dot);
       }
+   }
+
+   /** True when name k of group c has the role of their place this round in an earlier round too. */
+   private boolean hadRole(int c, int k) {
+      return !Roles.roundsAs(before, groups.get(c).get(k), k).isEmpty();
    }
 
    /** True when name k of group c shares this group with someone they were grouped with before. */
@@ -745,6 +795,12 @@ public class GroupBoard extends JPanel {
       }
       if (!again.isEmpty()) {
          text.append(fresh.isEmpty() ? "" : "; ").append("again with ").append(String.join(", ", again));
+      }
+      int role = roles ? Roles.of(k, group.size()) : -1;
+      if (role >= 0) {
+         List<Integer> before = Roles.roundsAs(this.before, name, role);
+         text.append(". ").append(Roles.NAMES[role])
+            .append(before.isEmpty() ? " for the first time" : " again (round " + join(before) + ")");
       }
       return text.toString();
    }
@@ -961,11 +1017,15 @@ public class GroupBoard extends JPanel {
       g.fillRect(0, top, w, BAR);
       int gap = 8;
       List<Button> buttons = buttons();
-      // Narrower padding when the buttons would not fit (the Groups bar with "Sure? Press again").
+      // Narrower padding, then gaps, when the buttons would not fit (the Groups bar with "Sure? Press again").
       int pad = 12;
       int total = barWidth(g, buttons, pad, gap);
       if (total > w - 16) {
          pad = 7;
+         total = barWidth(g, buttons, pad, gap);
+      }
+      if (total > w - 16) {
+         gap = 3;
          total = barWidth(g, buttons, pad, gap);
       }
       int x = (w - total) / 2;
@@ -974,7 +1034,7 @@ public class GroupBoard extends JPanel {
          button.bounds.setBounds(x, top + 10, bw, 30);
          boolean hover = button.enabled && button.bounds.contains(mouseX, mouseY);
          boolean armed = button == clear && clearArmed;
-         g.setColor(armed ? ERROR : hover ? new Color(255, 250, 238) : Color.WHITE);
+         g.setColor(armed ? ERROR : button.on ? PICKED : hover ? new Color(255, 250, 238) : Color.WHITE);
          g.fillRoundRect(x, top + 10, bw, 30, 14, 14);
          g.setColor(button.enabled ? INK : new Color(180, 176, 168));
          g.setStroke(new BasicStroke(hover ? 2f : 1.2f));

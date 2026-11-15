@@ -19,6 +19,7 @@ import java.util.List;
  * names=Alice,Bob,Carol,Dave
  * min=2
  * max=3
+ * roles=off
  * picked=Carol,Alice
  * away=Dave
  * apart=Alice,Bob
@@ -27,7 +28,8 @@ import java.util.List;
  *
  * with one {@code round=} line per round, oldest first, its groups separated by {@code |}, and a {@code picked=} line
  * (the names the wheel has picked this time around, oldest first) once the wheel has picked someone, an {@code away=}
- * line for the names marked away in the roll call, and one {@code apart=} line per keep-apart rule.
+ * line for the names marked away in the roll call, one {@code apart=} line per keep-apart rule, and {@code roles=off} when
+ * the cards hide the roles.
  */
 public final class Roster {
    static final String EXAMPLE = "Alice,Bob,Carol,Dave,Erin,Frank,Grace,Heidi,Ivan,Judy,Mallory,Niaj";
@@ -36,6 +38,8 @@ public final class Roster {
    String names = EXAMPLE;
    String min = "2";
    String max = "3";
+   /** Whether the cards show each member's role; the file says {@code roles=off} when not. */
+   boolean roles = true;
    final PartnerHistory history = new PartnerHistory();
    final PickBag picks = new PickBag();
    final ClassRules rules = new ClassRules();
@@ -61,6 +65,8 @@ public final class Roster {
                roster.min = value;
             } else if (key.equals("max")) {
                roster.max = value;
+            } else if (key.equals("roles")) {
+               roster.roles = !value.equals("off");
             } else if (key.equals("picked")) {
                roster.picks.load(value);
             } else if (key.equals("away")) {
@@ -98,6 +104,9 @@ public final class Roster {
       text.append("names=").append(names).append('\n');
       text.append("min=").append(min).append('\n');
       text.append("max=").append(max).append('\n');
+      if (!roles) {
+         text.append("roles=off\n");
+      }
       if (!picks.isEmpty()) {
          text.append("picked=").append(picks.text()).append('\n');
       }

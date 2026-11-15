@@ -20,7 +20,7 @@ import javax.swing.SwingUtilities;
  * The window: the original names, min and max fields and button across the top, and the {@link GroupBoard} under
  * them. Each round is mixed by {@link FreshMix} against every round before it, kept with the class in
  * {@code ~/.groupcreator-class.txt}, and written to {@code output.txt} as before. Names marked away in the roll call
- * sit a round out, and keep-apart rules hold whenever the group sizes allow.
+ * sit a round out, keep-apart rules hold whenever the group sizes allow, and {@link Roles} hands out the roles.
  */
 public class Main extends JFrame implements GroupBoard.Actions {
    private final JTextField textField = new JTextField();
@@ -37,6 +37,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       // Read after the window exists, so the browser build has put the saved file back.
       roster = Roster.load(new File(System.getProperty("user.home"), ".groupcreator-class.txt"));
       board = new GroupBoard(roster.history, roster.picks, roster.rules, this);
+      board.roles = roster.roles;
 
       JPanel names = new JPanel();
       names.add(new JLabel("Names, separated by commas:"));
@@ -101,7 +102,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       PartnerHistory past = replace ? roster.history.first(roster.history.size() - 1) : roster.history;
       List<List<String>> groups;
       try {
-         groups = FreshMix.mix(names, min, max, past, roster.rules, random);
+         groups = Roles.rotate(FreshMix.mix(names, min, max, past, roster.rules, random), past, random);
       } catch (IllegalArgumentException ex) {
          board.showMessage(ex.getMessage());
          return;
@@ -142,6 +143,12 @@ public class Main extends JFrame implements GroupBoard.Actions {
    @Override
    public List<String> classNames() {
       return GroupMaker.parseNames(textField.getText());
+   }
+
+   @Override
+   public void rolesShown(boolean shown) {
+      roster.roles = shown;
+      picksChanged();
    }
 
    @Override
