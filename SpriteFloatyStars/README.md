@@ -2,6 +2,14 @@
 
 A background program written in Java that animates colored dots ("stars") on a blue field. A small settings window picks the mode, window size, star count and star size, then opens the animation. The stars in that window now answer the mouse: hold to pull them all in, let go to fling them out (see Playing with the stars). A sixth mode, **Orbits**, turns the field into a small galaxy: the stars fall round suns you place and drag. A seventh, **Sky writing**, has the stars spell a message you type. It also has **Star Catcher**, a game played over those same animations.
 
+## Pick a sky
+
+The settings window used to offer seven modes by number ("Mode 1" to "Mode 7") with nothing to say what each one was. Now every mode plays live in a small tile above the fields, four on top and three below, each named in its corner ("1 Drift" to "7 Sky writing"):
+
+- **Point** at a tile: a white frame lights round it and the line under the tiles says what that mode does. With the pointer away, the line describes the mode chosen in the Mode list, whose tile keeps a gold frame.
+- **Click** a tile: that mode is chosen in the Mode list and its window opens at once, with the X/Y, Number and Size fields as they are (as OK would). The Mode list and OK still work as before, from the keyboard too.
+- The tiles are small fields of their own (60 stars, or 160 in Orbits and Sky writing, which spells HELLO), started a few seconds in so a Burst has already spread and the letters have formed. They stop moving while Star Catcher has the settings window hidden, and hold still as a picture when the browser asks for reduced motion.
+
 ## Playing with the stars
 
 The original animation only played to itself. Now the mouse (or a finger, in the browser) reaches into it:
@@ -63,6 +71,7 @@ The most time left for each night caught is saved to `.spritefloatystars-nights.
 Settings window:
 
 - **Play Star Catcher**: open the game (see above).
+- **The seven tiles**: each mode playing live; click one to open it (see Pick a sky).
 - **Mode**: Mode 1 to Mode 7.
   - Mode 1: white stars at random positions drift left and down, wrapping at the edges.
   - Mode 2: stars burst from the center and bounce off the edges, colored by position.
@@ -95,6 +104,7 @@ Closing the settings window or an animation window exits the program; closing th
 
 - `src/animate2/Animate2Main.java`: entry point; shows the `SettingsFrame`.
 - `src/animate2/SettingsFrame.java`: the settings window; parses the fields and opens an `AnimationFrame`, or a `CatchFrame`.
+- `src/animate2/SkyPicker.java`: the settings window's seven live tiles, the line describing a mode, and a click on a tile opening it.
 - `src/animate2/AnimationFrame.java`: the animation window holding a `StarField`.
 - `src/animate2/StarField.java`: star positions, velocities and colors; moves them on a 15 ms Swing timer (scaled by the time since the last tick, so the speed does not depend on the machine) and draws them for each mode. Each star also has a kick from the pointer (the pull, the wake and bursts) that dies away by itself, and the field draws the pull's glow, the burst ring, the mode name and the help. Star Catcher makes one without a timer or pointer and moves and draws it as its sky.
 - `src/animate2/StarHand.java`: the mouse on an animation window's field: press starts the pull, release flings, moving sets where the pointer rests; in Orbits, a press on a sun drags it.
@@ -113,7 +123,7 @@ From the repo root: `./run.ps1 old SpriteFloatyStars` (or `./run.ps1 old SpriteF
 
 ## Self-check
 
-`test/animate2/CatchCheck.java` checks the stars for the time left, that every night starts with its gold stars and black holes and keeps them inside the field until the clock runs out, that stars twinkle out only on the nights that say so and Supernova's holes swallow stars, catching within reach, combos and their bonus, black holes costing time (never below zero), and that the saved records keep the most time left, skip bad lines and open nights in order. `test/animate2/StarHandCheck.java` checks, in every mode, that holding gathers the stars, letting go spreads them and they all end up back on the field, that a click bursts near stars away, a longer hold flings harder (up to a cap), the wake nudges a star, mode changes keep the stars (Burst mode starts them in the middle) and wrap round, and the help shows, hides and fades. `test/animate2/OrbitsCheck.java` checks that Orbits starts with one sun and the trails on, that a lone sun's stars keep their distance while going round, that a click places a sun but a hold or a drag does not, the four-sun limit, dragging a sun, taking one away at the edge or by right click, a sun swallowing a star that then starts again, wrapping with no suns, the T key, and that the sun and both skies are drawn. `test/animate2/SkyWritingCheck.java` checks that a message is cleaned and wrapped to make its letters bigger, that the stars settle into HELLO (the H's crossbar has stars, the gap above it none), scatter under a fling and find their letters again, that typing adds only what the font has, Backspace erases, 40 letters is the most, an empty message spreads the stars over the sky, every star gets a place after stars are added or taken away, and that a kept message reads back. From `SpriteFloatyStars/`:
+`test/animate2/CatchCheck.java` checks the stars for the time left, that every night starts with its gold stars and black holes and keeps them inside the field until the clock runs out, that stars twinkle out only on the nights that say so and Supernova's holes swallow stars, catching within reach, combos and their bonus, black holes costing time (never below zero), and that the saved records keep the most time left, skip bad lines and open nights in order. `test/animate2/StarHandCheck.java` checks, in every mode, that holding gathers the stars, letting go spreads them and they all end up back on the field, that a click bursts near stars away, a longer hold flings harder (up to a cap), the wake nudges a star, mode changes keep the stars (Burst mode starts them in the middle) and wrap round, and the help shows, hides and fades. `test/animate2/OrbitsCheck.java` checks that Orbits starts with one sun and the trails on, that a lone sun's stars keep their distance while going round, that a click places a sun but a hold or a drag does not, the four-sun limit, dragging a sun, taking one away at the edge or by right click, a sun swallowing a star that then starts again, wrapping with no suns, the T key, and that the sun and both skies are drawn. `test/animate2/SkyWritingCheck.java` checks that a message is cleaned and wrapped to make its letters bigger, that the stars settle into HELLO (the H's crossbar has stars, the gap above it none), scatter under a fling and find their letters again, that typing adds only what the font has, Backspace erases, 40 letters is the most, an empty message spreads the stars over the sky, every star gets a place after stars are added or taken away, and that a kept message reads back. `test/animate2/SkyPickerCheck.java` checks that a click on each of the seven tiles finds its mode (and the gaps, the outside and the eighth cell find none) and that every tile shows its stars. From `SpriteFloatyStars/`:
 
 ```powershell
 javac -d ../out/check/SpriteFloatyStars src/animate2/*.java test/animate2/*.java
@@ -121,4 +131,5 @@ java -ea -cp ../out/check/SpriteFloatyStars animate2.CatchCheck
 java -ea -cp ../out/check/SpriteFloatyStars animate2.StarHandCheck
 java -ea -cp ../out/check/SpriteFloatyStars animate2.OrbitsCheck
 java -ea -cp ../out/check/SpriteFloatyStars animate2.SkyWritingCheck
+java -ea -cp ../out/check/SpriteFloatyStars animate2.SkyPickerCheck
 ```
