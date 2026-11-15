@@ -47,6 +47,8 @@ A run with a rewind in it is practice: the score shows "Practice: 1 rewind" unde
 
 The game over screen shows your score, best and today's best, and a medal: Bronze at 10 pipes, Silver at 20, Gold at 30 and Platinum at 40 (the thresholds of the original Flappy Bird), with how many more pipes the next medal needs. In endless mode, beating your best score shows "New best!" during the run.
 
+The game over screen is a scoreboard, laid out like the original game's: "Game Over" in the score's outlined lettering, then a parchment card with the medal on the left and SCORE, BEST (and TODAY, once there is a today's best) on the right. The score counts up from 0 once the screen has risen (in up to 0.8 s), then the medal lands with a small bounce and a sparkle keeps glinting on it, and a red NEW tag marks a best or today's best the run just beat. With no medal yet, the empty slot shows the pipes the first one needs (10). Under the card come the medal line, the practice note for a practice run, the Rewind button and how to go back to the title screen. With reduced motion the numbers, medal and tags show at once and the sparkle is off. The layout is measured in one unit that fits both the window's height and a narrow page's width, so the card stays whole on a phone.
+
 ## Controls / usage
 
 - **Space**, or a **click** or **tap** anywhere in the game: start from the title screen, flap, or (on the game over screen) go back to the title screen.
