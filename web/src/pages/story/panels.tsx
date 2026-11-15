@@ -242,6 +242,7 @@ export function EraPanel() {
       </div>
       <p className="caption" id="era-note">
         {era.then ? 'Then: the recovered code with light bug fixes, as first restored.' : 'Now: today\'s version, after every rework since.'}
+        {' '}<a href={'compare.html?app=' + encodeURIComponent(era.app)}>Play both side by side</a>
       </p>
     </>
   );

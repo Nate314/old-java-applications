@@ -3,7 +3,8 @@ import { flushSync } from 'react-dom';
 import { played } from './passport';
 import { WATCH } from './watch';
 import { saverMinutes, saverOn, setSaverOn } from './saver';
-import { appId, catalog, type CatalogApp } from './catalog';
+import { appId, catalog, root, type CatalogApp } from './catalog';
+import { embedded } from './skin';
 import { JAR_JAVA, JAR_KEYS, NO_QUIRKS, eraPage, indexOf, isThen, programFile, quirks, saveStore } from './then-and-now';
 import { INVITE, SHARED } from './share';
 import { sourcePanel } from './source-viewer';
@@ -196,6 +197,10 @@ function TitleScreen({ total, onGo, onMount }: {
           {/* Then and now: the other version of the app, once the catalog says it has one. */}
           <a className="shim-title-era" href={eraPage(!then)} hidden={!(app && app.then)}>
             {then ? 'Play today’s version' : 'Play it as first restored, before the reworks'}
+          </a>
+          {/* Both versions at once, with what changed in between (src/pages/compare); not inside another page's frame. */}
+          <a className="shim-title-era" href={root() + 'compare.html?app=' + id} hidden={!(app && app.then) || embedded}>
+            Compare then and now side by side
           </a>
           {/* The app for the desktop, today's version only (the jars are built from today's sources). */}
           <p className="shim-title-jar" hidden={then}>
