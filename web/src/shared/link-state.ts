@@ -1,7 +1,7 @@
 // What a friend's link brings an app: the address parameter each app reads from its own page (<body data-args-page>,
 // see the apps' READMEs). Pages that run an app in a frame (the home page's player, play.html) pass it on, so the
 // link lands in the same state from any page it points at.
-const PARAMS: Record<string, string> = { NumberGuess: 'challenge', UltimateTicTacToe: 'game', SynthesizerKeyboard: 'tune', MusicTheoryExpert: 'song' };
+const PARAMS: Record<string, string> = { NumberGuess: 'challenge', UltimateTicTacToe: 'game', SynthesizerKeyboard: 'tune', MusicTheoryExpert: 'song', WindowsE: 'keys' };
 
 /** The app whose parameter the address carries (/?challenge=... is a NumberGuess link), or null. */
 export function linkedApp(search: string): string | null {
