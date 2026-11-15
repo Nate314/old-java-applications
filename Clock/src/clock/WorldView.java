@@ -47,6 +47,8 @@ final class WorldView implements Tab {
    private boolean dragging;
    private Rectangle[] cityBoxes;
    private Rectangle done;
+   private Rectangle picture;
+   private final WorldMap map = new WorldMap();
 
    WorldView(Main clock) {
       this.clock = clock;
@@ -80,7 +82,7 @@ final class WorldView implements Tab {
    @Override
    public String hint() {
       return this.picking ? "Click a city to add or remove it   Enter: done"
-            : "Drag the strips or Left/Right: plan   Space: now   A: cities";
+            : "Drag the strips or Left/Right: plan   Space: now   M: map   A: cities";
    }
 
    // ---- Painting ----
@@ -102,10 +104,18 @@ final class WorldView implements Tab {
       Rectangle rows = new Rectangle(area.x, status.y - gap - rowHeight * zones.size(), area.width, rowHeight * zones.size());
       Rectangle top = new Rectangle(area.x, area.y, area.width, rows.y - gap - area.y);
 
-      int side = Math.max(40, Math.min(top.height, top.width * 55 / 100));
-      Rectangle dial = new Rectangle(top.x, top.y + (top.height - side) / 2, side, side);
-      this.paintDial(g, dial, zones, t);
-      this.paintInfo(g, new Rectangle(dial.x + side + gap, top.y, top.width - side - gap, top.height), t, now);
+      if (this.clock.state.worldMap) {
+         // The map, twice as wide as high, leaving the time here at least a third of the width.
+         int width = Math.max(80, Math.min(top.height * 2, top.width * 66 / 100));
+         this.picture = new Rectangle(top.x, top.y + (top.height - width / 2) / 2, width, width / 2);
+         this.map.paint(g, this.picture, zones, COLORS, t);
+      } else {
+         int side = Math.max(40, Math.min(top.height, top.width * 55 / 100));
+         this.picture = new Rectangle(top.x, top.y + (top.height - side) / 2, side, side);
+         this.paintDial(g, this.picture, zones, t);
+      }
+      int infoX = this.picture.x + this.picture.width + gap;
+      this.paintInfo(g, new Rectangle(infoX, top.y, top.x + top.width - infoX, top.height), t, now);
 
       boolean[] together = together(zones, Zone.HERE.midnight(t), WORK_FROM, WORK_TO);
       this.paintRows(g, rows, zones, t, together);
@@ -113,11 +123,12 @@ final class WorldView implements Tab {
       g.setColor(Ui.INK);
       Ui.line(g, this.plan(zones, t, together), Ui.LABELS, status);
 
-      this.buttons = Ui.row(buttonRow, 4, gap);
+      this.buttons = Ui.row(buttonRow, 5, gap);
       Ui.button(g, this.buttons[0], "Earlier", false);
       Ui.button(g, this.buttons[1], "Now", this.shown >= 0);
       Ui.button(g, this.buttons[2], "Later", false);
-      Ui.button(g, this.buttons[3], "Cities", false);
+      Ui.button(g, this.buttons[3], this.clock.state.worldMap ? "Dial" : "Map", false);
+      Ui.button(g, this.buttons[4], "Cities", false);
    }
 
    /** The 24-hour dial: the hours as a colored ring, and a hand per zone at its local time. */
@@ -408,7 +419,14 @@ final class WorldView implements Tab {
          this.dragging = true;
          this.dragDay = Zone.HERE.midnight(this.shown(now));
          this.drag(x, y, now);
+      } else if (this.picture != null && this.picture.contains(x, y)) {
+         this.toggleMap();
       }
+   }
+
+   /** Between the map of day and night and the 24-hour dial. */
+   private void toggleMap() {
+      this.clock.state.worldMap = !this.clock.state.worldMap;
    }
 
    private void button(int which, long now) {
@@ -421,6 +439,9 @@ final class WorldView implements Tab {
             break;
          case 2:
             this.step(1, now);
+            break;
+         case 3:
+            this.toggleMap();
             break;
          default:
             this.picking = true;
@@ -489,6 +510,9 @@ final class WorldView implements Tab {
          case KeyEvent.VK_ESCAPE:
             this.shown = -1;
             return true;
+         case KeyEvent.VK_M:
+            this.toggleMap();
+            return true;
          case KeyEvent.VK_A:
             this.picking = true;
             this.message = null;
@@ -546,7 +570,7 @@ final class WorldView implements Tab {
       g.drawString(text, box.x, box.y + (box.height + metrics.getAscent() - metrics.getDescent()) / 2);
    }
 
-   private static boolean overlaps(Rectangle box, List<Rectangle> others) {
+   static boolean overlaps(Rectangle box, List<Rectangle> others) {
       for (Rectangle other : others) {
          // Rectangle.intersects, which the browser's AWT does not have.
          if (box.x < other.x + other.width && other.x < box.x + box.width

@@ -25,38 +25,43 @@ final class Zone {
 
    /** The cities to pick from, west to east. */
    static final Zone[] CITIES = {
-      new Zone("Honolulu", -600, NONE), new Zone("Anchorage", -540, US), new Zone("Los Angeles", -480, US),
-      new Zone("Vancouver", -480, US), new Zone("Phoenix", -420, NONE), new Zone("Denver", -420, US),
-      new Zone("Mexico City", -360, NONE), new Zone("Chicago", -360, US), new Zone("New York", -300, US),
-      new Zone("Toronto", -300, US), new Zone("Bogota", -300, NONE), new Zone("Lima", -300, NONE),
-      new Zone("Halifax", -240, US), new Zone("Buenos Aires", -180, NONE), new Zone("Sao Paulo", -180, NONE),
-      new Zone("Reykjavik", 0, NONE), new Zone("London", 0, EU), new Zone("Lisbon", 0, EU), new Zone("Dublin", 0, EU),
-      new Zone("Lagos", 60, NONE), new Zone("Paris", 60, EU), new Zone("Madrid", 60, EU), new Zone("Rome", 60, EU),
-      new Zone("Berlin", 60, EU), new Zone("Amsterdam", 60, EU), new Zone("Stockholm", 60, EU),
-      new Zone("Johannesburg", 120, NONE), new Zone("Athens", 120, EU), new Zone("Helsinki", 120, EU),
-      new Zone("Kyiv", 120, EU), new Zone("Istanbul", 180, NONE), new Zone("Moscow", 180, NONE),
-      new Zone("Nairobi", 180, NONE), new Zone("Riyadh", 180, NONE), new Zone("Tehran", 210, NONE),
-      new Zone("Dubai", 240, NONE), new Zone("Karachi", 300, NONE), new Zone("Delhi", 330, NONE),
-      new Zone("Kathmandu", 345, NONE), new Zone("Dhaka", 360, NONE), new Zone("Bangkok", 420, NONE),
-      new Zone("Jakarta", 420, NONE), new Zone("Singapore", 480, NONE), new Zone("Hong Kong", 480, NONE),
-      new Zone("Beijing", 480, NONE), new Zone("Manila", 480, NONE), new Zone("Perth", 480, NONE),
-      new Zone("Seoul", 540, NONE), new Zone("Tokyo", 540, NONE), new Zone("Adelaide", 570, AU),
-      new Zone("Brisbane", 600, NONE), new Zone("Sydney", 600, AU), new Zone("Melbourne", 600, AU),
-      new Zone("Auckland", 720, NZ)
+      new Zone("Honolulu", -600, NONE, 21.31, -157.86), new Zone("Anchorage", -540, US, 61.22, -149.90), new Zone("Los Angeles", -480, US, 34.05, -118.24),
+      new Zone("Vancouver", -480, US, 49.28, -123.12), new Zone("Phoenix", -420, NONE, 33.45, -112.07), new Zone("Denver", -420, US, 39.74, -104.99),
+      new Zone("Mexico City", -360, NONE, 19.43, -99.13), new Zone("Chicago", -360, US, 41.88, -87.63), new Zone("New York", -300, US, 40.71, -74.01),
+      new Zone("Toronto", -300, US, 43.65, -79.38), new Zone("Bogota", -300, NONE, 4.71, -74.07), new Zone("Lima", -300, NONE, -12.05, -77.04),
+      new Zone("Halifax", -240, US, 44.65, -63.57), new Zone("Buenos Aires", -180, NONE, -34.60, -58.38), new Zone("Sao Paulo", -180, NONE, -23.55, -46.63),
+      new Zone("Reykjavik", 0, NONE, 64.15, -21.94), new Zone("London", 0, EU, 51.51, -0.13), new Zone("Lisbon", 0, EU, 38.72, -9.14), new Zone("Dublin", 0, EU, 53.35, -6.26),
+      new Zone("Lagos", 60, NONE, 6.52, 3.38), new Zone("Paris", 60, EU, 48.86, 2.35), new Zone("Madrid", 60, EU, 40.42, -3.70), new Zone("Rome", 60, EU, 41.90, 12.50),
+      new Zone("Berlin", 60, EU, 52.52, 13.40), new Zone("Amsterdam", 60, EU, 52.37, 4.90), new Zone("Stockholm", 60, EU, 59.33, 18.07),
+      new Zone("Johannesburg", 120, NONE, -26.20, 28.05), new Zone("Athens", 120, EU, 37.98, 23.73), new Zone("Helsinki", 120, EU, 60.17, 24.94),
+      new Zone("Kyiv", 120, EU, 50.45, 30.52), new Zone("Istanbul", 180, NONE, 41.01, 28.98), new Zone("Moscow", 180, NONE, 55.76, 37.62),
+      new Zone("Nairobi", 180, NONE, -1.29, 36.82), new Zone("Riyadh", 180, NONE, 24.71, 46.68), new Zone("Tehran", 210, NONE, 35.69, 51.39),
+      new Zone("Dubai", 240, NONE, 25.20, 55.27), new Zone("Karachi", 300, NONE, 24.86, 67.01), new Zone("Delhi", 330, NONE, 28.61, 77.21),
+      new Zone("Kathmandu", 345, NONE, 27.72, 85.32), new Zone("Dhaka", 360, NONE, 23.81, 90.41), new Zone("Bangkok", 420, NONE, 13.76, 100.50),
+      new Zone("Jakarta", 420, NONE, -6.21, 106.85), new Zone("Singapore", 480, NONE, 1.35, 103.82), new Zone("Hong Kong", 480, NONE, 22.32, 114.17),
+      new Zone("Beijing", 480, NONE, 39.90, 116.41), new Zone("Manila", 480, NONE, 14.60, 120.98), new Zone("Perth", 480, NONE, -31.95, 115.86),
+      new Zone("Seoul", 540, NONE, 37.57, 126.98), new Zone("Tokyo", 540, NONE, 35.68, 139.69), new Zone("Adelaide", 570, AU, -34.93, 138.60),
+      new Zone("Brisbane", 600, NONE, -27.47, 153.03), new Zone("Sydney", 600, AU, -33.87, 151.21), new Zone("Melbourne", 600, AU, -37.81, 144.96),
+      new Zone("Auckland", 720, NZ, -36.85, 174.76)
    };
 
    /** The computer's own time zone. */
-   static final Zone HERE = new Zone("Here", 0, HERE_RULE);
+   static final Zone HERE = new Zone("Here", 0, HERE_RULE, Double.NaN, Double.NaN);
 
    final String name;
    /** Minutes ahead of UTC outside daylight saving time. */
    final int standard;
    final int rule;
+   /** Where the city is, in degrees (north and east positive), for the World map; unknown for here. */
+   final double latitude;
+   final double longitude;
 
-   Zone(String name, int standard, int rule) {
+   Zone(String name, int standard, int rule, double latitude, double longitude) {
       this.name = name;
       this.standard = standard;
       this.rule = rule;
+      this.latitude = latitude;
+      this.longitude = longitude;
    }
 
    static Zone named(String name) {
