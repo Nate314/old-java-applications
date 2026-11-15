@@ -3,7 +3,7 @@
 // come from apps.json.
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import './home.css';
-import { APPS, app, type App } from '../../shared/catalog';
+import { APPS, app, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
 import { FIRST, H, draw, useHomeDraw } from './model';
 import { TOUR } from './tour';
@@ -34,7 +34,7 @@ function Rail() {
         <li key={a.id}>
           <button type="button" title={a.hint} className={played(a) ? 'played' : undefined}
             aria-current={H.current ? String(H.current === a) as 'true' | 'false' : undefined} onClick={() => P.choose(a)}>
-            <span className="pic"><img src={a.shot} alt="" loading="lazy" /></span>
+            <span className="pic"><img src={webp(a.shot, true)} alt="" loading="lazy" /></span>
             <span className="name">{a.name}</span>
           </button>
         </li>
@@ -51,7 +51,7 @@ function Stamps() {
         <li key={a.id}>
           <button type="button" className={[played(a) && 'played', a.id === H.fresh && 'fresh'].filter(Boolean).join(' ') || undefined}
             title={a.name + (played(a) ? ': played' : ': not played yet')} onClick={() => P.choose(a)}>
-            <span className="seal"><img src={a.shot} alt="" loading="lazy" /></span>
+            <span className="seal"><img src={webp(a.shot, true)} alt="" loading="lazy" /></span>
             <span className="label">{a.name}</span>
           </button>
         </li>
@@ -304,7 +304,7 @@ function News() {
       <ol className="news-list" id="news-list">
         {v && v.cards.map((c, k) => (
           <li key={k} className={c.updated ? 'updated' : undefined}>
-            <span className="pic"><img src={c.site ? SITE_ICON : (c.focus || c.it.apps[0]).shot} alt="" loading="lazy" /></span>
+            <span className="pic"><img src={c.site ? SITE_ICON : webp((c.focus || c.it.apps[0]).shot, true)} alt="" loading="lazy" /></span>
             <div className="body">
               <span className="meta">
                 <time>{day(c.it.t)}</time>
@@ -400,7 +400,7 @@ function Gallery() {
               className={cls || undefined} hidden={!inFilter(a, H.filter)} style={rank ? { order: rank[a.id] } : undefined}
               onMouseEnter={() => cardEnter(a.id)} onMouseLeave={() => cardLeave(a.id)} onFocus={e => cardFocus(e, a.id)} onBlur={e => cardBlur(e, a.id)}>
             <a className="thumb" href={page(a.id)} onClick={e => P.cardClick(e, a)}>
-              <img src={a.shot} alt={a.alt} loading="lazy" />
+              <img src={webp(a.shot)} alt={a.alt} loading="lazy" />
               <span className="badge">{played(a) ? 'Played ✓' : 'New'}</span>
               <span className="saved" hidden={!(t.checked && (ok || t.offline))}>{t.checked ? (ok ? 'Offline ✓' : 'Needs a connection') : null}</span>
               {c.wanted[a.id] && (

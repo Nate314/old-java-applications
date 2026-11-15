@@ -3,11 +3,12 @@
 # driven over the DevTools protocol (web/cdp.ps1) through its recipe below, so every thumbnail shows its app in
 # play (a game under way, a lesson lit, a race half run) rather than a start screen, and can be taken again the
 # same way after a change. Then the image is cropped to its windows, the remaining magenta is made transparent,
-# and wide shots are scaled down to -MaxWidth.
+# and wide shots are scaled down to -MaxWidth. Last, Chrome encodes the home page's lighter copies of it (Save-Webp).
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
 #   ./web/shots.ps1
 #   ./web/shots.ps1 -Apps Minesweeper,Clock -Port 8101
 #   ./web/shots.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
+#   ./web/shots.ps1 -WebpOnly   (only re-encode the .webp copies from the PNGs already in -Out, e.g. after a merge)
 param(
     [string[]]$Apps,
     [int]$Port = 8101,
@@ -16,7 +17,8 @@ param(
     [int]$Width = 960,
     [int]$Height = 600,
     [int]$MaxWidth = 480,
-    [string]$Out = (Join-Path $PSScriptRoot 'public/shots')
+    [string]$Out = (Join-Path $PSScriptRoot 'public/shots'),
+    [switch]$WebpOnly
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'cdp.ps1')
@@ -71,7 +73,7 @@ $Recipes = [ordered]@{
     WindowsE            = @{ Steps = @('wait:800', (Click 'Side by side'), 'wait:300', (Click 'DO IT'), 'wait:2500', $WindowsEFront) }
 }
 # HandMade: the committed thumbnail was composited by hand (web/README.md), so only -Apps naming it retakes it.
-if (-not $Apps) { $Apps = @($Recipes.Keys | Where-Object { -not $Recipes[$_].HandMade }) }
+if (-not $Apps) { $Apps = @($Recipes.Keys | Where-Object { $WebpOnly -or -not $Recipes[$_].HandMade }) }
 
 Add-Type -AssemblyName System.Drawing
 function Crop-Shot([string]$path) {
@@ -108,6 +110,17 @@ function Crop-Shot([string]$path) {
     $bmp.Dispose()
 }
 
+# The PNG stays the master (share cards, photo booth, takeaway); the home page shows WebP copies, about a quarter of
+# the bytes: <App>.webp at full size for the gallery and <App>-240.webp, 240 px wide, for the rail, passport and news.
+# Lossy color at 0.9 (no visible change at thumbnail size), alpha kept exact by Chrome's encoder.
+function Save-Webp([string]$png) {
+    $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($png))
+    foreach ($w in 0, 240) {
+        $webp = Invoke-Js "(async function () { var i = new Image(); i.src = 'data:image/png;base64,$b64'; await i.decode(); var c = document.createElement('canvas'), W = $w ? Math.min($w, i.width) : i.width; c.width = W; c.height = Math.round(i.height * W / i.width); var g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(i, 0, 0, c.width, c.height); var b = await new Promise(function (r) { c.toBlob(r, 'image/webp', 0.9); }); return await new Promise(function (r) { var f = new FileReader(); f.onload = function () { r(f.result.split(',')[1]); }; f.readAsDataURL(b); }); })()" -Await
+        [IO.File]::WriteAllBytes(($png -replace '\.png$', $(if ($w) { "-$w.webp" } else { '.webp' })), [Convert]::FromBase64String($webp))
+    }
+}
+
 $site = Join-Path $PSScriptRoot 'target/site'
 $out = $Out
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -115,6 +128,8 @@ $session = Start-Headless $site $Port $DebugPort $Chrome 'shots' $Width $Height
 try {
     Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = $Width; height = $Height; deviceScaleFactor = 1; mobile = $false } | Out-Null
     foreach ($app in $Apps) {
+        $png = Join-Path $out "$app.png"
+        if ($WebpOnly) { if (Test-Path $png) { Save-Webp $png; Write-Host "$app -> webp" }; continue }
         $recipe = $Recipes[$app]
         if (-not $recipe) { Write-Warning "$app has no recipe; skipped."; continue }
         $query = 'embed&shot' + $(if ($recipe.Query) { '&' + $recipe.Query } else { '' })
@@ -124,9 +139,9 @@ try {
         # Only the app: no controller, toast or pretend taskbar tray over the desktop.
         Invoke-Js "[].forEach.call(document.querySelectorAll('.shim-watch, .shim-pad, .shim-toast, .shim-gp-pointer, .shim-shell-tray'), function (e) { e.style.visibility = 'hidden'; })" | Out-Null
         Start-Sleep -Milliseconds 100
-        $png = Join-Path $out "$app.png"
         [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String((Invoke-Cdp 'Page.captureScreenshot' @{ format = 'png' }).data))
         Crop-Shot $png
+        Save-Webp $png
         Write-Host "$app -> $png"
     }
 } finally {

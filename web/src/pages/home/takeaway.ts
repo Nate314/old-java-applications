@@ -2,7 +2,7 @@
 // and Save all for offline, which puts every file of every app into the service worker's cache (sw.js).
 // Saved cards get an Offline chip; with no connection the banner says so and unsaved cards step back.
 // What the panel, the chips and the banner show is in H.take; Home.tsx draws it.
-import { APPS } from '../../shared/catalog';
+import { APPS, webp } from '../../shared/catalog';
 import { H, draw } from './model';
 
 const CACHE = 'oldjava-v1';   // the cache sw.js serves from
@@ -32,7 +32,7 @@ function shell(bundle: string[]) {
                  'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'apps.json', 'assets/files.json'];
   files.push(...bundle);
   files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg');   // the story page and what it shows
-  APPS.forEach(a => files.push(a.shot));
+  APPS.forEach(a => files.push(a.shot, webp(a.shot), webp(a.shot, true)));
   return files.map(abs);
 }
 const lists: Record<string, Promise<string[]>> = {};

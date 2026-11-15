@@ -4,7 +4,7 @@
 // It renders inside <section id="records">, which stays in Home.tsx: the arcade tabs (tabs.ts) show and hide that
 // section, and badge the Records tab with the count it reports (onCount).
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { APPS } from '../../shared/catalog';
+import { APPS, webp } from '../../shared/catalog';
 import { qr, type QrCode as Code } from '../../shared/qr';
 import { QrCode } from '../../shared/QrCode';
 import { byId } from '../../shared/dom';
@@ -196,7 +196,7 @@ export function Records({ onCount }: { onCount?: (n: number) => void }) {
             <li key={store}>
               <button type="button" title={'Play ' + nameOf(store)}
                       onClick={() => { const open = window.oldjavaPassport.open; if (open) open(store.split('.')[0]); }}>
-                {shot && <img src={shot} alt="" loading="lazy" />}
+                {shot && <img src={webp(shot, true)} alt="" loading="lazy" />}
                 <span><strong>{nameOf(store)}</strong><span>{line(store, saves[store])}</span></span>
               </button>
             </li>

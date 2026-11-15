@@ -2,7 +2,7 @@
 // screen. A click on one plays it. The rail and the gallery are the keyboard's and screen reader's way to the same
 // apps, so the wall is decoration for them (aria-hidden, out of the tab order).
 import './hero-wall.css';
-import { APPS, type App } from '../../shared/catalog';
+import { APPS, webp, type App } from '../../shared/catalog';
 import { H } from './model';
 import * as P from './player';
 
@@ -15,7 +15,7 @@ function Column({ apps }: { apps: App[] }) {
       {[...apps, ...apps].map((a, i) => (
         <li key={i}>
           <button type="button" tabIndex={-1} title={'Play ' + a.name} className={H.current === a ? 'on' : undefined} onClick={() => P.choose(a)}>
-            <img src={a.shot} alt="" loading="lazy" />
+            <img src={webp(a.shot, true)} alt="" loading="lazy" />
             <span>{a.name}</span>
           </button>
         </li>
