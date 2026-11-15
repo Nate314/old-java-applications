@@ -66,6 +66,37 @@ public class WindowsKeyCheck {
          drag(key, 52, 48);
          mouse(key, MouseEvent.MOUSE_RELEASED, MouseEvent.BUTTON1);
          check(log.equals(List.of("+" + win, "-" + win)), "sliding back onto the key before letting go is a plain click: " + log);
+         log.clear();
+         ShortcutShelf shelf = new ShortcutShelf(keys);
+         shelf.setSize(Test.WIDTH, ShortcutShelf.HEIGHT);
+         for (int i = 0; i < ShortcutShelf.count(); i++) {
+            java.awt.Rectangle r = shelf.rect(i);
+            check(r.x >= 0 && r.y >= 0 && r.x + r.width <= Test.WIDTH && r.y + r.height <= ShortcutShelf.HEIGHT
+               && shelf.at(r.x + r.width / 2, r.y + r.height / 2) == i, "shortcut " + i + " is inside the shelf and found there");
+            log.clear();
+            click(shelf, r.x + r.width / 2, r.y + r.height / 2, r.x + r.width / 2, r.y + r.height / 2);
+            int code = ShortcutShelf.code(i);
+            check(log.equals(List.of("+" + win, "+" + code, "-" + code, "-" + win)), "a click on shortcut " + i + " makes Win+" + code + ": " + log);
+         }
+         check(ShortcutShelf.code(0) == KeyEvent.VK_E && ShortcutShelf.code(4) == KeyEvent.VK_LEFT, "the shelf starts with E and the arrows follow");
+         log.clear();
+         java.awt.Rectangle first = shelf.rect(0);
+         java.awt.Rectangle second = shelf.rect(1);
+         click(shelf, first.x + 5, first.y + 5, second.x + 5, second.y + 5);
+         check(log.isEmpty(), "letting go on another shortcut presses none: " + log);
+         for (java.awt.event.KeyListener l : shelf.getKeyListeners()) {
+            l.keyPressed(new KeyEvent(shelf, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_DOWN, KeyEvent.CHAR_UNDEFINED));
+            l.keyReleased(new KeyEvent(shelf, KeyEvent.KEY_RELEASED, 0, 0, KeyEvent.VK_ENTER, (char) 10));
+         }
+         check(shelf.picked() == 1 && log.equals(List.of("+" + win, "+" + KeyEvent.VK_D, "-" + KeyEvent.VK_D, "-" + win)),
+            "Down then Enter presses Win+D: " + log);
+         for (java.awt.event.KeyListener l : shelf.getKeyListeners()) {
+            l.keyPressed(new KeyEvent(shelf, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_UP, KeyEvent.CHAR_UNDEFINED));
+            l.keyPressed(new KeyEvent(shelf, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_UP, KeyEvent.CHAR_UNDEFINED));
+         }
+         check(shelf.picked() == ShortcutShelf.count() - 1, "Up from the first wraps round to the last");
+         BufferedImage image = new BufferedImage(Test.WIDTH, ShortcutShelf.HEIGHT, BufferedImage.TYPE_INT_ARGB);
+         shelf.paint(image.getGraphics());
       });
       if (!java.awt.GraphicsEnvironment.isHeadless()) {
          SwingUtilities.invokeAndWait(() -> {
@@ -73,6 +104,21 @@ public class WindowsKeyCheck {
             check(frame.isAlwaysOnTop() && !frame.getFocusableWindowState() && frame.isUndecorated(),
                "the window stays on top, borderless, without taking the keyboard");
             check(!frame.isVisible() && frame.getWidth() == Test.WIDTH, "open() builds it without showing it");
+            javax.swing.JButton more = find(frame.getContentPane(), Test.SHOW_SHORTCUTS);
+            int bottom = frame.getY() + frame.getHeight();
+            more.doClick();
+            check(frame.getHeight() == Test.HEIGHT + ShortcutShelf.HEIGHT && frame.getY() + frame.getHeight() == bottom,
+               "the shortcuts open upward, keeping the key where it was");
+            // A window that was never shown is not laid out; a peer (still hidden) lets validate() do it.
+            frame.addNotify();
+            frame.validate();
+            ShortcutShelf shelf = (ShortcutShelf) find(frame.getContentPane(), null);
+            check(shelf.isVisible() && shelf.getHeight() == ShortcutShelf.HEIGHT, "the shelf gets its height: " + shelf.getHeight());
+            if (System.getProperty("shot") != null) {
+               shot(frame, System.getProperty("shot"));
+            }
+            more.doClick();
+            check(frame.getHeight() == Test.HEIGHT && frame.getY() + frame.getHeight() == bottom && !shelf.isVisible(), "and close again");
             frame.dispose();
          });
       }
@@ -82,6 +128,39 @@ public class WindowsKeyCheck {
 
    private static void mouse(WindowsKey key, int id, int button) {
       key.dispatchEvent(new MouseEvent(key, id, 0, 0, 50, 50, 1, false, button));
+   }
+
+   private static void click(java.awt.Component c, int x, int y, int upX, int upY) {
+      c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_PRESSED, 0, MouseEvent.BUTTON1_DOWN_MASK, x, y, 1, false, MouseEvent.BUTTON1));
+      c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_RELEASED, 0, 0, upX, upY, 1, false, MouseEvent.BUTTON1));
+   }
+
+   /** The button with that accessible name in the window (with null, the shortcut shelf). */
+   private static javax.swing.JButton find(java.awt.Container in, String name) {
+      for (java.awt.Component c : in.getComponents()) {
+         if (c instanceof javax.swing.JButton && (name == null ? c instanceof ShortcutShelf
+            : name.equals(c.getAccessibleContext().getAccessibleName()))) {
+            return (javax.swing.JButton) c;
+         }
+         if (c instanceof java.awt.Container) {
+            javax.swing.JButton b = find((java.awt.Container) c, name);
+            if (b != null) {
+               return b;
+            }
+         }
+      }
+      return null;
+   }
+
+   /** The window drawn into a PNG without showing it, to look at the layout. */
+   private static void shot(JFrame frame, String path) {
+      try {
+         BufferedImage image = new BufferedImage(frame.getWidth(), frame.getHeight(), BufferedImage.TYPE_INT_ARGB);
+         frame.getContentPane().paint(image.getGraphics());
+         javax.imageio.ImageIO.write(image, "png", new java.io.File(path));
+      } catch (java.io.IOException e) {
+         throw new RuntimeException(e);
+      }
    }
 
    private static void drag(WindowsKey key, int x, int y) {
