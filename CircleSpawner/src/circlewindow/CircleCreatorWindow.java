@@ -5,6 +5,8 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -21,8 +23,9 @@ import javax.swing.Timer;
 /**
  * The creator window, top center of the screen. It builds the chosen shape below itself out of borderless
  * windows, a few per frame so the shape grows in. Choosing another shape, size or colors morphs the windows
- * on screen into it, and drawing on the pad (the Draw shape) reshapes them as you draw. Pressing any window
- * of the shape scatters it. A drawing with several frames plays as a flipbook: the windows glide from one frame
+ * on screen into it, and drawing on the pad (the Draw shape) reshapes them as you draw. Clicking any window
+ * of the shape scatters it; dragging one carries the whole shape like a jelly, and it can be thrown. A drawing
+ * with several frames plays as a flipbook: the windows glide from one frame
  * to the next, those of the parts that did not change staying where they are.
  */
 public final class CircleCreatorWindow extends JFrame {
@@ -73,6 +76,37 @@ public final class CircleCreatorWindow extends JFrame {
    private final Timer morphTimer = new Timer(FRAME_MILLIS, event -> this.morphStep());
    private final Timer clockTimer = new Timer(TICK_MILLIS, event -> this.tick());
    private final Timer playTimer = new Timer(PLAY_MILLIS, event -> this.playStep());
+   private final Timer jellyTimer = new Timer(FRAME_MILLIS, event -> this.jellyStep());
+   /** How far a press must move to pick the shape up rather than click it. */
+   private static final int DRAG_START = 5;
+   /** Presses and drags on the shape's windows: a click scatters it, a drag picks it up (see Jelly). */
+   private final MouseAdapter hand = new MouseAdapter() {
+      @Override
+      public void mousePressed(MouseEvent e) {
+         CircleCreatorWindow.this.pressX = e.getXOnScreen();
+         CircleCreatorWindow.this.pressY = e.getYOnScreen();
+         CircleCreatorWindow.this.dragged = false;
+      }
+
+      @Override
+      public void mouseDragged(MouseEvent e) {
+         CircleCreatorWindow.this.drag(e.getXOnScreen(), e.getYOnScreen());
+      }
+
+      @Override
+      public void mouseReleased(MouseEvent e) {
+         CircleCreatorWindow.this.letGo();
+      }
+   };
+   private Jelly jelly;
+   private int pressX;
+   private int pressY;
+   /** True once the press has moved past DRAG_START (so letting go is not a click), and while the shape is held. */
+   private boolean dragged;
+   private boolean holding;
+   /** How far the shape has been carried from its place under this window; Build it and scattering bring it back. */
+   private int movedX;
+   private int movedY;
    private final Saved saved = Saved.load();
    private Morph morph;
    private String builtShape = "";
@@ -155,7 +189,11 @@ public final class CircleCreatorWindow extends JFrame {
          this.fitWindow();
          this.show(MORPH_FRAMES);
       });
-      this.createButton.addActionListener(event -> this.build());
+      this.createButton.addActionListener(event -> {
+         this.movedX = 0;
+         this.movedY = 0;
+         this.build();
+      });
       clearButton.addActionListener(event -> this.pad.clear());
       previousButton.addActionListener(event -> this.turnTo(this.pad.frame() - 1));
       nextButton.addActionListener(event -> this.turnTo(this.pad.frame() + 1));
@@ -206,7 +244,7 @@ public final class CircleCreatorWindow extends JFrame {
    private void tick() {
       if (!Shapes.CLOCK.equals(this.builtShape) || !Shapes.CLOCK.equals(this.shapeBox.getSelectedItem())
             || this.slices.isEmpty() || this.buildTimer.isRunning() || this.scatterTimer.isRunning()
-            || this.morphTimer.isRunning()
+            || this.morphTimer.isRunning() || this.jellyTimer.isRunning()
             || Shapes.clockText(new Date()).equals(this.shownTime)) {
          return;
       }
@@ -247,7 +285,8 @@ public final class CircleCreatorWindow extends JFrame {
          this.stopPlaying();
          return;
       }
-      if (this.buildTimer.isRunning() || this.scatterTimer.isRunning() || this.morphTimer.isRunning()) {
+      if (this.buildTimer.isRunning() || this.scatterTimer.isRunning() || this.morphTimer.isRunning()
+            || this.jellyTimer.isRunning()) {
          return;
       }
       this.pad.goTo(this.pad.frame() + 1);
@@ -323,6 +362,7 @@ public final class CircleCreatorWindow extends JFrame {
       }
       List<Rectangle> pieces = Shapes.build(shape, size, word, this.pad.cells(),
          screen.width / 2, top + (screen.height - top) / 2, screen.width * 9 / 10);
+      this.carry(pieces, screen);
       if (pieces.isEmpty()) {
          this.status.setText("Draw on the pad and the windows follow.");
       }
@@ -375,7 +415,7 @@ public final class CircleCreatorWindow extends JFrame {
       this.pending.clear();
       this.pendingColors.clear();
       this.morph = new Morph(this.slices, pieces, this.colors(pieces, this.builtShape), frames, this.ticking,
-         (bounds, color) -> new CircleSliceWindow(bounds, color, "", false, this::scatter));
+         (bounds, color) -> new CircleSliceWindow(bounds, color, "", false, this.hand));
       if (frames > DRAW_FRAMES && !this.ticking) {
          this.status.setText("Changing into " + this.shapeName() + "...");
       }
@@ -417,7 +457,7 @@ public final class CircleCreatorWindow extends JFrame {
       }
       String name = this.shapeName();
       this.status.setText(Character.toUpperCase(name.charAt(0)) + name.substring(1) + ", " + this.slices.size()
-         + " windows. Click it to scatter.");
+         + " windows. Drag it, throw it or click to scatter.");
    }
 
    /** One frame of building: shows the next few windows. */
@@ -425,7 +465,7 @@ public final class CircleCreatorWindow extends JFrame {
       int perFrame = Math.max(1, (this.pending.size() + BUILD_FRAMES - 1) / BUILD_FRAMES);
       for (int i = 0; i < perFrame && this.built < this.pending.size(); i++, this.built++) {
          this.slices.add(new CircleSliceWindow(this.pending.get(this.built), this.pendingColors.get(this.built),
-            String.valueOf(this.built + 1), this.onTop(this.built), this::scatter));
+            String.valueOf(this.built + 1), this.onTop(this.built), this.hand));
       }
       if (this.built >= this.pending.size()) {
          this.buildTimer.stop();
@@ -483,6 +523,8 @@ public final class CircleCreatorWindow extends JFrame {
          slice.velocityY = dy * 0.08 - 6.0 - this.random.nextDouble() * 6.0;
       }
       this.scatterFrame = 0;
+      this.movedX = 0;
+      this.movedY = 0;
       this.status.setText("Scattered! Pick a shape or press Build it.");
       this.scatterTimer.start();
    }
@@ -503,8 +545,106 @@ public final class CircleCreatorWindow extends JFrame {
       }
    }
 
-   /** Stops building, scattering and morphing; a morph's leftover windows close where they are. */
+   /**
+    * Moves the pieces of a new shape to where the shape on screen was carried, kept on the screen if they fit,
+    * so morphs, Clock ticks and the flipbook stay where the shape was dropped.
+    */
+   private void carry(List<Rectangle> pieces, Dimension screen) {
+      if (pieces.isEmpty() || this.movedX == 0 && this.movedY == 0) {
+         return;
+      }
+      Rectangle area = new Rectangle(pieces.get(0));
+      for (Rectangle r : pieces) {
+         area.add(r);
+      }
+      int dx = clamp(this.movedX, -area.x, screen.width - area.x - area.width);
+      int dy = clamp(this.movedY, -area.y, screen.height - area.y - area.height);
+      for (Rectangle r : pieces) {
+         r.x += dx;
+         r.y += dy;
+      }
+   }
+
+   /** value kept between low and high, or left alone when there is no room between them. */
+   private static int clamp(int value, int low, int high) {
+      return low > high ? value : Math.max(low, Math.min(high, value));
+   }
+
+   /** The pointer pressed on the shape has moved: past DRAG_START it picks the whole shape up. */
+   private void drag(int screenX, int screenY) {
+      if (!this.dragged) {
+         if (Math.hypot(screenX - this.pressX, screenY - this.pressY) < DRAG_START) {
+            return;
+         }
+         this.dragged = true;
+         if (this.slices.isEmpty() || this.buildTimer.isRunning() || this.scatterTimer.isRunning()) {
+            return;
+         }
+         // Also catches a shape still gliding from a throw: it is put down where it is, then picked up again.
+         this.stopPlaying();
+         this.stopAll();
+         List<Rectangle> bounds = new ArrayList<>();
+         for (CircleSliceWindow slice : this.slices) {
+            bounds.add(slice.getBounds());
+         }
+         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+         this.jelly = new Jelly(bounds, this.pressX, this.pressY, screen.width, screen.height,
+            Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion")));
+         this.holding = true;
+         this.status.setText("Drop it anywhere, or throw it.");
+         this.jellyTimer.start();
+      }
+      if (this.holding) {
+         this.jelly.hold(screenX - this.pressX, screenY - this.pressY);
+      }
+   }
+
+   /** The pointer let go of the shape: a click scatters it, a drag drops (or throws) it. */
+   private void letGo() {
+      if (this.holding) {
+         this.holding = false;
+         this.jelly.letGo();
+      } else if (!this.dragged) {
+         this.scatter();
+      }
+   }
+
+   /** One frame of the shape being carried or thrown; once it is at rest it stays where it landed. */
+   private void jellyStep() {
+      boolean resting = this.jelly.step();
+      this.placeCarried();
+      if (resting) {
+         this.endJelly();
+         this.showBuilt();
+      }
+   }
+
+   private void placeCarried() {
+      for (int i = 0; i < this.slices.size(); i++) {
+         CircleSliceWindow slice = this.slices.get(i);
+         slice.x = this.jelly.x[i];
+         slice.y = this.jelly.y[i];
+         slice.setLocation((int)Math.round(slice.x), (int)Math.round(slice.y));
+      }
+   }
+
+   /** Puts the carried shape down where it has got to, every window in its place in the shape. */
+   private void endJelly() {
+      if (this.jelly == null) {
+         return;
+      }
+      this.jellyTimer.stop();
+      this.holding = false;
+      this.jelly.settle();
+      this.placeCarried();
+      this.movedX += this.jelly.movedX();
+      this.movedY += this.jelly.movedY();
+      this.jelly = null;
+   }
+
+   /** Stops building, scattering, morphing and carrying; a morph's leftover windows close where they are. */
    private void stopAll() {
+      this.endJelly();
       this.buildTimer.stop();
       this.scatterTimer.stop();
       this.morphTimer.stop();
