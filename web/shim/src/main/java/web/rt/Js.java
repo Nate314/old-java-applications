@@ -102,15 +102,19 @@ public final class Js {
             + " if (el.ownerDocument.activeElement !== el && el.isConnected)"
             + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
             + " var _a = el.ownerDocument.activeElement;"
-            + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a)) _a.blur();")
+            + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a) && _a !== el.closest('.window')) _a.blur();")
     public static native void focusComponent(JSObject el);
+
+    /** Gives a window itself the page's keyboard focus (no ring), so a screen reader names it and keys are plainly the app's. */
+    @JSBody(params = "el", script = "el.setAttribute('tabindex', '-1'); el.focus({preventScroll: true, focusVisible: false});")
+    public static native void focusWindow(JSObject el);
 
     /**
      * True when the page's keyboard focus is free for the app to take: the element's page is focused, nothing on it
-     * has the focus (it is on the body), and the screen is not touch-first (a focused field there raises the phone's
+     * has the focus (it is on the body, or on an app window itself), and the screen is not touch-first (a focused field there raises the phone's
      * keyboard). The home page's player is not focused, so it never grabs the keyboard.
      */
-    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body)"
+    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body || _d.activeElement.classList.contains('window'))"
             + " && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);")
     public static native boolean pageFocusFree(JSObject el);
 
