@@ -79,6 +79,8 @@ final class DeskPanel extends JPanel {
    private Color messageColor = TEXT;
    private long messageUntil;
    private boolean startOverArmed;
+   /** Whether the chart shows, in hindsight, the best single buy and sell of the picked stock so far today (I). */
+   private boolean hindsight;
    /** The chart card's tabs: the picked stock's day, its days so far as candles, or the race against the rivals. */
    private static final int CHART = 0;
    private static final int DAYS = 1;
@@ -119,6 +121,10 @@ final class DeskPanel extends JPanel {
       Button hear = new Button("Hear", 'h', null, new Rectangle(660, 259, 46, 16), () -> open.getAsBoolean() && tab == CHART, this::hear);
       hear.lit = () -> ear.hearing() != null;
       buttons.add(hear);
+      // Between the 2 PM and 4 PM labels under the chart.
+      Button look = new Button("Hindsight", 'i', null, new Rectangle(556, 259, 64, 16), () -> open.getAsBoolean() && tab == CHART, this::toggleHindsight);
+      look.lit = () -> hindsight;
+      buttons.add(look);
       String[] labels = {"Buy 1", "Buy 10", "Buy max", "Sell 1", "Sell 10", "Sell all"};
       char[] keys = {'b', 'v', 'm', 's', 'd', 'a'};
       int[] counts = {1, 10, Integer.MAX_VALUE, -1, -10, Integer.MIN_VALUE};
@@ -229,6 +235,34 @@ final class DeskPanel extends JPanel {
       }
    }
 
+   /** I: shows or hides the best trade so far today on the chart, and says what it would have made. */
+   private void toggleHindsight() {
+      hindsight = !hindsight;
+      String symbol = symbol();
+      String[] parts = symbol == null ? null : hindsight(symbol, desk.market.minute);
+      say(!hindsight ? "Hindsight off." : parts == null ? symbol + " has not risen yet today: no trade to catch. I hides it."
+         : parts[2] + " I hides it.", hindsight ? WARN : MUTED);
+   }
+
+   /**
+    * The best single trade in {@code symbol} from the open to {@code upTo}, in three pieces: "CRM's best trade so far:
+    * buy at 10:41 AM for $75.20", "sell at 2:58 PM for $78.10, +3.86%, about +$386 with all your money in it" and the
+    * short "In hindsight, CRM: +3.86%, about +$386 with all your money." Null when it has not risen.
+    */
+   private String[] hindsight(String symbol, int upTo) {
+      Market.Stock stock = desk.market.stock(symbol);
+      int[] best = Market.bestTrade(stock.path, upTo);
+      if (best == null) {
+         return null;
+      }
+      double buy = stock.path[best[0]];
+      double sell = stock.path[best[1]];
+      String gain = Money.percent(buy, sell) + ", about " + Money.change(desk.portfolio.openingWorth() * (sell / buy - 1)) + " with all your money";
+      return new String[] {symbol + "'s best trade " + (upTo >= Market.CLOSE ? "today" : "so far") + ": buy at " + Market.clock(best[0])
+         + " for " + Money.dollars(buy), "sell at " + Market.clock(best[1]) + " for " + Money.dollars(sell) + ", " + gain + " in it",
+         "In hindsight, " + symbol + ": " + gain + "."};
+   }
+
    /** What a screen reader says for the desk: the time, the picked stock and your money. */
    private String summary() {
       Market market = desk.market;
@@ -242,6 +276,9 @@ final class DeskPanel extends JPanel {
             .append(" today").append(desk.portfolio.shares(symbol) > 0 ? ", you hold " + desk.portfolio.shares(symbol) + ". " : ". ");
          if (tab == DAYS) {
             out.append("Days tab: ").append(daysChange(bars(symbol))).append(". ");
+         } else if (tab == CHART && hindsight && !market.closed()) {
+            String[] parts = hindsight(symbol, market.minute);
+            out.append(parts == null ? "In hindsight, no rise to catch yet. " : "In hindsight, " + parts[0] + ", " + parts[1] + ". ");
          }
       }
       out.append("Net worth ").append(Money.dollars(desk.portfolio.worth(market))).append(", ").append(ordinal(desk.rank(false)))
@@ -665,6 +702,9 @@ final class DeskPanel extends JPanel {
                marks.add(new Rectangle(x - 7, Math.min(ty[0], ty[2]) - 1, 14, 12));
             }
          }
+         if (hindsight) {
+            paintHindsight(g, stock, now, xOf, yOf, box);
+         }
          paintOrders(g, stock.symbol, box);
          // While the chart is heard, a playhead at the minute playing, with its time and price.
          int heard = ear.minute();
@@ -686,6 +726,50 @@ final class DeskPanel extends JPanel {
             text(g, tag, SMALL, TEXT, left + 5, box.y + 13);
          }
       }
+   }
+
+   /**
+    * The best single buy and later sell so far today, in gold: a ring at each end, a dashed line between them, the
+    * span between their prices shaded, and a tag with the times, prices and gain.
+    */
+   private void paintHindsight(Graphics2D g, Market.Stock stock, int now, java.util.function.IntUnaryOperator xOf,
+         java.util.function.DoubleToIntFunction yOf, Rectangle box) {
+      int[] best = Market.bestTrade(stock.path, now);
+      String tag;
+      if (best == null) {
+         tag = "Hindsight: no rise to catch yet";
+      } else {
+         double buy = stock.path[best[0]];
+         double sell = stock.path[best[1]];
+         int x1 = xOf.applyAsInt(best[0]);
+         int y1 = yOf.applyAsInt(buy);
+         int x2 = xOf.applyAsInt(best[1]);
+         int y2 = yOf.applyAsInt(sell);
+         g.setColor(withAlpha(WARN, 34));
+         g.fillRect(x1, y2, Math.max(1, x2 - x1), y1 - y2);
+         g.setColor(WARN);
+         g.setStroke(new BasicStroke(2f));
+         // Dashed by hand: the web build's BasicStroke has no dashes.
+         double length = Math.max(1, Math.hypot(x2 - x1, y2 - y1));
+         for (double d = 0; d < length; d += 9) {
+            double e = Math.min(length, d + 5);
+            g.drawLine((int) Math.round(x1 + (x2 - x1) * d / length), (int) Math.round(y1 + (y2 - y1) * d / length),
+               (int) Math.round(x1 + (x2 - x1) * e / length), (int) Math.round(y1 + (y2 - y1) * e / length));
+         }
+         g.drawOval(x1 - 6, y1 - 6, 12, 12);
+         g.drawOval(x2 - 6, y2 - 6, 12, 12);
+         g.setStroke(new BasicStroke(1f));
+         tag = "Hindsight: " + Market.clock(best[0]) + " " + Money.dollars(buy) + " to " + Market.clock(best[1]) + " "
+            + Money.dollars(sell) + ", " + Money.percent(buy, sell);
+      }
+      tag = fit(g, tag, SMALL, box.width - 12);
+      int w = width(g, tag, SMALL) + 10;
+      int top = box.y + box.height - 17;
+      g.setColor(new Color(10, 16, 40, 220));
+      g.fillRoundRect(box.x + 2, top, w, 15, 8, 8);
+      g.setColor(WARN);
+      g.drawRoundRect(box.x + 2, top, w, 15, 8, 8);
+      text(g, tag, SMALL, TEXT, box.x + 7, top + 11);
    }
 
    /**
@@ -1141,6 +1225,21 @@ final class DeskPanel extends JPanel {
             + "    Worst " + worst.symbol + " " + Money.percent(worst.open(), worst.close());
          text(g, movers, SMALL, MUTED, x, card.y + 120);
       }
+      // In hindsight, the day's best single trade among the stocks on the desk.
+      String bestSymbol = null;
+      double bestGain = 1;
+      for (Market.Stock stock : market.stocks()) {
+         int[] trade = desk.symbols().contains(stock.symbol) ? Market.bestTrade(stock.path, Market.CLOSE) : null;
+         if (trade != null && stock.path[trade[1]] / stock.path[trade[0]] > bestGain) {
+            bestGain = stock.path[trade[1]] / stock.path[trade[0]];
+            bestSymbol = stock.symbol;
+         }
+      }
+      if (bestSymbol != null) {
+         String[] parts = hindsight(bestSymbol, Market.CLOSE);
+         text(g, fit(g, "In hindsight, " + parts[0] + ",", SMALL, card.width - 36), SMALL, WARN, x, card.y + 138);
+         text(g, fit(g, parts[1] + ".", SMALL, card.width - 36), SMALL, WARN, x, card.y + 152);
+      }
       // How the race against the rivals went today.
       List<Desk.Standing> race = desk.standings(true);
       int place = desk.rank(true);
@@ -1154,7 +1253,7 @@ final class DeskPanel extends JPanel {
       List<Double> closes = new ArrayList<>(desk.portfolio.closes);
       closes.add(worth);
       int from = Math.max(0, closes.size() - 14);
-      Rectangle box = new Rectangle(x, card.y + 132, card.width - 36, 124);
+      Rectangle box = new Rectangle(x, card.y + 164, card.width - 36, 92);
       double low = Portfolio.START;
       double high = Portfolio.START;
       for (int i = from; i < closes.size(); i++) {

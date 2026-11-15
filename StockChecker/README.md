@@ -35,6 +35,15 @@ The chart can be listened to as well as looked at, so you can follow a stock wit
 - For screen readers, the desk's accessible name says the day, the time, whether the market is open, the picked stock's price and change, the shares you hold, your net worth and your place, and that H and L listen.
 - An order line's tag slides right past any trade marker it would cover, such as a rival's dot at 9:30 at the chart's left edge.
 
+## Hindsight
+
+Every chart is easy to trade after the fact. **Hindsight** (I, beside Hear under the chart) shows it: the best single buy and later sell of the picked stock from the open to now, so you can see what the day offered and how close your own trades came.
+
+- On the Chart tab, a gold ring at the buy and at the sell, a dashed line between them and the price span between them shaded, with a tag at the chart's bottom left: "Hindsight: 10:21 AM $75.67 to 12:14 PM $76.76, +1.44%". It follows the market as it runs, so a new low or high moves it. "No rise to catch yet" while the stock has only fallen since the open.
+- Turning it on says what that trade would have made with all your money in it (your net worth at the open). I again hides it.
+- At the closing bell, the results show the day's best trade of all the stocks on the desk: "In hindsight, NFLX's best trade today: buy at 10:28 AM for $147.14, sell at 3:58 PM for $152.67, +3.76%, about +$375.83 with all your money in it."
+- While it is on, the desk's screen reader name says the same for the picked stock.
+
 ## Days
 
 The Chart tab shows one day; the **Days** tab (W) shows the picked stock across the days you have played, so you can see whether a dip today is part of a slide or a blip in a climb.
@@ -93,8 +102,7 @@ The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCh
 
 ## Self-check
 
-`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the Days candles (kept at each close and across a reload, the wick spanning the body, the last 19 kept, cleared by Start over), the money text
- and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
+`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the Days candles (kept at each close and across a reload, the wick spanning the body, the last 19 kept, cleared by Start over), the money text, Hindsight's best trade (the low before the high, only up to now, none on a day that only fell, and the same as trying every buy and sell pair over 50 days) and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
 
 ```
 javac -d ../out/check/StockChecker src/stockchecker/*.java test/stockchecker/*.java
