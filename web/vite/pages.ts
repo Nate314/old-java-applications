@@ -37,6 +37,9 @@ let early: Promise<string> | null = null;
 async function withEarly(html: string): Promise<string> {
   early ??= script('src/runtime/early.ts', true);
   const code = (await early).trim();
+  // It is inlined in every page that runs the runtime (38 of them), uncached and before first paint, so it must stay
+  // small: an import in skin.ts once bundled the whole runtime and React into it (200 KB a page).
+  if (code.length > 16384) throw new Error('src/runtime/early.ts bundles to ' + code.length + ' bytes (limit 16384): does skin.ts import something now?');
   return html.replace('<script data-early=""></script>', () => '<script>' + code + '</script>');
 }
 const htmlId = (r: Route) => resolve(root, r.file);
