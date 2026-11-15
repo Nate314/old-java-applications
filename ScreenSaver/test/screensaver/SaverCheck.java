@@ -119,6 +119,7 @@ public class SaverCheck {
       checkMaze();
       checkGallery();
       checkPlay();
+      checkMusic();
 
       System.out.println("SaverCheck passed");
    }
@@ -307,6 +308,58 @@ public class SaverCheck {
          }
       }
       return true;
+   }
+
+   /** Music (M): silent until switched on; then every saver rings notes of the one scale, never faster than its gap. */
+   private static void checkMusic() {
+      List<int[]> heard = new java.util.ArrayList<>();
+      int[] open = new int[1];
+      Music.listen(new Music.Voice() {
+         @Override
+         public void on(int part, int note, int velocity) {
+            heard.add(new int[] {part, note, velocity});
+            open[0]++;
+         }
+
+         @Override
+         public void off(int part, int note) {
+            open[0]--;
+         }
+      });
+      List<Saver> list = savers();
+      Music.live(false);
+      for (Saver s : list) {
+         s.reset(1920, 1080, new Random(3));
+         for (int frame = 0; frame < 1000; frame++) {
+            s.tick(16);
+            Music.tick(16);
+         }
+      }
+      check(heard.isEmpty(), "no music until M");
+      Music.live(true);
+      for (Saver s : list) {
+         heard.clear();
+         s.reset(1920, 1080, new Random(3));
+         // The logo learns its size from its first paint.
+         s.paint(new BufferedImage(1920, 1080, BufferedImage.TYPE_INT_RGB).createGraphics());
+         for (int frame = 0; frame < 4000; frame++) {
+            s.tick(16 * (s instanceof Tiles ? 40 : 1));
+            Music.tick(16);
+         }
+         System.out.println("Music: " + s.name() + ", " + heard.size() + " notes in 64 s");
+         check(!heard.isEmpty(), s.name() + " plays music");
+         // 64 s of real time: even the beads at 40x speed (160 tiles a second) keep to one note per 0.06 s.
+         check(heard.size() <= 64 / 0.06 + 40, s.name() + " is not a buzz: " + heard.size() + " notes");
+         for (int[] n : heard) {
+            check(n[1] >= 36 && n[1] <= 108 && java.util.Arrays.asList(0, 2, 4, 7, 9).contains(n[1] % 12),
+               s.name() + " stays in the pentatonic scale: " + n[1]);
+            check(n[2] > 0 && n[2] <= 127, "a fair loudness");
+         }
+      }
+      check(Music.sounding() <= 32, "a bounded number of notes held");
+      Music.live(false);
+      check(Music.sounding() == 0 && open[0] == 0, "off lets every note go: " + open[0]);
+      Music.listen(null);
    }
 
    private static List<Saver> savers() {

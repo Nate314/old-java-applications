@@ -30,12 +30,26 @@ By default it moves on to the next saver every 30 seconds. It closes if you move
 
 Play is not saved: the screen saver always starts out closing on the mouse.
 
+**M** turns on music made by the saver on screen: each one plays its own instrument, and what it draws sets the notes. Every note is from one pentatonic scale (C major), so whatever rings together sounds right, and each instrument waits a moment between notes (from 0.05 s to 0.4 s, in real time), so a fast speed gives a busier tune rather than a buzz.
+
+- **Green circles, Green squares, Bright circles**: a music box note for every tile that comes or goes, higher the nearer the top of the screen; leaving ones are softer.
+- **Starfield**: a celesta twinkle as a near star streaks past, pitched by where round the middle it went; louder at warp speed (T).
+- **Mystify**: vibes when a corner bounces, higher further up a side or further right along the top or bottom.
+- **Pipes**: a marimba knock at every ball joint, higher nearer the top.
+- **Bouncing logo**: a xylophone note on every bounce, pitched by the logo's new color, and a chord of bells on a corner hit.
+- **Dot clock**: a low tick each second as the colon comes on, and a chord of bells when the digits change, higher later in the hour.
+- **Aquarium**: a kalimba note when a fish eats a flake, and now and then a soft one as a bubble reaches the top (higher for a smaller bubble).
+- **Maze**: a harp note for every room the walker enters, rising as it nears the orb's corner and softer in dead ends; a chord when it reaches the orb.
+
+The music is off at every start and is not saved, so the site's idle screen saver (below) stays silent. It plays only for the saver on screen: the gallery (G) is quiet.
+
 ## Controls / usage
 
 - **N** or **Space** / **P**: next / previous saver.
 - **1** to **9**, and **0** for the tenth (number row): show that saver and stop cycling, so it stays on screen.
 - **G**: all the savers at once, to pick one (see above). In it, the arrow keys (or N and P) move, Enter, Space, a number or a click picks, G goes back and Esc closes.
 - **T**: play with the saver (see above), or stop.
+- **M**: music on or off (see above).
 - **C**: cycle on or off (every 30 seconds).
 - **Left / Right**: slower / faster, by a factor of 1.1 per press (from 0.05x to 250x; at 250x the tiles step every millisecond, as the original's fastest). The moving savers stop speeding up at 8x.
 - **Up / Down** (tile savers): shrink / grow the tiles by a factor of 1.1 (at least 10 px). The grid is rebuilt for the new size and the cycle starts over.
@@ -52,6 +66,7 @@ Play is not saved: the screen saver always starts out closing on the mouse.
 - `src/screensaver/Main.java`: the full-screen `JFrame`, the input listeners, a 16 ms Swing timer that advances the current saver by the time elapsed (times the speed), the fade in from black on each change, and the caption. It paints through a `JPanel` content pane.
 - `src/screensaver/Saver.java`: the interface each saver implements: `reset` to a screen size, `tick` by milliseconds, `paint`, and `touch` for the pointer in play (T), with `away`, the push the tiles and dot clock share.
 - `src/screensaver/Tiles.java` (the original and its two variants), `Starfield.java`, `Mystify.java`, `Pipes.java`, `BouncingLogo.java`, `DotClock.java`, `Aquarium.java`, `Maze.java`: the savers.
+- `src/screensaver/Music.java`: the music (M): the scale, each saver's instrument and gap between notes, and the MIDI synthesizer, opened on the first note. Savers ring it as things happen; `Main` says when it is listening.
 - `src/screensaver/Gallery.java`: the grid of all the savers (G): its layout, the selection, and painting each saver scaled into its own image.
 - `src/screensaver/Settings.java`: reads and writes `~/.screensaver.txt`, with the tank's lines.
 
@@ -59,7 +74,7 @@ The original jar set a custom cursor from `cursor.png`, which did not ship. The 
 
 ## Self-check
 
-`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. For the Maze, over 30 mazes: every room carved with no loops, the route joining start and orb, the walker always reaching the orb, and a new maze after the map. For the gallery: ten same-sized screens inside the window and under its header, none overlapping, at 1920x1080, 900x600, 375x600 and 400x700; every saver showing on its little screen; a click on each screen picking it; and the arrow keys moving through the grid. For play (T): the push away from the pointer; the tiles and dot clock drawn aside under the pointer and back after; the stars streaming from near the pointer and back from the middle; Mystify's corners speeding up when held (at most three times) and slowing back; a pipe started at a press and grown to the pointer, waiting there; the logo picked up only by a press on it, following the pointer, thrown fast the way it moved and slowing back to its drift; one pinch of flakes per press; the maze walker hurrying; and every saver saying what the mouse does. From `ScreenSaver/`:
+`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. For the Maze, over 30 mazes: every room carved with no loops, the route joining start and orb, the walker always reaching the orb, and a new maze after the map. For the gallery: ten same-sized screens inside the window and under its header, none overlapping, at 1920x1080, 900x600, 375x600 and 400x700; every saver showing on its little screen; a click on each screen picking it; and the arrow keys moving through the grid. For play (T): the push away from the pointer; the tiles and dot clock drawn aside under the pointer and back after; the stars streaming from near the pointer and back from the middle; Mystify's corners speeding up when held (at most three times) and slowing back; a pipe started at a press and grown to the pointer, waiting there; the logo picked up only by a press on it, following the pointer, thrown fast the way it moved and slowing back to its drift; one pinch of flakes per press; the maze walker hurrying; and every saver saying what the mouse does. For music (M): no note until it is on; then every saver rings notes, all in the pentatonic scale and at a fair loudness, none faster than its gap (the tiles at 40x speed), and turning it off lets every note go. From `ScreenSaver/`:
 
 ```
 javac -d ../out/check/ScreenSaver src/screensaver/*.java test/screensaver/*.java

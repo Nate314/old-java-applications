@@ -218,6 +218,7 @@ class Maze implements Saver {
          if (this.action == 0) {
             if (this.atGoal()) {
                this.mapLeft = MAP_MILLIS;
+               Music.chord(Music.MAZE, 0.6, 0.85);
                continue;
             }
             this.nextAction();
@@ -241,6 +242,8 @@ class Maze implements Saver {
                this.by += DY[this.dir];
                this.walked[this.by][this.bx] = true;
                this.steps++;
+               // Music (M): each room a harp note, rising as the walker nears the orb's corner; off the way through, softer.
+               Music.ring(Music.MAZE, (this.bx + this.by - 2) / (2.0 * (SIZE - 3)), this.route[this.by][this.bx] ? 0.55 : 0.3);
                this.px = this.bx + 0.5;
                this.py = this.by + 0.5;
             } else {

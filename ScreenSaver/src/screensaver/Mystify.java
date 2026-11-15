@@ -128,13 +128,16 @@ class Mystify implements Saver {
             this.steer(s, c, millis);
             this.x[s][c] += this.dx[s][c] * millis;
             this.y[s][c] += this.dy[s][c] * millis;
+            // Music (M): a bounce rings a note, higher further up a side wall or further right along the top or bottom.
             if (this.x[s][c] < 0 || this.x[s][c] > this.width) {
                this.dx[s][c] = -this.dx[s][c];
                this.x[s][c] = Math.max(0, Math.min(this.width, this.x[s][c]));
+               Music.ring(Music.MYSTIFY, 1 - this.y[s][c] / this.height, 0.45);
             }
             if (this.y[s][c] < 0 || this.y[s][c] > this.height) {
                this.dy[s][c] = -this.dy[s][c];
                this.y[s][c] = Math.max(0, Math.min(this.height, this.y[s][c]));
+               Music.ring(Music.MYSTIFY, this.x[s][c] / this.width, 0.45);
             }
          }
       }
