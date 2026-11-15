@@ -1,5 +1,6 @@
 package numberguess;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -302,8 +303,8 @@ public final class Board extends JPanel {
 			if (game.isOver()) {
 				say("Out of guesses. It was " + Level.commas(game.number()), HIGH, "Press Enter or click the line for a new number.");
 			} else {
-				say(Level.commas(number) + (low ? " is too low" : " is too high"), low ? LOW : HIGH,
-						"It is from " + Level.commas(game.low()) + " to " + Level.commas(game.high()) + ". "
+				say(Level.commas(number) + (low ? " is too low" : " is too high"), low ? LOW : HIGH, readText(lastRead())
+						+ " It is from " + Level.commas(game.low()) + " to " + Level.commas(game.high()) + ". "
 								+ guessesLeft(game.guessesLeft()) + ".");
 			}
 			break;
@@ -315,6 +316,27 @@ public final class Board extends JPanel {
 		}
 		slide.start();
 		repaint();
+	}
+
+	/** How the latest guess narrowed it, compared with guessing the middle. */
+	private Hindsight.Read lastRead() {
+		List<Hindsight.Read> reads = Hindsight.reads(level, game.number(), game.guesses());
+		return reads.get(reads.size() - 1);
+	}
+
+	private static String readText(Hindsight.Read read) {
+		switch (read) {
+		case HALVED:
+			return "Halved it.";
+		case LUCKY:
+			return "Lucky: off the middle, and it paid off.";
+		default:
+			return "Costly: the middle would have left less.";
+		}
+	}
+
+	private static Color readColor(Hindsight.Read read) {
+		return read == Hindsight.Read.HALVED ? POSSIBLE : read == Hindsight.Read.LUCKY ? GOLD : WARN;
 	}
 
 	private static String guessesLeft(int left) {
@@ -668,8 +690,12 @@ public final class Board extends JPanel {
 			return;
 		}
 		paintGuessMeter(g);
-		paintFullLine(g);
-		paintZoom(g);
+		if (!isPicking() && game.isOver()) {
+			paintHindsight(g);
+		} else {
+			paintFullLine(g);
+			paintZoom(g);
+		}
 		paintChips(g);
 	}
 
@@ -780,6 +806,95 @@ public final class Board extends JPanel {
 			g.setColor(POSSIBLE_DARK);
 			g.drawLine(left, line.y + line.height + 1, zoom.x, zoom.y - 2);
 			g.drawLine(right, line.y + line.height + 1, zoom.x + zoom.width, zoom.y - 2);
+		}
+	}
+
+	/**
+	 * After the game, in place of the number lines: how many numbers were left after each guess (on a log scale, so
+	 * every halving is the same step down), yours beside the halving search's for the same number.
+	 */
+	private void paintHindsight(Graphics2D g) {
+		int number = game.number();
+		List<Integer> halving = Hindsight.halving(level, number);
+		List<Long> yours = Hindsight.left(level, number, game.guesses());
+		List<Long> theirs = Hindsight.left(level, number, halving);
+		List<Hindsight.Read> reads = Hindsight.reads(level, number, game.guesses());
+		Rectangle box = new Rectangle(MARGIN, 134, getWidth() - 2 * MARGIN, 120);
+		g.setColor(CARD);
+		g.fillRoundRect(box.x, box.y, box.width, box.height, 10, 10);
+		Rectangle plot = new Rectangle(box.x + 62, box.y + 46, box.width - 84, box.height - 58);
+		int steps = Math.max(yours.size(), theirs.size()) - 1;
+		g.setFont(new Font("SansSerif", Font.BOLD, 13));
+		g.setColor(TEXT);
+		g.drawString(hindsightSummary(halving.size()), box.x + 12, box.y + 20);
+		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+		g.setColor(SOFT);
+		int[] counts = new int[3];
+		for (Hindsight.Read read : reads) {
+			counts[read.ordinal()]++;
+		}
+		g.drawString(counts[0] + " halved, " + counts[1] + " lucky, " + counts[2] + " costly. Steep drops are lucky, shallow ones cost guesses.",
+				box.x + 12, box.y + 36);
+		g.drawString(Level.commas(level.max()), plot.x - 8 - g.getFontMetrics().stringWidth(Level.commas(level.max())), plot.y + 4);
+		g.drawString("found", plot.x - 8 - g.getFontMetrics().stringWidth("found"), plot.y + plot.height + 4);
+		g.setColor(RULED_OUT);
+		g.drawLine(plot.x, plot.y + plot.height, plot.x + plot.width, plot.y + plot.height);
+		g.setStroke(new BasicStroke(2f));
+		paintPath(g, theirs, plot, steps, DIM);
+		g.setStroke(new BasicStroke(3f));
+		paintPath(g, yours, plot, steps, POSSIBLE);
+		g.setStroke(new BasicStroke(1f));
+		for (int i = 0; i <= steps; i++) {
+			int x = plot.x + plot.width * i / steps;
+			if (i < theirs.size()) {
+				g.setColor(DIM);
+				g.fillOval(x - 3, yOn(plot, theirs.get(i)) - 3, 7, 7);
+			}
+			if (i < yours.size()) {
+				boolean last = i == yours.size() - 1;
+				g.setColor(i == 0 ? POSSIBLE : last && !game.isFound() ? HIGH : readColor(reads.get(i - 1)));
+				g.fillOval(x - 5, yOn(plot, yours.get(i)) - 5, 11, 11);
+			}
+		}
+		// The key, top right.
+		int keyX = box.x + box.width - 150, keyY = box.y + 16;
+		g.setColor(POSSIBLE);
+		g.fillRoundRect(keyX, keyY - 4, 18, 4, 3, 3);
+		g.setColor(SOFT);
+		g.drawString("You", keyX + 24, keyY);
+		g.setColor(DIM);
+		g.fillRoundRect(keyX + 56, keyY - 4, 18, 4, 3, 3);
+		g.setColor(SOFT);
+		g.drawString("Halving", keyX + 80, keyY);
+	}
+
+	/** The line under the game: yours against always guessing the middle. */
+	private String hindsightSummary(int halving) {
+		int yours = game.getGuesses();
+		String number = Level.commas(game.number());
+		String takes = "Halving finds " + number + " in " + guesses(halving);
+		if (!game.isFound()) {
+			return takes + ".";
+		}
+		if (yours < halving) {
+			return "Luck saved you " + guesses(halving - yours) + ". " + takes + ".";
+		}
+		if (yours == halving) {
+			return "Even with halving: it finds " + number + " in " + guesses(halving) + " too.";
+		}
+		return takes + ": " + (yours - halving) + " fewer than you.";
+	}
+
+	/** {@code left} numbers on a log scale: the whole range at the top, the number found at the bottom. */
+	private int yOn(Rectangle plot, long left) {
+		double scale = Math.log(left + 1) / Math.log(level.max() + 1.0);
+		return (int) Math.round(plot.y + plot.height * (1 - scale));
+	}
+
+	private void paintPath(Graphics2D g, List<Long> left, Rectangle plot, int steps, Color color) {
+		g.setColor(color);
+		for (int i = 1; i < left.size(); i++) {
+			g.drawLine(plot.x + plot.width * (i - 1) / steps, yOn(plot, left.get(i - 1)), plot.x + plot.width * i / steps, yOn(plot, left.get(i)));
 		}
 	}
 
@@ -904,6 +1019,7 @@ public final class Board extends JPanel {
 				}
 			}
 		}
+		List<Hindsight.Read> reads = isPicking() ? null : Hindsight.reads(level, game.number(), guesses);
 		for (int i = 0; i < guesses.size(); i++) {
 			String label = Level.commas(guesses.get(i));
 			int width = metrics.stringWidth(label) + 26;
@@ -927,6 +1043,11 @@ public final class Board extends JPanel {
 				g.fillPolygon(new int[] { arrowX - 4, arrowX + 4, arrowX }, new int[] { y + 8, y + 8, y + 14 }, 3);
 			} else {
 				g.fillOval(arrowX - 3, y + 8, 7, 7);
+			}
+			if (reads != null) {
+				// How the guess narrowed it: teal halved, gold lucky, orange costly.
+				g.setColor(readColor(reads.get(i)));
+				g.fillRoundRect(x + 6, y + height + 1, width - 12, 3, 3, 3);
 			}
 			x += width + 6;
 		}
