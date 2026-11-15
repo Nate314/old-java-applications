@@ -23,7 +23,7 @@ import javax.swing.Timer;
  * its one pixel from that image: it sees exactly what you see, red marker and all. E switches to evolving bots
  * (Evolution, drawn by EvolveView) and back. A run has its sky (night every 700 points), dust at the dinosaur's feet,
  * a blinking score every 100 points, beeps (M) and a shake when it crashes. G races the ghost of your best run on its
- * own course.
+ * own course. P races two players on one keyboard (Duel).
  */
 final class RunnerPanel extends JPanel {
    private static final long serialVersionUID = 1L;
@@ -42,6 +42,8 @@ final class RunnerPanel extends JPanel {
    private static final Color DUST = new Color(0xBDBDBD);
    /** The moon and the stars, as night shows them (they are not there by day). */
    private static final Color MOON = new Color(0xE6E6E6);
+   /** The second player's dinosaur, in a two-player race. */
+   static final Color P2 = new Color(0xB85A1B);
    static final Font SCORE = new Font(Font.MONOSPACED, Font.BOLD, 15);
    static final Font TITLE = new Font(Font.SANS_SERIF, Font.BOLD, 16);
    static final Font TEXT = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
@@ -87,6 +89,9 @@ final class RunnerPanel extends JPanel {
    /** G: every run is the saved ghost's course, with the ghost playing beside you (ghost, from the run's start). */
    private boolean racing;
    private Ghost ghost;
+   /** P: non-null while two players race (P1 is runner); tapped is the runner a click or tap is holding. */
+   private Duel duel;
+   private Runner tapped;
 
    /** A quiet panel, for the self-check. */
    RunnerPanel(Records records, long seed) {
@@ -108,8 +113,12 @@ final class RunnerPanel extends JPanel {
                RunnerPanel.this.toggleSound();
             } else if (RunnerPanel.this.evolution != null || k == KeyEvent.VK_E) {
                RunnerPanel.this.evolveKey(k);
+            } else if (k == KeyEvent.VK_P) {
+               RunnerPanel.this.togglePlayers();
             } else if (k == KeyEvent.VK_G) {
                RunnerPanel.this.toggleRace();
+            } else if (RunnerPanel.this.duel != null) {
+               RunnerPanel.this.duelKey(k, true);
             } else if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
                RunnerPanel.this.jumpKey(true);
             } else if (k == KeyEvent.VK_DOWN || k == KeyEvent.VK_S) {
@@ -127,7 +136,9 @@ final class RunnerPanel extends JPanel {
             if (RunnerPanel.this.evolution != null) {
                return;
             }
-            if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
+            if (RunnerPanel.this.duel != null) {
+               RunnerPanel.this.duelKey(k, false);
+            } else if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
                RunnerPanel.this.jumpKey(false);
             } else if (k == KeyEvent.VK_DOWN || k == KeyEvent.VK_S) {
                RunnerPanel.this.duckKey(false);
@@ -142,6 +153,11 @@ final class RunnerPanel extends JPanel {
                RunnerPanel.this.clickStrip(e.getX());
             } else if (RunnerPanel.this.evolution != null) {
                return;
+            } else if (RunnerPanel.this.duel != null) {
+               // Two players on one screen: the left half jumps P1, the right half P2.
+               Duel d = RunnerPanel.this.duel;
+               RunnerPanel.this.tapped = e.getX() < Runner.WIDTH / 2 ? d.p1 : d.p2;
+               RunnerPanel.this.duelJump(RunnerPanel.this.tapped, true);
             } else if (RunnerPanel.this.bot.isOn() && RunnerPanel.this.bot.markerContains(e.getX(), e.getY())) {
                RunnerPanel.this.dragging = true;
             } else {
@@ -154,6 +170,9 @@ final class RunnerPanel extends JPanel {
             if (RunnerPanel.this.dragging) {
                RunnerPanel.this.dragging = false;
                RunnerPanel.this.saveMarker();
+            } else if (RunnerPanel.this.tapped != null) {
+               RunnerPanel.this.tapped.release();
+               RunnerPanel.this.tapped = null;
             } else if (RunnerPanel.this.evolution == null) {
                RunnerPanel.this.jumpKey(false);
             }
@@ -209,6 +228,43 @@ final class RunnerPanel extends JPanel {
       this.runner.duck(down);
    }
 
+   /** In a two-player race: Space, W and S are P1's jump and duck, the up and down arrows P2's. */
+   private void duelKey(int k, boolean down) {
+      Duel d = this.duel;
+      Runner r = k == KeyEvent.VK_SPACE || k == KeyEvent.VK_W || k == KeyEvent.VK_S ? d.p1
+         : k == KeyEvent.VK_UP || k == KeyEvent.VK_DOWN ? d.p2 : null;
+      if (r == null) {
+         return;
+      }
+      if (k == KeyEvent.VK_S || k == KeyEvent.VK_DOWN) {
+         r.duck(down);
+      } else {
+         this.duelJump(r, down);
+      }
+   }
+
+   /** A jump key in a two-player race: starts both at once (the start is not a jump), then jumps its own dinosaur. */
+   private void duelJump(Runner r, boolean down) {
+      Duel d = this.duel;
+      if (!down) {
+         r.release();
+      } else if (d.running()) {
+         r.press();
+      } else if (this.runner.state() == Runner.State.READY
+         || this.runner.idleSteps() >= RESTART_LOCK && d.p2.idleSteps() >= RESTART_LOCK) {
+         d.start();
+      }
+   }
+
+   /** P: two players race the same course, or back to one. Leaves the bot, the ghost and the evolution. */
+   void togglePlayers() {
+      boolean on = this.duel == null;
+      this.setEvolving(false);
+      this.setBot(false);
+      this.duel = on ? new Duel(this.runner, System.nanoTime()) : null;
+      this.repaint();
+   }
+
    private void toggleBot() {
       this.bot.setOn(!this.bot.isOn(), this.runner);
       if (this.bot.isOn()) {
@@ -245,7 +301,7 @@ final class RunnerPanel extends JPanel {
    void setEvolving(boolean on) {
       this.toReady();
       this.racing = false;
-      this.runner.setCourse(null);
+      this.duel = null;
       this.dragging = false;
       this.confirmUntil = 0;
       this.evolution = on ? this.newEvolution() : null;
@@ -258,6 +314,7 @@ final class RunnerPanel extends JPanel {
          return;
       }
       this.toReady();
+      this.duel = null;
       this.racing = !this.racing;
       this.runner.setCourse(this.racing ? this.records.ghost.course : null);
       this.repaint();
@@ -270,6 +327,11 @@ final class RunnerPanel extends JPanel {
       this.seen = Runner.State.READY;
       this.crashLines = new String[0];
       this.ghost = null;
+      this.tapped = null;
+      if (this.duel != null) {
+         this.duel.ready();
+      }
+      this.runner.setCourse(null);
    }
 
    private Evolution newEvolution() {
@@ -294,6 +356,8 @@ final class RunnerPanel extends JPanel {
                this.toggleSound();
             } else if (c[2] == KeyEvent.VK_G) {
                this.toggleRace();
+            } else if (c[2] == KeyEvent.VK_P) {
+               this.togglePlayers();
             } else {
                this.evolveKey(c[2]);
             }
@@ -348,6 +412,10 @@ final class RunnerPanel extends JPanel {
                break;
             }
          }
+         return;
+      }
+      if (this.duel != null) {
+         this.duelStep();
          return;
       }
       if (this.bot.isOn()) {
@@ -417,6 +485,46 @@ final class RunnerPanel extends JPanel {
       this.hundreds = score / 100;
    }
 
+   /** One step of a two-player race: both dinosaurs, then the sky and dust of the one in front, and the result. */
+   private void duelStep() {
+      Duel d = this.duel;
+      if (this.seen != Runner.State.RUNNING && d.running()) {
+         this.sky.reset();
+         this.dust.clear();
+         this.hundreds = 0;
+         this.flashSteps = 0;
+         this.crashLines = new String[0];
+      }
+      this.flashSteps = Math.max(0, this.flashSteps - 1);
+      this.shakeSteps = Math.max(0, this.shakeSteps - 1);
+      for (Runner r : new Runner[] { d.p1, d.p2 }) {
+         boolean wasRunning = r.state() == Runner.State.RUNNING;
+         boolean wasJumping = r.isJumping();
+         r.step();
+         if (wasRunning && r.state() == Runner.State.CRASHED) {
+            this.shakeSteps = SHAKE_STEPS;
+            this.sounds.crash();
+         } else if (r.isJumping() && !wasJumping) {
+            this.sounds.jump();
+         }
+      }
+      Runner v = d.view();
+      if (v.state() == Runner.State.RUNNING) {
+         this.sky.step(v.score());
+         this.dust.step(v);
+         if (v.score() / 100 > this.hundreds) {
+            this.flashSteps = FLASH_STEPS;
+            this.sounds.milestone();
+         }
+         this.hundreds = v.score() / 100;
+      }
+      d.score();
+      if (d.over() && this.crashLines.length == 0) {
+         this.crashLines = d.lines();
+      }
+      this.seen = d.running() ? Runner.State.RUNNING : this.runner.state();
+   }
+
    private void crashed() {
       int score = this.runner.score();
       if (this.botWholeRun && !this.humanHelped) {
@@ -477,6 +585,17 @@ final class RunnerPanel extends JPanel {
       double dark = this.evolution != null ? 0 : this.sky.darkness();
       if (this.evolution != null) {
          EvolveView.paint(g, this.evolution, SPEEDS[this.speed]);
+      } else if (this.duel != null) {
+         Runner v = this.duel.view();
+         paintWorld(g, v, this.sky);
+         this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
+         // Two that fell at the same obstacle stand together: P1 on top, P2's label lifted over P1's.
+         Duel d = this.duel;
+         boolean together = Math.abs(d.p2.distance() + d.p2.dinoX() - d.p1.distance() - d.p1.dinoX()) < 30;
+         this.paintBeside(g, d.p2, v, Sky.tint(P2, dark), "P2", together ? 12 : 0, dark);
+         this.paintBeside(g, d.p1, v, Sky.tint(INK, dark), "P1", 0, dark);
+         this.paintDuelScore(g, dark);
+         this.paintMessage(g, dark);
       } else {
          paintWorld(g, this.runner, this.sky);
          this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
@@ -515,18 +634,22 @@ final class RunnerPanel extends JPanel {
          labels = new String[] { "Speed " + SPEEDS[this.speed] + "x (F)",
             System.nanoTime() < this.confirmUntil ? "Sure? N again" : "Start over (N)", "Back to the game (E)" };
          keys = new int[] { KeyEvent.VK_F, KeyEvent.VK_N, KeyEvent.VK_E };
+      } else if (this.duel != null) {
+         help = "P1: W or Space, S   P2: ↑ and ↓";
+         labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", "One player (P)", "Evolve a bot (E)" };
+         keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_P, KeyEvent.VK_E };
       } else {
          help = this.bot.isOn()
             ? "B: bot off   Drag its red eye to change what it watches   X: put it back"
             : "Space or ↑: jump (hold for higher)   ↓: duck   B: the original bot plays";
          if (this.records.ghost == null && !this.racing) {
-            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", "Evolve a bot (E)" };
-            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_E };
+            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", "Two players (P)", "Evolve a bot (E)" };
+            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_P, KeyEvent.VK_E };
          } else {
             help = this.bot.isOn() ? "B: bot off   Drag its red eye   X: put it back" : "Space or ↑: jump   ↓: duck   B: bot";
             labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)",
-               this.racing ? "New courses (G)" : "Race your ghost (G)", "Evolve a bot (E)" };
-            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_G, KeyEvent.VK_E };
+               this.racing ? "New courses (G)" : "Race your ghost (G)", "Two players (P)", "Evolve a bot (E)" };
+            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_G, KeyEvent.VK_P, KeyEvent.VK_E };
          }
       }
       this.chips.clear();
@@ -539,7 +662,7 @@ final class RunnerPanel extends JPanel {
       }
       for (int i = 0; i < labels.length; i++) {
          int[] c = this.chips.get(i);
-         boolean main = keys[i] == KeyEvent.VK_E || keys[i] == KeyEvent.VK_G && this.racing;
+         boolean main = keys[i] == KeyEvent.VK_E || keys[i] == KeyEvent.VK_G && this.racing || keys[i] == KeyEvent.VK_P && this.duel != null;
          g.setColor(main ? ink : paper);
          g.fillRoundRect(c[0], STRIP + 3, c[1], HEIGHT - STRIP - 6, 8, 8);
          g.setColor(main ? paper : muted);
@@ -637,21 +760,22 @@ final class RunnerPanel extends JPanel {
    /** runner's dinosaur in color on paper (the white of its eye after a crash). */
    static void paintDino(Graphics2D g, Runner runner, Color color, Color paper) {
       int top = runner.dinoTop();
+      int x = runner.dinoX();
       g.setColor(color);
       if (runner.isDucking()) {
-         Sprites.draw(g, runner.steps() / 6 % 2 == 0 ? Sprites.DUCK_A : Sprites.DUCK_B, Runner.DINO_X, top, 2);
+         Sprites.draw(g, runner.steps() / 6 % 2 == 0 ? Sprites.DUCK_A : Sprites.DUCK_B, x, top, 2);
          return;
       }
       boolean running = runner.state() == Runner.State.RUNNING && !runner.isJumping();
       String[] legs = !running ? Sprites.LEGS_STAND : runner.steps() / 6 % 2 == 0 ? Sprites.LEGS_A : Sprites.LEGS_B;
-      Sprites.draw(g, Sprites.DINO, Runner.DINO_X, top, 2);
-      Sprites.draw(g, legs, Runner.DINO_X, top + Sprites.DINO.length * 2, 2);
+      Sprites.draw(g, Sprites.DINO, x, top, 2);
+      Sprites.draw(g, legs, x, top + Sprites.DINO.length * 2, 2);
       if (runner.state() == Runner.State.CRASHED) {
          // A wide-open eye.
          g.setColor(paper);
-         g.fillRect(Runner.DINO_X + 23, top + 1, 6, 6);
+         g.fillRect(x + 23, top + 1, 6, 6);
          g.setColor(color);
-         g.fillRect(Runner.DINO_X + 25, top + 3, 2, 2);
+         g.fillRect(x + 25, top + 3, 2, 2);
       }
    }
 
@@ -666,19 +790,43 @@ final class RunnerPanel extends JPanel {
     */
    private void paintGhost(Graphics2D g, double dark) {
       Runner r = this.ghost.runner();
-      int dx = (int) Math.round(this.ghostOffset());
-      if (Runner.DINO_X + dx + Runner.DUCK_W < 0 || Runner.DINO_X + dx > Runner.WIDTH) {
+      Color ink = Sky.tint(INK, dark);
+      boolean apart = Math.round(this.ghostOffset()) != 0 || r.state() == Runner.State.CRASHED || r.dinoTop() != this.runner.dinoTop();
+      this.paintBeside(g, r, this.runner, new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 80), apart ? "ghost" : null, 0, dark);
+   }
+
+   /**
+    * Runner r's dinosaur on view's course, as far ahead or behind as it has run, with a label above it (and its score
+    * once it has crashed), lifted by lift pixels. A null label draws none.
+    */
+   private void paintBeside(Graphics2D g, Runner r, Runner view, Color color, String label, int lift, double dark) {
+      int dx = (int) Math.round(r.distance() - view.distance());
+      if (r.dinoX() + dx + Runner.DUCK_W < 0 || r.dinoX() + dx > Runner.WIDTH) {
          return;
       }
-      Color ink = Sky.tint(INK, dark);
       g.translate(dx, 0);
-      paintDino(g, r, new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 80), Sky.tint(PAPER, dark));
+      paintDino(g, r, color, Sky.tint(PAPER, dark));
       g.translate(-dx, 0);
-      if (dx != 0 || r.state() == Runner.State.CRASHED || r.dinoTop() != this.runner.dinoTop()) {
+      if (label != null) {
          g.setFont(TINY);
          g.setColor(Sky.tint(MUTED, dark));
-         g.drawString(r.state() == Runner.State.CRASHED ? "ghost " + r.score() : "ghost", Runner.DINO_X + dx + 2, r.dinoTop() - 4);
+         g.drawString(r.state() == Runner.State.CRASHED ? label + " " + r.score() : label, r.dinoX() + dx + 2, r.dinoTop() - 4 - lift);
       }
+   }
+
+   /** Top right in a two-player race: each player's score in its color; top left, the rounds each has won. */
+   private void paintDuelScore(Graphics2D g, double dark) {
+      g.setFont(SCORE);
+      FontMetrics fm = g.getFontMetrics();
+      String two = "P2 " + pad(this.duel.p2.score());
+      String one = "P1 " + pad(this.duel.p1.score()) + "  ";
+      int x = Runner.WIDTH - 14 - fm.stringWidth(two);
+      g.setColor(Sky.tint(P2, dark));
+      g.drawString(two, x, 24);
+      g.setColor(Sky.tint(INK, dark));
+      g.drawString(one, x - fm.stringWidth(one), 24);
+      g.setColor(Sky.tint(MUTED, dark));
+      g.drawString("WINS " + this.duel.wins(1) + " - " + this.duel.wins(2), 14, 24);
    }
 
    /** Top right, as in Chrome's game: the bot's best in red, your best, then this run. */
@@ -720,11 +868,14 @@ final class RunnerPanel extends JPanel {
 
    private void paintMessage(Graphics2D g, double dark) {
       Runner.State state = this.runner.state();
-      if (state == Runner.State.RUNNING) {
+      if (state == Runner.State.RUNNING || this.duel != null && this.duel.running()) {
          return;
       }
-      String title = state == Runner.State.READY ? "Space to run" : "G A M E   O V E R";
-      String[] lines = state == Runner.State.READY && this.racing
+      String title = state != Runner.State.READY ? "G A M E   O V E R" : this.duel != null ? "Two players: Space, W or ↑ to run" : "Space to run";
+      String[] lines = state == Runner.State.READY && this.duel != null
+         ? new String[] { "P1 jumps with W or Space and ducks with S. P2 has ↑ and ↓.",
+            "One course for both, P2 a step ahead. Or tap your half of the game." }
+         : state == Runner.State.READY && this.racing
          ? new String[] { "Your ghost's course: the run where you scored " + this.records.ghost.score + ".",
             "It runs beside you, jump for jump. Get further and you are the ghost." }
          : state == Runner.State.READY
@@ -740,7 +891,8 @@ final class RunnerPanel extends JPanel {
       for (int i = 0; i < lines.length; i++) {
          centered(g, lines[i], 104 + i * 18);
       }
-      if (state == Runner.State.CRASHED && !this.bot.isOn() && this.runner.idleSteps() >= RESTART_LOCK) {
+      if (state == Runner.State.CRASHED && !this.bot.isOn() && this.runner.idleSteps() >= RESTART_LOCK
+         && (this.duel == null || this.duel.p2.idleSteps() >= RESTART_LOCK)) {
          paintRestart(g, ink, Runner.WIDTH / 2, 147);
       }
    }
@@ -790,5 +942,9 @@ final class RunnerPanel extends JPanel {
 
    Evolution evolution() {
       return this.evolution;
+   }
+
+   Duel duel() {
+      return this.duel;
    }
 }

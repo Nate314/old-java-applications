@@ -92,10 +92,17 @@ final class Runner {
    private boolean released;
    private boolean downHeld;
    private Obstacle crashedInto;
+   /** Where this dinosaur stands: DINO_X, or further right for the second player of a two-player race. */
+   private final int dinoX;
 
    Runner(long seed) {
+      this(seed, DINO_X);
+   }
+
+   Runner(long seed, int dinoX) {
       this.random = new Random(seed);
       this.seed = seed;
+      this.dinoX = dinoX;
    }
 
    /** Every run from now on is this course (a Ghost's), or with null a fresh one each run. */
@@ -254,12 +261,12 @@ final class Runner {
       int oh = o.h - (o.kind == Kind.BIRD ? 12 : 3);
       int top = this.dinoTop();
       if (this.isDucking()) {
-         return overlaps(DINO_X + 2, top + 3, DUCK_W - 6, DUCK_H - 3, ox, oy, ow, oh);
+         return overlaps(this.dinoX + 2, top + 3, DUCK_W - 6, DUCK_H - 3, ox, oy, ow, oh);
       }
       // Head and body.
-      return overlaps(DINO_X + 20, top + 1, 19, 14, ox, oy, ow, oh)
-         || overlaps(DINO_X + 4, top + 14, 26, 20, ox, oy, ow, oh)
-         || overlaps(DINO_X + 10, top + 34, 12, 6, ox, oy, ow, oh);
+      return overlaps(this.dinoX + 20, top + 1, 19, 14, ox, oy, ow, oh)
+         || overlaps(this.dinoX + 4, top + 14, 26, 20, ox, oy, ow, oh)
+         || overlaps(this.dinoX + 10, top + 34, 12, 6, ox, oy, ow, oh);
    }
 
    private static boolean overlaps(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
@@ -303,6 +310,10 @@ final class Runner {
 
    int dinoTop() {
       return GROUND - (int) Math.round(this.height) - (this.isDucking() ? DUCK_H : DINO_H);
+   }
+
+   int dinoX() {
+      return this.dinoX;
    }
 
    double distance() {
