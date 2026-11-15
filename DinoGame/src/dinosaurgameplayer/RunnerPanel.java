@@ -25,7 +25,7 @@ import javax.swing.Timer;
  * (Evolution, drawn by EvolveView) and back. A run has its sky (night every 700 points), dust at the dinosaur's feet,
  * a blinking score every 100 points, beeps (M) and a shake when it crashes. G races the ghost of your best run on its
  * own course. P races two players on one keyboard (Duel). L plays by ear (Ears): beats sound each obstacle, and the
- * blindfold hides them.
+ * blindfold hides them. T after a crash shows the whole run in one picture (RunPicture).
  */
 final class RunnerPanel extends JPanel {
    private static final long serialVersionUID = 1L;
@@ -96,6 +96,8 @@ final class RunnerPanel extends JPanel {
    private Runner tapped;
    /** L: Play by ear's beats, and with the blindfold the obstacles hidden while a run is under way. */
    private Ears.Mode ears;
+   /** T after a crash: the run just ended, in one picture, shown instead of the game until a key goes on. */
+   private RunPicture picture;
 
    /** A quiet panel, for the self-check. */
    RunnerPanel(Records records, long seed) {
@@ -122,6 +124,8 @@ final class RunnerPanel extends JPanel {
                RunnerPanel.this.togglePlayers();
             } else if (k == KeyEvent.VK_G) {
                RunnerPanel.this.toggleRace();
+            } else if (k == KeyEvent.VK_T) {
+               RunnerPanel.this.togglePicture();
             } else if (RunnerPanel.this.duel != null) {
                RunnerPanel.this.duelKey(k, true);
             } else if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
@@ -212,6 +216,9 @@ final class RunnerPanel extends JPanel {
    // ---- input ----
 
    private void jumpKey(boolean down) {
+      if (down) {
+         this.picture = null;
+      }
       if (!down) {
          this.runner.release();
          return;
@@ -273,6 +280,7 @@ final class RunnerPanel extends JPanel {
    }
 
    private void toggleBot() {
+      this.picture = null;
       this.bot.setOn(!this.bot.isOn(), this.runner);
       if (this.bot.isOn()) {
          this.botEver = true;
@@ -334,6 +342,7 @@ final class RunnerPanel extends JPanel {
       this.seen = Runner.State.READY;
       this.crashLines = new String[0];
       this.ghost = null;
+      this.picture = null;
       this.tapped = null;
       if (this.duel != null) {
          this.duel.ready();
@@ -367,12 +376,26 @@ final class RunnerPanel extends JPanel {
                this.togglePlayers();
             } else if (c[2] == KeyEvent.VK_L) {
                this.toggleEars();
+            } else if (c[2] == KeyEvent.VK_T) {
+               this.togglePicture();
             } else {
                this.evolveKey(c[2]);
             }
             return;
          }
       }
+   }
+
+   /** Whether T can show the run just ended: one player, the bot off, after a crash. */
+   private boolean canPicture() {
+      return this.evolution == null && this.duel == null && !this.bot.isOn() && this.runner.state() == Runner.State.CRASHED;
+   }
+
+   /** T: the whole run just ended in one picture (with the ghost raced, if any), or back to the crash screen. */
+   void togglePicture() {
+      this.picture = this.picture == null && this.canPicture()
+         ? new RunPicture(Ghost.of(this.runner), this.ghost == null ? null : this.ghost.copy()) : null;
+      this.repaint();
    }
 
    /** M: the beeps on or off, remembered. */
@@ -615,7 +638,7 @@ final class RunnerPanel extends JPanel {
    }
 
    private void paintScene(Graphics2D g, boolean blind) {
-      double dark = this.evolution != null ? 0 : this.sky.darkness();
+      double dark = this.evolution != null || this.picture != null ? 0 : this.sky.darkness();
       if (this.evolution != null) {
          EvolveView.paint(g, this.evolution, SPEEDS[this.speed]);
       } else if (this.duel != null) {
@@ -629,6 +652,8 @@ final class RunnerPanel extends JPanel {
          this.paintBeside(g, d.p1, v, Sky.tint(INK, dark), "P1", 0, dark);
          this.paintDuelScore(g, dark);
          this.paintMessage(g, dark);
+      } else if (this.picture != null) {
+         this.picture.paint(g);
       } else {
          paintWorld(g, this.runner, this.sky, !blind);
          this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
@@ -681,6 +706,7 @@ final class RunnerPanel extends JPanel {
             ? "B: bot off   Drag its red eye to change what it watches   X: put it back"
             : "Space or ↑: jump (hold for higher)   ↓: duck   B: the original bot plays";
          String ear = this.ears == Ears.Mode.OFF ? "By ear (L)" : this.ears == Ears.Mode.CUES ? "Beats on (L)" : "Blindfold (L)";
+         String whole = this.picture != null ? "Back (T)" : this.canPicture() ? "Whole run (T)" : null;
          if (this.records.ghost == null && !this.racing) {
             labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", ear, "Two players (P)", "Evolve a bot (E)" };
             keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_L, KeyEvent.VK_P, KeyEvent.VK_E };
@@ -689,6 +715,16 @@ final class RunnerPanel extends JPanel {
             labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", ear,
                this.racing ? "New courses (G)" : "Race your ghost (G)", "Two players (P)", "Evolve a bot (E)" };
             keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_L, KeyEvent.VK_G, KeyEvent.VK_P, KeyEvent.VK_E };
+         }
+         if (whole != null) {
+            String[] l = new String[labels.length + 1];
+            int[] k = new int[keys.length + 1];
+            l[0] = whole;
+            k[0] = KeyEvent.VK_T;
+            System.arraycopy(labels, 0, l, 1, labels.length);
+            System.arraycopy(keys, 0, k, 1, keys.length);
+            labels = l;
+            keys = k;
          }
       }
       this.chips.clear();
@@ -702,7 +738,7 @@ final class RunnerPanel extends JPanel {
       for (int i = 0; i < labels.length; i++) {
          int[] c = this.chips.get(i);
          boolean main = keys[i] == KeyEvent.VK_E || keys[i] == KeyEvent.VK_G && this.racing || keys[i] == KeyEvent.VK_P && this.duel != null
-            || keys[i] == KeyEvent.VK_L && this.ears != Ears.Mode.OFF;
+            || keys[i] == KeyEvent.VK_L && this.ears != Ears.Mode.OFF || keys[i] == KeyEvent.VK_T;
          g.setColor(main ? ink : paper);
          g.fillRoundRect(c[0], STRIP + 3, c[1], HEIGHT - STRIP - 6, 8, 8);
          g.setColor(main ? paper : muted);
@@ -987,6 +1023,10 @@ final class RunnerPanel extends JPanel {
 
    Ghost ghost() {
       return this.ghost;
+   }
+
+   RunPicture picture() {
+      return this.picture;
    }
 
    Evolution evolution() {

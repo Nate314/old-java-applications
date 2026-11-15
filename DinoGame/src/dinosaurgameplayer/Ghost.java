@@ -30,6 +30,11 @@ final class Ghost {
       return new Ghost(runner.course(), runner.score(), inputs);
    }
 
+   /** The same run, with a Runner of its own, so playing it does not move this one. */
+   Ghost copy() {
+      return new Ghost(this.course, this.score, this.inputs);
+   }
+
    /** Back to the start of the run, running. */
    void start() {
       this.runner = new Runner(this.course);

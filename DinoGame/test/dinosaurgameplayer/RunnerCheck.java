@@ -259,6 +259,32 @@ public final class RunnerCheck {
       }
       assert kept.runner().score() == mine && kept.runner().steps() == crashStep : "the ghost crashes where you did";
       assert Ghost.decode(kept.encode()).encode().equals(kept.encode()) && Ghost.decode("1,2,9,3") == null && Ghost.decode("x") == null;
+      // T: the whole run in one picture, played again from its keys: same score, its jumps, every row inside the game.
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      RunPicture pic = gp.picture();
+      assert pic != null && pic.you.score == mine && pic.ghost == null && pic.you.jumps > 5 && !pic.you.obstacles.isEmpty()
+         : "the picture replays your run";
+      assert pic.you.steps.size() == crashStep && pic.rowHeight() >= 150 / pic.shrink + 4 : pic.rows + " rows at 1/" + pic.shrink;
+      int[] endAt = pic.at(pic.you.end());
+      assert endAt[1] == pic.rows - 1 && endAt[0] <= Runner.WIDTH - 10 : "the crash is on the last row";
+      BufferedImage shot = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D sg = shot.createGraphics();
+      gp.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+      gp.paint(sg);
+      sg.dispose();
+      int trail = 0;
+      for (int y = 0; y < RunnerPanel.STRIP; y++) {
+         for (int x = 0; x < Runner.WIDTH; x++) {
+            trail += shot.getRGB(x, y) == RunPicture.TRAIL.getRGB() ? 1 : 0;
+         }
+      }
+      assert trail > 300 : "the ribbon is drawn: " + trail;
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      assert gp.picture() == null : "T again goes back";
+      gp.setBot(true);
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      assert gp.picture() == null : "no picture while the bot plays";
+      gp.setBot(false);
       // The next run is a new course; G races the ghost on its own.
       gp.runner().restart();
       for (int i = 0; i < 200; i++) {
@@ -279,6 +305,17 @@ public final class RunnerCheck {
       }
       assert gp.ghost().runner().distance() > before : "the ghost runs on after you crash";
       assert Records.load(gfile).ghost.score == mine : "a worse run keeps the ghost";
+      // Raced, the picture has the ghost too, further along, and building it leaves the ghost where it is.
+      double ghostAt = gp.ghost().runner().distance();
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      assert gp.picture() != null && gp.picture().ghost.score == mine && gp.picture().ghost.end() > gp.picture().you.end()
+         && gp.picture().you.score == gp.runner().score() && gp.ghost().runner().distance() == ghostAt;
+      for (int i = 0; i < RunnerPanel.STRIP; i++) {
+         gp.step();
+      }
+      key(gp, java.awt.event.KeyEvent.VK_SPACE, true);
+      key(gp, java.awt.event.KeyEvent.VK_SPACE, false);
+      assert gp.picture() == null && gp.runner().state() == Runner.State.RUNNING : "Space goes on: a new run";
       gp.toggleRace();
       gp.runner().press();
       gp.step();
