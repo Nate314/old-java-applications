@@ -81,6 +81,7 @@ import { init as instantOpen } from './instant-open';
 import { init as sideBySide } from './side-by-side';
 import { init as toolbarMore } from './toolbar-more';
 import { init as stageGlow } from './stage-glow';
+import { init as slowMo } from './slow-mo';
 
 // In the order boot.js ran them.
 skin();
@@ -113,3 +114,4 @@ instantOpen();
 sideBySide();
 toolbarMore();
 stageGlow();
+slowMo();
