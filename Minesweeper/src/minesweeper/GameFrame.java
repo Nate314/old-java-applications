@@ -9,6 +9,7 @@ import java.awt.Point;
 import java.awt.Toolkit;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import javax.swing.JButton;
@@ -85,6 +86,10 @@ public final class GameFrame extends JFrame {
    private JButton oddsButton;
    private Color plainButton;
    private Color plainText;
+   /** The player's guesses this game, tagged on the board when it ends. */
+   private final Luck luck = new Luck();
+   /** The chance the move being made hits a mine, read just before it (0 when certain, -1 when not known). */
+   private double moveRisk = -1;
 
    public GameFrame(SoundPlayer soundPlayer) {
       this(soundPlayer, null, null, null, false, false);
@@ -189,6 +194,9 @@ public final class GameFrame extends JFrame {
 
    /** Left click on a tile: reveals it (and a blank region), or ends the game on a mine. */
    void revealFrom(int row, int column) {
+      if (this.grid != null && !this.revealed[row][column]) {
+         this.noteRisk(Collections.singletonList(new int[]{row, column}));
+      }
       this.reveal(row, column, row, column);
       this.refreshOdds();
    }
@@ -206,6 +214,7 @@ public final class GameFrame extends JFrame {
          }
          return;
       }
+      this.noteRisk(targets);
       for (int[] cell : targets) {
          if (this.gameOver) {
             return;
@@ -213,6 +222,26 @@ public final class GameFrame extends JFrame {
          this.reveal(cell[0], cell[1], row, column);
       }
       this.refreshOdds();
+   }
+
+   /**
+    * Before a player's move opens those tiles: notes how likely (from the numbers alone) it was to hit a mine, so the
+    * game's guesses can be shown when it ends. For several tiles (opening around a number) that is the riskiest one's.
+    */
+   private void noteRisk(List<int[]> cells) {
+      this.moveRisk = -1;
+      double[][] odds = this.watching ? null : Odds.of(this.view(), this.level.mines);
+      if (odds == null) {
+         return;
+      }
+      int[] worst = cells.get(0);
+      for (int[] cell : cells) {
+         if (odds[cell[0]][cell[1]] > odds[worst[0]][worst[1]]) {
+            worst = cell;
+         }
+      }
+      this.moveRisk = odds[worst[0]][worst[1]];
+      this.luck.add(worst[0] * this.columns + worst[1], this.moveRisk);
    }
 
    /** Reveals (row, column); the tiles ripple out from (fromRow, fromColumn), the tile that was clicked. */
@@ -259,6 +288,9 @@ public final class GameFrame extends JFrame {
             this.status.setText("Boom! Click any tile to play again.");
             if (instead != null) {
                this.showDeduction(instead, "No need to guess: the glowing tiles were safe.");
+            } else if (this.moveRisk > 1e-9) {
+               String[] lines = this.luck.lossLines();
+               this.setHintLines(lines[0], lines[1]);
             } else {
                this.setHintLines("That one was a guess.", this.bestTimes.noGuess() ? " " : "No guess (G) deals boards logic can clear.");
             }
@@ -291,9 +323,11 @@ public final class GameFrame extends JFrame {
             this.soundPlayer.queueNote(note);
          }
          if (!this.computerPlayed) {
+            int guesses = this.luck.guesses();
             this.setHintLines(this.oddsCounted ? "Cleared with the odds showing." : this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
-               : this.fairBoard ? "Cleared by logic alone, no guesses." : "Cleared!",
-               this.hints > 0 ? "A game won with hints sets no best time." : " ");
+               : guesses > 0 ? "Cleared, with " + guesses + (guesses == 1 ? " guess." : " guesses.")
+               : this.fairBoard ? "Cleared by logic alone, no guesses." : "Cleared without a single guess.",
+               guesses > 0 ? this.luck.winLine() : this.hints > 0 ? "A game won with hints sets no best time." : " ");
          }
          if (this.computerPlayed) {
             // Not a best time: the computer played some or all of it.
@@ -349,6 +383,10 @@ public final class GameFrame extends JFrame {
       this.gameOver = true;
       this.finishMillis = System.currentTimeMillis();
       this.clock.stop();
+      for (int i = 0; i < this.luck.guesses(); i++) {
+         int cell = this.luck.cells.get(i);
+         this.tiles[cell / this.columns][cell % this.columns].setGamble(this.luck.risks.get(i));
+      }
    }
 
    boolean isRevealed(int row, int column) {

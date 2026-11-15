@@ -80,6 +80,7 @@ public class MineFieldCheck {
       }
 
       checkBestTimes();
+      checkLuck();
       checkSolver();
       checkLogic();
       checkFairBoards();
@@ -404,6 +405,23 @@ public class MineFieldCheck {
          mine[hidden.get(i)] = false;
       }
       return ways;
+   }
+
+   /** Guesses: certain moves are not kept, and the chance of coming through is the product of each survival. */
+   private static void checkLuck() {
+      Luck luck = new Luck();
+      check(luck.winLine() == null, "no guesses, no luck line");
+      luck.add(3, 0);
+      luck.add(7, 0.5);
+      luck.add(9, 0.25);
+      check(luck.guesses() == 2 && luck.cells.get(0) == 7 && luck.cells.get(1) == 9, "only the guesses are kept");
+      check(Math.abs(luck.survival(2) - 0.375) < 1e-12, "survival is the product");
+      check(luck.winLine().contains("38%"), "win line: " + luck.winLine());
+      String[] loss = luck.lossLines();
+      check(loss[0].contains("25%") && loss[1].contains("50%"), "loss lines: " + loss[0] + " / " + loss[1]);
+      System.out.println("Luck: " + luck.winLine());
+      luck.add(4, 1);
+      check(luck.lossLines()[0].startsWith("The numbers showed"), "a certain mine is no guess: " + luck.lossLines()[0]);
    }
 
    private static void checkBestTimes() {

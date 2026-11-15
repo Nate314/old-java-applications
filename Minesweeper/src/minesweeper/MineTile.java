@@ -75,6 +75,9 @@ public final class MineTile extends JButton implements MouseListener {
    private int hint = HINT_NONE;
    /** Odds (O): the chance this hidden tile is a mine, 0 to 1, or -1 when not shown. */
    private double odds = -1;
+   /** Once the game is over: the chance this tile was a mine when the player guessed on it, or -1 if it was no guess. */
+   private double gamble = -1;
+   private static final Color GAMBLE = new Color(123, 31, 162);
    private boolean cursor;
    private boolean hover;
    private boolean pressed;
@@ -147,6 +150,13 @@ public final class MineTile extends JButton implements MouseListener {
             this.describe(chance < 0 ? "hidden" : "hidden, " + Odds.percent(chance) + " chance of a mine");
          }
       }
+   }
+
+   /** Tags this tile as one the player guessed on, with its chance of being a mine at the time (shown once the game ends). */
+   void setGamble(double risk) {
+      this.gamble = risk;
+      this.repaint();
+      this.getAccessibleContext().setAccessibleName(this.getAccessibleContext().getAccessibleName() + ", your guess, " + Odds.percent(risk) + " chance of a mine");
    }
 
    /** Shows or hides the keyboard cursor on this tile. */
@@ -272,6 +282,9 @@ public final class MineTile extends JButton implements MouseListener {
          }
       }
       this.paintHint(g, s);
+      if (this.gamble >= 0) {
+         this.paintGamble(g, s);
+      }
       if (this.cursor) {
          g.setColor(CURSOR);
          g.setStroke(new BasicStroke(Math.max(2, s / 14f)));
@@ -366,6 +379,29 @@ public final class MineTile extends JButton implements MouseListener {
       }
       g.setColor(safe ? GRASS_EDGE : Color.WHITE);
       g.drawString(text, x, y);
+   }
+
+   /** A guess the player made: a purple ring, and the chance it was a mine on a tag along the bottom (if it fits). */
+   private void paintGamble(Graphics2D g, int s) {
+      int w = this.getWidth();
+      int h = this.getHeight();
+      int inset = Math.max(1, s / 16);
+      g.setColor(GAMBLE);
+      g.setStroke(new BasicStroke(Math.max(2, s / 14f)));
+      g.drawRoundRect(inset, inset, w - 2 * inset - 1, h - 2 * inset - 1, s / 4, s / 4);
+      if (s < 22) {
+         return;
+      }
+      String text = Odds.percent(this.gamble);
+      g.setFont(new Font("Dialog", Font.BOLD, Math.max(8, (int) (s * 0.28))));
+      FontMetrics fm = g.getFontMetrics();
+      int tw = fm.stringWidth(text) + 6;
+      int th = fm.getAscent() + 2;
+      int x = (w - tw) / 2;
+      int y = h - th - inset;
+      g.fillRoundRect(x, y, tw, th, th, th);
+      g.setColor(Color.WHITE);
+      g.drawString(text, x + 3, y + fm.getAscent());
    }
 
    /** Revealed ground: a flat sand square, with a faint line where it meets the next one. */
