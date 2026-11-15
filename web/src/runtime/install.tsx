@@ -15,6 +15,7 @@ import { findMac, findOff, openFind } from './find';
 import { docked, openDockPicker } from './side-by-side';
 import { openMaker } from './skin-maker';
 import { More, moreOut } from './toolbar-more';
+import { PhoneKeys } from './phone-keys';
 import { openLayer } from './ui/layer';
 
 export let siteRoot: string;
@@ -122,6 +123,8 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
             <button type="button" className={more('.shim-controls-open', 'shim-controls-open')} title="Show or hide the on-screen controller" aria-pressed={padShown()}
               onClick={e => { togglePad(); blur(e); }}>Controls</button>
           )}
+          {/* not in BAND_ORDER: on a phone it is the way to type, so it never steps out under More */}
+          <PhoneKeys />
           <a className={more('.shim-next', 'shim-next')} hidden={!next} href={next ? pageOf(next) : undefined}>{next ? 'Next: ' + next.name + ' ›' : ''}</a>
         </>
       )}

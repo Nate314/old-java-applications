@@ -435,6 +435,14 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 - Buttons never take keyboard focus, so the app keeps the keyboard. A press counts as playing for the arcade passport.
 - The keys are synthetic `KeyboardEvent`s dispatched on the page, with `keyCode` set the way the shim reads it, so the apps and the shim are unchanged. The layouts are the `PADS` table in `boot.js`. Every skin styles it: a dark glass console in Modern, a Metal panel in Classic, neon buttons that light up magenta in Arcade.
 
+### Type with the phone's keyboard
+
+A phone shows its keyboard only for a text box, and many apps take typed keys on a painted panel (SpriteFloatyStars' Sky writing, ScreenSaver's 0 to 9, Minesweeper's F, MusicTheoryExpert's Chord finder letters), so on a phone none of those could be typed. Now an app page's band has a Keyboard button (⌨) where the main pointer is a finger (`pointer: coarse`), in every app (`src/runtime/phone-keys.tsx`):
+
+- A tap puts the focus in a hidden box of its own, so the phone's keyboard comes up; another tap (or tapping elsewhere) puts it away. The button is lit while it is up, and it never steps out under More.
+- What is typed reaches the app as key presses, the same synthetic `KeyboardEvent`s the touch controller sends. Phones mostly report typed letters as keyCode 229, so the characters are read from what the box gained or lost (each change becomes Backspaces and then the new characters, which also covers word suggestions and autocorrect), and the box's own key events are kept from the app. Enter, Escape, Tab, the arrows, Delete, Home and End are passed on from their key events. The box always holds one space, so a Backspace has something to delete and shows as a change.
+- When one of the app's own text fields has the focus, the button brings that field's keyboard back instead.
+
 ## Game controllers
 
 Plug a game controller into the computer (or pair it with the phone), press any button, and it plays every app. Browsers report a controller to a page only after one of its buttons is pressed there, so that first press is when the controller chart appears. It uses the Gamepad API's standard layout (an Xbox or PlayStation style pad); `boot.js` polls it once per animation frame.

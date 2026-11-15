@@ -5609,3 +5609,29 @@ html[data-saver] * {
   border-color: #ff2bd6;
   box-shadow: 0 0 18px rgba(255, 43, 214, 0.45);
 }
+
+/* ---- Keyboard (phone-keys.tsx): on a touch screen, the phone's keyboard types to the app ---- */
+.shim-keys {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The box the phone's keyboard types into: there for the focus, never seen. 16px, or iOS zooms the page to it. */
+.shim-keys-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.shim-toolbar .shim-keys-open[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
