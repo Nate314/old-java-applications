@@ -16,7 +16,7 @@ export interface Tour {
 }
 
 /** A news item from history.txt (lazy/news.tsx reads it). */
-export interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[] }
+export interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[]; quiet: boolean }
 
 export const H = {
   // ---- the player ----

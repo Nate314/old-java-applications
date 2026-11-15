@@ -12,14 +12,12 @@ import { HeroWall } from './HeroWall';
 import { Mrz, Stamp, stampDate } from './Stamp';
 import * as P from './player';
 import { TABS, badge, stampCount, tabClick, tabKey, tabShown } from './tabs';
-import { allClick, day, openApp } from './news';
+import { WhatsNew } from './WhatsNew';
 import { bannerText, installClick, saveClick } from './takeaway';
 import { cardBlur, cardEnter, cardFocus, cardLeave, clipBroken, clipPlaying } from './clips';
 import { inFilter, playedRank, useRecordLines } from './yours';
 
 const page = (id: string) => id + '/index.html';
-// What's new pictures a change to the whole arcade with the site's icon, at its full address as news.js gave it.
-const SITE_ICON = new URL('icons/icon.svg', location.href).href;
 const THEN_HINT = 'As first restored in 2026: the recovered code with light bug fixes, before the later reworks.';
 // The runtime's Find names its key for the platform, as its own button does (and is off in screenshots and the saver).
 const FIND_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
@@ -218,51 +216,6 @@ function Tab({ id, label }: { id: string; label: string }) {
 
 const off = (id: string) => (H.tab !== null && H.tab !== id ? ' off' : '');
 
-function News() {
-  const v = H.news.view;
-  return (
-    <section className={'news' + (v && v.fresh ? ' fresh' : '') + off('news')} id="news" role="tabpanel" aria-labelledby="tab-news" hidden={!v}>
-      <div className="news-head">
-        <div className="text"><h2 id="news-title">What’s new</h2><p id="news-text" aria-live="polite">{v ? v.text : null}</p></div>
-        <div className="actions">
-          <button className="btn primary" type="button" id="news-play" hidden={!(v && v.fresh)} onClick={() => { if (v && v.play && v.play.app) openApp(v.play.app); }}>
-            {v && v.play ? v.play.label : 'Play it'}
-          </button>
-          {' '}
-          <button className="btn" type="button" id="news-all" aria-expanded={H.news.all} aria-controls="news-list" hidden={!(v && v.more)} onClick={allClick}>
-            {v ? v.allLabel : 'Show all'}
-          </button>
-        </div>
-      </div>
-      <ol className="news-list" id="news-list">
-        {v && v.cards.map((c, k) => (
-          <li key={k} className={c.updated ? 'updated' : undefined}>
-            <span className="pic"><img src={c.site ? SITE_ICON : webp((c.focus || c.it.apps[0]).shot, true)} alt="" loading="lazy" /></span>
-            <div className="body">
-              <span className="meta">
-                <time>{day(c.it.t)}</time>
-                {c.updated ? <span className="tag">Since you played</span>
-                  : c.site ? <span className="tag site">{c.it.apps.length > 4 ? c.it.apps.length + ' apps' : 'All apps'}</span> : null}
-              </span>
-              <strong>{c.it.title}</strong>
-              {c.it.more && <span className="more">{c.it.more.charAt(0).toUpperCase() + c.it.more.slice(1)}</span>}
-              {!c.site && (
-                <span className="plays">
-                  {c.it.apps.map(x => (
-                    <button key={x.id} className={'btn' + (c.one ? ' primary' : '')} type="button" aria-label={'Play ' + x.name} onClick={() => openApp(x.id)}>
-                      {c.one ? 'Play' : x.name}
-                    </button>
-                  ))}
-                </span>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
 function Passport() {
   const count = stampCount(), left = APPS.length - count;
   return (
@@ -391,7 +344,7 @@ export function Home() {
           {' '}
           <Tab id="takeaway" label="Take it with you" />
         </div>
-        <News />
+        <WhatsNew off={off('news')} />
         <Passport />
         <section className={'records' + off('records')} id="records" role="tabpanel" aria-labelledby="tab-records">
           <Records onCount={n => { if (H.recordsCount !== n) { H.recordsCount = n; draw(false); } }} />
