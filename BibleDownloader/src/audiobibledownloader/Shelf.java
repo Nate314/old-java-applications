@@ -26,6 +26,8 @@ public final class Shelf {
 
    private final File file;
    public String translation = "web";
+   /** The translation set beside it, verse by verse ("" when reading one). */
+   public String compare = "";
    public int book = Books.find("LUK");
    public int chapter = 1;
    /** The verse at the top of the open page, so a different text size or window keeps the place. */
@@ -74,6 +76,11 @@ public final class Shelf {
          case "translation":
             if (BibleApi.translationIndex(value) >= 0) {
                this.translation = value;
+            }
+            break;
+         case "compare":
+            if (BibleApi.translationIndex(value) >= 0) {
+               this.compare = value;
             }
             break;
          case "at": {
@@ -151,6 +158,7 @@ public final class Shelf {
 
    public void save() {
       String text = "translation=" + this.translation + "\n"
+         + (this.compare.isEmpty() || this.compare.equals(this.translation) ? "" : "compare=" + this.compare + "\n")
          + "place=" + Books.NAMES[this.book] + " " + this.chapter + ":" + this.verse + "\n"
          + "at=" + Books.IDS[this.book] + "." + this.chapter + "." + this.verse + "\n"
          + "size=" + this.size + "\n"
@@ -169,6 +177,15 @@ public final class Shelf {
       } catch (IOException e) {
          System.err.println("Could not save " + this.file + ": " + e);
       }
+   }
+
+   /** The translation to set beside {@code open} after {@code compare}: each other one in turn, then "" (off). */
+   public static String nextCompare(String open, String compare) {
+      int i = compare.isEmpty() ? -1 : BibleApi.translationIndex(compare);
+      do {
+         i++;
+      } while (i < BibleApi.TRANSLATIONS.length && BibleApi.TRANSLATIONS[i].equals(open));
+      return i < BibleApi.TRANSLATIONS.length ? BibleApi.TRANSLATIONS[i] : "";
    }
 
    public boolean isRead(int book, int chapter) {

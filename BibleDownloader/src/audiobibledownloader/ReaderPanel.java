@@ -39,6 +39,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    static final Color MUTED = new Color(0x8a7a66);
    private static final Color MARK = new Color(0xf6dc7c);
    static final Color HOVER = new Color(0xefe4c6);
+   /** The second translation's words when both share one page. */
+   private static final Color ALT_INK = new Color(0x5e4a36);
    private static final Color BUTTON = new Color(0x4a3828);
    private static final Color BUTTON_HOVER = new Color(0x654b34);
    private static final Color BUTTON_TEXT = new Color(0xf3e7cf);
@@ -73,6 +75,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private int pickedBook;
 
    private Chapter chapter;
+   /** The open chapter in the second translation when two are side by side, or null. */
+   private Chapter other;
    private String loadError;
    /** Bumped on every request, so a slow answer for a chapter no longer wanted is dropped. */
    private int request;
@@ -162,29 +166,35 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       this.loadError = null;
       int ticket = ++this.request;
       String translation = this.shelf.translation;
+      String compare = this.shelf.compare;
       Chapter ready = BibleApi.cached(translation, book, number);
-      if (ready != null) {
-         this.show(ready);
+      Chapter readyOther = compare.isEmpty() ? null : BibleApi.cached(compare, book, number);
+      if (ready != null && (compare.isEmpty() || readyOther != null)) {
+         this.show(ready, readyOther);
          return;
       }
       this.chapter = null;
+      this.other = null;
       this.repaint();
       new Thread(() -> {
          Chapter loaded = null;
+         Chapter loadedOther = null;
          String error = null;
          try {
             loaded = BibleApi.fetch(translation, book, number);
+            loadedOther = compare.isEmpty() ? null : BibleApi.fetch(compare, book, number);
          } catch (IOException e) {
             error = e.getMessage();
          }
-         Chapter result = loaded;
+         Chapter result = error == null ? loaded : null;
+         Chapter resultOther = loadedOther;
          String message = error;
          SwingUtilities.invokeLater(() -> {
             if (ticket != this.request) {
                return;
             }
             if (result != null) {
-               this.show(result);
+               this.show(result, resultOther);
             } else {
                this.loadError = message;
                this.repaint();
@@ -193,8 +203,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }).start();
    }
 
-   private void show(Chapter loaded) {
+   private void show(Chapter loaded, Chapter loadedOther) {
       this.chapter = loaded;
+      this.other = loadedOther;
       this.pages = null;
       this.pagesKey = "";
       this.spread = -1;
@@ -208,17 +219,18 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       if (ordinal >= Books.TOTAL) {
          return;
       }
-      String translation = this.shelf.translation;
       int book = Books.bookOf(ordinal);
       int number = Books.chapterOf(ordinal);
-      if (BibleApi.cached(translation, book, number) == null) {
-         new Thread(() -> {
-            try {
-               BibleApi.fetch(translation, book, number);
-            } catch (IOException e) {
-               // Fetched again when it is opened.
-            }
-         }).start();
+      for (String translation : new String[]{this.shelf.translation, this.shelf.compare}) {
+         if (!translation.isEmpty() && BibleApi.cached(translation, book, number) == null) {
+            new Thread(() -> {
+               try {
+                  BibleApi.fetch(translation, book, number);
+               } catch (IOException e) {
+                  // Fetched again when it is opened.
+               }
+            }).start();
+         }
       }
    }
 
@@ -294,12 +306,25 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    private void cycleTranslation() {
       int i = (BibleApi.translationIndex(this.shelf.translation) + 1) % BibleApi.TRANSLATIONS.length;
+      if (BibleApi.TRANSLATIONS[i].equals(this.shelf.compare)) {
+         // The two sides swap rather than show one translation twice.
+         this.shelf.compare = this.shelf.translation;
+      }
       this.shelf.translation = BibleApi.TRANSLATIONS[i];
       this.shelf.save();
-      this.say(BibleApi.TRANSLATION_NAMES[i]);
+      this.say(BibleApi.TRANSLATION_NAMES[i] + (this.shelf.compare.isEmpty() ? "" : " beside " + this.shelf.compare.toUpperCase()));
       if (this.view == View.READ) {
          this.open(this.shelf.book, this.shelf.chapter, false);
       }
+   }
+
+   /** Side by side: off, then each other translation in turn beside the open one, then off again. */
+   private void cycleCompare() {
+      this.shelf.compare = Shelf.nextCompare(this.shelf.translation, this.shelf.compare);
+      this.shelf.save();
+      int i = BibleApi.translationIndex(this.shelf.compare);
+      this.say(i < 0 ? "Side by side off (C: compare again)" : "Side by side: " + BibleApi.TRANSLATION_NAMES[i] + " (C: the next one)", 3200);
+      this.open(this.shelf.book, this.shelf.chapter, false);
    }
 
    private void resize(int step) {
@@ -426,6 +451,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             break;
          case 't':
             this.cycleTranslation();
+            break;
+         case 'c':
+            this.cycleCompare();
             break;
          case 'm':
             this.nextMark();
@@ -987,7 +1015,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       int lh = this.lineHeight();
       int lines = Math.max(1, text[0].height / lh);
       if (this.chapter == null || this.chapter.book != this.shelf.book || this.chapter.number != this.shelf.chapter
-            || !this.chapter.translation.equals(this.shelf.translation)) {
+            || !this.chapter.translation.equals(this.shelf.translation)
+            || !this.shelf.compare.isEmpty() && (this.other == null || this.other.book != this.chapter.book
+               || this.other.number != this.chapter.number || !this.other.translation.equals(this.shelf.compare))) {
          String ref = Books.NAMES[this.shelf.book] + " " + this.shelf.chapter;
          if (this.loadError != null) {
             this.centered(g, text[0], ref, this.loadError, "Try again");
@@ -1002,9 +1032,18 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       Font numeral = new Font("Serif", Font.BOLD, Shelf.SIZES[this.shelf.size] * 3);
       Font title = new Font("Serif", Font.BOLD, Shelf.SIZES[this.shelf.size] * 17 / 10);
       FontMetrics bodyMetrics = g.getFontMetrics(body);
-      String key = this.chapter.title() + "/" + this.chapter.translation + "/" + this.shelf.size + "/" + text[0].width + "/" + lines;
+      Chapter beside = this.shelf.compare.isEmpty() ? null : this.other;
+      String key = this.chapter.title() + "/" + this.chapter.translation + "/" + (beside == null ? "" : beside.translation + "/" + sheets.length)
+         + "/" + this.shelf.size + "/" + text[0].width + "/" + lines;
       if (!key.equals(this.pagesKey)) {
-         this.pages = Layout.paginate(this.chapter, bodyMetrics, g.getFontMetrics(small), g.getFontMetrics(numeral), text[0].width, lines);
+         this.pages = beside == null
+            ? Layout.paginate(this.chapter, bodyMetrics, g.getFontMetrics(small), g.getFontMetrics(numeral), text[0].width, lines)
+            : Layout.parallel(this.chapter, beside, bodyMetrics, g.getFontMetrics(small), g.getFontMetrics(numeral), text[0].width, lines,
+               sheets.length == 1 ? g.getFontMetrics(body.deriveFont(Font.ITALIC)) : null);
+         if (!this.pagesKey.isEmpty()) {
+            // Set again (another size, window or side by side): find the place again by its verse.
+            this.spread = -1;
+         }
          this.pagesKey = key;
       }
       int per = sheets.length;
@@ -1018,6 +1057,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }
 
       int space = bodyMetrics.stringWidth(" ");
+      Font altBody = body.deriveFont(Font.ITALIC);
       for (int s = 0; s < per; s++) {
          int index = this.spread + s;
          Rectangle area = text[s];
@@ -1056,6 +1096,12 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
                   g.setColor(RUBRIC);
                   g.drawString(run.text, x, base - Shelf.SIZES[this.shelf.size] * 4 / 10);
                   break;
+               case Layout.ALT_WORD:
+                  this.word(g, run, x, top, lh, space);
+                  g.setFont(altBody);
+                  g.setColor(ALT_INK);
+                  g.drawString(run.text, x, base);
+                  break;
                default:
                   this.word(g, run, x, top, lh, space);
                   g.setFont(body);
@@ -1088,9 +1134,29 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.drawString(ref, x, sheet.y + 24);
       String folio = (this.spread + side + 1) + " / " + this.pages.size();
       g.drawString(folio, area.x + (area.width - fm.stringWidth(folio)) / 2, sheet.y + sheet.height - 14);
-      if (per == 1 || side == 1) {
-         g.drawString(this.shelf.translation.toUpperCase(), area.x, sheet.y + 24);
+      String compare = this.shelf.compare.toUpperCase();
+      if (!compare.isEmpty()) {
+         // Side by side, each page names its translation; on one page the second, in italics, follows each verse.
+         String tag = per == 2 ? (side == 0 ? this.shelf.translation.toUpperCase() : compare) : this.shelf.translation.toUpperCase() + " + " + compare;
+         int tx = per == 2 && side == 0 ? area.x + area.width - fm.stringWidth(tag) : area.x;
+         this.headLink(g, tag + " ⇄", tx, sheet.y + 24);
+      } else if (per == 1 || side == 1) {
+         String open = this.shelf.translation.toUpperCase();
+         g.drawString(open, area.x, sheet.y + 24);
+         this.headLink(g, "⇄ COMPARE", area.x + fm.stringWidth(open + "   "), sheet.y + 24);
       }
+   }
+
+   /** Red running-head text that sets another translation beside the open one (as C does). */
+   private void headLink(Graphics2D g, String label, int x, int base) {
+      FontMetrics fm = g.getFontMetrics();
+      Rectangle r = new Rectangle(x - 4, base - fm.getAscent() - 5, fm.stringWidth(label) + 8, fm.getHeight() + 8);
+      g.setColor(this.over(r) ? HOVER : PAPER);
+      g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+      g.setColor(RUBRIC);
+      g.drawString(label, x, base);
+      g.setColor(MUTED);
+      this.hits.add(new Hit(r, this::cycleCompare, 0));
    }
 
    /** The facing page after a chapter's last page: what comes next. */
