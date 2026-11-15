@@ -2,6 +2,7 @@ package simplealgorithms;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
@@ -20,15 +21,22 @@ class DividePage extends Page {
 	private static final int RULER_W = 380;
 	private static final int FIRST_ROW = 108;
 	private static final int ROW_GAP = 62;
+	private static final Font SOURCE_FONT = new Font("Monospaced", Font.PLAIN, 12);
+	private static final Color NOTE = new Color(60, 100, 180);
 
 	enum Kind { UP, OVER, BACK, DONE }
 
-	/** One step of the search: the guess after it, the line divide printed for it (null for the value it returns). */
+	/**
+	 * One step of the search: the guess after it, the line divide printed for it (null for the value it returns), and
+	 * divide's tolerance and counter2 after it, which only change on a step back.
+	 */
 	static final class Step {
 		final double guess;
 		final String line;
 		final int level;
 		final Kind kind;
+		double tolerance = 1;
+		double counter2 = 90;
 
 		Step(double guess, String line, int level, Kind kind) {
 			this.guess = guess;
@@ -36,7 +44,38 @@ class DividePage extends Page {
 			this.level = level;
 			this.kind = kind;
 		}
+
+		/** True if this pass of divide's loop took its if branch (stepped back), not the else (counted on). */
+		boolean back() {
+			return kind == Kind.BACK || kind == Kind.DONE && line == null;
+		}
 	}
+
+	/** MyMath.divide as it was written (printing its steps), shown by the Code view. */
+	static final String[] SOURCE = {
+			"double divide(double num1, double num2) {",
+			"  double guess = 0;",
+			"  double error = 0.01;",
+			"  double tolerance = 1;",
+			"  double currentGuess = 5;",
+			"  double counter2 = 90;",
+			"  int counter = 0;",
+			"  while(guess * num2 != num1) {",
+			"    if(guess * num2 > num1) {",
+			"      guess -= tolerance;",
+			"      tolerance -= counter2 * error;",
+			"      counter2 /= 10;",
+			"      if(currentGuess - guess < error) break;",
+			"    }",
+			"    else {",
+			"      guess += tolerance;",
+			"    }",
+			"    System.out.println(counter + \": \" + guess);",
+			"    currentGuess = guess;",
+			"    counter++;",
+			"  }",
+			"  return guess;",
+			"}" };
 
 	/**
 	 * Every step divide takes for a / b, read back from the lines it prints. A guess below the one before is a step
@@ -65,6 +104,17 @@ class DividePage extends Page {
 			Step last = steps.remove(steps.size() - 1);
 			steps.add(new Step(last.guess, last.line, last.level, Kind.DONE));
 		}
+		// tolerance and counter2 as divide changes them, with the same double arithmetic, for the Code view.
+		double tolerance = 1;
+		double counter2 = 90;
+		for (Step step : steps) {
+			if (step.back()) {
+				tolerance -= counter2 * 0.01;
+				counter2 /= 10;
+			}
+			step.tolerance = tolerance;
+			step.counter2 = counter2;
+		}
 		return steps;
 	}
 
@@ -76,8 +126,11 @@ class DividePage extends Page {
 	private int preset;
 	private boolean playing = true;
 	private int wait;
+	/** Code view: divide's source with this step's lines lit, in place of the rulers. */
+	private boolean code;
 
 	private final Button play;
+	private final Button codeButton;
 
 	DividePage() {
 		super("Division");
@@ -85,6 +138,7 @@ class DividePage extends Page {
 		button("Step", 's', () -> move(1));
 		button("Back", 'b', () -> move(-1));
 		button("Next division", 'n', this::nextPreset);
+		codeButton = button("Code", 'c', this::toggleCode);
 		compute();
 	}
 
@@ -106,6 +160,11 @@ class DividePage extends Page {
 			shown = 0;
 			wait = 0;
 		}
+	}
+
+	private void toggleCode() {
+		code = !code;
+		codeButton.label = code ? "Rulers" : "Code";
 	}
 
 	private void togglePlay() {
@@ -179,16 +238,22 @@ class DividePage extends Page {
 	@Override
 	void paint(Graphics2D g, int w, int h) {
 		text(g, "Division by counting", TITLE, INK, 20, 32);
-		text(g, "MyMath.divide adds 1 until guess * b passes a, steps back, then counts by 0.1, then 0.01.",
-				TEXT, PENCIL, 20, 54);
+		if (!code) {
+			text(g, "MyMath.divide adds 1 until guess * b passes a, steps back, then counts by 0.1, then 0.01.",
+					TEXT, PENCIL, 20, 54);
+		}
 		paintEntry(g, w);
 		if (steps == null) {
 			text(g, "Type a division like 22/7: two numbers above 0, with a / b at most 100. Backspace deletes.",
 					BOLD, RED, 20, 110);
 			return;
 		}
-		paintRulers(g);
-		paintLines(g, w);
+		if (code) {
+			paintCode(g);
+		} else {
+			paintRulers(g);
+		}
+		paintLines(g, w, code ? 505 : 470);
 		paintCaption(g, h);
 	}
 
@@ -321,9 +386,70 @@ class DividePage extends Page {
 		}
 	}
 
+	/**
+	 * The Code view: divide's source, with the lines this step ran lit and what they did written beside them. Each
+	 * step is one pass of the while loop (the first also runs the set-up lines above it).
+	 */
+	private void paintCode(Graphics2D g) {
+		Step step = steps.get(shown);
+		Step previous = shown > 0 ? steps.get(shown - 1) : null;
+		double before = previous != null ? previous.guess : 0;
+		boolean back = step.back();
+		boolean exact = step.kind == Kind.DONE && step.guess * b == a;
+		String[] notes = new String[SOURCE.length];
+		boolean[] ran = new boolean[SOURCE.length];
+		for (int i = 0; i <= 6; i++) {
+			ran[i] = shown == 0;
+		}
+		ran[7] = ran[8] = true;
+		double product = before * b;
+		notes[7] = number(product, 8) + " != " + number(a, 8);
+		notes[8] = back ? number(product, 8) + " > " + number(a, 8) : "no: to else";
+		if (back) {
+			ran[9] = ran[10] = ran[11] = ran[12] = ran[13] = true;
+			notes[9] = "guess = " + number(step.guess, 8);
+			notes[10] = "tolerance = " + number(step.tolerance, 8);
+			notes[11] = "counter2 = " + number(step.counter2, 8);
+			// currentGuess still holds the guess before this step back: their gap is the step just taken back.
+			// Written on the row under the test, which is too long to leave room beside it.
+			double gap = before - step.guess;
+			notes[13] = "currentGuess - guess = " + number(gap, 15) + (gap < 0.01 ? " < 0.01" : " >= 0.01");
+		} else {
+			ran[14] = ran[15] = true;
+			notes[15] = "guess = " + number(step.guess, 8);
+		}
+		if (step.line != null) {
+			ran[17] = ran[18] = ran[19] = true;
+			notes[19] = "counter = " + (shown + 1);
+		}
+		if (step.kind == Kind.DONE) {
+			ran[21] = true;
+			notes[21] = "returns " + number(step.guess, 10);
+			if (exact) {
+				// The loop's test runs once more after this pass, and now it fails.
+				notes[7] += ", then " + number(step.guess * b, 8) + " == " + number(a, 8);
+			}
+		}
+		int top = 52;
+		int lineH = 13;
+		for (int i = 0; i < SOURCE.length; i++) {
+			int y = top + i * lineH;
+			if (ran[i]) {
+				g.setColor(i == 21 ? new Color(46, 125, 80, 60) : new Color(255, 226, 120, 170));
+				g.fillRect(16, y - 10, 480, lineH);
+			}
+			text(g, SOURCE[i], SOURCE_FONT, ran[i] ? INK : PENCIL, 20, y);
+			if (notes[i] != null && ran[i]) {
+				Color color = i == 8 && back ? RED : i == 13 ? (step.kind == Kind.DONE ? GREEN : PENCIL)
+						: i == 21 ? GREEN : NOTE;
+				int x = i == 13 ? 80 : Math.max(340, 28 + width(g, SOURCE[i], SOURCE_FONT));
+				text(g, notes[i], SMALL, color, x, y);
+			}
+		}
+	}
+
 	/** The lines divide printed, the one for this step highlighted; red ones passed a. */
-	private void paintLines(Graphics2D g, int w) {
-		int x = 470;
+	private void paintLines(Graphics2D g, int w, int x) {
 		int top = 78;
 		text(g, "what divide prints", BOLD, INK, x, top);
 		int rows = 12;
@@ -337,7 +463,8 @@ class DividePage extends Page {
 			}
 			String line = step.line != null ? step.line : "returns " + step.guess;
 			Color color = step.kind == Kind.OVER ? RED : step.kind == Kind.DONE ? GREEN : step.kind == Kind.BACK ? PENCIL : INK;
-			text(g, line, step.kind == Kind.DONE ? CODE_BOLD : CODE, color, x, y);
+			// Beside the code the column is narrower, so its lines take the code's smaller type.
+			text(g, line, code ? SOURCE_FONT : step.kind == Kind.DONE ? CODE_BOLD : CODE, color, x, y);
 		}
 	}
 
