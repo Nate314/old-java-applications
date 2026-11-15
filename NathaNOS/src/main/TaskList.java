@@ -49,6 +49,8 @@ final class TaskList {
    }
 
    private final List<Task> tasks = new ArrayList<>();
+   /** Every app window opened, borderless ones too, for Restart and Shut Down to close. */
+   private final List<Component> windows = new ArrayList<>();
    private final Main desktop;
    private String launchingName = "App";
    private Image launchingIcon;
@@ -61,6 +63,7 @@ final class TaskList {
       Toolkit.getDefaultToolkit().addAWTEventListener(event -> {
          if (event.getID() == WindowEvent.WINDOW_OPENED && event.getSource() instanceof Frame && event.getSource() != desktop) {
             Frame frame = (Frame)event.getSource();
+            this.windows.add(frame);
             // Borderless windows (ScreenSaver, CircleSpawner's slices) are not app windows a taskbar would list.
             if (!frame.isUndecorated()) {
                place(frame, desktop);
@@ -86,6 +89,7 @@ final class TaskList {
    }
 
    void add(JInternalFrame frame, String name, Image icon) {
+      this.windows.add(frame);
       this.added(new Task(frame, name, icon));
    }
 
@@ -133,6 +137,23 @@ final class TaskList {
          }
       }
       return !showing.isEmpty();
+   }
+
+   /** Closes every app window, as Restart and Shut Down do; returns where the windows on show were, for the outlines. */
+   List<Rectangle> closeAll() {
+      List<Rectangle> were = new ArrayList<>();
+      for (Component window : this.windows) {
+         if (window.isDisplayable() && window.isVisible()) {
+            were.add(window.getBounds());
+         }
+         if (window instanceof Window) {
+            ((Window)window).dispose();
+         } else {
+            ((JInternalFrame)window).dispose();
+         }
+      }
+      this.windows.clear();
+      return were;
    }
 
    /** How many windows of the app are showing. */

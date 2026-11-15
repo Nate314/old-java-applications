@@ -16,10 +16,11 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
   - **New**, **Undo** (also Ctrl+Z; the last 40 strokes of this window), **Wallpaper** (makes the picture the desktop's wallpaper, stretched to cover the screen with its edges cut, and the wallpaper changes with each stroke) and **Delete** (press twice; deleting the wallpaper's picture brings back the original photo). The line under the palette says what the tool does and what just happened.
 - On a narrow screen the icon tiles get narrower (down to 48 pixels) so every column of icons fits across it.
 - **MENU button** (left end of the taskbar): show / hide the start menu.
-- **Start menu**: the NathaNOS logo, one row per app (click to open it) and **Shut Down** (exit). On a short screen the rows wrap into more columns.
+- **Start menu**: the NathaNOS logo, one row per app (click to open it), and **Restart** and **Shut Down** side by side at the bottom. On a short screen the rows wrap into more columns.
 - **Taskbar buttons**: one per open app window, in the order they opened, with the app's name and icon. The button of the active window is lit. Clicking a button brings that window to the front; clicking the lit button minimizes its window, and clicking a minimized window's button brings it back. A minimized window keeps its button until it is closed. Borderless windows (ScreenSaver, CircleSpawner's circle slices) get no button.
 - **Show desktop**: the thin strip at the right end of the taskbar, past the clock, as on Windows. A click minimizes every window on the taskbar; when they are all minimized, a click brings them all back.
 - **Window outlines**: a window flies between the desktop and the taskbar as a few light outlines that grow or shrink in about a fifth of a second, slowing as they land. Opening an app sends them from the icon or start menu row that opened it to the new window, minimizing sends them from the window into its button, and restoring sends them out of the button, after which the window shows. They are drawn on the desktop, so a window that is already up (an app opened in its own window) covers the part of them inside it.
+- **Restart and Shut Down**: every app window closes at once (borderless ones too), its outlines flying into the middle of the screen, while the whole desktop, taskbar included, fades to black over about half a second with "Restarting" or "Shutting down" and a ring of chasing dots. Shut Down then ends NathaNOS, as it always did (in the browser, the page's exit screen follows). Restart instead shows `assets/NathaNOS.jpg`, the recovered NathaNOS logo that the original never displayed, with "Starting NathaNOS" for about two seconds, then fades back to the desktop, about four seconds in all. Icons, wallpaper and Paint pictures stay as they were. Clicks during the sequence do nothing. With reduced motion (in the browser) the fades and outlines are skipped and each step shows at once.
 - **Clock**: the local time and date at the right end of the taskbar.
 - **Icons**: `assets/<name>.png` (matched ignoring case) on a light tile, or for an app without one, a colored tile with its initials (FlappyBird is "FB").
 - Opening an app loads the jar's `Main-Class`, then:
@@ -39,7 +40,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 `~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`, or `wallpaper=picture:Picture 1` for a picture from Paint) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
 - The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. `./run.ps1 old NathaNOS` adds the other apps (see Running).
 
-The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines.
+The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines, then Restart and the shut down screen.
 
 ## Code layout
 
@@ -56,7 +57,8 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 - `src/main/LauncherWindow.java`: the taskbar, with the MENU button, the window buttons, the clock and Show desktop.
 - `src/main/TaskList.java`: tracks the open app windows for the taskbar, minimizes and restores them, and centers new windows that open in the top-left corner.
 - `src/main/Zoom.java`: the outlines that fly between a window and its icon or taskbar button.
-- `src/main/StartMenu.java`: the start menu panel with the logo, the app list and Shut Down.
+- `src/main/StartMenu.java`: the start menu panel with the logo, the app list, Restart and Shut Down.
+- `src/main/Power.java`: Restart and Shut Down: closing every window, the fade to black, the logo and the fade back.
 - `src/main/FlatButton.java`: the flat icon-and-label button used by the taskbar and the start menu.
 - `src/main/AppIcon.java`: draws an app's icon, or its initials tile.
 - `src/main/AppLauncher.java`: runs an app's `main` on its own thread, and keeps NathaNOS open when an app's window closes.
@@ -72,9 +74,10 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 javac -d ../out/check/NathaNOS src/main/*.java test/main/*.java
 java -ea -cp ../out/check/NathaNOS main.PictureCheck
 java -ea -cp ../out/check/NathaNOS main.ZoomCheck
+java -ea -cp ../out/check/NathaNOS main.PowerCheck
 ```
 
-`test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land.
+`test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land. `test/main/PowerCheck.java` checks the Restart and Shut Down timeline: the fade to black, the logo shown only on Restart and only on black, the fade back to the desktop, and the steps shown at once with reduced motion.
 
 ## Running
 
