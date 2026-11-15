@@ -172,9 +172,13 @@ public final class PlayLog {
    public String describe(String id, long now, ZoneId zone) {
       int n = count(id);
       if (n == 0) return "New: not launched here yet";
-      LocalDate then = Instant.ofEpochMilli(last(id)).atZone(zone).toLocalDate();
-      long days = ChronoUnit.DAYS.between(then, Instant.ofEpochMilli(now).atZone(zone).toLocalDate());
-      String when = days <= 0 ? "today" : days == 1 ? "yesterday" : days + " days ago";
-      return "Played " + (n == 1 ? "once" : n == 2 ? "twice" : n + " times") + ", last " + when;
+      return "Played " + (n == 1 ? "once" : n == 2 ? "twice" : n + " times") + ", last " + ago(last(id), now, zone);
+   }
+
+   /** "today", "yesterday" or "4 days ago", by calendar day. */
+   static String ago(long then, long now, ZoneId zone) {
+      LocalDate day = Instant.ofEpochMilli(then).atZone(zone).toLocalDate();
+      long days = ChronoUnit.DAYS.between(day, Instant.ofEpochMilli(now).atZone(zone).toLocalDate());
+      return days <= 0 ? "today" : days == 1 ? "yesterday" : days + " days ago";
    }
 }

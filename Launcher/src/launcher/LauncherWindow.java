@@ -308,11 +308,16 @@ public final class LauncherWindow extends JFrame {
          : a.category.equals(f));
    }
 
-   /** What changed in an app since it was last launched here, newest first; nothing for an app never launched. */
+   /**
+    * What changed for a player in an app since it was last launched here, newest first (housekeeping left out);
+    * nothing for an app never launched.
+    */
    List<History.Change> news(Catalog.App a) {
       History.Story s = history.of(a.id);
       if (s == null || log.count(a.id) == 0) return List.of();
-      return s.since(log.seen(a.id), log.last(a.id));
+      List<History.Change> out = new ArrayList<>(s.since(log.seen(a.id), log.last(a.id)));
+      out.removeIf(c -> c.quiet);
+      return out;
    }
 
    /** The Updated chip's count follows launches; it shows only while some app has news (or it is the filter). */
@@ -704,10 +709,11 @@ public final class LauncherWindow extends JFrame {
          g2.setColor(new Color(0x171a21));
          g2.fillRoundRect(6, 6, w - 12, ph, 12, 12);
          thumbs.draw(g2, app, 14, 12, w - 28, ph - 12);
+         List<History.Change> fresh = then ? List.of() : news(app);
          // badge on the picture
          if (isRunning(app.id)) badge(g2, w, running.contains(app.id) ? "RUNNING" : "RUNNING THEN", Ui.GO);
          else if (log.count(app.id) == 0 && !then) badge(g2, w, "NEW", Ui.ACCENT);
-         else if (!then && !news(app).isEmpty()) badge(g2, w, "UPDATED", Ui.FRESH);
+         else if (!fresh.isEmpty()) badge(g2, w, fresh.size() == 1 ? "1 UPDATE" : fresh.size() + " UPDATES", Ui.FRESH);
          // words
          g2.setFont(Ui.font(Font.BOLD, 15f));
          g2.setColor(Ui.TEXT);
@@ -716,11 +722,10 @@ public final class LauncherWindow extends JFrame {
          if (app.pressesKeys()) Ui.chip(g2, x + 6, ph + 40, "Real keys", Ui.WARN);
          g2.setFont(Ui.font(Font.PLAIN, 12f));
          History.Story story = then ? history.of(app.id) : null;
-         int fresh = then ? 0 : news(app).size();
-         g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : fresh > 0 ? Ui.FRESH : Ui.MUTED);
+         g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
          String line = isRunning(app.id) ? "Running now"
             : story != null ? growth(story)
-            : fresh > 0 ? (fresh == 1 ? "1 change" : fresh + " changes") + " since you played"
+            : !fresh.isEmpty() ? "New: " + tidy(app, fresh.get(0).subject)
             : order.equals("most") && log.total(app.id) > 0 ? PlayLog.duration(log.total(app.id)) + " played"
             : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
          g2.drawString(fit(g2, line, w - 24), 12, h - 12);
@@ -944,7 +949,7 @@ public final class LauncherWindow extends JFrame {
          String warn = playsOld ? s.warning : a.warning;
          name.setText(a.name);
          hint.setText(s != null ? "As first restored: " + History.sentences(s.about, 2) : a.hint);
-         String word = s == null ? whatsNew(a, news(a)) : null;
+         String word = s == null ? whatsNew(a, news(a), clock.getAsLong(), ZoneId.systemDefault()) : null;
          hint.setVisible(word == null);
          whatsNew.setVisible(word != null);
          if (word != null) whatsNew.setText(word);
@@ -1054,13 +1059,16 @@ public final class LauncherWindow extends JFrame {
    }
 
    /**
-    * The detail pane's word on what is new since the app was last launched: the newest two changes, and how many
-    * more; null when nothing is.
+    * The detail pane's word on what is new since the app was last launched: the newest two changes, each with
+    * the day it landed, and how many more; null when nothing is.
     */
-   static String whatsNew(Catalog.App app, List<History.Change> news) {
+   static String whatsNew(Catalog.App app, List<History.Change> news, long now, ZoneId zone) {
       if (news.isEmpty()) return null;
-      StringBuilder t = new StringBuilder("New since you last played:");
-      for (History.Change c : news.subList(0, Math.min(2, news.size()))) t.append("\n\u2022 ").append(tidy(app, c.subject));
+      StringBuilder t = new StringBuilder(news.size() == 1 ? "New since you last played:"
+         : news.size() + " things new since you last played:");
+      for (History.Change c : news.subList(0, Math.min(2, news.size()))) {
+         t.append("\n\u2022 ").append(tidy(app, c.subject)).append(" (").append(PlayLog.ago(c.millis, now, zone)).append(')');
+      }
       if (news.size() > 2) t.append("\n").append(news.size() - 2).append(" more in History (Alt+H).");
       return t.toString();
    }

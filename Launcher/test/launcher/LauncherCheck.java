@@ -208,9 +208,23 @@ public class LauncherCheck {
          && LauncherWindow.tidy(find(apps, "WindowsE"), "Windows+E: y").equals("Y")
          && LauncherWindow.tidy(find(apps, "Windows"), "WindowsE: y").equals("WindowsE: y")
          && LauncherWindow.tidy(clockApp, "Run the site: z").equals("Run the site: z"), "subjects tidied");
-      String fresh = LauncherWindow.whatsNew(clockApp, three);
-      check(fresh.equals("New since you last played:\n\u2022 A third\n\u2022 Two apps: both\n1 more in History (Alt+H)."), fresh);
-      check(LauncherWindow.whatsNew(clockApp, List.of()) == null, "nothing new, no word");
+      List<History.Change> four = List.of(new History.Change("h4", 3 * day, "Clock: a fourth"), three.get(0), three.get(1), three.get(2));
+      String fresh = LauncherWindow.whatsNew(clockApp, four, 3 * day + 60_000L, utc);
+      check(fresh.equals("4 things new since you last played:\n\u2022 A fourth (today)\n\u2022 A third (3 days ago)\n"
+         + "2 more in History (Alt+H)."), fresh);
+      check(LauncherWindow.whatsNew(clockApp, List.of(three.get(0)), day, utc).equals("New since you last played:\n\u2022 A third (yesterday)"),
+         "one change, with its day");
+      check(LauncherWindow.whatsNew(clockApp, List.of(), 0, utc) == null, "nothing new, no word");
+      // Housekeeping is not news: the same subjects the site's What's new folds away, by the same rule.
+      check(!three.get(0).quiet && new History.Change("x", 0, "Clock README: words").quiet
+         && new History.Change("x", 0, "Refactor: one helper").quiet && new History.Change("x", 0, "ClockCheck: alarm").quiet
+         && !new History.Change("x", 0, "Clock: a world map").quiet, "quiet subjects");
+      String kind = new String(Files.readAllBytes(root.resolve("web/src/runtime/lazy/news-kind.ts")), StandardCharsets.UTF_8);
+      kind = kind.substring(kind.indexOf("new RegExp(["), kind.indexOf("].join")).replaceAll("//[^\n]*", "");
+      java.util.regex.Matcher lit = java.util.regex.Pattern.compile("'((?:[^'\\\\]|\\\\.)*)'|\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(kind);
+      List<String> parts = new java.util.ArrayList<>();
+      while (lit.find()) parts.add((lit.group(1) != null ? lit.group(1) : lit.group(2)).replace("\\\\", "\\"));
+      check(String.join("|", parts).equals(History.QUIET.pattern()), "the launcher's quiet rule matches news-kind.ts: " + parts);
       check(Runner.homeOption("-Xmx1g", Paths.get("/h o")).endsWith("\"-Duser.home=" + Paths.get("/h o").toAbsolutePath() + "\"")
          && Runner.homeOption(null, Paths.get("/h")).startsWith("\"-D"), "then home option");
       // The unpacker refuses entries that would land outside its folder.
