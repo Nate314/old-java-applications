@@ -151,6 +151,17 @@ final class Market {
       return stock == null ? 0 : stock.path[minute];
    }
 
+   /** The stock's day so far as one candle: {day, open, high, low, price now}. */
+   double[] bar(Stock stock) {
+      double high = stock.open();
+      double low = stock.open();
+      for (int m = 0; m <= minute; m++) {
+         high = Math.max(high, stock.path[m]);
+         low = Math.min(low, stock.path[m]);
+      }
+      return new double[] {day, stock.open(), high, low, stock.path[minute]};
+   }
+
    boolean closed() {
       return minute >= CLOSE;
    }

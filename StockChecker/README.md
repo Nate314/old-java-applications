@@ -11,11 +11,11 @@ Originally an editable list of ticker symbols with a price label beside each, re
 - **Watch list** (left): each stock's price, change since the open, shares held and a sparkline of the day so far. Click a row, or use **Up**/**Down**, to pick it.
 - **Chart** (right): the picked stock's day so far, with the open as a dashed line, price and time axes, and a green or red marker at each of your buys and sells.
 - **Buy 1** (B), **Buy 10** (V), **Buy max** (M), **Sell 1** (S), **Sell 10** (D), **Sell all** (A): trade the picked stock at the current price, with no fees. You can only spend the cash you have. The line under the chart shows your position (shares, average cost, gain or loss) or how many shares your cash buys.
-- **Chart** / **Race** (tabs at the top right of the chart, C and R; R toggles): the Race tab shows how you are doing against four computer traders (see below).
+- **Chart** / **Days** / **Race** (tabs at the top right of the chart, C, W and R; R toggles): the Days tab shows the picked stock day by day (see below), the Race tab how you are doing against four computer traders (see below).
 - **Header rank**: "2nd of 5" beside your net worth is your place among you and the four rivals by net worth.
 - **News** (bottom): the latest headline about the market or a stock on the desk. A headline comes with a push of 0.6% to 2.2% in that direction over the next 15 to 45 minutes. Under it, a ticker tape of every stock on the desk.
 - **Closing bell**: at 4:00 PM a bell rings (tubular bells on the MIDI synthesizer) and the chart gives way to the day's results: net worth, the change today and since day 1, the best and worst stock, and a bar chart of net worth at every close so far (the last 14). **Next day** (Enter or N) opens the next day. **Start over** (X, press twice) goes back to day 1 with $10,000.
-- The desk is saved in `~/.stockchecker-desk.txt` (on trades, speed changes, every 15 market minutes and at the close), so it carries on from the same minute next time. The rivals are saved there too (`rival=`, `rhold=`, `rtrade=` and `rclose=` lines).
+- The desk is saved in `~/.stockchecker-desk.txt` (on trades, speed changes, every 15 market minutes and at the close), so it carries on from the same minute next time. The rivals are saved there too (`rival=`, `rhold=`, `rtrade=` and `rclose=` lines), and so are the Days tab's candles (`bar=` lines).
 
 ## Order lines
 
@@ -34,6 +34,17 @@ The chart can be listened to as well as looked at, so you can follow a stock wit
 - **L** listens live: while the market runs, a short note each market minute for the picked stock's price, on the same scale. L again stops.
 - For screen readers, the desk's accessible name says the day, the time, whether the market is open, the picked stock's price and change, the shares you hold, your net worth and your place, and that H and L listen.
 - An order line's tag slides right past any trade marker it would cover, such as a rival's dot at 9:30 at the chart's left edge.
+
+## Days
+
+The Chart tab shows one day; the **Days** tab (W) shows the picked stock across the days you have played, so you can see whether a dip today is part of a slide or a blip in a climb.
+
+- One candle per day, oldest at the left, today's at the right, outlined and still moving while the market is open: the body runs from the day's open to its close (green when it closed higher, red when lower) and the thin wick from its low to its high. Up to 20 days show (today and the 19 before it), labelled D1, D2 and so on underneath (every other day when they would not fit).
+- Beside the price, the change from the open of the first day shown to now ("+4.15% since day 1"; just today's change while today is the only day).
+- While you hold the stock, a dashed line marks your average cost ("You paid $79.66 a share"), so you can see at a glance how far the price has run from it.
+- Point at a candle for that day's change, open, high, low and close (for today: "Today so far", and the price now). The Days tab takes no clicks; order lines are put on the Chart tab.
+- It works after the closing bell too, with the finished day as the last candle. The screen reader name of the desk adds the change shown while the tab is open.
+- Each closing bell keeps every stock on the desk's candle in the desk file, as `bar=` lines (the last 19 per stock). The candles start with the first close after this change: a desk saved before it shows only the days closed since. Start over clears them. A stock that was off the desk for some days simply has no candles for them, so its D labels skip.
 
 ## The rivals
 
@@ -82,7 +93,8 @@ The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCh
 
 ## Self-check
 
-`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the money text and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
+`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the Days candles (kept at each close and across a reload, the wick spanning the body, the last 19 kept, cleared by Start over), the money text
+ and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
 
 ```
 javac -d ../out/check/StockChecker src/stockchecker/*.java test/stockchecker/*.java
