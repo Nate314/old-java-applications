@@ -216,9 +216,9 @@ final class ShortcutShelf extends JButton {
    /** The hover to press row: a switch, lit when on, and its name. */
    private void paintHoverRow(Graphics2D g, Rectangle r, boolean lit, Font nameFont) {
       boolean on = this.dwellOn.getAsBoolean();
-      int sw = 24;
+      int sw = 20;
       int sh = r.height - 10;
-      int sx = r.x + 4;
+      int sx = r.x + 3;
       int sy = r.y + 5;
       g.setColor(on ? CAP : WindowsKey.BACK);
       g.fillRoundRect(sx, sy, sw, sh, sh, sh);
@@ -226,7 +226,7 @@ final class ShortcutShelf extends JButton {
       g.fillOval(on ? sx + sw - sh + 2 : sx + 2, sy + 2, sh - 4, sh - 4);
       g.setFont(nameFont);
       g.setColor(lit ? Color.WHITE : TEXT);
-      g.drawString(HOVER_NAME, sx + sw + 6, r.y + (r.height + g.getFontMetrics().getAscent()) / 2 - 2);
+      g.drawString(HOVER_NAME, sx + sw + 5, r.y + (r.height + g.getFontMetrics().getAscent()) / 2 - 2);
    }
 
    @Override
