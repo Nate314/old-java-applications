@@ -358,6 +358,7 @@ public final class GamePanel extends JPanel implements KeyListener {
          )
       );
       g2.setStroke(new BasicStroke((float)(Main.FRAME_WIDTH / 250)));
+      Color debugColor = g2.getColor();   // the puffs and the last flight change the color before the body's circle
       int shakeX = 0;
       int shakeY = 0;
       if (this.shake > 0.0F) {
@@ -407,6 +408,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.drawBird(g2);
       if (this.debugMode) {
          float[] body = this.body();
+         g2.setColor(debugColor);
          g2.drawOval(Math.round(body[0] - body[2]), Math.round(body[1] - body[2]), Math.round(body[2] * 2.0F), Math.round(body[2] * 2.0F));
       }
       if (this.contact != null && (this.state == DYING || this.state == GAME_OVER)) {
