@@ -11,6 +11,7 @@ import org.teavm.jso.JSObject;
 import web.shim.java.awt.TComponent;
 import web.shim.java.awt.TContainer;
 import web.shim.java.awt.TKeyboardFocusManager;
+import web.shim.java.awt.TRobot;
 import web.shim.java.awt.TWindow;
 import web.shim.java.awt.event.TKeyEvent;
 import web.shim.java.awt.event.TMouseEvent;
@@ -456,6 +457,10 @@ public final class TDesktop {
     }
 
     private static void onKey(JSObject e, int id) {
+        if (TRobot.takesKey(Keys.toVk(Js.keyCode(e)), id)) {
+            Js.preventDefault(e);
+            return;
+        }
         TWindow w = active;
         if (w == null || !w.isVisible()) {
             return;

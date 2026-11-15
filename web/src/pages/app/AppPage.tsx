@@ -15,7 +15,7 @@ const SITE = 'Old Java Applications';
  *  - data-files: files its program reads, preloaded from its folder before main() runs
  *  - data-args: its program's arguments (FlappyBird's frame rate, as run.ps1 passes it)
  *  - data-args-page: main also gets the page's address, to build links that reopen it (a tune, a game by link)
- *  - data-own-layout: it places its windows itself, so boot.js does not center them (CircleSpawner)
+ *  - data-own-layout: it places its windows itself, so boot.js does not center them (CircleSpawner, Windows)
  *  - data-shell: its program presses Windows keys, so boot.js plays a pretend Windows for them (Windows, WindowsE)
  *  - data-tab-title: the browser tab follows its window title (Clock)
  * Values are attribute values; an empty string is an attribute without a value.
@@ -37,7 +37,7 @@ const BODY: Record<string, Record<string, string>> = {
   StockChecker: { 'data-files': 'myStocks.txt stockCheck.csv' },
   SynthesizerKeyboard: { 'data-args-page': '' },
   UltimateTicTacToe: { 'data-args-page': '' },
-  Windows: { 'data-shell': '' },
+  Windows: { 'data-shell': '', 'data-own-layout': '' },
   WindowsE: { 'data-shell': '' },
 };
 
