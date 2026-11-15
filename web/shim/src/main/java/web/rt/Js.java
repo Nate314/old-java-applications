@@ -398,12 +398,24 @@ public final class Js {
             + "_a.remove(); setTimeout(function () { URL.revokeObjectURL(_u); }, 10000);")
     public static native void download(String name, String data);
 
-    /** Replaces the app's saved files. A full localStorage logs an error and keeps the previous copy. */
-    @JSBody(params = { "key", "paths", "data" }, script =
-            "var _s = {}; for (var _i = 0; _i < paths.length; _i++) _s[paths[_i]] = data[_i];"
-            + "try { if (paths.length) localStorage.setItem(key, JSON.stringify(_s)); else localStorage.removeItem(key); }"
+    /**
+     * Writes the files this page changed (and drops the ones it deleted) into the app's store, keeping every other
+     * file in it, since other pages of the site share it. A full localStorage logs an error and keeps the previous copy.
+     */
+    @JSBody(params = { "key", "paths", "data", "drops" }, script =
+            "var _s; try { _s = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { _s = null; }"
+            + "if (!_s || typeof _s !== 'object' || Array.isArray(_s)) _s = {};"
+            + "for (var _i = 0; _i < paths.length; _i++) _s[paths[_i]] = data[_i];"
+            + "for (var _j = 0; _j < drops.length; _j++) delete _s[drops[_j]];"
+            + "try { if (Object.keys(_s).length) localStorage.setItem(key, JSON.stringify(_s)); else localStorage.removeItem(key); }"
             + " catch (e) { console.error('Could not keep the saved files: ' + e); }")
-    public static native void storeSaves(String key, String[] paths, String[] data);
+    public static native void storeSaves(String key, String[] paths, String[] data, String[] drops);
+
+    /** Calls back when another page changes (or clears) the store; savedPaths and savedData then read the new copy. */
+    @JSBody(params = { "key", "cb" }, script =
+            "window.addEventListener('storage', function (e) {"
+            + " if ((e.key === key || e.key === null) && e.storageArea === localStorage) cb(); });")
+    public static native void onSavesChanged(String key, Callback cb);
 
     @JSBody(params = { "ms", "cb" }, script = "setInterval(cb, ms);")
     public static native void every(int ms, Callback cb);

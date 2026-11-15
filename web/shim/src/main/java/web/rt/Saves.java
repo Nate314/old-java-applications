@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Keeps the files an app writes across page loads. TeaVM's file system lives in memory, so every second (and when the
@@ -17,6 +18,8 @@ import java.util.Map;
  * {@code oldjava.saves.<App>} ({@code <App>.then} on an app's then.html). On the next load those files are written back over the page's preloaded ones before
  * main() runs, so FlappyBird's best score or StockChecker's edited list come back as they would on a desktop disk.
  * Files written to {@code ~/Downloads} are not kept: each is handed to the browser as a download, then deleted.
+ * Other pages of the site share the store (another tab, the home page's player), so only the files this page changed
+ * are written into it, and files another page saves are picked up from the storage event.
  */
 public final class Saves {
     private static final String PREFIX = "oldjava.saves.";
@@ -47,6 +50,7 @@ public final class Saves {
             }
         }
         scan(false);
+        Js.onSavesChanged(key, Saves::pickUp);
         Js.every(1000, () -> scan(true));
         Js.onPageHide(() -> scan(true));
     }
@@ -55,7 +59,8 @@ public final class Saves {
     private static void scan(boolean store) {
         List<File> files = new ArrayList<>();
         collect(new File("/"), files);
-        boolean changed = false;
+        List<String> puts = new ArrayList<>();
+        List<String> drops = new ArrayList<>();
         Map<String, Boolean> present = new HashMap<>();
         for (File file : files) {
             String path = file.getAbsolutePath();
@@ -74,7 +79,7 @@ public final class Saves {
                 String data = read(file);
                 if (data != null && !data.equals(saved.get(path))) {
                     saved.put(path, data);
-                    changed = true;
+                    puts.add(path);
                 }
             }
         }
@@ -82,17 +87,37 @@ public final class Saves {
             if (!present.containsKey(path)) {
                 saved.remove(path);
                 seen.remove(path);
-                changed = true;
+                drops.add(path);
             }
         }
-        if (changed) {
-            String[] paths = saved.keySet().toArray(new String[0]);
-            String[] data = new String[paths.length];
-            for (int i = 0; i < paths.length; i++) {
-                data[i] = saved.get(paths[i]);
+        if (!puts.isEmpty() || !drops.isEmpty()) {
+            String[] data = new String[puts.size()];
+            for (int i = 0; i < data.length; i++) {
+                data[i] = saved.get(puts.get(i));
             }
-            Js.storeSaves(key, paths, data);
+            Js.storeSaves(key, puts.toArray(new String[0]), data, drops.toArray(new String[0]));
         }
+    }
+
+    /**
+     * Another page changed the store: its files are written into this page's file system, unless this page changed
+     * the same file since the last look. Files it dropped stay in memory here, but are not written back unless the
+     * app writes them again.
+     */
+    private static void pickUp() {
+        Map<String, Boolean> now = new HashMap<>();
+        for (String path : Js.savedPaths(key)) {
+            now.put(path, Boolean.TRUE);
+            String data = Js.savedData(key, path);
+            File file = new File(path);
+            // Changed, made or deleted here since the last look: this page's copy wins on the next scan.
+            boolean mine = !Objects.equals(seen.get(path), file.exists() ? file.lastModified() : null);
+            if (data != null && !mine && !data.equals(saved.get(path)) && write(file, data)) {
+                saved.put(path, data);
+                seen.put(path, file.lastModified());
+            }
+        }
+        saved.keySet().retainAll(now.keySet());
     }
 
     private static void collect(File dir, List<File> out) {
