@@ -4,6 +4,7 @@ import { APPS } from '../../shared/catalog';
 // Flappy Bird's Bird class: as decompiled in the repo's first commit (4fea701, b.java) and as #1 renamed it (b331e84, Bird.java).
 import decompiled from './b-decompiled.java.txt?raw';
 import renamedSource from './Bird-renamed.java.txt?raw';
+import { ShareStory } from './ShareStory';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 // Rename-only means the two files have the same tokens apart from the names, so splitting both on identifiers
@@ -52,6 +53,9 @@ export function StoryTop() {
       <nav aria-label="Chapters">
         {CHAPTERS.map((c, i) => <a key={c[0]} href={c[0]} aria-current={at ? (i === at.chapter ? 'true' : 'false') : undefined}>{c[1]}</a>)}
       </nav>
+      {at && at.chapter >= 0
+        ? <ShareStory className="btn share" label="Share this chapter" hash={CHAPTERS[at.chapter][0]} name={CHAPTERS[at.chapter][1]} />
+        : <ShareStory className="btn share" label="Share" />}
       <span className="bar" id="bar" aria-hidden="true" style={at ? { transform: 'scaleX(' + at.read + ')' } : undefined} />
     </header>
   );

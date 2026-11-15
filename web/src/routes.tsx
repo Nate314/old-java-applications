@@ -25,6 +25,9 @@ const skin = <script dangerouslySetInnerHTML={{ __html: SKIN_SCRIPT }} />;
 const homeDescription = 'Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play ' +
   apps.length + ' of them in the browser, installed as an app or offline.';
 
+const storyDescription = 'How 20 Java Swing and AWT programs written more than ten years ago were recovered from old jars, ' +
+  'fixed up and brought to the browser, told with their real code and the apps themselves.';
+
 export const ROUTES: Route[] = [
   // The home page: the player, Your arcade and the gallery. boot.js (the site's shared runtime, as on every app
   // page) runs before it (its module imports it first), and What's new (src/runtime/lazy/news.ts) after it. The share tags point at the card web/cards.ps1
@@ -94,7 +97,18 @@ export const ROUTES: Route[] = [
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{'The story: ' + SITE}</title>
-        <meta name="description" content="How 20 Java Swing and AWT programs written more than ten years ago were recovered from old jars, fixed up and brought to the browser, told with their real code and the apps themselves." />
+        <meta name="description" content={storyDescription} />
+        {/* The link preview: the card web/cards.ps1 renders from card.html?story, as the home page's. */}
+        <meta property="og:type" content="article" />
+        <meta property="og:site_name" content={SITE} />
+        <meta property="og:title" content="Twenty old programs, brought back to play" />
+        <meta property="og:description" content={storyDescription} />
+        <meta property="og:url" content="story.html" />
+        <meta property="og:image" content="cards/story.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="Flappy Bird's decompiled class b beside the same code renamed to class Bird" />
+        <meta name="twitter:card" content="summary_large_image" />
         {ICON}
         <link rel="stylesheet" href="shim.css" />
         {skin}
