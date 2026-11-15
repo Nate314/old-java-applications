@@ -177,6 +177,46 @@ public class DeskCheck {
       }
       saved.delete();
 
+      // Orders: a line below the price buys the dip, a stop sells all, the other line on the stock is cancelled.
+      File ordered = File.createTempFile("stockchecker-orders", ".txt");
+      ordered.delete();
+      Desk lines = Desk.load(ordered, Arrays.asList("CRM"), first);
+      lines.tick();
+      double now = lines.market.price("CRM");
+      check(lines.setOrder("CRM", now * 1.0005) == null, "no order right at the price");
+      Desk.Order dip = lines.setOrder("CRM", now * 0.999);
+      Desk.Order breakout = lines.setOrder("CRM", now * 1.5);
+      check(dip.buy && !dip.above && breakout.buy && breakout.above && lines.orders.size() == 2, "a buy line each side");
+      check(lines.setOrder("CRM", now * 1.4).above && lines.orders.size() == 2, "a new line replaces the one on its side");
+      Desk.Order dipCopy = Desk.load(ordered, Arrays.asList("CRM"), first).order("CRM", false);
+      check(dipCopy != null && dipCopy.buy && dipCopy.price == dip.price, "orders reload");
+      Portfolio.Trade bought = null;
+      while (bought == null && !lines.tick()) {
+         if (!lines.fills.isEmpty()) {
+            bought = lines.fills.get(0);
+         }
+      }
+      check(bought != null && bought.shares > 0 && bought.price <= dip.price, "the dip line buys at or under it");
+      check(lines.portfolio.shares("CRM") == bought.shares && lines.portfolio.cash < bought.price, "it buys max");
+      check(lines.orders.isEmpty(), "a fill cancels the stock's other line");
+      check(!lines.market.closed(), "the dip comes before the close");
+      double held = lines.market.price("CRM");
+      Desk.Order stop = lines.setOrder("CRM", held * 0.5);
+      check(stop != null && !stop.buy && !stop.above, "holding, a line below is a stop");
+      lines.sell("CRM", Integer.MAX_VALUE);
+      check(lines.orders.isEmpty(), "selling everything drops the sell lines");
+      lines.setOrder("CRM", held * 0.99);
+      lines.setWatch(Arrays.asList("NFLX"));
+      check(lines.orders.isEmpty(), "a stock that leaves the desk takes its lines");
+      lines.setOrder("NFLX", lines.market.price("NFLX") * 0.5);
+      check(lines.orders.size() == 1, "a line on NFLX");
+      while (!lines.tick()) {
+         // to the close
+      }
+      lines.nextDay();
+      check(lines.orders.isEmpty(), "orders last the day");
+      ordered.delete();
+
       // Money text.
       check(Money.dollars(10234.5).equals("$10,234.50"), Money.dollars(10234.5));
       check(Money.dollars(-0.004).equals("$0.00") && Money.change(-12).equals("-$12.00") && Money.change(5).equals("+$5.00"), "change");
