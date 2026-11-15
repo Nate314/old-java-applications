@@ -51,7 +51,7 @@ $StarsSuns = "js:(function (c) { var r = c.getBoundingClientRect(); [[0.27, 0.3]
 $Recipes = [ordered]@{
     Clock               = @{ Steps = @('wait:800', 'key:W', 'wait:300', (ClockAt 10.25), 'wait:800') }
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', 'wait:500', 'key:Space', 'wait:450', 'key:Space', 'wait:350') }
-    Minesweeper         = @{ Steps = @('wait:800', 'key:W', 'wait:2200') }
+    Minesweeper         = @{ Steps = @('wait:800', 'key:O', 'key:W', 'wait:2200') }
     NathaNOS            = @{ Steps = @('wait:1500', $NathaNOSPicture, 'wait:5000', $NathaNOSOpen, 'wait:1500') }
     RubiksCube2D        = @{ Steps = @('wait:1500', (Click '^Mix$'), 'wait:1500', 'key:T', 'wait:600') + (Repeat 19 @($CoachTurn, 'wait:120')) + @('wait:1500') }
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:7000', 'key:F', 'wait:1800') }

@@ -83,6 +83,7 @@ public class MineFieldCheck {
       checkSolver();
       checkLogic();
       checkFairBoards();
+      checkOdds();
       System.out.println("MineFieldCheck passed");
    }
 
@@ -271,6 +272,138 @@ public class MineFieldCheck {
          System.out.println("Solver " + level + ": " + wins + " of " + games + " games won");
          check(level != Level.BEGINNER || wins > games * 0.7, "the computer won only " + wins + " Beginner games");
       }
+   }
+
+   /**
+    * Odds against counting every mine placement that fits what is seen, on small boards part way through (with a few
+    * flags, which the odds must ignore), then on Expert games the computer plays.
+    */
+   private static void checkOdds() {
+      int size = 5;
+      int mines = 6;
+      for (int seed = 0; seed < 60; seed++) {
+         Random random = new Random(seed);
+         String[][] grid = new MineFieldGenerator(size, size, mines, 2, 2, random).getGrid();
+         boolean[][] revealed = new boolean[size][size];
+         MineFieldGenerator.reveal(grid, revealed, new boolean[size][size], 2, 2);
+         for (int extra = seed % 3; extra > 0; extra--) {
+            int x = random.nextInt(size);
+            int y = random.nextInt(size);
+            if (!MineFieldGenerator.isMine(grid, x, y)) {
+               MineFieldGenerator.reveal(grid, revealed, new boolean[size][size], x, y);
+            }
+         }
+         int[][] view = new int[size][size];
+         List<Integer> hidden = new java.util.ArrayList<>();
+         for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+               view[x][y] = revealed[x][y] ? (grid[x][y].trim().isEmpty() ? 0 : Integer.parseInt(grid[x][y]))
+                  : random.nextInt(5) == 0 ? Solver.FLAG : Solver.HIDDEN;
+               if (!revealed[x][y]) {
+                  hidden.add(x * size + y);
+               }
+            }
+         }
+         double[][] odds = Odds.of(view, mines);
+         check(odds != null, "no odds on board " + seed);
+         double[] counted = new double[size * size];
+         double total = countPlacements(view, hidden, 0, mines, new boolean[size * size], counted);
+         for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+               double expected = revealed[x][y] ? -1 : counted[x * size + y] / total;
+               check(Math.abs(odds[x][y] - expected) < 1e-9, "odds at " + x + "," + y + " on board " + seed + ": " + odds[x][y] + " not " + expected);
+            }
+         }
+      }
+
+      // Expert games played by the computer: at every move the odds add up to the mines, never put a mine at 0% or a
+      // safe tile at 100%, and are quick.
+      long slowest = 0;
+      int n = Level.EXPERT.size;
+      for (int seed = 0; seed < 40; seed++) {
+         Random random = new Random(seed);
+         String[][] grid = null;
+         boolean[][] revealed = new boolean[n][n];
+         boolean[][] flagged = new boolean[n][n];
+         int flags = 0;
+         for (int step = 0; step < n * n * 2; step++) {
+            int[][] view = new int[n][n];
+            for (int x = 0; x < n; x++) {
+               for (int y = 0; y < n; y++) {
+                  view[x][y] = revealed[x][y] ? (grid[x][y].trim().isEmpty() ? 0 : Integer.parseInt(grid[x][y]))
+                     : flagged[x][y] ? Solver.FLAG : Solver.HIDDEN;
+               }
+            }
+            if (grid != null) {
+               long start = System.nanoTime();
+               double[][] odds = Odds.of(view, Level.EXPERT.mines);
+               slowest = Math.max(slowest, (System.nanoTime() - start) / 1_000_000);
+               check(odds != null, "no odds in Expert game " + seed);
+               double sum = 0;
+               for (int x = 0; x < n; x++) {
+                  for (int y = 0; y < n; y++) {
+                     if (revealed[x][y]) {
+                        check(odds[x][y] == -1, "a revealed tile with odds");
+                        continue;
+                     }
+                     sum += odds[x][y];
+                     boolean mine = MineFieldGenerator.isMine(grid, x, y);
+                     check(mine ? odds[x][y] > 1e-9 && odds[x][y] <= 1 + 1e-9 : odds[x][y] >= 0 && odds[x][y] < 1 - 1e-9,
+                        (mine ? "a mine at 0%" : "a safe tile at 100%") + " in Expert game " + seed);
+                  }
+               }
+               check(Math.abs(sum - Level.EXPERT.mines) < 1e-6, "Expert odds add up to " + sum + " mines");
+            }
+            Solver.Move move = Solver.next(view, Level.EXPERT.mines - flags, random);
+            if (grid == null) {
+               grid = new MineFieldGenerator(n, n, Level.EXPERT.mines, move.row, move.column, random).getGrid();
+            }
+            if (move.flag) {
+               flagged[move.row][move.column] = true;
+               flags++;
+               continue;
+            }
+            if (MineFieldGenerator.isMine(grid, move.row, move.column)) {
+               break;
+            }
+            MineFieldGenerator.reveal(grid, revealed, flagged, move.row, move.column);
+            if (MineFieldGenerator.isWon(grid, revealed)) {
+               break;
+            }
+         }
+      }
+      System.out.println("Odds: at most " + slowest + " ms a move in 40 Expert games");
+   }
+
+   /** Counts the placements of {@code mines} mines on the hidden tiles that fit every number, and per tile those with a mine there. */
+   private static double countPlacements(int[][] view, List<Integer> hidden, int from, int mines, boolean[] mine, double[] counted) {
+      int size = view.length;
+      if (mines == 0) {
+         for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+               if (view[x][y] >= 0) {
+                  int near = 0;
+                  for (int[] nb : MineFieldGenerator.neighbors(size, size, x, y)) {
+                     near += mine[nb[0] * size + nb[1]] ? 1 : 0;
+                  }
+                  if (near != view[x][y]) {
+                     return 0;
+                  }
+               }
+            }
+         }
+         for (int c = 0; c < mine.length; c++) {
+            counted[c] += mine[c] ? 1 : 0;
+         }
+         return 1;
+      }
+      double ways = 0;
+      for (int i = from; i < hidden.size(); i++) {
+         mine[hidden.get(i)] = true;
+         ways += countPlacements(view, hidden, i + 1, mines - 1, mine, counted);
+         mine[hidden.get(i)] = false;
+      }
+      return ways;
    }
 
    private static void checkBestTimes() {

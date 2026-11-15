@@ -78,16 +78,23 @@ public final class GameFrame extends JFrame {
    /** Moves made in this game, so asking twice for the same hint counts once. */
    private int moves;
    private int hintedAtMove = -1;
+   /** Odds (O): every hidden tile shows its chance of being a mine. Kept for the next game, not saved. */
+   private boolean showOdds;
+   /** The odds were shown in this game, which counts as one hint. */
+   private boolean oddsCounted;
+   private JButton oddsButton;
+   private Color plainButton;
+   private Color plainText;
 
    public GameFrame(SoundPlayer soundPlayer) {
-      this(soundPlayer, null, null, null, false);
+      this(soundPlayer, null, null, null, false, false);
    }
 
    /**
     * Without best times, reads them from the file. That happens here, after JFrame's constructor, because the browser
     * build restores saved files when the first component is created.
     */
-   private GameFrame(SoundPlayer soundPlayer, BestTimes bestTimes, Point location, int[] cursorSpot, boolean watching) {
+   private GameFrame(SoundPlayer soundPlayer, BestTimes bestTimes, Point location, int[] cursorSpot, boolean watching, boolean odds) {
       this.soundPlayer = soundPlayer;
       this.bestTimes = bestTimes != null ? bestTimes : BestTimes.load(BEST_TIMES_FILE);
       this.level = this.bestTimes.lastLevel();
@@ -138,6 +145,9 @@ public final class GameFrame extends JFrame {
       if (watching) {
          this.toggleWatch();
       }
+      if (odds) {
+         this.toggleOdds();
+      }
    }
 
    /** One button per level; the current one is lit. Not focusable, so the arrow keys keep moving the window. */
@@ -167,12 +177,20 @@ public final class GameFrame extends JFrame {
       hint.setToolTipText("Show the next tile that can be worked out, and why (H)");
       hint.addActionListener(event -> this.hint());
       bar.add(hint);
+      this.oddsButton = new JButton("Odds");
+      this.oddsButton.setFocusable(false);
+      this.oddsButton.setToolTipText("Show every hidden tile's chance of being a mine (O)");
+      this.oddsButton.addActionListener(event -> this.toggleOdds());
+      this.plainButton = this.oddsButton.getBackground();
+      this.plainText = this.oddsButton.getForeground();
+      bar.add(this.oddsButton);
       return bar;
    }
 
    /** Left click on a tile: reveals it (and a blank region), or ends the game on a mine. */
    void revealFrom(int row, int column) {
       this.reveal(row, column, row, column);
+      this.refreshOdds();
    }
 
    /**
@@ -194,6 +212,7 @@ public final class GameFrame extends JFrame {
          }
          this.reveal(cell[0], cell[1], row, column);
       }
+      this.refreshOdds();
    }
 
    /** Reveals (row, column); the tiles ripple out from (fromRow, fromColumn), the tile that was clicked. */
@@ -272,7 +291,7 @@ public final class GameFrame extends JFrame {
             this.soundPlayer.queueNote(note);
          }
          if (!this.computerPlayed) {
-            this.setHintLines(this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
+            this.setHintLines(this.oddsCounted ? "Cleared with the odds showing." : this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
                : this.fairBoard ? "Cleared by logic alone, no guesses." : "Cleared!",
                this.hints > 0 ? "A game won with hints sets no best time." : " ");
          }
@@ -374,7 +393,8 @@ public final class GameFrame extends JFrame {
    void play(Level choice) {
       this.bestTimes.setLastLevel(choice);
       this.dispose();
-      new GameFrame(this.soundPlayer, this.bestTimes, this.getLocation(), this.cursor == null ? null : this.cursor.spot(), this.watching);
+      new GameFrame(this.soundPlayer, this.bestTimes, this.getLocation(), this.cursor == null ? null : this.cursor.spot(), this.watching,
+         this.showOdds);
    }
 
    /** W: the computer plays this board (and the games after it) until W again, a click or a key on a tile. */
@@ -467,6 +487,48 @@ public final class GameFrame extends JFrame {
       this.restart();
    }
 
+   /** O or the Odds button: shows or hides every hidden tile's chance of being a mine. Counts as a hint. */
+   void toggleOdds() {
+      this.showOdds = !this.showOdds;
+      this.oddsButton.setBackground(this.showOdds ? SELECTED_LEVEL : this.plainButton);
+      this.oddsButton.setForeground(this.showOdds ? Color.BLACK : this.plainText);
+      this.clearHint();
+      this.refreshOdds();
+   }
+
+   /**
+    * Puts each hidden tile's odds on it (or takes them off, with Odds off or the game over) and, while playing, says
+    * under the status line what they show.
+    */
+   private void refreshOdds() {
+      double[][] odds = this.showOdds && !this.gameOver && this.grid != null ? Odds.of(this.view(), this.level.mines) : null;
+      double safest = 1;
+      for (int r = 0; r < this.rows; r++) {
+         for (int c = 0; c < this.columns; c++) {
+            double chance = odds == null || this.revealed[r][c] ? -1 : odds[r][c];
+            this.tiles[r][c].setOdds(chance);
+            if (chance >= 0 && !this.flagged[r][c]) {
+               safest = Math.min(safest, chance);
+            }
+         }
+      }
+      if (!this.showOdds || this.gameOver) {
+         return;
+      }
+      if (this.grid == null) {
+         this.setHintLines("Odds: each tile's chance of being a mine.", "They show after the first click, which is always safe.");
+      } else if (odds == null) {
+         this.setHintLines("Too many ways to count the odds here.", "They come back as more of the board opens.");
+      } else {
+         if (!this.watching && !this.oddsCounted) {
+            this.oddsCounted = true;
+            this.hints++;
+         }
+         this.setHintLines(safest < 1e-9 ? "Odds: the 0% tiles are safe to open." : "Odds: no tile is safe for certain.",
+            safest < 1e-9 ? "The redder a tile, the likelier a mine." : "The safest is " + Odds.percent(safest) + " likely to be a mine.");
+      }
+   }
+
    /** Marks a deduction on the board (its numbers ringed, its tiles glowing or red) with a line saying what and why. */
    private void showDeduction(Logic.Deduction step, String action) {
       this.clearHint();
@@ -494,9 +556,11 @@ public final class GameFrame extends JFrame {
       this.showTip();
    }
 
-   /** Between hints: what kind of board this is and where the help is. */
+   /** Between hints: what kind of board this is and where the help is (with Odds on, what the odds say). */
    private void showTip() {
-      if (this.bestTimes.noGuess()) {
+      if (this.showOdds) {
+         this.refreshOdds();
+      } else if (this.bestTimes.noGuess()) {
          this.setHintLines("No guess: logic alone clears every board.", "Stuck? Hint (H) shows the next step and why.");
       } else {
          this.setHintLines("Random boards: some need a lucky guess.", "No guess (G) deals boards logic can clear.");
