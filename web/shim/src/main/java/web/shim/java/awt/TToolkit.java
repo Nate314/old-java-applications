@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import web.shim.java.awt.datatransfer.TClipboard;
 import web.shim.java.awt.event.TAWTEventListener;
+import web.rt.Js;
 import web.shim.java.awt.web.TDesktop;
 
 public class TToolkit {
@@ -65,6 +66,14 @@ public class TToolkit {
                 awtListeners.get(i).eventDispatched(event);
             }
         }
+    }
+
+    /**
+     * "oldjava.reducedMotion" is Boolean.TRUE while the visitor's system asks for less motion, FALSE otherwise, asked
+     * afresh on each call. Any other name is null, as the desktop Toolkit answers names it does not know (see web/README).
+     */
+    public Object getDesktopProperty(String name) {
+        return "oldjava.reducedMotion".equals(name) ? Boolean.valueOf(Js.reducedMotion()) : null;
     }
 
     public void beep() {
