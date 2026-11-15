@@ -28,7 +28,7 @@ export function installClick() {
 const abs = (path: string) => new URL(path, location.href).href;
 // The pages' own scripts and stylesheets are listed by the build (assets/files.json, see vite/pages.ts).
 function shell(bundle: string[]) {
-  const files = ['./', 'index.html', 'history.txt', 'shim.css', 'manifest.webmanifest', 'icons/icon.svg',
+  const files = ['./', 'index.html', 'history.txt', 'shim.css', 'forced-colors.css', 'manifest.webmanifest', 'icons/icon.svg',
                  'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'apps.json', 'assets/files.json'];
   files.push(...bundle);
   files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg');   // the story page and what it shows

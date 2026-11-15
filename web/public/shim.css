@@ -7,6 +7,8 @@
  *            animation when an app starts (see "arcade skin" at the end).
  */
 
+@import url("forced-colors.css") (forced-colors: active);   /* high contrast themes */
+
 :root,
 :root[data-skin="classic"] {
   --desk: #3a6ea5;

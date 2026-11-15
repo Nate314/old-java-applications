@@ -89,3 +89,8 @@ h1 { margin: 0; font-size: clamp(20px, 5vw, 30px); line-height: 1.1; letter-spac
 @media (max-height: 360px) {
   .note { display: none; }
 }
+
+/* High contrast: the triangle is drawn with borders, which forced colors would paint in full as a box. */
+@media (forced-colors: active) {
+  .play::before { forced-color-adjust: none; border-color: transparent transparent transparent ButtonText; }
+}
