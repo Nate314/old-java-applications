@@ -71,7 +71,7 @@ $Recipes = [ordered]@{
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Pick 'Mode 6'), (Click '^OK$'), 'wait:3000', $StarsSuns, 'wait:7000', 'rec') }
     TankGame            = @{ Query = 'watch'; Steps = @('wait:3000', 'rec') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:500', 'key:Space', 'wait:1200', 'rec') }
-    CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', (Pick 'Heart'), 'wait:2600', (Pick 'Star')) }
+    CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', (Pick 'Heart'), 'wait:1600', (Click '^Spin$')) }
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:2500', 'rec', 'wait:1200', 'key:F') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'key:B', 'key:-', 'key:=', 'rec') }
     GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:W', 'wait:1200', 'key:P', 'wait:600', 'key:Space') }
