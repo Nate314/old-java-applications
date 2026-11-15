@@ -61,6 +61,25 @@ public class GameStateCheck {
       Random random = new Random(1);
       check(Computer.easyMove(game, random) == 2 * 9 + 5, "easy takes the win");
       check(Computer.hardMove(game, random, 50) == 2 * 9 + 5, "hard takes the win");
+      // Hints: the search grown a slice at a time has chances for every legal move only, and picks the win.
+      Computer.Think think = new Computer.Think(game);
+      for (int slice = 0; slice < 5; slice++) {
+         think.grow(random, 10);
+      }
+      double[] chances = think.chances();
+      for (int move = 0; move < 81; move++) {
+         boolean legal = game.canPlay(move / 9, move % 9);
+         check(legal == !Double.isNaN(chances[move]), "a hint for move " + move + " only if it is legal");
+         check(!legal || chances[move] >= 0 && chances[move] <= 1, "hint chances in range for " + move);
+      }
+      check(think.best() == 2 * 9 + 5 && chances[2 * 9 + 5] > 0.95, "the hint's best is the win, near certain");
+      check(new Computer.Think(new GameState()).best() == -1, "no pick before any search");
+      // A short search of an empty board: doubts are positive where there are chances, and shrink with more search.
+      think = new Computer.Think(new GameState());
+      think.grow(random, 5);
+      double before = think.doubts()[40];
+      think.grow(random, 100);
+      check(before > 0 && think.doubts()[40] < before && Double.isNaN(think.doubts()[0]) == Double.isNaN(think.chances()[0]), "doubts shrink as the search grows");
 
       // Full games: every computer move is legal, and Hard (a short search) beats Easy far more often than not.
       int hardWins = 0;

@@ -32,6 +32,7 @@ public final class CellButton extends JButton implements ActionListener {
    private static final Color X_WON = new Color(26, 50, 82);
    private static final Color O_WON = new Color(76, 34, 46);
    private static final Color DRAWN = new Color(40, 42, 48);
+   private static final Color TEXT_ON_HINT = new Color(240, 244, 250);
    /** How long a mark takes to draw in, and the line through a won board, then the big mark over it. */
    static final int MARK_MS = 240;
    static final int LINE_MS = 220;
@@ -101,6 +102,10 @@ public final class CellButton extends JButton implements ActionListener {
             this.game.toggleWatch();
             event.consume();
             return;
+         case KeyEvent.VK_H:
+            this.game.toggleHints();
+            event.consume();
+            return;
          default:
             return;
       }
@@ -115,7 +120,9 @@ public final class CellButton extends JButton implements ActionListener {
     * top left board, middle square"; "O, last move, ..."), and redraws it.
     */
    final void show(String mark, boolean open, boolean last) {
-      this.getAccessibleContext().setAccessibleName((mark.isEmpty() ? "empty" + (open ? ", open" : "") : mark + (last ? ", last move" : ""))
+      double chance = this.game.hintChance(this.move());
+      String hint = Double.isNaN(chance) ? "" : ", " + Math.round(chance * 100) + "%" + (this.game.hintBest() == this.move() ? ", best" : "");
+      this.getAccessibleContext().setAccessibleName((mark.isEmpty() ? "empty" + (open ? ", open" : "") + hint : mark + (last ? ", last move" : ""))
          + ", " + PLACES[this.boardIndex] + " board, " + PLACES[this.cellIndex] + " square");
       this.repaint();
    }
@@ -156,6 +163,10 @@ public final class CellButton extends JButton implements ActionListener {
          : GameState.DRAW.equals(result) ? DRAWN
          : playable ? CELL_OPEN
          : CELL;
+      Review.Grade hint = mark.isEmpty() ? this.game.hintGrade(this.move()) : null;
+      if (hint != null) {
+         tile = mix(tile, ReviewGraph.color(hint), 0.28);   // Hints: the tile leans to the color a review would grade the move
+      }
       g.setColor(last ? CELL_LAST : tile);
       g.fillRoundRect(pad / 2, pad / 2, w - pad, h - pad, arc, arc);
 
@@ -172,6 +183,19 @@ public final class CellButton extends JButton implements ActionListener {
          g.setColor(GOLD);
          g.setStroke(new BasicStroke(Math.max(2f, w / 16f)));
          g.drawRoundRect(pad, pad, w - 2 * pad - 1, h - 2 * pad - 1, arc, arc);
+      }
+      if (hint != null) {
+         // Hints: the move's chances for the side to move, and the search's pick in a gold ring.
+         String text = Math.round(this.game.hintChance(this.move()) * 100) + (w >= 48 ? "%" : "");
+         g.setFont(new Font("Dialog", Font.BOLD, Math.max(9, w / 4)));
+         FontMetrics metrics = g.getFontMetrics();
+         g.setColor(TEXT_ON_HINT);
+         g.drawString(text, (w - metrics.stringWidth(text)) / 2, (h + metrics.getAscent() - metrics.getDescent()) / 2);
+         if (this.game.hintBest() == this.move()) {
+            g.setColor(GOLD);
+            g.setStroke(new BasicStroke(Math.max(2f, w / 16f)));
+            g.drawRoundRect(pad, pad, w - 2 * pad - 1, h - 2 * pad - 1, arc, arc);
+         }
       }
       Review.Grade grade = last ? this.game.reviewGrade() : null;
       if (grade != null && grade != Review.Grade.GOOD) {

@@ -63,6 +63,12 @@ public final class Computer {
 
    private static Node search(GameState state, Random random, long millis, int[] moves) {
       Node root = new Node(null, -1, !state.xTurn, moves);
+      grow(root, state, random, millis);
+      return root;
+   }
+
+   /** Adds about {@code millis} (and at least MIN_PLAYOUTS games) of search to the tree under {@code root}, the node of {@code state}. */
+   private static void grow(Node root, GameState state, Random random, long millis) {
       long deadline = System.currentTimeMillis() + millis;
       for (int playouts = 0; playouts < MIN_PLAYOUTS || System.currentTimeMillis() < deadline; playouts++) {
          GameState game = state.copy();
@@ -96,7 +102,64 @@ public final class Computer {
             }
          }
       }
-      return root;
+   }
+
+   /**
+    * Hints: Hard's search on one position, grown a little at a time so the board can show it settle, with every legal
+    * move's chances for the side to move (the share of the search's games after it that the mover won, a draw half).
+    */
+   static final class Think {
+      private static final int PRIOR_GAMES = 10;
+      private final GameState state;
+      private final Node root;
+
+      Think(GameState state) {
+         this.state = state.copy();
+         this.root = new Node(null, -1, !state.xTurn, state.legalMoves());
+      }
+
+      void grow(Random random, long millis) {
+         Computer.grow(this.root, this.state, random, millis);
+      }
+
+      /**
+       * chances[move] for each legal move searched so far; NaN for the rest. Each starts from even, as if PRIOR_GAMES
+       * were drawn, so a move the search tried only a few times does not show as a blunder (or a sure win) by chance.
+       */
+      double[] chances() {
+         double[] chances = new double[81];
+         java.util.Arrays.fill(chances, Double.NaN);
+         for (Node child : this.root.children) {
+            chances[child.move] = (child.score + 0.5 * PRIOR_GAMES) / (child.visits + PRIOR_GAMES);
+         }
+         return chances;
+      }
+
+      /**
+       * How far each move's chances may be off, from how few games it got: two standard errors; NaN where chances() is.
+       * A hint's grade counts only the part of a move's shortfall beyond this, so noise is not called a mistake.
+       */
+      double[] doubts() {
+         double[] chances = this.chances();
+         double[] doubts = new double[81];
+         java.util.Arrays.fill(doubts, Double.NaN);
+         for (Node child : this.root.children) {
+            double p = chances[child.move];
+            doubts[child.move] = 2 * Math.sqrt(p * (1 - p) / (child.visits + PRIOR_GAMES));
+         }
+         return doubts;
+      }
+
+      /** The move Hard would play: the one searched most; -1 before any search. */
+      int best() {
+         Node best = null;
+         for (Node child : this.root.children) {
+            if (best == null || child.visits > best.visits) {
+               best = child;
+            }
+         }
+         return best == null ? -1 : best.move;
+      }
    }
 
    /** What a search found: its move, and the side to move's score with it (0 to 1). */
