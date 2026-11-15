@@ -273,6 +273,48 @@ dialog.records-in .buttons { display: flex; flex-wrap: wrap; justify-content: fl
 .takeaway .perks li::before { content: "\2713"; margin-right: 6px; color: #7df9ff; font-weight: 700; }
 .takeaway .note { margin-top: 10px; font-size: 13px; opacity: 0.7; }
 .takeaway .note[hidden] { display: none; }
+/* The cartridge case: each app a cartridge, a notched shell with its picture as the label; lit once saved. */
+.takeaway .case { margin-top: 16px; }
+.takeaway .case-head { margin: 0 0 8px; font-size: 13px; }
+.takeaway .case-head strong { color: #7df9ff; }
+.takeaway .case-head span { opacity: 0.75; }
+.takeaway .carts { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.takeaway .cart > a, .takeaway .cart > button {
+  position: relative; display: flex; flex-direction: column; gap: 3px; width: 100%; height: 100%; box-sizing: border-box;
+  padding: 10px 7px 7px; border: 1px solid #35205c; border-radius: 6px 6px 3px 3px; background: linear-gradient(#2a1150, #1d0b3b);
+  color: #e6e0ff; font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+  clip-path: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%); transition: transform 0.15s, border-color 0.15s; }
+/* the grip ridges along the top edge */
+.takeaway .cart > a::before, .takeaway .cart > button::before { content: ""; position: absolute; top: 3px; left: 30%; right: 30%; height: 3px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 2px, transparent 2px 5px); }
+.takeaway .cart img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px;
+                      background: #0b0620; filter: grayscale(1) brightness(0.55); transition: filter 0.3s; }
+.takeaway .cart-name { font-size: 12px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.takeaway .cart-state { margin-top: auto; font-size: 11px; opacity: 0.75; }
+.takeaway .cart > button:not(:disabled) .cart-state { color: #7df9ff; opacity: 1; }
+.takeaway .cart > button:disabled { cursor: default; opacity: 0.7; }
+.takeaway .cart.lit > a { border-color: #7df9ff; box-shadow: inset 0 0 0 1px rgba(125, 249, 255, 0.25); }
+.takeaway .cart.lit img { filter: none; }
+.takeaway .cart.lit .cart-state { color: #7df9ff; opacity: 1; }
+.takeaway .cart.busy > button { border-color: #ff2bd6; opacity: 1; }
+.takeaway .cart.busy img { filter: grayscale(0.6) brightness(0.8); animation: cart-load 1s ease-in-out infinite alternate; }
+.takeaway .cart.busy .cart-state { color: #ff2bd6; opacity: 1; }
+@keyframes cart-load { to { filter: grayscale(0) brightness(1); } }
+/* phones: four to a row, so the case stays about a screen tall */
+@media (max-width: 520px) {
+  .takeaway .carts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .takeaway .cart > a, .takeaway .cart > button { padding: 9px 5px 5px; }
+  .takeaway .cart-name { font-size: 10px; letter-spacing: -0.01em; }
+}
+@media (hover: hover) {
+  .takeaway .cart > a:hover, .takeaway .cart > button:not(:disabled):hover { transform: translateY(-2px); border-color: #ff2bd6; }
+  .takeaway .cart > button:not(:disabled):hover img { filter: grayscale(0.3) brightness(0.85); }
+}
+.takeaway .cart > a:focus-visible, .takeaway .cart > button:focus-visible { outline: 2px solid #7df9ff; outline-offset: 2px; clip-path: none; }
+@media (prefers-reduced-motion: reduce) {
+  .takeaway .cart > a, .takeaway .cart > button, .takeaway .cart img { transition: none; }
+  .takeaway .cart.busy img { animation: none; }
+}
 ul.apps .saved { position: absolute; top: 8px; right: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
                  font-size: 12px; font-weight: 700; background: #170a2e; color: #7df9ff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
 ul.apps .saved[hidden] { display: none; }
