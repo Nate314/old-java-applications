@@ -21,11 +21,12 @@ Level n starts from a solved cube and mixes it with n moves while you watch (eac
 - **Teach me** (top left, or T): coaches you through solving the cube from where it is, the way people learn to (see Teach me below). Click it again (**Stop teaching**) to go back to the message and help.
 - **Patterns** (top, or G): the Patterns card in place of the message and help (see Patterns below). **1** to **7** pick a pattern, the same number again plays Show me, **M** is Make it and **Backspace** goes back to the list.
 - **My cube** (top, or C): paint the cube to match a real one in your hands, then Teach me solves that one (see My cube below). **1** to **6** pick the color to paint with while it is up; C again (or Cancel) puts the cube back as it was.
+- **Timer** (top, or K): a speed timer for solving a real cube, the way cubers time themselves (see Timer below). K or Timer again closes it.
 - **Hint** (H): rings the square of the next move back toward solved and lights its key in green. In 3D an arrow on the square shows which way to drag it, and the cube turns by itself to show the square when it is on a side out of view.
 - **Solve**: plays the way back to solved, one move at a time. A level solved this way is not counted. After a long Mix it solves the cube layer by layer the Teach me way instead, when that takes fewer moves than turning back every move of the mix (about 150 against up to 1000). Hint gives that way's next move too.
 - **Mix** with **Moves** (default 1000) and **Secs** (default 0.5): free play, scrambling with that many random moves (any face, any square, any of the four directions) spread over that many seconds in total. Hint and Solve also work after a Mix.
 - Typing in the Moves and Secs fields no longer turns the cube. The title bar shows the level and your move count. Non-numeric Moves or Secs show a message there instead of mixing.
-- The best stars and fewest moves per level, the level played last, the view and the patterns made by hand are saved to `~/.rubikscube-levels.txt` (lines like `level=4` and `3=3,3` for level 3: 3 stars, 3 moves, `view=net` once the flat net is picked, and `patterns=spots,checkerboard`). The app opens on that level and in that view.
+- The best stars and fewest moves per level, the level played last, the view and the patterns made by hand are saved to `~/.rubikscube-levels.txt` (lines like `level=4` and `3=3,3` for level 3: 3 stars, 3 moves, `view=net` once the flat net is picked, and `patterns=spots,checkerboard`, and `times=` with the Timer's latest 100 times in milliseconds, oldest first). The app opens on that level and in that view.
 - No command-line arguments. The window is 550x700.
 
 Hint and Solve know the way back because every move is recorded as a path of cube positions from the solved cube. A move that returns to a position already on the path (its inverse, or the fourth turn of one slice) cuts the path back there, so the hints never retrace a loop. A level's mix never simply undoes its previous move and always ends that many steps along the path from solved, which is the level's par.
@@ -51,6 +52,15 @@ For someone holding a mixed-up real cube: copy it into the app and be taken thro
 - Once no square is gray, the card checks that the painting is a cube that turning could make (`RealCube`): nine of each color, every corner and edge a real piece's colors, each piece once, no corner with its colors in mirror order, the corners' twists adding up to whole turns, an even number of flipped edges, and as many swaps among the corners as among the edges (both odd or both even). If not, it says what is wrong in red ("A cube has 9 squares of each color. This one has 10 white but 8 yellow.", "Two edges are blue and red, so one of them has a wrong square.", "One corner is twisted in its place. Turning never does that...").
 - **Teach me** on the card makes the painting the cube and turns Teach me on (see above). The level panel says Your cube; Hint and Solve take the coach's way, since there are no recorded moves to turn back. Make each turn the card shows on the real cube too, and both end solved. **Cancel** puts back the cube from before painting. While painting, the level and move controls wait. Nothing new is saved.
 
+## Timer
+
+For timing your solves of a real cube, like the timers cubers use.
+
+- The card gives a scramble of 20 face turns in the usual notation (U D F B R L for the up, down, front, back, right and left faces, ' for a turn back, 2 for twice), never the same face twice in a row nor three turns on one axis. Hold a solved cube with the blue center on top and red facing you and make the turns. The cube on screen is scrambled the same way from solved, so you can check yours against it, or solve it there when there is no cube in your hands (Hint, Solve and Teach me work on it as after a Mix).
+- Hold **Space** (or press and hold the time on the card, on a touch screen): the time turns red, then green after 0.3 s. Let go to start. Press Space again (any key, or a tap on the card) to stop. Letting go before it is green does not start it, and a key held down counts once.
+- Each time is kept and a new scramble comes up at once. The card shows the best time, the average of the last 5 and of the last 12 with the best and worst of them left out (Ao5, Ao12, as cubers count them), and the last five times. **Delete last** drops the latest time (a start by mistake); **New scramble** skips to another one.
+- Times are cut to hundredths, not rounded (12.349 s shows as 12.34). There is no 15 second inspection countdown and no +2 or DNF marks.
+
 ## Patterns
 
 
@@ -74,11 +84,13 @@ The moves are now the quarter turns of a real cube (`CubeGeometry`): the net is 
 - `src/rubikscube/PatternPanel.java`: the Patterns card: the list with a small cube drawn wearing each pattern, and one pattern's card with its chips, status and Show me / Make it buttons.
 - `src/rubikscube/RealCube.java`: My cube's check: whether 54 painted colors are a position a real cube can be turned into, and if not, why in words.
 - `src/rubikscube/PaintPanel.java`: the My cube card: how to hold the cube, the six colors with the squares left of each, the check's word, and Cancel and Teach me.
+- `src/rubikscube/SolveTimer.java`: the Timer: Space held, let go and pressed again as a state, the scramble, the time format and the averages.
+- `src/rubikscube/TimerPanel.java`: the Timer card: the scramble, the time (the pad to hold on a touch screen), the averages and the last times.
 - `src/rubikscube/ClickCard.java`: what the Patterns and My cube cards share: places to click laid out at each paint, the one under the mouse, and their buttons.
 - `src/rubikscube/MoveHistory.java`: the path of positions from the solved cube; applies and records moves and gives the next move back (Hint, Solve).
-- `src/rubikscube/LevelRecords.java`: the 20 levels' best stars and moves, the last level and the patterns made, read from and saved to `~/.rubikscube-levels.txt`; the star rule.
+- `src/rubikscube/LevelRecords.java`: the 20 levels' best stars and moves, the last level, the patterns made and the Timer's times, read from and saved to `~/.rubikscube-levels.txt`; the star rule.
 - `src/rubikscube/Move.java`: applies a W/A/S/D move for the selected face and square as a layer turn (see A real cube).
-- `src/rubikscube/MoveKeyDispatcher.java`: global key dispatcher that turns W/A/S/D presses into moves, Z/H/R/N/P into the level keys, T into Teach me, C into My cube (1 to 6 then pick its colors), G, 1 to 7, M and Backspace into Patterns, V into the view switch and the arrow keys into turning the 3D cube, except while typing in a text field.
+- `src/rubikscube/MoveKeyDispatcher.java`: global key dispatcher that turns W/A/S/D presses into moves, Z/H/R/N/P into the level keys, T into Teach me, C into My cube (1 to 6 then pick its colors), K into the Timer (Space then holds, starts and stops it), G, 1 to 7, M and Backspace into Patterns, V into the view switch and the arrow keys into turning the 3D cube, except while typing in a text field.
 - `src/rubikscube/Scrambler.java`: the Mix feature; applies random moves through the `MoveHistory` on a Swing timer. Also makes the random moves for a level's mix.
 - `src/rubikscube/ColorPalette.java`: maps color names to `Color`s.
 
@@ -114,6 +126,13 @@ java -ea -cp ../out/check/RubiksCube2D rubikscube.PatternCheck
 ```
 javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
 java -ea -cp ../out/check/RubiksCube2D rubikscube.RealCubeCheck
+```
+
+`test/rubikscube/TimerCheck.java` checks the Timer: that 2000 scrambles have 20 turns, never one face twice in a row or three turns on one axis, and mix the cube; that a tap shorter than the hold does not start it, a held key's repeats count once, letting go after the hold starts it and the next press stops it with the right time; the time format (cut, not rounded, minutes past 60 s); Ao5 leaving out the best and worst; and that the latest 100 times are kept, Delete last drops one, and they survive a reload beside the level records. From `RubiksCube2D/`:
+
+```
+javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
+java -ea -cp ../out/check/RubiksCube2D rubikscube.TimerCheck
 ```
 
 The check found that `d` on the yellow and white faces turned the top or bottom face the wrong way (so `a` then `d` did not undo), which is now fixed.

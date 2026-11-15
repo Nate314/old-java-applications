@@ -5,6 +5,7 @@ import java.awt.Font;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,11 +49,11 @@ public final class CubeFrame extends JFrame implements ActionListener {
          // Lines are broken by hand: the browser build's labels do not wrap.
          "<html>Click a square, then<br>press W A S D (or the<br>buttons) to turn its row,<br>column or ring.<br><br>"
                + "Each level mixes the cube<br>one move more while you<br>watch. Turn it back to<br>solved: at par for 3 stars.<br><br>"
-               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>T: Teach me. G: patterns.<br>C: paint your own cube.</html>");
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>T: Teach me. G: patterns.<br>C: your cube. K: timer.</html>");
    private static final String HELP_3D =
          "<html>Drag a square to turn<br>its row, column or ring.<br>Drag around the cube<br>(or press the arrow keys)<br>to look at other sides.<br>"
                + "Or click a square, then<br>press W A S D.<br><br>"
-               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: flat net. T: Teach me.<br>G: patterns to make.<br>C: paint your own cube.</html>";
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: flat net. T: Teach me.<br>G: patterns to make.<br>C: your cube. K: timer.</html>";
    private final String helpNet;
    private final JButton viewButton = new JButton();
    private final JButton teachButton = new JButton("Teach me");
@@ -61,6 +62,14 @@ public final class CubeFrame extends JFrame implements ActionListener {
    private final PatternPanel patternPanel = new PatternPanel(this::patternClick);
    private final JButton paintButton = new JButton("My cube");
    private final PaintPanel paintPanel = new PaintPanel(this::paintClick);
+   private final JButton timerButton = new JButton("Timer");
+   private final TimerPanel timerPanel = new TimerPanel(this::timerClick);
+   private final SolveTimer solveTimer = new SolveTimer();
+   /** Repaints the Timer card's time while it is held or running. */
+   private final Timer timerTick = new Timer(40, event -> this.timerCard());
+   /** The Timer card is up in place of the message and help, with this scramble on the cube. */
+   private boolean timing = false;
+   private String scramble = "";
    /** My cube is up: clicks paint squares the color picked (the brush) instead of selecting them. */
    private boolean painting = false;
    private int brush = 0;
@@ -182,6 +191,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.panel.add(this.paintButton);
       this.paintPanel.setVisible(false);
       this.panel.add(this.paintPanel);
+      this.timerButton.addActionListener(this);
+      this.panel.add(this.timerButton);
+      this.timerPanel.setVisible(false);
+      this.panel.add(this.timerPanel);
       // Last, so it lies under every other control.
       this.panel.add(this.view);
       this.showView(this.records.netView());
@@ -215,6 +228,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.coachPanel.setBounds(left, y - 4, leftWidth + 8, 294);
       this.patternPanel.setBounds(left, y - 4, leftWidth + 8, 294);
       this.paintPanel.setBounds(left, y - 4, leftWidth + 8, 294);
+      this.timerPanel.setBounds(left, y - 4, leftWidth + 8, 294);
       for (JLabel label : new JLabel[]{this.levelLabel, this.goalLabel, this.movesLabel, this.bestLabel, this.totalLabel, this.messageLabel, this.helpLabel}) {
          this.panel.add(label);
       }
@@ -238,6 +252,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.teachButton.setBounds(12, 10, 116, 28);
       this.patternButton.setBounds(134, 10, 124, 28);
       this.paintButton.setBounds(264, 10, 100, 28);
+      this.timerButton.setBounds(368, 10, 68, 28);
       int keyWidth = (int)(2.75 * w / 3.0);
       int keyHeight = (int)(2.75 * h / 3.0);
       int keyX = net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
@@ -392,6 +407,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.freePlay = false;
       this.par = this.level;
       this.records.setLastLevel(this.level);
+      this.closeTimer();
       this.endPatternRun();
       this.resetRun();
       this.cube.reset();
@@ -612,6 +628,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
    /** T: turns Teach me on or off. */
    final void toggleCoach() {
       this.stopPaint(true);
+      this.closeTimer();
       if (this.patterning && !this.coaching) {
          // One card at a time.
          this.togglePatterns();
@@ -802,6 +819,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
    /** G: the Patterns card in place of the message and help (closing Teach me), or back. */
    final void togglePatterns() {
       this.stopPaint(true);
+      this.closeTimer();
       if (this.coaching && !this.patterning) {
          this.toggleCoach();
       }
@@ -1054,6 +1072,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       if (this.patterning) {
          this.togglePatterns();
       }
+      this.closeTimer();
       this.endPatternRun();
       this.clock.stop();
       this.resetRun();
@@ -1168,6 +1187,125 @@ public final class CubeFrame extends JFrame implements ActionListener {
       return colors;
    }
 
+   // ---- Timer ----
+
+   /** K: the Timer card for timing solves of a real cube (closing the other cards), or back. */
+   final void toggleTimer() {
+      if (this.timing) {
+         this.closeTimer();
+         return;
+      }
+      if (this.coaching) {
+         this.toggleCoach();
+      }
+      if (this.patterning) {
+         this.togglePatterns();
+      }
+      this.stopPaint(true);
+      this.timing = true;
+      this.timerPanel.setVisible(true);
+      this.helpLabel.setVisible(false);
+      this.messageLabel.setVisible(false);
+      this.newScramble();
+      // Off the Timer button: in the browser Space on a focused button presses it natively, past the key dispatcher.
+      this.timerPanel.requestFocusInWindow();
+      this.panel.repaint();
+   }
+
+   private void closeTimer() {
+      if (!this.timing) {
+         return;
+      }
+      this.timing = false;
+      this.solveTimer.cancel();
+      this.timerTick.stop();
+      this.timerPanel.setVisible(false);
+      this.helpLabel.setVisible(true);
+      this.messageLabel.setVisible(true);
+      this.panel.repaint();
+   }
+
+   /** A new scramble, made on a solved cube on screen so it can be checked against the real one (and solved here). */
+   private void newScramble() {
+      this.stopAll();
+      this.endPatternRun();
+      this.freePlay = true;
+      this.resetRun();
+      this.cube.reset();
+      this.history.restart();
+      this.view.reset();
+      this.scramble = SolveTimer.scramble(this.random);
+      for (int turn : Patterns.parse(this.scramble)) {
+         Scrambler.apply(this.history, this.appMove(turn));
+      }
+      this.cube.refresh();
+      this.message("Scrambled. Solve it<br>on your real cube, or<br>here any way you like.");
+      this.coachSteps = null;
+      this.updateStatus();
+      this.timerCard();
+   }
+
+   /**
+    * Space while the Timer card is up (outside the Mix fields): held then let go starts the solve, pressed stops
+    * it, and while a solve runs any key stops it. Returns true when the key was the timer's.
+    */
+   final boolean timerKey(int id, int keyCode) {
+      boolean space = keyCode == KeyEvent.VK_SPACE;
+      boolean running = this.solveTimer.state() == SolveTimer.State.RUNNING;
+      if (!this.timing || !space && !(running && id == KeyEvent.KEY_PRESSED)) {
+         return false;
+      }
+      if (id == KeyEvent.KEY_PRESSED) {
+         this.timerPress();
+         if (!space) {
+            // Its release is not the timer's: let go now so the next Space counts.
+            this.solveTimer.release(System.currentTimeMillis());
+         }
+      } else if (id == KeyEvent.KEY_RELEASED) {
+         this.solveTimer.release(System.currentTimeMillis());
+         this.timerCard();
+      }
+      return true;
+   }
+
+   private void timerPress() {
+      if (this.solveTimer.press(System.currentTimeMillis())) {
+         this.records.addTime(this.solveTimer.last());
+         this.newScramble();
+         return;
+      }
+      this.timerCard();
+   }
+
+   /** A click on the Timer card: the pad (held and let go like Space), New scramble or Delete last. */
+   private void timerClick(int action) {
+      if (this.solveTimer.state() == SolveTimer.State.RUNNING && action != TimerPanel.LET_GO) {
+         // A tap anywhere on the card stops the solve.
+         this.timerPress();
+      } else if (action == TimerPanel.PAD) {
+         this.timerPress();
+      } else if (action == TimerPanel.LET_GO) {
+         this.solveTimer.release(System.currentTimeMillis());
+         this.timerCard();
+      } else if (action == TimerPanel.NEW) {
+         this.newScramble();
+      } else if (action == TimerPanel.DROP) {
+         this.records.dropLastTime();
+         this.solveTimer.forgetLast();
+         this.timerCard();
+      }
+   }
+
+   /** Repaints the Timer card, ticking while the time is held or running. */
+   private void timerCard() {
+      this.timerPanel.show(this.scramble, this.solveTimer, this.records.times());
+      if (this.timing && this.solveTimer.state() != SolveTimer.State.IDLE) {
+         this.timerTick.start();
+      } else {
+         this.timerTick.stop();
+      }
+   }
+
    /** The level keys: Z undo, H hint, R retry, N next, P previous. */
    final void levelKey(char key) {
       switch (key) {
@@ -1202,6 +1340,8 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.togglePatterns();
       } else if (source == this.paintButton) {
          this.togglePaint();
+      } else if (source == this.timerButton) {
+         this.toggleTimer();
       } else if (source == this.undoButton) {
          this.levelKey('z');
       } else if (source == this.hintButton) {
@@ -1227,6 +1367,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
             return;
          }
          this.stopAll();
+         this.closeTimer();
          this.endPatternRun();
          this.freePlay = true;
          this.resetRun();
