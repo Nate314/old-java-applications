@@ -42,6 +42,21 @@ const BODY: Record<string, Record<string, string>> = {
   WindowsE: { 'data-shell': '' },
 };
 
+/**
+ * Fetched with the page, not after the runtime asks: the title screen waits unseen for apps.json (its name, hint and
+ * Then | Now), and keeps room for today's page's story line (news.js and history.txt). Asked for late, after boot.js,
+ * they arrived after the first frame on a slow phone and moved the card under the visitor's eyes.
+ */
+function Preloads({ story }: { story: boolean }) {
+  return (
+    <>
+      <link rel="preload" href="../apps.json" as="fetch" crossOrigin="anonymous" />
+      {story && <link rel="modulepreload" href="../assets/news.js" />}
+      {story && <link rel="preload" href="../history.txt" as="fetch" crossOrigin="anonymous" />}
+    </>
+  );
+}
+
 /** The page's head: its name, the link preview tags (with the app's card from web/cards.ps1), skins and programs. */
 function AppHead({ app }: { app: App }) {
   const from = app.origin === 'original' ? 'Built from the original Java source' : 'Recovered from an old Java jar';
@@ -65,6 +80,7 @@ function AppHead({ app }: { app: App }) {
       <link rel="stylesheet" href="../shim.css" />
       <EarlyScript />
       <RuntimeScript src="../assets/boot.js" />
+      <Preloads story />
       {/* Deferred, so it runs after the runtime module: TeaVM reads $rt_putStdoutCustom as it loads. */}
       <script defer src="classes.js" />
     </>
@@ -105,6 +121,7 @@ function ThenHead({ app }: { app: App }) {
       <link rel="stylesheet" href="../shim.css" />
       <EarlyScript />
       <RuntimeScript src="../assets/boot.js" />
+      <Preloads story={false} />
       <script defer src="then.js" />
     </>
   );

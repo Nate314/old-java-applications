@@ -30,6 +30,7 @@ function Story({ id }: { id: string }) {
   const [data, setData] = useState<NewsData | null>(null);
   useEffect(() => { load().then(setData); }, []);
   const mine = data ? data.items.filter(it => it.apps.some(a => a.id === id)) : [];
+  if (!data) return <details className="shim-title-story" aria-hidden="true" />;   // empty: keeps the line's room (shim.css)
   if (!mine.length) return <details className="shim-title-story" hidden />;
   const since = lastPlayed(id);
   const fresh = since ? mine.filter(it => it.t > since).length : 0;
