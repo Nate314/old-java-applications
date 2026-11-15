@@ -25,6 +25,8 @@ import javax.swing.Timer;
 public final class KeyboardWindow extends JFrame implements KeyListener {
    private static final int MOUSE = -1;
    private static final int BEAT_MILLIS = 420;
+   /** How long the falling notes take to move down to the next note after a right one. */
+   private static final int FOLLOW_MILLIS = 160;
    private static final int[] FANFARE = {0, 4, 7, 12};
    /** The microphone ignores what it hears until the keyboard's own notes have been silent this long. */
    private static final int ECHO_MILLIS = 500;
@@ -443,7 +445,11 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.stopListening();
       }
       if (this.lesson != null && !this.lesson.finished()) {
-         this.lesson.press(key);
+         if (this.lesson.press(key)) {
+            this.piano.follow(this.lesson.position(), FOLLOW_MILLIS);
+         } else {
+            this.piano.miss(key);
+         }
          if (this.lesson.finished()) {
             this.newBest = this.lesson.song().id() != null && this.records.add(this.lesson);
             this.fanfare();
@@ -467,7 +473,13 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private void startSong(int index) {
       this.stopListening();
       this.bar.setNotice(null);
+      boolean hadLesson = this.lesson != null;
       this.lesson = index < 0 ? null : new Lesson(this.menu()[index]);
+      this.piano.setSong(this.lesson == null ? null : this.lesson.song());
+      if (hadLesson != (this.lesson != null)) {
+         // The falling notes get room of their own, so the keys keep their size.
+         this.setSize(this.getWidth(), this.getHeight() + (hadLesson ? -PianoPanel.FALL : PianoPanel.FALL));
+      }
       this.newBest = false;
       this.refresh();
    }
@@ -506,6 +518,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.listenMidi = this.midiNote(this.listenKey);
       this.midiPlayer.noteOn(this.listenMidi);
       this.piano.setPressed(this.listenKey, true);
+      this.piano.play(note, millis);
       this.refresh();
       later(millis * 85 / 100, () -> {
          if (run == this.listenRun) {
@@ -538,6 +551,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.endListenNote();
       if (this.listenNote >= 0) {
          this.listenNote = -1;
+         this.piano.follow(this.lesson.position(), FOLLOW_MILLIS * 2);
          this.refresh();
       }
    }

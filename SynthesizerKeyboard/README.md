@@ -11,6 +11,8 @@ A strip above the keys lists five songs, each with the best stars won on it: Mar
 - After the last note a short fanfare plays and the strip shows the stars: three with no misses, two with up to one miss per ten notes (at least two), one otherwise. "New best!" shows when the run has fewer misses than the best one so far.
 - **Listen** plays the song to you at tempo, lighting each key. Press any piano key to stop it and play yourself; the lesson carries on where you were.
 
+While a song is picked, falling notes open over the keys (the window grows 120 px for them, so the keys keep their size), showing the song: each note a bar over its own key, as tall as it is long (four and a half beats fit above the keys), with the computer key on it when there is room. The next note is gold and sits on the keys, the ones after it are blue, and a right press moves the song down a note, so the played one sinks into the key in green. A wrong key flashes its lane red. During Listen the notes fall at tempo and each one sinks into its key while it sounds; when Listen stops, the song moves back to where the lesson was. In free play, while recording and in the looper there are no falling notes and the keys take the whole height. Clicks on the falling notes play nothing.
+
 The best result for each song is saved to `.synthesizer-songs.txt` in the user's home folder, one `ID=stars,misses` line per finished song (for example `ODE=3,0`).
 
 ## Send a tune
@@ -63,14 +65,14 @@ Build a little band out of your own playing: the looper records two bars at a ti
 - **O**: the looper on or off (see Looper, for its own keys). While it is on, the song keys wait.
 - **Left / Right**: shift the notes down / up one octave (5 down to 4 up). Notes already held keep the pitch they started with and stop when released. Lessons follow the keys, so they work in any octave.
 - **Up / Down**: next / previous MIDI instrument (program 0 to 120).
-- The window is 3/4 of the screen wide and half of it tall (at least 340 px), and 168 px taller while the looper's lanes are open. The title shows the current instrument and octave shift.
+- The window is 3/4 of the screen wide and half of it tall (at least 340 px), 120 px taller while a song is picked (for its falling notes), and 168 px taller while the looper's lanes are open. The title shows the current instrument and octave shift.
 - Arguments, all optional: a tune code or link to open (see Send a tune), and the address of the page the keyboard runs on, which the browser build passes so the links it copies point back at it.
 
 ## Code layout
 
 - `src/synthesizer/Main.java`: entry point; reads a tune code or link and the page address from the arguments, and creates a `KeyboardWindow`.
 - `src/synthesizer/KeyboardWindow.java`: the window; handles key presses, mouse presses on the keys, songs, Listen, recording, copying the tune and the fanfare.
-- `src/synthesizer/PianoPanel.java`: draws the keys with their labels, the held keys and the lit next key, and finds the key under the mouse.
+- `src/synthesizer/PianoPanel.java`: draws the keys with their labels, the held keys and the lit next key, and the lesson's falling notes above them, and finds the key under the mouse.
 - `src/synthesizer/LessonBar.java`: the strip above the keys (song list with stars, Record and Looper, upcoming notes, the recording, result, the looper's buttons, and notices such as "Link copied").
 - `src/synthesizer/Song.java`: the five songs, written as note names with lengths.
 - `src/synthesizer/Lesson.java`: playing along with one song: next note, misses, stars.
@@ -92,7 +94,7 @@ From the repo root: `./run.ps1 old SynthesizerKeyboard` (or `./run.ps1 old Synth
 
 ## Self-check
 
-`test/synthesizer/LessonCheck.java` checks that every song parses to keys on the keyboard with positive lengths, that a lesson only moves on for the right key and counts misses, the star rules, that the saved records keep the best run and skip bad lines, and that recorded tunes get their lengths from the timing, stop at 64 notes, survive their code, link and saved file, and that broken codes are refused. `test/synthesizer/MicrophoneCheck.java` needs no microphone: it checks that pitches from a low voice to a whistle (pure and rich in overtones, at 44.1 and 48 kHz) read as the right note within 3 cents, that silence, quiet and noise read as none, that a note counts once however long it is held and again after a pause or a new attack but not for an octave slip, a fading string or a slide through notes, and that a made-up line singing E D C D E E E is heard as those seven notes. `test/synthesizer/LoopCheck.java` checks that a take snaps notes to steps (an early downbeat, a short tap, a note wrapping round from just after the pass, a held note ending with the pass, a take from the second bar ringing on into the first), skips presses outside the take and stops at 64 notes, that the loop keeps at most four layers with mutes, Undo and Clear, the tempo limits, and that the saved file comes back the same and skips bad lines. From `SynthesizerKeyboard/`:
+`test/synthesizer/LessonCheck.java` checks that every song parses to keys on the keyboard with positive lengths and starts each note on the right beat, that the falling notes take the top of the keyboard only during a lesson (where they are not keys) and scroll to the right beat, that a lesson only moves on for the right key and counts misses, the star rules, that the saved records keep the best run and skip bad lines, and that recorded tunes get their lengths from the timing, stop at 64 notes, survive their code, link and saved file, and that broken codes are refused. `test/synthesizer/MicrophoneCheck.java` needs no microphone: it checks that pitches from a low voice to a whistle (pure and rich in overtones, at 44.1 and 48 kHz) read as the right note within 3 cents, that silence, quiet and noise read as none, that a note counts once however long it is held and again after a pause or a new attack but not for an octave slip, a fading string or a slide through notes, and that a made-up line singing E D C D E E E is heard as those seven notes. `test/synthesizer/LoopCheck.java` checks that a take snaps notes to steps (an early downbeat, a short tap, a note wrapping round from just after the pass, a held note ending with the pass, a take from the second bar ringing on into the first), skips presses outside the take and stops at 64 notes, that the loop keeps at most four layers with mutes, Undo and Clear, the tempo limits, and that the saved file comes back the same and skips bad lines. From `SynthesizerKeyboard/`:
 
 ```
 javac -d ../out/check/SynthesizerKeyboard src/synthesizer/*.java test/synthesizer/*.java

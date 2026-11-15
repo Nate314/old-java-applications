@@ -95,4 +95,13 @@ public final class Song {
    public double beats(int note) {
       return this.beats[note];
    }
+
+   /** The beat note {@code note} starts on, counted from 0 at the first note; the song's whole length for {@code length()}. */
+   public double start(int note) {
+      double beat = 0;
+      for (int before = 0; before < note; before++) {
+         beat += this.beats[before];
+      }
+      return beat;
+   }
 }
