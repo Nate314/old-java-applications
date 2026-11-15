@@ -61,6 +61,8 @@ public final class LauncherWindow extends JFrame {
    private static final String[][] FILTERS = {
       {"all", "All"}, {"game", "Games"}, {"music", "Music"}, {"toy", "Toys"}, {"tool", "Tools"}, {"keys", "Real keys"},
       {"updated", "Updated"}};   // last: updatedChip() hides it with the gap before it
+   /** The orders the cards can be shown in, as the Order button cycles them; the choice is kept by the play log. */
+   private static final String[][] ORDERS = {{"gallery", "Gallery"}, {"recent", "Recently played"}, {"most", "Most played"}};
 
    private final List<Catalog.App> apps;
    private final PlayLog log;
@@ -82,6 +84,8 @@ public final class LauncherWindow extends JFrame {
    private final JLabel status = new JLabel();
 
    private String filter = "all";
+   private String order = ORDERS[0][0];
+   private final Ui.FlatButton orderButton = new Ui.FlatButton("", false);
    private Catalog.App selected;
    private History history = History.NONE;
    private boolean then;   // Play runs the apps as first restored
@@ -132,6 +136,8 @@ public final class LauncherWindow extends JFrame {
 
       Catalog.App last = null;
       for (Catalog.App a : apps) if (log.count(a.id) > 0 && (last == null || log.last(a.id) > log.last(last.id))) last = a;
+      for (String[] o : ORDERS) if (o[0].equals(log.order())) order = o[0];
+      sortTiles();
       applyFilter();
       select(last != null ? last : apps.get(0), true);
       status(last != null ? "Welcome back. " + last.name + " is where you left off: press Enter to play it again."
@@ -219,7 +225,12 @@ public final class LauncherWindow extends JFrame {
          id -> apps.stream().filter(a -> a.id.equals(id)).map(a -> a.name).findFirst().orElse(id);
       saves.addActionListener(e -> SavesMenu.open(this, home, log, nameOf, this::status));
       setTransferHandler(SavesMenu.drops(this, home, nameOf, this::status));
+      orderButton.setMnemonic(KeyEvent.VK_O);
+      orderButton.setToolTipText("Show the cards in the gallery's order, the ones you played last first, or the ones you"
+         + " played longest first (Alt+O)");
+      orderButton.addActionListener(e -> nextOrder());
       buttons.setOpaque(false);
+      buttons.add(orderButton);
       buttons.add(saves);
       buttons.add(pick);
       row.add(buttons, BorderLayout.EAST);
@@ -316,6 +327,37 @@ public final class LauncherWindow extends JFrame {
    }
 
    // ---- state ---------------------------------------------------------------------------------------------
+
+   /** Moves to the next order and keeps it for next time. */
+   void nextOrder() {
+      int i = 0;
+      while (!ORDERS[i][0].equals(order)) i++;
+      order = ORDERS[(i + 1) % ORDERS.length][0];
+      log.order(order);
+      sortTiles();
+      applyFilter();
+      select(selected, true);
+      status(order.equals("recent") ? "Recently played first: the app you launched last leads, then the one before it."
+         : order.equals("most") ? "Most played first: the apps you have spent the most time in lead, each with its time."
+         : "In the gallery's order, as on the web site.");
+   }
+
+   String order() {
+      return order;
+   }
+
+   /**
+    * Puts the cards in the current order: by last launch, or by time played (then launches), newest or most first;
+    * apps not played yet, and ties, keep the gallery's order.
+    */
+   private void sortTiles() {
+      java.util.Comparator<Tile> by = java.util.Comparator.comparingInt(t -> apps.indexOf(t.app));
+      if (order.equals("recent")) by = java.util.Comparator.<Tile>comparingLong(t -> -log.last(t.app.id)).thenComparing(by);
+      if (order.equals("most")) by = java.util.Comparator.<Tile>comparingLong(t -> -log.total(t.app.id))
+         .thenComparingInt(t -> -log.count(t.app.id)).thenComparing(by);
+      tiles.sort(by);
+      for (String[] o : ORDERS) if (o[0].equals(order)) orderButton.setText("Order: " + o[1]);
+   }
 
    /** Shows the tiles of the current filter that match the search, and keeps a visible app selected. */
    void applyFilter() {
@@ -470,7 +512,8 @@ public final class LauncherWindow extends JFrame {
          return;
       }
       History.Story story = history.of(app.id);
-      if (!old) log.launched(app.id, clock.getAsLong(), story == null ? null : story.newest());
+      long started = clock.getAsLong();
+      if (!old) log.launched(app.id, started, story == null ? null : story.newest());
       running.add(key(app, old));
       status(old ? "Starting " + name + ": the first time, its code is unpacked from git history into out/then;"
             + " that commit's run.ps1 compiles it."
@@ -482,7 +525,20 @@ public final class LauncherWindow extends JFrame {
          if (why != null) status(name + " could not be started: " + why.getMessage());
          else if (code != 0) status(name + " stopped with exit code " + code + ". The console that started the launcher says why.");
          else if (old) status(name + " closed. Switch to Now (Alt+N) to compare it with today's.");
-         else status(app.name + " closed. " + log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault()) + ".");
+         if (why != null || old) {
+            refresh();
+            return;
+         }
+         // Time played runs from Play until the window closes, so it includes run.ps1's compile.
+         long took = clock.getAsLong() - started;
+         log.played(app.id, took);
+         if (code == 0) status(app.name + " closed (" + PlayLog.duration(took) + " this time). "
+            + log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault()) + ".");
+         if (!order.equals("gallery")) {
+            sortTiles();   // the app just played may move up; it stays selected
+            applyFilter();
+            select(selected, true);
+         }
          refresh();
       }));
    }
@@ -665,6 +721,7 @@ public final class LauncherWindow extends JFrame {
          String line = isRunning(app.id) ? "Running now"
             : story != null ? growth(story)
             : fresh > 0 ? (fresh == 1 ? "1 change" : fresh + " changes") + " since you played"
+            : order.equals("most") && log.total(app.id) > 0 ? PlayLog.duration(log.total(app.id)) + " played"
             : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
          g2.drawString(fit(g2, line, w - 24), 12, h - 12);
          if (sel) {
@@ -901,7 +958,7 @@ public final class LauncherWindow extends JFrame {
          boolean on = running.contains(key(a, playsOld));
          record.setForeground(s != null ? Ui.THEN : Ui.MUTED);
          record.setText(on ? "Running now. Close its window to finish."
-            : s == null ? log.describe(a.id, clock.getAsLong(), ZoneId.systemDefault())
+            : s == null ? recordLine(a)
             : !s.changed ? "Its code has not changed since: Play runs today's."
             : changeCount(s) + " since then. History (Alt+H) lists them.");
          play.setText(on ? "Running..." : playsOld ? "Play it as first restored" : "Play " + a.name);
@@ -923,6 +980,13 @@ public final class LauncherWindow extends JFrame {
          }
          revalidate();
          repaint();
+      }
+
+      /** "Played 3 times, last yesterday", with the time played under it once there is some. */
+      private String recordLine(Catalog.App a) {
+         String played = log.describe(a.id, clock.getAsLong(), ZoneId.systemDefault());
+         String time = log.timeLine(a.id);
+         return time == null ? played : "<html>" + played + "<br>" + time + "</html>";
       }
 
       /**
