@@ -1,6 +1,7 @@
 package launcher;
 
 import java.awt.Component;
+import java.awt.datatransfer.DataFlavor;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +20,8 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
@@ -37,7 +40,7 @@ final class SavesMenu {
       int pick = JOptionPane.showOptionDialog(parent,
          "<html><body style='width:340px'>Take your records (best times, scores, stars, the timer, the trading desk) "
             + "between these desktop apps and the web site.<br><br><b>Load</b> a file from the site's <i>Your records</i> "
-            + "&gt; Download, and pick which apps take its records.<br><b>Save</b> this computer's records as "
+            + "&gt; Download (or drop it on the launcher window), and pick which apps take its records.<br><b>Save</b> this computer's records as "
             + FILE_NAME + ", then use <i>Your records</i> &gt; Load on the site.</body></html>",
          "Saves", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
       if (pick == 0) load(parent, home, nameOf, status);
@@ -70,10 +73,39 @@ final class SavesMenu {
       }
    }
 
+   /** Takes a saves file dropped on the window (from the site's Download, say) the way Load a file... does. */
+   static TransferHandler drops(Component parent, Path home, Function<String, String> nameOf, Consumer<String> status) {
+      return new TransferHandler() {
+         @Override
+         public boolean canImport(TransferSupport s) {
+            return s.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
+         }
+
+         @Override
+         public boolean importData(TransferSupport s) {
+            if (!canImport(s)) return false;
+            try {
+               List<?> files = (List<?>) s.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
+               if (files.isEmpty()) return false;
+               Path file = ((File) files.get(0)).toPath();
+               // Later, so the drag source (Explorer) is not held while the dialog waits.
+               SwingUtilities.invokeLater(() -> load(parent, file, home, nameOf, status));
+               return true;
+            } catch (Exception e) {
+               status.accept("Could not take the dropped file: " + e.getMessage());
+               return false;
+            }
+         }
+      };
+   }
+
    private static void load(Component parent, Path home, Function<String, String> nameOf, Consumer<String> status) {
       JFileChooser c = chooser(home);
       if (c.showOpenDialog(parent) != JFileChooser.APPROVE_OPTION) return;
-      Path file = c.getSelectedFile().toPath();
+      load(parent, c.getSelectedFile().toPath(), home, nameOf, status);
+   }
+
+   static void load(Component parent, Path file, Path home, Function<String, String> nameOf, Consumer<String> status) {
       SaveBundle bundle;
       try {
          bundle = SaveBundle.parse(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));

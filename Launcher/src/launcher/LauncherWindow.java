@@ -175,9 +175,12 @@ public final class LauncherWindow extends JFrame {
       pick.addActionListener(e -> pickForMe());
       Ui.FlatButton saves = new Ui.FlatButton("Saves", false);
       saves.setMnemonic(KeyEvent.VK_S);
-      saves.setToolTipText("Move your records between these apps and the web site (Alt+S)");
-      saves.addActionListener(e -> SavesMenu.open(this, Paths.get(System.getProperty("user.home")), log,
-         id -> apps.stream().filter(a -> a.id.equals(id)).map(a -> a.name).findFirst().orElse(id), this::status));
+      saves.setToolTipText("Move your records between these apps and the web site (Alt+S), or drop a saves file on this window");
+      Path home = Paths.get(System.getProperty("user.home"));
+      java.util.function.Function<String, String> nameOf =
+         id -> apps.stream().filter(a -> a.id.equals(id)).map(a -> a.name).findFirst().orElse(id);
+      saves.addActionListener(e -> SavesMenu.open(this, home, log, nameOf, this::status));
+      setTransferHandler(SavesMenu.drops(this, home, nameOf, this::status));
       JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
       buttons.setOpaque(false);
       buttons.add(saves);

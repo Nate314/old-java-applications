@@ -85,6 +85,18 @@ public class LauncherCheck {
          }
          for (String name : app.getValue()) check(src.indexOf("\"" + name + "\"") >= 0, app.getKey() + " saves " + name);
       }
+      // And the other way: every home-folder dotfile an app's sources name travels in the bundle.
+      for (Catalog.App a : apps) {
+         try (java.util.stream.Stream<Path> walk = Files.walk(root.resolve(a.id).resolve("src"))) {
+            for (Path j : (Iterable<Path>) walk.filter(f -> f.toString().endsWith(".java"))::iterator) {
+               java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"(\\.[a-z0-9-]+\\.txt)\"")
+                  .matcher(new String(Files.readAllBytes(j), StandardCharsets.UTF_8));
+               while (m.find()) {
+                  check(SaveBundle.FILES.getOrDefault(a.id, List.of()).contains(m.group(1)), a.id + "'s " + m.group(1) + " is in SaveBundle.FILES");
+               }
+            }
+         }
+      }
       Path home = Files.createTempDirectory("launcher-saves");
       Path other = Files.createTempDirectory("launcher-saves-to");
       String tricky = "BEGINNER=53600\nname=Ren\u00e9e \"q\" \\ tab\t\u00ff\u0001\n";
