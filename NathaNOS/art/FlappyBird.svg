@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
   <!-- NathaNOS desktop icon for FlappyBird: the round teal bird (as in FlappyBird/art/bird.svg) flying through the
-       gap between two green pipes. Original art for this repo. -->
+       gap between two copper pipes (as in FlappyBird/art). Original art for this repo. -->
   <rect x="16" y="16" width="224" height="224" rx="28" fill="#7fd3f0"/>
   <g fill="#ffffff" opacity="0.8"><ellipse cx="70" cy="204" rx="40" ry="14"/><ellipse cx="120" cy="40" rx="30" ry="10"/></g>
-  <path d="M164 16 h28 a28 28 0 0 1 28 28 V72 h8 v22 h-72 v-22 h8 Z" fill="#4caf3e"/>
-  <path d="M164 240 V192 h-8 v-22 h72 v22 h-8 V212 a28 28 0 0 1 -28 28 Z" fill="#4caf3e"/>
-  <g fill="#7ad36a"><rect x="172" y="20" width="10" height="52"/><rect x="172" y="192" width="10" height="44"/></g>
+  <path d="M164 16 h28 a28 28 0 0 1 28 28 V72 h8 v22 h-72 v-22 h8 Z" fill="#c46a35"/>
+  <path d="M164 240 V192 h-8 v-22 h72 v22 h-8 V212 a28 28 0 0 1 -28 28 Z" fill="#c46a35"/>
+  <g fill="#e8955a"><rect x="172" y="20" width="10" height="52"/><rect x="172" y="192" width="10" height="44"/></g>
   <g transform="translate(22 66) scale(1.3)">
     <path d="M16 46 L2 38 L6 52 L0 60 L16 60 Z" fill="#1b7f74"/>
     <circle cx="48" cy="54" r="36" fill="#2bb3a3"/>
