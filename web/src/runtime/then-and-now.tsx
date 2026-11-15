@@ -133,7 +133,7 @@ function SwitchDrawer({ onClose, onPanel }: { onClose: () => void; onPanel: (el:
   return (
     <>
       <div className="shim-scrim" onClick={onClose} />
-      <aside className="shim-drawer" aria-label="Switch app" ref={panel}>
+      <aside className="shim-drawer" role="dialog" aria-modal="true" aria-label="Switch app" ref={panel}>
         <div className="shim-drawer-head">
           <strong>Switch app</strong>
           <CloseButton onClick={onClose} />

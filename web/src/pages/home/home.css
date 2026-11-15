@@ -32,6 +32,9 @@ p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
 .screen { position: relative; overflow: hidden; background: var(--desk); }
 /* The iframe keeps a desktop-sized viewport (the apps size their windows from it) and is scaled to fit. */
 .screen iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+/* Skip past the app: out of sight until the keyboard reaches it, then over the screen's corner. */
+.screen .skip-app { position: absolute; z-index: 2; top: 8px; left: 8px; background: var(--card-bg); }
+.screen .skip-app:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); border: 0; }
 
 /* ---- the channel rail: every app one click away, without leaving the player ---- */
 .rail { display: flex; align-items: stretch; gap: 6px; padding: 8px; border-top: 1px solid var(--card-border); }

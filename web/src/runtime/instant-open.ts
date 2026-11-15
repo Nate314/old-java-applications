@@ -58,14 +58,14 @@ function warmApp(id: string, then: boolean) {
 }
 
 // What a pointed-at element would open: { app, then, player } for a link to an app page, or for one of the home
-// page's player controls (its rail, whose buttons follow the gallery's order, and the gallery's Play and picture
+// page's player controls (its rail, whose buttons name their app in data-id, and the gallery's Play and picture
 // links, which play in the player), whose app is warmed rather than prerendered.
 function instantTarget(el: Element | null): { app: string; then: boolean; player: boolean } | null {
   if (!el || !el.closest) return null;
   var rail = el.closest('#rail button');
   if (rail) {
-    var li = document.querySelectorAll('#apps li[data-app]')[([] as Element[]).indexOf.call(document.querySelectorAll('#rail button'), rail)];
-    return li ? { app: li.getAttribute('data-app')!, then: false, player: true } : null;
+    var id = rail.getAttribute('data-id');
+    return id ? { app: id, then: false, player: true } : null;
   }
   var a = el.closest<HTMLAnchorElement>('a[href]');
   var place = a && !a.hasAttribute('download') && tripPlace(a.href);

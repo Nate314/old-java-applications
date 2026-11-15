@@ -257,7 +257,7 @@ function DockPicker({ onClose, onPick, onPanel }: { onClose: () => void; onPick:
   return (
     <>
       <div className="shim-scrim" onClick={onClose} />
-      <aside className="shim-drawer shim-dock-picker" aria-label="Side by side" ref={panel}>
+      <aside className="shim-drawer shim-dock-picker" role="dialog" aria-modal="true" aria-label="Side by side" ref={panel}>
         <div className="shim-drawer-head">
           <strong>Side by side</strong>
           <CloseButton onClick={onClose} />
