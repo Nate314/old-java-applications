@@ -15,7 +15,11 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.swing.JPanel;
 
@@ -27,11 +31,18 @@ import synthesizer.MySynthesizer;
 /**
  * The Songwriter tab: pick a key on the circle of fifths, build a progression of up to eight chords from the key's
  * seven, and hear it loop with a bass line. The original program played one progression (I-IV-V-I in G major) and
- * the tab opens on it; the chords still come from the original scale and triad code.
+ * the tab opens on it; the chords still come from the original scale and triad code. Melody mode (R) turns the
+ * computer keyboard and the on-screen keys into a flute to play over the loop, and keeps what is played as a melody.
  */
 @SuppressWarnings("serial")
 public final class Songwriter extends JPanel {
 	private static final String CHORD_KEYS = "1234567";
+	/** Typed melody keys, as on a piano and as in the Chord finder: A is C, W is C#, S is D, up to ; (E an octave up). */
+	private static final String PIANO_KEYS = "awsedftgyhujkolp;";
+	private static final Color OUT_OF_KEY = new Color(150, 153, 162);
+	private static final Color IN_KEY_BLACK = new Color(78, 84, 108);
+	private static final Color MELODY_BLACK = new Color(40, 140, 76);
+	private static final Color RECORD = new Color(232, 70, 70);
 	private static final int TEMPO_STEP = 5;
 	private static final int HEADER = 52;
 	private static final Color SUGGESTED = new Color(255, 196, 60, 150);
@@ -52,6 +63,16 @@ public final class Songwriter extends JPanel {
 	/** The chord last sounded (from the loop or a button), for the line under the buttons; 0 for none. */
 	private int heardDegree;
 	private String notice = "";
+	/** Melody mode: the piano keys play the melody, and what is played while the loop plays is kept. */
+	private boolean melodyMode;
+	/** The typed keys' lowest note (A types it). */
+	private int typedBase = 60;
+	/** Melody notes held down, each with {the loop slot it started on (-1 when not looping), when it started}. */
+	private final Map<Integer, long[]> held = new HashMap<>();
+	private final Set<Integer> keysDown = new HashSet<>();
+	/** The note held by the mouse, or -1. */
+	private int mouseNote = -1;
+	private int keysTop;
 
 	// Where things were last drawn, for the mouse.
 	private final List<Rectangle> chordButtons = new ArrayList<>();
@@ -59,6 +80,7 @@ public final class Songwriter extends JPanel {
 	private final List<Rectangle> presetButtons = new ArrayList<>();
 	private Rectangle playButton = new Rectangle(), slower = new Rectangle(), faster = new Rectangle();
 	private Rectangle styleButton = new Rectangle(), voicingButton = new Rectangle(), clearButton = new Rectangle();
+	private Rectangle melodyButton = new Rectangle(), melodyRoll = new Rectangle();
 	private int circleX, circleY, radius;
 	private Object hover;
 
@@ -86,7 +108,22 @@ public final class Songwriter extends JPanel {
 			@Override
 			public void mousePressed(MouseEvent event) {
 				requestFocusInWindow();
-				click(targetAt(event.getX(), event.getY()));
+				int key = keyAt(event.getX(), event.getY());
+				if (key >= 0) {
+					setMelodyMode(true);
+					mouseNote = key;
+					press(key);
+				} else {
+					click(targetAt(event.getX(), event.getY()));
+				}
+			}
+
+			@Override
+			public void mouseReleased(MouseEvent event) {
+				if (mouseNote >= 0) {
+					letGo(mouseNote);
+					mouseNote = -1;
+				}
 			}
 
 			@Override
@@ -165,6 +202,7 @@ public final class Songwriter extends JPanel {
 
 	public void clearChords() {
 		song.clear();
+		song.clearMelody();
 		selected = -1;
 		player.stop();
 		notice = "Cleared. Pick chords to start a new progression.";
@@ -221,6 +259,74 @@ public final class Songwriter extends JPanel {
 		changed();
 	}
 
+	// ---- the melody ----
+
+	public boolean isMelodyMode() {
+		return melodyMode;
+	}
+
+	public void setMelodyMode(boolean on) {
+		if (on == melodyMode) {
+			return;
+		}
+		melodyMode = on;
+		if (!on) {
+			for (int note : new ArrayList<>(held.keySet())) {
+				letGo(note);
+			}
+			keysDown.clear();
+		}
+		notice = "";
+		repaint();
+	}
+
+	/** Starts a melody note: it sounds until let go, and is written where it started if the loop is playing. */
+	public void press(int note) {
+		if (note < LOW_NOTE || note > HIGH_NOTE || held.containsKey(note)) {
+			return;
+		}
+		player.liveOn(note);
+		held.put(note, new long[] { player.nearestSlot(), System.currentTimeMillis() });
+		repaint();
+	}
+
+	/** Ends a melody note; one started while the loop played joins the melody, as long as it was held (in eighths). */
+	public void letGo(int note) {
+		long[] start = held.remove(note);
+		if (start == null) {
+			return;
+		}
+		player.liveOff(note);
+		if (start[0] >= 0 && player.isPlaying()) {
+			song.addNote((int) start[0], note, Math.round((System.currentTimeMillis() - start[1]) / (float) player.eighthMillis()));
+			changed();
+		} else {
+			repaint();
+		}
+	}
+
+	public void eraseMelody() {
+		song.clearMelody();
+		notice = "Melody erased. Play the loop and the keys again to write a new one.";
+		changed();
+	}
+
+	public void shiftTyped(int octaves) {
+		typedBase = Math.max(LOW_NOTE, Math.min(HIGH_NOTE - 16, typedBase + 12 * octaves));
+		notice = "Typed keys now start at C" + (typedBase / 12 - 1) + ".";
+		repaint();
+	}
+
+	/** Lets go of a typed melody key. */
+	public void keyReleased(KeyEvent event) {
+		if (keysDown.remove(event.getKeyCode())) {
+			int piano = PIANO_KEYS.indexOf(Character.toLowerCase(event.getKeyChar()));
+			if (piano >= 0) {
+				letGo(typedBase + piano);
+			}
+		}
+	}
+
 	private void changed() {
 		song.save(file);
 		repaint();
@@ -231,7 +337,22 @@ public final class Songwriter extends JPanel {
 		int code = event.getKeyCode();
 		char key = Character.toLowerCase(event.getKeyChar());
 		int chord = CHORD_KEYS.indexOf(key);
-		if (code == KeyEvent.VK_SPACE || code == KeyEvent.VK_ENTER) {
+		int piano = PIANO_KEYS.indexOf(key);
+		if (event.isControlDown() || event.isAltDown() || event.isMetaDown()) {
+			return false;
+		}
+		if (melodyMode && piano >= 0 && key != KeyEvent.CHAR_UNDEFINED) {
+			// A held key repeats; only its first press counts.
+			if (keysDown.add(code)) {
+				press(typedBase + piano);
+			}
+		} else if (melodyMode && (code == KeyEvent.VK_Z || code == KeyEvent.VK_X)) {
+			shiftTyped(code == KeyEvent.VK_X ? 1 : -1);
+		} else if (melodyMode && (code == KeyEvent.VK_BACK_SPACE || code == KeyEvent.VK_DELETE)) {
+			eraseMelody();
+		} else if (code == KeyEvent.VK_R) {
+			setMelodyMode(!melodyMode);
+		} else if (code == KeyEvent.VK_SPACE || code == KeyEvent.VK_ENTER) {
 			togglePlay();
 		} else if (chord >= 0 && key != KeyEvent.CHAR_UNDEFINED) {
 			pick(chord + 1);
@@ -280,6 +401,8 @@ public final class Songwriter extends JPanel {
 			nextVoicing();
 		} else if (target == clearButton) {
 			clearChords();
+		} else if (target == melodyButton) {
+			setMelodyMode(!melodyMode);
 		} else if (chordButtons.contains(target)) {
 			pick(chordButtons.indexOf(target) + 1);
 		} else if (presetButtons.contains(target)) {
@@ -334,7 +457,9 @@ public final class Songwriter extends JPanel {
 		playButton = new Rectangle(x, row, 112, 40);
 		slower = new Rectangle(x + 122, row, 34, 40);
 		faster = new Rectangle(x + 122 + 34 + 76, row, 34, 40);
-		clearButton = new Rectangle(x + w - 70, row, 70, 40);
+		clearButton = new Rectangle(x + w - 58, row, 58, 40);
+		int melodyX = faster.x + faster.width + 8;
+		melodyButton = new Rectangle(melodyX, row, Math.max(64, clearButton.x - 8 - melodyX), 40);
 		int half = (w - gap) / 2;
 		styleButton = new Rectangle(x, row + 48, half, 32);
 		voicingButton = new Rectangle(x + half + gap, row + 48, half, 32);
@@ -343,6 +468,19 @@ public final class Songwriter extends JPanel {
 		for (int i = 0; i < Preset.values().length; i++) {
 			presetButtons.add(new Rectangle(x + (i % 3) * (pw + gap), row + 112 + (i / 3) * 36, pw, 30));
 		}
+		// In melody mode the melody's piano roll takes the famous progressions' place.
+		melodyRoll = new Rectangle(x, row + 112, w, 66);
+		keysTop = Math.max(row + 112 + 36 + 76, height - 96);
+	}
+
+	private int keyboardHeight() {
+		return Math.max(40, getHeight() - 12 - keysTop);
+	}
+
+	/** The on-screen key under the point, or -1. */
+	private int keyAt(int x, int y) {
+		layOut();
+		return Look.keyAt(16, keysTop, getWidth() - 32, keyboardHeight(), x, y);
 	}
 
 	private Object targetAt(int x, int y) {
@@ -356,7 +494,10 @@ public final class Songwriter extends JPanel {
 		}
 		List<Rectangle> all = new ArrayList<>(chordButtons);
 		all.addAll(slots.subList(0, Math.min(slots.size(), song.size() + (selected >= 0 ? 1 : 0))));
-		all.addAll(presetButtons);
+		if (!melodyMode) {
+			all.addAll(presetButtons);
+		}
+		all.add(melodyButton);
 		all.add(playButton);
 		all.add(slower);
 		all.add(faster);
@@ -387,8 +528,11 @@ public final class Songwriter extends JPanel {
 		paintChordButtons(g);
 		paintSlots(g);
 		paintControls(g);
-		paintPresets(g);
-		int keysTop = Math.max(presetButtons.get(presetButtons.size() - 1).y + 76, getHeight() - 96);
+		if (melodyMode) {
+			paintMelodyRoll(g);
+		} else {
+			paintPresets(g);
+		}
 		paintInfo(g, keysTop - 14);
 		paintKeys(g, keysTop);
 	}
@@ -617,8 +761,89 @@ public final class Songwriter extends JPanel {
 		g.drawString("beats/min", middle - g.getFontMetrics().stringWidth("beats/min") / 2, slower.y + 34);
 
 		paintSmallButton(g, clearButton, "Clear");
+		paintMelodyButton(g);
 		paintOption(g, styleButton, "Play chords", song.style().title(), "S");
 		paintOption(g, voicingButton, "Voicing", song.voicing().title(), "V");
+	}
+
+	/** Melody (R): blue while melody mode is on, with a red dot while what is played is being recorded. */
+	private void paintMelodyButton(Graphics2D g) {
+		Rectangle b = melodyButton;
+		g.setColor(melodyMode ? hover == b ? BLUE_HOVER : BLUE : hover == b ? CARD_HOVER : CARD);
+		g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+		boolean recording = melodyMode && player.isPlaying();
+		g.setColor(recording ? RECORD : melodyMode ? Color.WHITE : SOFT);
+		g.fillOval(b.x + 9, b.y + b.height / 2 - 5, 10, 10);
+		g.setColor(melodyMode ? Color.WHITE : TEXT);
+		g.setFont(Look.fitFont(g, "Melody", Font.BOLD, 14, b.width - 30));
+		g.drawString("Melody", b.x + 24, b.y + b.height / 2 + 5);
+	}
+
+	/**
+	 * The melody as a piano roll over the progression's bars: one column per eighth note, higher notes higher, the
+	 * bar being played shaded and the beat playing marked in gold.
+	 */
+	private void paintMelodyRoll(Graphics2D g) {
+		Rectangle r = melodyRoll;
+		List<int[]> notes = song.melody();
+		int bars = Math.max(1, song.size());
+		int columns = bars * Progression.EIGHTHS;
+		notes.removeIf(note -> note[0] >= columns); // past the last chord: kept, but not played until there are chords there
+		g.setColor(SOFT);
+		g.setFont(new Font("SansSerif", Font.BOLD, 13));
+		g.drawString("Melody (R)", r.x, r.y - 8);
+		String count = notes.isEmpty() ? "No notes yet" : (notes.size() == 1 ? "1 note" : notes.size() + " notes") + ". Backspace erases it";
+		g.setColor(DIM);
+		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+		count = Look.fit(g, count, r.width - 90);
+		g.drawString(count, r.x + r.width - g.getFontMetrics().stringWidth(count), r.y - 8);
+		g.setColor(CARD);
+		g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+		int low = Integer.MAX_VALUE, high = Integer.MIN_VALUE;
+		for (int[] note : notes) {
+			low = Math.min(low, note[1]);
+			high = Math.max(high, note[1]);
+		}
+		if (low > high) {
+			low = 60 + song.tonic();
+			high = low + 12;
+		}
+		// At least an octave tall, centered on the notes.
+		while (high - low < 12) {
+			high++;
+			if (high - low < 12) {
+				low--;
+			}
+		}
+		double column = (r.width - 8) / (double) columns;
+		int left = r.x + 4, top = r.y + 4, rows = high - low + 1;
+		double row = (r.height - 8) / (double) rows;
+		if (playing >= 0) {
+			g.setColor(SELECTED);
+			g.fillRect(left + (int) (playing * 8 * column), r.y + 2, (int) (8 * column), r.height - 4);
+			g.setColor(new Color(255, 196, 60, 110));
+			g.fillRect(left + (int) ((playing * 8 + beat * 2) * column), r.y + 2, (int) Math.ceil(2 * column), r.height - 4);
+		}
+		g.setColor(DIM);
+		for (int bar = 1; bar < bars; bar++) {
+			int bx = left + (int) (bar * 8 * column);
+			g.drawLine(bx, r.y + 4, bx, r.y + r.height - 4);
+		}
+		g.setColor(RIGHT);
+		for (int[] note : notes) {
+			int nx = left + (int) (note[0] * column);
+			int nw = Math.max(3, (int) (Math.min(note[2], columns - note[0]) * column) - 1);
+			int ny = top + (int) ((high - note[1]) * row);
+			g.fillRoundRect(nx, ny, nw, Math.max(3, (int) row), 4, 4);
+		}
+		if (notes.isEmpty()) {
+			g.setColor(SOFT);
+			g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+			String hint = player.isPlaying() ? "Play the keys now: every note is written into the loop."
+					: "Press Play (Space), then play the keys over the chords.";
+			hint = Look.fit(g, hint, r.width - 16);
+			g.drawString(hint, r.x + (r.width - g.getFontMetrics().stringWidth(hint)) / 2, r.y + r.height / 2 + 5);
+		}
 	}
 
 	private void paintSmallButton(Graphics2D g, Rectangle b, String label) {
@@ -668,6 +893,14 @@ public final class Songwriter extends JPanel {
 		if (!notice.isEmpty()) {
 			line = notice;
 			color = GOLD;
+		} else if (melodyMode && !player.isPlaying()) {
+			line = "Melody: type A W S E D F T G Y H U J K (C" + (typedBase / 12 - 1)
+					+ " up), Z / X: octave, or click the keys. Grey keys are not in " + song.keyName() + ".";
+			color = TEXT;
+		} else if (melodyMode && heardDegree > 0) {
+			line = "Recording over " + song.chordName(heardDegree) + ": its notes " + song.noteNames(heardDegree)
+					+ " are gold, the safest to land on.";
+			color = TEXT;
 		} else if (heardDegree > 0 && !sounding.isEmpty()) {
 			line = song.chordName(heardDegree) + " (" + song.numeral(heardDegree) + " in " + song.keyName() + "): "
 					+ song.noteNames(heardDegree);
@@ -675,22 +908,38 @@ public final class Songwriter extends JPanel {
 		} else if (song.size() == 0) {
 			line = "Pick chords from the key above, or a famous progression, then press Play.";
 		} else {
-			line = "Space plays your progression round and round, with a bass line. Change anything while it plays.";
+			line = "Space plays your progression round and round, with a bass line. Click the keys below (or R) to add a melody.";
 		}
 		g.setColor(color);
 		g.setFont(Look.fitFont(g, line, Font.BOLD, 14, getWidth() - 32));
 		g.drawString(line, 16, y);
 	}
 
-	/** The keyboard, with the chord's notes in gold and the bass in blue. */
+	/**
+	 * The keyboard, with the chord's notes in gold and the bass in blue; in melody mode the notes out of the key are
+	 * greyed and the melody's notes are green.
+	 */
 	private void paintKeys(Graphics2D g, int top) {
 		Color[] colors = new Color[HIGH_NOTE + 1];
+		if (melodyMode) {
+			Set<Integer> inKey = new HashSet<>();
+			for (int note : song.scale()) {
+				inKey.add(Math.floorMod(note, 12));
+			}
+			for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
+				boolean in = inKey.contains(note % 12);
+				colors[note] = isBlack(note) ? in ? IN_KEY_BLACK : null : in ? null : OUT_OF_KEY;
+			}
+		}
 		for (int note : sounding) {
 			colors[note] = isBlack(note) ? GOLD_BLACK : GOLD;
 		}
 		for (int note : soundingBass) {
 			colors[note] = isBlack(note) ? BASS_BLACK : BASS;
 		}
-		Look.paintKeyboard(g, 16, top, getWidth() - 32, Math.max(40, getHeight() - 12 - top), colors);
+		for (int note : player.melodySounding()) {
+			colors[note] = isBlack(note) ? MELODY_BLACK : RIGHT;
+		}
+		Look.paintKeyboard(g, 16, top, getWidth() - 32, keyboardHeight(), colors);
 	}
 }
