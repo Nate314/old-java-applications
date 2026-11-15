@@ -216,7 +216,7 @@ public final class LessonBar extends JPanel {
          this.paintNotes(g, this.lesson.song(), Math.max(0, this.listenNote - 2), this.listenNote, LISTEN);
       } else {
          this.header(g, this.lesson.song().title(), TEXT, "Note " + (this.lesson.position() + 1) + " of " + this.lesson.song().length()
-            + "   misses " + this.lesson.misses() + "   L listen   R restart   0 free play");
+            + "   misses " + this.lesson.misses() + "   L listen   R restart   A backing   0 free play");
          this.paintNotes(g, this.lesson.song(), Math.max(0, this.lesson.position() - 2), this.lesson.position(), NEXT);
       }
    }

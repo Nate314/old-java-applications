@@ -19,7 +19,37 @@ public final class LessonCheck {
       checkRecords();
       checkTunes();
       checkChords();
+      checkBacking();
       System.out.println("LessonCheck: all checks passed");
+   }
+
+   private static void checkBacking() {
+      for (Song song : Song.ALL) {
+         int[] chords = Backing.chords(song);
+         assert chords.length == song.length() && chords[0] >= 0 : song.id() + " starts on a chord";
+         for (int note = 0; note < song.length(); note++) {
+            int chord = Backing.at(chords, note);
+            assert chord >= 0 && chord < 12 && chord != 11 : song.id() + " note " + note + " has chord " + chord;
+            assert note == 0 || chords[note] != Backing.at(chords, note - 1) : song.id() + " starts the chord it has already";
+         }
+         assert Backing.at(chords, song.length() - 1) == (song.id().equals("JINGLE") ? 7 : 0) : song.id() + " ends on C (Jingle Bells on G)";
+      }
+      // Mary: C under E D C D, G under D D D, C under E G G, and G under D D E D before the last C.
+      int[] mary = Backing.chords(Song.ALL[0]);
+      assert mary[0] == 0 && mary[7] == 7 && mary[10] == 0 && mary[21] == 7 && mary[25] == 0;
+      assert Backing.at(mary, 23) == 7 : "the E in D D E D keeps the G";
+      // Twinkle: C C G G | F F C | F F C C | G G C, its first line's chords.
+      int[] twinkle = Backing.chords(Song.ALL[1]);
+      String line = "";
+      for (int note = 0; note < 14; note++) {
+         line += twinkle[note] < 0 ? "" : Chord.name(twinkle[note]) + " ";
+      }
+      assert line.equals("C F C F C G C ") : line;
+      // A friend's tune on black keys gets their major chords; Bdim is never picked.
+      Song sharp = Tune.decode("g2k2b2g2", Tune.FRIENDS);
+      assert Backing.chords(sharp)[0] == 6 : "F# A# C# F# is F#, got " + Backing.chords(sharp)[0];
+      int[] notes = Backing.notes(7, 60);
+      assert java.util.Arrays.equals(notes, new int[]{43, 55, 59, 62}) : "G: a low G, then G B D an octave below the keys";
    }
 
    private static void checkChords() {

@@ -14,6 +14,8 @@ import javax.swing.Timer;
  * lights the key a lesson is waiting for, and tints blue the note the microphone hears. Keys are numbered 0 to 12 in note order.
  * During a lesson the top of the panel shows the song as falling notes: a bar per note over its key, as long as the
  * note, coming down to land on the keys. The next note sits on the keys and the song moves down a note at each right press.
+ * The backing's chord names ride down with the notes, each on a line where its chord starts, and a pill at the top
+ * right shows the backing (and turns it on or off when clicked).
  */
 public final class PianoPanel extends JPanel {
    public static final int KEYS = 13;
@@ -46,6 +48,12 @@ public final class PianoPanel extends JPanel {
    /** How many beats of the song the falling notes show above the keys. */
    private static final double BEATS_SHOWN = 4.5;
    private static final int MISS_MILLIS = 450;
+   private static final Color CHORD_LINE = new Color(200, 170, 255, 70);
+   private static final Color CHORD_TEXT = new Color(214, 192, 255);
+   private static final Color PILL = new Color(40, 34, 64, 220);
+   private static final Color PILL_OFF = new Color(40, 42, 54, 220);
+   private static final Font CHORD_FONT = new Font("SansSerif", Font.BOLD, 12);
+   private static final int PILL_HEIGHT = 20;
 
    private final boolean[] pressed = new boolean[KEYS];
    private int hint = -1;
@@ -64,6 +72,11 @@ public final class PianoPanel extends JPanel {
    /** The key whose lane flashes red for a wrong note, or -1. */
    private int missKey = -1;
    private long missAt;
+   /** The song's backing chords (see Backing), whether the backing is on, resting for the microphone, and the chord sounding (-1 for none). */
+   private int[] chordKeys;
+   private boolean backing = true;
+   private boolean resting;
+   private int backingChord = -1;
    private final Timer frames = new Timer(16, event -> this.frame());
 
    public PianoPanel() {
@@ -100,11 +113,40 @@ public final class PianoPanel extends JPanel {
    /** Shows {@code song} falling from its first note, or hides the falling notes for null. */
    public void setSong(Song song) {
       this.song = song;
+      this.chordKeys = song == null ? null : Backing.chords(song);
       this.next = 0;
       this.missKey = -1;
       this.glideMillis = 0;
       this.toBeat = 0;
       this.repaint();
+   }
+
+   public void setBacking(boolean on, boolean resting, int chord) {
+      this.backing = on;
+      this.resting = resting;
+      this.backingChord = chord;
+      this.repaint();
+   }
+
+   /** The backing pill's text, sized to the panel. */
+   private String pillText() {
+      String state = !this.backing ? "off" : this.resting ? "rests (mic)" : this.backingChord < 0 ? "on" : Chord.name(this.backingChord);
+      return (this.getWidth() < 420 ? "" : "A  ") + "Backing " + state;
+   }
+
+   /** The backing pill's left edge and width, measured in its font. */
+   private int[] pillSpan() {
+      int width = this.getFontMetrics(CHORD_FONT).stringWidth(this.pillText()) + 20;
+      return new int[]{this.getWidth() - 6 - width, width};
+   }
+
+   /** Whether a point is on the backing pill, shown over the falling notes during a lesson. */
+   public boolean backingAt(int x, int y) {
+      if (this.song == null || this.keysTop() < PILL_HEIGHT + 12) {
+         return false;
+      }
+      int[] span = this.pillSpan();
+      return y >= 6 && y < 6 + PILL_HEIGHT && x >= span[0] && x < span[0] + span[1];
    }
 
    /** Moves the song down until note {@code note} sits on the keys (past the end for its length), over {@code millis}. */
@@ -318,9 +360,38 @@ public final class PianoPanel extends JPanel {
             g.drawString(LETTERS[key], span[0] + (span[1] - metrics.stringWidth(LETTERS[key])) / 2, bottom - 5);
          }
       }
+      this.paintChords(g, width, top, beat, perBeat);
       // The line the notes land on, in the gold of the next key.
       g.setColor(LANDING);
       g.fillRect(0, top - 3, width, 3);
+   }
+
+   /** The backing's chord names, each on a faint line where its chord starts, and the backing pill on top. */
+   private void paintChords(Graphics2D g, int width, int top, double beat, double perBeat) {
+      g.setFont(CHORD_FONT);
+      FontMetrics metrics = g.getFontMetrics();
+      for (int note = 0; note < this.song.length(); note++) {
+         if (this.chordKeys[note] < 0) {
+            continue;
+         }
+         int y = (int)Math.round(top - (this.song.start(note) - beat) * perBeat);
+         if (y < metrics.getAscent() || y > top) {
+            continue;
+         }
+         g.setColor(CHORD_LINE);
+         g.fillRect(0, y - 1, width, 1);
+         g.setColor(this.backing ? CHORD_TEXT : LABEL_SOFT);
+         g.drawString(Chord.name(this.chordKeys[note]), 6, y - 4);
+      }
+      if (top < PILL_HEIGHT + 12) {
+         return;
+      }
+      int[] span = this.pillSpan();
+      g.setColor(this.backing ? PILL : PILL_OFF);
+      g.fillRoundRect(span[0], 6, span[1], PILL_HEIGHT, PILL_HEIGHT, PILL_HEIGHT);
+      g.setColor(this.backing && !this.resting ? CHORD_TEXT : LABEL_SOFT);
+      g.drawRoundRect(span[0], 6, span[1] - 1, PILL_HEIGHT - 1, PILL_HEIGHT, PILL_HEIGHT);
+      g.drawString(this.pillText(), span[0] + 10, 6 + (PILL_HEIGHT + metrics.getAscent()) / 2 - 2);
    }
 
    /** The computer key's letter at the bottom of a key, with the note name (or chord name) above it. */
