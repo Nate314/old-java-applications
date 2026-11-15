@@ -71,6 +71,23 @@ public class LauncherCheck {
       Path seenFile = file.resolveSibling(file.getFileName().toString().replace(".txt", "-seen.txt"));
       check(new PlayLog(file).seen("TankGame").equals("abc123") && new PlayLog(file).count("TankGame") == 5, "seen kept");
       check(new String(Files.readAllBytes(file), StandardCharsets.UTF_8).contains("TankGame 5 "), "play record format unchanged");
+      // Time played and the cards' order are kept in their own files beside it too.
+      check(again.timeLine("TankGame") == null && again.order().isEmpty(), "no time or order yet");
+      again.played("TankGame", 40 * 60_000L);
+      again.played("TankGame", 32 * 60_000L);
+      again.played("TankGame", 0);   // a start that never ran adds nothing
+      again.order("most");
+      PlayLog timed = new PlayLog(file);
+      check(timed.total("TankGame") == 72 * 60_000L && timed.longest("TankGame") == 40 * 60_000L, "time kept");
+      check("1 h 12 min played in all, longest 40 min".equals(timed.timeLine("TankGame")), timed.timeLine("TankGame"));
+      check(timed.order().equals("most") && timed.count("TankGame") == 5, "order kept, play record untouched");
+      check(PlayLog.duration(59_999).equals("under a minute") && PlayLog.duration(120 * 60_000L).equals("2 h"), "durations");
+      Path timeFile = file.resolveSibling(file.getFileName().toString().replace(".txt", "-time.txt"));
+      Files.write(timeFile, "junk\nClock 5 x\nTankGame 60000 60000\n".getBytes(StandardCharsets.UTF_8));
+      check(new PlayLog(file).total("Clock") == 0 && "1 min played in all".equals(new PlayLog(file).timeLine("TankGame")),
+         "damaged time lines skipped; one play shows no longest");
+      Files.delete(timeFile);
+      Files.delete(file.resolveSibling(file.getFileName().toString().replace(".txt", "-order.txt")));
       Files.delete(seenFile);
       Files.delete(file);
 
