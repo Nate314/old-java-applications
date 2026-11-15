@@ -34,6 +34,18 @@ public final class GameFrame extends JFrame {
    /** Watch: the computer makes a move this often, and starts the next game this long after one ends. */
    private static final int WATCH_STEP_MS = 280;
    private static final int WATCH_NEXT_GAME_MS = 2600;
+   /** Zoom (Z): a zoomed board shows this many tiles across and is dragged to see the rest. */
+   private static final int ZOOM_TILES = 8;
+   /** The strip under and right of a zoomed board where the bars show which part of it is in view. */
+   private static final int GUTTER = 6;
+   /** A press must move this far (window pixels) before it drags the board instead of playing the tile. */
+   private static final int DRAG_SLOP = 8;
+   /** Offsets meaning "center the board", for a new game or a fresh zoom. */
+   private static final int CENTER = Integer.MIN_VALUE;
+   /** Height of the second row of buttons on a narrow screen. */
+   private static final int SECOND_ROW = 30;
+   /** Zoom (Z), kept for the next game; null until the first window, which turns it on for a phone-sized screen. */
+   private static Boolean zoom;
    public boolean gameOver = false;
    private final Level level;
    private final BestTimes bestTimes;
@@ -44,6 +56,22 @@ public final class GameFrame extends JFrame {
    public int revealNoteDirection = 1;
    public MineTile[][] tiles;
    private JPanel panel = new JPanel();
+   /** Holds the tiles; zoomed, it is the window onto the bigger board, which moves under it. */
+   private final JPanel field = new JPanel(null);
+   private final JPanel acrossBar = new JPanel();
+   private final JPanel downBar = new JPanel();
+   private JButton zoomButton;
+   /** A phone-sized screen: the buttons take two rows, so the window is no wider than the board. */
+   private final boolean narrow;
+   /** How far the zoomed board is dragged from its top left corner, in window pixels. */
+   private int offsetX = CENTER;
+   private int offsetY = CENTER;
+   /** Where a press on the board began (in the board's own pixels) and the offsets then; dragged once it moves. */
+   private int pressX;
+   private int pressY;
+   private int pressOffsetX;
+   private int pressOffsetY;
+   private boolean dragged;
    private final JLabel status = new JLabel(" ", SwingConstants.CENTER);
    private final Timer clock = new Timer(1000, event -> this.updateStatus());
    /** Tiles with an animation running, repainted every frame until they are done. */
@@ -107,8 +135,13 @@ public final class GameFrame extends JFrame {
       this.tiles = new MineTile[this.rows][this.columns];
       this.revealed = new boolean[this.rows][this.columns];
       this.flagged = new boolean[this.rows][this.columns];
-      int windowSize = (int)(Toolkit.getDefaultToolkit().getScreenSize().getHeight() * 3.0 / 4.0);
-      this.tileWidth = this.tileHeight = Math.max(16, (windowSize - BARS_HEIGHT) / this.rows);
+      Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+      this.narrow = screen.getWidth() < 640;
+      if (zoom == null) { // where a whole Classic board leaves tiles too small to tap
+         zoom = this.narrow;
+      }
+      int windowSize = (int)(screen.getHeight() * 3.0 / 4.0);
+      this.tileWidth = this.tileHeight = Math.max(16, (windowSize - BARS_HEIGHT - (this.narrow ? SECOND_ROW : 0)) / this.rows);
       this.setDefaultCloseOperation(3);
       this.addKeyListener(new WindowMoveKeyListener(this));
       this.add(this.levelBar(), BorderLayout.NORTH);
@@ -128,15 +161,21 @@ public final class GameFrame extends JFrame {
       this.panel.setBackground(new Color(0, 0, 0, 0));
       this.panel.setLayout(null);
       this.panel.setPreferredSize(new Dimension(this.rows * this.tileWidth, this.columns * this.tileHeight));
+      this.field.setBackground(new Color(0, 0, 0, 0));
+      this.panel.add(this.field);
+      for (JPanel bar : new JPanel[]{this.acrossBar, this.downBar}) {
+         bar.setBackground(new Color(120, 120, 120, 150));
+         this.panel.add(bar);
+      }
 
       for (int row = 0; row < this.rows; row++) {
          for (int column = 0; column < this.columns; column++) {
             this.tiles[row][column] = new MineTile(this, row, column);
-            this.panel.add(this.tiles[row][column]);
+            this.field.add(this.tiles[row][column]);
             this.tiles[row][column].setVisible(true);
-            this.tiles[row][column].setBounds(row * this.tileWidth, column * this.tileHeight, this.tileWidth, this.tileHeight);
          }
       }
+      this.layoutTiles();
 
       this.updateStatus();
       this.pack();
@@ -155,9 +194,13 @@ public final class GameFrame extends JFrame {
       }
    }
 
-   /** One button per level; the current one is lit. Not focusable, so the arrow keys keep moving the window. */
+   /**
+    * One button per level; the current one is lit; then the game's own buttons, on a second row on a narrow screen.
+    * Not focusable, so the arrow keys keep moving the window.
+    */
    private JPanel levelBar() {
-      JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 4));
+      JPanel levels = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 4));
+      JPanel bar = this.narrow ? new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 4)) : levels;
       for (Level choice : Level.values()) {
          JButton button = new JButton(choice.label);
          button.setFocusable(false);
@@ -166,7 +209,7 @@ public final class GameFrame extends JFrame {
             button.setForeground(Color.BLACK);
          }
          button.addActionListener(event -> this.play(choice));
-         bar.add(button);
+         levels.add(button);
       }
       JButton noGuess = new JButton("No guess");
       noGuess.setFocusable(false);
@@ -189,7 +232,19 @@ public final class GameFrame extends JFrame {
       this.plainButton = this.oddsButton.getBackground();
       this.plainText = this.oddsButton.getForeground();
       bar.add(this.oddsButton);
-      return bar;
+      this.zoomButton = new JButton("Zoom");
+      this.zoomButton.setFocusable(false);
+      this.zoomButton.setToolTipText("Bigger tiles: drag the board to see the rest (Z)");
+      this.zoomButton.addActionListener(event -> this.toggleZoom());
+      this.lightZoom();
+      bar.add(this.zoomButton);
+      if (!this.narrow) {
+         return bar;
+      }
+      JPanel rows = new JPanel(new BorderLayout());
+      rows.add(levels, BorderLayout.NORTH);
+      rows.add(bar, BorderLayout.SOUTH);
+      return rows;
    }
 
    /** Left click on a tile: reveals it (and a blank region), or ends the game on a mine. */
@@ -423,7 +478,106 @@ public final class GameFrame extends JFrame {
       this.cursor = tile;
       if (tile != null) {
          tile.setCursor(true);
+         this.scrollTo(tile);
       }
+   }
+
+   /** Zoom only helps boards wider than the view it shows; Beginner's tiles are big enough already. */
+   private boolean zoomed() {
+      return zoom && this.rows > ZOOM_TILES + 1;
+   }
+
+   /** Z or the Zoom button: bigger tiles on a board dragged to see the rest, or the whole board. Kept for the next game. */
+   void toggleZoom() {
+      zoom = !zoom;
+      this.lightZoom();
+      this.offsetX = this.offsetY = CENTER;
+      this.layoutTiles();
+      if (this.cursor != null) {
+         this.scrollTo(this.cursor);
+      }
+   }
+
+   private void lightZoom() {
+      this.zoomButton.setBackground(zoom ? SELECTED_LEVEL : this.plainButton);
+      this.zoomButton.setForeground(zoom ? Color.BLACK : this.plainText);
+   }
+
+   /** Places the tiles: the whole board, or zoomed, the dragged part of the bigger one with bars saying which part. */
+   private void layoutTiles() {
+      int board = this.rows * this.tileWidth;
+      boolean zoomed = this.zoomed();
+      int view = zoomed ? board - GUTTER : board;
+      int size = zoomed ? view / ZOOM_TILES : this.tileWidth;
+      int content = size * this.rows;
+      this.offsetX = !zoomed ? 0 : clamp(this.offsetX == CENTER ? (content - view) / 2 : this.offsetX, content, view);
+      this.offsetY = !zoomed ? 0 : clamp(this.offsetY == CENTER ? (content - view) / 2 : this.offsetY, content, view);
+      this.field.setBounds(0, 0, view, view);
+      for (int row = 0; row < this.rows; row++) {
+         for (int column = 0; column < this.columns; column++) {
+            this.tiles[row][column].setBounds(row * size - this.offsetX, column * size - this.offsetY, size, size);
+         }
+      }
+      this.acrossBar.setVisible(zoomed);
+      this.downBar.setVisible(zoomed);
+      if (zoomed) {
+         this.acrossBar.setBounds(this.offsetX * view / content, view + 2, view * view / content, GUTTER - 2);
+         this.downBar.setBounds(view + 2, this.offsetY * view / content, GUTTER - 2, view * view / content);
+      }
+      this.panel.repaint();
+   }
+
+   /** An offset that keeps the view on the board. */
+   static int clamp(int offset, int content, int view) {
+      return Math.max(0, Math.min(offset, content - view));
+   }
+
+   /** The offset that brings [start, start + size) into view with a tile to spare on each side (clamped later). */
+   static int follow(int offset, int start, int size, int view) {
+      if (start - size < offset) {
+         return start - size;
+      }
+      return start + 2 * size > offset + view ? start + 2 * size - view : offset;
+   }
+
+   /** Zoomed, drags the board so the tile (the keyboard's or the computer's) is in view. */
+   private void scrollTo(MineTile tile) {
+      if (!this.zoomed()) {
+         return;
+      }
+      int x = follow(this.offsetX, tile.getX() + this.offsetX, tile.getWidth(), this.field.getWidth());
+      int y = follow(this.offsetY, tile.getY() + this.offsetY, tile.getHeight(), this.field.getHeight());
+      if (x != this.offsetX || y != this.offsetY) {
+         this.offsetX = x;
+         this.offsetY = y;
+         this.layoutTiles();
+      }
+   }
+
+   /** A press on a tile, at (x, y) in the board's own pixels: a drag may follow. */
+   void pressBoard(int x, int y) {
+      this.pressX = x;
+      this.pressY = y;
+      this.pressOffsetX = this.offsetX;
+      this.pressOffsetY = this.offsetY;
+      this.dragged = false;
+   }
+
+   /** The press moved to (x, y): zoomed, past a few pixels, the board follows it. True while it is being dragged. */
+   boolean dragBoard(int x, int y) {
+      if (!this.zoomed() || !this.dragged && Math.abs(x - this.pressX) + Math.abs(y - this.pressY) < DRAG_SLOP) {
+         return false;
+      }
+      this.dragged = true;
+      this.offsetX = this.pressOffsetX - (x - this.pressX);
+      this.offsetY = this.pressOffsetY - (y - this.pressY);
+      this.layoutTiles();
+      return true;
+   }
+
+   /** The last press dragged the board, so its release plays no tile. */
+   boolean wasDragged() {
+      return this.dragged;
    }
 
    /** A new game on the same level, where this window was. */

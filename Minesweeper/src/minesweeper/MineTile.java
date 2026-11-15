@@ -11,6 +11,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.event.MouseAdapter;
 import javax.swing.JButton;
 
 /**
@@ -95,6 +96,12 @@ public final class MineTile extends JButton implements MouseListener {
       this.setBorderPainted(false);
       this.setContentAreaFilled(false);
       this.addMouseListener(this);
+      this.addMouseMotionListener(new MouseAdapter() {
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            MineTile.this.dragged(event);
+         }
+      });
       this.addKeyListener(new KeyAdapter() {
          @Override
          public void keyPressed(KeyEvent event) {
@@ -521,6 +528,9 @@ public final class MineTile extends JButton implements MouseListener {
 
    @Override
    public final void mouseClicked(MouseEvent event) {
+      if (this.game.wasDragged()) { // the press dragged the zoomed board
+         return;
+      }
       this.game.moveCursor(null);
       if (this.game.gameOver || event.getButton() == MouseEvent.BUTTON1) {
          this.play(true);
@@ -571,8 +581,17 @@ public final class MineTile extends JButton implements MouseListener {
 
    @Override
    public final void mousePressed(MouseEvent event) {
+      this.game.pressBoard(this.getX() + event.getX(), this.getY() + event.getY());
       if (event.getButton() == MouseEvent.BUTTON1 && this.shown == SHOW_HIDDEN && this.mark != FLAG && !this.game.gameOver) {
          this.pressed = true;
+         this.repaint();
+      }
+   }
+
+   /** Zoomed, a press that moves drags the board (in the board's own pixels, since this tile moves with it). */
+   private void dragged(MouseEvent event) {
+      if (this.game.dragBoard(this.getX() + event.getX(), this.getY() + event.getY()) && this.pressed) {
+         this.pressed = false;
          this.repaint();
       }
    }
