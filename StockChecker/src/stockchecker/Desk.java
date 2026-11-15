@@ -57,6 +57,8 @@ final class Desk {
    }
 
    static final int MAX_SYMBOLS = 8;
+   /** Finished days kept per stock for the Days chart (today's candle makes 20). */
+   static final int HISTORY = 19;
    /** Speeds: paused, normal (a day in about 2.5 minutes) and fast (about 30 seconds). */
    static final int PAUSED = 0;
    static final int NORMAL = 1;
@@ -67,6 +69,8 @@ final class Desk {
    /** Each symbol's last close (the price its next day opens from), or its starting price before any close. */
    private final Map<String, Double> bases = new LinkedHashMap<>();
    private List<String> watch = new ArrayList<>();
+   /** Each stock's finished days, oldest first, the last {@link #HISTORY}: {day, open, high, low, close}. */
+   final Map<String, List<double[]>> days = new LinkedHashMap<>();
    final Portfolio portfolio = new Portfolio();
    final List<Rival> rivals = Rival.all();
    /** Your standing orders, at most one above and one below the price per stock. */
@@ -132,6 +136,10 @@ final class Desk {
                   case "rclose": desk.rival(parts[0]).closes.add(Double.parseDouble(parts[1])); break;
                   case "order":
                      desk.orders.add(new Order(parts[0], parts[1].equals("buy"), parts[2].equals("above"), Double.parseDouble(parts[3])));
+                     break;
+                  case "bar":
+                     desk.days.computeIfAbsent(parts[0], k -> new ArrayList<>()).add(new double[] {Integer.parseInt(parts[1]),
+                        Double.parseDouble(parts[2]), Double.parseDouble(parts[3]), Double.parseDouble(parts[4]), Double.parseDouble(parts[5])});
                      break;
                   default: break;
                }
@@ -325,6 +333,11 @@ final class Desk {
       }
       for (Market.Stock stock : market.stocks()) {
          bases.put(stock.symbol, stock.close());
+         List<double[]> bars = days.computeIfAbsent(stock.symbol, k -> new ArrayList<>());
+         bars.add(market.bar(stock));
+         while (bars.size() > HISTORY) {
+            bars.remove(0);
+         }
       }
       market = new Market(market.day + 1, marketSymbols(), bases, firstPrices);
       save();
@@ -338,6 +351,7 @@ final class Desk {
          rival.portfolio.reset();
       }
       bases.clear();
+      days.clear();
       market = new Market(1, symbols(), bases, firstPrices);
       save();
    }
@@ -376,6 +390,12 @@ final class Desk {
          out.append("base=").append(base.getKey()).append(':').append(base.getValue()).append('\n');
       }
       write(out, "", portfolio);
+      for (Map.Entry<String, List<double[]>> bars : days.entrySet()) {
+         for (double[] bar : bars.getValue()) {
+            out.append("bar=").append(bars.getKey()).append(':').append((int) bar[0]).append(':').append(bar[1]).append(':')
+               .append(bar[2]).append(':').append(bar[3]).append(':').append(bar[4]).append('\n');
+         }
+      }
       for (Order order : orders) {
          out.append("order=").append(order.symbol).append(':').append(order.buy ? "buy" : "sell").append(':')
             .append(order.above ? "above" : "below").append(':').append(order.price).append('\n');

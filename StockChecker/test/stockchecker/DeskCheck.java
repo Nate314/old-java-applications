@@ -94,14 +94,31 @@ public class DeskCheck {
       check(again.portfolio.trades.isEmpty(), "trades are per day");
       Desk third = Desk.load(file, Arrays.asList("NFLX"), first);
       check(third.market.day == 2 && third.market.stock("CRM").open() == again.market.stock("CRM").open(), "day 2 reloads the same");
+      // The Days chart: each close keeps a candle per stock, across a reload.
+      double[] candle = third.days.get("CRM").get(0);
+      check(third.days.get("CRM").size() == 1 && candle[0] == 1 && candle[4] == close, "day 1's CRM candle kept: " + Arrays.toString(candle));
+      check(candle[2] >= Math.max(candle[1], candle[4]) && candle[3] <= Math.min(candle[1], candle[4]), "a candle's wick spans its body");
+      double[] live = third.market.bar(third.market.stock("CRM"));
+      check(live[0] == 2 && live[1] == live[4] && live[2] == live[1], "today's candle at the open is one price");
       third.startOver();
       check(third.market.day == 1 && third.portfolio.cash == Portfolio.START && third.portfolio.holdings.isEmpty(), "start over");
+      check(third.days.isEmpty(), "start over clears the days");
       check(worth > 0, "worth");
       for (Rival rival : third.rivals) {
          check(rival.portfolio.cash == Portfolio.START && rival.portfolio.holdings.isEmpty() && rival.portfolio.closes.isEmpty(),
             "start over resets " + rival.name);
       }
+      for (int day = 1; day <= Desk.HISTORY + 3; day++) {
+         while (!third.tick()) {
+            // run to the closing bell
+         }
+         third.nextDay();
+      }
+      List<double[]> kept = Desk.load(file, Arrays.asList("NFLX"), first).days.get("NFLX");
+      check(kept.size() == Desk.HISTORY && kept.get(0)[0] == 4 && kept.get(kept.size() - 1)[0] == Desk.HISTORY + 3,
+         "the last " + Desk.HISTORY + " days are kept: " + kept.size());
       file.delete();
+
 
       // The rivals: same trades for everybody, carried across a reload, no credit, day traders out by the close.
       List<String> five = Arrays.asList("crm", "lmt", "tsn", "nflx", "swk");

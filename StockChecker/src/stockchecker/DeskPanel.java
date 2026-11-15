@@ -79,8 +79,11 @@ final class DeskPanel extends JPanel {
    private Color messageColor = TEXT;
    private long messageUntil;
    private boolean startOverArmed;
-   /** Whether the chart card shows the race against the rivals instead of the picked stock. */
-   private boolean race;
+   /** The chart card's tabs: the picked stock's day, its days so far as candles, or the race against the rivals. */
+   private static final int CHART = 0;
+   private static final int DAYS = 1;
+   private static final int RACE = 2;
+   private int tab = CHART;
    private final Rectangle[] rows = new Rectangle[Desk.MAX_SYMBOLS * 2];
    /** The big chart's plot box and price range as last drawn (null when no chart shows), for placing order lines. */
    private Rectangle plot;
@@ -103,15 +106,17 @@ final class DeskPanel extends JPanel {
          button.lit = () -> desk.speed == speed;
          buttons.add(button);
       }
-      // The chart card's two tabs: the picked stock's chart, or the race against the rivals (R toggles).
-      Button chartTab = new Button("Chart", 'c', null, new Rectangle(588, 60, 56, 22), always, () -> race = false);
-      chartTab.lit = () -> !race;
-      buttons.add(chartTab);
-      Button raceTab = new Button("Race", 'r', null, new Rectangle(648, 60, 56, 22), always, () -> race = true);
-      raceTab.lit = () -> race;
-      buttons.add(raceTab);
+      // The chart card's tabs: Chart (C), Days (W) and Race (R, which toggles).
+      String[] tabs = {"Chart", "Days", "Race"};
+      char[] tabKeys = {'c', 'w', 'r'};
+      for (int i = 0; i < tabs.length; i++) {
+         int which = i;
+         Button button = new Button(tabs[i], tabKeys[i], null, new Rectangle(572 + i * 46, 60, 42, 22), always, () -> tab = which);
+         button.lit = () -> tab == which;
+         buttons.add(button);
+      }
       // At the chart card's bottom right corner, under the price labels.
-      Button hear = new Button("Hear", 'h', null, new Rectangle(660, 259, 46, 16), () -> open.getAsBoolean() && !race, this::hear);
+      Button hear = new Button("Hear", 'h', null, new Rectangle(660, 259, 46, 16), () -> open.getAsBoolean() && tab == CHART, this::hear);
       hear.lit = () -> ear.hearing() != null;
       buttons.add(hear);
       String[] labels = {"Buy 1", "Buy 10", "Buy max", "Sell 1", "Sell 10", "Sell all"};
@@ -183,7 +188,7 @@ final class DeskPanel extends JPanel {
    private void tick() {
       ticks++;
       String symbol = symbol();
-      if (ear.hearing() != null && (!ear.hearing().equals(symbol) || race || desk.market.closed())) {
+      if (ear.hearing() != null && (!ear.hearing().equals(symbol) || tab != CHART || desk.market.closed())) {
          ear.stop();
       }
       ear.tick();
@@ -235,6 +240,9 @@ final class DeskPanel extends JPanel {
          double price = stock.path[market.minute];
          out.append(symbol).append(' ').append(Money.dollars(price)).append(", ").append(Money.percent(stock.open(), price))
             .append(" today").append(desk.portfolio.shares(symbol) > 0 ? ", you hold " + desk.portfolio.shares(symbol) + ". " : ". ");
+         if (tab == DAYS) {
+            out.append("Days tab: ").append(daysChange(bars(symbol))).append(". ");
+         }
       }
       out.append("Net worth ").append(Money.dollars(desk.portfolio.worth(market))).append(", ").append(ordinal(desk.rank(false)))
          .append(" of ").append(desk.rivals.size() + 1).append(". H hears the chart, L listens live.");
@@ -278,7 +286,7 @@ final class DeskPanel extends JPanel {
 
    /** Whether the pointer is over the chart where a click places or cancels an order. */
    private boolean onPlot(int x, int y) {
-      return plot != null && !race && !desk.market.closed() && symbol() != null && plot.contains(x, y);
+      return plot != null && tab == CHART && !desk.market.closed() && symbol() != null && plot.contains(x, y);
    }
 
    /** A click on the chart: cancels the order line under it, or puts one at that price. */
@@ -418,7 +426,7 @@ final class DeskPanel extends JPanel {
          return;
       }
       if (key == 'r') {
-         race = !race;
+         tab = tab == RACE ? CHART : RACE;
          return;
       }
       if (key == '-' || key == '=' || key == '+') {
@@ -463,14 +471,18 @@ final class DeskPanel extends JPanel {
       paintWatch(g);
       plot = null;
       if (desk.market.closed()) {
-         if (race) {
+         if (tab == RACE) {
             paintStandings(g);
+         } else if (tab == DAYS) {
+            paintDays(g, new Rectangle(272, 54, 438, 268));
          } else {
             paintClose(g);
          }
       } else {
-         if (race) {
+         if (tab == RACE) {
             paintRace(g);
+         } else if (tab == DAYS) {
+            paintDays(g, new Rectangle(272, 54, 438, 222));
          } else {
             paintChart(g);
          }
@@ -575,14 +587,7 @@ final class DeskPanel extends JPanel {
       Color line = up ? UP : DOWN;
 
       if (big) {
-         g.setFont(SMALL);
-         for (int k = 0; k <= 4; k++) {
-            double price = low + span * k / 4;
-            int y = yOf.applyAsInt(price);
-            g.setColor(new Color(255, 255, 255, 22));
-            g.drawLine(box.x, y, box.x + box.width, y);
-            text(g, Money.dollars(price), SMALL, MUTED, box.x + box.width + 6, y + 4);
-         }
+         paintScale(g, box, low, span);
          int[] hours = {30, 150, 270, 390};
          String[] names = {"10 AM", "12 PM", "2 PM", "4 PM"};
          for (int k = 0; k < hours.length; k++) {
@@ -790,11 +795,129 @@ final class DeskPanel extends JPanel {
       x += width(g, Money.dollars(price), BIG) + 10;
       boolean up = price >= stock.open();
       String change = Money.change(price - stock.open()) + " (" + Money.percent(stock.open(), price) + ") today";
-      text(g, fit(g, change, PLAIN, 580 - x), PLAIN, up ? UP : DOWN, x, card.y + 24);
+      text(g, fit(g, change, PLAIN, 564 - x), PLAIN, up ? UP : DOWN, x, card.y + 24);
       paintLine(g, stock, new Rectangle(card.x + 14, card.y + 38, card.width - 84, card.height - 62), true);
    }
 
+   /** Five price lines across {@code box}, from {@code low} up by {@code span}, labelled at the right. */
+   private void paintScale(Graphics2D g, Rectangle box, double low, double span) {
+      for (int k = 0; k <= 4; k++) {
+         int y = box.y + box.height - (int) Math.round(box.height * k / 4.0);
+         g.setColor(new Color(255, 255, 255, 22));
+         g.drawLine(box.x, y, box.x + box.width, y);
+         text(g, Money.dollars(low + span * k / 4), SMALL, MUTED, box.x + box.width + 6, y + 4);
+      }
+   }
+
+   /** The stock's finished days kept on the desk and today so far, oldest first, as {day, open, high, low, close}. */
+   private List<double[]> bars(String symbol) {
+      List<double[]> bars = new ArrayList<>(desk.days.getOrDefault(symbol, new ArrayList<>()));
+      bars.add(desk.market.bar(desk.market.stock(symbol)));
+      return bars;
+   }
+
+   /** "+3.20% since day 4", or "+0.40% today" while today is the only day. */
+   private static String daysChange(List<double[]> bars) {
+      double[] last = bars.get(bars.size() - 1);
+      return Money.percent(bars.get(0)[1], last[4]) + (bars.size() == 1 ? " today" : " since day " + (int) bars.get(0)[0]);
+   }
+
+   /**
+    * The Days tab: the picked stock's days on the desk as candles (a body from the open to the close, a wick from the
+    * low to the high), today's outlined and still moving, your average cost as a line while you hold some, and the
+    * prices of the day under the pointer.
+    */
+   private void paintDays(Graphics2D g, Rectangle card) {
+      g.setColor(new Color(255, 255, 255, 14));
+      g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
+      String symbol = symbol();
+      if (symbol == null) {
+         text(g, "No stock picked.", PLAIN, MUTED, card.x + 14, card.y + 24);
+         return;
+      }
+      List<double[]> bars = bars(symbol);
+      double first = bars.get(0)[1];
+      double price = bars.get(bars.size() - 1)[4];
+      int x = card.x + 14;
+      text(g, symbol, BIG, accent, x, card.y + 25);
+      x += width(g, symbol, BIG) + 10;
+      text(g, Money.dollars(price), BIG, TEXT, x, card.y + 25);
+      x += width(g, Money.dollars(price), BIG) + 10;
+      text(g, fit(g, daysChange(bars), PLAIN, 564 - x), PLAIN, price >= first ? UP : DOWN, x, card.y + 24);
+
+      int held = desk.portfolio.shares(symbol);
+      double paid = held > 0 ? desk.portfolio.holdings.get(symbol).cost / held : 0;
+      double low = paid > 0 ? Math.min(first, paid) : first;
+      double high = paid > 0 ? Math.max(first, paid) : first;
+      for (double[] bar : bars) {
+         low = Math.min(low, bar[3]);
+         high = Math.max(high, bar[2]);
+      }
+      // At least a 2% range, so a quiet day is not drawn as a wild one.
+      double room = Math.max(high - low, first * 0.02);
+      double lowF = (high + low) / 2 - room * 0.6;
+      double span = room * 1.2;
+      Rectangle box = new Rectangle(card.x + 14, card.y + 38, card.width - 84, card.height - 62);
+      paintScale(g, box, lowF, span);
+      java.util.function.DoubleToIntFunction yOf = p -> box.y + box.height - (int) Math.round((p - lowF) / span * box.height);
+      int slot = box.width / Math.max(bars.size(), 10);
+      int hover = box.contains(mouseX, mouseY) ? (mouseX - box.x) / slot : -1;
+      // Label every day when the labels fit, or every other one (today always).
+      int every = (24 + slot - 1) / slot;
+      for (int i = 0; i < bars.size(); i++) {
+         double[] bar = bars.get(i);
+         boolean today = i == bars.size() - 1;
+         int cx = box.x + i * slot + slot / 2;
+         if (i == hover) {
+            g.setColor(new Color(255, 255, 255, 26));
+            g.fillRect(box.x + i * slot, box.y, slot, box.height);
+         }
+         Color color = bar[4] >= bar[1] ? UP : DOWN;
+         g.setColor(today ? color : withAlpha(color, 190));
+         g.setStroke(new BasicStroke(1.5f));
+         g.drawLine(cx, yOf.applyAsInt(bar[2]), cx, yOf.applyAsInt(bar[3]));
+         g.setStroke(new BasicStroke(1f));
+         int w = Math.max(3, slot - 6);
+         int top = yOf.applyAsInt(Math.max(bar[1], bar[4]));
+         int tall = Math.max(2, yOf.applyAsInt(Math.min(bar[1], bar[4])) - top);
+         g.fillRect(cx - w / 2, top, w, tall);
+         if (today) {
+            g.setColor(accent);
+            g.drawRect(cx - w / 2 - 2, top - 2, w + 3, tall + 3);
+         }
+         if ((bars.size() - 1 - i) % every == 0) {
+            String label = "D" + (int) bar[0];
+            text(g, label, SMALL, today ? accent : MUTED, cx - width(g, label, SMALL) / 2, box.y + box.height + 14);
+         }
+      }
+      marks.clear();
+      if (paid > 0) {
+         orderLine(g, box, yOf.applyAsInt(paid), accent, "You paid " + Money.dollars(paid) + " a share", 230, false);
+      }
+      if (hover >= 0 && hover < bars.size()) {
+         double[] bar = bars.get(hover);
+         boolean now = hover == bars.size() - 1 && !desk.market.closed();
+         String head = (now ? "Today so far" : "Day " + (int) bar[0]) + ": " + Money.percent(bar[1], bar[4]);
+         String body = "Open " + Money.dollars(bar[1]) + ", high " + Money.dollars(bar[2]) + ", low " + Money.dollars(bar[3])
+            + (now ? ", now " : ", close ") + Money.dollars(bar[4]);
+         int w = Math.max(width(g, head, BOLD), width(g, body, SMALL)) + 12;
+         // On the side away from the pointer, so the candle stays in sight.
+         int left = mouseX < box.x + box.width / 2 ? box.x + box.width - w : box.x;
+         g.setColor(new Color(10, 16, 40, 235));
+         g.fillRoundRect(left, box.y + 2, w, 34, 8, 8);
+         g.setColor(withAlpha(accent, 200));
+         g.drawRoundRect(left, box.y + 2, w, 34, 8, 8);
+         text(g, head, BOLD, bar[4] >= bar[1] ? UP : DOWN, left + 6, box.y + 16);
+         text(g, body, SMALL, TEXT, left + 6, box.y + 31);
+      } else if (bars.size() == 1) {
+         text(g, "Each closing bell adds a day here.", SMALL, withAlpha(MUTED, 170), box.x + slot + 8, box.y + 12);
+      } else {
+         text(g, "Point at a day for its prices", SMALL, withAlpha(MUTED, 170), box.x + box.width - 160, box.y + 12);
+      }
+   }
+
    private static Color colorOf(Desk.Standing standing) {
+
       return standing.rival == null ? TEXT : RIVALS[standing.rival.kind];
    }
 
