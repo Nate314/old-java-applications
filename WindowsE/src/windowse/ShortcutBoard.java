@@ -29,6 +29,12 @@ final class ShortcutBoard extends JPanel {
    private static final int STEPS_Y = 56;
    private static final int ROWS = 4;
    private static final int DECK_UNITS_X10 = 125;   // 12.5 keys wide
+   private static final int DECK_W = 2 * PAD + DECK_UNITS_X10 * UNIT / 10;
+   private static final int SCREEN_W = 192;
+   private static final int SCREEN_H = 120;
+   private static final int BEZEL = 5;
+   private static final int MONITOR_X = MARGIN + DECK_W + 16;
+   private static final int MONITOR_W = SCREEN_W + 2 * BEZEL;
    private static final Color BACK = new Color(243, 245, 249);
    private static final Color DECK = new Color(28, 30, 36);
    private static final Color KEY = new Color(48, 51, 60);
@@ -78,11 +84,15 @@ final class ShortcutBoard extends JPanel {
    private int done;
    private int count;
    private boolean running;
+   private boolean dry;
+   /** The screen after the plan, and while a run goes (and after it, until the plan changes) the screen it made. */
+   private Screen after = new Screen();
+   private Screen live;
 
    /** onPick runs when a key is clicked; onPress when one is double-clicked (pick it and press it). */
    ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress) {
       this.setLayout(null);
-      this.setPreferredSize(new Dimension(2 * MARGIN + 2 * PAD + DECK_UNITS_X10 * UNIT / 10,
+      this.setPreferredSize(new Dimension(MONITOR_X + MONITOR_W + MARGIN,
          HEAD + 2 * PAD + ROWS * UNIT + MARGIN));
       this.release.setRepeats(false);
       for (int row = 0; row < LAYOUT.length; row++) {
@@ -121,9 +131,23 @@ final class ShortcutBoard extends JPanel {
       this.repaint();
    }
 
-   /** A run of these steps starts (the list itself, or one step of the picked key). */
-   void started(List<Step> run) {
+   /** What DO IT!!! would press now; the little screen shows what that does. */
+   void plan(List<Step> plan) {
+      this.after = Screen.after(plan);
+      this.live = null;
+      this.repaint();
+   }
+
+   /** The little screen's words for what the plan does (empty plan: the count is not a number). */
+   String afterSummary() {
+      return this.after.summary();
+   }
+
+   /** A run of these steps starts (the list itself, or one step of the picked key); dry: only on the little screen. */
+   void started(List<Step> run, boolean dry) {
       this.running = true;
+      this.dry = dry;
+      this.live = new Screen();
       this.run = run;
       this.done = 0;
       this.count = 0;
@@ -138,6 +162,7 @@ final class ShortcutBoard extends JPanel {
       this.done = done;
       this.letGo();
       this.current = this.run.get(this.stepAt(done - 1)).shortcut;
+      this.live.apply(this.current);
       this.caps.get(Shortcut.START).setPushed(true);
       this.caps.get(this.current).setPushed(true);
       this.release.restart();
@@ -180,9 +205,9 @@ final class ShortcutBoard extends JPanel {
       this.paintHead(g);
       this.paintSteps(g);
 
-      int deckW = 2 * PAD + DECK_UNITS_X10 * UNIT / 10;
+      this.paintMonitor(g);
       g.setColor(DECK);
-      g.fillRoundRect(MARGIN, HEAD, deckW, 2 * PAD + ROWS * UNIT, 16, 16);
+      g.fillRoundRect(MARGIN, HEAD, DECK_W, 2 * PAD + ROWS * UNIT, 16, 16);
       g.setFont(new Font("SansSerif", Font.PLAIN, 11));
       for (int row = 0; row < LAYOUT.length; row++) {
          int tenths = 0;
@@ -225,7 +250,7 @@ final class ShortcutBoard extends JPanel {
       g.setFont(new Font("SansSerif", Font.PLAIN, 12));
       g.drawString(head.combo() + " " + head.does + ".", x, y + 31);
 
-      String right = this.running ? "Pressing " + this.done + " of " + this.count : "Double-click a key to press it";
+      String right = this.running ? (this.dry ? "Preview " : "Pressing ") + this.done + " of " + this.count : "Double-click a key to press it";
       g.setFont(new Font("SansSerif", this.running ? Font.BOLD : Font.PLAIN, this.running ? 14 : 11));
       g.setColor(this.running ? KeyCap.ACCENT : MUTED);
       FontMetrics fm = g.getFontMetrics();
@@ -276,6 +301,53 @@ final class ShortcutBoard extends JPanel {
             x += 18;
          }
       }
+   }
+
+   /** Beside the keyboard, a little monitor showing what the presses do, and under it the same in words. */
+   private void paintMonitor(Graphics2D g) {
+      Screen screen = this.live != null ? this.live : this.after;
+      int x = MONITOR_X;
+      int y = HEAD;
+      g.setColor(DECK);
+      g.fillRoundRect(x, y, MONITOR_W, SCREEN_H + 2 * BEZEL, 10, 10);
+      g.fillRect(x + MONITOR_W / 2 - 10, y + SCREEN_H + 2 * BEZEL, 20, 10);
+      g.fillRoundRect(x + MONITOR_W / 2 - 36, y + SCREEN_H + 2 * BEZEL + 10, 72, 5, 4, 4);
+      MiniScreen.paint(g, screen, x + BEZEL, y + BEZEL, SCREEN_W, SCREEN_H);
+
+      String label = this.running ? (this.dry ? "PREVIEW, NO KEYS PRESSED" : "PRESSING")
+         : this.live != null ? (this.dry ? "PREVIEW" : "WHAT IT DID") : "AFTER DO IT!!!";
+      g.setColor(this.running ? KeyCap.ACCENT : MUTED);
+      g.setFont(new Font("SansSerif", Font.BOLD, 11));
+      int ty = y + SCREEN_H + 2 * BEZEL + 30;
+      g.drawString(label, x, ty);
+      g.setColor(INK);
+      g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+      FontMetrics fm = g.getFontMetrics();
+      List<String> lines = wrap(screen.summary(), fm, MONITOR_W + MARGIN - 2, 3);
+      for (int i = 0; i < lines.size(); i++) {
+         g.drawString(lines.get(i), x, ty + 15 * (i + 1));
+      }
+   }
+
+   /** Text broken into lines of at most width pixels, at most max lines (the last one ending "..." if cut). */
+   static List<String> wrap(String text, FontMetrics fm, int width, int max) {
+      List<String> lines = new ArrayList<>();
+      String line = "";
+      for (String word : text.split(" ")) {
+         String next = line.isEmpty() ? word : line + " " + word;
+         if (fm.stringWidth(next) <= width || line.isEmpty()) {
+            line = next;
+         } else {
+            lines.add(line);
+            line = word;
+         }
+      }
+      lines.add(line);
+      if (lines.size() > max) {
+         lines = new ArrayList<>(lines.subList(0, max));
+         lines.set(max - 1, lines.get(max - 1) + "...");
+      }
+      return lines;
    }
 
    /** A small key: the Windows logo (shortcut null) or the shortcut's key. Returns where it ends. */

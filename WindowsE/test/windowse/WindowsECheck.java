@@ -13,7 +13,7 @@ import javax.swing.SwingUtilities;
  * Self-check for the presses each shortcut sends, with a key list in place of java.awt.Robot (nothing reaches the
  * real keyboard): every press holds Windows only around its own key (so keys typed between presses are not Win
  * shortcuts), the Windows key alone is tapped, a list of steps is pressed in order, Stop ends early, and onDone runs
- * once.
+ * once. Also what the little screen says each list does.
  */
 public class WindowsECheck {
    /** Writes each press as "+code" and each release as "-code". */
@@ -52,8 +52,46 @@ public class WindowsECheck {
          check(s.times >= 1 && !s.title.isEmpty() && !s.does.isEmpty() && s.combo().startsWith("Win"), s + " is described");
       }
       check(Shortcut.EXPLORER.times == 10, "Win+E still offers 10, as the original did");
+      screenChecks();
       System.out.println("WindowsECheck: all checks passed");
       System.exit(0);
+   }
+
+   /** The little screen: what each shortcut does to it, and the words for it. */
+   private static void screenChecks() {
+      Screen sides = Screen.after(WindowsEWindow.SIDE_BY_SIDE);
+      check(sides.summary().equals("2 File Explorer windows: 1 on the left half, 1 on the right half."), "Side by side: " + sides.summary());
+      check(says(steps(Shortcut.EXPLORER, 10), "10 File Explorer windows."), "Win+E x10");
+      check(says(steps(Shortcut.EXPLORER, 1000), "40 File Explorer windows."), "Win+E stops at 40 windows, as the pretend Windows does");
+      check(says(steps(Shortcut.EXPLORER, 2, Shortcut.DESKTOP, 1), "2 File Explorer windows: 2 hidden by Win+D."), "Win+D hides");
+      check(says(steps(Shortcut.EXPLORER, 2, Shortcut.DESKTOP, 2), "2 File Explorer windows."), "Win+D again brings them back");
+      check(says(steps(Shortcut.EXPLORER, 1, Shortcut.LEFT, 1, Shortcut.RIGHT, 1), "1 File Explorer window."), "Right from the left half puts it back");
+      check(says(steps(Shortcut.EXPLORER, 1, Shortcut.UP, 1, Shortcut.DOWN, 2), "1 File Explorer window: 1 minimized."), "Down restores, then minimizes");
+      check(says(steps(Shortcut.EXPLORER, 2, Shortcut.DOWN, 1, Shortcut.LEFT, 1), "2 File Explorer windows: 1 on the left half, 1 minimized."),
+         "the arrows move the window in front, the next one once the first is minimized");
+      check(says(steps(Shortcut.LEFT, 1), "Nothing open. The arrows found no File Explorer window to move."), "an arrow with no window");
+      check(says(steps(Shortcut.START, 1, Shortcut.RUN, 1), "The Start menu open; the Run box open."), "Start and Run");
+      check(says(steps(Shortcut.START, 2), "Nothing open."), "the Windows key twice closes the Start menu");
+      check(says(steps(Shortcut.START, 1, Shortcut.DESKTOP, 1), "Nothing open."), "Win+D closes the Start menu");
+      check(says(steps(Shortcut.TASKS, 1000001), "Task view open."), "a huge count keeps a toggle's parity");
+      check(WindowsEWindow.parseCount(" 7 ") == 7 && WindowsEWindow.parseCount("-3") == 0 && WindowsEWindow.parseCount("x") == -1, "counts");
+   }
+
+   /** Steps from pairs: shortcut, times, shortcut, times... */
+   private static List<Step> steps(Object... pairs) {
+      List<Step> list = new ArrayList<>();
+      for (int i = 0; i < pairs.length; i += 2) {
+         list.add(new Step((Shortcut) pairs[i], (Integer) pairs[i + 1]));
+      }
+      return list;
+   }
+
+   private static boolean says(List<Step> steps, String summary) {
+      String got = Screen.after(steps).summary();
+      if (!got.equals(summary)) {
+         System.out.println(WindowsEWindow.labels(steps) + " says: " + got);
+      }
+      return got.equals(summary);
    }
 
    /** Presses shortcut count times (stopping after stopAfter presses, unless -1) and returns the log. */
