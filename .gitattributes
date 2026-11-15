@@ -1,3 +1,4 @@
 # compose-launcher reads these on every platform; bash cannot run a CRLF script.
+*.sh text eol=lf
 run.ps1 text eol=lf
 run.conf text eol=lf
