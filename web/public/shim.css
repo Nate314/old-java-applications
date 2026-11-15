@@ -3014,6 +3014,22 @@ button.shim-toast-go {
   font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* Windows' on-screen key is always on top: over the pretend Windows it presses keys on, under the site's panels.
+   The desktop is lifted with it, so it lets the clicks between its windows through to the pretend Windows. */
+body[data-app="Windows"] #desktop {
+  z-index: 1600000000;
+  pointer-events: none;
+}
+
+body[data-app="Windows"] #desktop > * {
+  pointer-events: auto;
+}
+
+/* The Start menu goes over everything, as on Windows (on a narrow page it would be under the key). */
+html:has(.shim-start) body[data-app="Windows"] #desktop {
+  z-index: auto;
+}
+
 .shim-shell > * {
   pointer-events: auto;
 }

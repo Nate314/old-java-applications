@@ -58,7 +58,15 @@ export function pretendWindows() {
       show();
     }
   }
-  function outside(e: Event) { var box = layer.querySelector('.shim-start'); if (menu && box && !box.contains(e.target as Node)) closeMenu(); }
+  // A press on an app's window that closes the menu may be on a Windows key (Windows' on-screen one), whose release
+  // then sends the key: it closed the menu, so that release must not open it again.
+  var closedAt = -1e9;
+  function outside(e: Event) {
+    var box = layer.querySelector('.shim-start');
+    if (!menu || !box || box.contains(e.target as Node)) return;
+    if ((e.target as Element).closest && (e.target as Element).closest('#desktop')) closedAt = e.timeStamp;
+    closeMenu();
+  }
   function openMenu() {
     menu = { seq: ++seq, query: '' };
     draw();
@@ -283,7 +291,7 @@ export function pretendWindows() {
 
   // The keys Windows+E's keyboard sends with the Windows key held (Windows itself only sends the key alone).
   var SHORTCUTS: Record<number, () => void> = {
-    524: function () { if (menu) closeMenu(); else openMenu(); },
+    524: function () { if (menu) closeMenu(); else if (performance.now() - closedAt > 1500) openMenu(); closedAt = -1e9; },
     69: openExplorer,
     68: showDesktop,
     82: openRun,

@@ -20,6 +20,6 @@ export const TOUR: [app: string, tryThis: string][] = ([
   ['StockChecker', '$10,000 of play money in a market that opens at its last real 2016 quotes. B buys, S sells, R shows the race.'],
   ['BibleDownloader', 'An open book in five public domain translations. Turn the page, or pick a reading plan.'],
   ['NathaNOS', 'A whole fake desktop: open any app from its icons or the start menu, or paint a picture in Paint.'],
-  ['Windows', 'It presses the Windows key once, then quits. Here the key opens a pretend Start menu of every app: type to search.'],
+  ['Windows', 'An on-screen Windows key: click it for a pretend Start menu of every app, or hold it and press E for File Explorer.'],
   ['WindowsE', 'Win+E as many times as you ask, on a pretend Windows: double-click a folder to play that app.'],
 ] as [string, string][]).filter(t => APPS.some(a => a.id === t[0]));
