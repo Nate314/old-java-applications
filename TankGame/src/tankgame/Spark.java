@@ -1,26 +1,35 @@
 package tankgame;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.util.List;
 import java.util.Random;
 
-/** One fading spark of a hit, an explosion or a muzzle flash, or a puff of smoke that rises and spreads. */
+/**
+ * One fading spark of a hit, an explosion or a muzzle flash, a puff of smoke that rises and spreads, the ring of a blast's
+ * shock wave, the flash of light a blast throws on the ground, or a tumbling scrap of a destroyed tank.
+ */
 public class Spark
 {
     private static final Random RANDOM = new Random();
     private static final Color  FLAME  = new Color(255, 220, 90);
     private static final Color  SMOKE  = new Color(70, 66, 62);
+    private enum Kind { SPARK, SMOKE, RING, GLOW, SCRAP }
     private double              x;
     private double              y;
-    private final double        vx;
-    private final double        vy;
+    private double              vx;
+    private double              vy;
     private final int           life;
     private int                 age;
     private final Color         color;
-    private final boolean       smoke;
+    private final Kind          kind;
+    /** A ring's or a glow's full radius; a scrap's size. */
+    private final double        size;
+    private final double        spin;
+    private double              turn;
 
-    private Spark(double x, double y, double vx, double vy, int life, Color color, boolean smoke)
+    private Spark(double x, double y, double vx, double vy, int life, Color color, Kind kind, double size)
     {
         this.x = x;
         this.y = y;
@@ -28,7 +37,9 @@ public class Spark
         this.vy = vy;
         this.life = life;
         this.color = color;
-        this.smoke = smoke;
+        this.kind = kind;
+        this.size = size;
+        this.spin = RANDOM.nextDouble() * 0.6 - 0.3;
     }
 
     /** Adds {@code count} sparks flying out from (x, y) at up to {@code speed} px per tick. */
@@ -39,7 +50,26 @@ public class Spark
             double angle = RANDOM.nextDouble() * 2 * Math.PI;
             double v = speed * (0.3 + 0.7 * RANDOM.nextDouble());
             sparks.add(new Spark(x, y, Math.cos(angle) * v, Math.sin(angle) * v, 20 + RANDOM.nextInt(25),
-                            RANDOM.nextBoolean() ? color : FLAME, false));
+                            RANDOM.nextBoolean() ? color : FLAME, Kind.SPARK, 0));
+        }
+    }
+
+    /** A blast at (x, y): its shock wave spreading to {@code radius} and the light it throws on the ground. */
+    public static void blast(List<Spark> sparks, double x, double y, double radius)
+    {
+        sparks.add(new Spark(x, y, 0, 0, 16 + (int) (radius / 6), FLAME, Kind.GLOW, radius * 0.8));
+        sparks.add(new Spark(x, y, 0, 0, 12 + (int) (radius / 8), Color.WHITE, Kind.RING, radius));
+    }
+
+    /** Scraps of a destroyed tank thrown out from (x, y), tumbling and skidding to a stop. */
+    public static void scraps(List<Spark> sparks, double x, double y, int count, Color color)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            double angle = RANDOM.nextDouble() * 2 * Math.PI;
+            double v = 3 + 6 * RANDOM.nextDouble();
+            sparks.add(new Spark(x, y, Math.cos(angle) * v, Math.sin(angle) * v, 60 + RANDOM.nextInt(40),
+                            RANDOM.nextBoolean() ? color : Tank.shade(color, 0.5), Kind.SCRAP, 6 + RANDOM.nextInt(7)));
         }
     }
 
@@ -47,7 +77,7 @@ public class Spark
     public static void smoke(List<Spark> sparks, double x, double y)
     {
         sparks.add(new Spark(x + RANDOM.nextInt(16) - 8, y + RANDOM.nextInt(16) - 8, RANDOM.nextDouble() - 0.5,
-                        -0.4 - RANDOM.nextDouble() * 0.6, 40 + RANDOM.nextInt(30), SMOKE, true));
+                        -0.4 - RANDOM.nextDouble() * 0.6, 40 + RANDOM.nextInt(30), SMOKE, Kind.SMOKE, 0));
     }
 
     /** Moves one tick; returns false once the spark has faded out. */
@@ -55,13 +85,53 @@ public class Spark
     {
         x += vx;
         y += vy;
+        if (kind == Kind.SCRAP)
+        {
+            turn += spin * Math.hypot(vx, vy);
+            vx *= 0.9;
+            vy *= 0.9;
+        }
         return ++age < life;
     }
 
     public void paint(Graphics2D g)
     {
         int left = life - age;
-        if (smoke)
+        switch (kind)
+        {
+            case RING:
+                // Spreads fast, then slows, thinning out as it goes.
+                int r = (int) (size * (1 - Math.pow((double) left / life, 3)));
+                g.setStroke(new BasicStroke(1 + 6f * left / life));
+                g.setColor(new Color(255, 250, 225, 200 * left / life));
+                g.drawOval((int) x - r, (int) (y - r * 0.9), 2 * r, (int) (1.8 * r));
+                g.setStroke(new BasicStroke(1));
+                return;
+            case GLOW:
+                // Rings of warm light, brightest in the middle, that fade out.
+                for (int i = 4; i >= 1; i--)
+                {
+                    int gr = (int) (size * i / 4);
+                    g.setColor(new Color(255, 200, 110, 34 * left / life));
+                    g.fillOval((int) x - gr, (int) (y - gr * 0.85), 2 * gr, (int) (1.7 * gr));
+                }
+                return;
+            case SCRAP:
+                Graphics2D t = (Graphics2D) g.create();
+                t.translate(x, y);
+                t.rotate(turn);
+                int a = Math.min(255, 255 * left * 3 / life);
+                int s = (int) size;
+                t.setColor(new Color(0, 0, 0, a / 3));
+                t.fillRect(-s / 2 + 2, -s / 3 + 3, s, s * 2 / 3);
+                t.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), a));
+                t.fillRect(-s / 2, -s / 3, s, s * 2 / 3);
+                t.dispose();
+                return;
+            default:
+                break;
+        }
+        if (kind == Kind.SMOKE)
         {
             int size = 8 + 22 * age / life;
             g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 110 * left / life));

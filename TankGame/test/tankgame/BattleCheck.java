@@ -224,7 +224,10 @@ public final class BattleCheck
                 battle.tick(W, H);
             }
             assert battle.winner() == red && battle.redWins() == round && green.health() == 0;
+            // The destroying hit is one blast (the panel plays it in slow motion) and shakes the field hard.
+            assert battle.blasts() == round && battle.shake() >= 10 : battle.blasts() + " " + battle.shake();
             while (battle.phase() == Battle.Phase.ROUND_OVER) battle.tick(W, H);
+            assert battle.shake() == 0 : "the shake dies down";
             if (round < Battle.ROUNDS_TO_WIN)
             {
                 assert battle.phase() == Battle.Phase.ROUND_START && battle.round() == round + 1;

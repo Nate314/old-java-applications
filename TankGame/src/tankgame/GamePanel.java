@@ -25,6 +25,7 @@ import javax.swing.Timer;
 public class GamePanel extends JPanel
 {
     private static final int   TICK_MILLIS = 16;
+    private static final int   SLOW_FRAMES = 66;
     private static final Color FIELD       = new Color(106, 122, 72);
     /** The ground is drawn this many times finer than the field, so it stays sharp when the page zooms the window. */
     private static final int   GROUND_SCALE = 2;
@@ -45,6 +46,10 @@ public class GamePanel extends JPanel
     /** Each tank's x, y and rotation when its tracks last marked the ground. */
     private final double[][]   lastPose    = new double[2][];
     private int                ticks;
+    /** Frames left of the slow motion that plays a destroyed tank's blast, and the blasts seen so far. */
+    private int                slowFrames;
+    private int                blastsSeen;
+    private final Random       shakeRandom = new Random();
     /** The supply drops line on the title card or match-over screen, and where it was last drawn (null when hidden). */
     private Line               suppliesShown;
     private Rectangle          suppliesBox;
@@ -129,7 +134,23 @@ public class GamePanel extends JPanel
     /** Moves everything one step on the Swing event thread, so speed does not depend on the paint rate. */
     private void tick()
     {
+        if (slowFrames > 0)
+        {
+            // The blast that destroys a tank plays at a third of the speed, then a half, then full speed again.
+            slowFrames--;
+            int every = slowFrames > 30 ? 3 : slowFrames > 12 ? 2 : 1;
+            if (slowFrames % every != 0)
+            {
+                repaint();
+                return;
+            }
+        }
         battle.tick(getWidth(), getHeight());
+        if (battle.blasts() != blastsSeen)
+        {
+            blastsSeen = battle.blasts();
+            slowFrames = SLOW_FRAMES;
+        }
         ticks++;
         if (getWidth() > 0 && getHeight() > 0)
         {
@@ -256,6 +277,17 @@ public class GamePanel extends JPanel
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        // Hits and blasts shake the field and everything on it; the score bar and banners hold still.
+        double shake = battle.shake();
+        int shakeX = (int) Math.round((shakeRandom.nextDouble() * 2 - 1) * shake);
+        int shakeY = (int) Math.round((shakeRandom.nextDouble() * 2 - 1) * shake);
+        if (shake > 0)
+        {
+            // The strip the shaken ground uncovers is grass too, also in pictures of the canvas (replay, photo).
+            g.setColor(FIELD);
+            g.fillRect(0, 0, getWidth(), getHeight());
+        }
+        g.translate(shakeX, shakeY);
         if (ground != null) g.drawImage(ground, 0, 0, getWidth(), getHeight(), null);
         for (Arena.Wall wall : battle.arena().walls()) wall(g, wall);
         // A landed crate lies under the tanks; a falling one is above everything on the ground.
@@ -270,6 +302,7 @@ public class GamePanel extends JPanel
         if (supply != null && !supply.landed()) supply.paint(g, ticks);
         for (Shell shell : battle.shells()) shell.paint(g);
         for (Spark spark : battle.sparks()) spark.paint(g);
+        g.translate(-shakeX, -shakeY);
         if (battle.phase() != Battle.Phase.TITLE)
         {
             scoreBar(g, battle.red(), battle.redWins(), false);
@@ -409,6 +442,8 @@ public class GamePanel extends JPanel
                                 new Line(battle.redWins() + " - " + battle.greenWins(), SMALL, DIM) });
                 break;
             case ROUND_OVER:
+                // The blast plays out in slow motion before the banner covers it.
+                if (slowFrames > 0) break;
                 panel(g, new Line[] { winner == null ? new Line("Both tanks destroyed", MEDIUM, TEXT)
                                 : new Line(winner.name() + " wins the round", MEDIUM, light(winner)),
                                 new Line(winner == null ? "No point: play the round again"
