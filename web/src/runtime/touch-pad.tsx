@@ -6,6 +6,7 @@ import { openLayer } from './ui/layer';
 import { redrawBar } from './install';
 import { appId } from './catalog';
 import { store, stored } from './stored';
+import { sendKey } from './phone-keys';
 
 export let pad: OldjavaPad;
 
@@ -65,13 +66,10 @@ export function keyOf(name: string) {
   return { key: name.toLowerCase(), code: 'Key' + name, which: name.charCodeAt(0), cap: name };
 }
 
-// A key event the shim cannot tell from a real one (keyCode cannot be set through the constructor).
+/** Presses or releases a key named as in PADS. */
 export function fireKey(type: string, name: string) {
   var k = keyOf(name);
-  var e = new KeyboardEvent(type, { key: k.key, code: k.code, bubbles: true, cancelable: true });
-  Object.defineProperty(e, 'keyCode', { get: function () { return k.which; } });
-  Object.defineProperty(e, 'which', { get: function () { return k.which; } });
-  document.body.dispatchEvent(e);
+  sendKey(type, { key: k.key, code: k.code }, k.which);
 }
 
 const PAD_KEY = 'oldjava.pad';
