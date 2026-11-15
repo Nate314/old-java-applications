@@ -33,6 +33,8 @@ public final class Shelf {
    /** The verse at the top of the open page, so a different text size or window keeps the place. */
    public int verse = 1;
    public int size = 1;
+   /** Night pages: dark paper and light ink. */
+   public boolean night;
    private final BitSet read = new BitSet(Books.TOTAL);
    /** "LUK.1.3": a highlighted verse, in any translation. */
    private final TreeSet<String> marks = new TreeSet<>();
@@ -95,6 +97,9 @@ public final class Shelf {
          }
          case "size":
             this.size = clamp(Integer.parseInt(value), 0, SIZES.length - 1);
+            break;
+         case "night":
+            this.night = value.equals("1");
             break;
          case "read":
             for (String ref : value.split(",")) {
@@ -162,6 +167,7 @@ public final class Shelf {
          + "place=" + Books.NAMES[this.book] + " " + this.chapter + ":" + this.verse + "\n"
          + "at=" + Books.IDS[this.book] + "." + this.chapter + "." + this.verse + "\n"
          + "size=" + this.size + "\n"
+         + (this.night ? "night=1\n" : "")
          + "read=" + refs(this.read) + "\n"
          + "marks=" + String.join(",", this.marks) + "\n"
          + (this.plan == null ? "" : "plan=" + this.plan.id + "\n"
