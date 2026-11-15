@@ -101,7 +101,8 @@ public final class Js {
             + " var _k = el.ownerDocument.activeElement;" // the phone Keyboard's box (phone-keys.tsx) keeps the focus, or the phone's keyboard drops
             + " if (_k && _k.classList.contains('shim-keys-box') && !el.matches('input, textarea')) return;"
             + " if (el.matches('button, input, select, textarea')) {"
-            + " if (el.ownerDocument.activeElement !== el && el.isConnected)"
+            // a frame without the keyboard (the home page's player, a docked app) never takes it: el.focus() would pull it in
+            + " if (el.ownerDocument.activeElement !== el && el.isConnected && (el.ownerDocument.hasFocus() || !el.ownerDocument.defaultView.frameElement))"
             + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
             + " var _a = el.ownerDocument.activeElement;"
             + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a) && _a !== el.closest('.window')) _a.blur();")
