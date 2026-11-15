@@ -171,6 +171,9 @@ function TitleScreen({ total, onGo, onMount }: {
           )}
           <span className="shim-title-cat">{app ? (then ? 'As first restored' : CATS[app.cat] || '') : ''}</span>
           <h1>{app ? app.name : document.title}</h1>
+          {/* Play right under the name, ahead of the hint and the record lines, so a phone shows it without scrolling. */}
+          <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : 'Loading…'}</button>
+          <span className="shim-title-press">or press any key</span>
           <p className="shim-title-hint">
             {app ? (then
               ? (app.origin === 'original' ? 'The author’s own source as it was found' : 'The code as it came out of the old jar') +
@@ -191,8 +194,6 @@ function TitleScreen({ total, onGo, onMount }: {
             {saver ? 'Also this site’s screen saver, after ' + saverMinutes() + ' minutes away. ' : 'This site’s screen saver is off. '}
             <button type="button" className="shim-title-forget" onClick={() => { setSaverOn(!saverOn()); setSaver(saverOn()); }}>{saver ? 'Turn off' : 'Turn on'}</button>
           </p>
-          <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : 'Loading…'}</button>
-          <span className="shim-title-press">or press any key</span>
           <a className="shim-title-source" href="#source" data-sound="none">{then ? 'Read the source as first restored' : 'Read the source'}</a>
           {/* The games that play themselves: a look before playing (see watch). */}
           <a className="shim-title-watch" href="?watch" hidden={!WATCH[id] || then}>Watch the computer play it first</a>
