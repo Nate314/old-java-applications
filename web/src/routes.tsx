@@ -103,6 +103,24 @@ export const ROUTES: Route[] = [
       </>
     ),
   },
+  // Then and now: compare.html?app=<App> plays an app as first restored and as it is today side by side (two
+  // play.html frames, one with &then), over every change to it in between (history.txt). The title screens link it.
+  // It wears the visitor's skin from shim.css, as the story does. See web/README.md, Then and now side by side.
+  {
+    file: 'compare.html',
+    entry: 'src/pages/compare/main.tsx',
+    head: (
+      <>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{'Then and now: ' + SITE}</title>
+        <meta name="description" content="An old Java app as it was first restored and as it is today, both playable side by side, with every change in between." />
+        {ICON}
+        <link rel="stylesheet" href="shim.css" />
+        {skin}
+      </>
+    ),
+  },
   // Lost and found: the page GitHub Pages (and any host that serves a 404.html) shows for an address with nothing
   // at it. Short links: an address that names an app sends the visitor straight to it, keeping the query and the
   // hash (src/pages/notfound/match.ts). Anything else shows the apps closest to what was typed, a search over all
