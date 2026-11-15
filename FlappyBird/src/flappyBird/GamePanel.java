@@ -84,6 +84,11 @@ public final class GamePanel extends JPanel implements KeyListener {
    private int rewinds = 0;
    /** Where the bird's body met a pipe in the last crash, marked until the next run or rewind; null for the ground. */
    private float[] contact;
+   /** The flight guide ({@link Guide}): on by itself until the best score reaches Guide.UNTIL, unless G chose. */
+   private boolean guide;
+   private boolean guideChosen = false;
+   /** This run flies with the guide that G brought back after the best passed Guide.UNTIL: practice, no records. */
+   private boolean guidedPractice = false;
    /** The time of day ({@link Sky}), easing toward the score's. */
    private float skyPhase;
 
@@ -133,6 +138,9 @@ public final class GamePanel extends JPanel implements KeyListener {
             this.reset();
          }
       } else if (this.state != DYING && this.state != REWINDING && !this.paused) {
+         if (this.state == READY) {
+            this.guidedPractice = this.guide && this.highScore >= Guide.UNTIL;
+         }
          this.state = PLAYING;
          this.bird.flap();
          this.sounds.flap();
@@ -266,12 +274,12 @@ public final class GamePanel extends JPanel implements KeyListener {
 
    /** The run is over: keep the records, flash, shake, and let the bird drop to the ground before the game over screen. */
    private void crash() {
-      // A run with a rewind in it is practice: it keeps no best score and no ghost.
-      if (this.rewinds == 0 && this.score() > this.highScore) {
+      // A run with a rewind in it, or the guide brought back, is practice: it keeps no best score and no ghost.
+      if (this.practiceNote() == null && this.score() > this.highScore) {
          this.highScore = this.score();
          saveHighScore(this.highScore);
       }
-      if (this.rewinds == 0 && this.daily && this.course.offer(this.score(), this.samples)) {
+      if (this.practiceNote() == null && this.daily && this.course.offer(this.score(), this.samples)) {
          this.course.save(DailyCourse.FILE);
       }
       // With reduced motion the crash keeps its thud and feathers but neither flashes nor shakes.
@@ -412,6 +420,9 @@ public final class GamePanel extends JPanel implements KeyListener {
       if (this.state == PLAYING || rewound) {
          this.drawLastFlight(g2);
       }
+      if (this.guide && (this.state == PLAYING || this.state == REWOUND)) {
+         this.drawGuide(g2);
+      }
       this.drawPuffs(g2);
       this.drawBird(g2);
       if (this.debugMode) {
@@ -434,8 +445,10 @@ public final class GamePanel extends JPanel implements KeyListener {
       boolean flying = this.state == PLAYING || this.state == DYING || rewound;
       if (flying) {
          this.drawScore(g2);
-         if (this.rewinds > 0) {
-            this.drawCaption(g2, "Practice: " + rewindCount(this.rewinds), Main.FRAME_HEIGHT * 5 / 24, new Color(200, 230, 255));
+         if (this.practiceNote() != null) {
+            this.drawCaption(g2, "Practice: " + this.practiceNote(), Main.FRAME_HEIGHT * 5 / 24, new Color(200, 230, 255));
+         } else if (this.guide && this.state == PLAYING && this.score() == 0) {
+            this.drawCaption(g2, "Yellow dots: a flap now. White: no flap. Red ring: a crash", Main.FRAME_HEIGHT * 5 / 24, new Color(255, 255, 255));
          }
       }
       if (this.state == REWINDING) {
@@ -456,13 +469,13 @@ public final class GamePanel extends JPanel implements KeyListener {
       String records = "Best " + this.highScore + (this.daily || this.course.bestScore() > 0 ? "     Today " + this.course.bestScore() : "");
       if (this.state == READY) {
          if (this.daily) {
-            this.drawBanner(g2, "Today's Course", "The same pipes all day. Race your best run's ghost.", "Space, click or tap to flap; C for endless pipes", records);
+            this.drawBanner(g2, "Today's Course", "The same pipes all day. Race your best run's ghost.", "Space, click or tap to flap; C for endless pipes", this.guideLine(), records);
          } else {
-            this.drawBanner(g2, "Flappy Bird", "Endless: new pipes every run", "Space, click or tap to flap; C for today's course", records);
+            this.drawBanner(g2, "Flappy Bird", "Endless: new pipes every run", "Space, click or tap to flap; C for today's course", this.guideLine(), records);
          }
       } else if (this.state == GAME_OVER) {
-         String scores = this.rewinds > 0
-            ? "Score " + this.score() + " with " + rewindCount(this.rewinds) + " (practice, not a record)"
+         String scores = this.practiceNote() != null
+            ? "Score " + this.score() + " with " + this.practiceNote() + " (practice, not a record)"
             : "Score " + this.score() + "     " + records;
          // The game over screen rises into place over its first third of a second.
          float rise = Math.max(0.0F, 1.0F - this.stateSteps / (float)(this.stepsPerSecond / 3.0));
@@ -511,6 +524,65 @@ public final class GamePanel extends JPanel implements KeyListener {
    /** Whether the visitor asked for reduced motion (the web page's shim answers; the desktop JDK gives null, so false). */
    private static boolean calm() {
       return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+   }
+
+   /** What made this run practice ("the flight guide, 1 rewind"), or null for a run that keeps its records. */
+   private String practiceNote() {
+      String guided = this.guidedPractice ? "the flight guide" : null;
+      if (this.rewinds == 0) {
+         return guided;
+      }
+      return guided == null ? rewindCount(this.rewinds) : guided + ", " + rewindCount(this.rewinds);
+   }
+
+   private String guideLine() {
+      if (!this.guide) {
+         return "G: flight guide, shows where a flap takes you";
+      }
+      return this.highScore >= Guide.UNTIL ? "Flight guide on (G): practice, not a record" : "Flight guide on (G turns it off)";
+   }
+
+   /**
+    * The flight guide: the next second of flight as dots, yellow if the bird flaps now and white if it does not, each
+    * ending in a red ring where it would crash.
+    */
+   private void drawGuide(Graphics2D g2) {
+      List<float[][]> shapes = new ArrayList<>();
+      for (int pipeIndex = 0; pipeIndex < this.pipes.positions.size(); pipeIndex++) {
+         shapes.add(this.pipeShape(pipeIndex));
+      }
+      int steps = (int)this.stepsPerSecond;
+      int every = Math.max(1, steps / 14);
+      // Yellow kept apart from the copper pipes and the teal bird that web/clips.ps1's autopilot looks for.
+      this.drawPath(g2, Guide.path(this.bird, false, steps, every, shapes, Background.groundY), new Color(255, 255, 255));
+      this.drawPath(g2, Guide.path(this.bird, true, steps, every, shapes, Background.groundY), new Color(255, 235, 90));
+   }
+
+   private void drawPath(Graphics2D g2, List<float[]> path, Color color) {
+      int dot = Math.max(4, Bird.HEIGHT / 6);
+      Graphics2D g = (Graphics2D)g2.create();
+      for (int i = 0; i < path.size(); i++) {
+         float[] point = path.get(i);
+         int x = Math.round(point[0]);
+         int y = Math.round(point[1]);
+         if (point.length == 3) {
+            int ring = dot * 2;
+            g.setStroke(new BasicStroke(Math.max(2.0F, dot / 2.0F)));
+            g.setColor(new Color(0, 0, 0, 120));
+            g.drawOval(x - ring + 1, y - ring + 2, ring * 2, ring * 2);
+            g.setColor(new Color(235, 50, 50));
+            g.drawOval(x - ring, y - ring, ring * 2, ring * 2);
+         } else {
+            // Fainter further ahead, where the guess counts for less; a thin dark edge keeps it seen over a pale sky.
+            int alpha = 240 - 120 * i / Math.max(1, path.size());
+            g.setStroke(new BasicStroke(Math.max(1.0F, dot / 6.0F)));
+            g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+            g.fillOval(x - dot / 2, y - dot / 2, dot, dot);
+            g.setColor(new Color(40, 30, 20, alpha * 2 / 3));
+            g.drawOval(x - dot / 2, y - dot / 2, dot, dot);
+         }
+      }
+      g.dispose();
    }
 
    static String rewindCount(int rewinds) {
@@ -807,6 +879,15 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.samples.add(this.sample());
       this.target = this.daily ? this.course.bestScore() : this.highScore;
       this.noticeSteps = 0;
+      this.guidedPractice = false;
+      if (!this.guideChosen) {
+         boolean was = this.guide;
+         this.guide = this.highScore < Guide.UNTIL;
+         if (was && !this.guide) {
+            this.notice = "Best of " + Guide.UNTIL + "! The flight guide steps aside (G brings it back)";
+            this.noticeSteps = (int)this.stepsPerSecond * 4;
+         }
+      }
    }
 
    private static int loadHighScore() {
@@ -853,6 +934,12 @@ public final class GamePanel extends JPanel implements KeyListener {
             if (this.state == READY) {
                this.daily = !this.daily;
                this.reset();
+            }
+            return;
+         case KeyEvent.VK_G:
+            if (this.state == READY) {
+               this.guide = !this.guide;
+               this.guideChosen = true;
             }
             return;
          case KeyEvent.VK_D:
