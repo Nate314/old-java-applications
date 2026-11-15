@@ -25,7 +25,7 @@ function findType(text: string) {
   var input = document.querySelector('.shim-find-input') as HTMLInputElement | null;
   if (!input || !text) return;
   input.value += text;
-  input.dispatchEvent(new Event('input'));
+  input.dispatchEvent(new Event('input', { bubbles: true }));   // React listens at the root
 }
 
 function findChord(e: KeyboardEvent) {   // Ctrl+K, Cmd+K on a Mac
