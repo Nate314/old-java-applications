@@ -141,6 +141,17 @@ class PathPage extends Page {
 		labels();
 	}
 
+	/** One cell back, paused: a drawn way goes first, then the cells looked at, last one first. */
+	private void back() {
+		playing = false;
+		if (pathShown > 0) {
+			pathShown = 0;
+		} else {
+			shown = Math.max(0, Math.ceil(shown) - 1);
+		}
+		labels();
+	}
+
 	private void replace(Grid next) {
 		grid = next;
 		searches = Paths.all(grid);
@@ -184,6 +195,10 @@ class PathPage extends Page {
 	boolean key(KeyEvent event) {
 		if (event.getKeyCode() == KeyEvent.VK_RIGHT || Character.toLowerCase(event.getKeyChar()) == 's') {
 			step();
+			return true;
+		}
+		if (event.getKeyCode() == KeyEvent.VK_LEFT || Character.toLowerCase(event.getKeyChar()) == 'b') {
+			back();
 			return true;
 		}
 		return false;

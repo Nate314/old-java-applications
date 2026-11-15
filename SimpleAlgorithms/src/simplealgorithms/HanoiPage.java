@@ -4,6 +4,7 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.event.KeyEvent;
+import java.util.ArrayDeque;
 import java.util.List;
 
 /**
@@ -20,10 +21,12 @@ class HanoiPage extends Page {
 	private static final String[] SPEED_NAMES = { "Slow", "Normal", "Fast", "Turbo" };
 	private static final int BASE = 350;
 
-	private HanoiTower tower;
+	HanoiTower tower;
 	private List<Hanoi.Move> printed;
 	/** Moves made so far that match the printed list, or -1 once a hand move left it. */
-	private int onPath;
+	int onPath;
+	/** Every move made, as {from, to, onPath before it}, so Back can take them back one by one. */
+	private final ArrayDeque<int[]> history = new ArrayDeque<>();
 	private int moves;
 	private int lifted = -1;
 	private String warning;
@@ -44,6 +47,7 @@ class HanoiPage extends Page {
 		super("Hanoi");
 		play = button("Pause", ' ', this::togglePlay);
 		button("Step", 's', this::step);
+		button("Back", 'b', this::back);
 		button("Reset", 'r', this::reset);
 		button("Fewer disks", '-', () -> resize(disks - 1));
 		button("More disks", '+', () -> resize(disks + 1));
@@ -56,6 +60,7 @@ class HanoiPage extends Page {
 		printed = Hanoi.moves(disks);
 		onPath = 0;
 		moves = 0;
+		history.clear();
 		lifted = -1;
 		warning = null;
 		animDisk = -1;
@@ -88,8 +93,28 @@ class HanoiPage extends Page {
 		speedButton.label = SPEED_NAMES[speed];
 	}
 
+	/**
+	 * Takes back one move, paused: a move in flight goes back to its peg, a lifted disk is put down, and otherwise
+	 * the last move made (by Step, Play or hand) is undone, back on the printed path if it was on it then.
+	 */
+	void back() {
+		playing = false;
+		updatePlay();
+		warning = null;
+		if (animDisk >= 0) {
+			animDisk = -1;
+		} else if (lifted >= 0) {
+			lifted = -1;
+		} else if (!history.isEmpty()) {
+			int[] last = history.pop();
+			tower.move(last[1], last[0]);
+			moves--;
+			onPath = last[2];
+		}
+	}
+
 	/** One move of the solution: finishes a move in flight first. */
-	private void step() {
+	void step() {
 		playing = false;
 		updatePlay();
 		if (animDisk >= 0) {
@@ -129,6 +154,7 @@ class HanoiPage extends Page {
 		boolean printedMove = onPath >= 0 && onPath < printed.size() && tower.pegOf(printed.get(onPath).disk) == from
 				&& tower.top(from) == printed.get(onPath).disk && tower.target(printed.get(onPath)) == to;
 		if (tower.move(from, to) >= 0) {
+			history.push(new int[] { from, to, onPath });
 			moves++;
 			onPath = printedMove ? onPath + 1 : -1;
 		}
@@ -194,13 +220,17 @@ class HanoiPage extends Page {
 			step();
 			return true;
 		}
+		if (event.getKeyCode() == KeyEvent.VK_LEFT) {
+			back();
+			return true;
+		}
 		return false;
 	}
 
 	@Override
 	void paint(Graphics2D g, int w, int h) {
 		text(g, "Tower of Hanoi", TITLE, INK, 20, 32);
-		text(g, "Stack every disk on the right peg, never a disk on a smaller one. Click a peg to lift its top disk.",
+		text(g, "Stack every disk on the right peg, never on a smaller one. Click a peg to lift its top disk; B takes a move back.",
 				TEXT, PENCIL, 20, 54);
 		text(g, "Moves " + moves, BOLD, INK, w - 20 - width(g, "Moves " + moves, BOLD), 32);
 		paintExplanation(g, w);
