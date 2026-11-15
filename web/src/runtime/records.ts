@@ -78,11 +78,11 @@ function recordOf(id: string, saves: Record<string, string>) {
     }
     return null;
   }
-  if (rule) {
-    var text = saved(rule.file);
-    return text === null ? '' : rule.show(text, saved);
-  }
-  return paths.length ? 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ') : '';
+  if (!paths.length) return '';
+  // A rule reads its listed file ('' when missing) and any other with saved(); when it has nothing to say (saves only
+  // in another file, or no record yet), the saved files are named as for an app with no rule.
+  var line = rule ? rule.show(saved(rule.file) || '', saved) : '';
+  return line || 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ');
 }
 
 const newsLoad = lazyScript(() => import('./lazy/news'), () => window.oldjavaNews, 'news.js');
@@ -148,9 +148,20 @@ export function init() {
       if (made) parts.push((parts.length ? 'patterns' : 'Your patterns') + ': ' + made[1].split(',').length + ' of 7 made');
       return parts.join('; ');
     } },
-    MusicTheoryExpert: { file: '.musictheory-drills.txt', show: function (text) {
-      var r = starRows(text);
-      return r.won ? 'Your ear training: ' + r.won + ' of 6 drills passed, ' + r.stars + ' of 18 stars' : '';
+    // The Songwriter's song (musictheoryexpert.Progression): key=<fifths up from C>, minor=, chords=<degrees>, melody=<notes>.
+    MusicTheoryExpert: { file: '.musictheory-drills.txt', show: function (text, saved) {
+      var r = starRows(text), song = saved('.musictheory-songwriter.txt') || '';
+      var parts = r.won ? ['Your ear training: ' + r.won + ' of 6 drills passed, ' + r.stars + ' of 18 stars'] : [];
+      var key = /^key=(\d+)$/m.exec(song), chords = /^chords=([\d,]*)$/m.exec(song), notes = /^melody=(.*)$/m.exec(song);
+      if (key && chords) {
+        var p = +key[1] % 12, minor = /^minor=true$/m.test(song), n = chords[1].split(',').filter(Boolean).length;
+        var m = notes ? notes[1].split(',').filter(Boolean).length : 0;
+        var tonic = ((p * 7 + (minor ? 9 : 0)) % 12);
+        var name = (p > 6 ? ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] : ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'])[tonic];
+        parts.push((parts.length ? 'your song' : 'Your song') + ': ' + n + (n === 1 ? ' chord' : ' chords') + ' in ' + name + (minor ? ' minor' : ' major')
+          + (m ? ' with a ' + m + '-note melody' : ''));
+      }
+      return parts.join('; ');
     } },
     // Duels against the computer are a lower-case duel=won,lost,drawn row, which starRows passes by.
     NumberGuess: { file: '.numberguess-record.txt', show: function (text) {

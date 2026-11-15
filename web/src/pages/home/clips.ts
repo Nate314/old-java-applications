@@ -8,6 +8,7 @@
 import type { FocusEvent as ReactFocusEvent } from 'react';
 import { APPS } from '../../shared/catalog';
 import { H, draw } from './model';
+import { inFilter } from './yours';
 
 const still = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = matchMedia('(hover: hover) and (pointer: fine)');
@@ -19,7 +20,7 @@ let wait = 0;
 export function hasClip(id: string) { return canPlay && !!APPS.find(a => a.id === id)?.clip && !clip.broken[id]; }
 const card = (id: string) => document.querySelector<HTMLLIElement>('#apps li[data-app="' + id + '"]')!;
 const videoOf = (id: string) => card(id).querySelector<HTMLVideoElement>('a.thumb video');
-const shown = (id: string) => H.filter === 'all' || APPS.find(a => a.id === id)!.cat === H.filter;
+const shown = (id: string) => inFilter(APPS.find(a => a.id === id)!, H.filter);
 
 function play(id: string) {
   clearTimeout(wait);
