@@ -7,6 +7,7 @@ interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: strin
 
 interface OldjavaPassport {
   has(id: string): boolean;
+  when(id: string): number;
   reload(): void;
   reset(): void;
   onChange(fn: (fresh: string | null) => void): void;
