@@ -80,6 +80,7 @@ public class MineFieldCheck {
       }
 
       checkBestTimes();
+      checkZoom();
       checkLuck();
       checkSolver();
       checkLogic();
@@ -426,6 +427,23 @@ public class MineFieldCheck {
       System.out.println("Luck: " + luck.winLine());
       luck.add(4, 1);
       check(luck.lossLines()[0].startsWith("The numbers showed"), "a certain mine is no guess: " + luck.lossLines()[0]);
+   }
+
+   /** Zoom: the view never leaves the board, and the cursor's tile is brought into view with a tile to spare. */
+   private static void checkZoom() {
+      int size = 44, view = 8 * size, content = 15 * size;
+      check(GameFrame.clamp(-30, content, view) == 0, "clamp at the top left");
+      check(GameFrame.clamp(9999, content, view) == content - view, "clamp at the bottom right");
+      check(GameFrame.clamp(100, content, view) == 100, "clamp leaves an offset on the board");
+      for (int offset = 0; offset <= content - view; offset += 7) {
+         for (int tile = 0; tile < 15; tile++) {
+            int start = tile * size;
+            int moved = GameFrame.clamp(GameFrame.follow(offset, start, size, view), content, view);
+            check(start >= moved && start + size <= moved + view, "tile " + tile + " out of view from " + offset);
+            boolean inside = start - size >= offset && start + 2 * size <= offset + view;
+            check(!inside || moved == offset, "view moved for tile " + tile + " already in view at " + offset);
+         }
+      }
    }
 
    private static void checkBestTimes() {
