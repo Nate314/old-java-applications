@@ -62,7 +62,7 @@ public final class Catalog {
       "Windows", new String[] {"Presses the Windows key once, then exits. It has no window.",
          "It presses the real Windows key as soon as it starts, which opens the Start menu."},
       "WindowsE", new String[] {
-         "A keyboard of Windows shortcuts that presses the one you pick a chosen number of times: Win+E by default, which opens that many File Explorer windows.",
+         "A keyboard of Windows shortcuts that presses the one you pick a chosen number of times: Win+E by default, which opens that many File Explorer windows. Add steps to press a list in a row: Side by side opens two windows on the two halves.",
          "Clicking its DO IT!!! button presses real Windows shortcuts: 10 File Explorer windows by default."});
 
    private Catalog() {
