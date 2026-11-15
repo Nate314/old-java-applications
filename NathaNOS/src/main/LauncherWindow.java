@@ -4,6 +4,9 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
+import java.awt.Rectangle;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -14,17 +17,19 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 import javax.swing.plaf.basic.BasicInternalFrameUI;
 
-/** The taskbar: the MENU button, a button for each open app window, and a clock. */
+/** The taskbar: the MENU button, a button for each open app window, a clock, and Show desktop at the right end. */
 public class LauncherWindow extends JInternalFrame {
    static final Color BAR = new Color(18, 26, 42);
    static final Color HOVER = new Color(44, 58, 84);
    static final Color ON = new Color(56, 74, 106);
    private static final int START_WIDTH = 116;
    private static final int CLOCK_WIDTH = 96;
+   private static final int SHOW_DESKTOP_WIDTH = 16;
    private static final int MAX_TASK_WIDTH = 190;
    private static final String[] MONTHS = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
    public JPanel panel = new JPanel();
+   private final Main screen;
    private final TaskList tasks;
    private final List<TaskList.Task> shown = new ArrayList<>();
    private final List<FlatButton> taskButtons = new ArrayList<>();
@@ -32,6 +37,7 @@ public class LauncherWindow extends JInternalFrame {
 
    public LauncherWindow(Main screen, TaskList tasks) {
       super("Launcher", false, false, false);
+      this.screen = screen;
       this.tasks = tasks;
       this.setBorder(null);
       this.setSize(screen.getWidth(), Math.max(36, screen.getHeight() / 20));
@@ -52,8 +58,11 @@ public class LauncherWindow extends JInternalFrame {
       );
       start.setBounds(4, 0, START_WIDTH, this.getHeight());
       this.panel.add(start);
-      this.clock.setBounds(this.getWidth() - CLOCK_WIDTH, 0, CLOCK_WIDTH, this.getHeight());
+      this.clock.setBounds(this.getWidth() - SHOW_DESKTOP_WIDTH - CLOCK_WIDTH, 0, CLOCK_WIDTH, this.getHeight());
       this.panel.add(this.clock);
+      JComponent showDesktop = new ShowDesktop();
+      showDesktop.setBounds(this.getWidth() - SHOW_DESKTOP_WIDTH, 0, SHOW_DESKTOP_WIDTH, this.getHeight());
+      this.panel.add(showDesktop);
 
       Timer timer = new Timer(500, e -> this.refresh());
       timer.start();
@@ -68,7 +77,7 @@ public class LauncherWindow extends JInternalFrame {
          this.layoutTasks();
       }
       for (int i = 0; i < this.shown.size(); i++) {
-         this.taskButtons.get(i).setOn(this.shown.get(i).isActive());
+         this.taskButtons.get(i).setOn(!this.shown.get(i).minimized && this.shown.get(i).isActive());
       }
       this.clock.repaint();
    }
@@ -79,16 +88,74 @@ public class LauncherWindow extends JInternalFrame {
       }
       this.taskButtons.clear();
       int left = START_WIDTH + 12;
-      int room = this.getWidth() - CLOCK_WIDTH - 8 - left;
+      int room = this.getWidth() - SHOW_DESKTOP_WIDTH - CLOCK_WIDTH - 8 - left;
       int width = this.shown.isEmpty() ? 0 : Math.min(MAX_TASK_WIDTH, room / this.shown.size());
       for (int i = 0; i < this.shown.size(); i++) {
          TaskList.Task task = this.shown.get(i);
-         FlatButton button = new FlatButton(task.icon, task.name, task.name, null, HOVER, ON, task::activate);
+         int at = i;
+         FlatButton button = new FlatButton(task.icon, task.name, task.name, null, HOVER, ON, () -> this.tasks.press(task, this.buttonBounds(at)));
          button.setBounds(left + i * width, 0, width, this.getHeight());
          this.taskButtons.add(button);
          this.panel.add(button);
       }
       this.panel.repaint();
+   }
+
+   /** Where taskbar button i is on the desktop, for the outlines a minimized window flies into. */
+   private Rectangle buttonBounds(int i) {
+      return Zoom.on(this.taskButtons.get(i), this.screen.desktopPane);
+   }
+
+   /** Minimizes every window to its button, or, when they are all minimized already, brings them all back. */
+   private void showDesktop() {
+      this.refresh();
+      boolean restore = this.tasks.allMinimized(this.shown);
+      for (int i = 0; i < this.shown.size(); i++) {
+         TaskList.Task task = this.shown.get(i);
+         if (restore) {
+            this.tasks.restore(task, this.buttonBounds(i));
+         } else if (!task.minimized) {
+            this.tasks.minimize(task, this.buttonBounds(i));
+         }
+      }
+   }
+
+   /** A thin strip at the right end of the taskbar, as on Windows: a click shows the desktop. */
+   private final class ShowDesktop extends JComponent {
+      private boolean hovered;
+
+      ShowDesktop() {
+         this.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+               ShowDesktop.this.hovered = true;
+               ShowDesktop.this.repaint();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+               ShowDesktop.this.hovered = false;
+               ShowDesktop.this.repaint();
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+               if (e.getButton() == MouseEvent.BUTTON1) {
+                  LauncherWindow.this.showDesktop();
+               }
+            }
+         });
+      }
+
+      @Override
+      protected void paintComponent(Graphics g) {
+         if (this.hovered) {
+            g.setColor(HOVER);
+            g.fillRect(1, 0, this.getWidth() - 1, this.getHeight());
+         }
+         g.setColor(ON);
+         g.fillRect(0, 6, 1, this.getHeight() - 12);
+      }
    }
 
    /** The time and date at the right end of the taskbar. */

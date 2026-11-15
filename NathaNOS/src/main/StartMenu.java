@@ -60,10 +60,12 @@ public class StartMenu extends JInternalFrame {
 
       for (int i = 0; i < launcher.count(); i++) {
          int app = i;
+         FlatButton[] made = new FlatButton[1];
          FlatButton row = new FlatButton(launcher.icon(i), launcher.name(i), launcher.name(i), null, LauncherWindow.HOVER, null, () -> {
             this.hideMenu();
-            launcher.launch(app);
+            launcher.launch(app, made[0]);
          });
+         made[0] = row;
          row.setBounds(4 + i / rows * column, HEADER + 4 + i % rows * ROW, column, ROW);
          panel.add(row);
       }

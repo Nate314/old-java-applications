@@ -17,7 +17,9 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 - On a narrow screen the icon tiles get narrower (down to 48 pixels) so every column of icons fits across it.
 - **MENU button** (left end of the taskbar): show / hide the start menu.
 - **Start menu**: the NathaNOS logo, one row per app (click to open it) and **Shut Down** (exit). On a short screen the rows wrap into more columns.
-- **Taskbar buttons**: one per open app window, in the order they opened, with the app's name and icon. The button of the active window is lit. Clicking a button brings that window to the front. Borderless windows (ScreenSaver, CircleSpawner's circle slices) get no button.
+- **Taskbar buttons**: one per open app window, in the order they opened, with the app's name and icon. The button of the active window is lit. Clicking a button brings that window to the front; clicking the lit button minimizes its window, and clicking a minimized window's button brings it back. A minimized window keeps its button until it is closed. Borderless windows (ScreenSaver, CircleSpawner's circle slices) get no button.
+- **Show desktop**: the thin strip at the right end of the taskbar, past the clock, as on Windows. A click minimizes every window on the taskbar; when they are all minimized, a click brings them all back.
+- **Window outlines**: a window flies between the desktop and the taskbar as a few light outlines that grow or shrink in about a fifth of a second, slowing as they land. Opening an app sends them from the icon or start menu row that opened it to the new window, minimizing sends them from the window into its button, and restoring sends them out of the button, after which the window shows. They are drawn on the desktop, so a window that is already up (an app opened in its own window) covers the part of them inside it.
 - **Clock**: the local time and date at the right end of the taskbar.
 - **Icons**: `assets/<name>.png` (matched ignoring case) on a light tile, or for an app without one, a colored tile with its initials (FlappyBird is "FB").
 - Opening an app loads the jar's `Main-Class`, then:
@@ -27,6 +29,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 - Closing an app's window closes only that app. Apps use `EXIT_ON_CLOSE` when run alone, so NathaNOS switches every window opened after it starts to `DISPOSE_ON_CLOSE`. An app that calls `System.exit` itself still ends NathaNOS (ScreenSaver and Minesweeper's Esc close their window instead).
 - The desktop window never takes focus, so clicking the taskbar or background does not raise it over open apps. That also means an internal window (Clock) stays behind app windows that cover it, even after its taskbar button brings it to the front of the desktop.
 - Closing an app's window does not stop timers or threads it started unless the app stops them itself, so they can keep running until NathaNOS exits.
+- Minimizing hides the window (the app keeps running behind it, timers and all), so it is the same on the desktop and in the browser, and the window does not go to the system's own taskbar.
 - No keyboard controls (apart from Paint's) or command-line arguments. The window is undecorated and fills the screen.
 
 ## Saved state
@@ -36,7 +39,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 `~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`, or `wallpaper=picture:Picture 1` for a picture from Paint) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
 - The shipped `assets/` has one jar, `Clock.jar`, an older Clock build. `./run.ps1 old NathaNOS` adds the other apps (see Running).
 
-The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint.
+The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines.
 
 ## Code layout
 
@@ -50,8 +53,9 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 - `src/main/DesktopMenu.java`: the right-click desktop menu with the wallpaper previews and Arrange icons by name.
 - `src/main/Wallpaper.java`: the five wallpapers; paints the four scenes into an image the size of the screen.
 - `src/main/DesktopSettings.java`: reads and writes `~/.nathanos.txt`.
-- `src/main/LauncherWindow.java`: the taskbar, with the MENU button, the window buttons and the clock.
-- `src/main/TaskList.java`: tracks the open app windows for the taskbar, and centers new windows that open in the top-left corner.
+- `src/main/LauncherWindow.java`: the taskbar, with the MENU button, the window buttons, the clock and Show desktop.
+- `src/main/TaskList.java`: tracks the open app windows for the taskbar, minimizes and restores them, and centers new windows that open in the top-left corner.
+- `src/main/Zoom.java`: the outlines that fly between a window and its icon or taskbar button.
 - `src/main/StartMenu.java`: the start menu panel with the logo, the app list and Shut Down.
 - `src/main/FlatButton.java`: the flat icon-and-label button used by the taskbar and the start menu.
 - `src/main/AppIcon.java`: draws an app's icon, or its initials tile.
@@ -67,7 +71,10 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 ```
 javac -d ../out/check/NathaNOS src/main/*.java test/main/*.java
 java -ea -cp ../out/check/NathaNOS main.PictureCheck
+java -ea -cp ../out/check/NathaNOS main.ZoomCheck
 ```
+
+`test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land.
 
 ## Running
 
