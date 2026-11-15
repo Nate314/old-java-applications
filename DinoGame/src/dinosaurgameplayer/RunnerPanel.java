@@ -22,7 +22,8 @@ import javax.swing.Timer;
  * Draws the game and takes the keys. With the bot on, every step is also drawn into an image, and the bot reads
  * its one pixel from that image: it sees exactly what you see, red marker and all. E switches to evolving bots
  * (Evolution, drawn by EvolveView) and back. A run has its sky (night every 700 points), dust at the dinosaur's feet,
- * a blinking score every 100 points, beeps (M) and a shake when it crashes.
+ * a blinking score every 100 points, beeps (M) and a shake when it crashes. G races the ghost of your best run on its
+ * own course.
  */
 final class RunnerPanel extends JPanel {
    private static final long serialVersionUID = 1L;
@@ -83,6 +84,9 @@ final class RunnerPanel extends JPanel {
    private boolean passedBest;
    private int bestSteps;
    private int shakeSteps;
+   /** G: every run is the saved ghost's course, with the ghost playing beside you (ghost, from the run's start). */
+   private boolean racing;
+   private Ghost ghost;
 
    /** A quiet panel, for the self-check. */
    RunnerPanel(Records records, long seed) {
@@ -104,6 +108,8 @@ final class RunnerPanel extends JPanel {
                RunnerPanel.this.toggleSound();
             } else if (RunnerPanel.this.evolution != null || k == KeyEvent.VK_E) {
                RunnerPanel.this.evolveKey(k);
+            } else if (k == KeyEvent.VK_G) {
+               RunnerPanel.this.toggleRace();
             } else if (k == KeyEvent.VK_SPACE || k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
                RunnerPanel.this.jumpKey(true);
             } else if (k == KeyEvent.VK_DOWN || k == KeyEvent.VK_S) {
@@ -237,15 +243,33 @@ final class RunnerPanel extends JPanel {
 
    /** Into the evolution (carrying on from the saved champion) or back to the game's ready screen. */
    void setEvolving(boolean on) {
-      // A run under way when the mode changes is dropped, and counts for nobody.
-      this.runner.duck(false);
-      this.runner.ready();
-      this.seen = Runner.State.READY;
-      this.crashLines = new String[0];
+      this.toReady();
+      this.racing = false;
+      this.runner.setCourse(null);
       this.dragging = false;
       this.confirmUntil = 0;
       this.evolution = on ? this.newEvolution() : null;
       this.setCursor(Cursor.getDefaultCursor());
+   }
+
+   /** G: race the ghost of your best run on its course, or back to a new course each run. */
+   void toggleRace() {
+      if (this.records.ghost == null && !this.racing) {
+         return;
+      }
+      this.toReady();
+      this.racing = !this.racing;
+      this.runner.setCourse(this.racing ? this.records.ghost.course : null);
+      this.repaint();
+   }
+
+   /** A run under way when the mode changes is dropped, and counts for nobody. */
+   private void toReady() {
+      this.runner.duck(false);
+      this.runner.ready();
+      this.seen = Runner.State.READY;
+      this.crashLines = new String[0];
+      this.ghost = null;
    }
 
    private Evolution newEvolution() {
@@ -268,6 +292,8 @@ final class RunnerPanel extends JPanel {
          if (x >= c[0] && x < c[0] + c[1]) {
             if (c[2] == KeyEvent.VK_M) {
                this.toggleSound();
+            } else if (c[2] == KeyEvent.VK_G) {
+               this.toggleRace();
             } else {
                this.evolveKey(c[2]);
             }
@@ -345,6 +371,15 @@ final class RunnerPanel extends JPanel {
          this.flashSteps = 0;
          this.passedBest = false;
          this.bestSteps = 0;
+         this.ghost = this.racing ? this.records.ghost : null;
+         if (this.ghost != null) {
+            this.ghost.start();
+         }
+      }
+      // The ghost runs beside you, and after you crash runs on until it is off the screen.
+      if (this.ghost != null && this.ghost.runner().state() == Runner.State.RUNNING
+         && (this.runner.state() == Runner.State.RUNNING || this.ghostOffset() < Runner.WIDTH)) {
+         this.ghost.step();
       }
       boolean wasRunning = this.runner.state() == Runner.State.RUNNING;
       boolean wasJumping = this.runner.isJumping();
@@ -399,9 +434,19 @@ final class RunnerPanel extends JPanel {
          boolean best = score > this.records.best;
          if (best) {
             this.records.best = score;
+         }
+         Ghost raced = this.ghost;
+         boolean newGhost = this.records.ghost == null || score > this.records.ghost.score;
+         if (newGhost) {
+            this.records.ghost = Ghost.of(this.runner);
+         }
+         if (best || newGhost) {
             this.records.save();
          }
-         String bot = this.records.botBest == 0 ? "Press B to see how far the original bot gets."
+         String bot = raced != null
+            ? score > raced.score ? "You beat your ghost by " + (score - raced.score) + ". This run is your ghost now."
+               : score == raced.score ? "A dead heat with your ghost." : "Your ghost runs on to " + raced.score + ". Watch where it jumps."
+            : this.records.botBest == 0 ? "Press B to see how far the original bot gets."
             : score > this.records.botBest ? "You beat the bot's best of " + this.records.botBest + "."
             : "The bot's best is " + this.records.botBest + ". Beat it?";
          this.crashLines = new String[] { (best && score > 0 ? "New best: " : "You scored ") + score + ".", bot };
@@ -435,6 +480,14 @@ final class RunnerPanel extends JPanel {
       } else {
          paintWorld(g, this.runner, this.sky);
          this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
+         if (this.racing && !this.bot.isOn()) {
+            g.setFont(SCORE);
+            g.setColor(Sky.tint(MUTED, dark));
+            g.drawString("GHOST " + pad(this.records.ghost.score), 14, 24);
+         }
+         if (this.ghost != null && !this.bot.isOn()) {
+            this.paintGhost(g, dark);
+         }
          paintDino(g, this.runner, Sky.tint(INK, dark), Sky.tint(PAPER, dark));
          this.paintScore(g, dark);
          if (this.bot.isOn()) {
@@ -466,8 +519,15 @@ final class RunnerPanel extends JPanel {
          help = this.bot.isOn()
             ? "B: bot off   Drag its red eye to change what it watches   X: put it back"
             : "Space or ↑: jump (hold for higher)   ↓: duck   B: the original bot plays";
-         labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", "Evolve a bot (E)" };
-         keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_E };
+         if (this.records.ghost == null && !this.racing) {
+            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", "Evolve a bot (E)" };
+            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_E };
+         } else {
+            help = this.bot.isOn() ? "B: bot off   Drag its red eye   X: put it back" : "Space or ↑: jump   ↓: duck   B: bot";
+            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)",
+               this.racing ? "New courses (G)" : "Race your ghost (G)", "Evolve a bot (E)" };
+            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_G, KeyEvent.VK_E };
+         }
       }
       this.chips.clear();
       int x = Runner.WIDTH - 6;
@@ -479,7 +539,7 @@ final class RunnerPanel extends JPanel {
       }
       for (int i = 0; i < labels.length; i++) {
          int[] c = this.chips.get(i);
-         boolean main = keys[i] == KeyEvent.VK_E;
+         boolean main = keys[i] == KeyEvent.VK_E || keys[i] == KeyEvent.VK_G && this.racing;
          g.setColor(main ? ink : paper);
          g.fillRoundRect(c[0], STRIP + 3, c[1], HEIGHT - STRIP - 6, 8, 8);
          g.setColor(main ? paper : muted);
@@ -595,6 +655,32 @@ final class RunnerPanel extends JPanel {
       }
    }
 
+   /** How far the ghost has run past you (less than 0 once it has crashed and you run on). */
+   private double ghostOffset() {
+      return this.ghost.runner().distance() - this.runner.distance();
+   }
+
+   /**
+    * The ghost: your best run's dinosaur, see-through, where it is on this course. While you both run it is beside you;
+    * once it crashes it is left behind, and once you crash it runs on over the obstacles still on the screen.
+    */
+   private void paintGhost(Graphics2D g, double dark) {
+      Runner r = this.ghost.runner();
+      int dx = (int) Math.round(this.ghostOffset());
+      if (Runner.DINO_X + dx + Runner.DUCK_W < 0 || Runner.DINO_X + dx > Runner.WIDTH) {
+         return;
+      }
+      Color ink = Sky.tint(INK, dark);
+      g.translate(dx, 0);
+      paintDino(g, r, new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 80), Sky.tint(PAPER, dark));
+      g.translate(-dx, 0);
+      if (dx != 0 || r.state() == Runner.State.CRASHED || r.dinoTop() != this.runner.dinoTop()) {
+         g.setFont(TINY);
+         g.setColor(Sky.tint(MUTED, dark));
+         g.drawString(r.state() == Runner.State.CRASHED ? "ghost " + r.score() : "ghost", Runner.DINO_X + dx + 2, r.dinoTop() - 4);
+      }
+   }
+
    /** Top right, as in Chrome's game: the bot's best in red, your best, then this run. */
    private void paintScore(Graphics2D g, double dark) {
       g.setFont(SCORE);
@@ -638,7 +724,10 @@ final class RunnerPanel extends JPanel {
          return;
       }
       String title = state == Runner.State.READY ? "Space to run" : "G A M E   O V E R";
-      String[] lines = state == Runner.State.READY
+      String[] lines = state == Runner.State.READY && this.racing
+         ? new String[] { "Your ghost's course: the run where you scored " + this.records.ghost.score + ".",
+            "It runs beside you, jump for jump. Get further and you are the ghost." }
+         : state == Runner.State.READY
          ? new String[] { "Jump the cacti, duck the birds. Night falls every " + Sky.NIGHT_EVERY + ".",
             "Or press B and the original bot plays, watching one pixel." }
          : this.crashLines;
@@ -693,6 +782,10 @@ final class RunnerPanel extends JPanel {
 
    String[] crashLines() {
       return this.crashLines;
+   }
+
+   Ghost ghost() {
+      return this.ghost;
    }
 
    Evolution evolution() {

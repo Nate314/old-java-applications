@@ -242,6 +242,48 @@ public final class RunnerCheck {
       }
       assert dust.count() < 8 : "dust settles";
 
+      // The ghost: a run of yours plays again, jump for jump, from its course and keys.
+      File gfile = File.createTempFile("dinogame", ".txt");
+      gfile.delete();
+      RunnerPanel gp = new RunnerPanel(Records.load(gfile), 11);
+      gp.runner().press();
+      runYou(gp);
+      int mine = gp.runner().score();
+      long crashStep = gp.runner().steps();
+      Ghost kept = Records.load(gfile).ghost;
+      assert kept != null && kept.score == mine && mine > 150 : "your run is kept as a ghost: " + mine;
+      kept.start();
+      while (kept.runner().state() == Runner.State.RUNNING) {
+         kept.step();
+      }
+      assert kept.runner().score() == mine && kept.runner().steps() == crashStep : "the ghost crashes where you did";
+      assert Ghost.decode(kept.encode()).encode().equals(kept.encode()) && Ghost.decode("1,2,9,3") == null && Ghost.decode("x") == null;
+      // The next run is a new course; G races the ghost on its own.
+      gp.runner().restart();
+      for (int i = 0; i < 200; i++) {
+         gp.step();
+      }
+      assert gp.runner().course() != kept.course : "a new course each run";
+      gp.toggleRace();
+      assert gp.runner().state() == Runner.State.READY && gp.ghost() == null : "G drops the run under way";
+      gp.runner().press();
+      gp.step();
+      assert gp.ghost() != null && gp.runner().course() == kept.course;
+      run(gp);   // no keys this time: an early crash
+      assert gp.runner().score() < mine && gp.crashLines()[1].equals("Your ghost runs on to " + mine + ". Watch where it jumps.")
+         : gp.crashLines()[1];
+      double before = gp.ghost().runner().distance();
+      for (int i = 0; i < 30; i++) {
+         gp.step();
+      }
+      assert gp.ghost().runner().distance() > before : "the ghost runs on after you crash";
+      assert Records.load(gfile).ghost.score == mine : "a worse run keeps the ghost";
+      gp.toggleRace();
+      gp.runner().press();
+      gp.step();
+      assert gp.ghost() == null && gp.runner().course() != kept.course : "G again: new courses";
+      gfile.delete();
+
       // The file keeps both bests and the marker; damaged lines are skipped.
       Records r = Records.load(file);
       r.best = 812;
@@ -310,6 +352,25 @@ public final class RunnerCheck {
          p.step();
       }
       assert p.runner().state() == Runner.State.CRASHED : "the run ends";
+   }
+
+   /** Plays like a person would, roughly: jumps cacti and low birds with held or tapped keys, ducks the middle birds. */
+   private static void runYou(RunnerPanel p) {
+      Runner r = p.runner();
+      int held = 0;
+      for (int i = 0; i < 60 * 600 && r.state() == Runner.State.RUNNING; i++) {
+         Runner.Obstacle o = r.at(Runner.DINO_X);
+         double ahead = o == null ? 999 : o.x - Runner.DINO_X - Runner.DINO_W;
+         boolean duck = o != null && o.kind == Runner.Kind.BIRD && o.lift == Runner.BIRD_HEIGHTS[1] && ahead < 60;
+         r.duck(duck);
+         if (!duck && !r.isJumping() && o != null && o.lift < Runner.BIRD_HEIGHTS[1] && ahead < r.speed() * 5 && ahead > 0) {
+            r.press();
+            held = o.kind == Runner.Kind.LARGE_CACTUS ? 14 : 3;
+         } else if (held > 0 && --held == 0) {
+            r.release();
+         }
+         p.step();
+      }
    }
 
    private static int botRun(long seed, int[] marker) throws Exception {
