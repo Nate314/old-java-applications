@@ -54,7 +54,7 @@ The game over screen shows your score, best and today's best, and a medal: Bronz
 
 ## Running
 
-From the repo root: `./run.ps1 FlappyBird` (or `./run.ps1 FlappyBird -Build` to build a jar).
+From the repo root: `./run.ps1 old FlappyBird` (or `./run.ps1 old FlappyBird -Build` to build a jar).
 
 Images are loaded by relative path (`bg.jpg`, `bird.png`, ...), so the working directory must be `FlappyBird/src`. The downloadable `FlappyBird.jar` on the site carries them and unpacks them into `~/.oldjava/FlappyBird` before it starts (see [Download .jar](../web/README.md#download-jar)).
 

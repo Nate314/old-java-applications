@@ -26,7 +26,7 @@ An UltimateTicTacToe game written in Java, against the computer, for two players
   - The search is the random-game search Hard plays with, run briefly, so its numbers are estimates that move a little from one review to the next; a move well inside a grade keeps it, one near the edge may not.
   - **<** and **>** (or the left and right arrow keys; up and down too) step back and forward, a step forward drawing the move in; Home and End go to the start and the end. **Next mistake** (N) jumps to the next mistake or blunder of either side. At the end, the status line gives the result and the turning point (the move that cost the most), and the title bar counts each side's inaccuracies, mistakes and blunders. **Done** (Esc, or R again) goes back to the finished game; a click on a cell does nothing while reviewing. Nothing is saved.
 - **W**: watch the computer play both sides, each move a short (150 ms) Hard search, game after game, the next starting 3 s after each ends. From Two players or Friend by link it first starts a game against the computer on Easy (the game with a friend is only set aside). W again, a click on a cell or a click on a mode button takes over: X is yours again, in the game as it stands. A game the computer played X in does not count in the record.
-- **Keyboard**: Tab and Shift+Tab move between the cells and buttons (Swing's focus order; in the browser too), and Space or Enter presses the focused one. The arrow keys move a white cursor across the whole 9x9 grid (from board to board at the edges) and preview the cell they land on, as the mouse does. A screen reader hears each cell's mark, whether the next move may go there and where it is ("empty, open, top left board, middle square"; "O, last move, top board, bottom left square"), through Swing's accessible names. One optional command-line argument: a friend's code or link, which opens it in Friend by link (`./run.ps1 UltimateTicTacToe e5e1`). The browser build also passes the page's own address, for the links. The window is about 3/4 of the screen height (narrower on a narrow screen, so it fits) and not resizable; the marks scale with the cells.
+- **Keyboard**: Tab and Shift+Tab move between the cells and buttons (Swing's focus order; in the browser too), and Space or Enter presses the focused one. The arrow keys move a white cursor across the whole 9x9 grid (from board to board at the edges) and preview the cell they land on, as the mouse does. A screen reader hears each cell's mark, whether the next move may go there and where it is ("empty, open, top left board, middle square"; "O, last move, top board, bottom left square"), through Swing's accessible names. One optional command-line argument: a friend's code or link, which opens it in Friend by link (`./run.ps1 old UltimateTicTacToe e5e1`). The browser build also passes the page's own address, for the links. The window is about 3/4 of the screen height (narrower on a narrow screen, so it fits) and not resizable; the marks scale with the cells.
 
 ## Code layout
 
@@ -44,7 +44,7 @@ An UltimateTicTacToe game written in Java, against the computer, for two players
 
 ## Running
 
-From the repo root: `./run.ps1 UltimateTicTacToe` (or `./run.ps1 UltimateTicTacToe -Build` to build a jar).
+From the repo root: `./run.ps1 old UltimateTicTacToe` (or `./run.ps1 old UltimateTicTacToe -Build` to build a jar).
 
 ## Self-check
 

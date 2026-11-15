@@ -1,0 +1,11 @@
+# The web arcade (web/README.md) in Docker. Start it with ./run.ps1 (no arguments): the
+# compose-launcher submodule picks a free host port into .env, runs docker compose and prints the address.
+# A bare `docker compose up --build` works too, on port 8080.
+services:
+  site:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "${SITE_PORT:-8080}:8080"
+    restart: unless-stopped

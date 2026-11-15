@@ -60,7 +60,7 @@ Classic Minesweeper often ends on a coin flip: two tiles, one mine, nothing on t
 
 ## Running
 
-From the repo root: `./run.ps1 Minesweeper` (or `./run.ps1 Minesweeper -Build` to build a jar).
+From the repo root: `./run.ps1 old Minesweeper` (or `./run.ps1 old Minesweeper -Build` to build a jar).
 
 ## Self-check
 
