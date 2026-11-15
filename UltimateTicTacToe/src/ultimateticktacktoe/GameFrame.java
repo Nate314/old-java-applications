@@ -246,9 +246,11 @@ public final class GameFrame extends JFrame {
       this.takeBackButton.addActionListener(event -> this.takeBack());
       this.friendField.setToolTipText("The " + this.thing() + " to send. Paste your friend's here and press Open.");
       // Review takes Open's place once the game ends, so room is kept for the wider of the two.
-      int buttons = this.copyButton.getPreferredSize().width + Math.max(open.getPreferredSize().width, this.friendReviewButton.getPreferredSize().width)
-         + this.takeBackButton.getPreferredSize().width;
-      int fieldWidth = Math.max(60, width - buttons - GAP * 5);
+      int others = Math.max(open.getPreferredSize().width, this.friendReviewButton.getPreferredSize().width) + this.takeBackButton.getPreferredSize().width;
+      if (width - others - this.copyButton.getPreferredSize().width - GAP * 5 < 60) {
+         this.copyButton.setText("Copy");   // a short board: Take back must stay on the row
+      }
+      int fieldWidth = Math.max(40, width - others - this.copyButton.getPreferredSize().width - GAP * 5);
       this.friendField.setPreferredSize(new Dimension(fieldWidth, this.copyButton.getPreferredSize().height));
       this.friendRow.add(this.friendField);
       this.friendRow.add(this.copyButton);
