@@ -210,6 +210,11 @@ public final class Js {
     @JSBody(script = "return performance.now();")
     public static native double now();
 
+    /** True while the visitor's system asks for less motion (prefers-reduced-motion), read live so it follows a change. */
+    @JSBody(script = "var _m = window.__shimCalm || (window.matchMedia && (window.__shimCalm = matchMedia('(prefers-reduced-motion: reduce)')));"
+            + " return !!(_m && _m.matches);")
+    public static native boolean reducedMotion();
+
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb, true);")
     public static native void listenCapture(JSObject el, String type, EventCallback cb);
 

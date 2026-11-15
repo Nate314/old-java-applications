@@ -111,6 +111,21 @@ TeaVM runs Java threads as green threads on the JavaScript event loop. DOM event
 
 `boot.js` defines `$rt_putStdoutCustom` before `classes.js` runs (the program is a deferred script after it), so TeaVM hands it `System.out` text. Every page logs it to the browser console line by line. A page with `<body data-console>` would also show it in a panel docked at the bottom of the page; no page uses that now, since GroupCreator and SimpleAlgorithms show their results in their own windows.
 
+### Reduced motion
+
+An app can ask whether the visitor wants less motion (the system setting browsers report as `prefers-reduced-motion: reduce`) with one standard AWT call, the same on the page and the desktop:
+
+```java
+boolean calm = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+```
+
+- On the page the shim's `Toolkit.getDesktopProperty` answers `Boolean.TRUE` or `Boolean.FALSE` from `matchMedia` (`Js.reducedMotion`) on every call, so an app that asks when the effect starts (a crash, a blast) follows a change made while it runs. The query is made once and kept, so asking every frame costs next to nothing.
+- On the desktop the JDK's Toolkit does not know the name and answers `null`, so the same line gives `false` and the app moves as it always has.
+- Any other name is `null` in the shim, as on the desktop for names a toolkit does not know.
+- What to do with it is the app's choice: drop shake and flashes, skip slow motion, jump to the end of a zoom. Keep the game itself the same.
+
+No app reads it yet. Apps with motion that should adopt it: TankGame (screen shake, blast light and the slow-motion kill), DinoGame (the crash shake), FlappyBird (the crash's white flash and shake) and ScreenSaver (the gallery's zoom into a saver). The site's own page code already reads the setting itself (stage glow, the band's news, passport stamps, the photo booth, preview clips).
+
 ### Images, files and sound
 
 - Each app page lists the files it needs in `<body data-files>`. `boot.js` fetches them before `main()` runs; images are decoded so their sizes are known, and every file is copied into TeaVM's in-memory file system so `java.io` finds it by the original relative path. Files the app writes are kept across page loads (see Saved files).
