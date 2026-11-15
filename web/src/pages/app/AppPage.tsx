@@ -20,7 +20,7 @@ import { SITE, ShareTags } from '../../shared/ShareTags';
  * Values are attribute values; an empty string is an attribute without a value.
  */
 const BODY: Record<string, Record<string, string>> = {
-  CircleSpawner: { 'data-own-layout': '' },
+  CircleSpawner: { 'data-own-layout': '', 'data-args-page': '' },
   Clock: { 'data-tab-title': '' },
   FlappyBird: { 'data-files': 'bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png', 'data-args': '120' },
   // NathaNOS: its own pictures, a jar of each app on its desktop (Clock.jar is the older one it shipped with), the
