@@ -28,7 +28,7 @@ final class Power extends JInternalFrame {
 
    private final Main screen;
    private final TaskList tasks;
-   private final Image logo = new ImageIcon("assets/NathaNOS.jpg").getImage();
+   private final Image logo = new ImageIcon("assets/NathaNOS.png").getImage();
    private final Timer timer = new Timer(TICK_MS, e -> this.tick());
    private boolean restart;
    private boolean still;

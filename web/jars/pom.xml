@@ -116,7 +116,7 @@
                 <workjar app="NathaNOS" main="main.Main">
                   <files>
                     <zipfileset dir="${repo}/NathaNOS/assets" includes="*.png *.jpg Clock.jar"
-                                excludes="background.png NOS.png transparent.png" prefix="workfolder/assets"/>
+                                excludes="background.png NathaNOS.jpg NOS.png transparent.png" prefix="workfolder/assets"/>
                     <zipfileset dir="${work}/plain" excludes="Clock.jar NathaNOS.jar Windows.jar WindowsE.jar" prefix="workfolder/assets"/>
                     <zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/>
                   </files>

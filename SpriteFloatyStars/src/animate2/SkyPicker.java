@@ -50,6 +50,9 @@ final class SkyPicker extends JPanel {
          boolean night = mode == StarField.ORBITS || mode == StarField.SKY_WRITING;
          this.skies[mode] = new StarField(mode, new Dimension(TILE_WIDTH, TILE_HEIGHT), night ? 160 : 60, night ? 6 : 4, false);
          this.skies[mode].setSize(TILE_WIDTH, TILE_HEIGHT);
+         if (this.skies[mode].hintVisible()) {
+            this.skies[mode].toggleHint(); // a tile is too small for Orbits' and Sky writing's help lines
+         }
          this.frames[mode] = new BufferedImage(TILE_WIDTH, TILE_HEIGHT, BufferedImage.TYPE_INT_RGB);
          // A few seconds in, so even a still tile (reduced motion) shows the burst spread and the letters formed.
          for (int frame = 0; frame < 150; frame++) {
