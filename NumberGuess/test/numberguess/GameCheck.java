@@ -52,6 +52,20 @@ public class GameCheck {
 		}
 		check(game.isOver() && !game.isFound() && game.stars() == 0, "out of guesses");
 
+		// Hindsight: middle guesses are halved, off-middle ones lucky or costly by what they left.
+		check(Hindsight.read(1, 100, 50, 7) == Hindsight.Read.HALVED && Hindsight.read(1, 100, 51, 7) == Hindsight.Read.HALVED, "both middles halve");
+		check(Hindsight.read(1, 100, 10, 7) == Hindsight.Read.LUCKY && Hindsight.read(1, 100, 10, 60) == Hindsight.Read.COSTLY, "lucky or costly");
+		check(Hindsight.read(1, 100, 7, 7) == Hindsight.Read.LUCKY && Hindsight.read(5, 5, 5, 5) == Hindsight.Read.HALVED, "hits");
+		check(Hindsight.left(Level.HUNDRED, 40, java.util.Arrays.asList(50, 20, 40)).equals(java.util.Arrays.asList(100L, 49L, 29L, 0L)), "left after each guess");
+		check(Hindsight.reads(Level.HUNDRED, 40, java.util.Arrays.asList(50, 20)).equals(java.util.Arrays.asList(Hindsight.Read.HALVED, Hindsight.Read.COSTLY)), "reads");
+		for (Level level : Level.values()) {
+			for (int number : new int[] { 1, level.max() / 3, level.max() }) {
+				java.util.List<Integer> halving = Hindsight.halving(level, number);
+				check(halving.size() <= level.par() && halving.get(halving.size() - 1) == number, level + " halving path finds " + number);
+				check(!Hindsight.reads(level, number, halving).contains(Hindsight.Read.COSTLY), "halving is never costly");
+			}
+		}
+
 		// You pick: the computer finds every number within par, and catches answers that contradict.
 		for (int number = 1; number <= MindReader.MAX; number++) {
 			MindReader reader = new MindReader();
