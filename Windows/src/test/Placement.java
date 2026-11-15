@@ -13,7 +13,7 @@ import java.io.Writer;
  * Where the user left the key, in ~/.windows-key.txt: its left edge and bottom edge on the screen ("x=1780",
  * "bottom=1016"; the bottom, since the shelf grows the window upward), its size ("size=2" for the biggest of
  * {@link #SCALES}), whether the shelf was open ("shelf=on") and whether hover to press was on ("hover=on"). A missing file or a damaged line leaves the defaults:
- * the lower right of the screen, the smallest key, the shelf shut.
+ * the lower right of the screen, the smallest key, the shelf open.
  */
 final class Placement {
    static final File FILE = new File(System.getProperty("user.home", "."), ".windows-key.txt");
@@ -24,7 +24,8 @@ final class Placement {
    int x = -1;
    int bottom = -1;
    int size;
-   boolean shelf;
+   /** Open the first time, so a new user sees every shortcut by name; after that, as they left it. */
+   boolean shelf = true;
    boolean hover;
 
    double scale() {

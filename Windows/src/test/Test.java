@@ -62,7 +62,7 @@ public class Test {
             g.fillRect(0, 0, this.getWidth(), this.getHeight());
             g.setColor(new Color(236, 239, 244));
             // The sign grows with the strip, which grows with the key's size.
-            g.setFont(new Font("SansSerif", Font.PLAIN, Math.round(13f * this.getHeight() / 24)));
+            g.setFont(new Font("SansSerif", Font.BOLD, Math.round(13f * this.getHeight() / 24)));
             String s = sign.get();
             FontMetrics m = g.getFontMetrics();
             g.drawString(s, (this.getWidth() - m.stringWidth(s)) / 2, (this.getHeight() + m.getAscent()) / 2 - 2);
@@ -110,8 +110,8 @@ public class Test {
       JButton more = stripButton(() -> shelf.isVisible() ? "▾" : "▴");
       more.setToolTipText("Shortcuts");
       more.getAccessibleContext().setAccessibleName(place.shelf ? HIDE_SHORTCUTS : SHOW_SHORTCUTS);
-      // + makes the key bigger; at the largest, - takes it back to the smallest.
-      JButton size = stripButton(() -> place.size + 1 < Placement.SCALES.length ? "+" : "−");
+      // The size it is, S, M or L (a + here read as "Windows +", a chord); a click goes to the next, L back to S.
+      JButton size = stripButton(() -> Placement.SIZE_NAMES[place.size].substring(0, 1));
       Runnable nameSize = () -> {
          String now = Placement.SIZE_NAMES[place.size];
          String next = Placement.SIZE_NAMES[(place.size + 1) % Placement.SCALES.length];

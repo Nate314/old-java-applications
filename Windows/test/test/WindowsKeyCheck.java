@@ -57,6 +57,16 @@ public class WindowsKeyCheck {
          drag(key, 50 + WindowsKey.SLIDE + 30, 40);
          check(key.slide() == right, "a slide to the right picks the right arrow");
          paint(key);
+         if (System.getProperty("keyshot") != null) {
+            // Held and slid right: the four arrows round the logo, the right one lit, "Snap right" under it.
+            try {
+               BufferedImage held = new BufferedImage(key.getWidth(), key.getHeight(), BufferedImage.TYPE_INT_ARGB);
+               key.paint(held.getGraphics());
+               javax.imageio.ImageIO.write(held, "png", new File(System.getProperty("keyshot")));
+            } catch (java.io.IOException e) {
+               throw new RuntimeException(e);
+            }
+         }
          key.dispatchEvent(new MouseEvent(key, MouseEvent.MOUSE_RELEASED, 0, 0, 50 + WindowsKey.SLIDE + 30, 40, 1, false, MouseEvent.BUTTON1));
          check(log.equals(List.of("+" + win, "+" + right, "-" + right, "-" + win)) && key.slide() == 0,
             "letting go after the slide makes Win+Right: " + log);
@@ -80,6 +90,11 @@ public class WindowsKeyCheck {
             check(log.equals(List.of("+" + win, "+" + code, "-" + code, "-" + win)), "a click on shortcut " + i + " makes Win+" + code + ": " + log);
          }
          check(ShortcutShelf.code(0) == KeyEvent.VK_E && ShortcutShelf.code(4) == KeyEvent.VK_LEFT, "the shelf starts with E and the arrows follow");
+         java.awt.Rectangle leftCap = shelf.rect(4);
+         shelf.dispatchEvent(new MouseEvent(shelf, MouseEvent.MOUSE_MOVED, 0, 0, leftCap.x + 3, leftCap.y + 3, 0, false, MouseEvent.NOBUTTON));
+         check("Win+←: Snap left".equals(shelf.getToolTipText()), "pointing at the left arrow names it: " + shelf.getToolTipText());
+         shelf.dispatchEvent(new MouseEvent(shelf, MouseEvent.MOUSE_EXITED, 0, 0, -1, -1, 0, false, MouseEvent.NOBUTTON));
+         check(shelf.getToolTipText().startsWith("Click a shortcut"), "and off the shelf, the shelf's own tip again");
          log.clear();
          java.awt.Rectangle first = shelf.rect(0);
          java.awt.Rectangle second = shelf.rect(1);
@@ -177,7 +192,7 @@ public class WindowsKeyCheck {
       File file = File.createTempFile("windows-key", ".txt");
       file.deleteOnExit();
       Placement fresh = Placement.load(new File(file.getPath() + ".missing"));
-      check(fresh.x == -1 && fresh.bottom == -1 && fresh.size == 0 && !fresh.shelf, "no file: the defaults");
+      check(fresh.x == -1 && fresh.bottom == -1 && fresh.size == 0 && fresh.shelf, "no file: the defaults, the shelf open for a first look");
       Placement left = new Placement();
       left.x = 300;
       left.bottom = 500;
@@ -198,7 +213,11 @@ public class WindowsKeyCheck {
             check(frame.isAlwaysOnTop() && !frame.getFocusableWindowState() && frame.isUndecorated(),
                "the window stays on top, borderless, without taking the keyboard");
             check(!frame.isVisible() && frame.getWidth() == Test.WIDTH, "open() builds it without showing it");
-            javax.swing.JButton more = find(frame.getContentPane(), Test.SHOW_SHORTCUTS);
+            javax.swing.JButton more = find(frame.getContentPane(), Test.HIDE_SHORTCUTS);
+            check(more != null && frame.getHeight() == Test.HEIGHT + ShortcutShelf.HEIGHT, "the first time, the shelf is open");
+            more.doClick();
+            check(Test.SHOW_SHORTCUTS.equals(more.getAccessibleContext().getAccessibleName()) && frame.getHeight() == Test.HEIGHT,
+               "and closes");
             int bottom = frame.getY() + frame.getHeight();
             more.doClick();
             check(frame.getHeight() == Test.HEIGHT + ShortcutShelf.HEIGHT && frame.getY() + frame.getHeight() == bottom,
