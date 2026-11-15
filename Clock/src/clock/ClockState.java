@@ -33,6 +33,8 @@ final class ClockState {
    boolean twentyFour = false;
    /** Whether the Westminster quarters ring. */
    boolean chimes = false;
+   /** The World tab shows the map of day and night (else the 24-hour dial). */
+   boolean worldMap = true;
    final Countdown countdown = new Countdown();
    final Stopwatch stopwatch = new Stopwatch();
    final Focus focus = new Focus();
@@ -85,6 +87,8 @@ final class ClockState {
                   this.twentyFour = value.equals("24");
                } else if (key.equals("chimes")) {
                   this.chimes = value.equals("on");
+               } else if (key.equals("worldMap")) {
+                  this.worldMap = !value.equals("off");
                } else if (key.equals("alarm")) {
                   alarm[0] = Integer.parseInt(value);
                } else if (key.equals("alarmOn")) {
@@ -202,6 +206,7 @@ final class ClockState {
          cities.add(zone.name);
       }
       text.append("world=").append(String.join(",", cities)).append('\n');
+      text.append("worldMap=").append(this.worldMap ? "on" : "off").append('\n');
       return text.toString();
    }
 }
