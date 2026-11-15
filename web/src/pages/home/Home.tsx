@@ -7,6 +7,7 @@ import { APPS, app, type App } from '../../shared/catalog';
 import { FIRST, H, draw, useHomeDraw } from './model';
 import { TOUR } from './tour';
 import { Records } from './Records';
+import { HeroWall } from './HeroWall';
 import * as P from './player';
 import { TABS, badge, stampCount, tabClick, tabKey, tabShown } from './tabs';
 import { allClick, day, openApp } from './news';
@@ -428,6 +429,7 @@ export function Home() {
   const t = H.take;
   return (
     <main>
+      <HeroWall />
       <h1>Old Java Applications</h1>
       <p className="lead">
         Java Swing and AWT programs recovered from old jars
