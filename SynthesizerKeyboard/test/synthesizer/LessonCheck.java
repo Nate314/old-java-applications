@@ -5,7 +5,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 
-/** Assert-based self-check of the songs, the lesson, the saved records and recorded tunes. Run with {@code java -ea}. */
+/** Assert-based self-check of the songs, the lesson, the saved records, recorded tunes and chord keys. Run with {@code java -ea}. */
 public final class LessonCheck {
    public static void main(String[] args) throws IOException {
       boolean enabled = false;
@@ -18,7 +18,23 @@ public final class LessonCheck {
       checkLesson();
       checkRecords();
       checkTunes();
+      checkChords();
       System.out.println("LessonCheck: all checks passed");
+   }
+
+   private static void checkChords() {
+      String[] names = {"C", "C#", "Dm", "D#", "Em", "F", "F#", "G", "G#", "Am", "A#", "Bdim", "C"};
+      for (int key = 0; key < PianoPanel.KEYS; key++) {
+         assert Chord.name(key).equals(names[key]) : key + " is " + Chord.name(key);
+         int[] keys = Chord.keys(key);
+         assert keys.length == 3 && keys[0] == key : "a chord starts on its own key";
+         for (int tone = 0; tone < 3; tone++) {
+            assert keys[tone] >= 0 && keys[tone] < PianoPanel.KEYS : key + " lights " + keys[tone];
+            assert Math.floorMod(keys[tone] - key, 12) == Chord.intervals(key)[tone] : "key " + key + " tone " + tone + " has the chord's pitch";
+         }
+      }
+      assert java.util.Arrays.equals(Chord.keys(12), new int[]{12, 4, 7}) : "the high C's E and G light below it";
+      assert java.util.Arrays.equals(Chord.keys(9), new int[]{9, 12, 4}) : "Am: A, the high C, and E below";
    }
 
    private static void checkSongs() {
