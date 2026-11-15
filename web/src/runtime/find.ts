@@ -6,7 +6,8 @@ import { isThen } from './then-and-now';
 import { playSound } from './sounds';
 import { lazyScript } from './lazy-script';
 
-export let findMac: boolean;
+export const findMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+export const findKey = findMac ? '⌘K' : 'Ctrl K';   // Find's key as its button and box show it
 export let findOff: boolean;
 let findHeld: string[] | null;
 let findHeldTimer: number | ReturnType<typeof setInterval>;
@@ -51,7 +52,6 @@ export function init() {
   window.oldjavaSite.played = function (id) { return !!played[id]; };
   window.oldjavaSite.watchable = Object.keys(WATCH);
   window.oldjavaSite.sound = function (name) { playSound(name); };
-  findMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   findOff = clipMode || document.documentElement.hasAttribute('data-shot') || document.documentElement.hasAttribute('data-saver');
   // The first Ctrl+K of a page loads find.js before the box can take the focus: keys typed in that moment are held
   // here and typed into the box once it has the focus, instead of reaching the app behind it (a title screen

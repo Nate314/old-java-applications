@@ -14,10 +14,11 @@ import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { openLayer } from '../ui/layer';
 import { storedJson } from '../stored';
+import { findKey } from '../find';
 
 declare global {
   interface Window {
-  oldjavaFind?: { open(opener?: Element | null): void; isOpen(): boolean; key: string };
+  oldjavaFind?: { open(opener?: Element | null): void; isOpen(): boolean };
   }
 }
 // What boot.js's find.ts has lent window.oldjavaSite by the time this file runs.
@@ -30,8 +31,6 @@ interface Item {
 }
 /** What the box shows: its groups of rows, the row picked (-1 for none) and the line under them. */
 interface FindView { groups: [string, Item[]][]; active: number; status: string }
-
-const KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K';
 
 function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMount }: {
   view: FindView; home: boolean; onSearch: () => void; onKey: (e: KeyboardEvent) => void; onClose: () => void;
@@ -84,7 +83,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
         </div>
         <p className="shim-find-status" role="status">{view.status}</p>
         <div className="shim-find-foot">
-          {[['↑↓', 'move'], ['Enter', 'open'], ['Shift Enter', 'full page'], [KEY, 'close']].map((k, i) => i === 2 && !home ? null : (
+          {[['↑↓', 'move'], ['Enter', 'open'], ['Shift Enter', 'full page'], [findKey, 'close']].map((k, i) => i === 2 && !home ? null : (
             <span key={i}><kbd>{k[0]}</kbd>{' ' + k[1]}</span>
           ))}
         </div>
@@ -427,7 +426,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
     });
   }
 
-  window.oldjavaFind = { open: open, isOpen: function () { return !!box; }, key: KEY };
+  window.oldjavaFind = { open: open, isOpen: function () { return !!box; } };
 })();
 
 export {};   // a module, imported when it is needed (its chunk is assets/find.js)

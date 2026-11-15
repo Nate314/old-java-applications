@@ -21,7 +21,8 @@ const page = (id: string) => id + '/index.html';
 // What's new pictures a change to the whole arcade with the site's icon, at its full address as news.js gave it.
 const SITE_ICON = new URL('icons/icon.svg', location.href).href;
 const THEN_HINT = 'As first restored in 2026: the recovered code with light bug fixes, before the later reworks.';
-// The runtime's Find names its key for the platform, as its own button does (and is off in screenshots and the saver).
+// The runtime's Find names its key for the platform (findKey in runtime/find.ts; importing it here would split a chunk
+// off boot.js), as its own button does (and is off in screenshots and the saver).
 const FIND_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
   && !document.documentElement.hasAttribute('data-shot') && !document.documentElement.hasAttribute('data-saver') ? '⌘K' : 'Ctrl K';
 
