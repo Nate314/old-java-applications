@@ -5,12 +5,16 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.Random;
 
 /**
  * Sorting race: six sorts on the same numbers, side by side, each getting the same number of steps per tick. The
  * bars show each compare (orange) and each swap or write (red); a finished sort is checked bar by bar in green and
- * gets its place. Click a sort to listen to it: each tick plays a note pitched by the value it just touched.
+ * gets its place. Click a sort to listen to it: each tick plays a note pitched by the value it just touched. The
+ * Prints view (V) draws each sort's whole run as one picture instead, time going down and each value in its own
+ * color, and dragging on a picture scrubs the race back and forth.
  */
 class SortPage extends Page {
 	private static final int[] SIZES = { 16, 32, 64, 128 };
@@ -22,6 +26,11 @@ class SortPage extends Page {
 	private static final int TOP = 66;
 	private static final int MARGIN = 16;
 	private static final int GAP = 8;
+	/** The Bars | Prints switch beside the title: one half per view. */
+	private static final Rectangle[] VIEWS = { new Rectangle(140, 16, 52, 22), new Rectangle(192, 16, 58, 22) };
+	/** The colors a value runs through from smallest to largest in the Prints view. */
+	private static final Color[] RAMP = { new Color(52, 78, 160), new Color(38, 160, 170), new Color(150, 200, 80),
+			new Color(245, 180, 50), new Color(210, 70, 60) };
 
 	private final Random random = new Random();
 	private final SortSound sound = new SortSound();
@@ -33,6 +42,15 @@ class SortPage extends Page {
 	/** The lane being listened to, and the one under the pointer (-1 for none). */
 	private int listen = 4;
 	private int hovered = -1;
+	/** Bars, or each sort's run as one picture; and the lane being scrubbed by a drag (-1 for none). */
+	private boolean prints;
+	private int scrubbing = -1;
+	/** The color of each value for the Prints view, made for the race's largest value. */
+	private Color[] colors = new Color[0];
+	/** Each lane's print drawn so far, for which race, and how many rows it holds. */
+	private final BufferedImage[] printImages = new BufferedImage[Sorts.NAMES.length];
+	private final int[] printRows = new int[Sorts.NAMES.length];
+	private SortRace printRace;
 	/** The page's height at the last paint, so clicks find the same lanes. */
 	private int pageHeight = LabPanel.HEIGHT - 90;
 
@@ -122,6 +140,11 @@ class SortPage extends Page {
 				lane.sweep = Math.min(lane.values.length, lane.sweep + perTick);
 			}
 		}
+		playHeard();
+	}
+
+	/** The note of the value the listened-to sort just touched, or of its check; silence when it has neither. */
+	private void playHeard() {
 		SortRace.Lane heard = race.lanes[listen];
 		if (heard.last != null) {
 			sound.play(heard.touched, race.max);
@@ -159,6 +182,14 @@ class SortPage extends Page {
 			step();
 			return true;
 		}
+		if (Character.toLowerCase(event.getKeyChar()) == 'v') {
+			prints = !prints;
+			return true;
+		}
+		if (event.getKeyCode() == KeyEvent.VK_LEFT) {
+			seek(race.clock - 1);
+			return true;
+		}
 		if (Character.toLowerCase(event.getKeyChar()) == 'r') {
 			restart();
 			return true;
@@ -166,8 +197,21 @@ class SortPage extends Page {
 		return false;
 	}
 
+	/** Moves the race to any time, paused, and plays the note there. */
+	private void seek(int time) {
+		playing = false;
+		race.seek(time);
+		labels();
+		playHeard();
+	}
+
 	@Override
 	void click(int x, int y) {
+		for (int view = 0; view < VIEWS.length; view++) {
+			if (VIEWS[view].contains(x, y)) {
+				prints = view == 1;
+			}
+		}
 		int lane = laneAt(x, y);
 		if (lane >= 0) {
 			listen = lane;
@@ -175,7 +219,25 @@ class SortPage extends Page {
 				sound.toggle();
 				labels();
 			}
+			if (prints && area(laneBox(lane, pageHeight)).contains(x, y)) {
+				scrubbing = lane;
+				drag(x, y);
+			}
 		}
+	}
+
+	@Override
+	void drag(int x, int y) {
+		if (scrubbing >= 0) {
+			Rectangle area = area(laneBox(scrubbing, pageHeight));
+			int row = Math.max(0, Math.min(SortRace.ROWS - 1, (y - area.y) * SortRace.ROWS / area.height));
+			seek(race.timeOf(row));
+		}
+	}
+
+	@Override
+	void release() {
+		scrubbing = -1;
 	}
 
 	@Override
@@ -187,6 +249,11 @@ class SortPage extends Page {
 		int laneWidth = (LabPanel.WIDTH - 2 * MARGIN - 2 * GAP) / 3;
 		int laneHeight = (h - TOP - 6 - GAP) / 2;
 		return new Rectangle(MARGIN + index % 3 * (laneWidth + GAP), TOP + index / 3 * (laneHeight + GAP), laneWidth, laneHeight);
+	}
+
+	/** Where a lane draws its bars or print. */
+	private static Rectangle area(Rectangle box) {
+		return new Rectangle(box.x + 8, box.y + 42, box.width - 16, box.height - 50);
 	}
 
 	private int laneAt(int x, int y) {
@@ -202,6 +269,7 @@ class SortPage extends Page {
 	void paint(Graphics2D g, int w, int h) {
 		pageHeight = h;
 		text(g, "Sorting race", TITLE, INK, 20, 32);
+		paintViews(g);
 		String status = race.numbers.length + " numbers, " + Sorts.ORDERS[order].toLowerCase() + "  \u00b7  step " + race.clock;
 		text(g, status, BOLD, INK, w - 20 - width(g, status, BOLD), 32);
 		paintSummary(g);
@@ -210,7 +278,29 @@ class SortPage extends Page {
 		}
 	}
 
+	private void paintViews(Graphics2D g) {
+		String[] names = { "Bars", "Prints" };
+		for (int view = 0; view < VIEWS.length; view++) {
+			Rectangle r = VIEWS[view];
+			boolean on = prints == (view == 1);
+			g.setColor(on ? INK : Color.WHITE);
+			g.fillRoundRect(r.x, r.y, r.width, r.height, 22, 22);
+			centered(g, names[view], BOLD, on ? Color.WHITE : INK, r.x + r.width / 2, r.y + 16);
+		}
+		Rectangle all = new Rectangle(VIEWS[0].x, VIEWS[0].y, VIEWS[1].x + VIEWS[1].width - VIEWS[0].x, VIEWS[0].height);
+		g.setColor(INK);
+		g.setStroke(new BasicStroke(1.5f));
+		g.drawRoundRect(all.x, all.y, all.width, all.height, 22, 22);
+		g.setStroke(new BasicStroke(1f));
+		text(g, "V", SMALL, PENCIL, all.x + all.width + 6, all.y + 15);
+	}
+
 	private void paintSummary(Graphics2D g) {
+		if (!race.finished() && prints) {
+			text(g, "Each run as one picture: time goes down and each number keeps its color."
+					+ " Drag on one to go back and forth.", TEXT, PENCIL, 20, 54);
+			return;
+		}
 		if (!race.finished()) {
 			text(g, "Every sort gets the same steps each tick: a compare or a write is one, a swap two."
 					+ " Click a sort to hear it.", TEXT, PENCIL, 20, 54);
@@ -222,7 +312,7 @@ class SortPage extends Page {
 		text(g, won, BOLD, GREEN, 20, 54);
 		String slow = "  " + Sorts.NAMES[last.algorithm] + " took " + last.total
 				+ (first.total > 0 ? ", " + Page.number((double) last.total / first.total, 2) + " times as many." : ".");
-		String tip = "  Try another order (O) or more numbers (B).";
+		String tip = prints ? "  Try another order (O) or more numbers (B)." : "  See each run as a picture (V).";
 		int x = 20 + width(g, won, BOLD);
 		text(g, slow + (x + width(g, slow + tip, TEXT) < LabPanel.WIDTH - 16 ? tip : ""), TEXT, INK, x, 54);
 	}
@@ -257,7 +347,88 @@ class SortPage extends Page {
 		} else if (lane.algorithm == hovered) {
 			text(g, "Click to hear", SMALL, PENCIL, right - width(g, "Click to hear", SMALL), box.y + 20);
 		}
-		paintBars(g, lane, new Rectangle(box.x + 8, box.y + 42, box.width - 16, box.height - 50));
+		if (prints) {
+			paintPrint(g, lane, area(box));
+		} else {
+			paintBars(g, lane, area(box));
+		}
+	}
+
+	/**
+	 * The lane's print up to the furthest the race has been, with a line at the clock. The print is kept as an
+	 * image at twice the size (sharp on a 2x screen) and only the rows the race has newly reached are added to it, as
+	 * redrawing thousands of cells every tick is slow in the browser.
+	 */
+	private void paintPrint(Graphics2D g, SortRace.Lane lane, Rectangle area) {
+		if (printRace != race) {
+			printRace = race;
+			Arrays.fill(printImages, null);
+		}
+		int index = lane.algorithm;
+		BufferedImage image = printImages[index];
+		if (image == null || image.getWidth() != 2 * area.width || image.getHeight() != 2 * area.height) {
+			image = new BufferedImage(2 * area.width, 2 * area.height, BufferedImage.TYPE_INT_RGB);
+			printImages[index] = image;
+			printRows[index] = 0;
+			Graphics2D blank = image.createGraphics();
+			blank.setColor(Color.WHITE);
+			blank.fillRect(0, 0, image.getWidth(), image.getHeight());
+			blank.dispose();
+		}
+		int shown = race.rowAt(race.reached) + 1;
+		if (printRows[index] < shown) {
+			Graphics2D cells = image.createGraphics();
+			paintRows(cells, lane, new Rectangle(0, 0, image.getWidth(), image.getHeight()), printRows[index], shown);
+			cells.dispose();
+			printRows[index] = shown;
+		}
+		g.drawImage(image, area.x, area.y, area.width, area.height, null);
+		g.setColor(GRID);
+		g.drawRect(area.x, area.y, area.width - 1, area.height - 1);
+		int y = rowY(area, race.rowAt(race.clock) + 1) - 1;
+		g.setColor(INK);
+		g.fillRect(area.x - 4, y, area.width + 8, 2);
+	}
+
+	/** Rows from to to of the print: a column per place, each cell in its value's color, as runs of equal cells. */
+	private void paintRows(Graphics2D g, SortRace.Lane lane, Rectangle area, int from, int to) {
+		if (colors.length != race.max + 1) {
+			colors = new Color[race.max + 1];
+			for (int value = 0; value <= race.max; value++) {
+				colors[value] = ramp((double) value / race.max);
+			}
+		}
+		int n = lane.values.length;
+		for (int i = 0; i < n; i++) {
+			int x0 = area.x + i * area.width / n;
+			int x1 = area.x + (i + 1) * area.width / n;
+			for (int row = from; row < to;) {
+				int value = lane.print[row][i];
+				int end = row + 1;
+				while (end < to && lane.print[end][i] == value) {
+					end++;
+				}
+				g.setColor(colors[value]);
+				g.fillRect(x0, rowY(area, row), x1 - x0, rowY(area, end) - rowY(area, row));
+				row = end;
+			}
+		}
+	}
+
+	private static int rowY(Rectangle area, int row) {
+		return area.y + row * area.height / SortRace.ROWS;
+	}
+
+	/** A color along {@link #RAMP}, for t from 0 to 1. */
+	private static Color ramp(double t) {
+		double at = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
+		int i = Math.min(RAMP.length - 2, (int) at);
+		double f = at - i;
+		Color a = RAMP[i];
+		Color b = RAMP[i + 1];
+		return new Color((int) Math.round(a.getRed() + (b.getRed() - a.getRed()) * f),
+				(int) Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * f),
+				(int) Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * f));
 	}
 
 	private void paintBars(Graphics2D g, SortRace.Lane lane, Rectangle area) {
