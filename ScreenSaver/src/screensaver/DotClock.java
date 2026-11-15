@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.Date;
 import java.util.Random;
 import java.util.function.Supplier;
@@ -49,6 +50,9 @@ class DotClock implements Saver {
    private double[][] litFor = new double[COLUMNS][5];
    private int[][] shade = new int[COLUMNS][5];
    private Font font;
+   /** Play (T): the pointer scatters the dots near it, or null. */
+   private Point pointer;
+   private boolean pressed;
 
    /** Reads the time from this; Date's getters give local time on the desktop and in the browser. */
    DotClock(Supplier<Date> now) {
@@ -64,6 +68,7 @@ class DotClock implements Saver {
    public void reset(int width, int height, Random random) {
       this.width = width;
       this.height = height;
+      this.pointer = null;
       this.dot = (int)Math.max(4, Math.min(width * 0.6 / COLUMNS, height * 0.3 / 5));
       this.font = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(12, this.dot * 2 / 3));
       this.clockWidth = COLUMNS * this.dot;
@@ -145,6 +150,12 @@ class DotClock implements Saver {
    }
 
    @Override
+   public void touch(Point at, boolean down) {
+      this.pointer = at;
+      this.pressed = down;
+   }
+
+   @Override
    public void paint(Graphics2D g) {
       int left = (int)this.x;
       int top = (int)this.y;
@@ -152,6 +163,9 @@ class DotClock implements Saver {
          for (int r = 0; r < 5; r++) {
             int cx = left + c * this.dot + this.dot / 2;
             int cy = top + r * this.dot + this.dot / 2;
+            double[] push = Saver.away(cx, cy, this.pointer, this.dot * (this.pressed ? 5 : 3), this.dot * (this.pressed ? 2.2 : 1.2));
+            cx += (int)push[0];
+            cy += (int)push[1];
             int size = this.dot - Math.max(2, this.dot / 8);
             if (this.lit[c][r]) {
                double grown = Math.min(1, this.litFor[c][r] / GROW_MILLIS);

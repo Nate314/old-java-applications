@@ -17,17 +17,31 @@ By default it moves on to the next saver every 30 seconds. It closes if you move
 
 **G** shows all ten at once, live, each on a small screen of its own in a grid (four across on a wide screen, two on a phone), with its number and name under it. Pick one with the arrow keys and Enter (or Space), its number, or a click (a tap in the browser): it grows from its little screen to the whole one and stays there, as a number key would. **G** again goes back to the saver that was showing, cycling as before. In the grid the mouse does not close anything; it lights up the screen under it. Each saver is drawn at full screen size and scaled into its own picture, so it looks as it will when picked.
 
+**T** turns a saver into a toy you can play with: the mouse (or a finger) no longer closes it, and each saver answers it in its own way. Esc still closes, and T again hands it back (the next mouse move, after a moment, closes it as before). The caption's last line says what the mouse does to the saver showing.
+
+- **Green circles, Green squares, Bright circles**: the tiles near the pointer slip aside and shrink, like a hand through beads; held down, it pushes wider and harder.
+- **Starfield**: the stars stream out of a point most of the way to the pointer, so pointing steers the flight; hold the button for warp speed (five times as fast, longer streaks).
+- **Mystify**: hold the button and every corner is pulled toward the pointer, up to three times its own speed, so the outlines wrap round it; let go and they drift back to their own speed.
+- **Pipes**: a press on an empty cell starts a new pipe there; hold and drag, and the pipe grows toward the pointer one cell at a time and waits under it.
+- **Bouncing logo**: grab the logo, drag it, and let go to throw it (at up to eight times its drift, slowing back down over a few seconds). Throw it into a corner and it counts.
+- **Dot clock**: the dots scatter from the pointer and settle back when it moves on.
+- **Aquarium**: a click drops a pinch of flakes where you click, and the fish come for it.
+- **Maze**: hold the button and the walker hurries, three times as fast.
+
+Play is not saved: the screen saver always starts out closing on the mouse.
+
 ## Controls / usage
 
 - **N** or **Space** / **P**: next / previous saver.
 - **1** to **9**, and **0** for the tenth (number row): show that saver and stop cycling, so it stays on screen.
 - **G**: all the savers at once, to pick one (see above). In it, the arrow keys (or N and P) move, Enter, Space, a number or a click picks, G goes back and Esc closes.
+- **T**: play with the saver (see above), or stop.
 - **C**: cycle on or off (every 30 seconds).
 - **Left / Right**: slower / faster, by a factor of 1.1 per press (from 0.05x to 250x; at 250x the tiles step every millisecond, as the original's fastest). The moving savers stop speeding up at 8x.
 - **Up / Down** (tile savers): shrink / grow the tiles by a factor of 1.1 (at least 10 px). The grid is rebuilt for the new size and the cycle starts over.
 - **F** (Aquarium): feed the fish. It shows for 5 seconds when the screen saver starts, on every change of saver, and when the speed or cycling changes.
 - **Esc**: close.
-- **Mouse**: moving or dragging more than a few pixels, clicking, pressing, releasing or leaving the window closes it. Mouse moves in the first 1.5 seconds are ignored (showing the window can report one when the mouse has not moved), as is leaving the window then.
+- **Mouse** (unless playing, T): moving or dragging more than a few pixels, clicking, pressing, releasing or leaving the window closes it. Mouse moves in the first 1.5 seconds are ignored (showing the window can report one when the mouse has not moved), as is leaving the window then.
 - Closing works like the window's close button would: run alone it exits, and inside NathaNOS only the screen saver closes.
 - Keys act on key release. No command-line arguments.
 - The window is undecorated and fills the screen. The tile size is the greatest common factor of the screen width and height (120 px on 1920x1080) when that gives between 4 and 12 rows, as the original; on other screens, where that factor is often a pixel or two, it is a ninth of the screen height. The grid is centered, so the edge tiles are cut evenly.
@@ -36,7 +50,7 @@ By default it moves on to the next saver every 30 seconds. It closes if you move
 ## Code layout
 
 - `src/screensaver/Main.java`: the full-screen `JFrame`, the input listeners, a 16 ms Swing timer that advances the current saver by the time elapsed (times the speed), the fade in from black on each change, and the caption. It paints through a `JPanel` content pane.
-- `src/screensaver/Saver.java`: the interface each saver implements: `reset` to a screen size, `tick` by milliseconds, `paint`.
+- `src/screensaver/Saver.java`: the interface each saver implements: `reset` to a screen size, `tick` by milliseconds, `paint`, and `touch` for the pointer in play (T), with `away`, the push the tiles and dot clock share.
 - `src/screensaver/Tiles.java` (the original and its two variants), `Starfield.java`, `Mystify.java`, `Pipes.java`, `BouncingLogo.java`, `DotClock.java`, `Aquarium.java`, `Maze.java`: the savers.
 - `src/screensaver/Gallery.java`: the grid of all the savers (G): its layout, the selection, and painting each saver scaled into its own image.
 - `src/screensaver/Settings.java`: reads and writes `~/.screensaver.txt`, with the tank's lines.
@@ -45,7 +59,7 @@ The original jar set a custom cursor from `cursor.png`, which did not ship. The 
 
 ## Self-check
 
-`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. For the Maze, over 30 mazes: every room carved with no loops, the route joining start and orb, the walker always reaching the orb, and a new maze after the map. For the gallery: ten same-sized screens inside the window and under its header, none overlapping, at 1920x1080, 900x600, 375x600 and 400x700; every saver showing on its little screen; a click on each screen picking it; and the arrow keys moving through the grid. From `ScreenSaver/`:
+`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. For the Maze, over 30 mazes: every room carved with no loops, the route joining start and orb, the walker always reaching the orb, and a new maze after the map. For the gallery: ten same-sized screens inside the window and under its header, none overlapping, at 1920x1080, 900x600, 375x600 and 400x700; every saver showing on its little screen; a click on each screen picking it; and the arrow keys moving through the grid. For play (T): the push away from the pointer; the tiles and dot clock drawn aside under the pointer and back after; the stars streaming from near the pointer and back from the middle; Mystify's corners speeding up when held (at most three times) and slowing back; a pipe started at a press and grown to the pointer, waiting there; the logo picked up only by a press on it, following the pointer, thrown fast the way it moved and slowing back to its drift; one pinch of flakes per press; the maze walker hurrying; and every saver saying what the mouse does. From `ScreenSaver/`:
 
 ```
 javac -d ../out/check/ScreenSaver src/screensaver/*.java test/screensaver/*.java

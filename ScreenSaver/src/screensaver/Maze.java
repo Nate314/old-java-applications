@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,6 +67,8 @@ class Maze implements Saver {
    private int height;
    private Random random;
    private double[] depth = new double[0];
+   /** Play (T): held down, the walker hurries, three times as fast. */
+   private boolean hurry;
 
    @Override
    public String name() {
@@ -77,6 +80,7 @@ class Maze implements Saver {
       this.width = width;
       this.height = height;
       this.random = random;
+      this.hurry = false;
       this.build();
    }
 
@@ -193,7 +197,13 @@ class Maze implements Saver {
    }
 
    @Override
+   public void touch(Point at, boolean down) {
+      this.hurry = at != null && down;
+   }
+
+   @Override
    public void tick(double millis) {
+      millis *= this.hurry ? 3 : 1;
       this.time += millis;
       while (millis > 0) {
          if (this.mapLeft > 0) {
