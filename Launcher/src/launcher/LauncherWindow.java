@@ -66,6 +66,7 @@ public final class LauncherWindow extends JFrame {
    private final Runner thenRunner;
    private final Path root;
    private final LongSupplier clock;
+   private final StartMenu start;   // null off Windows
    private final Thumbs thumbs = new Thumbs();
    private final Random random = new Random();
    private final Set<String> running = new HashSet<>();
@@ -84,7 +85,7 @@ public final class LauncherWindow extends JFrame {
    private boolean then;   // Play runs the apps as first restored
 
    public LauncherWindow(List<Catalog.App> apps, PlayLog log, Runner runner, Runner thenRunner, Path root,
-         LongSupplier clock) {
+         LongSupplier clock, StartMenu start) {
       super("Old Java Applications");
       this.apps = apps;
       this.log = log;
@@ -92,6 +93,7 @@ public final class LauncherWindow extends JFrame {
       this.thenRunner = thenRunner;
       this.root = root;
       this.clock = clock;
+      this.start = start;
       search = new Ui.SearchField("Search " + apps.size() + " apps");
 
       for (Catalog.App app : apps) {
@@ -424,6 +426,40 @@ public final class LauncherWindow extends JFrame {
       return running.contains(id) || running.contains(id + " then");
    }
 
+   /**
+    * Adds the apps to the Windows Start menu, or takes them out when they are all there already, in the
+    * background (PowerShell makes the shortcuts); the status line says how it went.
+    */
+   void toggleStart(List<Catalog.App> among) {
+      List<Catalog.App> these = new ArrayList<>();
+      for (Catalog.App a : among) if (StartMenu.allowed(a)) these.add(a);
+      if (start == null || these.isEmpty() || startBusy) return;
+      boolean add = !these.stream().allMatch(start::has);
+      String what = these.size() == 1 ? these.get(0).name : these.size() + " apps";
+      startBusy = true;
+      refresh();
+      status((add ? "Adding " : "Taking ") + what + (add ? " to" : " out of") + " the Start menu...");
+      CompletableFuture.runAsync(() -> {
+         try {
+            if (add) start.add(these);
+            else start.remove(these);
+         } catch (IOException | InterruptedException e) {
+            throw new java.util.concurrent.CompletionException(e);
+         }
+      }).whenComplete((v, err) -> SwingUtilities.invokeLater(() -> {
+         startBusy = false;
+         Throwable why = err != null && err.getCause() != null ? err.getCause() : err;
+         if (why != null) status("Could not change the Start menu: " + why.getMessage());
+         else if (!add) status("Took " + what + " out of the Start menu.");
+         else status("Added " + what + " to the Start menu: press the Windows key and type "
+            + (these.size() == 1 ? "\"" + these.get(0).name + "\"" : "an app's name")
+            + ", or open the " + StartMenu.FOLDER + " folder in All apps.");
+         refresh();
+      }));
+   }
+
+   private boolean startBusy;
+
    // ---- the grid ------------------------------------------------------------------------------------------
 
    /** Lays the visible tiles out in as many columns as fit, stretched to fill the width. */
@@ -596,7 +632,7 @@ public final class LauncherWindow extends JFrame {
       private final JComponent picture = new JComponent() {
          @Override
          protected void paintComponent(Graphics g) {
-            if (app == null) return;
+            if (app == null || getHeight() < 60) return;   // squeezed out by a short window: a sliver would look broken
             Graphics2D g2 = Ui.smooth(g);
             g2.setColor(new Color(0x12141a));
             g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
@@ -628,6 +664,9 @@ public final class LauncherWindow extends JFrame {
       private final Ui.FlatButton play = new Ui.FlatButton("Play", true);
       private final Ui.FlatButton readme = new Ui.FlatButton("Read me", false);
       private final Ui.FlatButton folder = new Ui.FlatButton("Open folder", false);
+      private final Ui.FlatButton pin = new Ui.FlatButton("", false);
+      private final Ui.FlatButton pinAll = new Ui.FlatButton("", false);
+      private final JPanel startRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
 
       Detail() {
          setBackground(Ui.PANEL);
@@ -674,6 +713,14 @@ public final class LauncherWindow extends JFrame {
          buttons.add(Box.createHorizontalStrut(8));
          buttons.add(changes);
          buttons.setMaximumSize(new Dimension(inner, 40));
+         pin.setMnemonic(KeyEvent.VK_M);
+         pin.addActionListener(e -> toggleStart(List.of(app)));
+         pinAll.addActionListener(e -> toggleStart(apps));
+         startRow.setOpaque(false);
+         startRow.add(pin);
+         startRow.add(Box.createHorizontalStrut(8));
+         startRow.add(pinAll);
+         startRow.setMaximumSize(new Dimension(inner, 40));
          now.setMnemonic(KeyEvent.VK_N);
          now.setToolTipText("Play today's version of each app (Alt+N)");
          now.addActionListener(e -> setThen(false));
@@ -686,7 +733,7 @@ public final class LauncherWindow extends JFrame {
          modes.add(old);
          modes.setMaximumSize(new Dimension(inner, 40));
 
-         for (JComponent c : new JComponent[] {picture, name, tags, hint, warning, modes, record, play, buttons}) {
+         for (JComponent c : new JComponent[] {picture, name, tags, hint, warning, modes, record, play, buttons, startRow}) {
             c.setAlignmentX(Component.LEFT_ALIGNMENT);
          }
          add(picture);
@@ -707,6 +754,8 @@ public final class LauncherWindow extends JFrame {
          add(play);
          add(Box.createVerticalStrut(10));
          add(buttons);
+         add(Box.createVerticalStrut(8));
+         add(startRow);
       }
 
       private void fixed(JComponent c, int w, int h) {
@@ -741,6 +790,20 @@ public final class LauncherWindow extends JFrame {
          play.setText(on ? "Running..." : playsOld ? "Play it as first restored" : "Play " + a.name);
          play.setEnabled(!on);
          play.setFill(warn != null ? new Color(0xc9822a) : playsOld ? Ui.THEN_FILL : Ui.ACCENT);
+         startRow.setVisible(start != null && StartMenu.allowed(a));
+         if (start != null) {
+            boolean in = start.has(a);
+            long all = apps.stream().filter(StartMenu::allowed).count();
+            boolean allIn = apps.stream().filter(StartMenu::allowed).allMatch(start::has);
+            pin.setText(in ? "Remove from Start menu" : "Add to Start menu");
+            pin.setToolTipText(in ? "Takes the shortcut out of the Windows Start menu (Alt+M)"
+               : "Puts " + a.name + " in the Windows Start menu, so Windows search starts it without the launcher (Alt+M)");
+            pinAll.setText(allIn ? "Remove all" : "Add all " + all);
+            pinAll.setToolTipText(allIn ? "Takes every app out of the Start menu"
+               : "Puts every app in the Start menu, in an " + StartMenu.FOLDER + " folder (not the two that press real keys)");
+            pin.setEnabled(!startBusy);
+            pinAll.setEnabled(!startBusy);
+         }
          revalidate();
          repaint();
       }

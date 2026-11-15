@@ -65,6 +65,8 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 
 With no app name, `./run.ps1 old` asks whether to open the launcher or the site. Enter opens the [Launcher](Launcher/README.md): all 20 apps as cards with their pictures, filters for games, music, toys, tools and the apps that press real keys, a search field that has the keyboard from the start, and Enter to play. It remembers what you launched (in `~/.oldjava-launcher.txt`), opens on the last one, marks the rest New, and Pick for me plays one you have not tried. Apps that press real keys (Windows, WindowsE) say so with a Real keys chip and ask first. It reads the apps' names, hints and thumbnails from `web/src/shared/apps.json`, the list the web gallery is rendered from, so both front doors describe them the same way.
 
+On Windows the launcher can also put the apps in the Start menu (Add to Start menu, or Add all 18): after that, the Windows key and an app's name play it without opening the launcher.
+
 S (or `./run.ps1 old Site`) serves the [web site](web/README.md) instead: it builds `web/target/site` with Maven when it is missing (or with `-Build`), asks for the port (Enter for 8000), serves it with PowerShell (`web/serve.ps1`) and opens it in the browser. Ctrl+C stops the server.
 
 The launcher's Then button (Alt+T) plays any app as it was first restored, the version the web site's Then pages run, on the desktop: it unpacks that commit from git history into `out/then` and runs it with that commit's own `run.ps1`, next to today's version if you like. In Then mode each app shows its lines of Java then and now, and History (Alt+H) lists every change since.

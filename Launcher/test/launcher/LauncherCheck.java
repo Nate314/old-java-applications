@@ -178,6 +178,35 @@ public class LauncherCheck {
       String artScript = new String(Files.readAllBytes(root.resolve("web/art.ps1")), StandardCharsets.UTF_8);
       for (String art : ThenCopy.ART) check(artScript.contains("Out = '" + art + "'"), art + " is rendered by web/art.ps1");
 
+      // Start menu: every app but the two that press real keys gets a shortcut with its own file name, which runs
+      // run.ps1 by its full path; the icon file is one 256 px PNG; Remove deletes the shortcuts, icons and folder.
+      Path menu = Files.createTempDirectory("startmenu");
+      StartMenu start = new StartMenu("powershell", Paths.get("."), menu.resolve(StartMenu.FOLDER), menu.resolve("icons"));
+      java.util.Set<Path> links = new java.util.HashSet<>();
+      for (Catalog.App a : apps) {
+         check(StartMenu.allowed(a) == !a.pressesKeys(), a.id + " Start menu shortcut only without real keys");
+         if (StartMenu.allowed(a)) links.add(start.link(a));
+      }
+      check(links.size() == 18, "18 distinct shortcut names");
+      check(start.link(find(apps, "RubiksCube2D")).getFileName().toString().equals("Rubik's Cube 2D.lnk"), "shortcut named after the app");
+      String startArgs = StartMenu.arguments(root, "Clock");
+      check(startArgs.contains("-File \"" + root.resolve("run.ps1") + "\"") && startArgs.endsWith(" old Clock"), "shortcut runs run.ps1 old: " + startArgs);
+      byte[] ico = StartMenu.ico(StartMenu.icon(new java.awt.image.BufferedImage(427, 456, java.awt.image.BufferedImage.TYPE_INT_ARGB), Ui.ACCENT));
+      java.nio.ByteBuffer icoHead = java.nio.ByteBuffer.wrap(ico).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+      check(icoHead.getShort(2) == 1 && icoHead.getShort(4) == 1 && icoHead.getInt(14) == ico.length - 22 && icoHead.getInt(18) == 22, "ico header");
+      java.awt.image.BufferedImage iconPng = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(ico, 22, ico.length - 22));
+      check(iconPng.getWidth() == 256 && iconPng.getHeight() == 256, "ico holds a 256 px PNG");
+      Catalog.App clock = find(apps, "Clock");
+      Files.createDirectories(start.folder);
+      Files.createDirectories(menu.resolve("icons"));
+      Files.write(start.link(clock), new byte[] {1});
+      Files.write(menu.resolve("icons/Clock.ico"), ico);
+      check(start.has(clock) && !start.has(find(apps, "TankGame")), "has a shortcut");
+      start.remove(List.of(clock));
+      check(!start.has(clock) && !Files.exists(start.folder) && !Files.exists(menu.resolve("icons/Clock.ico")), "remove cleans up");
+      Files.delete(menu.resolve("icons"));
+      Files.delete(menu);
+
       System.out.println("LauncherCheck: all checks passed");
    }
 
