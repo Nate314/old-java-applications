@@ -159,9 +159,12 @@ final class WindowsKey extends JButton {
       g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
       g.setColor(BACK);
       g.fillRect(0, 0, this.getWidth(), this.getHeight());
+      // Drawn at the small size and scaled, so a bigger key is the same key, bigger.
+      double s = this.getWidth() / (double) Test.WIDTH;
+      g.scale(s, s);
       g.translate(MARGIN, MARGIN);
-      int w = this.getWidth() - 2 * MARGIN;
-      int h = this.getHeight() - 2 * MARGIN;
+      int w = (int) Math.round(this.getWidth() / s) - 2 * MARGIN;
+      int h = (int) Math.round(this.getHeight() / s) - 2 * MARGIN;
       int sink = this.down ? 4 : 0;
       g.setColor(this.down ? ACCENT_SIDE : SIDE);
       g.fillRoundRect(0, 5, w, h - 5, 16, 16);

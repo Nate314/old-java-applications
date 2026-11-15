@@ -127,9 +127,17 @@ final class ShortcutShelf extends JButton {
       this.keys.release(WindowsKey.WIN);
    }
 
-   /** Where the i-th shortcut is drawn: a whole row for the first four, a quarter of the last row for an arrow. */
+   /** How much bigger than the small key's shelf this one is (the window's size picks it). */
+   double scale() {
+      return this.getWidth() > 0 ? this.getWidth() / (double) Test.WIDTH : 1;
+   }
+
+   /**
+    * Where the i-th shortcut is drawn, at the small size (see {@link #scale}): a whole row for the first four, a
+    * quarter of the last row for an arrow.
+    */
    Rectangle rect(int i) {
-      int w = this.getWidth() - 2 * PAD;
+      int w = (int) Math.round(this.getWidth() / this.scale()) - 2 * PAD;
       if (i < ROWS) {
          return new Rectangle(PAD, PAD + i * ROW, w, ROW - 3);
       }
@@ -137,10 +145,11 @@ final class ShortcutShelf extends JButton {
       return new Rectangle(PAD + (i - ROWS) * (cap + PAD), PAD + ROWS * ROW + 2, cap, ROW - 5);
    }
 
-   /** The shortcut at (x, y), or -1. */
+   /** The shortcut at (x, y) on the screen, or -1. */
    int at(int x, int y) {
+      double s = this.scale();
       for (int i = 0; i < CODES.length; i++) {
-         if (this.rect(i).contains(x, y)) {
+         if (this.rect(i).contains((int) (x / s), (int) (y / s))) {
             return i;
          }
       }
@@ -177,6 +186,7 @@ final class ShortcutShelf extends JButton {
       g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
       g.setColor(WindowsKey.BACK);
       g.fillRect(0, 0, this.getWidth(), this.getHeight());
+      g.scale(this.scale(), this.scale());
       Font capFont = new Font("SansSerif", Font.BOLD, 11);
       Font nameFont = new Font("SansSerif", Font.PLAIN, 11);
       boolean focus = this.isFocusOwner();

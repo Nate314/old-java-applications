@@ -3,6 +3,7 @@ package test;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JFrame;
@@ -97,10 +98,41 @@ public class WindowsKeyCheck {
          check(shelf.picked() == ShortcutShelf.count() - 1, "Up from the first wraps round to the last");
          BufferedImage image = new BufferedImage(Test.WIDTH, ShortcutShelf.HEIGHT, BufferedImage.TYPE_INT_ARGB);
          shelf.paint(image.getGraphics());
+         // The large key's shelf: the same shortcuts, twice as big, found where they are drawn.
+         ShortcutShelf big = new ShortcutShelf(keys);
+         big.setSize(2 * Test.WIDTH, 2 * ShortcutShelf.HEIGHT);
+         for (int i = 0; i < ShortcutShelf.count(); i++) {
+            java.awt.Rectangle r = big.rect(i);
+            log.clear();
+            click(big, 2 * r.x + r.width, 2 * r.y + r.height, 2 * r.x + r.width, 2 * r.y + r.height);
+            int code = ShortcutShelf.code(i);
+            check(log.equals(List.of("+" + win, "+" + code, "-" + code, "-" + win)), "on the large shelf, shortcut " + i + " makes Win+" + code + ": " + log);
+         }
+         image = new BufferedImage(big.getWidth(), big.getHeight(), BufferedImage.TYPE_INT_ARGB);
+         big.paint(image.getGraphics());
+         key.setSize(2 * Test.WIDTH, 2 * (Test.HEIGHT - 24));
+         paint(key);
       });
+      // Where the key was left: kept in a file of its own, damaged or missing lines falling back to the defaults.
+      File file = File.createTempFile("windows-key", ".txt");
+      file.deleteOnExit();
+      Placement fresh = Placement.load(new File(file.getPath() + ".missing"));
+      check(fresh.x == -1 && fresh.bottom == -1 && fresh.size == 0 && !fresh.shelf, "no file: the defaults");
+      Placement left = new Placement();
+      left.x = 300;
+      left.bottom = 500;
+      left.size = 2;
+      left.shelf = true;
+      left.save(file);
+      Placement back = Placement.load(file);
+      check(back.x == 300 && back.bottom == 500 && back.size == 2 && back.shelf && back.scale() == 2, "a place comes back as it was saved");
+      java.nio.file.Files.write(file.toPath(), "x=12\nbottom=oops\nsize=9\nshelf=on\njunk\n".getBytes("utf-8"));
+      back = Placement.load(file);
+      check(back.x == -1 && back.bottom == -1 && back.size == 0 && back.shelf, "damaged lines are skipped, half a place is none");
       if (!java.awt.GraphicsEnvironment.isHeadless()) {
          SwingUtilities.invokeAndWait(() -> {
-            JFrame frame = Test.open(keys);
+            file.delete();
+            JFrame frame = Test.open(keys, file);
             check(frame.isAlwaysOnTop() && !frame.getFocusableWindowState() && frame.isUndecorated(),
                "the window stays on top, borderless, without taking the keyboard");
             check(!frame.isVisible() && frame.getWidth() == Test.WIDTH, "open() builds it without showing it");
@@ -119,7 +151,45 @@ public class WindowsKeyCheck {
             }
             more.doClick();
             check(frame.getHeight() == Test.HEIGHT && frame.getY() + frame.getHeight() == bottom && !shelf.isVisible(), "and close again");
+            check(Placement.load(file).x == frame.getX() && Placement.load(file).bottom == bottom, "the place is kept once the user acts");
+            javax.swing.JButton size = find(frame.getContentPane(), Test.KEY_SIZE + "Small, click for Medium");
+            int right = frame.getX() + frame.getWidth();
+            size.doClick();
+            check(frame.getWidth() == Math.round(Test.WIDTH * 1.5) && frame.getHeight() == Math.round(Test.HEIGHT * 1.5)
+               && frame.getX() + frame.getWidth() == right && frame.getY() + frame.getHeight() == bottom,
+               "Medium makes it half again as big, its bottom right corner kept: " + frame.getBounds());
+            check(Test.KEY_SIZE.concat("Medium, click for Large").equals(size.getAccessibleContext().getAccessibleName()), "the size button says what it is");
+            size.doClick();
+            more.doClick();
+            check(frame.getWidth() == 2 * Test.WIDTH && frame.getHeight() == 2 * (Test.HEIGHT + ShortcutShelf.HEIGHT), "Large, with the shelf: " + frame.getBounds());
+            frame.validate();
+            check(shelf.getWidth() == 2 * Test.WIDTH && shelf.getHeight() == 2 * ShortcutShelf.HEIGHT, "the large shelf is twice as big: " + shelf.getSize());
+            if (System.getProperty("bigshot") != null) {
+               shot(frame, System.getProperty("bigshot"));
+            }
+            java.awt.Rectangle was = frame.getBounds();
             frame.dispose();
+            // Opened again, it is where it was left, as big, with the shelf open.
+            JFrame again = Test.open(keys, file);
+            check(again.getBounds().equals(was) && find(again.getContentPane(), Test.HIDE_SHORTCUTS) != null,
+               "opened again, it comes back as it was left: " + again.getBounds() + " vs " + was);
+            again.dispose();
+            // Left off the screen (a smaller screen since), it comes back whole on this one.
+            Placement off = new Placement();
+            off.x = 100000;
+            off.bottom = 100000;
+            off.save(file);
+            JFrame lost = Test.open(keys, file);
+            java.awt.Dimension screen = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+            check(lost.getX() + lost.getWidth() == screen.width && lost.getY() + lost.getHeight() == screen.height,
+               "a place off the screen is brought back onto it: " + lost.getBounds());
+            lost.dispose();
+            off.x = 0;
+            off.bottom = 10;
+            off.save(file);
+            lost = Test.open(keys, file);
+            check(lost.getX() == 0 && lost.getY() == 0, "and so is one above it: " + lost.getBounds());
+            lost.dispose();
          });
       }
       System.out.println("WindowsKeyCheck: all checks passed");
