@@ -78,6 +78,8 @@ public class Main extends JFrame {
 		Component tab = tpane.getSelectedComponent();
 		if (event.getID() == KeyEvent.KEY_RELEASED && tab == finder) {
 			finder.keyReleased(event);
+		} else if (event.getID() == KeyEvent.KEY_RELEASED && tab == songwriter) {
+			songwriter.keyReleased(event);
 		}
 		return event.getID() == KeyEvent.KEY_PRESSED && (tab == trainer && trainer.keyPressed(event)
 				|| tab == songwriter && songwriter.keyPressed(event) || tab == finder && finder.keyPressed(event));
