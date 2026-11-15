@@ -14,7 +14,8 @@ A keyboard of Windows shortcuts that presses the one you pick as many times as y
   - **Up** (Max): Win+Up, maximizes the window in front.
   - **Down**: Win+Down, restores the window in front, or minimizes it.
 - **Press it ... times**: how many times (10 when E is picked, 1 for the others). Enter in the field does the same as the button.
-- **"DO IT!!!"**: holds the Windows key, taps the picked key that many times 100 ms apart (on a Swing timer, so the window stays responsive), then releases the Windows key; the Windows key alone is tapped that many times. While it runs, the Windows key and the picked key go down on the drawn keyboard, a count shows above it, and the button reads **Stop**, which ends it early and lets go of the Windows key. If the count is not a whole number of 1 or more, the title says so.
+- **"DO IT!!!"**: presses the picked shortcut that many times, 100 ms apart (on a Swing timer, so the window stays responsive). Each press holds the Windows key only around its own key (Windows down, E down, E up, Windows up), so between presses the Windows key is up and anything typed meanwhile stays an ordinary key; the Windows key alone is tapped. While it runs, the Windows key and the other key go down on the drawn keyboard with each press, a count shows above it, and the button reads **Stop**, which ends it early. If the count is not a whole number of 1 or more, the title says so.
+- **Steps**: **Add step** puts the picked shortcut, with the field's count, on the list shown above the keyboard (up to 8 steps; past the window's edge it says "+2 more"), and DO IT!!! then presses the whole list in order instead, lighting the step being pressed. **Clear** empties it. **Side by side** lists Win+E, Win+Left, Win+E, Win+Right: two File Explorer windows, one on each half of the screen.
 - The window is not resizable. Title "Windows+E". No command-line arguments.
 
 On the desktop these are the real shortcuts, so the window in front is usually Windows+E itself: Win+Left snaps it, Win+D hides it with everything else.
@@ -22,16 +23,17 @@ On the desktop these are the real shortcuts, so the window in front is usually W
 ## Code layout
 
 - `src/windowse/WindowsEMain.java`: entry point; shows a `WindowsEWindow` that presses keys with `RobotKeys`.
-- `src/windowse/WindowsEWindow.java`: the keyboard, the field and the button.
-- `src/windowse/ShortcutBoard.java`: draws the keyboard (the keys without a shortcut, dimmed), the picked shortcut and the count, and places a `KeyCap` on each shortcut's key.
+- `src/windowse/WindowsEWindow.java`: the keyboard, the field, the list of steps and the buttons.
+- `src/windowse/ShortcutBoard.java`: draws the keyboard (the keys without a shortcut, dimmed), the picked shortcut, the list of steps and the count, and places a `KeyCap` on each shortcut's key.
 - `src/windowse/KeyCap.java`: one shortcut's key, a button that draws itself as a keycap (picked, pushed down, hovered), with a screen reader name.
 - `src/windowse/Shortcut.java`: the shortcuts: key code, legend, caption, name, what it does and the count it offers.
-- `src/windowse/WindowsEPresser.java`: presses a shortcut a number of times on a Swing timer, and stops early.
+- `src/windowse/Step.java`: one step of the list: a shortcut and how many times.
+- `src/windowse/WindowsEPresser.java`: presses a list of steps on a Swing timer, and stops early.
 - `src/windowse/Keys.java`, `src/windowse/RobotKeys.java`: where the presses go; `RobotKeys` sends them with `java.awt.Robot`.
 
 ## Self-check
 
-`test/windowse/WindowsECheck.java` presses the shortcuts into a key list instead of `java.awt.Robot`, so nothing reaches the real keyboard: Win+E three times holds Windows once around three E taps, the Windows key alone is tapped, Win+Tab and Win+Left send their keys, Stop after two presses lets go of Windows, the done callback runs once, and every shortcut is described. From `WindowsE/`:
+`test/windowse/WindowsECheck.java` presses the shortcuts into a key list instead of `java.awt.Robot`, so nothing reaches the real keyboard: Win+E three times lets go of Windows after each E, the Windows key alone is tapped, Win+Tab and Win+Left send their keys, Stop after two presses stops there, Side by side and a mixed list are pressed in order, the done callback runs once, and every shortcut is described. From `WindowsE/`:
 
 ```
 javac -d ../out/check/WindowsE src/windowse/*.java test/windowse/*.java
@@ -53,4 +55,5 @@ The web build runs the same code on a page with a pretend Windows (see [web/READ
 - Win+D hides the File Explorer windows (and the Start menu, Run box and task view), and pressed again brings them back; the tray's Show desktop button does the same.
 - Win+R opens a Run box at the bottom left: type an app's name (or the start of it) and Enter plays it; `explorer` opens File Explorer.
 - Win+Tab shows task view: every File Explorer window as a small copy of itself, to bring to the front (minimized ones too) or close.
+- Side by side opens two File Explorer windows and snaps them to the two halves of the stage.
 - Win+Left and Win+Right snap the window in front to a half of the stage (the other way puts it back), Win+Up maximizes it, Win+Down puts a snapped or maximized window back and minimizes one that is not.
