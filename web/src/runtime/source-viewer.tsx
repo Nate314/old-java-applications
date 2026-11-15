@@ -1,7 +1,8 @@
 import { createElement, Fragment, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { embedded } from './skin';
 import { news } from './band-news';
-import { replay, replayNow } from './replay';
+import { replay } from './replay';
+import { ExitRecap } from './exit-recap';
 import { played } from './passport';
 import { appId, catalog, type CatalogApp } from './catalog';
 import { JAR_KEYS, JAR_KEYS_LABEL, NO_QUIRKS, eraPage, indexOf, isThen, picks, quirks, sourceDir } from './then-and-now';
@@ -370,7 +371,6 @@ export function exitScreen(msg: string) {
 function ExitScreen({ msg, replayLive }: { msg: string; replayLive: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const share = useRef<HTMLButtonElement>(null);
-  const again = useRef<HTMLButtonElement>(null);
   const [found, setFound] = useState<{ apps: CatalogApp[]; next: CatalogApp[] } | null>(null);
   useOwnKeys(box);
   useLayoutEffect(() => { box.current!.querySelector('button')!.focus(); }, []);
@@ -378,15 +378,11 @@ function ExitScreen({ msg, replayLive }: { msg: string; replayLive: boolean }) {
   const app = found ? found.apps[indexOf(found.apps, appId())] : null;
   const next = found ? found.next : [];
   return (
-    <Overlay text={msg} button="Run again" className="shim-exit" boxRef={box} before={app && <h2>{app.name + ' has closed'}</h2>}>
+    <Overlay text={msg} button="Run again" className="shim-exit" boxRef={box} before={<ExitRecap name={app && app.name} replayLive={replayLive} />}>
       {!embedded && <a className="shim-exit-home" href="../index.html">All apps</a>}
       <button type="button" className="shim-exit-share" data-sound="none" ref={share} onClick={() => openShare(appId(), share.current)}>{'↗ Share'}</button>
       {app && app.then && !embedded && (   // the player has its own Then | Now switch
         <a className="shim-exit-era" href={eraPage(!isThen())}>{isThen() ? 'Play today’s version' : 'Play it as first restored'}</a>
-      )}
-      {replayLive && (   // the last moments before it closed
-        <button type="button" className="shim-exit-share" data-sound="none" title="Watch, save or share the last moments of play"
-          ref={again} onClick={() => replayNow(again.current)}>{'⟲ Replay'}</button>
       )}
       {next.length > 0 && (
         <>

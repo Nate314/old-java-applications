@@ -83,6 +83,7 @@ import { init as toolbarMore } from './toolbar-more';
 import { init as stageGlow } from './stage-glow';
 import { init as slowMo } from './slow-mo';
 import { init as keptKeys } from './kept-keys';
+import { init as exitRecap } from './exit-recap';
 
 // In the order boot.js ran them.
 skin();
@@ -117,3 +118,4 @@ toolbarMore();
 stageGlow();
 slowMo();
 keptKeys();
+exitRecap();

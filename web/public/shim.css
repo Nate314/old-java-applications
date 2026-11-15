@@ -5670,3 +5670,109 @@ html[data-saver] * {
   border-color: var(--accent);
   color: #fff;
 }
+
+/* ---- exit recap (exit-recap.tsx): the run that just ended, at the top of the exit screen ---- */
+/* The clip arrives after Run again has the focus: the box stays at its top instead of following the button down. */
+.shim-exit {
+  overflow-anchor: none;
+}
+
+/* On an app page the box fits under the toolbar band, so the recap at its top is not hidden behind it. */
+:root[data-stage] .shim-overlay:has(.shim-exit) {
+  top: var(--bar-h, 0px);
+}
+
+:root[data-stage] .shim-exit {
+  max-height: calc(100vh - var(--bar-h, 0px) - 32px);
+}
+
+.shim-recap {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 0 0 14px;
+  text-align: left;
+}
+
+.shim-recap:not(.clip) {
+  justify-content: center;
+  text-align: center;
+}
+
+.shim-recap-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.shim-exit .shim-recap h2 {
+  margin: 0 0 6px;
+}
+
+.shim-exit .shim-recap p {
+  margin: 0 0 4px;
+  opacity: 0.85;
+}
+
+.shim-recap-record strong {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shim-recap-record.moved {
+  opacity: 1 !important;
+  font-weight: 600;
+}
+
+.shim-exit .shim-recap-clip {
+  position: relative;
+  flex: 0 0 46%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: #000;
+  line-height: 0;
+}
+
+.shim-recap-clip video {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+
+.shim-recap-clip span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 8px 6px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.shim-recap-clip:hover,
+.shim-recap-clip:focus-visible {
+  border-color: var(--accent);
+}
+
+@media (max-width: 520px) {
+  .shim-recap.clip {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .shim-recap-clip video {
+    max-height: 150px;
+  }
+}
