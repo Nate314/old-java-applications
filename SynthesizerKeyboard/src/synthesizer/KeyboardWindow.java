@@ -22,6 +22,7 @@ import javax.swing.Timer;
  * With the microphone on (I, or its button), notes sung, whistled or played on a real instrument count like keys.
  * The looper (O) records two bars at a time into up to four layers that play round and round under the keys.
  * With chord keys on (Q, or its button), each key plays its chord (see Chord).
+ * During a lesson a backing (A, or its pill over the falling notes) plays the song's chords under it (see Backing).
  */
 public final class KeyboardWindow extends JFrame implements KeyListener {
    private static final int MOUSE = -1;
@@ -31,6 +32,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private static final int[] FANFARE = {0, 4, 7, 12};
    /** The microphone ignores what it hears until the keyboard's own notes have been silent this long. */
    private static final int ECHO_MILLIS = 500;
+   /** The backing's channel, clear of the keys (0), the looper's layers (1 to 4) and the click (9). */
+   private static final int BACKING_CHANNEL = 5;
+   private static final int BACKING_VELOCITY = 58;
    private final MidiPlayer midiPlayer = new MidiPlayer();
    private final SongRecords records = SongRecords.load(new File(System.getProperty("user.home"), ".synthesizer-songs.txt"));
    private final PianoPanel piano = new PianoPanel();
@@ -109,6 +113,11 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private boolean looping;
    /** Whether Clear was pressed once and waits for a second press to delete every layer. */
    private boolean clearArmed;
+   /** Whether lessons are backed by their chords; the chords of the lesson's song, and the MIDI notes sounding (none: empty). */
+   private boolean backing = true;
+   private int[] backingChords;
+   private int[] backingNotes = new int[0];
+   private int backingChord = -1;
 
    /** {@code friendCode} is the code of a tune a friend sent (null for none); {@code page} as in the field. */
    public KeyboardWindow(String page, String friendCode) {
@@ -135,7 +144,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          @Override
          public void mousePressed(MouseEvent event) {
             int key = KeyboardWindow.this.piano.keyAt(event.getX(), event.getY());
-            if (key >= 0) {
+            if (KeyboardWindow.this.piano.backingAt(event.getX(), event.getY())) {
+               KeyboardWindow.this.toggleBacking();
+            } else if (key >= 0) {
                KeyboardWindow.this.press(MOUSE, key);
             }
          }
@@ -413,6 +424,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    public void dispose() {
       this.microphone.stop();
       this.looper.stop();
+      this.stopBacking();
       super.dispose();
    }
 
@@ -421,6 +433,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (this.mic == LessonBar.MIC_OFF || this.mic == LessonBar.MIC_FAILED) {
          this.micState(LessonBar.MIC_ASKING);
          this.bar.setNotice(null);
+         this.stopBacking();
          this.microphone.start();
       } else {
          this.microphone.stop();
@@ -431,6 +444,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
 
    private void micState(int state) {
       this.mic = state;
+      this.piano.setBacking(this.backing, this.micListening(), this.backingChord);
       this.bar.setMic(state, -1, 0);
       this.piano.setHeard(-1);
    }
@@ -474,6 +488,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       }
       if (this.lesson != null && !this.lesson.finished()) {
          if (this.lesson.press(key)) {
+            this.backChord(this.lesson.position() - 1);
             this.piano.follow(this.lesson.position(), FOLLOW_MILLIS);
          } else {
             this.piano.miss(key);
@@ -481,6 +496,12 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          if (this.lesson.finished()) {
             this.newBest = this.lesson.song().id() != null && this.records.add(this.lesson);
             this.fanfare();
+            // The last chord rings on under the fanfare.
+            later(1200, () -> {
+               if (this.lesson != null && this.lesson.finished()) {
+                  this.stopBacking();
+               }
+            });
          }
       }
       this.refresh();
@@ -513,6 +534,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.bar.setNotice(null);
       boolean hadLesson = this.lesson != null;
       this.lesson = index < 0 ? null : new Lesson(this.menu()[index]);
+      this.stopBacking();
+      this.backingChords = this.lesson == null ? null : Backing.chords(this.lesson.song());
       this.piano.setSong(this.lesson == null ? null : this.lesson.song());
       if (hadLesson != (this.lesson != null)) {
          // The falling notes get room of their own, so the keys keep their size.
@@ -555,6 +578,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.listenKey = song.key(note);
       this.listenMidi = this.midiNote(this.listenKey);
       this.midiPlayer.noteOn(this.listenMidi);
+      this.backChord(note);
       this.piano.setPressed(this.listenKey, true);
       this.piano.play(note, millis);
       this.refresh();
@@ -605,9 +629,49 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.endListenNote();
       if (this.listenNote >= 0) {
          this.listenNote = -1;
+         // The lesson goes back to where it was; its chord sounds again with the next right note.
+         this.stopBacking();
          this.piano.follow(this.lesson.position(), FOLLOW_MILLIS * 2);
          this.refresh();
       }
+   }
+
+   private boolean micListening() {
+      return this.mic == LessonBar.MIC_ASKING || this.mic == LessonBar.MIC_ON;
+   }
+
+   /** Sounds the chord the song has at note {@code note}, unless it is sounding already; the backing rests while the microphone listens. */
+   private void backChord(int note) {
+      int chord = this.backingChords == null ? -1 : Backing.at(this.backingChords, note);
+      if (!this.backing || this.micListening() || chord == this.backingChord) {
+         return;
+      }
+      this.stopBacking();
+      this.backingChord = chord;
+      this.backingNotes = chord < 0 ? new int[0] : Backing.notes(chord, this.midiNote(0));
+      for (int midi : this.backingNotes) {
+         this.midiPlayer.noteOn(BACKING_CHANNEL, midi, BACKING_VELOCITY);
+      }
+      this.piano.setBacking(this.backing, false, chord);
+   }
+
+   private void stopBacking() {
+      for (int midi : this.backingNotes) {
+         this.midiPlayer.noteOff(BACKING_CHANNEL, midi);
+      }
+      this.backingNotes = new int[0];
+      this.backingChord = -1;
+      this.piano.setBacking(this.backing, this.micListening(), -1);
+   }
+
+   /** Turns the backing on or off; turned on mid-song, it joins in at once on the chord of the note just played. */
+   private void toggleBacking() {
+      this.backing = !this.backing;
+      this.stopBacking();
+      if (this.backing && this.lesson != null && this.lesson.position() > 0 && !this.lesson.finished()) {
+         this.backChord(this.lesson.position() - 1);
+      }
+      this.bar.setNotice(this.backing ? (this.micListening() ? "Backing on: it rests while the microphone listens" : "Backing on: the song's chords play under you") : "Backing off");
    }
 
    /** A quick rising arpeggio when a song is finished. */
@@ -654,6 +718,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.toggleMic();
       } else if (keyCode == KeyEvent.VK_Q) {
          this.toggleChords();
+      } else if (keyCode == KeyEvent.VK_A) {
+         this.toggleBacking();
       } else if (keyCode == KeyEvent.VK_LEFT && this.octaveShift > -5) {
          this.octaveShift--;
       } else if (keyCode == KeyEvent.VK_RIGHT && this.octaveShift < 4) {
