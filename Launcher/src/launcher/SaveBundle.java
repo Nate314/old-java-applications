@@ -45,6 +45,7 @@ public final class SaveBundle {
       FILES.put("CircleSpawner", List.of(".circlespawner.txt"));
       FILES.put("NathaNOS", List.of(".nathanos.txt", ".nathanos-pictures.txt"));
       FILES.put("SimpleAlgorithms", List.of(".simplealgorithms-paths.txt"));
+      FILES.put("Windows", List.of(".windows-key.txt"));
    }
 
    /** App -> (web path -> contents), in a stable order. */

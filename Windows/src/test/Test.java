@@ -11,6 +11,7 @@ import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -28,6 +29,8 @@ public class Test {
    static final int HEIGHT = 138;
    private static final Color BAR = new Color(36, 38, 46);
    static final String SHOW_SHORTCUTS = "Show shortcuts";
+   static final String HIDE_SHORTCUTS = "Hide shortcuts";
+   static final String KEY_SIZE = "Key size: ";
 
    public static void main(String[] args) throws Exception {
       Robot robot = new Robot();
@@ -44,7 +47,7 @@ public class Test {
          public void release(int keyCode) {
             robot.keyRelease(keyCode);
          }
-      }).setVisible(true));
+      }, Placement.FILE).setVisible(true));
    }
 
    /**
@@ -58,7 +61,8 @@ public class Test {
             g.setColor(BAR);
             g.fillRect(0, 0, this.getWidth(), this.getHeight());
             g.setColor(new Color(236, 239, 244));
-            g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            // The sign grows with the strip, which grows with the key's size.
+            g.setFont(new Font("SansSerif", Font.PLAIN, Math.round(13f * this.getHeight() / 24)));
             String s = sign.get();
             FontMetrics m = g.getFontMetrics();
             g.drawString(s, (this.getWidth() - m.stringWidth(s)) / 2, (this.getHeight() + m.getAscent()) / 2 - 2);
@@ -74,12 +78,18 @@ public class Test {
       return button;
    }
 
-   /** The key's window, at the lower right of the screen above the taskbar, not yet shown. */
-   static JFrame open(WindowsKey.Keys keys) {
+   /**
+    * The key's window, not yet shown: where the user left it, at the size they picked and with the shelf as it was
+    * (from that file, which every move, resize and shelf change rewrites), or else small at the lower right of the
+    * screen above the taskbar.
+    */
+   static JFrame open(WindowsKey.Keys keys, File file) {
       JFrame frame = new JFrame(TITLE);
+      // After the first component: in the browser, that is what puts the saved files in place.
+      Placement place = Placement.load(file);
       WindowsKey key = new WindowsKey(keys);
       JPanel grip = new JPanel(new BorderLayout());
-      JLabel name = new JLabel("  " + TITLE);
+      JLabel name = new JLabel(" Windows");
       JButton close = stripButton(() -> "×");
       grip.setBackground(BAR);
       name.setForeground(new Color(170, 176, 190));
@@ -91,31 +101,70 @@ public class Test {
          System.exit(0);
       });
       ShortcutShelf shelf = new ShortcutShelf(keys);
-      shelf.setVisible(false);
+      shelf.setVisible(place.shelf);
       JButton more = stripButton(() -> shelf.isVisible() ? "▾" : "▴");
       more.setToolTipText("Shortcuts");
-      more.getAccessibleContext().setAccessibleName(SHOW_SHORTCUTS);
+      more.getAccessibleContext().setAccessibleName(place.shelf ? HIDE_SHORTCUTS : SHOW_SHORTCUTS);
+      // + makes the key bigger; at the largest, - takes it back to the smallest.
+      JButton size = stripButton(() -> place.size + 1 < Placement.SCALES.length ? "+" : "−");
+      Runnable nameSize = () -> {
+         String now = Placement.SIZE_NAMES[place.size];
+         String next = Placement.SIZE_NAMES[(place.size + 1) % Placement.SCALES.length];
+         size.setToolTipText("Key size: " + now + ". Click for " + next);
+         size.getAccessibleContext().setAccessibleName(KEY_SIZE + now + ", click for " + next);
+      };
+      nameSize.run();
+      JButton[] signs = {size, more, close};
+      // Sizes everything for the scale picked and puts the window back on the screen, its bottom right corner kept.
+      Runnable fit = () -> {
+         double s = place.scale();
+         int w = (int) Math.round(WIDTH * s);
+         int h = (int) Math.round((shelf.isVisible() ? HEIGHT + ShortcutShelf.HEIGHT : HEIGHT) * s);
+         grip.setPreferredSize(new Dimension(w, (int) Math.round(24 * s)));
+         for (JButton b : signs) {
+            b.setPreferredSize(new Dimension((int) Math.round(22 * s), (int) Math.round(24 * s)));
+            // Their signs change with the shelf and the size, and the shim repaints a button only when asked.
+            b.repaint();
+         }
+         name.setFont(new Font("SansSerif", Font.PLAIN, (int) Math.round(11 * s)));
+         shelf.setPreferredSize(new Dimension(w, (int) Math.round(ShortcutShelf.HEIGHT * s)));
+         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+         int x = Math.max(0, Math.min(frame.getX() + frame.getWidth() - w, screen.width - w));
+         int y = Math.max(0, Math.min(frame.getY() + frame.getHeight(), screen.height) - h);
+         frame.setBounds(x, y, w, h);
+         frame.validate();
+         frame.repaint();
+      };
+      Runnable keep = () -> {
+         place.x = frame.getX();
+         place.bottom = frame.getY() + frame.getHeight();
+         place.shelf = shelf.isVisible();
+         place.save(file);
+      };
       more.addActionListener(e -> {
          boolean show = !shelf.isVisible();
          shelf.setVisible(show);
-         more.getAccessibleContext().setAccessibleName(show ? "Hide shortcuts" : SHOW_SHORTCUTS);
+         more.getAccessibleContext().setAccessibleName(show ? HIDE_SHORTCUTS : SHOW_SHORTCUTS);
          // The shelf opens upward, so the key stays where it was, above the taskbar.
-         int h = show ? HEIGHT + ShortcutShelf.HEIGHT : HEIGHT;
-         frame.setBounds(frame.getX(), Math.max(0, frame.getY() + frame.getHeight() - h), WIDTH, h);
-         frame.validate();
-         frame.repaint();
-         more.repaint();
+         fit.run();
+         keep.run();
+      });
+      size.addActionListener(e -> {
+         place.size = (place.size + 1) % Placement.SCALES.length;
+         nameSize.run();
+         fit.run();
+         keep.run();
       });
       JPanel buttons = new JPanel(new BorderLayout());
       buttons.setBackground(BAR);
-      buttons.add(more, BorderLayout.WEST);
+      buttons.add(size, BorderLayout.WEST);
+      buttons.add(more, BorderLayout.CENTER);
       buttons.add(close, BorderLayout.EAST);
       grip.add(name, BorderLayout.CENTER);
       grip.add(buttons, BorderLayout.EAST);
       JPanel top = new JPanel(new BorderLayout());
       top.add(grip, BorderLayout.NORTH);
       top.add(shelf, BorderLayout.CENTER);
-      grip.setPreferredSize(new Dimension(WIDTH, 24));
       // No title bar, so the strip above the key moves the window.
       MouseAdapter drag = new MouseAdapter() {
          private int x;
@@ -131,6 +180,13 @@ public class Test {
          public void mouseDragged(MouseEvent e) {
             frame.setLocation(frame.getX() + e.getX() - this.x, frame.getY() + e.getY() - this.y);
          }
+
+         @Override
+         public void mouseReleased(MouseEvent e) {
+            // Dropped partly off the screen, it comes back whole; then it is remembered there.
+            fit.run();
+            keep.run();
+         }
       };
       grip.addMouseListener(drag);
       grip.addMouseMotionListener(drag);
@@ -140,13 +196,15 @@ public class Test {
       frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
       frame.add(top, BorderLayout.NORTH);
       frame.add(key, BorderLayout.CENTER);
-      frame.setSize(WIDTH, HEIGHT);
       frame.setAlwaysOnTop(true);
       // An on-screen key must not take the keyboard from the window it presses keys on.
       frame.setFocusableWindowState(false);
       Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
       // shortcut: 64 px is a guess at the taskbar's height; GraphicsEnvironment's usable bounds would be exact on the desktop.
-      frame.setLocation(screen.width - WIDTH - 24, screen.height - HEIGHT - 64);
+      // An empty window at the bottom right corner it will have; fit grows it from there, onto the screen.
+      frame.setBounds(place.x >= 0 ? place.x + (int) Math.round(WIDTH * place.scale()) : screen.width - 24,
+         place.bottom >= 0 ? place.bottom : screen.height - 64, 0, 0);
+      fit.run();
       return frame;
    }
 }
