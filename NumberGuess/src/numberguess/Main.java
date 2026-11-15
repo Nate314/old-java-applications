@@ -17,7 +17,7 @@ import javax.swing.SwingUtilities;
 
 /**
  * The window: the {@link Board} above, and below it the original text field and SUBMIT button for typing a guess,
- * or (in You pick) Lower, That's it and Higher for answering the computer's guess, or (in Magic) Yes and No for
+ * or (in You pick) Lower, That's it and Higher for answering the computer's guess (and a switch to allow one lie), or (in Magic) Yes and No for
  * each card, then How it works and Again.
  */
 @SuppressWarnings("serial")
@@ -29,6 +29,7 @@ public class Main extends JFrame implements ActionListener {
 	private final JButton lower = new JButton("Lower");
 	private final JButton correct = new JButton("That's it!");
 	private final JButton higher = new JButton("Higher");
+	private final JButton fib = new JButton("Let me lie once");
 	private final JButton yes = new JButton("Yes, it's there");
 	private final JButton no = new JButton("No");
 	private final JButton how = new JButton("How it works");
@@ -54,6 +55,7 @@ public class Main extends JFrame implements ActionListener {
 		panel.add(lower);
 		panel.add(correct);
 		panel.add(higher);
+		panel.add(fib);
 		panel.add(yes);
 		panel.add(no);
 		panel.add(how);
@@ -68,6 +70,7 @@ public class Main extends JFrame implements ActionListener {
 		lower.addActionListener(event -> answer(board::lower));
 		correct.addActionListener(event -> answer(board::correct));
 		higher.addActionListener(event -> answer(board::higher));
+		fib.addActionListener(event -> answer(this::toggleLies));
 		yes.addActionListener(event -> answer(() -> board.magicAnswer(true)));
 		no.addActionListener(event -> answer(() -> board.magicAnswer(false)));
 		how.addActionListener(event -> answer(board::explain));
@@ -97,6 +100,8 @@ public class Main extends JFrame implements ActionListener {
 		lower.setVisible(picking);
 		correct.setVisible(picking);
 		higher.setVisible(picking);
+		fib.setVisible(picking);
+		fib.setText(board.isLying() ? "No lies" : "Let me lie once");
 		boolean read = magic && board.isOver();
 		yes.setVisible(magic && !read);
 		no.setVisible(magic && !read);
@@ -127,6 +132,11 @@ public class Main extends JFrame implements ActionListener {
 		textField.requestFocusInWindow();
 	}
 
+	private void toggleLies() {
+		board.toggleLies();
+		showButtons();
+	}
+
 	private void answer(Runnable action) {
 		action.run();
 		board.requestFocusInWindow();
@@ -148,6 +158,8 @@ public class Main extends JFrame implements ActionListener {
 			board.lower();
 		} else if (code == KeyEvent.VK_ENTER || code == KeyEvent.VK_SPACE || code == KeyEvent.VK_C || code == KeyEvent.VK_Y) {
 			board.correct();
+		} else if (code == KeyEvent.VK_F) {
+			toggleLies();
 		} else {
 			return;
 		}
