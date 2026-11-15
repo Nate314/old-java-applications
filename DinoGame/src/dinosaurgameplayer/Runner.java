@@ -50,6 +50,8 @@ final class Runner {
       double x;
       /** Set by the bot when it jumps while this is the next obstacle. */
       boolean botJumped;
+      /** Play by ear's beats sounded for this so far (Ears): 0, 1 after the warning, 2 after the beat to act on. */
+      int beats;
 
       Obstacle(Kind kind, int size, int lift, double x, int gap) {
          this.kind = kind;

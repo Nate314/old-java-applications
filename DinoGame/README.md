@@ -14,6 +14,7 @@ The bot now comes with its game. `./run.ps1 old DinoGame` opens Dino Game: a din
 - **M** (or the **Sound** button in the bottom strip): the game's beeps on or off.
 - **G** (or the **Race your ghost** button, once you have run once): race your best run (see Race your ghost). G again, or **New courses**, goes back to a new course each run.
 - **P** (or the **Two players** button): two players race on one keyboard (see Two players). P again, or **One player**, goes back.
+- **L** (or the **By ear** button in the bottom strip): play by ear, then the blindfold, then off again (see Play by ear).
 - **E** (or the **Evolve a bot** button at the right of the bottom strip): evolve bots (see Evolve a bot). E again, or **Back to the game**, returns to the ready screen. A run under way when you switch is dropped and counts for nobody.
 
 Score: the distance run. Top right shows the bot's best (red, BOT), your best (HI) and this run.
@@ -24,7 +25,7 @@ Score: the distance run. Top right shows the bot's best (red, BOT), your best (H
 
 With the marker where it starts, the bot clears cacti and low birds well and usually ends at the first middle bird it meets, usually somewhere between 400 and 650 points.
 
-Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`, `sound=off` while the beeps are off, and once a generation has been bred, `evolved=generations,record`, `champion=` (the record holder's six numbers, see below) and `chart=` (the best score of each of the last 60 generations), and `ghost=` (see Race your ghost).
+Saved in `~/.dinogame.txt`: `best=` (yours), `bot=` (the bot's) and `marker=x,y`, `sound=off` while the beeps are off, `ears=cues` or `ears=blindfold` while Play by ear is on, and once a generation has been bred, `evolved=generations,record`, `champion=` (the record holder's six numbers, see below) and `chart=` (the best score of each of the last 60 generations), and `ghost=` (see Race your ghost).
 
 On the web site, `?watch` on its page (and the home page's demo, see Watch the computer play in `web/README.md`) starts it with the bot playing (B), and the visitor's first press takes over.
 
@@ -40,6 +41,18 @@ Every run is now its own course, and the game keeps your best one: its course an
 - Runs on the ghost's course count for your best like any other. The ghost is not drawn while the bot plays (B), so the bot's pixel never sees it.
 
 Saved in `~/.dinogame.txt` as `ghost=course,score,` then each input as `step * 4 + key` (0 jump down, 1 jump up, 2 duck down, 3 duck up), only the presses that changed something, so a held key's repeats are not kept.
+
+## Play by ear
+
+The bot plays by watching one pixel. L lets you play by listening instead: every obstacle you must get past sounds as it comes, so the game can be played with your eyes shut, or by someone who cannot see it.
+
+- **Two beats per obstacle**, a quarter of a second apart, like a count-in: a soft one to warn, then a loud one to act on. A **low** pitch (a marimba G3) asks for a jump: every cactus and the low birds. A **high** one (G5) asks for a duck: the middle birds. The high birds, which you run under, are silent.
+- **Press on the second beat and hold while it rings.** It rings as long as the key should be held: longer for a wide group of cacti, a short tap for a single small one, and for a duck until the bird has passed.
+- The beat to act on is worked out from where the obstacle is and the speed (`Ears`), a little early, so a press that comes a step or two after the beat still clears it.
+- Press L again for the **blindfold**: the beats go on, and the cacti and birds are not drawn while a run is under way. The ground, the clouds, the score and the dinosaur stay. At a crash they come back, so you can see what you ran into. The top left says "PLAYING BY EAR" or "BLINDFOLD: LISTEN", and the ready screen says what the beats mean.
+- The beats play even with the game's beeps off (M), since they are what you play by. They play only for one player (not in Two players or Evolve a bot), and also while the bot plays, so you can listen along to it.
+- Runs played by ear count for your best like any other, and can become your ghost. The bot is never blindfolded: the frame it reads still has every obstacle in it.
+- A third press of L turns it off. The setting is saved.
 
 ## Two players
 
@@ -61,7 +74,7 @@ A run now has a sky and a feel of its own:
 - **Passing your best** during a run: NEW BEST blinks under the score, with a rising run of notes.
 - **Dust** puffs up as the dinosaur takes off and lands, and specks kick up behind it as it runs. It stays behind the dinosaur, out of the bot's sight.
 - **Beeps**: a blip for each jump (yours or the bot's), the chime, and a low buzz for a crash. M turns them off and on.
-- **A crash** shakes the picture for a moment (only on screen: the frame the bot reads stays still), and once Space can start a new run a round arrow under GAME OVER says so.
+- **A crash** shakes the picture for a moment (only on screen: the frame the bot reads stays still; in the browser, not when the system asks for reduced motion), and once Space can start a new run a round arrow under GAME OVER says so.
 
 ## Evolve a bot
 
@@ -102,6 +115,7 @@ It sends real Space key presses via `java.awt.Robot` to whatever window has focu
 - `src/dinosaurgameplayer/Dust.java`: the dust at the dinosaur's feet.
 - `src/dinosaurgameplayer/Sounds.java`: the beeps, on the MIDI synthesizer.
 - `src/dinosaurgameplayer/Records.java`: `~/.dinogame.txt`.
+- `src/dinosaurgameplayer/Ears.java`: Play by ear (L): which obstacles sound, when each beat is due, how long to hold, and the saved setting. `Sounds.beat` plays them.
 - `src/dinosaurgameplayer/Duel.java`: two players (P): the second dinosaur's `Runner`, starting both on one course, which one the screen follows, and the rounds won.
 - `src/dinosaurgameplayer/Ghost.java`: a run kept to race: its course and inputs, played back on a `Runner` of its own. `Runner` picks each run's course and logs its inputs.
 - `src/dinosaurgameplayer/Brain.java`: an evolved bot's six numbers, its children and its saved form.
@@ -116,7 +130,7 @@ From the repo root: `./run.ps1 old DinoGame` (or `./run.ps1 old DinoGame -Build`
 
 ## Self-check
 
-`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file (with `sound=off`). For day and night: that night falls at 700 and 1400 and dawns 12 s later, that no color the game draws past the first moment of dusk has blue 83, that a course drawn through a whole night shows the bot no obstacle while the same course by day is full of them, the night crash line, and that the dust rises on take-off and landing, stays behind the marker and settles. For the evolution: that `Runner.inkAt` agrees with the drawn frame on every pixel an eye can sit on, through a whole course with birds; that a known brain ducks and finishes a course; that a seeded 40-generation run starts with the original bot, keeps a chart of 40 bests and ends with a record over twice the original's score held by a brain that ducks; that it carries on from a saved champion; that damaged brains are refused and numbers kept in range; that in the window E drops the run under way and each generation is saved; and the saved evolution lines. For the ghost: that a run played by keys is kept as the ghost and its replay crashes at the same step with the same score, that the saved form reads back and damaged ones are refused, that the next run is a new course, that G drops the run under way and races on the ghost's course, that the ghost runs on after you crash and a worse run keeps it, and that G again goes back to new courses. For two players: that P turns the bot off, P2 stands clear of P1, one key starts both on one course without a jump, W jumps only P1, the further one wins the round with the right line, two that fall at the same obstacle are a dead heat, nothing is saved, a held key does not start the next round at once, the next round is a new course, and P again goes back to one player. From `DinoGame/`:
+`test/dinosaurgameplayer/RunnerCheck.java` checks the bot's color rule, that a tap jumps lower than a held key, ducking, that a seed replays the same game, that the bot scores over 300 on six seeds with its marker where it starts and explains each crash, that a marker far to the right does worse, that your runs count for your best while a team run counts for nobody, and the saved file (with `sound=off`). For day and night: that night falls at 700 and 1400 and dawns 12 s later, that no color the game draws past the first moment of dusk has blue 83, that a course drawn through a whole night shows the bot no obstacle while the same course by day is full of them, the night crash line, and that the dust rises on take-off and landing, stays behind the marker and settles. For the evolution: that `Runner.inkAt` agrees with the drawn frame on every pixel an eye can sit on, through a whole course with birds; that a known brain ducks and finishes a course; that a seeded 40-generation run starts with the original bot, keeps a chart of 40 bests and ends with a record over twice the original's score held by a brain that ducks; that it carries on from a saved champion; that damaged brains are refused and numbers kept in range; that in the window E drops the run under way and each generation is saved; and the saved evolution lines. For the ghost: that a run played by keys is kept as the ghost and its replay crashes at the same step with the same score, that the saved form reads back and damaged ones are refused, that the next run is a new course, that G drops the run under way and races on the ghost's course, that the ghost runs on after you crash and a worse run keeps it, and that G again goes back to new courses. For two players: that P turns the bot off, P2 stands clear of P1, one key starts both on one course without a jump, W jumps only P1, the further one wins the round with the right line, two that fall at the same obstacle are a dead heat, nothing is saved, a held key does not start the next round at once, the next round is a new course, and P again goes back to one player. For Play by ear: that a player who only listens (pressing on each beat to act on and holding as long as it rings, never looking) averages over 1,000 on 40 courses, and still does when a step or two late; that each cactus and low bird sounds a low warning and then a low beat 14 or 15 steps later, a middle bird high ones and a high bird none, always before the obstacle arrives; that L goes from off to beats to the blindfold and back and is saved (and off is not written); and that the blindfold leaves the obstacles off the screen during a run, even while the bot plays (which still sees them and runs on), and shows them again at the crash. From `DinoGame/`:
 
 ```
 javac -encoding UTF-8 -d ../out/check/DinoGame src/dinosaurgameplayer/*.java test/dinosaurgameplayer/*.java

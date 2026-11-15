@@ -8,6 +8,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -23,7 +24,8 @@ import javax.swing.Timer;
  * its one pixel from that image: it sees exactly what you see, red marker and all. E switches to evolving bots
  * (Evolution, drawn by EvolveView) and back. A run has its sky (night every 700 points), dust at the dinosaur's feet,
  * a blinking score every 100 points, beeps (M) and a shake when it crashes. G races the ghost of your best run on its
- * own course. P races two players on one keyboard (Duel).
+ * own course. P races two players on one keyboard (Duel). L plays by ear (Ears): beats sound each obstacle, and the
+ * blindfold hides them.
  */
 final class RunnerPanel extends JPanel {
    private static final long serialVersionUID = 1L;
@@ -92,6 +94,8 @@ final class RunnerPanel extends JPanel {
    /** P: non-null while two players race (P1 is runner); tapped is the runner a click or tap is holding. */
    private Duel duel;
    private Runner tapped;
+   /** L: Play by ear's beats, and with the blindfold the obstacles hidden while a run is under way. */
+   private Ears.Mode ears;
 
    /** A quiet panel, for the self-check. */
    RunnerPanel(Records records, long seed) {
@@ -102,6 +106,7 @@ final class RunnerPanel extends JPanel {
       this.runner = new Runner(seed);
       this.records = records;
       this.sounds = sounds;
+      this.ears = records.ears;
       this.bot.moveTo(records.markerX, records.markerY);
       this.setPreferredSize(new Dimension(Runner.WIDTH, HEIGHT));
       this.setFocusable(true);
@@ -127,6 +132,8 @@ final class RunnerPanel extends JPanel {
                RunnerPanel.this.toggleBot();
             } else if (k == KeyEvent.VK_X) {
                RunnerPanel.this.resetMarker();
+            } else if (k == KeyEvent.VK_L) {
+               RunnerPanel.this.toggleEars();
             }
          }
 
@@ -358,6 +365,8 @@ final class RunnerPanel extends JPanel {
                this.toggleRace();
             } else if (c[2] == KeyEvent.VK_P) {
                this.togglePlayers();
+            } else if (c[2] == KeyEvent.VK_L) {
+               this.toggleEars();
             } else {
                this.evolveKey(c[2]);
             }
@@ -372,6 +381,20 @@ final class RunnerPanel extends JPanel {
       this.records.sound = this.sounds.isOn();
       this.records.save();
       this.repaint();
+   }
+
+   /** L: off, beats, beats with the blindfold, and off again; remembered. */
+   void toggleEars() {
+      this.ears = Ears.next(this.ears);
+      this.records.ears = this.ears;
+      this.records.save();
+      this.repaint();
+   }
+
+   /** Whether the screen hides the obstacles now: blindfolded, during a run of one player (shown again at a crash). */
+   boolean blindfolded() {
+      return this.ears == Ears.Mode.BLINDFOLD && this.duel == null && this.evolution == null
+         && this.runner.state() == Runner.State.RUNNING;
    }
 
    private void resetMarker() {
@@ -423,7 +446,7 @@ final class RunnerPanel extends JPanel {
             this.frame = new BufferedImage(Runner.WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
          }
          Graphics2D g = this.frame.createGraphics();
-         this.paintScene(g);
+         this.paintScene(g, false);   // the bot is never blindfolded
          g.dispose();
          this.bot.step(this.runner, (x, y) -> this.frame.getRGB(x, y) & 0xFFFFFF);
       }
@@ -467,6 +490,11 @@ final class RunnerPanel extends JPanel {
 
    /** After a running step: the sky, the dust, the jump blip, the chime every 100 points and a new best. */
    private void runStep(boolean wasJumping) {
+      if (this.ears != Ears.Mode.OFF) {
+         for (int[] b : Ears.beats(this.runner)) {
+            this.sounds.beat(b[0], (int) Math.round(b[1] * Runner.STEP_MS));
+         }
+      }
       int score = this.runner.score();
       this.sky.step(score);
       this.dust.step(this.runner);
@@ -566,7 +594,7 @@ final class RunnerPanel extends JPanel {
    @Override
    protected void paintComponent(Graphics g) {
       Graphics2D g2 = (Graphics2D) g;
-      if (this.shakeSteps > 0 && this.evolution == null) {
+      if (this.shakeSteps > 0 && this.evolution == null && !reducedMotion()) {
          // A crash shakes the picture (only on screen: the bot's frame stays still).
          int a = (this.shakeSteps + 1) / 3;
          int dx = this.shakeSteps % 2 == 0 ? a : -a;
@@ -574,14 +602,19 @@ final class RunnerPanel extends JPanel {
          g2.setColor(Sky.tint(PAPER, this.sky.darkness()));
          g2.fillRect(0, 0, Runner.WIDTH, HEIGHT);
          g2.translate(dx, dy);
-         this.paintScene(g2);
+         this.paintScene(g2, this.blindfolded());
          g2.translate(-dx, -dy);
       } else {
-         this.paintScene(g2);
+         this.paintScene(g2, this.blindfolded());
       }
    }
 
-   private void paintScene(Graphics2D g) {
+   /** In the browser, when the system asks for reduced motion: the crash does not shake (null on the desktop JDK). */
+   private static boolean reducedMotion() {
+      return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+   }
+
+   private void paintScene(Graphics2D g, boolean blind) {
       double dark = this.evolution != null ? 0 : this.sky.darkness();
       if (this.evolution != null) {
          EvolveView.paint(g, this.evolution, SPEEDS[this.speed]);
@@ -597,12 +630,17 @@ final class RunnerPanel extends JPanel {
          this.paintDuelScore(g, dark);
          this.paintMessage(g, dark);
       } else {
-         paintWorld(g, this.runner, this.sky);
+         paintWorld(g, this.runner, this.sky, !blind);
          this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
          if (this.racing && !this.bot.isOn()) {
             g.setFont(SCORE);
             g.setColor(Sky.tint(MUTED, dark));
             g.drawString("GHOST " + pad(this.records.ghost.score), 14, 24);
+         }
+         if (this.ears != Ears.Mode.OFF && !this.bot.isOn()) {
+            g.setFont(TINY);
+            g.setColor(Sky.tint(MUTED, dark));
+            g.drawString(this.ears == Ears.Mode.BLINDFOLD ? "BLINDFOLD: LISTEN" : "PLAYING BY EAR", 14, this.racing ? 40 : 24);
          }
          if (this.ghost != null && !this.bot.isOn()) {
             this.paintGhost(g, dark);
@@ -642,14 +680,15 @@ final class RunnerPanel extends JPanel {
          help = this.bot.isOn()
             ? "B: bot off   Drag its red eye to change what it watches   X: put it back"
             : "Space or ↑: jump (hold for higher)   ↓: duck   B: the original bot plays";
+         String ear = this.ears == Ears.Mode.OFF ? "By ear (L)" : this.ears == Ears.Mode.CUES ? "Beats on (L)" : "Blindfold (L)";
          if (this.records.ghost == null && !this.racing) {
-            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", "Two players (P)", "Evolve a bot (E)" };
-            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_P, KeyEvent.VK_E };
+            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", ear, "Two players (P)", "Evolve a bot (E)" };
+            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_L, KeyEvent.VK_P, KeyEvent.VK_E };
          } else {
-            help = this.bot.isOn() ? "B: bot off   Drag its red eye   X: put it back" : "Space or ↑: jump   ↓: duck   B: bot";
-            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)",
+            help = this.bot.isOn() ? "B: bot off   Drag its red eye" : "Space or ↑: jump   ↓: duck";
+            labels = new String[] { this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)", ear,
                this.racing ? "New courses (G)" : "Race your ghost (G)", "Two players (P)", "Evolve a bot (E)" };
-            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_G, KeyEvent.VK_P, KeyEvent.VK_E };
+            keys = new int[] { KeyEvent.VK_M, KeyEvent.VK_L, KeyEvent.VK_G, KeyEvent.VK_P, KeyEvent.VK_E };
          }
       }
       this.chips.clear();
@@ -662,7 +701,8 @@ final class RunnerPanel extends JPanel {
       }
       for (int i = 0; i < labels.length; i++) {
          int[] c = this.chips.get(i);
-         boolean main = keys[i] == KeyEvent.VK_E || keys[i] == KeyEvent.VK_G && this.racing || keys[i] == KeyEvent.VK_P && this.duel != null;
+         boolean main = keys[i] == KeyEvent.VK_E || keys[i] == KeyEvent.VK_G && this.racing || keys[i] == KeyEvent.VK_P && this.duel != null
+            || keys[i] == KeyEvent.VK_L && this.ears != Ears.Mode.OFF;
          g.setColor(main ? ink : paper);
          g.fillRoundRect(c[0], STRIP + 3, c[1], HEIGHT - STRIP - 6, 8, 8);
          g.setColor(main ? paper : muted);
@@ -681,6 +721,11 @@ final class RunnerPanel extends JPanel {
 
    /** The same under sky (or by day when it is null): at night inverted, with the moon and stars. */
    static void paintWorld(Graphics2D g, Runner runner, Sky sky) {
+      paintWorld(g, runner, sky, true);
+   }
+
+   /** The same, leaving out the obstacles unless obstacles is set (the blindfold). */
+   static void paintWorld(Graphics2D g, Runner runner, Sky sky, boolean obstacles) {
       double dark = sky == null ? 0 : sky.darkness();
       Color paper = Sky.tint(PAPER, dark);
       g.setColor(paper);
@@ -708,7 +753,7 @@ final class RunnerPanel extends JPanel {
          }
       }
 
-      for (Runner.Obstacle o : runner.obstacles()) {
+      for (Runner.Obstacle o : obstacles ? runner.obstacles() : new ArrayList<Runner.Obstacle>()) {
          int x = (int) Math.round(o.x);
          g.setColor(ink);
          if (o.kind == Runner.Kind.BIRD) {
@@ -875,6 +920,10 @@ final class RunnerPanel extends JPanel {
       String[] lines = state == Runner.State.READY && this.duel != null
          ? new String[] { "P1 jumps with W or Space and ducks with S. P2 has ↑ and ↓.",
             "One course for both, P2 a step ahead. Or tap your half of the game." }
+         : state == Runner.State.READY && this.ears != Ears.Mode.OFF && !this.bot.isOn()
+         ? new String[] { "Each cactus and low bird sounds two low beats: jump on the second, hold while it rings.",
+            this.ears == Ears.Mode.BLINDFOLD ? "Blindfold: you will not see them. A middle bird beats high: duck."
+               : "A middle bird beats high: duck on the second. High birds are silent." }
          : state == Runner.State.READY && this.racing
          ? new String[] { "Your ghost's course: the run where you scored " + this.records.ghost.score + ".",
             "It runs beside you, jump for jump. Get further and you are the ghost." }

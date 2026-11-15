@@ -28,6 +28,8 @@ final class Records {
    Ghost ghost;
    /** The game's beeps; M switches them. Saved only when off, as sound=off. */
    boolean sound = true;
+   /** Play by ear (L): saved only when on, as ears=cues or ears=blindfold. */
+   Ears.Mode ears = Ears.Mode.OFF;
    final List<Integer> chart = new ArrayList<>();
 
    Records(File file) {
@@ -62,6 +64,8 @@ final class Records {
                   r.generations = gens;
                } else if (kv[0].equals("sound")) {
                   r.sound = !kv[1].trim().equals("off");
+               } else if (kv[0].equals("ears")) {
+                  r.ears = Ears.decode(kv[1]);
                } else if (kv[0].equals("champion")) {
                   r.champion = Brain.decode(kv[1]);
                } else if (kv[0].equals("ghost")) {
@@ -87,6 +91,9 @@ final class Records {
       StringBuilder text = new StringBuilder("best=" + this.best + "\nbot=" + this.botBest + "\nmarker=" + this.markerX + "," + this.markerY + "\n");
       if (!this.sound) {
          text.append("sound=off\n");
+      }
+      if (Ears.encode(this.ears) != null) {
+         text.append("ears=").append(Ears.encode(this.ears)).append('\n');
       }
       if (this.champion != null && this.generations > 0) {
          text.append("evolved=").append(this.generations).append(',').append(this.evolvedBest).append('\n');

@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -336,6 +337,84 @@ public final class RunnerCheck {
       assert dp.duel().over() && dp.duel().winner() == 0 && dp.duel().wins(1) + dp.duel().wins(2) == 0
          && dp.duel().p2.score() < dp.duel().p1.score() && dp.crashLines()[0].startsWith("A dead heat") : dp.crashLines()[0];
 
+      // Play by ear: a player who never looks, only pressing on the beats (and holding as long as each rings), runs far.
+      int earTotal = 0;
+      int lateTotal = 0;
+      for (long seed = 1; seed <= 40; seed++) {
+         earTotal += earRun(seed, 0);
+         lateTotal += earRun(seed, 2);
+      }
+      assert earTotal / 40 > 1000 : "ear player average " + earTotal / 40;
+      assert lateTotal / 40 > 1000 : "an ear player up to 2 steps late averages " + lateTotal / 40;
+      // Each cactus and low bird gets a low warning then the beat to act on, 14 or 15 steps later; a middle bird two high
+      // ones; a high bird none. Every beat to act on comes before the obstacle reaches the dinosaur.
+      Runner er = new Runner(25);
+      er.press();
+      java.util.Map<Runner.Obstacle, Long> warned = new java.util.HashMap<>();
+      java.util.Set<String> heard = new java.util.HashSet<>();
+      for (int i = 0; i < 60 * 60 && er.state() == Runner.State.RUNNING; i++) {
+         er.step();
+         for (Runner.Obstacle o : er.obstacles()) {
+            assert o.lift != Runner.BIRD_HEIGHTS[2] || o.beats == 0 : "a high bird is silent";
+            assert o.x > Runner.DINO_X + Runner.DINO_W || Ears.need(o) == 0 || o.beats == 2 : "beats come before the obstacle";
+         }
+         for (int[] b : Ears.beats(er)) {
+            Runner.Obstacle o = null;
+            for (Runner.Obstacle c : er.obstacles()) {
+               boolean fresh = b[1] == 0 ? c.beats == 1 && !warned.containsKey(c) : c.beats == 2 && warned.containsKey(c) && warned.get(c) >= 0;
+               if (fresh && Ears.need(c) == b[0]) {
+                  o = c;
+                  break;
+               }
+            }
+            assert o != null : "a beat names an obstacle";
+            assert b[0] == (o.kind == Runner.Kind.BIRD && o.lift == Runner.BIRD_HEIGHTS[1] ? Ears.DUCK : Ears.JUMP);
+            if (b[1] == 0) {
+               warned.put(o, er.steps());
+            } else {
+               assert Math.abs(er.steps() - warned.get(o) - Ears.BEAT + 0.5) <= 0.5 : "the beat to act on is " + (er.steps() - warned.get(o)) + " steps after the warning";
+               assert b[1] > 0 && b[1] < 40 : "hold " + b[1];
+               warned.put(o, -1L);
+               heard.add(o.kind + (o.kind == Runner.Kind.BIRD ? " " + o.lift : ""));
+            }
+         }
+         // A seeing player keeps this run going, so the course reaches the birds.
+         Runner.Obstacle o = er.at(Runner.DINO_X);
+         if (o != null && !er.isJumping() && Ears.need(o) == Ears.JUMP && o.x - Runner.DINO_X - Runner.DINO_W < er.speed() * 5) {
+            er.press();
+         } else if (er.isJumping()) {
+            er.release();
+         }
+         er.duck(o != null && Ears.need(o) == Ears.DUCK && o.x - Runner.DINO_X - Runner.DINO_W < 60);
+      }
+      assert heard.contains("SMALL_CACTUS") && heard.contains("LARGE_CACTUS") : "heard " + heard;
+
+      // L goes from off to beats to the blindfold and back, and is saved; the blindfold hides the obstacles on screen
+      // during a run (the bot's frame still has them), and the crash shows them again.
+      File earFile = File.createTempFile("dinogame", ".txt");
+      earFile.delete();
+      RunnerPanel ep = new RunnerPanel(Records.load(earFile), 3);
+      key(ep, java.awt.event.KeyEvent.VK_L, true);
+      assert Records.load(earFile).ears == Ears.Mode.CUES;
+      key(ep, java.awt.event.KeyEvent.VK_L, true);
+      assert Records.load(earFile).ears == Ears.Mode.BLINDFOLD && !ep.blindfolded() : "the blindfold goes on with the run";
+      ep.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+      key(ep, java.awt.event.KeyEvent.VK_SPACE, true);
+      key(ep, java.awt.event.KeyEvent.VK_SPACE, false);
+      while (ep.runner().at(Runner.DINO_X + Runner.DINO_W) == null || ep.runner().at(Runner.DINO_X + Runner.DINO_W).x > 400) {
+         ep.step();
+      }
+      assert ep.blindfolded() && inkInField(ep) == 0 : "blindfolded, no obstacle drawn";
+      ep.setBot(true);
+      ep.step();
+      assert inkInField(ep) == 0 : "the screen stays blindfolded while the bot plays";
+      run(ep);
+      assert ep.runner().score() > 100 : "the bot still sees through the blindfold: " + ep.runner().score();
+      assert !ep.blindfolded() && inkInField(ep) > 0 : "the crash shows what was hit";
+      key(ep, java.awt.event.KeyEvent.VK_L, true);
+      assert Records.load(earFile).ears == Ears.Mode.OFF && !Files.readString(earFile.toPath()).contains("ears=") : "off is not written";
+      earFile.delete();
+
       // The file keeps both bests and the marker; damaged lines are skipped.
       Records r = Records.load(file);
       r.best = 812;
@@ -366,8 +445,67 @@ public final class RunnerCheck {
       assert broken.sound && broken.best == 0 && broken.botBest == 7 && broken.markerX == PixelBot.DEFAULT_X;
       file.delete();
 
-      System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore() + ")");
+      System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore()
+         + ", ear player average " + earTotal / 40 + ", " + lateTotal / 40 + " when up to 2 steps late)");
       System.exit(0);
+   }
+
+   /**
+    * A run played by ear alone, from seed: on each beat to act on, jump 1 to late + 1 steps after it and hold as long as
+    * the beat rings, or duck at once for as long. Stops at 3,000.
+    */
+   private static int earRun(long seed, int late) {
+      Runner r = new Runner(seed);
+      r.press();
+      r.release();
+      java.util.Random lateness = new java.util.Random(seed);
+      int hold = 0;
+      int duck = 0;
+      int wait = 0;
+      int pendingHold = 0;
+      while (r.state() == Runner.State.RUNNING && r.score() < 3000) {
+         r.step();
+         if (wait > 0 && --wait == 0) {
+            r.duck(false);
+            duck = 0;
+            r.press();
+            hold = pendingHold;
+         }
+         if (hold > 0 && --hold == 0) {
+            r.release();
+         }
+         if (duck > 0 && --duck == 0) {
+            r.duck(false);
+         }
+         for (int[] b : Ears.beats(r)) {
+            if (b[1] == 0) {
+               continue;
+            }
+            if (b[0] == Ears.DUCK) {
+               r.duck(true);
+               duck = b[1];
+            } else {
+               wait = 1 + lateness.nextInt(late + 1);
+               pendingHold = b[1];
+            }
+         }
+      }
+      return r.score();
+   }
+
+   /** Ink-colored pixels the panel draws on screen ahead of the dinosaur, between the score and the ground. */
+   private static int inkInField(RunnerPanel p) {
+      BufferedImage img = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = img.createGraphics();
+      p.paint(g);
+      g.dispose();
+      int n = 0;
+      for (int y = 50; y < Runner.GROUND; y++) {
+         for (int x = Runner.DINO_X + Runner.DUCK_W + 8; x < Runner.WIDTH; x++) {
+            n += (img.getRGB(x, y) & 0xFFFFFF) == (RunnerPanel.INK.getRGB() & 0xFFFFFF) ? 1 : 0;
+         }
+      }
+      return n;
    }
 
    private static int maxOf(List<Integer> list) {
