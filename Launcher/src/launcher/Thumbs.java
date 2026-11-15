@@ -13,7 +13,7 @@ import java.util.Map;
 import javax.imageio.ImageIO;
 
 /**
- * App pictures: the web gallery's thumbnails (web/site/shots, screenshots with a transparent desk), scaled once per
+ * App pictures: the web gallery's thumbnails (web/public/shots, screenshots with a transparent desk), scaled once per
  * size. An app without a screenshot gets a drawn card with its initials.
  */
 final class Thumbs {

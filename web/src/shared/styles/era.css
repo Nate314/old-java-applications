@@ -1,0 +1,2 @@
+/* The Then | Now switch's frame (the home page's player, the story's Then and now panel). */
+.era { display: inline-flex; border: 1px solid var(--card-border); border-radius: 999px; overflow: hidden; }

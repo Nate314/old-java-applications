@@ -75,10 +75,11 @@ Run mode launches each app from the folder it expects (for example `FlappyBird/s
 
 ## Web (TeaVM)
 
-Every app also runs in a browser, compiled to JavaScript with TeaVM on a small AWT/Swing compatibility layer. Requires Maven 3.9. From the repo root:
+Every app also runs in a browser, compiled to JavaScript with TeaVM on a small AWT/Swing compatibility layer. Requires Maven 3.9 and Node.js. From the repo root:
 
 ```powershell
-mvn -f web/pom.xml package                               # builds the static site into web/target/site
+npm --prefix web ci                                      # once: the site's packages
+npm --prefix web run build                               # builds the static site into web/target/site, from scratch
 python -m http.server 8000 --directory web/target/site   # then open http://localhost:8000/
 ```
 

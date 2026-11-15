@@ -1,4 +1,4 @@
-# Records the home page's preview clips (web/site/clips/<App>.mp4): a few seconds of each app running, which the
+# Records the home page's preview clips (web/public/clips/<App>.mp4): a few seconds of each app running, which the
 # gallery plays in a card's thumbnail while the pointer is on it (or, on touch screens, while the card is in the
 # middle of the screen).
 # Each app page is opened in clip mode (?embed&clip) in headless Chrome, driven over the DevTools protocol. Clip
@@ -10,8 +10,8 @@
 #   ./web/clips.ps1
 #   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8101
 # Apps without a recipe (NathaNOS, BibleDownloader, NumberGuess, Windows, WindowsE: nothing moves until the visitor
-# does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its <li> has
-# data-clip (web/site/index.html).
+# does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its app has
+# "clip": true in web/src/shared/apps.json (its gallery card then has data-clip).
 param(
     [string[]]$Apps,
     [int]$Port = 8101,
@@ -93,7 +93,7 @@ $Recipes = [ordered]@{
 if (-not $Apps) { $Apps = @($Recipes.Keys) }
 
 $site = Join-Path $PSScriptRoot 'target/site'
-$out = Join-Path $PSScriptRoot 'site/clips'
+$out = Join-Path $PSScriptRoot 'public/clips'
 New-Item -ItemType Directory -Force $out | Out-Null
 $session = Start-Headless $site $Port $DebugPort $Chrome 'clips'
 try {

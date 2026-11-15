@@ -14,8 +14,8 @@
   <!--
     Then and now (web/README.md): every app page with a "then" version can also run the app as it was first
     restored, before the chain of reworks: the sources at commit ${then.commit}, read from the repo's git history
-    with git archive, so no copy of them is kept in the tree. Each app gets <App>/then.js (its page is
-    site/<App>/then.html) and <App>/then-source/ for the source viewer.
+    with git archive, so no copy of them is kept in the tree. Each app gets <App>/then.js and <App>/then-source/
+    for the source viewer; its page, site/<App>/then.html, is written by the site's build (web/src/pages/app).
 
     The package names clash with today's sources, so this is its own module.
   -->
@@ -66,7 +66,8 @@
               </target>
             </configuration>
           </execution>
-          <!-- The pages, and the source viewer's files: then.html reads then-source/ (README and Java as first restored). -->
+          <!-- The source viewer's files: then.html (written by the site's build, web/src/pages/app/AppPage.tsx) reads
+               then-source/ (README and Java as first restored). -->
           <execution>
             <id>then-sources-for-viewer</id>
             <phase>process-resources</phase>
@@ -88,38 +89,6 @@
                     <echo file="${site.dir}/@{app}/then-source/files.txt" message="${then.@{app}}${line.separator}"/>
                   </sequential>
                 </macrodef>
-                <!-- Each app's then.html, from then.html here: its title as on its page today, and the body
-                     attributes its page needs (data-files, data-args, ...; see web/README.md). -->
-                <macrodef name="thenpage">
-                  <attribute name="app"/>
-                  <attribute name="title"/>
-                  <attribute name="body"/>
-                  <sequential>
-                    <copy file="${project.basedir}/then.html" tofile="${site.dir}/@{app}/then.html" overwrite="true" encoding="UTF-8">
-                      <filterset>
-                        <filter token="APP" value="@{app}"/>
-                        <filter token="TITLE" value="@{title}"/>
-                        <filter token="BODY" value="@{body}"/>
-                      </filterset>
-                    </copy>
-                  </sequential>
-                </macrodef>
-                <thenpage app="CircleSpawner" title="Circle Spawner" body="data-own-layout"/>
-                <thenpage app="Clock" title="Clock" body=""/>
-                <thenpage app="FlappyBird" title="Flappy Bird" body="data-files=&quot;bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png&quot; data-args=&quot;120&quot;"/>
-                <thenpage app="GroupCreator" title="Group Creator" body="data-console"/>
-                <thenpage app="Minesweeper" title="Minesweeper" body=""/>
-                <thenpage app="MusicTheoryExpert" title="Music Theory Expert" body=""/>
-                <thenpage app="NumberGuess" title="Number Guess" body=""/>
-                <thenpage app="RubiksCube2D" title="Rubik&apos;s Cube 2D" body=""/>
-                <thenpage app="ScreenSaver" title="Screen Saver" body=""/>
-                <thenpage app="SimpleAlgorithms" title="Simple Algorithms" body="data-console"/>
-                <thenpage app="SpriteFloatyStars" title="Sprite Floaty Stars" body=""/>
-                <thenpage app="StockChecker" title="Stock Checker" body="data-files=&quot;myStocks.txt stockCheck.csv&quot;"/>
-                <thenpage app="SynthesizerKeyboard" title="Synthesizer Keyboard" body=""/>
-                <thenpage app="TankGame" title="Tank Game" body=""/>
-                <thenpage app="UltimateTicTacToe" title="Ultimate Tic-Tac-Toe" body=""/>
-                <thenpage app="WindowsE" title="Windows+E" body="data-shell"/>
                 <thensource app="CircleSpawner"/>
                 <thensource app="Clock"/>
                 <thensource app="FlappyBird"/>
