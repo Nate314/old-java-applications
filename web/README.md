@@ -124,7 +124,7 @@ boolean calm = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopPropert
 - Any other name is `null` in the shim, as on the desktop for names a toolkit does not know.
 - What to do with it is the app's choice: drop shake and flashes, skip slow motion, jump to the end of a zoom. Keep the game itself the same.
 
-No app reads it yet. Apps with motion that should adopt it: TankGame (screen shake, blast light and the slow-motion kill), DinoGame (the crash shake), FlappyBird (the crash's white flash and shake) and ScreenSaver (the gallery's zoom into a saver). The site's own page code already reads the setting itself (stage glow, the band's news, passport stamps, the photo booth, preview clips).
+TankGame and Clock read it: TankGame drops its screen shake and plays the blast that destroys a tank at full speed (its light and ring stay), and Clock's ringing alarm stops shaking (its ring and bell stay). Other apps with motion that could adopt it: DinoGame (the crash shake), FlappyBird (the crash's white flash and shake) and ScreenSaver (the gallery's zoom into a saver). The site's own page code already reads the setting itself (stage glow, the band's news, passport stamps, the photo booth, preview clips).
 
 ### Images, files and sound
 
@@ -454,7 +454,7 @@ The keyboard games get an on-screen controller, so they can be played on a phone
 | FlappyBird | Flap (Space), Rewind (Z: after a crash, rewind and fly on), Course (C: endless pipes or today's course, on the game's title), Pause (P), Reset (R) |
 | TankGame | A cross (W A S D) and Fire (Q) for the red tank, a cross (arrow keys) and Fire (M) for the green tank. On the game's title, red's Fire starts a match against the computer and green's Fire a match for two players on one screen. Supply crates are turned on or off by tapping their line on the title card |
 | SynthesizerKeyboard | One octave of piano keys (Z S X D C V G B H N J M ,), each held for as long as it is touched, plus Song, Listen and Restart (T, L, R), Record (Space) and Copy link (Enter), Mic (I), Looper and Play loop (O, P), and Octave and Sound buttons (arrow keys) |
-| DinoGame | Jump (Space; held for a higher jump), Duck (Down), Bot (B), Reset eye (X), Ghost race (G), 2 players (P), Evolve (E), Speed (F, while evolving) and Sound (M). A tap on the game also jumps (with two players, a tap on its left half jumps P1 and on its right half P2) |
+| DinoGame | Jump (Space; held for a higher jump), Duck (S; with two players both buttons drive P1), Bot (B), Reset eye (X), Ghost race (G), 2 players (P), Evolve (E), Speed (F, while evolving) and Sound (M). A tap on the game also jumps (with two players, a tap on its left half jumps P1 and on its right half P2) |
 | SpriteFloatyStars | A cross (arrow keys) and Catch (Space) for Star Catcher's net, Next (N), Again (R) and Nights (M), and Add star (Up), Remove star (Down), Trails (T) and Help (H) for an animation window, where Next (N) changes the mode and Catch (Space) bursts the stars. The cross and Catch are gold. Unlike TankGame's two crosses, which stay on one row, this pad wraps onto more rows on a narrow page |
 
 - Each button shows its key, and lights up when that key is pressed on a real keyboard, so the controller doubles as a key chart.
@@ -489,7 +489,7 @@ Plug a game controller into the computer (or pair it with the phone), press any 
 | App | Buttons |
 |---|---|
 | FlappyBird | A or D-pad up: Flap (Space). B: Rewind a crash (Z). X: Course (C), Y: Reset (R), Start: Pause (P) |
-| DinoGame | A or D-pad up: Jump (Space). B or D-pad down: Duck. X: Bot (B), Y: Reset eye (X), Start: Evolve bots (E) |
+| DinoGame | A or D-pad up: Jump (Space). B or D-pad down: Duck (S, so with two players the pad drives P1). X: Bot (B), Y: Reset eye (X), Start: Evolve bots (E) |
 | TankGame | The first controller drives the red tank (D-pad or left stick: W A S D, A: fire Q), a second controller the green tank (arrow keys, A: fire M). X on the first controller turns supply crates on or off. On the game's title, the first controller's A starts a match against the computer and the second's a match for two players |
 | SynthesizerKeyboard | The white keys C to high C, going round the D-pad (left, down, right, up: Z X C V) and then the face buttons (X, A, B, Y: B N M ,). Start: Record (Space) |
 | SpriteFloatyStars | D-pad or left stick: the arrow keys (Star Catcher's net). A: Catch (Space; a burst in an animation window), B: Nights (M), X: Next (N; the next mode in an animation window), Y: Again (R), Start: Trails (T) |

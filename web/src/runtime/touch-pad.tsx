@@ -31,7 +31,7 @@ const PADS: Record<string, PadGroup[]> = {
     { buttons: [{ k: 'Z', label: 'Rewind' }, { k: 'C', label: 'Course' }, { k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
   ],
   DinoGame: [
-    { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'ArrowDown', label: 'Duck' }] },
+    { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'S', label: 'Duck' }] },
     { buttons: [{ k: 'B', label: 'Bot' }, { k: 'X', label: 'Reset eye' }, { k: 'G', label: 'Ghost' }, { k: 'P', label: '2 players' }, { k: 'E', label: 'Evolve' }, { k: 'F', label: 'Speed' }, { k: 'M', label: 'Sound' }] }
   ],
   TankGame: [

@@ -5,6 +5,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 
 /**
@@ -53,8 +54,8 @@ final class ClockFace implements Tab {
       this.alarmBox = new Rectangle(area.x + area.width - this.chimesBox.width, area.y, this.chimesBox.width, boxHeight);
       this.knobRadius = 0;
       Alarm alarm = this.clock.state.alarm;
-      // Ringing, the clock shakes on its feet like a bell-topped alarm clock.
-      int shake = alarm.isRinging() ? (int)Math.round(Math.sin(now / 18.0) * Math.max(2, margin * 0.8)) : 0;
+      // Ringing, the clock shakes on its feet like a bell-topped alarm clock, unless the browser page asks for less motion.
+      int shake = alarm.isRinging() && !Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion")) ? (int)Math.round(Math.sin(now / 18.0) * Math.max(2, margin * 0.8)) : 0;
       g2.translate(shake, 0);
       if (this.clock.state.analog) {
          g2.setStroke(new BasicStroke((float)margin));

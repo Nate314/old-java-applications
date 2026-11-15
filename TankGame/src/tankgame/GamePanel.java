@@ -7,6 +7,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -131,6 +132,12 @@ public class GamePanel extends JPanel
         timer.start();
     }
 
+    /** True while the browser page asks for less motion (the web shim's property; null, so false, on the desktop). */
+    private static boolean calm()
+    {
+        return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+    }
+
     /** Moves everything one step on the Swing event thread, so speed does not depend on the paint rate. */
     private void tick()
     {
@@ -138,7 +145,8 @@ public class GamePanel extends JPanel
         {
             // The blast that destroys a tank plays at a third of the speed, then a half, then full speed again.
             slowFrames--;
-            int every = slowFrames > 30 ? 3 : slowFrames > 12 ? 2 : 1;
+            // With reduced motion the blast plays at full speed (the banner still waits for it).
+            int every = calm() ? 1 : slowFrames > 30 ? 3 : slowFrames > 12 ? 2 : 1;
             if (slowFrames % every != 0)
             {
                 repaint();
@@ -278,7 +286,7 @@ public class GamePanel extends JPanel
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         // Hits and blasts shake the field and everything on it; the score bar and banners hold still.
-        double shake = battle.shake();
+        double shake = calm() ? 0 : battle.shake();
         int shakeX = (int) Math.round((shakeRandom.nextDouble() * 2 - 1) * shake);
         int shakeY = (int) Math.round((shakeRandom.nextDouble() * 2 - 1) * shake);
         if (shake > 0)

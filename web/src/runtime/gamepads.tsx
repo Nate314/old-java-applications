@@ -27,7 +27,7 @@ interface GamepadSnap { t: number; pads: { b: boolean[]; a: number[] }[] }
 // shows the chart again. A second controller gets the map's second entry (TankGame's green tank).
 const GAMEPADS: Record<string, GamepadMap[]> = {
   FlappyBird: [{ a: ['Space', 'Flap'], up: ['Space', 'Flap'], b: ['Z', 'Rewind a crash'], x: ['C', 'Course'], y: ['R', 'Reset'], start: ['P', 'Pause'] }],
-  DinoGame: [{ a: ['Space', 'Jump'], up: ['Space', 'Jump'], down: ['ArrowDown', 'Duck'], b: ['ArrowDown', 'Duck'],
+  DinoGame: [{ a: ['Space', 'Jump'], up: ['Space', 'Jump'], down: ['S', 'Duck'], b: ['S', 'Duck'],
                x: ['B', 'Bot'], y: ['X', 'Reset eye'], start: ['E', 'Evolve bots'] }],
   TankGame: [
     { stick: true, up: ['W', 'Forward'], down: ['S', 'Back'], left: ['A', 'Turn left'], right: ['D', 'Turn right'],
