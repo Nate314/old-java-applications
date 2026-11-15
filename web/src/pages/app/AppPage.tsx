@@ -7,8 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import type { App } from '../../shared/catalog';
 import { EarlyScript, RuntimeScript } from '../../shared/EarlyScript';
-
-const SITE = 'Old Java Applications';
+import { SITE, ShareTags } from '../../shared/ShareTags';
 
 /**
  * What an app's <body> says besides data-app, for boot.js:
@@ -68,16 +67,8 @@ function AppHead({ app }: { app: App }) {
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{app.name}</title>
       <meta name="description" content={description} />
-      <meta property="og:type" content="website" />
-      <meta property="og:site_name" content={SITE} />
-      <meta property="og:title" content={app.name + ' | ' + SITE} />
-      <meta property="og:description" content={description} />
-      <meta property="og:url" content={'../' + app.id + '/index.html'} />
-      <meta property="og:image" content={'../cards/' + app.id + '.jpg'} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={app.name + ', running in the browser'} />
-      <meta name="twitter:card" content="summary_large_image" />
+      <ShareTags title={app.name + ' | ' + SITE} description={description} url={'../' + app.id + '/index.html'}
+        image={'../cards/' + app.id + '.jpg'} alt={app.name + ', running in the browser'} />
       <link rel="stylesheet" href="../shim.css" />
       <EarlyScript />
       <RuntimeScript src="../assets/boot.js" />
