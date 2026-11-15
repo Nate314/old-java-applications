@@ -78,6 +78,8 @@ public class Battle
     private int              arenaRound         = -1;
     private int              arenaWidth;
     private int              arenaHeight;
+    /** The battle's sounds (V turns them off); silent until the window gives it the synthesizer's. */
+    private Sounds           sounds             = Sounds.silent();
     private Phase            phase              = Phase.TITLE;
     private int              phaseTicks;
     private boolean          vsComputer;
@@ -290,7 +292,11 @@ public class Battle
                 // Presses while waiting are dropped, so nobody fires the instant the round starts.
                 red.controls().fire();
                 green.controls().fire();
-                if (phaseTicks >= ROUND_START_TICKS) enter(Phase.FIGHT);
+                if (phaseTicks >= ROUND_START_TICKS)
+                {
+                    enter(Phase.FIGHT);
+                    sounds.fight();
+                }
                 break;
             case FIGHT:
                 fight(width, height);
@@ -300,6 +306,13 @@ public class Battle
                 if (phaseTicks >= ROUND_OVER_TICKS) finishRound();
                 break;
         }
+        boolean fighting = phase == Phase.FIGHT;
+        sounds.engines(fighting && moving(red), red.turboTicks() > 0, fighting && moving(green), green.turboTicks() > 0);
+    }
+
+    private static boolean moving(Tank tank)
+    {
+        return tank.velocityX() != 0 || tank.velocityY() != 0;
     }
 
     private void fight(int width, int height)
@@ -328,10 +341,11 @@ public class Battle
         if (shells.size() > fired)
         {
             Shell shell = shells.get(fired);
+            sounds.fire();
             Spark.burst(sparks, shell.x(), shell.y(), 8, 2.5, new Color(255, 160, 60));
         }
         // Turbo: a trail of yellow sparks from the back of a moving tank.
-        if (tank.turboTicks() > 0 && (tank.velocityX() != 0 || tank.velocityY() != 0))
+        if (tank.turboTicks() > 0 && moving(tank))
         {
             double heading = Math.toRadians(tank.rotation());
             Spark.burst(sparks, tank.x() - Math.sin(heading) * Tank.SIZE, tank.y() + Math.cos(heading) * Tank.SIZE, 1,
@@ -348,11 +362,14 @@ public class Battle
             if (++supplyClock >= nextDrop) supply = drop(width, height);
             return;
         }
+        boolean falling = !supply.landed();
         supply.tick();
+        if (falling && supply.landed()) sounds.landed();
         for (Tank tank : new Tank[] { red, green })
         {
             if (!supply.takenBy(tank)) continue;
             tank.give(supply.power());
+            sounds.take();
             Spark.burst(sparks, supply.x(), supply.y(), 24, 3.5, supply.power().color);
             noticePower = supply.power();
             noticeTank = tank;
@@ -366,6 +383,7 @@ public class Battle
     private boolean shootCrate(Shell shell)
     {
         if (supply == null || !supply.hitBy(shell)) return false;
+        sounds.crateShot();
         Spark.burst(sparks, supply.x(), supply.y(), 20, 3.5, new Color(170, 120, 66));
         Spark.blast(sparks, supply.x(), supply.y(), 40);
         shake(4);
@@ -406,9 +424,14 @@ public class Battle
     private boolean fly(Shell shell, int width, int height)
     {
         boolean flying = shell.move(width, height, arena);
-        if (shell.bounced()) Spark.burst(sparks, shell.x(), shell.y(), 5, 2, CHIPS);
+        if (shell.bounced())
+        {
+            Spark.burst(sparks, shell.x(), shell.y(), 5, 2, CHIPS);
+            sounds.ricochet();
+        }
         if (shell.burst())
         {
+            sounds.burst();
             Spark.burst(sparks, shell.x(), shell.y(), 14, 3, CHIPS);
             Spark.blast(sparks, shell.x(), shell.y(), 22);
             scorches.add(new double[] { shell.x(), shell.y(), 9 });
@@ -427,6 +450,10 @@ public class Battle
         Spark.burst(sparks, shell.x(), shell.y(), popped ? 22 : 12, 4,
                         damaged ? tank.color() : popped ? Supply.Power.SHIELD.color : CHIPS);
         if (damaged) Spark.blast(sparks, shell.x(), shell.y(), 34);
+        // The last hit's sound is the destroyed tank's boom (explodeIfDead).
+        if (damaged && tank.isAlive()) sounds.hit();
+        else if (popped) sounds.shieldPop();
+        else if (!damaged) sounds.ricochet();
         shake(damaged ? 7 : 3);
         return true;
     }
@@ -438,6 +465,7 @@ public class Battle
         Spark.blast(sparks, tank.x(), tank.y(), 150);
         Spark.scraps(sparks, tank.x(), tank.y(), 14, tank.color());
         shake(12);
+        sounds.destroyed();
         blasts++;
         scorches.add(new double[] { tank.x(), tank.y(), 62 });
     }
@@ -475,6 +503,7 @@ public class Battle
         }
         winner = redWins > greenWins ? red : green;
         if (vsComputer && !watchedMatch && record != null) record.add(winner == red);
+        sounds.matchOver(vsComputer && !watching && winner != red);
         enter(Phase.MATCH_OVER);
     }
 
@@ -507,6 +536,24 @@ public class Battle
     {
         setSupplies(!supplies);
         if (record != null) record.setSupplies(supplies);
+    }
+
+    /** The sounds the battle plays (the window's on the synthesizer, a self-check's silent ones). */
+    void setSounds(Sounds sounds)
+    {
+        this.sounds = sounds;
+    }
+
+    /** V: the sound on or off, saved with the record. */
+    public void toggleSound()
+    {
+        sounds.setOn(!sounds.isOn());
+        if (record != null) record.setSound(sounds.isOn());
+    }
+
+    public boolean sound()
+    {
+        return sounds.isOn();
     }
 
     public boolean supplies()

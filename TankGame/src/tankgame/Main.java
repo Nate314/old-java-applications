@@ -33,8 +33,9 @@ public class Main extends JFrame
         Battle battle = new Battle(red, green, new ComputerControls(new Random()), record);
         battle.setSupplies(record.supplies());
         battle.setField(Arena.cells(record.field()));
+        battle.setSounds(Sounds.open(record.sound()));
         GamePanel panel = new GamePanel(battle);
-        // C: watch the computer play both tanks (Battle.toggleWatch). X: supply drops on / off. B: build a battlefield.
+        // C: watch the computer play both tanks (Battle.toggleWatch). X: supply drops on / off. B: build a battlefield. V: sound.
         this.addKeyListener(new KeyAdapter()
         {
             @Override
@@ -43,6 +44,7 @@ public class Main extends JFrame
                 if (e.getKeyCode() == KeyEvent.VK_C) battle.toggleWatch();
                 if (e.getKeyCode() == KeyEvent.VK_X) battle.toggleSupplies();
                 if (e.getKeyCode() == KeyEvent.VK_B) battle.toggleBuild();
+                if (e.getKeyCode() == KeyEvent.VK_V) battle.toggleSound();
             }
         });
         this.add(panel);

@@ -552,7 +552,7 @@ public class GamePanel extends JPanel
                                 new Line("Press Q or tap to play the computer", MEDIUM, light(red)),
                                 new Line("Press M for two players", MEDIUM, light(green)),
                                 new Line("Press C to watch the computer play itself", SMALL, DIM),
-                                suppliesLine(), fieldLine(), recordLine() });
+                                suppliesLine(), soundLine(), fieldLine(), recordLine() });
                 break;
             case ROUND_START:
                 boolean go = battle.phaseTicks() > Battle.ROUND_START_TICKS - 25;
@@ -580,6 +580,7 @@ public class GamePanel extends JPanel
                                 new Line(ready ? "Press Q or tap to play the computer" : "", SMALL, light(red)),
                                 new Line(ready ? "Press M for two players" : "", SMALL, light(green)),
                                 ready ? suppliesLine() : new Line("", SMALL, TEXT),
+                                ready ? soundLine() : new Line("", SMALL, TEXT),
                                 ready ? fieldLine() : new Line("", SMALL, TEXT) });
                 break;
             default:
@@ -612,6 +613,12 @@ public class GamePanel extends JPanel
     {
         return new Line(battle.supplies() ? "Supply drops on: tap or press X to turn off"
                         : "Supply drops off: tap or press X to turn on", SMALL, CRATE, battle::toggleSupplies);
+    }
+
+    private Line soundLine()
+    {
+        return new Line(battle.sound() ? "Sound on: tap or press V to turn off" : "Sound off: tap or press V to turn on",
+                        SMALL, DIM, battle::toggleSound);
     }
 
     /** Said when the player's battlefield is set aside because this window is too narrow for it (Battle#fieldBlocked). */
