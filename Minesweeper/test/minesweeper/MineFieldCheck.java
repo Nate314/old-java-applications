@@ -375,6 +375,47 @@ public class MineFieldCheck {
          }
       }
       System.out.println("Odds: at most " + slowest + " ms a move in 40 Expert games");
+
+      // Expert boards opened in many scattered places (a loose frontier the old count gave up on about 1 move in 30):
+      // the odds are always counted, add up to the mines, and are quick.
+      slowest = 0;
+      int moves = 0;
+      for (int seed = 0; seed < 30; seed++) {
+         Random random = new Random(seed);
+         String[][] grid = new MineFieldGenerator(n, n, Level.EXPERT.mines, n / 2, n / 2, random).getGrid();
+         boolean[][] revealed = new boolean[n][n];
+         MineFieldGenerator.reveal(grid, revealed, new boolean[n][n], n / 2, n / 2);
+         for (int poke = 0; poke < 60; poke++) {
+            int x = random.nextInt(n);
+            int y = random.nextInt(n);
+            if (MineFieldGenerator.isMine(grid, x, y) || revealed[x][y]) {
+               continue;
+            }
+            MineFieldGenerator.reveal(grid, revealed, new boolean[n][n], x, y);
+            int[][] view = new int[n][n];
+            for (int i = 0; i < n; i++) {
+               for (int j = 0; j < n; j++) {
+                  view[i][j] = revealed[i][j] ? (grid[i][j].trim().isEmpty() ? 0 : Integer.parseInt(grid[i][j])) : Solver.HIDDEN;
+               }
+            }
+            long start = System.nanoTime();
+            double[][] odds = Odds.of(view, Level.EXPERT.mines);
+            slowest = Math.max(slowest, (System.nanoTime() - start) / 1_000_000);
+            moves++;
+            check(odds != null, "no odds on scattered Expert board " + seed);
+            double sum = 0;
+            for (int i = 0; i < n; i++) {
+               for (int j = 0; j < n; j++) {
+                  if (!revealed[i][j]) {
+                     sum += odds[i][j];
+                     check(!MineFieldGenerator.isMine(grid, i, j) || odds[i][j] > 1e-9, "a mine at 0% on scattered board " + seed);
+                  }
+               }
+            }
+            check(Math.abs(sum - Level.EXPERT.mines) < 1e-6, "scattered odds add up to " + sum + " mines");
+         }
+      }
+      System.out.println("Odds: at most " + slowest + " ms a move on " + moves + " moves of 30 scattered Expert boards");
    }
 
    /** Counts the placements of {@code mines} mines on the hidden tiles that fit every number, and per tile those with a mine there. */
