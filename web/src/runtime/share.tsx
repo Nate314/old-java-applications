@@ -8,6 +8,7 @@ import { EmbedSection } from './embed';
 import { playSound } from './sounds';
 import { CloseButton, useOwnKeys } from './ui/layer';
 import { openPanel } from './ui/panel';
+import { linkInvite } from '../shared/link-state';
 
 export let shareBox: HTMLElement | null;
 export let SHARED: RegExpExecArray | null;
@@ -157,20 +158,8 @@ export function init() {
   // on says so.
   shareBox = null;
   SHARED = /[?&]shared=(\d{1,3})(?:&|$)/.exec(location.search);
-  // What a friend's link brought (each app's parameter is in shared/link-state.ts: a game, a tune, a number to find,
-  // a song, a shape or a list of shortcuts): the title screen says so.
-  INVITE = /[?&]game=[a-i1-9]+(?:&|$)/i.test(location.search)
-    ? 'A friend sent you a game, and it is your move. Press Play to answer it.'
-    : /[?&]tune=(?:[a-m][1-8]){2,}(?:&|$)/i.test(location.search)
-      ? 'A friend sent you a tune. Press Play to hear it, then play it back.'
-      : /[?&]challenge=[0-4][0-9a-z-]+(?:&|$)/i.test(location.search)
-        ? 'A friend sent you a number to find. Press Play and try to beat their guesses.'
-        : /[?&]song=[0-9ab][Mm][1-7]/.test(location.search)
-          ? 'A friend sent you a song. Press Play to hear it, change it, and keep it if you like it.'
-          : /[?&]shape=[CRHSWKD][RBS]/.test(location.search)
-            ? 'A friend sent you a shape. Press Play to see it built; your own shape stays saved.'
-            : /[?&]keys=[a-z0-9]+(?:-[a-z0-9]+)*(?:&|$)/i.test(location.search)
-              ? 'A friend sent you a list of Windows shortcuts. Press Play, then Preview it before DO IT!!! presses them.'
-              : '';
+  // What a friend's link brought (a game, a tune, a number to find, a song, a shape or a list of shortcuts): the title
+  // screen says so.
+  INVITE = linkInvite(location.search);
   window.oldjavaShare = { open: openShare };
 }
