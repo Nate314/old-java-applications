@@ -65,7 +65,7 @@ public final class FreshMix {
       for (int i = 0; i < n; i++) {
          order.add(i);
       }
-      // Names go in their group in a random order, so the first name of a group says nothing.
+      // Names go in their group in a random order; Roles.rotate then orders each group by its roles.
       Collections.shuffle(order, random);
       for (int i : order) {
          groups.get(best[i]).add(names.get(i));
