@@ -1738,6 +1738,11 @@ canvas.paint.top {
     padding: 12px;
   }
 
+  /* Today's picture gets its room from the start (a Then page's quirks keep their own height), so the card does not jump when it loads. */
+  .shim-title:not(.then) .shim-title-art {
+    height: 30vh;
+  }
+
   .shim-title-art img {
     max-height: calc(30vh - 24px);
   }
@@ -4066,6 +4071,18 @@ html[data-saver] * {
 
 .shim-title-story[hidden] {
   display: none;
+}
+
+/* Its room while news.js loads: one summary line (padding, border, a line of text). */
+.shim-title-story:empty {
+  visibility: hidden;
+  height: calc(1.4em + 14px);
+}
+
+/* Until apps.json answers, the title card waits unseen rather than show its name and hint arriving. */
+.shim-title.unlisted .shim-title-card,
+.shim-title.unlisted .shim-title-press {
+  visibility: hidden;
 }
 
 .shim-title-story summary {

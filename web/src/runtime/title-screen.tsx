@@ -102,6 +102,7 @@ function TitleScreen({ total, onGo, onMount }: {
   const [ready, setReady] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [found, setFound] = useState<{ app: CatalogApp; apps: CatalogApp[] } | null>(null);
+  const [listed, setListed] = useState(false);   // apps.json has answered: the card shows, filled in, not half empty
   const [quirkList, setQuirkList] = useState<string[][] | null>(null);
   const [shown, setShown] = useState(false);   // the thumbnail, once it has loaded
   const [record] = useState(() => savedRecord(saveStore()));
@@ -121,6 +122,7 @@ function TitleScreen({ total, onGo, onMount }: {
   useLayoutEffect(() => { log.current!.scrollTop = log.current!.scrollHeight; }, [lines]);
   useEffect(() => {
     catalog().then(function (apps) {
+      setListed(true);
       var app = apps[indexOf(apps, id)];
       if (!app) return;
       setFound({ app, apps });
@@ -143,7 +145,7 @@ function TitleScreen({ total, onGo, onMount }: {
     if (!(e.target as Element).closest('a, .shim-title-forget, .shim-title-story')) onGo(e.nativeEvent);
   }
   return (
-    <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (leaving ? ' leaving' : '')}
+    <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (listed ? '' : ' unlisted') + (leaving ? ' leaving' : '')}
       role="dialog" data-sound="none" aria-label={document.title} ref={screen} onClick={onClick}>
       <div className="shim-title-card">
         <div className="shim-title-art">
@@ -201,7 +203,8 @@ function TitleScreen({ total, onGo, onMount }: {
             {' for the desktop, ' + JAR_JAVA + '.'}
             {JAR_KEYS[id] && <strong className="shim-title-jar-keys">{' ' + JAR_KEYS[id]}</strong>}
           </p>
-          {Story ? <Story id={id} /> : <details className="shim-title-story" hidden />}
+          {/* Until news.js answers, its line's room is kept (today's page only), so the meter and log below stay put. */}
+          {Story ? <Story id={id} /> : <details className="shim-title-story" hidden={then} aria-hidden="true" />}
         </div>
         <span className="shim-meter shim-title-meter" style={{ '--p': String(done / total) } as CSSProperties} />
         <pre className="shim-title-log" aria-hidden="true" ref={log}>
