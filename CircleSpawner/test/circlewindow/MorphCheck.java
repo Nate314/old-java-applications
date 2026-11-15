@@ -50,6 +50,38 @@ public class MorphCheck {
       check(copy.text().equals(text), "drawing round-trips");
       copy.setText("##/x");
       check(copy.cells()[0][0] && copy.cells()[0][1] && !copy.cells()[0][2] && !copy.cells()[1][0], "short rows read what is there");
+      // Flipbook: the first drawing winks in a second frame, every frame saves, an old one-frame save reads as one.
+      check(pad.frameCount() == 2 && pad.frame() == 0, "the first drawing has two frames");
+      boolean[][] open = pad.cells();
+      pad.goTo(1);
+      check(!Arrays.deepEquals(open, pad.cells()), "the second frame differs (a wink)");
+      List<Rectangle> wink = Shapes.build(Shapes.DRAW, 200, "", pad.cells(), 500, 400, 900);
+      int[] turn = Morph.match(wink, smile, true);
+      int kept = 0;
+      int shared = 0;
+      for (int i = 0; i < wink.size(); i++) {
+         if (smile.contains(wink.get(i))) {
+            shared++;
+            kept += smile.get(turn[i]).equals(wink.get(i)) ? 1 : 0;
+         }
+      }
+      check(shared > 0 && kept == shared, "turning the page keeps " + kept + " of " + shared + " unchanged windows still");
+      check(text.contains("|") && text.split("\\|").length == 2, "both frames are saved");
+      copy.setText(text);
+      check(copy.frameCount() == 2 && copy.frame() == 0 && copy.text().equals(text), "frames round-trip");
+      String oneFrame = text.substring(0, text.indexOf('|'));
+      copy.setText(oneFrame);
+      check(copy.frameCount() == 1 && copy.text().equals(oneFrame), "an older one-frame save reads as one frame");
+      check(copy.addFrame() && copy.frameCount() == 2 && copy.frame() == 1 && Arrays.deepEquals(copy.cells(), open),
+         "+ adds a copy of the frame after it and shows it");
+      check(copy.deleteFrame() && copy.frameCount() == 1 && copy.frame() == 0, "Delete removes the frame shown");
+      check(!copy.deleteFrame(), "the last frame stays");
+      while (copy.addFrame()) {
+         // Fill the flipbook.
+      }
+      check(copy.frameCount() == DrawPad.MAX_FRAMES, "a flipbook holds " + DrawPad.MAX_FRAMES + " frames");
+      copy.goTo(DrawPad.MAX_FRAMES);
+      check(copy.frame() == 0, "playing past the last frame goes back to the first");
       int[] changes = {0};
       DrawPad counted = new DrawPad(() -> changes[0]++);
       counted.clear();

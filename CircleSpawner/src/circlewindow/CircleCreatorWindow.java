@@ -22,7 +22,8 @@ import javax.swing.Timer;
  * The creator window, top center of the screen. It builds the chosen shape below itself out of borderless
  * windows, a few per frame so the shape grows in. Choosing another shape, size or colors morphs the windows
  * on screen into it, and drawing on the pad (the Draw shape) reshapes them as you draw. Pressing any window
- * of the shape scatters it.
+ * of the shape scatters it. A drawing with several frames plays as a flipbook: the windows glide from one frame
+ * to the next, those of the parts that did not change staying where they are.
  */
 public final class CircleCreatorWindow extends JFrame {
    private static final String BLUE = "Blue";
@@ -31,9 +32,9 @@ public final class CircleCreatorWindow extends JFrame {
    private static final int WIDTH = 380;
    private static final int HEIGHT = 112;
    /** The window with the drawing pad beside its controls, or (on a narrow screen) under them. */
-   private static final int DRAW_WIDTH = 560;
-   private static final int DRAW_HEIGHT = 250;
-   private static final int DRAW_BELOW_HEIGHT = 320;
+   private static final int DRAW_WIDTH = 620;
+   private static final int DRAW_HEIGHT = 290;
+   private static final int DRAW_BELOW_HEIGHT = 370;
    /** About how many frames building a shape takes, whatever its window count. */
    private static final int BUILD_FRAMES = 45;
    private static final int SCATTER_FRAMES = 50;
@@ -45,6 +46,9 @@ public final class CircleCreatorWindow extends JFrame {
    private static final int FRAME_MILLIS = 16;
    /** How often the Clock looks at the time. */
    private static final int TICK_MILLIS = 100;
+   /** A flipbook frame every PLAY_MILLIS, the windows gliding into it over PLAY_FRAMES frames and then holding. */
+   private static final int PLAY_MILLIS = 300;
+   private static final int PLAY_FRAMES = 9;
 
    private final JComboBox<String> shapeBox = new JComboBox<>(Shapes.ALL);
    private final JTextField sizeField = new JTextField("200", 4);
@@ -52,8 +56,13 @@ public final class CircleCreatorWindow extends JFrame {
    private final JTextField wordField = new JTextField("HELLO", 8);
    private final JButton createButton = new JButton("Build it");
    private final JLabel status = new JLabel(" ");
-   private final DrawPad pad = new DrawPad(() -> this.show(DRAW_FRAMES));
+   private final DrawPad pad = new DrawPad(() -> {
+      this.stopPlaying();
+      this.show(DRAW_FRAMES);
+   });
    private final JButton mirrorButton = new JButton();
+   private final JButton playButton = new JButton("Play");
+   private final JLabel frameLabel = new JLabel();
    private final JPanel padPanel = new JPanel(new BorderLayout());
    private final List<CircleSliceWindow> slices = new ArrayList<>();
    private final List<Rectangle> pending = new ArrayList<>();
@@ -63,6 +72,7 @@ public final class CircleCreatorWindow extends JFrame {
    private final Timer scatterTimer = new Timer(FRAME_MILLIS, event -> this.scatterStep());
    private final Timer morphTimer = new Timer(FRAME_MILLIS, event -> this.morphStep());
    private final Timer clockTimer = new Timer(TICK_MILLIS, event -> this.tick());
+   private final Timer playTimer = new Timer(PLAY_MILLIS, event -> this.playStep());
    private final Saved saved = Saved.load();
    private Morph morph;
    private String builtShape = "";
@@ -100,15 +110,34 @@ public final class CircleCreatorWindow extends JFrame {
       panel.add(this.status);
 
       JButton clearButton = new JButton("Clear");
-      JPanel padButtons = new JPanel();
-      padButtons.add(clearButton);
-      padButtons.add(this.mirrorButton);
+      JButton deleteButton = new JButton("Delete");
+      JButton previousButton = new JButton("<");
+      JButton nextButton = new JButton(">");
+      JButton addButton = new JButton("+");
+      previousButton.setToolTipText("Previous frame");
+      nextButton.setToolTipText("Next frame");
+      addButton.setToolTipText("Add a frame: a copy of this one, to change");
+      deleteButton.setToolTipText("Delete this frame");
+      JPanel frameRow = new JPanel();
+      frameRow.add(previousButton);
+      frameRow.add(this.frameLabel);
+      frameRow.add(nextButton);
+      frameRow.add(addButton);
+      frameRow.add(this.playButton);
+      JPanel editRow = new JPanel();
+      editRow.add(clearButton);
+      editRow.add(deleteButton);
+      editRow.add(this.mirrorButton);
+      JPanel padButtons = new JPanel(new BorderLayout());
+      padButtons.add(frameRow, BorderLayout.NORTH);
+      padButtons.add(editRow, BorderLayout.SOUTH);
       JPanel padHolder = new JPanel();
       padHolder.add(this.pad);
       this.padPanel.add(padHolder, BorderLayout.CENTER);
       this.padPanel.add(padButtons, BorderLayout.SOUTH);
       this.add(panel, BorderLayout.CENTER);
       this.showMirror();
+      this.showFrame();
 
       this.shapeBox.addActionListener(event -> {
          if (!this.settingUp) {
@@ -128,6 +157,36 @@ public final class CircleCreatorWindow extends JFrame {
       });
       this.createButton.addActionListener(event -> this.build());
       clearButton.addActionListener(event -> this.pad.clear());
+      previousButton.addActionListener(event -> this.turnTo(this.pad.frame() - 1));
+      nextButton.addActionListener(event -> this.turnTo(this.pad.frame() + 1));
+      addButton.addActionListener(event -> {
+         this.stopPlaying();
+         if (this.pad.addFrame()) {
+            this.showFrame();
+            this.remember();
+            this.status.setText("Frame " + (this.pad.frame() + 1) + ": a copy to change.");
+         } else {
+            this.status.setText("A flipbook holds " + DrawPad.MAX_FRAMES + " frames.");
+         }
+      });
+      deleteButton.addActionListener(event -> {
+         this.stopPlaying();
+         if (this.pad.deleteFrame()) {
+            this.showFrame();
+            this.show(DRAW_FRAMES);
+         }
+      });
+      this.playButton.addActionListener(event -> {
+         if (this.playTimer.isRunning()) {
+            this.stopPlaying();
+         } else if (this.pad.frameCount() < 2) {
+            this.status.setText("Press + to add a frame, then Play.");
+         } else {
+            this.playTimer.start();
+            this.playButton.setText("Stop");
+            this.showBuilt();
+         }
+      });
       this.mirrorButton.addActionListener(event -> {
          this.pad.setMirror(!this.pad.mirror());
          this.showMirror();
@@ -154,6 +213,48 @@ public final class CircleCreatorWindow extends JFrame {
       this.ticking = true;
       try {
          this.show(TICK_FRAMES);
+      } finally {
+         this.ticking = false;
+      }
+   }
+
+   /** Shows another frame of the drawing on the pad and on screen. */
+   private void turnTo(int index) {
+      this.stopPlaying();
+      this.pad.goTo(index);
+      this.showFrame();
+      this.show(DRAW_FRAMES);
+   }
+
+   private void showFrame() {
+      this.frameLabel.setText((this.pad.frame() + 1) + " / " + this.pad.frameCount());
+   }
+
+   private void stopPlaying() {
+      if (this.playTimer.isRunning()) {
+         this.playTimer.stop();
+         this.playButton.setText("Play");
+         this.showBuilt();
+      }
+   }
+
+   /**
+    * Turns the windows into the next frame of the flipbook, pairing them by where they are on screen as a Clock
+    * tick does, so the parts the frames share stay still. A frame still gliding (or a shape growing in) waits.
+    */
+   private void playStep() {
+      if (!this.drawing()) {
+         this.stopPlaying();
+         return;
+      }
+      if (this.buildTimer.isRunning() || this.scatterTimer.isRunning() || this.morphTimer.isRunning()) {
+         return;
+      }
+      this.pad.goTo(this.pad.frame() + 1);
+      this.showFrame();
+      this.ticking = true;
+      try {
+         this.show(PLAY_FRAMES);
       } finally {
          this.ticking = false;
       }
@@ -310,6 +411,10 @@ public final class CircleCreatorWindow extends JFrame {
          this.status.setText("Draw on the pad and the windows follow.");
          return;
       }
+      if (this.playTimer.isRunning()) {
+         this.status.setText("Playing your flipbook, " + this.slices.size() + " windows. Draw to stop.");
+         return;
+      }
       String name = this.shapeName();
       this.status.setText(Character.toUpperCase(name.charAt(0)) + name.substring(1) + ", " + this.slices.size()
          + " windows. Click it to scatter.");
@@ -359,6 +464,7 @@ public final class CircleCreatorWindow extends JFrame {
       if (this.scatterTimer.isRunning() || this.slices.isEmpty()) {
          return;
       }
+      this.stopPlaying();
       this.stopAll();
       this.pending.clear();
       this.pendingColors.clear();
