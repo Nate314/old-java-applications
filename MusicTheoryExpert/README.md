@@ -56,6 +56,15 @@ The **Chord finder** tab (where the Notes tab and its test button used to be) an
 - Under them, the three keys that hold the most of those chords (ties go to a key whose home chord is the first or last chord, then to major keys and fewer sharps or flats), each marked with how many it holds, and each chord shows its numeral in the best key. **Clicking a key** writes those chords that are in it into the Songwriter tab, in that key, and plays them. The Songwriter plays a key's natural chords, so in a minor key a major V (from harmonic minor) is played as a minor v there.
 - **Original demo** (top right) plays the original I-IV-V-I demo, as the Notes tab's test button did (see below).
 
+**Guitar** (I, or the Guitar button beside Original demo) swaps the keyboard for a guitar neck in standard tuning (E A D G B E), frets 0 to 12, high E on top as a player looking down sees it, and shows how to play the chord held:
+
+- The chord held becomes the easiest shape that plays it: every note of the chord rings, nothing else, on four strings or more, with its lowest note still in the bass. Building a chord, clicking one of Your chords, or switching to the guitar picks the shape. "Easiest" is a score: low on the neck, few fingers (a barre counts as one), no barre, few strings left out (bass strings are the usual ones to leave out, a string skipped in the middle almost never), and open strings only with the first three frets. It finds the open chords (C `x32010`, G `320003`, D `xx0232`, A `x02220`, E `022100`, Am `x02210`, Em `022000`, Dm `xx0231`) and barre chords where no open shape fits (F `133211`, Bm `x24432`).
+- Each fingered note is a blue dot named by its note, an open string a ring in the column left of the nut, a string not played an `x`, and the chord's root has a white ring. A barre is drawn as one bar across the strings it holds. The shape is written under the strings the way guitarists write it (`x32010`, frets past 9 in brackets).
+- Small blue dots show where else on the neck the chord's notes lie. Clicking a fret holds it on that string (one note per string, as on a guitar); clicking the held fret again, or the open string twice, lets the string go. The name, notes, staff and keys follow at once, so the neck works as a chord finder for guitar too.
+- Typed piano keys still hold exact notes; the neck shows how to finger them, or, when no hand can hold them all at once, says so and marks where each one is.
+- The staff writes the notes an octave up, as guitar music is written. Back on the piano (I again), a chord reaching below C3 moves up an octave so it shows on the keyboard.
+- It still sounds through the same piano voice.
+
 Nothing on this tab is saved.
 
 ## Controls / usage
@@ -69,7 +78,7 @@ On the Ear training tab:
   - the chords I, IV, V, I of G major (starting at G4, MIDI 67, each in root position) on MIDI channel 0;
   - the notes of the I chord (G, B, D) one at a time, then G5, on MIDI channel 1 (each note name is printed to stdout).
   The demo used to play on start; it now plays only from the button, so it does not talk over the first question.
-- On the Chord finder tab: piano keys (A W S E D F T G Y H U J K O L P ;) hold or let go of notes, Z / X move them an octave, Space plays, Enter adds the chord to Your chords, Backspace takes the last one off, Esc or Delete lets go of every note.
+- On the Chord finder tab: piano keys (A W S E D F T G Y H U J K O L P ;) hold or let go of notes, Z / X move them an octave, Space plays, Enter adds the chord to Your chords, Backspace takes the last one off, Esc or Delete lets go of every note, I switches between the keyboard and the guitar neck.
 - The window is 780x600 px and uses the system look and feel. Title "Music Theory Expert".
 - No command-line arguments.
 
@@ -85,6 +94,7 @@ On the Ear training tab:
 - `src/musictheoryexpert/ProgressionPlayer.java`: loops the progression, one eighth note per tick of a one-shot Swing timer set by the wall clock, in the three styles.
 - `src/musictheoryexpert/ChordFinder.java`: the Chord finder tab; draws the name card, staff, keys, your chords, the build buttons and the keyboard, and handles the mouse and keys.
 - `src/musictheoryexpert/ChordNamer.java`: names held notes (chord types, inversions, intervals), spells them by letter, finds the keys a chord belongs to and the keys a list of chords fits, and builds a chord from a root and a type.
+- `src/musictheoryexpert/Guitar.java`: the guitar in standard tuning: finds the easiest shape for a chord, or the way to finger exact notes, with its fingers and barre.
 - `src/musictheoryexpert/Look.java`: the colors, font fitting, keyboard drawing and keyboard hit test the tabs share.
 - `src/musictheoryexpert/StepPlayer.java`: plays a question's notes on MIDI channel 2, step by step on a Swing timer.
 - `src/musictheoryexpert/Notes.java`: sharp and flat note names, scale step patterns (major, natural, harmonic and melodic minor), scale and triad building, and the demo playback.
@@ -98,7 +108,7 @@ From the repo root: `./run.ps1 old MusicTheoryExpert` (or `./run.ps1 old MusicTh
 
 ## Self-check
 
-`test/musictheoryexpert/NotesCheck.java` checks note name lookup (sharp and flat), scales and triads. `test/musictheoryexpert/DrillCheck.java` checks that every drill asks each of its answers, that what plays matches the answer (triad shape, interval size, scale steps, chord degree) and stays on the keyboard, the round's score, streak and star rules, and that the saved records keep the best score, skip bad lines and open drills in order. `test/musictheoryexpert/ChordNamerCheck.java` checks the Chord finder's names (triads, sevenths, sixths, sus, add9, ninths, power chords, no-fifth chords, inversions and slash names, chords with no name), letter spelling, intervals, that every chord type on every root names itself back and builds in range, the keys of a chord (including harmonic minor's), and fitting a list of chords to a key. `test/musictheoryexpert/ProgressionCheck.java` checks the Songwriter's chord names, numerals and qualities in all 24 keys (and that the circle's neighbors hold each key's chords), key signatures, that smooth voicing keeps each chord's notes in range and never moves more than root position would, the presets, and saving and loading. From `MusicTheoryExpert/`:
+`test/musictheoryexpert/NotesCheck.java` checks note name lookup (sharp and flat), scales and triads. `test/musictheoryexpert/DrillCheck.java` checks that every drill asks each of its answers, that what plays matches the answer (triad shape, interval size, scale steps, chord degree) and stays on the keyboard, the round's score, streak and star rules, and that the saved records keep the best score, skip bad lines and open drills in order. `test/musictheoryexpert/ChordNamerCheck.java` checks the Chord finder's names (triads, sevenths, sixths, sus, add9, ninths, power chords, no-fifth chords, inversions and slash names, chords with no name), letter spelling, intervals, that every chord type on every root names itself back and builds in range, the keys of a chord (including harmonic minor's), and fitting a list of chords to a key. `test/musictheoryexpert/ProgressionCheck.java` checks the Songwriter's chord names, numerals and qualities in all 24 keys (and that the circle's neighbors hold each key's chords), key signatures, that smooth voicing keeps each chord's notes in range and never moves more than root position would, the presets, and saving and loading. `test/musictheoryexpert/GuitarCheck.java` checks the guitar shapes of the usual open and barre chords, barres and finger counts, that 15 chord types on all 12 roots each get a playable shape that rings just their notes with the root in the bass and names back to the same chord, and placing exact notes (or none, when a hand cannot hold them). From `MusicTheoryExpert/`:
 
 ```
 javac -d ../out/check/MusicTheoryExpert src/musictheoryexpert/*.java src/synthesizer/*.java test/musictheoryexpert/*.java
@@ -106,6 +116,7 @@ java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.NotesCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.DrillCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.ProgressionCheck
 java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.ChordNamerCheck
+java -ea -cp ../out/check/MusicTheoryExpert musictheoryexpert.GuitarCheck
 ```
 
 ## Known quirks
