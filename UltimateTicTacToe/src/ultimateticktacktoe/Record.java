@@ -11,7 +11,7 @@ import java.io.Writer;
  * Games won, lost and drawn against each computer level, the mode played last and the game with a friend, kept in a
  * small text file of {@code name=value} lines: {@code mode=HARD}, then one line such as {@code HARD=2,5,1} (wins,
  * losses, draws) per level that has been played, then the friend game's moves ({@code friend=e5a1}, see FriendLink)
- * and {@code friendWaiting=true} while the next move is the friend's.
+ * and {@code friendWaiting=true} while the next move is the friend's, and {@code sound=off} while the game's notes are off.
  */
 public final class Record {
    private final File file;
@@ -19,6 +19,7 @@ public final class Record {
    private Mode lastMode = Mode.EASY;
    private String friendMoves = "";
    private boolean friendWaiting;
+   private boolean soundOn = true;
 
    private Record(File file) {
       this.file = file;
@@ -48,6 +49,8 @@ public final class Record {
             this.friendMoves = value;
          } else if (name.equals("friendWaiting")) {
             this.friendWaiting = Boolean.parseBoolean(value);
+         } else if (name.equals("sound")) {
+            this.soundOn = !value.equals("off");
          } else {
             String[] counts = value.split(",");
             int[] row = this.results[Mode.valueOf(name).ordinal()];
@@ -89,6 +92,17 @@ public final class Record {
       }
    }
 
+   public boolean soundOn() {
+      return this.soundOn;
+   }
+
+   public void setSoundOn(boolean on) {
+      if (on != this.soundOn) {
+         this.soundOn = on;
+         this.save();
+      }
+   }
+
    /** Counts a finished game against the computer; {@code winner} is "X" (the player), "O" or DRAW. */
    public void add(Mode mode, String winner) {
       int column = "X".equals(winner) ? 0 : "O".equals(winner) ? 1 : 2;
@@ -118,6 +132,9 @@ public final class Record {
          if (!this.friendMoves.isEmpty()) {
             writer.write("friend=" + this.friendMoves + "\n");
             writer.write("friendWaiting=" + this.friendWaiting + "\n");
+         }
+         if (!this.soundOn) {
+            writer.write("sound=off\n");
          }
       } catch (IOException e) {
          System.err.println("Could not save the record: " + e.getMessage());

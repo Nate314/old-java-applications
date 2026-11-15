@@ -126,6 +126,9 @@ public final class GameFrame extends JFrame {
    private final Timer hintTimer = new Timer(HINT_TICK_MILLIS, event -> this.hintStep());
    /** Hints were shown in this game against the computer, so it does not count in the record. */
    private boolean hinted;
+   /** The game's notes (M turns them off and on; the setting is kept in the record file). */
+   private final Sounds sounds;
+   private final JButton soundButton = new JButton("Sound");
 
    /** {@code page} and {@code code} come from the arguments (see Main); either may be null. */
    public GameFrame(String page, String code) {
@@ -133,6 +136,7 @@ public final class GameFrame extends JFrame {
       this.copyButton = new JButton(page == null ? "Copy code" : "Copy link");
       this.record = Record.load(RECORD_FILE);
       this.mode = this.record.lastMode();
+      this.sounds = Sounds.open(this.record.soundOn());
       if (this.mode == Mode.FRIEND) {
          this.restoreFriendGame();
       }
@@ -212,10 +216,20 @@ public final class GameFrame extends JFrame {
          this.modeButtons[choice.ordinal()] = button;
          bar.add(button);
       }
+      this.soundButton.setFocusable(false);
+      this.soundButton.setToolTipText("The game's notes on or off (M)");
+      this.soundButton.addActionListener(event -> this.toggleSound());
+      bar.add(this.soundButton);
       if (bar.getPreferredSize().width > width) {
          for (Mode choice : Mode.values()) {
             this.modeButtons[choice.ordinal()].setText(choice.shortLabel);
          }
+      }
+      if (bar.getPreferredSize().width > width) {
+         this.soundButton.setText("♪");   // a note, on a phone-sized board
+      }
+      if (bar.getPreferredSize().width > width) {
+         bar.remove(this.soundButton);   // no room on a short screen: M still works
       }
       return bar;
    }
@@ -424,23 +438,43 @@ public final class GameFrame extends JFrame {
    /** Plays a move on the board shown and starts it drawing in (see play); false if the move is not allowed. */
    private boolean drawIn(int board, int cell) {
       String before = this.state.boardResults[board];
+      boolean x = this.state.xTurn;
       if (!this.state.play(board, cell)) {
          return false;
       }
       long now = System.currentTimeMillis();
       this.placedAt[board * 9 + cell] = now;
+      this.sounds.mark(cell, x);
       long end = now + CellButton.MARK_MS;
       if (before == null && this.state.boardResults[board] != null) {
          this.boardWonAt[board] = end;
+         this.sounded(GameState.winningLine(this.state.marks[board]), x, (int) (end - now), CellButton.LINE_MS, 0);
          end += CellButton.LINE_MS + CellButton.BIG_MARK_MS;
       }
       if (this.state.winner != null) {
          this.gameWonAt = end;
+         this.sounded(GameState.winningLine(this.state.boardResults), x, (int) (end - now), CellButton.GAME_OVER_MS, 12);
          end += CellButton.GAME_OVER_MS;
       }
       this.animateUntil = Math.max(this.animateUntil, end);
       this.animation.start();
       return true;
+   }
+
+   /** A board or the game just finished: its winning line's notes in time with the drawing, or a draw's two notes. */
+   private void sounded(int[] line, boolean x, int delay, int millis, int octave) {
+      if (line == null) {
+         this.sounds.drawn(delay);
+      } else {
+         this.sounds.line(line, x, delay, millis, octave);
+      }
+   }
+
+   /** M or Sound: the game's notes off or on, kept for next time. */
+   final void toggleSound() {
+      this.sounds.setOn(!this.sounds.isOn());
+      this.record.setSoundOn(this.sounds.isOn());
+      this.refresh();
    }
 
    private void animate() {
@@ -563,7 +597,11 @@ public final class GameFrame extends JFrame {
          this.newGame(this.mode);
          return;
       }
-      if (this.computerToMove() || this.mode == Mode.FRIEND && this.friendWaiting || !this.play(board, cell)) {
+      if (this.computerToMove() || this.mode == Mode.FRIEND && this.friendWaiting) {
+         return;
+      }
+      if (!this.play(board, cell)) {
+         this.sounds.refused();
          return;
       }
       if (this.mode == Mode.FRIEND) {
@@ -622,6 +660,9 @@ public final class GameFrame extends JFrame {
          button.setBackground(choice == this.mode ? CellButton.X_COLOR : BUTTON);
          button.setForeground(choice == this.mode ? Color.BLACK : TEXT);
       }
+      this.soundButton.setBackground(this.sounds.isOn() ? CellButton.X_COLOR : BUTTON);
+      this.soundButton.setForeground(this.sounds.isOn() ? Color.BLACK : TEXT);
+      this.soundButton.getAccessibleContext().setAccessibleName(this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)");
 
       String winner = this.state.winner;
       if (this.lessonStep >= 0) {
@@ -736,6 +777,7 @@ public final class GameFrame extends JFrame {
          : Lesson.STEPS[this.lessonStep].wrong(this.state, board * 9 + cell);
       if (wrong != null) {
          this.notice = wrong;
+         this.sounds.refused();
       } else {
          this.drawIn(board, cell);
          this.lessonDone = true;
@@ -930,6 +972,10 @@ public final class GameFrame extends JFrame {
 
    /** The arrow keys, Home, End, N and Esc (or R) while reviewing, and R to start one; true if the key was used. */
    final boolean reviewKey(int keyCode) {
+      if (keyCode == KeyEvent.VK_M) {
+         this.toggleSound();
+         return true;
+      }
       if (this.lessonStep >= 0) {
          if (keyCode == KeyEvent.VK_ESCAPE || keyCode == KeyEvent.VK_L) {
             this.endLesson();
