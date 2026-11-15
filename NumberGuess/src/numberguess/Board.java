@@ -24,7 +24,8 @@ import javax.swing.Timer;
  * line is the whole range with what is still possible lit; the bottom one zooms in on just that part, so a click on
  * it guesses the number under the pointer, even in 1 to 1,000,000. The guesses so far sit underneath as chips.
  * The Magic tab is a card trick instead: see {@link MagicCards}, drawn by {@link MagicView}. The Duel tab is a race
- * against the computer to find each other's number: see {@link Duel}, drawn by {@link DuelView}.
+ * against the computer to find each other's number: see {@link Duel}, drawn by {@link DuelView}. Hot and cold answers
+ * only warmer or colder than the guess before: see {@link Warmth}, drawn by {@link WarmthView}.
  */
 @SuppressWarnings("serial")
 public final class Board extends JPanel {
@@ -55,7 +56,7 @@ public final class Board extends JPanel {
 	private static final int ZOOM_Y = 198, ZOOM_HEIGHT = 36;
 	private static final int CHIPS_Y = 264;
 	/** The tabs after the five ranges. */
-	private static final int DUEL_TAB = Level.values().length, PICK_TAB = DUEL_TAB + 1, MAGIC_TAB = DUEL_TAB + 2;
+	private static final int DUEL_TAB = Level.values().length, PICK_TAB = DUEL_TAB + 1, MAGIC_TAB = DUEL_TAB + 2, WARM_TAB = DUEL_TAB + 3;
 
 	private final Records records;
 	private final Random random = new Random();
@@ -69,6 +70,8 @@ public final class Board extends JPanel {
 	private final MagicView magicView = new MagicView(this::repaint);
 	private Duel duel;
 	private final DuelView duelView = new DuelView(this::repaint);
+	private Warmth warm;
+	private final WarmthView warmView = new WarmthView();
 	/** Makes the computer's guess in a duel, a moment after yours. */
 	private final Timer computerTurn = new Timer(DuelView.thinkMillis(), event -> computerGuesses());
 	private String headline = "";
@@ -112,6 +115,9 @@ public final class Board extends JPanel {
 			public void mouseExited(MouseEvent event) {
 				hoverTab = -1;
 				hoverX = -1;
+				if (isWarm()) {
+					warmView.hover(warm, -1, -1);
+				}
 				repaint();
 			}
 		};
@@ -135,13 +141,17 @@ public final class Board extends JPanel {
 		return duel != null;
 	}
 
+	public boolean isWarm() {
+		return warm != null;
+	}
+
 	public boolean isOver() {
-		return isDuel() ? duel.isOver() : isMagic() ? magic.isDone() : isPicking() ? reader.isOver() : game.isOver();
+		return isWarm() ? warm.isOver() : isDuel() ? duel.isOver() : isMagic() ? magic.isDone() : isPicking() ? reader.isOver() : game.isOver();
 	}
 
 	/** The open tab: a range's ordinal, then Duel, You pick and Magic. */
 	private int tab() {
-		return isDuel() ? DUEL_TAB : isMagic() ? MAGIC_TAB : isPicking() ? PICK_TAB : level.ordinal();
+		return isWarm() ? WARM_TAB : isDuel() ? DUEL_TAB : isMagic() ? MAGIC_TAB : isPicking() ? PICK_TAB : level.ordinal();
 	}
 
 	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic, 3 for a won range (Challenge a friend). */
@@ -171,6 +181,7 @@ public final class Board extends JPanel {
 		this.level = level;
 		reader = null;
 		magic = null;
+		warm = null;
 		endDuel();
 		game = new Game(level, random);
 		newBest = false;
@@ -201,6 +212,7 @@ public final class Board extends JPanel {
 		reader = new MindReader(lying ? 1 : 0);
 		game = null;
 		magic = null;
+		warm = null;
 		endDuel();
 		askReader();
 		reset();
@@ -212,6 +224,7 @@ public final class Board extends JPanel {
 		magic = new MagicCards(random);
 		reader = null;
 		game = null;
+		warm = null;
 		endDuel();
 		magicView.dealt(false);
 		askMagic();
@@ -228,7 +241,23 @@ public final class Board extends JPanel {
 		reader = null;
 		game = null;
 		magic = null;
+		warm = null;
 		say("Duel: hide a number from 1 to " + Duel.MAX, TEXT, "Then race the computer to find each other's. You guess first each round.");
+		slide.stop();
+		repaint();
+		switched(before);
+	}
+
+	/** Hot and cold: a new number, found only by warmer or colder. */
+	public void startWarm() {
+		int before = kind();
+		endDuel();
+		warm = new Warmth(random);
+		reader = null;
+		game = null;
+		magic = null;
+		say("Hot and cold: find a number from 1 to " + Warmth.MAX, TEXT, "Each answer only says warmer or colder than your last guess. Par " + Warmth.PAR
+				+ ", " + Warmth.LIMIT + " guesses.");
 		slide.stop();
 		repaint();
 		switched(before);
@@ -241,7 +270,9 @@ public final class Board extends JPanel {
 
 	/** The same game again: a new number in this range, a new duel, or a new round of You pick. */
 	public void again() {
-		if (isDuel()) {
+		if (isWarm()) {
+			startWarm();
+		} else if (isDuel()) {
 			startDuel();
 		} else if (isMagic()) {
 			if (!magicView.isFlipping()) {
@@ -262,7 +293,7 @@ public final class Board extends JPanel {
 		while (index > 0 && index < DUEL_TAB && !records.isOpen(Level.values()[index])) {
 			index += by;
 		}
-		if (index >= 0 && index <= MAGIC_TAB) {
+		if (index >= 0 && index <= WARM_TAB) {
 			openTab(index);
 		}
 	}
@@ -276,7 +307,7 @@ public final class Board extends JPanel {
 
 	/** The top of the range being played. */
 	int max() {
-		return isDuel() ? Duel.MAX : isPicking() ? MindReader.MAX : level.max();
+		return isWarm() ? Warmth.MAX : isDuel() ? Duel.MAX : isPicking() ? MindReader.MAX : level.max();
 	}
 
 	private int low() {
@@ -305,6 +336,10 @@ public final class Board extends JPanel {
 
 	/** A typed or clicked guess. */
 	public void guess(int number) {
+		if (isWarm()) {
+			warmGuess(number);
+			return;
+		}
 		if (isDuel()) {
 			duelGuess(number);
 			return;
@@ -391,6 +426,52 @@ public final class Board extends JPanel {
 				: game.stars() < 3 ? " Par is " + level.par() + "." : " Press Enter for another.";
 		say("Got it: " + Level.commas(game.number()) + " in " + guesses + (guesses == 1 ? " guess" : " guesses"), RIGHT,
 				(newBest ? "New best! " : "") + more.trim());
+	}
+
+	// ---- Hot and cold ----
+
+	private void warmGuess(int number) {
+		if (warm.isOver()) {
+			startWarm();
+			return;
+		}
+		Integer before = warm.previous();
+		Warmth.Read read = warm.guess(number);
+		int left = warm.left();
+		String fit = left + (left == 1 ? " number fits" : " numbers fit") + ". " + guessesLeft(warm.guessesLeft()) + ".";
+		switch (read) {
+		case OUT_OF_RANGE:
+			notice("Pick a number from 1 to " + Warmth.MAX + ". Not counted.");
+			return;
+		case REPEAT:
+			notice(number + " was your last guess: it would be just as warm. Not counted.");
+			return;
+		case FOUND:
+			int count = warm.guesses().size();
+			say("Got it: " + number + " in " + guesses(count), RIGHT, (count <= Warmth.PAR ? "Within par! " : "Par is " + Warmth.PAR + ". ")
+					+ "The best plan never needs more than " + Warmth.PAR + ". Enter plays again.");
+			break;
+		default:
+			if (warm.isOver()) {
+				say("Out of guesses. It was " + warm.number(), HIGH, "Press Enter or click the line for a new number.");
+			} else if (read == Warmth.Read.FIRST) {
+				say("Not " + number + ". Now guess again", TEXT, "The answer will say if that guess is warmer or colder than " + number + ".");
+			} else if (read == Warmth.Read.SAME) {
+				say("Just as close as " + before, GOLD, "So it is exactly halfway between them. " + guessesLeft(warm.guessesLeft()) + ".");
+			} else {
+				boolean warmer = read == Warmth.Read.WARMER;
+				boolean above = (number > before) == warmer;
+				say(number + (warmer ? " is warmer" : " is colder") + " than " + before, warmer ? HIGH : LOW, (warmer ? "Closer" : "Further")
+						+ ", so it is " + (above ? "above" : "below") + " halfway, " + half(number + before) + ". " + fit);
+			}
+			break;
+		}
+		repaint();
+	}
+
+	/** Half of {@code twice}, as "49" or "49.5". */
+	static String half(int twice) {
+		return twice / 2 + (twice % 2 == 0 ? "" : ".5");
 	}
 
 	// ---- Duel ----
@@ -626,6 +707,10 @@ public final class Board extends JPanel {
 	// ---- mouse ----
 
 	private void openTab(int index) {
+		if (index == WARM_TAB) {
+			startWarm();
+			return;
+		}
 		if (index == MAGIC_TAB) {
 			startMagic();
 			return;
@@ -656,6 +741,14 @@ public final class Board extends JPanel {
 				return;
 			}
 		}
+		if (isWarm()) {
+			int number = warmView.numberAt(x, y);
+			if (number > 0 || warm.isOver() && y > TABS_Y + TAB_HEIGHT) {
+				guess(number);
+				warmView.hover(warm, x, y);
+			}
+			return;
+		}
 		if (isDuel()) {
 			int number = duelView.numberAt(duel, x, y);
 			if (number > 0 || duel.isOver() && y > TABS_Y + TAB_HEIGHT) {
@@ -675,6 +768,15 @@ public final class Board extends JPanel {
 			if (tabs.get(i).contains(x, y)) {
 				tab = i;
 			}
+		}
+		if (isWarm()) {
+			boolean changed = warmView.hover(warm, x, y);
+			if (tab != hoverTab || changed) {
+				hoverTab = tab;
+				setCursor(Cursor.getPredefinedCursor(tab >= 0 || warmView.hoverNumber() > 0 ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+				repaint();
+			}
+			return;
 		}
 		if (isDuel()) {
 			boolean changed = duelView.hover(duel, x, y);
@@ -722,7 +824,7 @@ public final class Board extends JPanel {
 
 	private void layOut() {
 		int width = getWidth();
-		int count = MAGIC_TAB + 1;
+		int count = WARM_TAB + 1;
 		int gap = 6;
 		int tabWidth = (width - 2 * MARGIN - gap * (count - 1)) / count;
 		tabs.clear();
@@ -754,6 +856,10 @@ public final class Board extends JPanel {
 			magicView.paint(g, magic, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
 			return;
 		}
+		if (isWarm()) {
+			warmView.paint(g, warm, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
+			return;
+		}
 		if (isDuel()) {
 			duelView.paint(g, duel, records, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
 			return;
@@ -774,6 +880,7 @@ public final class Board extends JPanel {
 			boolean duelTab = i == DUEL_TAB;
 			boolean picking = i == PICK_TAB;
 			boolean magicTab = i == MAGIC_TAB;
+			boolean warmTab = i == WARM_TAB;
 			Level tabLevel = i < DUEL_TAB ? Level.values()[i] : null;
 			boolean selected = i == tab();
 			boolean open = tabLevel == null || records.isOpen(tabLevel);
@@ -785,7 +892,7 @@ public final class Board extends JPanel {
 			}
 			g.setFont(new Font("SansSerif", Font.BOLD, 13));
 			g.setColor(open ? TEXT : DIM);
-			String label = duelTab ? "Duel" : picking ? "You pick" : magicTab ? "Magic" : tabLevel.label();
+			String label = warmTab ? "Hot & cold" : duelTab ? "Duel" : picking ? "You pick" : magicTab ? "Magic" : tabLevel.label();
 			if (g.getFontMetrics().stringWidth(label) > tab.width - 6) {
 				g.setFont(new Font("SansSerif", Font.BOLD, 11));
 			}
@@ -795,7 +902,7 @@ public final class Board extends JPanel {
 			if (tabLevel == null) {
 				g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 				g.setColor(SOFT);
-				String sub = duelTab ? "Race me" : picking ? "I guess yours" : "Card trick";
+				String sub = warmTab ? "Warmer?" : duelTab ? "Race me" : picking ? "I guess yours" : "Card trick";
 				g.drawString(sub, centerX - g.getFontMetrics().stringWidth(sub) / 2, tab.y + 35);
 			} else if (!open) {
 				paintLock(g, centerX, tab.y + 31);

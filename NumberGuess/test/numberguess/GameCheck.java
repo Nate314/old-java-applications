@@ -270,6 +270,35 @@ public class GameCheck {
 		check(Challenge.codeIn("https://x.io/apps/NumberGuess.html?challenge=2AB-c&shared=3").equals("2ab-c") && Challenge.codeIn(" 2ab ").equals("2ab"), "code in a link");
 		check("https://x.io/a.html".equals(Challenge.pageOf("https://x.io/a.html?challenge=2a#t")) && Challenge.pageOf("2ab") == null, "page of a link");
 		check(Challenge.message(null, game).equals(code) && Challenge.message("https://x.io/a.html", game).equals("https://x.io/a.html?challenge=" + code), "message");
+
+		checkWarmth();
+	}
+
+	/** Hot and cold: warmer and colder split at the halfway point, the number always still fits, and par is right. */
+	private static void checkWarmth() {
+		Warmth warm = new Warmth(40);
+		check(warm.guess(0) == Warmth.Read.OUT_OF_RANGE && warm.guess(101) == Warmth.Read.OUT_OF_RANGE, "hot and cold out of range");
+		check(warm.guess(10) == Warmth.Read.FIRST && warm.left() == 99 && warm.guess(10) == Warmth.Read.REPEAT, "first guess, then no repeat");
+		check(warm.guess(70) == Warmth.Read.SAME && warm.left() == 1 && warm.isPossible(40), "just as close means halfway");
+		check(warm.guess(40) == Warmth.Read.FOUND && warm.isOver() && warm.guesses().size() == 3, "found");
+		warm = new Warmth(30);
+		warm.guess(10);
+		check(warm.guess(70) == Warmth.Read.COLDER && warm.high() == 39 && warm.left() == 38, "colder keeps the far side of halfway");
+		check(warm.guess(20) == Warmth.Read.WARMER && warm.high() == 39 && warm.left() == 37, "warmer keeps this side, a ruled-out guess allowed");
+		check(warm.guess(31) == Warmth.Read.WARMER && warm.low() == 26 && warm.high() == 39, "warmer above halfway");
+		// Whatever is guessed, the number always fits every answer until it is found or the guesses run out.
+		Random random = new Random(7);
+		for (int number = 1; number <= Warmth.MAX; number++) {
+			for (int round = 0; round < 40; round++) {
+				warm = new Warmth(number);
+				while (!warm.isOver()) {
+					warm.guess(random.nextInt(Warmth.MAX) + 1);
+					check(warm.isPossible(number), "hot and cold keeps " + number + " after " + warm.guesses());
+				}
+				check(warm.isFound() == warm.guesses().contains(number), "found only by guessing it");
+			}
+		}
+		check(Warmth.par(10) == 5 && Warmth.par(Warmth.MAX) == Warmth.PAR, "hot and cold par");
 	}
 
 	private static void check(boolean condition, String what) {
