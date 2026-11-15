@@ -130,6 +130,27 @@ public class Main extends JFrame implements GroupBoard.Actions {
    }
 
    @Override
+   public void reuse(List<List<String>> round) {
+      List<String> typed = GroupMaker.parseNames(textField.getText());
+      List<String> here = roster.rules.present(typed);
+      if (here.isEmpty()) {
+         board.showMessage(typed.isEmpty() ? "Type the class in the names field first."
+            : "Everyone is marked away. Mark who is here in Roll call (A).");
+         return;
+      }
+      // The same groups, with the roles rotated against every round so far.
+      List<List<String>> groups = Roles.rotate(GroupMaker.again(round, here), roster.history, random);
+      roster.history.add(groups);
+      roster.names = textField.getText().trim();
+      String problem = save(groups);
+      board.showRound(typed, true);
+      if (problem != null) {
+         board.showMessage(problem);
+      }
+      board.requestFocusInWindow();
+   }
+
+   @Override
    public void edited(List<List<String>> groups) {
       roster.history.replaceLast(groups);
       String problem = save(groups);
