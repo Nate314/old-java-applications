@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for SimpleAlgorithms: bars being sorted, two of them swapping places. Original art for
+       this repo, after the Algorithm Lab's sorting race. -->
+  <rect x="16" y="28" width="224" height="200" rx="24" fill="#1e2b45"/>
+  <rect x="36" y="204" width="184" height="6" rx="3" fill="#3a4b6e"/>
+  <g fill="#5b8def">
+    <rect x="40" y="168" width="26" height="36" rx="4"/>
+    <rect x="76" y="144" width="26" height="60" rx="4"/>
+    <rect x="184" y="72" width="26" height="132" rx="4"/>
+  </g>
+  <rect x="112" y="96" width="26" height="108" rx="4" fill="#ff9f1c"/>
+  <rect x="148" y="120" width="26" height="84" rx="4" fill="#ff9f1c"/>
+  <path d="M125 80 Q143 48 161 104" stroke="#ffd34d" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <path d="M149 96 L161 106 L169 90" stroke="#ffd34d" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

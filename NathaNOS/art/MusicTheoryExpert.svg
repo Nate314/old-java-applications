@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for MusicTheoryExpert: the circle of fifths wheel with one key lit, and a note in the
+       middle. Original art for this repo, after the Songwriter wheel. -->
+  <circle cx="128" cy="128" r="116" fill="#26304a"/>
+  <path d="M70 27.5 A116 116 0 0 1 128 12 V64 A64 64 0 0 0 96 72.6 Z" fill="#34405f"/>
+  <path d="M186 27.5 A116 116 0 0 1 228.5 70 L183.4 96 A64 64 0 0 0 160 72.6 Z" fill="#34405f"/>
+  <path d="M128 12 A116 116 0 0 1 186 27.5 L160 72.6 A64 64 0 0 0 128 64 Z" fill="#3d78f0"/>
+  <g stroke="#4a5880" stroke-width="4">
+    <path d="M128 12 V64"/><path d="M186 27.5 L160 72.6"/><path d="M228.5 70 L183.4 96"/><path d="M244 128 H192"/>
+    <path d="M228.5 186 L183.4 160"/><path d="M186 228.5 L160 183.4"/><path d="M128 244 V192"/><path d="M70 228.5 L96 183.4"/>
+    <path d="M27.5 186 L72.6 160"/><path d="M12 128 H64"/><path d="M27.5 70 L72.6 96"/><path d="M70 27.5 L96 72.6"/>
+  </g>
+  <circle cx="128" cy="128" r="64" fill="#f4f7fb"/>
+  <ellipse cx="116" cy="154" rx="20" ry="15" fill="#1c2430" transform="rotate(-20 116 154)"/>
+  <path d="M133 150 V88 Q150 96 160 112" stroke="#1c2430" stroke-width="8" fill="none" stroke-linecap="round"/>
+</svg>

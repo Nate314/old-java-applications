@@ -61,7 +61,7 @@ public class StartMenu extends JInternalFrame {
       for (int i = 0; i < launcher.count(); i++) {
          int app = i;
          FlatButton[] made = new FlatButton[1];
-         FlatButton row = new FlatButton(launcher.icon(i), launcher.name(i), launcher.name(i), null, LauncherWindow.HOVER, null, () -> {
+         FlatButton row = new FlatButton(launcher.icon(i), launcher.name(i), AppIcon.words(launcher.name(i)), null, LauncherWindow.HOVER, null, () -> {
             this.hideMenu();
             launcher.launch(app, made[0]);
          });
