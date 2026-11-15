@@ -71,6 +71,8 @@ public final class Songwriter extends JPanel {
 	private String notice = "";
 	/** Melody mode: the piano keys play the melody, and what is played while the loop plays is kept. */
 	private boolean melodyMode;
+	/** The song written out as sheet music, over the circle and the buttons (I). */
+	private boolean sheet;
 	/** The typed keys' lowest note (A types it). */
 	private int typedBase = 60;
 	/** Melody notes held down, each with {the loop slot it started on (-1 when not looping), when it started}. */
@@ -87,6 +89,7 @@ public final class Songwriter extends JPanel {
 	private Rectangle playButton = new Rectangle(), slower = new Rectangle(), faster = new Rectangle();
 	private Rectangle styleButton = new Rectangle(), voicingButton = new Rectangle(), clearButton = new Rectangle();
 	private Rectangle melodyButton = new Rectangle(), melodyRoll = new Rectangle();
+	private Rectangle sheetButton = new Rectangle(), sheetArea = new Rectangle();
 	private Rectangle sendButton = new Rectangle(), keepButton = new Rectangle(), mineButton = new Rectangle();
 	private int circleX, circleY, radius;
 	private Object hover;
@@ -349,6 +352,18 @@ public final class Songwriter extends JPanel {
 		repaint();
 	}
 
+	// ---- the sheet music ----
+
+	public boolean isSheet() {
+		return sheet;
+	}
+
+	public void setSheet(boolean on) {
+		sheet = on;
+		notice = "";
+		repaint();
+	}
+
 	// ---- sending the song ----
 
 	public boolean isVisiting() {
@@ -409,6 +424,10 @@ public final class Songwriter extends JPanel {
 		if (event.isControlDown() || event.isAltDown() || event.isMetaDown()) {
 			return false;
 		}
+		if (code == KeyEvent.VK_I || sheet && code == KeyEvent.VK_ESCAPE) {
+			setSheet(!sheet);
+			return true;
+		}
 		if (melodyMode && piano >= 0 && key != KeyEvent.CHAR_UNDEFINED) {
 			// A held key repeats; only its first press counts.
 			if (keysDown.add(code)) {
@@ -465,6 +484,8 @@ public final class Songwriter extends JPanel {
 		if (target instanceof Integer) {
 			int code = (Integer) target;
 			setKey(code % 100, code >= 200);
+		} else if (target == sheetButton) {
+			setSheet(!sheet);
 		} else if (target == sendButton) {
 			send();
 		} else if (target == keepButton) {
@@ -551,6 +572,9 @@ public final class Songwriter extends JPanel {
 		// In melody mode the melody's piano roll takes the famous progressions' place.
 		melodyRoll = new Rectangle(x, row + 112, w, 66);
 		keysTop = Math.max(row + 112 + 36 + 76, height - 96);
+		sheetArea = new Rectangle(8, HEADER + 6, width - 16, keysTop - 40 - HEADER);
+		// Under the circle; over the sheet, in its lower left corner.
+		sheetButton = new Rectangle(16, sheet ? sheetArea.y + sheetArea.height - 42 : circleY + radius + 66, 190, 34);
 		sendButton = new Rectangle(150, 10, 122, 32);
 		keepButton = new Rectangle(sendButton.x + sendButton.width + 104, 10, 76, 32);
 		mineButton = new Rectangle(keepButton.x + keepButton.width + 6, 10, 72, 32);
@@ -575,6 +599,15 @@ public final class Songwriter extends JPanel {
 			int position = Math.floorMod((int) Math.floor(degrees / 30), 12);
 			return distance >= radius * 0.66 ? 100 + position : 200 + position;
 		}
+		if (sheet) {
+			// Over the sheet only its button and the header's buttons answer.
+			for (Rectangle box : visiting ? new Rectangle[] { sheetButton, sendButton, keepButton, mineButton } : new Rectangle[] { sheetButton, sendButton }) {
+				if (box.contains(x, y)) {
+					return box;
+				}
+			}
+			return null;
+		}
 		List<Rectangle> all = new ArrayList<>(chordButtons);
 		all.addAll(slots.subList(0, Math.min(slots.size(), song.size() + (selected >= 0 ? 1 : 0))));
 		if (!melodyMode) {
@@ -588,6 +621,7 @@ public final class Songwriter extends JPanel {
 		all.add(voicingButton);
 		all.add(clearButton);
 		all.add(sendButton);
+		all.add(sheetButton);
 		if (visiting) {
 			all.add(keepButton);
 			all.add(mineButton);
@@ -621,6 +655,12 @@ public final class Songwriter extends JPanel {
 		} else {
 			paintPresets(g);
 		}
+		if (sheet) {
+			Preset preset = song.matchingPreset();
+			String title = visiting ? "A friend's song" : preset != null && song.melody().isEmpty() ? preset.title() : "Your song";
+			LeadSheet.paint(g, sheetArea, song, title, playing, beat);
+		}
+		paintSheetButton(g);
 		paintInfo(g, keysTop - 14);
 		paintKeys(g, keysTop);
 	}
@@ -958,6 +998,19 @@ public final class Songwriter extends JPanel {
 		}
 	}
 
+	/** Sheet music (I) under the circle; over the sheet it takes you back. */
+	private void paintSheetButton(Graphics2D g) {
+		Rectangle b = sheetButton;
+		g.setColor(sheet ? hover == b ? BLUE_HOVER : BLUE : hover == b ? CARD_HOVER : CARD);
+		g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+		g.setColor(sheet ? Color.WHITE : TEXT);
+		g.setFont(new Font("SansSerif", Font.BOLD, 14));
+		g.drawString(sheet ? "Back to the circle" : "Sheet music", b.x + 12, b.y + 22);
+		g.setColor(sheet ? Color.WHITE : DIM);
+		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+		g.drawString("I", b.x + b.width - 16, b.y + 21);
+	}
+
 	private void paintSmallButton(Graphics2D g, Rectangle b, String label) {
 		g.setColor(hover == b ? CARD_HOVER : CARD);
 		g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
@@ -1005,6 +1058,8 @@ public final class Songwriter extends JPanel {
 		if (!notice.isEmpty()) {
 			line = notice;
 			color = GOLD;
+		} else if (sheet && !melodyMode && !player.isPlaying()) {
+			line = "Your song as sheet music: Space plays it, 1 to 7 add chords, R and the keys write a melody, I goes back.";
 		} else if (melodyMode && !player.isPlaying()) {
 			line = "Melody: type A W S E D F T G Y H U J K (C" + (typedBase / 12 - 1)
 					+ " up), Z / X: octave, or click the keys. Grey keys are not in " + song.keyName() + ".";
