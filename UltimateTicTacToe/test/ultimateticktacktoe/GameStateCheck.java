@@ -167,6 +167,7 @@ public class GameStateCheck {
       }
 
       checkLesson();
+      checkSounds();
       System.out.println("GameStateCheck passed (hard beat easy " + hardWins + " of " + games + ")");
    }
 
@@ -205,6 +206,38 @@ public class GameStateCheck {
       }
       check(Lesson.STEPS[4].wrong(Lesson.STEPS[4].start(), 5 * 9 + 1) != null, "sending O to its two in a row is turned away");
       check(Lesson.STEPS[5].wrong(Lesson.STEPS[5].start(), 8 * 9 + 8) == null, "the winning move wins the lesson game");
+   }
+
+   /**
+    * Each cell has its own note, rising in reading order with no repeats, O an octave under X; a won line plays its three
+    * notes in order (the game's an octave up); off is silent; and sound=off is kept in the record file.
+    */
+   private static void checkSounds() {
+      for (int cell = 1; cell < 9; cell++) {
+         check(Sounds.note(cell, true) > Sounds.note(cell - 1, true), "notes rise in reading order");
+         check(Sounds.note(cell, false) == Sounds.note(cell, true) - 12, "O an octave under X");
+      }
+      Sounds sounds = Sounds.silent(true);
+      sounds.mark(4, true);
+      sounds.mark(4, false);
+      sounds.line(new int[]{2, 4, 6}, false, 0, 300, 12);
+      check(sounds.heard.equals(java.util.Arrays.asList("0:69", "1:57", "1:64", "1:69", "1:74")), "notes heard " + sounds.heard);
+      sounds.setOn(false);
+      sounds.mark(0, true);
+      sounds.refused();
+      check(sounds.heard.size() == 5, "off is silent");
+      try {
+         java.io.File file = java.io.File.createTempFile("tictactoe", ".txt");
+         file.deleteOnExit();
+         Record record = Record.load(file);
+         check(record.soundOn(), "sound starts on");
+         record.setSoundOn(false);
+         check(!Record.load(file).soundOn(), "sound=off is kept");
+         record.setSoundOn(true);
+         check(Record.load(file).soundOn(), "sound on again");
+      } catch (java.io.IOException e) {
+         throw new AssertionError(e);
+      }
    }
 
    /** Plays (board, cell) pairs, failing if any is illegal. */
