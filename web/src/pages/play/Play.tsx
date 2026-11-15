@@ -1,6 +1,7 @@
 // The embeddable player (play.html?app=<App>): a poster first, the app only after Play, in a frame scaled to the widget.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { APPS, type App } from '../../shared/catalog';
+import { linkState } from '../../shared/link-state';
 import { Shot } from './Shot';
 import './play.css';
 
@@ -30,7 +31,7 @@ function first(): Shown {
 }
 
 function page(app: App, watch: boolean) {
-  return app.id + '/' + (then && app.then ? 'then.html' : 'index.html') + '?embed' + (watch ? '&watch' : '');
+  return app.id + '/' + (then && app.then ? 'then.html' : 'index.html') + '?embed' + (watch ? '&watch' : '') + linkState(app.id, location.search);
 }
 
 export function Play() {
@@ -137,7 +138,7 @@ export function Play() {
             else document.documentElement.requestFullscreen().catch(() => {});
           }}>⛶</button>
           {' '}
-          <a key={lit} id="full" className={lit ? 'lit' : undefined} href={app ? app.id + '/' + (thenApp ? 'then.html' : 'index.html') : 'index.html'}
+          <a key={lit} id="full" className={lit ? 'lit' : undefined} href={app ? app.id + '/' + (thenApp ? 'then.html' : 'index.html') + linkState(app.id, location.search).replace('&', '?') : 'index.html'}
             target="_blank" rel="noopener" title="Open this app on its own page, with its source and more" hidden={shown.mode === 'oops'} ref={fullLink}>
             Full page ↗
           </a>

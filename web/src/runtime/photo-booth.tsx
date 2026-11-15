@@ -337,6 +337,7 @@ function PhotoPanel({ photo, urls, onClose, onPanel }: {
           </label>
           <div className="shim-share-ways">
             <a className="shim-share-way primary" href={print ? print.url : undefined} download={download} data-sound="none" ref={save}
+              tabIndex={0} /* focusable before the print has an address, so the panel has the keys (Escape) from the start */
               onClick={e => { if (!print) { e.preventDefault(); return; } playSound('saved'); }}>Save picture</a>
             {canCopy && (
               <button type="button" className="shim-share-way" onClick={() => {
