@@ -60,7 +60,7 @@
                 <delete dir="${then.src}"/>
                 <mkdir dir="${then.src}"/>
                 <exec executable="git" dir="${repo.dir}" failonerror="true">
-                  <arg line="archive --format=tar -o ${project.build.directory}/then-src.tar ${then.commit} CircleSpawner Clock FlappyBird GroupCreator Minesweeper MusicTheoryExpert NumberGuess RubiksCube2D ScreenSaver SimpleAlgorithms SpriteFloatyStars StockChecker SynthesizerKeyboard TankGame UltimateTicTacToe WindowsE"/>
+                  <arg line="archive --format=tar -o ${project.build.directory}/then-src.tar ${then.commit} CircleSpawner Clock FlappyBird GroupCreator Minesweeper MusicTheoryExpert NumberGuess RubiksCube2D ScreenSaver SimpleAlgorithms SpriteFloatyStars StockChecker SynthesizerKeyboard TankGame UltimateTicTacToe Windows WindowsE"/>
                 </exec>
                 <untar src="${project.build.directory}/then-src.tar" dest="${then.src}"/>
               </target>
@@ -104,6 +104,7 @@
                 <thensource app="SynthesizerKeyboard"/>
                 <thensource app="TankGame"/>
                 <thensource app="UltimateTicTacToe"/>
+                <thensource app="Windows"/>
                 <thensource app="WindowsE"/>
               </target>
             </configuration>
@@ -134,6 +135,7 @@
                 <source>${then.src}/SynthesizerKeyboard/src</source>
                 <source>${then.src}/TankGame/src</source>
                 <source>${then.src}/UltimateTicTacToe/src</source>
+                <source>${then.src}/Windows/src</source>
                 <source>${then.src}/WindowsE/src</source>
               </sources>
             </configuration>
@@ -265,6 +267,14 @@
             <configuration>
               <mainClass>ultimateticktacktoe.Main</mainClass>
               <targetDirectory>${site.dir}/UltimateTicTacToe</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Windows</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>test.Test</mainClass>
+              <targetDirectory>${site.dir}/Windows</targetDirectory>
             </configuration>
           </execution>
           <execution>

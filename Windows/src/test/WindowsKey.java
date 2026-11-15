@@ -15,7 +15,8 @@ import javax.swing.JButton;
 /**
  * A Windows key on the screen that works like the one on a keyboard: it goes down when the mouse button does and
  * comes up when it does, so a click opens Start and holding it while pressing a key on the keyboard (E, D, R, an
- * arrow) makes Win+that key. Space or Enter, when it has the keyboard focus, taps it.
+ * arrow) makes Win+that key. Sliding off it while held, left, right, up or down, makes Win+that arrow when it is let go, so a
+ * window can be snapped with one finger and no keyboard. Space or Enter, when it has the keyboard focus, taps it.
  */
 final class WindowsKey extends JButton {
    /** Where the presses go: java.awt.Robot in the app, a list in the self-check. */
@@ -36,22 +37,31 @@ final class WindowsKey extends JButton {
    private static final Color TEXT = new Color(236, 239, 244);
    static final Color BACK = new Color(28, 30, 36);
    private static final int MARGIN = 8;
+   /** How far the pointer must slide from where it pressed the key before the release makes Win+an arrow. */
+   static final int SLIDE = 28;
 
    private final Keys keys;
    private boolean down;
    private boolean hover;
+   private int pressX;
+   private int pressY;
+   /** The arrow the pointer has slid toward while the key is held (KeyEvent.VK_LEFT and so on), or 0. */
+   private int slide;
 
    WindowsKey(Keys keys) {
       this.keys = keys;
       this.setFocusPainted(false);
       this.setBorderPainted(false);
       this.setContentAreaFilled(false);
-      this.setToolTipText("Click for Start. Hold it and press a key for Win+that key.");
-      this.getAccessibleContext().setAccessibleName("Windows key: click for Start, or hold it and press a key for Win+that key");
-      this.addMouseListener(new MouseAdapter() {
+      this.setToolTipText("Click for Start. Hold it and press a key for Win+that key, or slide off it for Win+that arrow.");
+      this.getAccessibleContext().setAccessibleName("Windows key: click for Start, or hold it and press a key for Win+that key, or slide off it for Win+that arrow");
+      MouseAdapter mouse = new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent e) {
             if (e.getButton() == MouseEvent.BUTTON1) {
+               WindowsKey.this.pressX = e.getX();
+               WindowsKey.this.pressY = e.getY();
+               WindowsKey.this.slide = 0;
                WindowsKey.this.setDown(true);
             }
          }
@@ -59,8 +69,20 @@ final class WindowsKey extends JButton {
          @Override
          public void mouseReleased(MouseEvent e) {
             if (e.getButton() == MouseEvent.BUTTON1) {
+               WindowsKey.this.slideTo(e.getX(), e.getY());
+               int arrow = WindowsKey.this.slide;
+               if (arrow != 0 && WindowsKey.this.down) {
+                  WindowsKey.this.keys.press(arrow);
+                  WindowsKey.this.keys.release(arrow);
+               }
+               WindowsKey.this.slide = 0;
                WindowsKey.this.setDown(false);
             }
+         }
+
+         @Override
+         public void mouseDragged(MouseEvent e) {
+            WindowsKey.this.slideTo(e.getX(), e.getY());
          }
 
          @Override
@@ -74,7 +96,9 @@ final class WindowsKey extends JButton {
             WindowsKey.this.hover = false;
             WindowsKey.this.repaint();
          }
-      });
+      };
+      this.addMouseListener(mouse);
+      this.addMouseMotionListener(mouse);
       this.addKeyListener(new KeyAdapter() {
          @Override
          public void keyReleased(KeyEvent e) {
@@ -97,6 +121,26 @@ final class WindowsKey extends JButton {
          this.keys.release(WIN);
       }
       this.repaint();
+   }
+
+   /** Which arrow a slide to (x, y) from the press makes: the longer way it went, once past SLIDE; back near the key, none. */
+   void slideTo(int x, int y) {
+      if (!this.down) {
+         return;
+      }
+      int dx = x - this.pressX;
+      int dy = y - this.pressY;
+      int arrow = Math.max(Math.abs(dx), Math.abs(dy)) < SLIDE ? 0
+         : Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? KeyEvent.VK_LEFT : KeyEvent.VK_RIGHT)
+         : (dy < 0 ? KeyEvent.VK_UP : KeyEvent.VK_DOWN);
+      if (arrow != this.slide) {
+         this.slide = arrow;
+         this.repaint();
+      }
+   }
+
+   int slide() {
+      return this.slide;
    }
 
    boolean isDown() {
@@ -142,7 +186,7 @@ final class WindowsKey extends JButton {
       g.fillRect(x + half + 3, y, half, half);
       g.fillRect(x, y + half + 3, half, half);
       g.fillRect(x + half + 3, y + half + 3, half, half);
-      String caption = this.down ? "+ a key" : "Start";
+      String caption = !this.down ? "Start" : this.slide == 0 ? "+ a key" : "+ " + "←↑→↓".charAt(this.slide - KeyEvent.VK_LEFT);
       g.setColor(this.down ? Color.WHITE : TEXT);
       g.setFont(new Font("SansSerif", Font.BOLD, 12));
       g.drawString(caption, (w - g.getFontMetrics().stringWidth(caption)) / 2, y + size + 22);

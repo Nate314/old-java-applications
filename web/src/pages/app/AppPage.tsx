@@ -89,6 +89,7 @@ const THEN_BODY: Record<string, Record<string, string>> = {
   },
   SimpleAlgorithms: { 'data-console': '' },
   StockChecker: BODY.StockChecker,
+  Windows: BODY.Windows,
   WindowsE: { 'data-shell': '' },
 };
 
