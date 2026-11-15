@@ -46,6 +46,7 @@ public final class BattleCheck
         powersFromCrates();
         cratesFallAndAreTaken();
         suppliesSetting();
+        soundSetting();
         computerAgainstComputerWithSupplies();
         pointerDrivesAndFires();
         buildYourOwnBattlefield();
@@ -210,6 +211,8 @@ public final class BattleCheck
         Tank green = new Tank("Green", Color.GREEN, greenKeys, 380, 250, 270);
         Battle battle = new Battle(red, green, new ComputerControls(new Random(1)), Record.load(file));
         battle.setLayouts(Arena.OPEN);           // the rules on an open field; walls are checked on their own
+        Sounds sounds = Sounds.silent();
+        battle.setSounds(sounds);
         battle.tick(W, H);
         assert battle.phase() == Battle.Phase.TITLE;
         greenKeys.fire = true;                   // green's fire picks two players
@@ -227,6 +230,14 @@ public final class BattleCheck
                 battle.tick(W, H);
             }
             assert battle.winner() == red && battle.redWins() == round && green.health() == 0;
+            if (round == 1)
+            {
+                // FIGHT!'s horn, then the cannon, two hits and the boom of the third; nothing else on an open field.
+                List<String> heard = new ArrayList<>(sounds.heard());
+                assert heard.get(0).equals("fight") && heard.contains("fire") : heard;
+                heard.removeIf(name -> name.equals("fire"));
+                assert heard.equals(java.util.Arrays.asList("fight", "hit", "hit", "destroyed")) : heard;
+            }
             // The destroying hit is one blast (the panel plays it in slow motion) and shakes the field hard.
             assert battle.blasts() == round && battle.shake() >= 10 : battle.blasts() + " " + battle.shake();
             while (battle.phase() == Battle.Phase.ROUND_OVER) battle.tick(W, H);
@@ -240,6 +251,7 @@ public final class BattleCheck
         }
         assert battle.phase() == Battle.Phase.MATCH_OVER && battle.winner() == red;
         assert Record.load(file).wins() + Record.load(file).losses() == 0;   // two-player matches are not recorded
+        assert last(sounds).equals("won") : "a two-player match ends on the fanfare";
         redKeys.fire = true;                     // too early: the match-over screen holds for a moment
         battle.tick(W, H);
         assert battle.phase() == Battle.Phase.MATCH_OVER;
@@ -253,6 +265,7 @@ public final class BattleCheck
         while (battle.phase() != Battle.Phase.MATCH_OVER && ticks++ < 60 * 60 * 10) battle.tick(W, H);
         assert battle.phase() == Battle.Phase.MATCH_OVER : "the computer finished a match against a red tank that sits still";
         assert battle.winner() == green;
+        assert last(sounds).equals("lost") : "losing to the computer ends on the falling line";
         Record saved = Record.load(file);
         assert saved.wins() == 0 && saved.losses() == 1 && saved.toString().equals("0 wins, 1 loss") : saved;
         file.delete();
@@ -446,6 +459,40 @@ public final class BattleCheck
     }
 
     /** X: supply drops are on by default, and turning them off is saved beside the record without losing it. */
+    private static String last(Sounds sounds)
+    {
+        return sounds.heard().get(sounds.heard().size() - 1);
+    }
+
+    /** V: the sound is on by default, off is saved beside the record, and while off nothing is played. */
+    private static void soundSetting() throws Exception
+    {
+        File file = File.createTempFile("tankgame-sound", ".txt");
+        file.delete();
+        assert Record.load(file).sound() : "the sound should start on";
+        Record record = Record.load(file);
+        record.add(true);
+        Script redKeys = new Script();
+        Battle battle = new Battle(tank(redKeys, 100, 250, 90), tank(new Script(), 380, 250, 270),
+                        new ComputerControls(new Random(1)), record);
+        Sounds sounds = Sounds.silent();
+        battle.setSounds(sounds);
+        battle.toggleSound();
+        assert !battle.sound() && !Record.load(file).sound() && Record.load(file).wins() == 1 : "sound=off not saved";
+        String text = new String(java.nio.file.Files.readAllBytes(file.toPath()), "UTF-8");
+        assert text.startsWith("1,0\n") && text.contains("sound=off") : text;
+        redKeys.fire = true;
+        for (int i = 0; i < Battle.ROUND_START_TICKS + 60; i++)
+        {
+            redKeys.fire = true;
+            battle.tick(W, H);
+        }
+        assert battle.phase() == Battle.Phase.FIGHT && sounds.heard().isEmpty() : sounds.heard();
+        battle.toggleSound();
+        assert battle.sound() && Record.load(file).sound() && Record.load(file).wins() == 1;
+        file.delete();
+    }
+
     private static void suppliesSetting() throws Exception
     {
         File file = File.createTempFile("tankgame-supplies", ".txt");
