@@ -167,6 +167,8 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 
 The home page opens with a player: Minesweeper is already running in it, and every card's Play button (or thumbnail) swaps that app into the player without leaving the page. Full page opens the app's own page, as do Ctrl-, Shift- and middle-clicks on Play. Selecting an app puts it in the address (`index.html#FlappyBird`), and loading that address starts the page with that app in the player. The filter buttons narrow the cards to games, music, toys or tools.
 
+On a page at least 1024 px wide, the room the lead leaves beside the title holds a wall of all 20 apps' windows (`src/pages/home/HeroWall.tsx`): three columns of thumbnails drifting up and down at different speeds and fading at the edges, so the first view already shows how many apps there are and what they look like. Clicking one plays it in the player, the one playing is outlined, and the wall stops while the mouse is over it. It stands still for visitors who ask for less motion, in screenshots and in the screen saver. It is decoration for the keyboard and screen readers (the rail and the gallery reach the same apps), and on narrower pages it is left out, so the phone's pocket player keeps its room.
+
 The player is built to keep a visitor playing without scrolling back to the gallery:
 
 - A rail of thumbnails under the screen lists all 20 apps; clicking one swaps it in. The current app is outlined and the rail scrolls to keep it in view. The arrows at either end play the previous or next app (wrapping around), and Shuffle plays a random app other than the current one.
