@@ -99,10 +99,10 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
   var box: { close(): void } | null = null;
 
   function onHome() { return !document.body.hasAttribute('data-app'); }
-  // A control of this page, if it is there and shown.
+  // A control of this page, if it is there and shown (waiting under the band's More counts: More clicks it too).
   function shown(selector: string | HTMLElement) {
     var n = typeof selector === 'string' ? document.querySelector<HTMLElement>(selector) : selector;
-    return n && !n.hidden && n.getClientRects().length ? n : null;
+    return n && !n.hidden && (n.getClientRects().length || n.classList.contains('shim-more-out')) ? n : null;
   }
   function toolbarButton(text: string) {
     var all = document.querySelectorAll<HTMLElement>('.shim-toolbar button');
