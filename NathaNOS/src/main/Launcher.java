@@ -1,5 +1,6 @@
 package main;
 
+import java.awt.Component;
 import java.awt.Image;
 import java.beans.PropertyVetoException;
 import java.lang.reflect.Constructor;
@@ -57,24 +58,25 @@ final class Launcher {
       return this.icons.get(app);
    }
 
-   /** Opens a picture from the desktop in a Paint window of its own. */
-   void openPicture(Picture picture) {
+   /** Opens a picture from the desktop in a Paint window of its own; from is the icon its window flies out of. */
+   void openPicture(Picture picture, Component from) {
+      this.tasks.launching(PAINT, this.icon(this.paint), Zoom.on(from, this.screen.desktopPane));
       PaintWindow.open(this.screen, this.tasks, picture, this.icon(this.paint));
    }
 
-   void launch(int app) {
+   /** Opens the app; from (an icon or a start menu row) is where its first window flies out of. */
+   void launch(int app, Component from) {
+      String name = this.name(app);
+      this.tasks.launching(name, this.icon(app), Zoom.on(from, this.screen.desktopPane));
       if (app == this.paint) {
          PaintWindow.open(this.screen, this.tasks, null, this.icon(app));
          return;
       }
       Class<?> main = this.applications.get(app);
-      String name = this.name(app);
       if (main == null) {
          System.err.println(name + " could not be loaded.");
          return;
       }
-
-      this.tasks.launching(name, this.icon(app));
       try {
          Constructor<?> embeddable;
          try {

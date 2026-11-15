@@ -24,6 +24,7 @@ public class Main extends JFrame {
    public LauncherWindow launcherWindow;
    public StartMenu startMenu;
    DesktopMenu desktopMenu;
+   final Zoom zoom = new Zoom();
    DesktopSettings settings = new DesktopSettings();
    Pictures pictures;
    Wallpaper wallpaper = Wallpaper.byId(Wallpaper.DEFAULT);
@@ -59,6 +60,7 @@ public class Main extends JFrame {
       this.desktopPane.add(this.startMenu, JLayeredPane.POPUP_LAYER);
       this.desktopMenu = new DesktopMenu(this, new DesktopShortcuts(this, launcher));
       this.desktopPane.add(this.desktopMenu, JLayeredPane.POPUP_LAYER);
+      this.desktopPane.add(this.zoom, JLayeredPane.DRAG_LAYER);
       // The window was shown before the desktop was added, so lay it out now; and since it never takes focus,
       // raise it once, or it opens behind the window that started it.
       this.revalidate();

@@ -200,7 +200,7 @@ final class DesktopShortcuts {
 
       @Override
       void open() {
-         DesktopShortcuts.this.launcher.launch(this.app);
+         DesktopShortcuts.this.launcher.launch(this.app, this);
       }
 
       @Override
@@ -220,7 +220,7 @@ final class DesktopShortcuts {
 
       @Override
       void open() {
-         DesktopShortcuts.this.launcher.openPicture(this.picture);
+         DesktopShortcuts.this.launcher.openPicture(this.picture, this);
       }
 
       @Override
