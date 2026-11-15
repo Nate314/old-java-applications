@@ -13,6 +13,7 @@ public class CatchFeelCheck {
       none.delete();
       CatchPanel panel = new CatchPanel(NightRecords.load(none));
       panel.stop(); // the check moves time itself
+      panel.random.setSeed(229); // the same stars every run, so the clicks below always find the star or hole they aim at
       panel.setSize(CatchPanel.WIDTH, CatchPanel.HEIGHT);
 
       // A catch: its place in the count stays dark while the star is in flight, the star is on its path, then the place lights.

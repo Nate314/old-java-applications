@@ -82,7 +82,7 @@ public final class CatchPanel extends JPanel {
    }
 
    private final NightRecords records;
-   private final Random random = new Random();
+   final Random random = new Random(); // not private: CatchFeelCheck seeds it so its stars land the same every run
    private final List<Effect> effects = new ArrayList<>();
    private final List<Flyer> flyers = new ArrayList<>();
    private final Rectangle[] nightCards = new Rectangle[Night.values().length];
