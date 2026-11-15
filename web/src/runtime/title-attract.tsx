@@ -3,12 +3,12 @@ import { root } from './catalog';
 
 // The title screen's attract mode: like an arcade cabinet showing its game before a coin goes in, the picture panel
 // plays the app's preview clip (clips/<App>.mp4, the gallery's), silent and looping. It is fetched only once the
-// app's own files are in (go), so it never slows the start. The still picture stays for reduced motion, Save-Data,
-// apps without a clip, and when the clip does not load (offline, say). Moving content needs a way to stop it: the
-// Pause chip in the corner (a click there does not start the app).
-const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches &&
-  !(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData &&
-  !!document.createElement('video').canPlayType('video/mp4');
+// app's own files and its picture are in (go), so it never slows the start. The still picture stays for reduced
+// motion, Save-Data, links the browser rates slower than 4G, apps without a clip, and when the clip does not load
+// (offline, say). Moving content needs a way to stop it: the Pause chip in the corner (a click there does not start
+// the app). play.html keeps its own copy of moves (Shot.tsx): a shared one would split a chunk off boot.js.
+const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData &&
+  (navigator.connection?.effectiveType || '4g') === '4g' && !!document.createElement('video').canPlayType('video/mp4');
 
 export function Attract({ id, go }: { id: string; go: boolean }) {
   const video = useRef<HTMLVideoElement>(null);

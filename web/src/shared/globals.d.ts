@@ -90,7 +90,7 @@ interface Window {
 
 interface Navigator {
   standalone?: boolean;   // iOS Safari, added to the home screen
-  connection?: { saveData?: boolean };
+  connection?: { saveData?: boolean; effectiveType?: string };
 }
 
 declare var documentPictureInPicture: DocumentPictureInPicture;

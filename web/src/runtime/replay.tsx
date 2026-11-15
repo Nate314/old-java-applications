@@ -52,7 +52,7 @@ export function setReplay(v: Replay | null) { replay = v; }
 
 const CLIP_SIZE = [640, 400];   // clip mode (?embed&clip): the gallery thumbnail's 16:10, at twice its usual width
 
-const CLIP_BPS = 900000;
+const CLIP_BPS = 400000;   // the clips play in four places, often on phones; 900k made SpriteFloatyStars 1 MB for no visible gain
 
 // MP4 first: phones and most sites take it, and Chrome records it. Firefox records WebM.
 function replayType() {

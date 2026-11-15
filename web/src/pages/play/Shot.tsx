@@ -1,13 +1,13 @@
 // The poster's picture, with the app's preview clip (clips/<App>.mp4, the gallery's) laid over it, playing silently
 // while the widget is on screen: a page with the widget on it shows the app moving before anyone clicks. The clip is
-// fetched only once the widget is in view. The picture stays still for reduced motion, Save-Data, the Then poster
-// and the apps without a clip, and if the clip does not load.
+// fetched only once the widget is in view and its picture is in. The picture stays still for reduced motion,
+// Save-Data, links the browser rates slower than 4G, the Then poster and the apps without a clip, and if the clip
+// does not load.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { App } from '../../shared/catalog';
+import { webp, type App } from '../../shared/catalog';
 
-const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches &&
-  !(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData &&
-  !!document.createElement('video').canPlayType('video/mp4');
+const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData &&
+  (navigator.connection?.effectiveType || '4g') === '4g' && !!document.createElement('video').canPlayType('video/mp4');
 
 export function Shot({ app, still, shown, onPlay }: { app: App | null; still: boolean; shown: boolean; onPlay: () => void }) {
   const img = useRef<HTMLImageElement>(null);
@@ -16,9 +16,10 @@ export function Shot({ app, still, shown, onPlay }: { app: App | null; still: bo
   const [box, setBox] = useState<CSSProperties>({});
   const [on, setOn] = useState(false);
   const [broken, setBroken] = useState(false);
+  const [pic, setPic] = useState(false);   // the picture has loaded: it comes before the clip on a slow link
 
   useEffect(() => {
-    if (!live || broken || !shown) return;
+    if (!live || broken || !shown || !pic) return;
     const i = img.current!;
     const v = video.current!;
     // The clip takes the picture's place, wherever the poster's layout puts it: centred on it and as big as fits in
@@ -39,12 +40,12 @@ export function Shot({ app, still, shown, onPlay }: { app: App | null; still: bo
     }, { threshold: 0.5 });
     io.observe(i);
     return () => { ro.disconnect(); io.disconnect(); v.pause(); };
-  }, [live, broken, shown]);
+  }, [live, broken, shown, pic]);
 
   return (
     <>
-      <img className={'shot' + (on ? ' covered' : '')} id="poster-shot" alt={app ? app.alt : ''} src={app ? app.shot : undefined} ref={img}
-        hidden={still} onClick={onPlay} />
+      <img className={'shot' + (on ? ' covered' : '')} id="poster-shot" alt={app ? app.alt : ''} src={app ? webp(app.shot) : undefined} ref={img}
+        hidden={still} onClick={onPlay} onLoad={() => setPic(true)} />
       {live && !broken && (
         <video className={'live' + (on ? ' on' : '')} ref={video} muted loop playsInline preload="none" aria-hidden="true"
           src={'clips/' + app!.id + '.mp4'} style={box} onClick={onPlay}
