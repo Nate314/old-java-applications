@@ -9,16 +9,19 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.util.Arrays;
 import javax.swing.Timer;
 
 public final class StarField extends Component {
    /** Movement per star per step was tuned for an uncapped repaint loop; this many steps per second keeps a similar pace. */
    private static final double STEPS_PER_SECOND = 200.0;
-   /** The five original modes, by the names Star Catcher gives the nights flown over them, then Orbits. */
-   static final String[] MODE_NAMES = {"Drift", "Burst", "Compass", "Confetti", "Flock", "Orbits"};
+   /** The five original modes, by the names Star Catcher gives the nights flown over them, then Orbits and Sky writing. */
+   static final String[] MODE_NAMES = {"Drift", "Burst", "Compass", "Confetti", "Flock", "Orbits", "Sky writing"};
    /** Mode 6: the stars circle suns the visitor places (see {@link Orbits}). */
    static final int ORBITS = 5;
+   /** Mode 7: the stars spell a message the visitor types (see {@link SkyWriting}). */
+   static final int SKY_WRITING = 6;
    /** Held down, the pointer pulls every star toward it this hard (px per step, per step). */
    private static final double PULL = 0.03;
    /** A kick from the pointer keeps this much of itself each step, so a flung star glides back to its own drift. */
@@ -72,6 +75,7 @@ public final class StarField extends Component {
    private boolean trails;
    private BufferedImage trailImage;
    private final Orbits orbits = new Orbits(this);
+   private final SkyWriting skyWriting;
 
    public StarField(int mode, Dimension size, int starCount, int starSize) {
       this(mode, size, starCount, starSize, true);
@@ -95,6 +99,7 @@ public final class StarField extends Component {
       this.randomColorValues = new int[starCount * 3];
       this.kickX = new double[starCount];
       this.kickY = new double[starCount];
+      this.skyWriting = new SkyWriting(this, animate ? new File(System.getProperty("user.home"), ".spritefloatystars-message.txt") : null);
       this.startOrbits();
 
       for (int star = 0; star < this.starCount; star++) {
@@ -112,7 +117,7 @@ public final class StarField extends Component {
    private void initStar(int star) {
       this.kickX[star] = 0.0;
       this.kickY[star] = 0.0;
-      if (this.mode == 0 || this.mode == 3 || this.mode == 4) {
+      if (this.mode == 0 || this.mode == 3 || this.mode == 4 || this.mode == SKY_WRITING) {
          this.x[star] = Math.random() * this.startSize.getWidth();
          this.y[star] = Math.random() * this.startSize.getHeight();
          if (this.mode == 3) {
@@ -160,7 +165,7 @@ public final class StarField extends Component {
    }
 
    /**
-    * Keys 1 to 6 and N: the stars start over in another mode (0 to 5), sized to the window as it is now. Orbits
+    * Keys 1 to 7 and N: the stars start over in another mode (0 to 6), sized to the window as it is now. Orbits
     * starts with one sun in the middle, turns the trails on and shows its own help.
     */
    final void setMode(int mode) {
@@ -173,9 +178,12 @@ public final class StarField extends Component {
       this.badgeAt = this.clock;
    }
 
+   /** Orbits and Sky writing open on a dark sky with the trails on, and show their own help. */
    private void startOrbits() {
-      if (this.mode == ORBITS) {
-         this.orbits.reset();
+      if (this.mode == ORBITS || this.mode == SKY_WRITING) {
+         if (this.mode == ORBITS) {
+            this.orbits.reset();
+         }
          this.trails = true;
          this.trailImage = null;
          this.hintShown = true;
@@ -195,6 +203,16 @@ public final class StarField extends Component {
 
    final Orbits orbits() {
       return this.orbits;
+   }
+
+   final SkyWriting skyWriting() {
+      return this.skyWriting;
+   }
+
+   /** Sky writing moves a star by its center, keeping its velocity and kick. */
+   final void moveStar(int star, double centerX, double centerY) {
+      this.x[star] = centerX - this.starSize / 2.0;
+      this.y[star] = centerY - this.starSize / 2.0;
    }
 
    final int fieldWidth() {
@@ -363,6 +381,10 @@ public final class StarField extends Component {
          this.orbits.move(steps);
          return;
       }
+      if (this.mode == SKY_WRITING) {
+         this.skyWriting.move(steps);
+         return;
+      }
       for (int star = 0; star < this.starCount; star++) {
          if (this.mode == 0 || this.mode == 4) {
             this.x[star] = this.x[star] - this.velocityX[star] * steps;
@@ -461,7 +483,7 @@ public final class StarField extends Component {
       super.paint(g);
       Graphics2D g2 = (Graphics2D)g;
       g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-      Color sky = this.mode == ORBITS ? Orbits.SKY : Color.blue;
+      Color sky = this.mode == ORBITS || this.mode == SKY_WRITING ? Orbits.SKY : Color.blue;
       int width = this.getWidth();
       int height = this.getHeight();
       if (this.trails && width > 0 && height > 0) {
@@ -487,6 +509,9 @@ public final class StarField extends Component {
       if (this.mode == ORBITS) {
          this.orbits.drawSuns(g2);
       }
+      if (this.mode == SKY_WRITING) {
+         this.skyWriting.drawCaret(g2);
+      }
       this.drawHand(g2);
    }
 
@@ -494,6 +519,10 @@ public final class StarField extends Component {
    final void drawStars(Graphics2D g2) {
       if (this.mode == ORBITS) {
          this.orbits.drawStars(g2);
+         return;
+      }
+      if (this.mode == SKY_WRITING) {
+         this.skyWriting.drawStars(g2);
          return;
       }
       for (int star = 0; star < this.starCount; star++) {
@@ -525,16 +554,24 @@ public final class StarField extends Component {
          g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, this.textSize() * 3 / 2));
          this.tag(g2, "Mode " + (this.mode + 1) + ": " + MODE_NAMES[this.mode], 14, 14, fade(BADGE_SECONDS - badgeAge));
       }
-      if (this.hintVisible()) {
-         int alpha = fade(HINT_SECONDS - (this.clock - this.hintShownAt));
+      boolean writing = this.mode == SKY_WRITING && this.skyWriting.writing();
+      if (this.hintVisible() || writing) {
+         int alpha = writing ? 255 : fade(HINT_SECONDS - (this.clock - this.hintShownAt));
          g2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, this.textSize()));
          int lineHeight = g2.getFontMetrics().getHeight() + 10;
-         String[] lines = this.mode == ORBITS
+         String[] lines = writing
+            ? new String[]{"Type your message (up to " + SkyWriting.MAX_LENGTH + " letters). Backspace erases.",
+                           "Enter keeps it."}
+            : this.mode == SKY_WRITING
+            ? new String[]{"Enter: write your own message in the stars.",
+                           "Hold to pull the stars, let go to fling them: they find their letters again.",
+                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help"}
+            : this.mode == ORBITS
             ? new String[]{"Click to place a sun (up to " + Orbits.MAX_SUNS + "). Drag a sun to move it.",
                            "Drag it off the edge to take it away. Hold to pull the stars.",
-                           "1-6 or N: mode   T: trails   Space: burst   H: help"}
+                           "1-7 or N: mode   T: trails   Space: burst   H: help"}
             : new String[]{"Hold to pull the stars in, let go to fling them. Click to burst.",
-                           "1-6 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help"};
+                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help"};
          int top = this.getHeight() - 8 - lines.length * lineHeight;
          for (String line : lines) {
             this.tag(g2, line, 14, top, alpha);
