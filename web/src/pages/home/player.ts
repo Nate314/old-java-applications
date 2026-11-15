@@ -402,7 +402,7 @@ function tourEnd() {
   if (/^#tour$/.test(location.hash)) history.replaceState(null, '', '#' + playing().id);
 }
 // Where a new start goes: the stop the last tour reached, or the first once it was finished.
-function tourResume() {
+export function tourResume() {
   const saved = tourSaved();
   return saved.done || !(saved.stop !== undefined && saved.stop > 0 && saved.stop < TOUR.length) ? 0 : saved.stop;
 }
