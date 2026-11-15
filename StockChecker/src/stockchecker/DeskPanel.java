@@ -646,6 +646,12 @@ final class DeskPanel extends JPanel {
          ys[now + 2] = box.y + box.height;
          g.setColor(withAlpha(line, 40));
          g.fillPolygon(xs, ys, now + 3);
+         // Each headline that moved this stock (its own or the market's): a faint band over the minutes it has pushed so far.
+         for (Market.Headline news : newsOf(stock.symbol)) {
+            int x1 = xOf.applyAsInt(news.minute);
+            g.setColor(withAlpha(news.up ? UP : DOWN, 28));
+            g.fillRect(x1, box.y, Math.max(2, xOf.applyAsInt(Math.min(now, news.minute + news.length)) - x1), box.height);
+         }
       }
 
       // The open, dashed.
@@ -666,6 +672,14 @@ final class DeskPanel extends JPanel {
 
       if (big) {
          marks.clear();
+         // A pin at the foot of the chart at each headline's minute, pointing the way it pushed.
+         for (Market.Headline news : newsOf(stock.symbol)) {
+            int x = xOf.applyAsInt(news.minute);
+            int bottom = box.y + box.height - 1;
+            g.setColor(news.up ? UP : DOWN);
+            g.fillPolygon(new int[] {x - 5, x + 5, x}, news.up ? new int[] {bottom, bottom, bottom - 9} : new int[] {bottom - 9, bottom - 9, bottom}, 3);
+            marks.add(new Rectangle(x - 6, bottom - 10, 12, 11));
+         }
          // The rivals' trades in this stock: a dot in their color with their initial, filled for a buy, a ring for a sell.
          for (Rival rival : desk.rivals) {
             for (Portfolio.Trade trade : rival.portfolio.trades) {
@@ -709,23 +723,52 @@ final class DeskPanel extends JPanel {
          // While the chart is heard, a playhead at the minute playing, with its time and price.
          int heard = ear.minute();
          if (stock.symbol.equals(ear.hearing()) && heard <= now) {
-            int x = xOf.applyAsInt(heard);
-            int y = yOf.applyAsInt(stock.path[heard]);
-            g.setColor(withAlpha(accent, 200));
-            g.setStroke(new BasicStroke(2f));
-            g.drawLine(x, box.y, x, box.y + box.height);
-            g.setStroke(new BasicStroke(1f));
-            g.fillOval(x - 6, y - 6, 12, 12);
-            String tag = Market.clock(heard) + "  " + Money.dollars(stock.path[heard]);
-            int w = width(g, tag, SMALL) + 10;
-            int left = Math.min(x + 6, box.x + box.width - w);
-            g.setColor(new Color(10, 16, 40, 230));
-            g.fillRoundRect(left, box.y + 2, w, 15, 8, 8);
-            g.setColor(accent);
-            g.drawRoundRect(left, box.y + 2, w, 15, 8, 8);
-            text(g, tag, SMALL, TEXT, left + 5, box.y + 13);
+            cursor(g, box, xOf.applyAsInt(heard), yOf.applyAsInt(stock.path[heard]), Market.clock(heard) + "  " + Money.dollars(stock.path[heard]), withAlpha(accent, 200));
+         } else if (box.contains(mouseX, mouseY)) {
+            // Under the pointer: that minute's time, price and change, or the headline when a pin is near.
+            int pointed = (int) Math.round((double) (mouseX - box.x) * Market.CLOSE / box.width);
+            Market.Headline near = newsNear(stock.symbol, pointed);
+            int m = near != null ? near.minute : pointed;
+            if (m <= now) {
+               String tag = Market.clock(m) + "  " + (near != null ? near.text
+                  : Money.dollars(stock.path[m]) + "  " + Money.percent(stock.open(), stock.path[m]));
+               cursor(g, box, xOf.applyAsInt(m), yOf.applyAsInt(stock.path[m]), tag, near != null ? (near.up ? UP : DOWN) : withAlpha(TEXT, 150));
+            }
          }
       }
+   }
+
+   /** The headlines so far today that moved {@code symbol}: its own and the market-wide ones, oldest first. */
+   private List<Market.Headline> newsOf(String symbol) {
+      return desk.market.news(java.util.Collections.singletonList(symbol));
+   }
+
+   /** The headline about {@code symbol} within 4 minutes of {@code minute} (the nearest), so a pin is easy to point at; or null. */
+   private Market.Headline newsNear(String symbol, int minute) {
+      Market.Headline near = null;
+      for (Market.Headline news : newsOf(symbol)) {
+         if (Math.abs(news.minute - minute) <= 4 && (near == null || Math.abs(news.minute - minute) < Math.abs(near.minute - minute))) {
+            near = news;
+         }
+      }
+      return near;
+   }
+
+   /** A vertical line down the chart at {@code x}, a dot on the price at {@code y}, and {@code tag} along the top. */
+   private void cursor(Graphics2D g, Rectangle box, int x, int y, String tag, Color color) {
+      g.setColor(color);
+      g.setStroke(new BasicStroke(2f));
+      g.drawLine(x, box.y, x, box.y + box.height);
+      g.setStroke(new BasicStroke(1f));
+      g.fillOval(x - 6, y - 6, 12, 12);
+      tag = fit(g, tag, SMALL, box.width - 10);
+      int w = width(g, tag, SMALL) + 10;
+      int left = Math.max(box.x, Math.min(x + 6, box.x + box.width - w));
+      g.setColor(new Color(10, 16, 40, 230));
+      g.fillRoundRect(left, box.y + 2, w, 15, 8, 8);
+      g.setColor(color);
+      g.drawRoundRect(left, box.y + 2, w, 15, 8, 8);
+      text(g, tag, SMALL, TEXT, left + 5, box.y + 13);
    }
 
    /**

@@ -23,12 +23,15 @@ final class Market {
       final boolean up;
       /** The stock it is about, or null for the whole market. */
       final String symbol;
+      /** How many minutes it pushes the price, from its own minute. */
+      final int length;
 
-      Headline(int minute, String text, boolean up, String symbol) {
+      Headline(int minute, String text, boolean up, String symbol, int length) {
          this.minute = minute;
          this.text = text;
          this.up = up;
          this.symbol = symbol;
+         this.length = length;
       }
    }
 
@@ -79,7 +82,7 @@ final class Market {
          for (int m = start; m < start + length && m <= CLOSE; m++) {
             marketDrift[m] = (up ? size : -size) / length;
          }
-         addHeadline(new Headline(start, up ? "Stocks rally across the board" : "Stocks slide across the board", up, null));
+         addHeadline(new Headline(start, up ? "Stocks rally across the board" : "Stocks slide across the board", up, null, length));
       }
       for (String symbol : symbols) {
          add(symbol, bases, firstPrices);
@@ -121,7 +124,7 @@ final class Market {
             double size = 0.006 + (a * 2 % 1) * 0.016;   // a picked the direction; its other bits pick the size
             drift = (up ? size : -size) / driftLeft;
             String[] lines = up ? UP : DOWN;
-            addHeadline(new Headline(m, lines[(int) (b * lines.length) % lines.length].replace("%", symbol), up, symbol));
+            addHeadline(new Headline(m, lines[(int) (b * lines.length) % lines.length].replace("%", symbol), up, symbol, driftLeft));
          }
          double move = perMinute * (0.55 * market[m] + 0.835 * own) + marketDrift[m] + (driftLeft > 0 ? drift : 0);
          if (driftLeft > 0) {

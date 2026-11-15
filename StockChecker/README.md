@@ -26,6 +26,13 @@ You do not have to watch every minute: draw a line on the chart and the desk tra
 - A buy line spends all the cash it can and a sell line sells every share held, at the price of the first minute that reaches the line (so a fast drop can fill under a buy line or a stop). The bell rings twice, the line under the chart says what was traded, and the stock's other line is cancelled, so a stop and a target work as a pair.
 - Lines are green for a buy and red for a sell, each with a tag saying what it does, and the chart's scale stretches to keep them in view. Selling every share by hand drops the stock's sell lines, a stock that leaves the desk takes its lines with it, and lines last only the day: they are gone at the next open. They are saved in the desk file as `order=` lines.
 
+## Reading the chart
+
+The chart says why a stock moved and what it cost at any minute, not only where it is now.
+
+- **News on the chart**: every headline that moved the picked stock so far today, its own or the whole market's ("Stocks slide across the board"), puts a small arrow at the foot of the chart at its minute (green pointing up, red pointing down) and shades the minutes it has pushed the price so far, in the same color. So a climb that starts at a green arrow was the news, and a red band over a green one shows the market dragging a stock down against its own good news. The band grows only up to now, so it does not give away how long the push will last.
+- **Point at the chart** to read it: a line down the chart at the minute under the pointer, a dot on the price, and a tag along the top with the time, the price and the change since the open ("12:49 PM  $79.99  -1.00%"). Within 4 minutes of a news arrow it jumps to it and the tag reads the headline instead ("10:43 AM  CRM climbs on heavy volume"). Clicking still puts an order line, as before.
+
 ## Hear the chart
 
 The chart can be listened to as well as looked at, so you can follow a stock without watching it, or without seeing the screen at all.
@@ -102,7 +109,7 @@ The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCh
 
 ## Self-check
 
-`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the Days candles (kept at each close and across a reload, the wick spanning the body, the last 19 kept, cleared by Start over), the money text, Hindsight's best trade (the low before the high, only up to now, none on a day that only fell, and the same as trying every buy and sell pair over 50 days) and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
+`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown, each headline pushing for 15 to 45 minutes, or 30 to 60 for the market, and moving its stock its way on average), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the Days candles (kept at each close and across a reload, the wick spanning the body, the last 19 kept, cleared by Start over), the money text, Hindsight's best trade (the low before the high, only up to now, none on a day that only fell, and the same as trying every buy and sell pair over 50 days) and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
 
 ```
 javac -d ../out/check/StockChecker src/stockchecker/*.java test/stockchecker/*.java
