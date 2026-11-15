@@ -32,8 +32,9 @@ public class Main extends JFrame
         Record record = Record.load(RECORD_FILE);
         Battle battle = new Battle(red, green, new ComputerControls(new Random()), record);
         battle.setSupplies(record.supplies());
+        battle.setField(Arena.cells(record.field()));
         GamePanel panel = new GamePanel(battle);
-        // C: watch the computer play both tanks (Battle.toggleWatch). X: supply drops on / off.
+        // C: watch the computer play both tanks (Battle.toggleWatch). X: supply drops on / off. B: build a battlefield.
         this.addKeyListener(new KeyAdapter()
         {
             @Override
@@ -41,6 +42,7 @@ public class Main extends JFrame
             {
                 if (e.getKeyCode() == KeyEvent.VK_C) battle.toggleWatch();
                 if (e.getKeyCode() == KeyEvent.VK_X) battle.toggleSupplies();
+                if (e.getKeyCode() == KeyEvent.VK_B) battle.toggleBuild();
             }
         });
         this.add(panel);

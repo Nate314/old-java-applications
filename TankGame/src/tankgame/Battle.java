@@ -2,6 +2,7 @@ package tankgame;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -26,7 +27,9 @@ public class Battle
         /** A tank was destroyed; the result is shown before the next round. */
         ROUND_OVER,
         /** Someone won three rounds; a fire key starts the next match. */
-        MATCH_OVER
+        MATCH_OVER,
+        /** The player lays walls on the grid for a battlefield of their own (B); a fire key fights on it. */
+        BUILD
     }
 
     public static final int  ROUNDS_TO_WIN      = 3;
@@ -65,6 +68,9 @@ public class Battle
     /** Counts the tanks destroyed so far, so the panel can play each one's blast in slow motion. */
     private int              blasts;
     private List<Arena.Layout> layouts          = Arena.LAYOUTS;
+    /** The player's battlefield on the grid; with any wall on it, every round is fought there. */
+    private boolean[][]      field              = new boolean[Arena.GRID][Arena.GRID];
+    private boolean          refused;
     private Arena            arena              = Arena.EMPTY;
     /** The round, field width and height the arena was placed for, so it is placed again when one changes. */
     private int              arenaRound         = -1;
@@ -138,6 +144,102 @@ public class Battle
         arenaRound = -1;
     }
 
+    /** The player's battlefield, as read from the record (see {@link Arena#cells}). */
+    public void setField(boolean[][] cells)
+    {
+        field = cells;
+        useField();
+    }
+
+    /** Rounds are fought on the player's battlefield if it has any wall, else on the four layouts in turn. */
+    private void useField()
+    {
+        setLayouts(hasField() || phase == Phase.BUILD ? Collections.singletonList(Arena.custom(field)) : Arena.LAYOUTS);
+    }
+
+    public boolean hasField()
+    {
+        for (boolean[] row : field)
+            for (boolean wall : row)
+                if (wall) return true;
+        return false;
+    }
+
+    /** B: from the title or match-over screen, opens the builder with both tanks on their starting spots; again, back. */
+    public void toggleBuild()
+    {
+        if (phase == Phase.BUILD) enter(Phase.TITLE);
+        else if (phase == Phase.TITLE || phase == Phase.MATCH_OVER)
+        {
+            red.reset();
+            green.reset();
+            shells.clear();
+            sparks.clear();
+            supply = null;
+            round = 0;
+            refused = false;
+            enter(Phase.BUILD);
+        }
+        useField();
+    }
+
+    /** Leaves the builder and starts a match (on the battlefield just built, if it has any wall). */
+    public void fightHere(boolean againstComputer)
+    {
+        if (phase != Phase.BUILD) return;
+        toggleBuild();
+        startMatch(againstComputer);
+    }
+
+    /** Whether a cell of the grid holds a wall. */
+    public boolean cell(int col, int row)
+    {
+        return field[row][col];
+    }
+
+    /**
+     * Lays or lifts a wall in a cell while building, saved at once. Cells on or beside a tank stay empty, and so does
+     * a cell whose wall would leave the tanks no way to reach each other (see {@link #refused}).
+     */
+    public void setCell(int col, int row, boolean wall, int width, int height)
+    {
+        if (phase != Phase.BUILD || col < 0 || row < 0 || col >= Arena.GRID || row >= Arena.GRID
+                        || field[row][col] == wall || wall && !Arena.cellFree(col, row, width, height, red, green)) return;
+        field[row][col] = wall;
+        if (wall && !Arena.build(Arena.custom(field), width, height, red, green).connected(width, height, red, green))
+        {
+            field[row][col] = false;
+            refused = true;
+        }
+        else saveField();
+    }
+
+    /** A new press in the builder: forgets the last refusal, which otherwise shows for the rest of the stroke. */
+    public void newStroke()
+    {
+        refused = false;
+    }
+
+    /** Whether the last wall laid was left out because it would shut the tanks apart (a match could never end). */
+    public boolean refused()
+    {
+        return refused;
+    }
+
+    /** Lifts every wall of the player's battlefield, so rounds go back to the four layouts. */
+    public void clearField()
+    {
+        field = new boolean[Arena.GRID][Arena.GRID];
+        refused = false;
+        saveField();
+    }
+
+    private void saveField()
+    {
+        useField();
+        if (record != null) record.setField(hasField() ? Arena.text(field) : "");
+    }
+
     /** Places the round's battlefield; the title shows the first round's. */
     private void placeArena(int width, int height)
     {
@@ -173,6 +275,11 @@ public class Battle
                 if (phase == Phase.MATCH_OVER && phaseTicks < MATCH_OVER_TICKS) break;
                 if (redFire || watching && phaseTicks >= WATCH_START_TICKS) startMatch(true);
                 else if (greenFire) startMatch(false);
+                break;
+            case BUILD:
+                boolean redGo = red.controls().fire();
+                boolean greenGo = greenKeys.fire();
+                if (redGo || greenGo) fightHere(redGo);
                 break;
             case ROUND_START:
                 // Presses while waiting are dropped, so nobody fires the instant the round starts.

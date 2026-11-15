@@ -190,8 +190,9 @@ export function init() {
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split('\n')[0].split(',').map(Number);
-      if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
-      return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
+      var field = /^field=.*#/m.test(text) ? 'your own battlefield built' : '';
+      if (n.length !== 2 || !(n[0] + n[1] > 0)) return field ? 'Your tanks: ' + field : '';
+      return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses') + (field ? '; ' + field : '');
     } },
     // Your best run, the bot's best run and the bots you evolved (generations bred, their record).
     DinoGame: { file: '.dinogame.txt', show: function (text) {
