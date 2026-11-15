@@ -139,7 +139,7 @@ public class LauncherCheck {
          check(mine.changed && mine.thenLines > 0 && mine.nowLines > mine.thenLines && !mine.changes.isEmpty(), "Minesweeper grew");
          check(mine.warning == null, "only apps that call Robot.keyPress warn, not ones with key listeners");
          check(history.of("DinoGame").warning != null && history.of("DinoGame").warning.contains("Space"), "the first DinoGame was a screen bot");
-         check(!history.of("Windows").changed && history.of("Windows").thenLines == history.of("Windows").nowLines, "Windows unchanged");
+         check(history.of("Windows").changed && history.of("Windows").nowLines > history.of("Windows").thenLines, "Windows grew its on-screen key");
          check(LauncherWindow.historyText(find(apps, "Clock"), history.of("Clock"), utc).contains("## Changes since"), "history text");
          // The first restored copy plays with today's original art, not the images taken from other apps.
          Path thenDir = Files.createTempDirectory("launcher-then-art").resolve("then");
