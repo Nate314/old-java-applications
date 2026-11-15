@@ -25,6 +25,7 @@ public class Main extends JFrame {
    public StartMenu startMenu;
    DesktopMenu desktopMenu;
    final Zoom zoom = new Zoom();
+   Power power;
    DesktopSettings settings = new DesktopSettings();
    Pictures pictures;
    Wallpaper wallpaper = Wallpaper.byId(Wallpaper.DEFAULT);
@@ -54,6 +55,7 @@ public class Main extends JFrame {
       TaskList tasks = new TaskList(this);
       Launcher launcher = new Launcher(this, tasks);
       this.launcherWindow = new LauncherWindow(this, tasks);
+      this.power = new Power(this, tasks);
       this.startMenu = new StartMenu(this, launcher);
       // The taskbar and its menu stay above internal app windows (Clock), as on a real desktop.
       this.desktopPane.add(this.launcherWindow, JLayeredPane.PALETTE_LAYER);
@@ -61,6 +63,8 @@ public class Main extends JFrame {
       this.desktopMenu = new DesktopMenu(this, new DesktopShortcuts(this, launcher));
       this.desktopPane.add(this.desktopMenu, JLayeredPane.POPUP_LAYER);
       this.desktopPane.add(this.zoom, JLayeredPane.DRAG_LAYER);
+      // Above everything, even the outlines and a dragged icon.
+      this.desktopPane.add(this.power, Integer.valueOf(JLayeredPane.DRAG_LAYER + 100));
       // The window was shown before the desktop was added, so lay it out now; and since it never takes focus,
       // raise it once, or it opens behind the window that started it.
       this.revalidate();
