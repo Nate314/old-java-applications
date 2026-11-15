@@ -3,6 +3,7 @@
 import './notfound.css';
 import { useState, type FormEvent } from 'react';
 import { LOST_APPS, named, score, type LostApp } from './match';
+import { Spotlight } from './Spotlight';
 
 function Card({ root, app, best }: { root: string; app: LostApp; best: boolean }) {
   return (
@@ -32,6 +33,10 @@ function Lost({ root, missing }: { root: string; missing: string }) {
     : none ? 'No app matches “' + q + '”, so here are all ' + apps.length + '.'
     : ranked.length + (ranked.length === 1 ? ' app matches' : ' apps match') + ' “' + q + '”';
 
+  // The best match goes in the spotlight, unless it only shares a word of the address with its hint.
+  const [first] = useState(query);
+  const spot = q && !none && (named(ranked[0].app, q) || query !== first) ? ranked[0].app : null;
+
   function go(e: FormEvent) {
     e.preventDefault();
     location.href = root + ranked[0].app.id + '/index.html';
@@ -51,8 +56,9 @@ function Lost({ root, missing }: { root: string; missing: string }) {
                  spellCheck="false" value={query} onChange={e => setQuery(e.target.value)} />
         </form>
         <p className="count" id="count" aria-live="polite">{count}</p>
+        <Spotlight root={root} match={spot} named={!!spot && named(spot, q)} query={q} />
         <ul className="cards" id="cards">
-          {ranked.map((x, i) => <Card key={x.app.id} root={root} app={x.app} best={i === 0 && !none && named(x.app, q)} />)}
+          {ranked.map((x, i) => <Card key={x.app.id} root={root} app={x.app} best={i === 0 && !none && named(x.app, q)} />).slice(spot ? 1 : 0)}
         </ul>
         <div className="shorts">
           <p>Every app has a short link. Type one after the site's address:</p>
