@@ -77,6 +77,18 @@ export const ROUTES: Route[] = [
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{SITE}</title>
         <meta name="description" content={'An old Java app, playable right here. Part of ' + SITE + ': 20 Java Swing and AWT programs recovered from old jars and running in the browser.'} />
+        {/* The link preview, for a play.html address pasted on its own: one page serves every app (?app= is read by
+            its script, which link previews do not run), so it shows the home page's card. */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content={SITE} />
+        <meta property="og:title" content={'Play an old Java app: ' + SITE} />
+        <meta property="og:description" content={homeDescription} />
+        <meta property="og:url" content="play.html" />
+        <meta property="og:image" content="cards/index.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content={'Thumbnails of six of the ' + apps.length + ' apps'} />
+        <meta name="twitter:card" content="summary_large_image" />
         {ICON}
       </>
     ),

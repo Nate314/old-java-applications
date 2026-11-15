@@ -1,6 +1,7 @@
 // The embeddable player (play.html?app=<App>): a poster first, the app only after Play, in a frame scaled to the widget.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { APPS, type App } from '../../shared/catalog';
+import { Shot } from './Shot';
 import './play.css';
 
 // The same four apps the runtime's WATCH table lets the computer play.
@@ -99,8 +100,7 @@ export function Play() {
           <img className="bg" id="poster-bg" alt="" src={poster ? poster.shot : undefined} />
           {' '}
           {/* The thumbnail and hint show today's app, so the Then poster keeps only a faded backdrop of it. */}
-          <img className="shot" id="poster-shot" alt={poster ? poster.alt : ''} src={poster ? poster.shot : undefined}
-            hidden={thenPoster} onClick={() => run(poster!, false)} />
+          <Shot app={poster} still={thenPoster} shown={shown.mode === 'poster'} onPlay={() => run(poster!, false)} />
           <div className="text">
             <p className="kicker" id="poster-kicker">{thenPoster ? 'Then: as first restored' : 'Play in your browser'}</p>
             <h1 id="poster-name">{poster ? poster.name : null}</h1>
