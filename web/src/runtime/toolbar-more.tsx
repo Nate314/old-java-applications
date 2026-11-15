@@ -2,6 +2,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { embedded } from './skin';
 import { playSound } from './sounds';
 import { redrawBar } from './install';
+import { isThen } from './then-and-now';
 
 // ---- one-row toolbar: what does not fit waits under More ----
 // An app page's band holds many controls, and which ones show depends on the width, the skin (Yours adds Edit),
@@ -58,10 +59,26 @@ function setHidden(h: boolean) {
   state.hidden = h;
   redrawBar();
 }
+// A calm band: even where everything would fit, the band shows only what gets a visitor playing and moving on
+// (How to play, Find, All apps, Switch app, Next, Controls, Keyboard, Sound); the rest waits under More from the
+// start. A control that is on (Slow-mo slowed, Side by side open, popped out) stays in the band so it can be
+// turned off where it shows, and so does Then | Now on the Then page, which says which version is playing.
+const CALM = ['.shim-era', '.shim-slowmo', '.shim-share-open', '.shim-source-open', '.shim-zoom', 'label',
+  '.shim-dock-open', '.shim-own-edit', '.shim-replay', '.shim-pop', '.shim-photo-open'];
+function calm() {
+  CALM.forEach(function (sel) {
+    var c = bar!.querySelector(':scope > ' + sel);
+    if (!c || !c.getBoundingClientRect().width || (sel !== '.shim-zoom' && c.getAttribute('aria-pressed') === 'true') || (sel === '.shim-era' && isThen())) return;
+    out.add(sel);
+  });
+}
 function fit() {
   var list = items(), allowed = narrow.matches ? 2 : 1;
   out.clear();
   state.hidden = true;
+  redrawBar();
+  calm();   // measured with every control back in the band, so one not showing (Replay before the app runs) stays out of the menu
+  state.hidden = !out.size;
   redrawBar();
   if (rows() > allowed) {
     setHidden(false);
@@ -170,6 +187,8 @@ function start(band: Element) {
   new MutationObserver(refit).observe(document.documentElement,
     { attributes: true, attributeFilter: ['data-skin', 'data-replay', 'data-photo', 'data-title', 'data-source', 'data-dock'] });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
+  // A control turned on from the menu (Slow-mo, Pop out) comes back into the band; hidden, it reports no resize.
+  new MutationObserver(refit).observe(bar, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
 }
 
 function buttonClick(e: ReactMouseEvent) {
