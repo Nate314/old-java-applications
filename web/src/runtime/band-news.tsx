@@ -1,4 +1,5 @@
 import { redrawBar } from './install';
+import { store, stored } from './stored';
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
@@ -160,11 +161,11 @@ const ZOOM_ROOM = 0.9;
 const zoomListeners: ((on: boolean) => void)[] = [];
 
 export function zoomFit() {
-  try { return localStorage.getItem(ZOOM_KEY) !== 'actual'; } catch (e) { return true; }
+  return stored(ZOOM_KEY) !== 'actual';
 }
 
 export function setZoomFit(on: boolean) {
-  try { localStorage.setItem(ZOOM_KEY, on ? 'fit' : 'actual'); } catch (e) { /* this page only */ }
+  store(ZOOM_KEY, on ? 'fit' : 'actual');
   zoomChanged();
 }
 
