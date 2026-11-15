@@ -129,3 +129,11 @@ select { font: inherit; font-size: 13px; padding: 2px 6px; border-radius: 6px; b
 @media (prefers-reduced-motion: reduce) {
   .bars .fill, .code .id { transition: none; }
 }
+
+/* sharing (ShareStory.tsx): the top bar's button, and what it says after copying */
+.story-top .share { padding: 2px 10px; font-size: 13px; }
+.share-said:empty { display: none; }
+.story-top .share-said { position: absolute; right: 16px; top: 100%; margin-top: 6px; padding: 4px 10px; border-radius: 6px;
+                         background: var(--accent); color: #fff; font-size: 13px; max-width: calc(100vw - 32px); overflow-wrap: anywhere; }
+.finale .share-said { flex-basis: 100%; font-size: 14px; }
+@media (max-width: 760px) { .story-top .share { margin-left: auto; } }

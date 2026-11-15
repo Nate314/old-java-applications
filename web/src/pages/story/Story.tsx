@@ -2,6 +2,7 @@
 import './story.css';
 import { APPS } from '../../shared/catalog';
 import { ChainShow, EraPanel, PickLink, RenamePanel, StoryTop, Tape } from './panels';
+import { ShareStory } from './ShareStory';
 
 // Where each app came from (HISTORY.md, The recovery).
 const FROM: Record<string, string> = {
@@ -234,6 +235,8 @@ export function Story() {
             <PickLink />
             {' '}
             <a className="btn" href="https://github.com/Nate314/old-java-applications">The code on GitHub</a>
+            {' '}
+            <ShareStory className="btn" label="Share the story" />
           </div>
         </section>
       </main>

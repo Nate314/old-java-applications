@@ -1,10 +1,11 @@
 # Makes the link preview pictures: a 1200 x 630 share card per app (web/public/cards/<App>.jpg, plus index.jpg for
-# the home page), rendered from web/card.html with headless Chrome. Names, hints, categories and origins come from
+# the home page and story.jpg for the story), rendered from web/card.html with headless Chrome. Names, hints, categories and origins come from
 # web/src/shared/apps.json, so run this again after changing an app's entry there. The pages' share tags, which point
 # at these cards, are written by the build (web/src/routes.tsx, web/src/pages/app/AppPage.tsx).
 # Build first (npm run build in web/, for the thumbnails and the icon), then run from the repo root:
 #   ./web/cards.ps1
 #   ./web/cards.ps1 -Apps Minesweeper,Clock -Port 8102
+#   ./web/cards.ps1 -Apps story -Port 8102       # only the story page's card (story.jpg)
 param(
     [string[]]$Apps = @(),
     [int]$Port = 8102,
@@ -53,6 +54,7 @@ function Shoot([string]$query, [string]$jpg) {
 try {
     Start-Sleep -Seconds 1
     if (-not $Apps.Count) { Shoot '' (Join-Path $out 'index.jpg') }
+    if (-not $Apps.Count -or $Apps -contains 'story') { Shoot '?story' (Join-Path $out 'story.jpg') }
     foreach ($e in $selected) {
         $q = '?app=' + $e.Id + '&name=' + [uri]::EscapeDataString($e.Name) + '&hint=' + [uri]::EscapeDataString($e.Hint) +
             '&cat=' + $e.Cat + '&origin=' + $e.Origin
