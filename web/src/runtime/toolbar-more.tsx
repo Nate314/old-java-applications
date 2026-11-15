@@ -3,6 +3,7 @@ import { embedded } from './skin';
 import { playSound } from './sounds';
 import { redrawBar } from './install';
 import { isThen } from './then-and-now';
+import { menuKeys } from '../shared/menu-keys';
 
 // ---- one-row toolbar: what does not fit waits under More ----
 // An app page's band holds many controls, and which ones show depends on the width, the skin (Yours adds Edit),
@@ -201,23 +202,7 @@ function buttonKey(e: ReactKeyboardEvent) {
     if (e.key === 'ArrowUp') { var l = entries(); if (l.length) l[l.length - 1].focus(); }
   }
 }
-function menuKey(e: ReactKeyboardEvent) {
-  var l = entries(), i = l.indexOf(document.activeElement as HTMLElement);
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    e.preventDefault();
-    var n = l.length;
-    if (n) l[((i < 0 ? (e.key === 'ArrowDown' ? -1 : 0) : i) + (e.key === 'ArrowDown' ? 1 : -1) + n) % n].focus();
-  } else if (e.key === 'Home' || e.key === 'End') {
-    e.preventDefault();
-    if (l.length) l[e.key === 'Home' ? 0 : l.length - 1].focus();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    close(true);
-  } else if (e.key === 'Tab') {
-    close(false);
-  }
-}
+function menuKey(e: ReactKeyboardEvent) { menuKeys(e, entries(), close); }
 
 /** The More button and its menu, at the end of an app page's band. */
 export function More() {
