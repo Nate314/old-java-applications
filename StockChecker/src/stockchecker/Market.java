@@ -162,6 +162,25 @@ final class Market {
       return new double[] {day, stock.open(), high, low, stock.path[minute]};
    }
 
+   /**
+    * In hindsight, the best single buy and later sell of {@code path} from the open to {@code upTo}, as {buy minute,
+    * sell minute}, or null when the price never rose above an earlier one.
+    */
+   static int[] bestTrade(double[] path, int upTo) {
+      int low = 0;
+      int[] best = null;
+      double gain = 1;
+      for (int m = 1; m <= upTo; m++) {
+         if (path[m] < path[low]) {
+            low = m;
+         } else if (path[m] / path[low] > gain) {
+            gain = path[m] / path[low];
+            best = new int[] {low, m};
+         }
+      }
+      return best;
+   }
+
    boolean closed() {
       return minute >= CLOSE;
    }

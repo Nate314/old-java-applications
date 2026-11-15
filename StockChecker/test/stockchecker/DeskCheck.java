@@ -251,6 +251,26 @@ public class DeskCheck {
       }
       check(ChartEar.minuteAt(ChartEar.STEPS / 2, 0) == 0, "a hearing at the open stays on the open");
 
+      // Hindsight: the best buy before a later sell, only up to the minute asked, and none on a day that only fell.
+      double[] path = {10, 12, 9, 11, 14, 8, 12};
+      check(Arrays.equals(Market.bestTrade(path, 6), new int[] {2, 4}), "best trade buys the low before the high");
+      check(Arrays.equals(Market.bestTrade(path, 1), new int[] {0, 1}), "best trade so far looks only up to now");
+      check(Market.bestTrade(new double[] {5, 4, 3, 3}, 3) == null, "no best trade when it never rose");
+      check(Market.bestTrade(path, 0) == null, "no best trade at the open");
+      for (int day = 1; day <= 50; day++) {
+         for (Market.Stock stock : new Market(day, symbols, none, first).stocks()) {
+            int[] best = Market.bestTrade(stock.path, Market.CLOSE);
+            double most = 1;
+            for (int i = 0; i <= Market.CLOSE; i++) {
+               for (int j = i + 1; j <= Market.CLOSE; j++) {
+                  most = Math.max(most, stock.path[j] / stock.path[i]);
+               }
+            }
+            check(best == null ? most == 1 : best[0] < best[1] && stock.path[best[1]] / stock.path[best[0]] == most,
+               "best trade matches every buy and sell pair on day " + day);
+         }
+      }
+
       System.out.println("DeskCheck passed");
    }
 
