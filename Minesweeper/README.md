@@ -38,6 +38,15 @@ A hint says what is certain. **Odds** (the button at the right of the top row, o
 - Odds stay on for the next game until turned off (they are not saved between runs). A game played with the odds showing counts as one hint, so a win sets no best time ("Cleared with the odds showing.").
 - Counting stops after a million steps, in which case the line says "Too many ways to count the odds here." That never happened in the self-check's Expert games; it takes many scattered openings on a large board.
 
+## Your guesses
+
+When a game ends, every tile you guessed on is ringed in purple with a tag giving its chance of being a mine at the moment you opened it, so the board shows where the game turned on luck and how much.
+
+- A move is a guess when the numbers on the board did not show the tile to be safe. Its chance is the one Odds (above) gives for that tile just before the click, from the numbers alone: like a hint, it does not trust your flags. The first click is never a guess. Opening around a number counts as one move, tagged on its riskiest tile.
+- **After a win** the lines under the status line say how many guesses it took and the odds of them all coming off: "Cleared, with 2 guesses." and "Odds your 2 guesses all came off: 91%. Each is tagged in purple." Each guess's chance was read from the board as it stood then, so these multiply. A win with none says "Cleared without a single guess." (on a No guess board, "Cleared by logic alone, no guesses.").
+- **After a mine** that was a guess: "That one was a guess: 29% likely a mine." and "Guess 3. Odds the 2 guesses before it came off: 76%." A tile the numbers already showed to be a mine is tagged 100% ("The numbers showed that one was a mine."). When the board could have told you instead, the hint lines show that, as before, and the tags are still drawn.
+- Screen readers hear "your guess, 29% chance of a mine" after a guessed tile's name. Moves the computer makes (W) are not tagged. Tiles under 22 px get the ring without the tag.
+
 ## Controls / usage
 
 - **Level buttons** (top of the window): Beginner (9x9, 10 mines), Classic (15x15, 18 mines, the original game's board) and Expert (16x16, 40 mines). The current level is lit. Picking one starts a new game on it. Keys **1**, **2** and **3** do the same, and **F2** starts a new game on the current level.
@@ -63,6 +72,7 @@ A hint says what is certain. **Odds** (the button at the right of the top row, o
 - `src/minesweeper/Level.java`: the three board sizes and mine counts.
 - `src/minesweeper/Logic.java`: what can be worked out for certain from the board as a player sees it, one step at a time, with the reason in words; also the hints (which do not trust the player's flags).
 - `src/minesweeper/Odds.java`: each hidden tile's chance of being a mine, by counting every placement of the mines that fits the numbers, group by group of tiles that share numbers.
+- `src/minesweeper/Luck.java`: the player's guesses in a game, each with its chance of being a mine, and the lines that sum them up.
 - `src/minesweeper/FairBoard.java`: deals no-guess boards, checking each random board by playing it with `Logic` from the first click.
 - `src/minesweeper/Solver.java`: the computer's next move for W: a step from `Logic`, or the least risky guess.
 - `src/minesweeper/BestTimes.java`: reads and writes the best times, the last level and the No guess setting.
@@ -77,7 +87,7 @@ From the repo root: `./run.ps1 old Minesweeper` (or `./run.ps1 old Minesweeper -
 
 ## Self-check
 
-`test/minesweeper/MineFieldCheck.java` checks board generation on every level, the flood reveal, opening around a number (including a wrong flag), the win check, the best times file (and the No guess setting), and the computer (W) playing 200 games on each level: a move it is sure of never hits a mine or flags a safe tile, it never plays a revealed or flagged tile, and it wins more than 70% of Beginner games (it prints its wins per level: 187, 199 and 169 of 200). It also checks each `Logic` rule and its reason on small boards, that over 300 random games with careless (often wrong) flags a hint never calls a mine safe or a safe tile a mine, and that 50 no-guess boards per level have the right mines, open on the first click and are cleared by `Logic` alone (it prints how long they took). For Odds it checks 60 small boards (5x5, 6 mines, with some random flags that must be ignored) against counting every placement of the mines one by one, and 40 Expert games played by the computer: at every move the odds add up to 40 mines, no mine is at 0% and no safe tile at 100%; it prints the slowest move (a few ms). From `Minesweeper/`:
+`test/minesweeper/MineFieldCheck.java` checks board generation on every level, the flood reveal, opening around a number (including a wrong flag), the win check, the best times file (and the No guess setting), and the computer (W) playing 200 games on each level: a move it is sure of never hits a mine or flags a safe tile, it never plays a revealed or flagged tile, and it wins more than 70% of Beginner games (it prints its wins per level: 187, 199 and 169 of 200). It also checks each `Logic` rule and its reason on small boards, that over 300 random games with careless (often wrong) flags a hint never calls a mine safe or a safe tile a mine, and that 50 no-guess boards per level have the right mines, open on the first click and are cleared by `Logic` alone (it prints how long they took). For Odds it checks 60 small boards (5x5, 6 mines, with some random flags that must be ignored) against counting every placement of the mines one by one, and 40 Expert games played by the computer: at every move the odds add up to 40 mines, no mine is at 0% and no safe tile at 100%; it prints the slowest move (a few ms). For guesses it checks that a certain move is not kept as one and that the odds of coming through them are their product. From `Minesweeper/`:
 
 ```
 javac -d ../out/check/Minesweeper src/minesweeper/*.java test/minesweeper/*.java
