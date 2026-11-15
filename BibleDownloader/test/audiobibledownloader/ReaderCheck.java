@@ -16,6 +16,25 @@ public class ReaderCheck {
          check(Books.ordinal(Books.bookOf(o), Books.chapterOf(o)) == o, "ordinal round-trip " + o);
       }
       check(Books.find("luk") == 41 && Books.find("XYZ") < 0, "find by id");
+
+      // Go to reads typed passages in the common forms.
+      String[][] typed = {
+         {"John 3:16", "John 3:16"}, {"jn 3 16", "John 3:16"}, {"jhn3.16", "John 3:16"}, {"  JOHN  3 : 16 ", "John 3:16"},
+         {"1 cor 13", "1 Corinthians 13"}, {"1co 13:4", "1 Corinthians 13:4"}, {"ii kings 2", "2 Kings 2"}, {"1 john", "1 John 1"},
+         {"Ps 23", "Psalms 23"}, {"psalm 119:105", "Psalms 119:105"}, {"gen", "Genesis 1"}, {"mk 1", "Mark 1"}, {"phil 4:13", "Philippians 4:13"},
+         {"song of songs 2", "Song of Solomon 2"}, {"Jude 5", "Jude 1:5"}, {"obad 3", "Obadiah 1:3"}, {"rev 99", "Revelation 22"},
+         {"isaiah 0", "Isaiah 1"}, {"5", "Luke 5"}, {"3:16", "Luke 3:16"}, {"Rev. 21:4", "Revelation 21:4"}
+      };
+      for (String[] t : typed) {
+         Passage p = Passage.parse(t[0], 41);
+         check(p != null && p.name().equals(t[1]), "go to \"" + t[0] + "\": " + (p == null ? "nothing" : p.name()));
+      }
+      check(Passage.parse("xyz 3", 41) == null && Passage.parse("", 41) == null && Passage.parse("3", -1) == null, "go to: no such book");
+      List<Passage> js = Passage.matches("j 2", 41, 5);
+      check(js.size() == 5 && js.get(0).name().equals("Joshua 2") && js.get(1).name().equals("Judges 2"), "go to: books in Bible order");
+      for (String famous : Passage.FAMOUS) {
+         check(Passage.parse(famous, -1) != null, "well known place " + famous);
+      }
       check(BibleApi.url("kjv", Books.find("JHN"), 3).equals("https://bible-api.com/data/kjv/JHN/3"), "chapter address");
 
       // The parser reads the verse and text fields, with escapes, and folds whitespace.
