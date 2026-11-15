@@ -82,6 +82,8 @@ public final class GamePanel extends JPanel implements KeyListener {
    private final Rewind rewind;
    /** Rewinds used this run; a run with any is practice and keeps no records. */
    private int rewinds = 0;
+   /** Where the bird's body met a pipe in the last crash, marked until the next run or rewind; null for the ground. */
+   private float[] contact;
 
    /**
     * A picture from the classpath (a jar of the app), or else from the folder the game is started in (as in the
@@ -152,6 +154,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.rewinds++;
       this.target = 0;
       this.collided = false;
+      this.contact = null;
       this.flash = 0.0F;
       this.shake = 0.0F;
       this.noticeSteps = 0;
@@ -245,6 +248,7 @@ public final class GamePanel extends JPanel implements KeyListener {
          this.notice = this.daily ? "You passed your ghost!" : "New best!";
          this.noticeSteps = (int)this.stepsPerSecond * 2;
       }
+      this.contact = null;
       this.collided = this.hitsPipe() || this.onGround();
       if (this.collided && !this.debugMode) {
          this.crash();
@@ -319,30 +323,26 @@ public final class GamePanel extends JPanel implements KeyListener {
       return this.pipes.passed;
    }
 
+   /** Whether the bird's body touches a pipe; if so, where is kept in {@link #contact} for the crash mark. */
    private boolean hitsPipe() {
+      float[] body = this.body();
       for (int pipeIndex = 0; pipeIndex < this.pipes.positions.size(); pipeIndex++) {
-         Position pipe = this.pipes.positions.get(pipeIndex);
-         int pipeLeft = (int)pipe.collisionX;
-         int pipeRight = pipeLeft + Pipes.PIPE_WIDTH;
-         int birdLeft = (int)this.bird.position.collisionX;
-         int birdRight = birdLeft + Bird.WIDTH;
-         boolean overlapsX = pipeLeft < birdRight && birdRight < pipeRight || pipeLeft < birdLeft && birdLeft < pipeRight;
-         if (pipeIndex % 2 == 0) {
-            int pipeBottom = (int)pipe.collisionY + Pipes.PIPE_HEIGHT;
-            int birdTop = (int)this.bird.position.collisionY;
-            if (overlapsX && pipeBottom > birdTop) {
-               return true;
-            }
-         } else {
-            int pipeTop = (int)pipe.collisionY;
-            int birdBottom = (int)this.bird.position.collisionY + Bird.HEIGHT;
-            if (overlapsX && pipeTop < birdBottom) {
-               return true;
-            }
+         float[] touch = Hitbox.touch(body, this.pipeShape(pipeIndex));
+         if (touch != null) {
+            this.contact = touch;
+            return true;
          }
       }
-
       return false;
+   }
+
+   private float[] body() {
+      return Hitbox.body(this.bird.position.collisionX, this.bird.position.collisionY, Bird.WIDTH, this.bird.rotation());
+   }
+
+   private float[][] pipeShape(int pipeIndex) {
+      Position pipe = this.pipes.positions.get(pipeIndex);
+      return Hitbox.pipe(pipe.collisionX, pipe.collisionY, Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, pipeIndex % 2 == 0);
    }
 
    @Override
@@ -379,7 +379,9 @@ public final class GamePanel extends JPanel implements KeyListener {
          Image image = pipeIndex % 2 == 0 ? this.pipes.topPipeImage : this.pipes.bottomPipeImage;
          g2.drawImage(image, (int)pipe.x, (int)pipe.y, null);
          if (this.debugMode) {
-            g2.drawRect((int)pipe.x, (int)pipe.y, image.getWidth(null), image.getHeight(null));
+            for (float[] r : this.pipeShape(pipeIndex)) {
+               g2.drawRect(Math.round(r[0]), Math.round(r[1]), Math.round(r[2]), Math.round(r[3]));
+            }
          }
       }
 
@@ -404,7 +406,11 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.drawPuffs(g2);
       this.drawBird(g2);
       if (this.debugMode) {
-         g2.drawRect((int)this.bird.position.collisionX, (int)this.bird.position.collisionY, this.bird.image.getWidth(null), this.bird.image.getHeight(null));
+         float[] body = this.body();
+         g2.drawOval(Math.round(body[0] - body[2]), Math.round(body[1] - body[2]), Math.round(body[2] * 2.0F), Math.round(body[2] * 2.0F));
+      }
+      if (this.contact != null && (this.state == DYING || this.state == GAME_OVER)) {
+         this.drawContact(g2);
       }
       g2.translate(-shakeX, -shakeY);
 
@@ -599,6 +605,32 @@ public final class GamePanel extends JPanel implements KeyListener {
       g.dispose();
    }
 
+   /**
+    * A spark where the bird's body met the pipe: the spot it touched, so a crash shows it was a real one. It stays
+    * through the fall and the game over screen, pulsing gently.
+    */
+   private void drawContact(Graphics2D g2) {
+      int x = Math.round(this.contact[0]);
+      int y = Math.round(this.contact[1]);
+      float pulse = 0.85F + 0.15F * (float)Math.sin(this.stateSteps * 2.0 * Math.PI / this.stepsPerSecond);
+      int inner = Math.max(3, Math.round(Bird.HEIGHT / 7.0F * pulse));
+      int outer = Math.max(8, Math.round(Bird.HEIGHT / 2.6F * pulse));
+      Graphics2D g = (Graphics2D)g2.create();
+      g.setStroke(new BasicStroke(Math.max(2.0F, Bird.HEIGHT / 16.0F), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+      for (int pass = 0; pass < 2; pass++) {
+         g.setColor(pass == 0 ? new Color(60, 20, 0, 150) : new Color(255, 236, 120));
+         int shift = pass == 0 ? 2 : 0;
+         for (int ray = 0; ray < 8; ray++) {
+            double a = ray * Math.PI / 4.0 + Math.PI / 8.0;
+            int length = ray % 2 == 0 ? outer : outer * 2 / 3;
+            g.drawLine(x + shift + (int)Math.round(Math.cos(a) * inner * 1.6), y + shift + (int)Math.round(Math.sin(a) * inner * 1.6),
+               x + shift + (int)Math.round(Math.cos(a) * length), y + shift + (int)Math.round(Math.sin(a) * length));
+         }
+         g.drawOval(x + shift - inner, y + shift - inner, inner * 2, inner * 2);
+      }
+      g.dispose();
+   }
+
    /** The bird, tilted with its flight and stretched for a moment by each flap. */
    private void drawBird(Graphics2D g2) {
       Graphics2D g = (Graphics2D)g2.create();
@@ -745,6 +777,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.bird = new Bird(this.images.get(4));
       this.bird.position.set(new Position(this.bird.position.collisionX, (float)(Main.FRAME_HEIGHT / 3)));
       this.collided = false;
+      this.contact = null;
       this.paused = false;
       this.state = READY;
       this.stateSteps = 0;
