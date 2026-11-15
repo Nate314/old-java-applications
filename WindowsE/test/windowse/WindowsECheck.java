@@ -53,8 +53,31 @@ public class WindowsECheck {
       }
       check(Shortcut.EXPLORER.times == 10, "Win+E still offers 10, as the original did");
       screenChecks();
+      boardChecks();
       System.out.println("WindowsECheck: all checks passed");
       System.exit(0);
+   }
+
+   /** Both keyboards place every shortcut's key once, inside the board and clear of the others; the pocket pad fits a phone. */
+   static void boardChecks() {
+      for (boolean pocket : new boolean[] {false, true}) {
+         ShortcutBoard board = new ShortcutBoard(s -> { }, s -> { }, pocket);
+         java.awt.Dimension size = board.getPreferredSize();
+         java.util.Set<Shortcut> seen = java.util.EnumSet.noneOf(Shortcut.class);
+         List<java.awt.Rectangle> placed = new ArrayList<>();
+         for (java.awt.Component c : board.getComponents()) {
+            KeyCap cap = (KeyCap) c;
+            java.awt.Rectangle r = cap.getBounds();
+            check(seen.add(cap.shortcut), cap.shortcut + " has one key (pocket " + pocket + ")");
+            check(r.x >= 0 && r.y >= 0 && r.x + r.width <= size.width && r.y + r.height <= size.height, cap.shortcut + " is on the board");
+            for (java.awt.Rectangle o : placed) {
+               check(!r.intersects(o), cap.shortcut + " clears the other keys");
+            }
+            placed.add(r);
+         }
+         check(seen.size() == Shortcut.values().length, "every shortcut has a key (pocket " + pocket + ")");
+         check(pocket ? size.width <= 400 : size.width > 800, "board width " + size.width + " (pocket " + pocket + ")");
+      }
    }
 
    /** The little screen: what each shortcut does to it, and the words for it. */

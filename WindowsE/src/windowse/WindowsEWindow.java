@@ -3,6 +3,7 @@ package windowse;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
@@ -38,7 +39,9 @@ public final class WindowsEWindow extends JFrame {
       }
    };
    private final Keys keys;
-   private final ShortcutBoard board = new ShortcutBoard(this::pick, this::pickAndPress);
+   /** Narrower than the full keyboard fits (a phone, in the browser): the pocket pad. */
+   static final int POCKET_BELOW = 880;
+   private final ShortcutBoard board;
    private final JTextField countField = new JTextField("10");
    private final JButton sideBySideButton = new JButton("Side by side");
    private final JButton addButton = new JButton("Add step");
@@ -50,7 +53,12 @@ public final class WindowsEWindow extends JFrame {
    private WindowsEPresser presser;
 
    WindowsEWindow(Keys keys) {
+      this(keys, Toolkit.getDefaultToolkit().getScreenSize().width < POCKET_BELOW);
+   }
+
+   WindowsEWindow(Keys keys, boolean pocket) {
       this.keys = keys;
+      this.board = new ShortcutBoard(this::pick, this::pickAndPress, pocket);
       this.setTitle(TITLE);
       this.setDefaultCloseOperation(3);
       this.setResizable(false);
@@ -74,21 +82,33 @@ public final class WindowsEWindow extends JFrame {
       this.previewButton.addActionListener(event -> this.doIt(true));
       this.doItButton.addActionListener(event -> this.doIt(false));
 
-      JPanel row = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
-      row.setBackground(new Color(243, 245, 249));
+      JPanel row = buttonRow();
       row.add(this.sideBySideButton);
       row.add(new JLabel("Press it"));
       row.add(this.countField);
       row.add(new JLabel("times"));
-      row.add(this.addButton);
-      row.add(this.clearButton);
-      row.add(this.previewButton);
-      row.add(this.doItButton);
+      JPanel more = pocket ? buttonRow() : row;   // pocket: the buttons go on a second row
+      more.add(this.addButton);
+      more.add(this.clearButton);
+      more.add(this.previewButton);
+      more.add(this.doItButton);
+      if (pocket) {
+         JPanel rows = new JPanel(new BorderLayout());
+         rows.add(row, BorderLayout.NORTH);
+         rows.add(more, BorderLayout.SOUTH);
+         row = rows;
+      }
       this.add(row, BorderLayout.SOUTH);   // added first, so the field has the keyboard when the window opens
       this.add(this.board, BorderLayout.CENTER);
       this.pick(Shortcut.EXPLORER);
       this.setSteps(Collections.emptyList());
       this.pack();
+   }
+
+   private static JPanel buttonRow() {
+      JPanel row = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+      row.setBackground(new Color(243, 245, 249));
+      return row;
    }
 
    private void pick(Shortcut shortcut) {

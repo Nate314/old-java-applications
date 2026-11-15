@@ -22,19 +22,9 @@ import javax.swing.Timer;
  * step being pressed lights up and a count runs.
  */
 final class ShortcutBoard extends JPanel {
-   private static final int UNIT = 48;
    private static final int MARGIN = 12;
    private static final int PAD = 10;
-   private static final int HEAD = 92;
-   private static final int STEPS_Y = 56;
-   private static final int ROWS = 4;
-   private static final int DECK_UNITS_X10 = 125;   // 12.5 keys wide
-   private static final int DECK_W = 2 * PAD + DECK_UNITS_X10 * UNIT / 10;
-   private static final int SCREEN_W = 192;
-   private static final int SCREEN_H = 120;
    private static final int BEZEL = 5;
-   private static final int MONITOR_X = MARGIN + DECK_W + 16;
-   private static final int MONITOR_W = SCREEN_W + 2 * BEZEL;
    private static final Color BACK = new Color(243, 245, 249);
    private static final Color DECK = new Color(28, 30, 36);
    private static final Color KEY = new Color(48, 51, 60);
@@ -75,6 +65,24 @@ final class ShortcutBoard extends JPanel {
          cap(Shortcut.LEFT, 10), cap(Shortcut.DOWN, 10), cap(Shortcut.RIGHT, 10)},
    };
 
+   /** The shortcut keys alone, three by three, for a narrow screen (a phone): the Windows key, then the arrows below. */
+   private static final Slot[][] POCKET = {
+      {cap(Shortcut.START, 10), cap(Shortcut.EXPLORER, 10), cap(Shortcut.RUN, 10)},
+      {cap(Shortcut.TASKS, 10), cap(Shortcut.UP, 10), cap(Shortcut.DESKTOP, 10)},
+      {cap(Shortcut.LEFT, 10), cap(Shortcut.DOWN, 10), cap(Shortcut.RIGHT, 10)},
+   };
+
+   /** Pocket: the 3x3 pad of bigger keys and a smaller monitor, about 380 px wide instead of about 860. */
+   final boolean pocket;
+   private final Slot[][] layout;
+   private final int unit;
+   private final int head;
+   private final int stepsY;
+   private final int deckW;
+   private final int screenW;
+   private final int screenH;
+   private final int monitorX;
+   private final int monitorW;
    private final Map<Shortcut, KeyCap> caps = new EnumMap<>(Shortcut.class);
    private final Timer release = new Timer(60, event -> this.letGo());
    private Shortcut picked;
@@ -90,17 +98,27 @@ final class ShortcutBoard extends JPanel {
    private Screen live;
 
    /** onPick runs when a key is clicked; onPress when one is double-clicked (pick it and press it). */
-   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress) {
+   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress, boolean pocket) {
+      this.pocket = pocket;
+      this.layout = pocket ? POCKET : LAYOUT;
+      this.unit = pocket ? 56 : 48;
+      this.head = pocket ? 122 : 92;   // pocket: what it does gets its own lines under the chips
+      this.stepsY = pocket ? 86 : 56;
+      this.deckW = 2 * PAD + (pocket ? 30 : 125) * this.unit / 10;   // 3 keys, or 12.5
+      this.screenW = pocket ? 144 : 192;
+      this.screenH = pocket ? 90 : 120;
+      this.monitorX = MARGIN + this.deckW + (pocket ? 12 : 16);
+      this.monitorW = this.screenW + 2 * BEZEL;
       this.setLayout(null);
-      this.setPreferredSize(new Dimension(MONITOR_X + MONITOR_W + MARGIN,
-         HEAD + 2 * PAD + ROWS * UNIT + MARGIN));
+      this.setPreferredSize(new Dimension(this.monitorX + this.monitorW + MARGIN,
+         this.head + 2 * PAD + this.layout.length * this.unit + MARGIN));
       this.release.setRepeats(false);
-      for (int row = 0; row < LAYOUT.length; row++) {
+      for (int row = 0; row < this.layout.length; row++) {
          int tenths = 0;
-         for (Slot slot : LAYOUT[row]) {
+         for (Slot slot : this.layout[row]) {
             if (slot.shortcut != null) {
                KeyCap cap = new KeyCap(slot.shortcut, onPick, onPress);
-               int[] r = bounds(row, tenths, slot.tenths);
+               int[] r = this.bounds(row, tenths, slot.tenths);
                cap.setBounds(r[0], r[1], r[2], r[3]);
                this.add(cap);
                this.caps.put(slot.shortcut, cap);
@@ -111,10 +129,10 @@ final class ShortcutBoard extends JPanel {
    }
 
    /** A key's x, y, width and height, from its row and where it starts and how wide it is, in tenths of a key. */
-   private static int[] bounds(int row, int startTenths, int tenths) {
-      int x = MARGIN + PAD + startTenths * UNIT / 10;
-      int y = HEAD + PAD + row * UNIT;
-      return new int[] {x + 2, y + 2, tenths * UNIT / 10 - 4, UNIT - 4};
+   int[] bounds(int row, int startTenths, int tenths) {
+      int x = MARGIN + PAD + startTenths * this.unit / 10;
+      int y = this.head + PAD + row * this.unit;
+      return new int[] {x + 2, y + 2, tenths * this.unit / 10 - 4, this.unit - 4};
    }
 
    void pick(Shortcut shortcut) {
@@ -207,13 +225,13 @@ final class ShortcutBoard extends JPanel {
 
       this.paintMonitor(g);
       g.setColor(DECK);
-      g.fillRoundRect(MARGIN, HEAD, DECK_W, 2 * PAD + ROWS * UNIT, 16, 16);
+      g.fillRoundRect(MARGIN, this.head, this.deckW, 2 * PAD + this.layout.length * this.unit, 16, 16);
       g.setFont(new Font("SansSerif", Font.PLAIN, 11));
-      for (int row = 0; row < LAYOUT.length; row++) {
+      for (int row = 0; row < this.layout.length; row++) {
          int tenths = 0;
-         for (Slot slot : LAYOUT[row]) {
+         for (Slot slot : this.layout[row]) {
             if (slot.shortcut == null && slot.label != null) {
-               int[] r = bounds(row, tenths, slot.tenths);
+               int[] r = this.bounds(row, tenths, slot.tenths);
                g.setColor(KEY_SIDE);
                g.fillRoundRect(r[0], r[1] + 3, r[2], r[3] - 3, 9, 9);
                g.setColor(KEY);
@@ -248,7 +266,15 @@ final class ShortcutBoard extends JPanel {
       g.drawString(head.title, x, y + 13);
       g.setColor(MUTED);
       g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-      g.drawString(head.combo() + " " + head.does + ".", x, y + 31);
+      String does = head.combo() + " " + head.does + ".";
+      if (this.pocket) {   // under the keys, the width of the window, in up to two lines
+         List<String> lines = wrap(does, g.getFontMetrics(), this.getWidth() - 2 * MARGIN - 4, 2);
+         for (int i = 0; i < lines.size(); i++) {
+            g.drawString(lines.get(i), MARGIN + 2, y + 50 + 14 * i);
+         }
+      } else {
+         g.drawString(does, x, y + 31);
+      }
 
       String right = this.running ? (this.dry ? "Preview " : "Pressing ") + this.done + " of " + this.count : "Double-click a key to press it";
       g.setFont(new Font("SansSerif", this.running ? Font.BOLD : Font.PLAIN, this.running ? 14 : 11));
@@ -266,14 +292,15 @@ final class ShortcutBoard extends JPanel {
     */
    private void paintSteps(Graphics2D g) {
       int x = MARGIN + 2;
-      int y = STEPS_Y;
+      int y = this.stepsY;
       g.setColor(MUTED);
       g.setFont(new Font("SansSerif", Font.BOLD, 11));
       g.drawString("STEPS", x, y + 16);
       x += 48;
       if (this.shown.isEmpty()) {
          g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-         g.drawString("Add step lists the picked key; DO IT!!! then presses the list in order.", x, y + 16);
+         g.drawString(this.pocket ? "Add step: a list to press in order."
+            : "Add step lists the picked key; DO IT!!! then presses the list in order.", x, y + 16);
          return;
       }
       int lit = this.running && this.run == this.shown && this.done > 0 ? this.stepAt(this.done - 1) : -1;
@@ -306,24 +333,26 @@ final class ShortcutBoard extends JPanel {
    /** Beside the keyboard, a little monitor showing what the presses do, and under it the same in words. */
    private void paintMonitor(Graphics2D g) {
       Screen screen = this.live != null ? this.live : this.after;
-      int x = MONITOR_X;
-      int y = HEAD;
+      int x = this.monitorX;
+      int y = this.head;
+      int mw = this.monitorW;
+      int sh = this.screenH;
       g.setColor(DECK);
-      g.fillRoundRect(x, y, MONITOR_W, SCREEN_H + 2 * BEZEL, 10, 10);
-      g.fillRect(x + MONITOR_W / 2 - 10, y + SCREEN_H + 2 * BEZEL, 20, 10);
-      g.fillRoundRect(x + MONITOR_W / 2 - 36, y + SCREEN_H + 2 * BEZEL + 10, 72, 5, 4, 4);
-      MiniScreen.paint(g, screen, x + BEZEL, y + BEZEL, SCREEN_W, SCREEN_H);
+      g.fillRoundRect(x, y, mw, sh + 2 * BEZEL, 10, 10);
+      g.fillRect(x + mw / 2 - 10, y + sh + 2 * BEZEL, 20, 10);
+      g.fillRoundRect(x + mw / 2 - 36, y + sh + 2 * BEZEL + 10, 72, 5, 4, 4);
+      MiniScreen.paint(g, screen, x + BEZEL, y + BEZEL, this.screenW, sh);
 
       String label = this.running ? (this.dry ? "PREVIEW, NO KEYS PRESSED" : "PRESSING")
          : this.live != null ? (this.dry ? "PREVIEW" : "WHAT IT DID") : "AFTER DO IT!!!";
       g.setColor(this.running ? KeyCap.ACCENT : MUTED);
       g.setFont(new Font("SansSerif", Font.BOLD, 11));
-      int ty = y + SCREEN_H + 2 * BEZEL + 30;
+      int ty = y + sh + 2 * BEZEL + 30;
       g.drawString(label, x, ty);
       g.setColor(INK);
       g.setFont(new Font("SansSerif", Font.PLAIN, 11));
       FontMetrics fm = g.getFontMetrics();
-      List<String> lines = wrap(screen.summary(), fm, MONITOR_W + MARGIN - 2, 3);
+      List<String> lines = wrap(screen.summary(), fm, mw + MARGIN - 2, this.pocket ? 4 : 3);
       for (int i = 0; i < lines.size(); i++) {
          g.drawString(lines.get(i), x, ty + 15 * (i + 1));
       }
