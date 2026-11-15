@@ -45,6 +45,8 @@ export const H = {
     shown: false, text: 'Install it as an app, and save all 20 to play with no connection.', install: false, note: false,
     meterShown: false, meterW: null as number | null, saving: false, saveText: 'Save all for offline', offline: false,
     saved: {} as Record<string, boolean>, checked: false,
+    queued: {} as Record<string, boolean>,   // apps the save running now is still fetching
+    used: null as number | null,              // bytes this site keeps on the device (navigator.storage.estimate)
   },
   recordsCount: 0,
   // ---- the gallery's preview clips ----
