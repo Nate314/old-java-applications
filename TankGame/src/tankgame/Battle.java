@@ -60,6 +60,10 @@ public class Battle
     /** Marks this tick's blasts left on the ground: x, y and radius. */
     private final List<double[]> scorches       = new ArrayList<>();
     private static final Color CHIPS            = new Color(170, 165, 155);
+    /** How far the field shakes, in px: set by hits and blasts, dying away each tick. */
+    private double           shake;
+    /** Counts the tanks destroyed so far, so the panel can play each one's blast in slow motion. */
+    private int              blasts;
     private List<Arena.Layout> layouts          = Arena.LAYOUTS;
     private Arena            arena              = Arena.EMPTY;
     /** The round, field width and height the arena was placed for, so it is placed again when one changes. */
@@ -148,6 +152,7 @@ public class Battle
     public void tick(int width, int height)
     {
         scorches.clear();
+        shake = shake < 0.3 ? 0 : shake * 0.8;
         placeArena(width, height);
         sparks.removeIf(spark -> !spark.move());
         red.fadeFlash();
@@ -250,6 +255,8 @@ public class Battle
     {
         if (supply == null || !supply.hitBy(shell)) return false;
         Spark.burst(sparks, supply.x(), supply.y(), 20, 3.5, new Color(170, 120, 66));
+        Spark.blast(sparks, supply.x(), supply.y(), 40);
+        shake(4);
         scorches.add(new double[] { supply.x(), supply.y(), 14 });
         crateGone();
         return true;
@@ -291,7 +298,9 @@ public class Battle
         if (shell.burst())
         {
             Spark.burst(sparks, shell.x(), shell.y(), 14, 3, CHIPS);
+            Spark.blast(sparks, shell.x(), shell.y(), 22);
             scorches.add(new double[] { shell.x(), shell.y(), 9 });
+            shake(2);
         }
         return flying;
     }
@@ -305,6 +314,8 @@ public class Battle
         boolean popped = shielded && !tank.shielded();
         Spark.burst(sparks, shell.x(), shell.y(), popped ? 22 : 12, 4,
                         damaged ? tank.color() : popped ? Supply.Power.SHIELD.color : CHIPS);
+        if (damaged) Spark.blast(sparks, shell.x(), shell.y(), 34);
+        shake(damaged ? 7 : 3);
         return true;
     }
 
@@ -312,7 +323,28 @@ public class Battle
     {
         if (tank.isAlive()) return;
         Spark.burst(sparks, tank.x(), tank.y(), 70, 9, tank.color());
+        Spark.blast(sparks, tank.x(), tank.y(), 150);
+        Spark.scraps(sparks, tank.x(), tank.y(), 14, tank.color());
+        shake(12);
+        blasts++;
         scorches.add(new double[] { tank.x(), tank.y(), 62 });
+    }
+
+    private void shake(double px)
+    {
+        shake = Math.max(shake, px);
+    }
+
+    /** How far the field shakes this tick, in px. */
+    public double shake()
+    {
+        return shake;
+    }
+
+    /** How many tanks have been destroyed since the game started. */
+    public int blasts()
+    {
+        return blasts;
     }
 
     /** A damaged tank smokes, more with each hit, and a wreck smokes most. */
