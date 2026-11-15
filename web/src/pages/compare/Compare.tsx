@@ -5,7 +5,8 @@ import { APPS } from '../../shared/catalog';
 import { SITE } from '../../shared/ShareTags';
 
 // The Then versions are built from commit 5a28e46 (then.commit in web/then/pom.xml); this is its commit time, so the
-// changes listed are the ones made after it.
+// changes listed are the ones made after it. history.txt carries no hashes, so change this together with then.commit
+// (web/then/pom.xml and web/then-nathanos/pom.xml).
 const THEN_AT = 1793558285 * 1000;
 const WITH_THEN = APPS.filter(a => a.then);
 const asked = new URLSearchParams(location.search).get('app');

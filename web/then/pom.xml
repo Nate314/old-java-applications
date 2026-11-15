@@ -22,7 +22,8 @@
   <properties>
     <!-- master after "Generic example names, Modern as the default skin, and every app in NathaNOS (#9)": the
          recovered apps with the bug fixes of "Modernize all 20 apps" (#6), before the reworks from #10 on. A pinned
-         hash, not master, so "then" stays put when later work is merged. web/then-nathanos uses the same commit. -->
+         hash, not master, so "then" stays put when later work is merged. web/then-nathanos uses the same commit.
+         Change it together with THEN_AT in web/src/pages/compare/Compare.tsx (this commit's time). -->
     <then.commit>5a28e4608fc254e9cc075768a598a965b7fe2d24</then.commit>
     <then.src>${project.build.directory}/then-src</then.src>
   </properties>
