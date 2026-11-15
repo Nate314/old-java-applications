@@ -68,7 +68,7 @@ $Recipes = [ordered]@{
     BibleDownloader     = @{ Steps = @('wait:5000') }
     DinoGame            = @{ HandMade = $true; Steps = @('wait:800', 'key:E', 'key:F', 'wait:25000', 'key:F', 'wait:1800') }
     Windows             = @{ Ready = $ShellUp; Steps = @('wait:1500') }
-    WindowsE            = @{ Steps = @('wait:800', "js:(function (f) { f.value = '5'; f.dispatchEvent(new Event('input')); })(document.querySelector('#desktop input'))", (Click 'DO IT'), 'wait:2500', $WindowsEFront) }
+    WindowsE            = @{ Steps = @('wait:800', (Click 'Side by side'), 'wait:300', (Click 'DO IT'), 'wait:2500', $WindowsEFront) }
 }
 # HandMade: the committed thumbnail was composited by hand (web/README.md), so only -Apps naming it retakes it.
 if (-not $Apps) { $Apps = @($Recipes.Keys | Where-Object { -not $Recipes[$_].HandMade }) }

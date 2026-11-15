@@ -7,7 +7,9 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import javax.swing.JPanel;
@@ -15,14 +17,16 @@ import javax.swing.Timer;
 
 /**
  * A small keyboard with the Windows shortcuts on it. The keys that do something with the Windows key are blue-edged
- * buttons ({@link KeyCap}); the rest are drawn, dimmed. Above it, the picked shortcut and what it does; while it is
- * being pressed, the Windows key stays down, the other key goes down with each press, and a count runs.
+ * buttons ({@link KeyCap}); the rest are drawn, dimmed. Above it, the picked shortcut and what it does, and the list
+ * of steps DO IT!!! presses; while they are pressed, the Windows key and the other key go down with each press, the
+ * step being pressed lights up and a count runs.
  */
 final class ShortcutBoard extends JPanel {
    private static final int UNIT = 48;
    private static final int MARGIN = 12;
    private static final int PAD = 10;
-   private static final int HEAD = 62;
+   private static final int HEAD = 92;
+   private static final int STEPS_Y = 56;
    private static final int ROWS = 4;
    private static final int DECK_UNITS_X10 = 125;   // 12.5 keys wide
    private static final Color BACK = new Color(243, 245, 249);
@@ -68,6 +72,9 @@ final class ShortcutBoard extends JPanel {
    private final Map<Shortcut, KeyCap> caps = new EnumMap<>(Shortcut.class);
    private final Timer release = new Timer(60, event -> this.letGo());
    private Shortcut picked;
+   private List<Step> shown = new ArrayList<>();
+   private List<Step> run = new ArrayList<>();
+   private Shortcut current;
    private int done;
    private int count;
    private boolean running;
@@ -108,25 +115,47 @@ final class ShortcutBoard extends JPanel {
       this.repaint();
    }
 
-   /** A run of count presses starts: the Windows key goes down and stays down until {@link #stopped()}. */
-   void started(int count) {
-      this.running = true;
-      this.done = 0;
-      this.count = count;
-      this.caps.get(Shortcut.START).setPushed(this.picked != Shortcut.START);
+   /** The list of steps under the picked shortcut. */
+   void steps(List<Step> steps) {
+      this.shown = steps;
       this.repaint();
    }
 
-   /** One more press is done: the picked key goes down for a moment. */
+   /** A run of these steps starts (the list itself, or one step of the picked key). */
+   void started(List<Step> run) {
+      this.running = true;
+      this.run = run;
+      this.done = 0;
+      this.count = 0;
+      for (Step step : run) {
+         this.count += step.times;
+      }
+      this.repaint();
+   }
+
+   /** One more press is done: the Windows key and the key pressed with it go down for a moment. */
    void tapped(int done) {
       this.done = done;
-      this.caps.get(this.picked).setPushed(true);
+      this.letGo();
+      this.current = this.run.get(this.stepAt(done - 1)).shortcut;
+      this.caps.get(Shortcut.START).setPushed(true);
+      this.caps.get(this.current).setPushed(true);
       this.release.restart();
       this.repaint();
    }
 
+   /** Which step of the run press number tap (from 0) belongs to. */
+   private int stepAt(int tap) {
+      int i = 0;
+      for (int left = tap; i < this.run.size() - 1 && left >= this.run.get(i).times; i++) {
+         left -= this.run.get(i).times;
+      }
+      return i;
+   }
+
    void stopped() {
       this.running = false;
+      this.current = null;
       this.release.stop();
       for (KeyCap cap : this.caps.values()) {
          cap.setPushed(false);
@@ -134,9 +163,11 @@ final class ShortcutBoard extends JPanel {
       this.repaint();
    }
 
-   /** The press is over: the picked key comes back up (the Windows key stays down while it is held). */
+   /** The press is over: the keys come back up. */
    private void letGo() {
-      this.caps.get(this.picked).setPushed(false);
+      for (KeyCap cap : this.caps.values()) {
+         cap.setPushed(false);
+      }
    }
 
    @Override
@@ -147,6 +178,7 @@ final class ShortcutBoard extends JPanel {
       g.setColor(BACK);
       g.fillRect(0, 0, this.getWidth(), this.getHeight());
       this.paintHead(g);
+      this.paintSteps(g);
 
       int deckW = 2 * PAD + DECK_UNITS_X10 * UNIT / 10;
       g.setColor(DECK);
@@ -171,26 +203,27 @@ final class ShortcutBoard extends JPanel {
 
    /** The picked shortcut as keys ("[logo] + [E]"), its name and what it does; on the right, the count while running. */
    private void paintHead(Graphics2D g) {
-      if (this.picked == null) {
+      Shortcut head = this.current != null ? this.current : this.picked;
+      if (head == null) {
          return;
       }
       int x = MARGIN + 2;
       int y = 14;
       x = chip(g, x, y, null) + 6;
-      if (this.picked != Shortcut.START) {
+      if (head != Shortcut.START) {
          g.setColor(MUTED);
          g.setFont(new Font("SansSerif", Font.BOLD, 16));
          g.drawString("+", x, y + 21);
          x += 18;
-         x = chip(g, x, y, this.picked);
+         x = chip(g, x, y, head);
       }
       x += 14;
       g.setColor(INK);
       g.setFont(new Font("SansSerif", Font.BOLD, 17));
-      g.drawString(this.picked.title, x, y + 13);
+      g.drawString(head.title, x, y + 13);
       g.setColor(MUTED);
       g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-      g.drawString(this.picked.combo() + " " + this.picked.does + ".", x, y + 31);
+      g.drawString(head.combo() + " " + head.does + ".", x, y + 31);
 
       String right = this.running ? "Pressing " + this.done + " of " + this.count : "Double-click a key to press it";
       g.setFont(new Font("SansSerif", this.running ? Font.BOLD : Font.PLAIN, this.running ? 14 : 11));
@@ -199,6 +232,49 @@ final class ShortcutBoard extends JPanel {
       int rx = this.getWidth() - MARGIN - 2 - fm.stringWidth(right);
       if (rx > x + 230) {   // only where it clears the description
          g.drawString(right, rx, y + 13);
+      }
+   }
+
+   /**
+    * The list of steps as pills joined by arrows, the one being pressed lit; past the right edge, "+N more". Empty, a
+    * line says what the list is for.
+    */
+   private void paintSteps(Graphics2D g) {
+      int x = MARGIN + 2;
+      int y = STEPS_Y;
+      g.setColor(MUTED);
+      g.setFont(new Font("SansSerif", Font.BOLD, 11));
+      g.drawString("STEPS", x, y + 16);
+      x += 48;
+      if (this.shown.isEmpty()) {
+         g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+         g.drawString("Add step lists the picked key; DO IT!!! then presses the list in order.", x, y + 16);
+         return;
+      }
+      int lit = this.running && this.run == this.shown && this.done > 0 ? this.stepAt(this.done - 1) : -1;
+      g.setFont(new Font("SansSerif", Font.BOLD, 12));
+      FontMetrics fm = g.getFontMetrics();
+      int right = this.getWidth() - MARGIN - 2;
+      for (int i = 0; i < this.shown.size(); i++) {
+         String text = this.shown.get(i).label();
+         int w = fm.stringWidth(text) + 18;
+         if (x + w > right - (i < this.shown.size() - 1 ? 60 : 0)) {
+            g.setColor(MUTED);
+            g.drawString("+" + (this.shown.size() - i) + " more", x, y + 16);
+            break;
+         }
+         g.setColor(i == lit ? KeyCap.ACCENT : Color.WHITE);
+         g.fillRoundRect(x, y, w, 24, 12, 12);
+         g.setColor(i == lit ? KeyCap.ACCENT : new Color(170, 176, 190));
+         g.drawRoundRect(x, y, w - 1, 23, 12, 12);
+         g.setColor(i == lit ? Color.WHITE : INK);
+         g.drawString(text, x + 9, y + 16);
+         x += w;
+         if (i < this.shown.size() - 1) {
+            g.setColor(MUTED);
+            g.drawString(">", x + 5, y + 16);
+            x += 18;
+         }
       }
    }
 

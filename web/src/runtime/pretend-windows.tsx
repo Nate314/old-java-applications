@@ -2,7 +2,7 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { played } from './passport';
-import { catalog, type CatalogApp } from './catalog';
+import { appId, catalog, type CatalogApp } from './catalog';
 import { playSound } from './sounds';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { play, playProps } from './ui/cards';
@@ -59,12 +59,13 @@ export function pretendWindows() {
     }
   }
   // A press on an app's window that closes the menu may be on a Windows key (Windows' on-screen one), whose release
-  // then sends the key: it closed the menu, so that release must not open it again.
+  // then sends the key: it closed the menu, so that release must not open it again. Only Windows has such a key:
+  // WindowsE's presses come from its DO IT!!! button, and each one must reach the menu.
   var closedAt = -1e9;
   function outside(e: Event) {
     var box = layer.querySelector('.shim-start');
     if (!menu || !box || box.contains(e.target as Node)) return;
-    if ((e.target as Element).closest && (e.target as Element).closest('#desktop')) closedAt = e.timeStamp;
+    if (appId() === 'Windows' && (e.target as Element).closest && (e.target as Element).closest('#desktop')) closedAt = e.timeStamp;
     closeMenu();
   }
   function openMenu() {
