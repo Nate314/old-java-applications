@@ -66,9 +66,17 @@ export function savedRecord(id: string) {
   return recordOf(id, saves);
 }
 
-// The record line for an app's saved files ({ path: contents }), wherever they came from: this browser's store, or
-// saves brought from another device (the home page's Your records, src/pages/home/Records.tsx).
+// The line an app's saved files ({ path: contents }) earn on its title screen: its record, else the files named.
 function recordOf(id: string, saves: Record<string, string>) {
+  var paths = Object.keys(saves || {});
+  if (!paths.length) return '';
+  return ruleLine(id, saves) || 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ');
+}
+
+// The app's own record line for its saved files, wherever they came from: this browser's store, or saves brought
+// from another device (the home page's Your records, src/pages/home/Records.tsx). '' when its rule has nothing to
+// say (saves only in another file, or no record yet), and for a store without a rule (a Then version, "<App>.then").
+function ruleLine(id: string, saves: Record<string, string>) {
   var paths = Object.keys(saves || {});
   var rule = RECORDS[id];
   // The text of a saved file by its name, or null.
@@ -78,11 +86,8 @@ function recordOf(id: string, saves: Record<string, string>) {
     }
     return null;
   }
-  if (!paths.length) return '';
-  // A rule reads its listed file ('' when missing) and any other with saved(); when it has nothing to say (saves only
-  // in another file, or no record yet), the saved files are named as for an app with no rule.
-  var line = rule ? rule.show(saved(rule.file) || '', saved) : '';
-  return line || 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ');
+  // A rule reads its listed file ('' when missing) and any other with saved().
+  return rule && paths.length ? rule.show(saved(rule.file) || '', saved) : '';
 }
 
 const newsLoad = lazyScript(() => import('./lazy/news'), () => window.oldjavaNews, 'news.js');
@@ -287,7 +292,7 @@ export function init() {
       return parts.length ? 'Your clock: ' + parts.join(', ') : '';
     } }
   };
-  window.oldjavaRecords = { line: recordOf };
+  window.oldjavaRecords = { line: ruleLine };
   // news.js (What's new), which the home page loads itself, added to an app page once.
   newsPromise = null;
 }

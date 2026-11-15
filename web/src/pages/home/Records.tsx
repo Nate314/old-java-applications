@@ -9,18 +9,15 @@ import { qr, type QrCode as Code } from '../../shared/qr';
 import { QrCode } from '../../shared/QrCode';
 import { byId } from '../../shared/dom';
 import { stopPlayer } from './player';
-import { PLAYED, PREFIX, check, collect, decode, encode, readJson, type Bundle, type Files } from './saves';
+import { PLAYED, PREFIX, check, collect, decode, encode, onSavesChange, readJson, type Bundle, type Files } from './saves';
 
 const MAX_QR_VERSION = 30;   // bigger codes are too dense to scan from a screen
 
 const nameOf = (store: string) =>
   (APPS.find(a => a.id === store.split('.')[0])?.name ?? store.split('.')[0]) + (/\.then$/.test(store) ? ' (Then)' : '');
 const shotOf = (store: string) => APPS.find(a => a.id === store.split('.')[0])?.shot;
-function line(store: string, files: Files) {
-  let text = /\.then$/.test(store) ? '' : window.oldjavaRecords.line(store, files);
-  if (!text) text = 'Saved: ' + Object.keys(files).map(p => p.split('/').pop()).join(', ');
-  return text.replace(/^Saved here from last time: /, 'Saved: ');
-}
+const line = (store: string, files: Files) =>
+  window.oldjavaRecords.line(store, files) || 'Saved: ' + Object.keys(files).map(p => p.split('/').pop()).join(', ');
 const kb = (bytes: number) => bytes < 1024 ? bytes + ' bytes' : (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
 
 interface Phone { link: string; code: Code | null; text: string }
@@ -38,14 +35,7 @@ export function Records({ onCount }: { onCount?: (n: number) => void }) {
   const empty = !stores.length;
   useEffect(() => { if (onCount) onCount(stores.length); }, [stores.length]);
 
-  useEffect(() => {
-    const refresh = () => setSaves(collect().saves);
-    const onStorage = (e: StorageEvent) => { if (e.key === null || e.key.indexOf(PREFIX) === 0) refresh(); };
-    window.addEventListener('storage', onStorage);
-    // The player's app saves every second while it runs; keep the list in step without a storage event (same page).
-    const timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
-    return () => { window.removeEventListener('storage', onStorage); clearInterval(timer); };
-  }, []);
+  useEffect(() => onSavesChange(() => setSaves(collect().saves)), []);
 
   function bringIn(bundle: Bundle, from: string) {
     const stamps = Object.keys(bundle.played).filter(id => !window.oldjavaPassport.has(id) && APPS.some(a => a.id === id));
