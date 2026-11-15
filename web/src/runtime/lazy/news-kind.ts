@@ -3,6 +3,7 @@
 // and an app's "Latest change" line skips them. Only the subject is read, so commit subjects keep the patterns below.
 const QUIET = new RegExp([
   '^(refactor\\b|runtime:|site code:|media scripts:|shim:|round \\d+\\b)',   // tidy-ups and round fit-ups
+  'in one place\\b', 'one shared helper\\b',   // rounds 36 and 38's refactors, whose subjects skip "Refactor:"
   'readme\\b', 'check:', 'prompt\\.md', 'upgrade vite', "convert the site's pages",   // docs, tests, tooling
   'retake', 'share card', '(description|hint) (now )?mentions',   // pictures and descriptions catching up
 ].join('|'), 'i');
