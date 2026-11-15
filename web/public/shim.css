@@ -5776,3 +5776,71 @@ html[data-saver] * {
     max-height: 150px;
   }
 }
+
+/* Title screen attract mode (src/runtime/title-attract.tsx): the app's preview clip plays over its picture. */
+.shim-title-art:has(.shim-title-clip) {
+  position: relative;
+}
+
+.shim-title-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
+.shim-title-clip.on {
+  opacity: 1;
+}
+
+.shim-title-art:has(.shim-title-clip.on) img {
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
+.shim-title-clip-pause {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.62);
+  color: #fff;
+  font: 600 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+.shim-title-clip-pause:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+:root[data-skin="classic"] .shim-title-clip-pause {
+  border-radius: 0;
+  border-color: var(--button-border);
+  background: var(--card-bg);
+  color: inherit;
+}
+
+/* Arcade: the clip is the cabinet's screen, with scanlines and a neon glow. */
+:root[data-skin="arcade"] .shim-title-art:has(.shim-title-clip.on)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 40px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-title-clip-pause {
+  z-index: 1;
+  border-color: #ff2bd6;
+  background: rgba(7, 4, 15, 0.8);
+  color: #5ff;
+  font-family: "Courier New", ui-monospace, monospace;
+  text-transform: uppercase;
+}

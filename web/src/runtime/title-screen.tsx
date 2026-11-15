@@ -12,6 +12,7 @@ import { CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
 import { fetchOk } from './fetch-ok';
+import { Attract } from './title-attract';
 
 /** A line of the boot log: [label, value, class]. */
 export type LogLine = [string, string, string];
@@ -47,7 +48,7 @@ export function titleScreen(files: string[]) {
     if (!started || leaving) return;
     if (e && e.type === 'keydown') {
       if ((e as KeyboardEvent).key === 'Tab' || (e as KeyboardEvent).key === 'Shift' || (e as KeyboardEvent).key === 'Control' || (e as KeyboardEvent).key === 'Alt' || (e as KeyboardEvent).key === 'Meta') return;
-      if ((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-find')) return;   // keys for those panels
+      if ((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-title-clip-pause, .shim-find')) return;   // keys for those panels
       e.preventDefault();
       e.stopPropagation();
       // Its release must not reach the app either: it never saw the press.
@@ -151,6 +152,7 @@ function TitleScreen({ total, onGo, onMount }: {
       <div className="shim-title-card">
         <div className="shim-title-art">
           <img alt="" hidden={!shown} src={app && !then ? app.shot : undefined} onLoad={() => setShown(true)} />
+          {app && app.clip && !then && <Attract id={id} go={ready} />}
           {app && then && (
             // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.
             <>
