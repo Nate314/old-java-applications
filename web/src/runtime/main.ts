@@ -82,6 +82,7 @@ import { init as sideBySide } from './side-by-side';
 import { init as toolbarMore } from './toolbar-more';
 import { init as stageGlow } from './stage-glow';
 import { init as slowMo } from './slow-mo';
+import { init as keptKeys } from './kept-keys';
 
 // In the order boot.js ran them.
 skin();
@@ -115,3 +116,4 @@ sideBySide();
 toolbarMore();
 stageGlow();
 slowMo();
+keptKeys();

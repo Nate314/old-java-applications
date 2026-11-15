@@ -130,6 +130,10 @@ public final class TDesktop {
                     shown.setFocusOwnerQuietly(first);
                 }
             }
+            // No button or field took it (a game's canvas): the window itself holds the page's keyboard focus.
+            if (shown.isVisible() && shown.getFocusableWindowState() && Js.pageFocusFree(shown.element())) {
+                Js.focusWindow(shown.element());
+            }
         });
     }
 
