@@ -10,6 +10,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.function.BooleanSupplier;
 import javax.swing.JButton;
 
 /**
@@ -41,6 +42,9 @@ final class WindowsKey extends JButton {
    static final int SLIDE = 28;
 
    private final Keys keys;
+   /** Hover to press, when it is on: resting on the key taps it. */
+   private final Dwell dwell;
+   private final BooleanSupplier dwellOn;
    private boolean down;
    private boolean hover;
    private int pressX;
@@ -49,7 +53,13 @@ final class WindowsKey extends JButton {
    private int slide;
 
    WindowsKey(Keys keys) {
+      this(keys, () -> false);
+   }
+
+   WindowsKey(Keys keys, BooleanSupplier dwellOn) {
       this.keys = keys;
+      this.dwellOn = dwellOn;
+      this.dwell = new Dwell(this, dwellOn, i -> this.tap());
       this.setFocusPainted(false);
       this.setBorderPainted(false);
       this.setContentAreaFilled(false);
@@ -62,6 +72,7 @@ final class WindowsKey extends JButton {
                WindowsKey.this.pressX = e.getX();
                WindowsKey.this.pressY = e.getY();
                WindowsKey.this.slide = 0;
+               WindowsKey.this.dwell.clicked();
                WindowsKey.this.setDown(true);
             }
          }
@@ -88,12 +99,14 @@ final class WindowsKey extends JButton {
          @Override
          public void mouseEntered(MouseEvent e) {
             WindowsKey.this.hover = true;
+            WindowsKey.this.dwell.at(0);
             WindowsKey.this.repaint();
          }
 
          @Override
          public void mouseExited(MouseEvent e) {
             WindowsKey.this.hover = false;
+            WindowsKey.this.dwell.at(-1);
             WindowsKey.this.repaint();
          }
       };
@@ -137,6 +150,10 @@ final class WindowsKey extends JButton {
          this.slide = arrow;
          this.repaint();
       }
+   }
+
+   Dwell dwell() {
+      return this.dwell;
    }
 
    int slide() {
@@ -184,6 +201,20 @@ final class WindowsKey extends JButton {
       int x = (w - size) / 2;
       int y = (h - 6) / 2 - size / 2 - 8 + sink;
       int half = (size - 3) / 2;
+      if (this.dwellOn.getAsBoolean()) {
+         // Hover to press: a ring round the logo, filling clockwise while the pointer rests on the key.
+         int ring = size + 14;
+         int rx = x + size / 2 - ring / 2;
+         int ry = y + size / 2 - ring / 2;
+         g.setStroke(new BasicStroke(3f));
+         g.setColor(this.down ? ACCENT_SIDE : SIDE);
+         g.drawOval(rx, ry, ring, ring);
+         int sweep = (int) Math.round(360 * this.dwell.progress(0));
+         if (sweep > 0) {
+            g.setColor(LIT);
+            g.drawArc(rx, ry, ring, ring, 90, -sweep);
+         }
+      }
       g.setColor(this.down ? Color.WHITE : ACCENT_TEXT);
       g.fillRect(x, y, half, half);
       g.fillRect(x + half + 3, y, half, half);

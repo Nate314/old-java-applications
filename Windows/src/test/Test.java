@@ -87,7 +87,7 @@ public class Test {
       JFrame frame = new JFrame(TITLE);
       // After the first component: in the browser, that is what puts the saved files in place.
       Placement place = Placement.load(file);
-      WindowsKey key = new WindowsKey(keys);
+      WindowsKey key = new WindowsKey(keys, () -> place.hover);
       JPanel grip = new JPanel(new BorderLayout());
       JLabel name = new JLabel(" Windows");
       JButton close = stripButton(() -> "×");
@@ -100,7 +100,12 @@ public class Test {
          key.setDown(false);
          System.exit(0);
       });
-      ShortcutShelf shelf = new ShortcutShelf(keys);
+      ShortcutShelf shelf = new ShortcutShelf(keys, () -> place.hover, () -> {
+         place.hover = !place.hover;
+         key.repaint();
+         // Every move rewrites the place, so the rest of it is current.
+         place.save(file);
+      });
       shelf.setVisible(place.shelf);
       JButton more = stripButton(() -> shelf.isVisible() ? "▾" : "▴");
       more.setToolTipText("Shortcuts");

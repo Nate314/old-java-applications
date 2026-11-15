@@ -12,13 +12,15 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.function.BooleanSupplier;
 import javax.swing.JButton;
 
 /**
  * The shortcuts the Windows key makes, as a shelf of keys to click: each one presses Win+that key. Holding the key
  * and typing a letter needs a keyboard, so this is how a touch screen or a mouse alone gets File Explorer, the
  * desktop, Run and task view, and the four snaps. With the keyboard focus (in the browser, by Tab), the arrow keys
- * pick a shortcut and Space or Enter presses it.
+ * pick a shortcut and Space or Enter presses it. The last row turns hover to press ({@link Dwell}) on and off for
+ * the shelf and the key alike.
  */
 final class ShortcutShelf extends JButton {
    private static final int[] CODES = {KeyEvent.VK_E, KeyEvent.VK_D, KeyEvent.VK_R, KeyEvent.VK_TAB,
@@ -28,9 +30,12 @@ final class ShortcutShelf extends JButton {
       "Snap left", "Fill the screen", "Snap right", "Restore or minimize"};
    /** The rows of one shortcut each; the arrows share the last row. */
    private static final int ROWS = 4;
+   /** The row after the arrows, which turns hover to press on and off; it comes after the shortcuts. */
+   static final int HOVER_ROW = CODES.length;
+   static final String HOVER_NAME = "Hover to press";
    private static final int PAD = 4;
    private static final int ROW = 26;
-   static final int HEIGHT = 2 * PAD + (ROWS + 1) * ROW;
+   static final int HEIGHT = 2 * PAD + (ROWS + 2) * ROW;
    private static final Color FACE = new Color(48, 51, 61);
    private static final Color HOVER = new Color(66, 70, 82);
    private static final Color LIT = new Color(96, 182, 255);
@@ -39,13 +44,23 @@ final class ShortcutShelf extends JButton {
    private static final Color DIM = new Color(170, 176, 190);
 
    private final WindowsKey.Keys keys;
+   private final BooleanSupplier dwellOn;
+   private final Runnable toggleDwell;
+   private final Dwell dwell;
    /** The shortcut under the pointer, the one the mouse button holds, and the one the arrow keys picked; -1 for none. */
    private int hover = -1;
    private int held = -1;
    private int picked;
 
    ShortcutShelf(WindowsKey.Keys keys) {
+      this(keys, () -> false, () -> { });
+   }
+
+   ShortcutShelf(WindowsKey.Keys keys, BooleanSupplier dwellOn, Runnable toggleDwell) {
       this.keys = keys;
+      this.dwellOn = dwellOn;
+      this.toggleDwell = toggleDwell;
+      this.dwell = new Dwell(this, dwellOn, this::press);
       this.setFocusPainted(false);
       this.setBorderPainted(false);
       this.setContentAreaFilled(false);
@@ -57,6 +72,7 @@ final class ShortcutShelf extends JButton {
          public void mousePressed(MouseEvent e) {
             if (e.getButton() == MouseEvent.BUTTON1) {
                ShortcutShelf.this.held = ShortcutShelf.this.at(e.getX(), e.getY());
+               ShortcutShelf.this.dwell.clicked();
                ShortcutShelf.this.repaint();
             }
          }
@@ -68,7 +84,7 @@ final class ShortcutShelf extends JButton {
                ShortcutShelf.this.held = -1;
                // Letting go off the shortcut it pressed calls it off, as with any button.
                if (i >= 0 && i == ShortcutShelf.this.at(e.getX(), e.getY())) {
-                  ShortcutShelf.this.send(i);
+                  ShortcutShelf.this.press(i);
                }
                ShortcutShelf.this.repaint();
             }
@@ -105,7 +121,7 @@ final class ShortcutShelf extends JButton {
          @Override
          public void keyReleased(KeyEvent e) {
             if (e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_ENTER) {
-               ShortcutShelf.this.send(ShortcutShelf.this.picked);
+               ShortcutShelf.this.press(ShortcutShelf.this.picked);
             }
          }
       });
@@ -127,6 +143,21 @@ final class ShortcutShelf extends JButton {
       this.keys.release(WindowsKey.WIN);
    }
 
+   /** A row pressed: Win+its key, or hover to press turned on or off. */
+   void press(int i) {
+      if (i == HOVER_ROW) {
+         this.toggleDwell.run();
+         this.name();
+         this.repaint();
+      } else {
+         this.send(i);
+      }
+   }
+
+   Dwell dwell() {
+      return this.dwell;
+   }
+
    /** How much bigger than the small key's shelf this one is (the window's size picks it). */
    double scale() {
       return this.getWidth() > 0 ? this.getWidth() / (double) Test.WIDTH : 1;
@@ -138,8 +169,8 @@ final class ShortcutShelf extends JButton {
     */
    Rectangle rect(int i) {
       int w = (int) Math.round(this.getWidth() / this.scale()) - 2 * PAD;
-      if (i < ROWS) {
-         return new Rectangle(PAD, PAD + i * ROW, w, ROW - 3);
+      if (i < ROWS || i == HOVER_ROW) {
+         return new Rectangle(PAD, PAD + (i < ROWS ? i : ROWS + 1) * ROW, w, ROW - 3);
       }
       int cap = (w - 3 * PAD) / 4;
       return new Rectangle(PAD + (i - ROWS) * (cap + PAD), PAD + ROWS * ROW + 2, cap, ROW - 5);
@@ -148,7 +179,7 @@ final class ShortcutShelf extends JButton {
    /** The shortcut at (x, y) on the screen, or -1. */
    int at(int x, int y) {
       double s = this.scale();
-      for (int i = 0; i < CODES.length; i++) {
+      for (int i = 0; i <= HOVER_ROW; i++) {
          if (this.rect(i).contains((int) (x / s), (int) (y / s))) {
             return i;
          }
@@ -162,6 +193,7 @@ final class ShortcutShelf extends JButton {
 
    private void hoverAt(int x, int y) {
       int i = this.at(x, y);
+      this.dwell.at(i);
       if (i != this.hover) {
          this.hover = i;
          this.repaint();
@@ -169,14 +201,32 @@ final class ShortcutShelf extends JButton {
    }
 
    private void pick(int step) {
-      this.picked = (this.picked + step + CODES.length) % CODES.length;
+      this.picked = (this.picked + step + HOVER_ROW + 1) % (HOVER_ROW + 1);
       this.name();
       this.repaint();
    }
 
    private void name() {
-      this.getAccessibleContext().setAccessibleName("Windows key shortcuts: Win+" + CAPS[this.picked] + ", "
-         + NAMES[this.picked] + ". Arrow keys for another, Space to press it");
+      String row = this.picked == HOVER_ROW ? HOVER_NAME + ", " + (this.dwellOn.getAsBoolean() ? "on" : "off")
+         + ": resting the pointer on the key or a shortcut presses it"
+         : "Win+" + CAPS[this.picked] + ", " + NAMES[this.picked];
+      this.getAccessibleContext().setAccessibleName("Windows key shortcuts: " + row + ". Arrow keys for another, Space to press it");
+   }
+
+   /** The hover to press row: a switch, lit when on, and its name. */
+   private void paintHoverRow(Graphics2D g, Rectangle r, boolean lit, Font nameFont) {
+      boolean on = this.dwellOn.getAsBoolean();
+      int sw = 24;
+      int sh = r.height - 10;
+      int sx = r.x + 4;
+      int sy = r.y + 5;
+      g.setColor(on ? CAP : WindowsKey.BACK);
+      g.fillRoundRect(sx, sy, sw, sh, sh, sh);
+      g.setColor(on || lit ? Color.WHITE : DIM);
+      g.fillOval(on ? sx + sw - sh + 2 : sx + 2, sy + 2, sh - 4, sh - 4);
+      g.setFont(nameFont);
+      g.setColor(lit ? Color.WHITE : TEXT);
+      g.drawString(HOVER_NAME, sx + sw + 6, r.y + (r.height + g.getFontMetrics().getAscent()) / 2 - 2);
    }
 
    @Override
@@ -190,17 +240,27 @@ final class ShortcutShelf extends JButton {
       Font capFont = new Font("SansSerif", Font.BOLD, 11);
       Font nameFont = new Font("SansSerif", Font.PLAIN, 11);
       boolean focus = this.isFocusOwner();
-      for (int i = 0; i < CODES.length; i++) {
+      for (int i = 0; i <= HOVER_ROW; i++) {
          Rectangle r = this.rect(i);
          boolean lit = i == this.held;
          g.setColor(lit ? LIT : i == this.hover ? HOVER : FACE);
          g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+         // Hover to press: the row fills from the left while the pointer rests on it.
+         int fill = (int) Math.round(r.width * this.dwell.progress(i));
+         if (fill > 0 && !lit) {
+            g.setColor(CAP);
+            g.fillRoundRect(r.x, r.y, fill, r.height, 8, 8);
+         }
          if (focus && i == this.picked) {
             g.setColor(TEXT);
             g.setStroke(new BasicStroke(1f));
             g.drawRoundRect(r.x, r.y, r.width - 1, r.height - 1, 8, 8);
          }
          g.setFont(capFont);
+         if (i == HOVER_ROW) {
+            this.paintHoverRow(g, r, lit, nameFont);
+            continue;
+         }
          int capW = i < ROWS ? Math.max(18, g.getFontMetrics().stringWidth(CAPS[i]) + 8) : r.width;
          int base = r.y + (r.height + g.getFontMetrics().getAscent()) / 2 - 2;
          if (i < ROWS) {

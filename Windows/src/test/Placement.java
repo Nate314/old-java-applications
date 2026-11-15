@@ -12,7 +12,7 @@ import java.io.Writer;
 /**
  * Where the user left the key, in ~/.windows-key.txt: its left edge and bottom edge on the screen ("x=1780",
  * "bottom=1016"; the bottom, since the shelf grows the window upward), its size ("size=2" for the biggest of
- * {@link #SCALES}) and whether the shelf was open ("shelf=on"). A missing file or a damaged line leaves the defaults:
+ * {@link #SCALES}), whether the shelf was open ("shelf=on") and whether hover to press was on ("hover=on"). A missing file or a damaged line leaves the defaults:
  * the lower right of the screen, the smallest key, the shelf shut.
  */
 final class Placement {
@@ -25,6 +25,7 @@ final class Placement {
    int bottom = -1;
    int size;
    boolean shelf;
+   boolean hover;
 
    double scale() {
       return SCALES[this.size];
@@ -49,6 +50,8 @@ final class Placement {
                   }
                } else if (name.equals("shelf")) {
                   p.shelf = value.equals("on");
+               } else if (name.equals("hover")) {
+                  p.hover = value.equals("on");
                }
             } catch (NumberFormatException damaged) {
                // A damaged line is skipped; the rest still count.
@@ -70,7 +73,8 @@ final class Placement {
          if (this.x >= 0) {
             writer.write("x=" + this.x + "\nbottom=" + this.bottom + "\n");
          }
-         writer.write("size=" + this.size + "\nshelf=" + (this.shelf ? "on" : "off") + "\n");
+         writer.write("size=" + this.size + "\nshelf=" + (this.shelf ? "on" : "off") + "\nhover="
+            + (this.hover ? "on" : "off") + "\n");
       } catch (IOException | RuntimeException exception) {
          System.err.println("Could not save " + file + ": " + exception);
       }
