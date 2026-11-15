@@ -7,6 +7,7 @@ import { indexOf } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { appOut, audio } from './midi';
 import { playSound } from './sounds';
+import { real } from './slow-mo';
 
 /** A recorded clip: its video, how many seconds it holds, and the app it shows. */
 export interface ReplayClip { blob: Blob; seconds: number; app: string }
@@ -268,7 +269,7 @@ export function startReplay(desktop: Element): Replay | null {
   }
   function frame() {
     (popped && !popped.win.closed ? popped.win : window).requestAnimationFrame(frame);
-    var t = performance.now();   // not the frame's time, which a popped out window counts from its own start
+    var t = real.now();   // not the frame's time, which a popped out window counts from its own start
     if (away()) return;
     if (window.__shimPainted) {
       window.__shimPainted = false;
@@ -279,8 +280,8 @@ export function startReplay(desktop: Element): Replay | null {
     if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
     last = t;
     changed = false;
-    var t0 = performance.now(), box = drawDesk(g, canvas, desktop);
-    cost = 0.8 * cost + 0.2 * (performance.now() - t0);
+    var t0 = real.now(), box = drawDesk(g, canvas, desktop);
+    cost = 0.8 * cost + 0.2 * (real.now() - t0);
     if (!box) return;
     // A recording keeps the size it started with (Chrome's MP4 does not follow a resize), so windows much
     // bigger or smaller than it (a splash before the app's window, Minesweeper's Expert board) are fitted in at
@@ -301,7 +302,7 @@ export function startReplay(desktop: Element): Replay | null {
     track = canvas.captureStream(REPLAY_FPS).getVideoTracks()[0];
     begin();
     if (!first) return;
-    setInterval(rotate, REPLAY_SEG / 2);
+    real.setInterval(rotate, REPLAY_SEG / 2);   // real time: a slowed app's clip still covers 10 to 20 s
     document.documentElement.setAttribute('data-replay', '');
     if (embedded && window.parent !== window) window.parent.postMessage({ oldjavaReplay: true }, location.origin);
   }

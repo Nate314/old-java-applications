@@ -4,11 +4,13 @@ import { embedded } from './skin';
 
 // ---- Slow-mo: the real-time apps at half or a quarter of their speed ----
 // FlappyBird's pipes, DinoGame's cacti and TankGame's shells come at one speed, the one a 2010s player had. The
-// band's Slow-mo button runs the app's clock slower instead: the page's time (Date, performance.now and the
-// requestAnimationFrame stamps) moves at the chosen rate and its timers (setTimeout, setInterval, which
+// band's Slow-mo button runs the app's clock slower instead: the page's time (performance.now, which Java's nanoTime
+// is, and the requestAnimationFrame stamps) moves at the chosen rate and its timers (setTimeout, setInterval, which
 // Thread.sleep and Swing timers come down to in TeaVM) wait longer by as much, so an app that steps by the frame
 // and one that steps by the time both slow down, with no change to its code. Sound keeps its real pitch.
 // The clock is warped only once a visitor slows it, and kept behind real time after, so no app sees time jump.
+// Date stays the wall clock: CircleSpawner's clock face, FlappyBird's daily course, the passport's dates, photo
+// stamps and the Clock's alarms all read it. The site's own clocks that must not slow (instant replay) use `real`.
 // Each app keeps its own choice (oldjava.slowmo.<app>).
 
 /** The apps that move on their own, where a slower world helps or is fun to watch. */
@@ -17,31 +19,21 @@ const RATES = [1, 0.5, 0.25];
 const NAMES: Record<number, string> = { 1: 'full speed', 0.5: 'half speed', 0.25: 'quarter speed' };
 const FACES: Record<number, string> = { 1: '', 0.5: ' ½×', 0.25: ' ¼×' };
 
-let rate = 1, realAt = 0, warpAt = 0;
-let realNow: (() => number) | null = null;
+let rate = 1, realAt = 0, warpAt = 0, warping = false;
+/** The clock and timers as they were before any warp, for site code that must keep real time. */
+export const real = { now: performance.now.bind(performance), setInterval: setInterval.bind(window) };
+const realNow = real.now;
 /** The page's time now, in performance.now terms: real time at the rates it has run at since warping began. */
-function warpNow() { return warpAt + (realNow!() - realAt) * rate; }
+function warpNow() { return warpAt + (realNow() - realAt) * rate; }
 /** The page's time for a real performance.now stamp. */
 function warped(real: number) { return warpAt + (real - realAt) * rate; }
 
 function warp() {
-  if (realNow) return;
-  var perf = performance, RealDate = Date, start = perf.now.bind(perf), timeout = setTimeout, interval = setInterval;
-  var frame = requestAnimationFrame;
-  realNow = start;
-  realAt = warpAt = start();
-  var behind = function () { return start() - warpNow(); };
-  perf.now = warpNow;
-  // A Date made with no arguments is now in the page's time; with arguments, or called as a function, as before.
-  var WarpDate = function (this: unknown, ...a: unknown[]) {
-    if (!new.target) return RealDate();
-    return a.length ? new (RealDate as unknown as new (...b: unknown[]) => Date)(...a) : new RealDate(RealDate.now() - behind());
-  } as unknown as DateConstructor;
-  (WarpDate as { prototype: Date }).prototype = RealDate.prototype;
-  WarpDate.now = function () { return RealDate.now() - behind(); };
-  WarpDate.parse = RealDate.parse;
-  WarpDate.UTC = RealDate.UTC;
-  window.Date = WarpDate;
+  if (warping) return;
+  warping = true;
+  var timeout = setTimeout, interval = setInterval, frame = requestAnimationFrame;
+  realAt = warpAt = realNow();
+  performance.now = warpNow;
   window.setTimeout = function (fn: TimerHandler, ms?: number, ...a: unknown[]) { return timeout(fn, (ms || 0) / rate, ...a); } as typeof setTimeout;
   window.setInterval = function (fn: TimerHandler, ms?: number, ...a: unknown[]) { return interval(fn, (ms || 0) / rate, ...a); } as typeof setInterval;
   window.requestAnimationFrame = function (cb: FrameRequestCallback) { return frame(function (t) { cb(warped(t)); }); };
@@ -52,7 +44,7 @@ export function setRate(r: number) {
   if (r === rate) return;
   warp();
   warpAt = warpNow();
-  realAt = realNow!();
+  realAt = realNow();
   rate = r;
 }
 
