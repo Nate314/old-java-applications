@@ -133,6 +133,19 @@ public class TimerCheck {
       check(damaged.mode.equals(ClockState.CLOCK) && !damaged.analog && damaged.countdown.length() == 5 * M,
             "a damaged file keeps the defaults for its bad lines");
       check(ClockState.load(new File(file.getPath() + ".missing")).mode.equals(ClockState.CLOCK), "a missing file gives defaults");
+      state.flip = true;
+      state.save();
+      back = ClockState.load(file);
+      check(!back.analog && back.flip && back.text().contains("face=flip\n"), "the flip clock face is remembered");
+
+      // The flip clock: its six figures, and a flap falling from standing up, over the hinge, to lying down.
+      check(new String(FlipFace.figures(9, 5, 7, false)).equals(" 90507"), "12-hour flip cards blank the hour's leading zero");
+      check(new String(FlipFace.figures(0, 30, 59, false)).equals("123059"), "midnight is 12 on the flip cards");
+      check(new String(FlipFace.figures(9, 5, 7, true)).equals("090507") && new String(FlipFace.figures(23, 59, 0, true)).equals("235900"),
+            "24-hour flip cards keep both hour figures");
+      check(FlipFace.fold(0, 500) == 1 && FlipFace.fold(500, 500) == -1 && FlipFace.fold(9999, 500) == -1 && FlipFace.fold(-5, 500) == 1,
+            "a flap starts standing and ends lying down");
+      check(FlipFace.fold(250, 500) > 0 && FlipFace.fold(400, 500) < 0, "a flap falls faster as it goes (edge on after half its time)");
 
       // The Westminster quarters: one change at quarter past, two at half past, three at quarter to, four and the hour.
       int[] quarterPast = Westminster.steps(9, 1);

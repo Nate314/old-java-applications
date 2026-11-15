@@ -28,6 +28,8 @@ final class ClockState {
    private final File file;
    String mode = CLOCK;
    boolean analog = true;
+   /** The flip clock face, when not analog. */
+   boolean flip;
    boolean twentyFour = false;
    /** Whether the Westminster quarters ring. */
    boolean chimes = false;
@@ -77,7 +79,8 @@ final class ClockState {
                if (key.equals("mode") && (value.equals(CLOCK) || value.equals(TIMER) || value.equals(STOPWATCH) || value.equals(FOCUS) || value.equals(WORLD))) {
                   this.mode = value;
                } else if (key.equals("face")) {
-                  this.analog = !value.equals("digital");
+                  this.analog = !value.equals("digital") && !value.equals("flip");
+                  this.flip = value.equals("flip");
                } else if (key.equals("hours")) {
                   this.twentyFour = value.equals("24");
                } else if (key.equals("chimes")) {
@@ -155,7 +158,7 @@ final class ClockState {
    String text() {
       StringBuilder text = new StringBuilder();
       text.append("mode=").append(this.mode).append('\n');
-      text.append("face=").append(this.analog ? "analog" : "digital").append('\n');
+      text.append("face=").append(this.analog ? "analog" : this.flip ? "flip" : "digital").append('\n');
       text.append("hours=").append(this.twentyFour ? "24" : "12").append('\n');
       text.append("chimes=").append(this.chimes ? "on" : "off").append('\n');
       text.append("alarm=").append(this.alarm.minute()).append('\n');
