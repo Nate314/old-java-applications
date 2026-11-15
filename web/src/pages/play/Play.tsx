@@ -1,6 +1,6 @@
 // The embeddable player (play.html?app=<App>): a poster first, the app only after Play, in a frame scaled to the widget.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { APPS, type App } from '../../shared/catalog';
+import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
 import { Shot } from './Shot';
 import './play.css';
@@ -98,7 +98,7 @@ export function Play() {
     <>
       <div className="main" ref={main}>
         <div className={'poster' + (thenPoster ? ' then' : '')} id="poster" hidden={shown.mode !== 'poster'}>
-          <img className="bg" id="poster-bg" alt="" src={poster ? poster.shot : undefined} />
+          <img className="bg" id="poster-bg" alt="" src={poster ? webp(poster.shot) : undefined} />
           {' '}
           {/* The thumbnail and hint show today's app, so the Then poster keeps only a faded backdrop of it. */}
           <Shot app={poster} still={thenPoster} shown={shown.mode === 'poster'} onPlay={() => run(poster!, false)} />

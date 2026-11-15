@@ -151,8 +151,8 @@ function TitleScreen({ total, onGo, onMount }: {
       role="dialog" data-sound="none" aria-label={document.title} ref={screen} onClick={onClick}>
       <div className="shim-title-card">
         <div className="shim-title-art">
-          <img alt="" hidden={!shown} src={app && !then ? app.shot : undefined} onLoad={() => setShown(true)} />
-          {app && app.clip && !then && <Attract id={id} go={ready} />}
+          <img alt="" hidden={!shown} src={app && !then ? app.shot.replace(/[.]png$/, '.webp') : undefined} onLoad={() => setShown(true)} />
+          {app && app.clip && !then && <Attract id={id} go={ready && shown} />}
           {app && then && (
             // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.
             <>
