@@ -207,7 +207,8 @@ function TitleScreen({ total, onGo, onMount }: {
           {Story ? <Story id={id} /> : <details className="shim-title-story" hidden={then} aria-hidden="true" />}
         </div>
         <span className="shim-meter shim-title-meter" style={{ '--p': String(done / total) } as CSSProperties} />
-        <pre className="shim-title-log" aria-hidden="true" ref={log}>
+        {/* tabIndex -1: Chrome puts a scroller in the tab order, and this one is hidden from screen readers. */}
+        <pre className="shim-title-log" aria-hidden="true" tabIndex={-1} ref={log}>
           {lines.map(([label, value, cls], i) => (
             <span key={i} className={'row' + (cls ? ' ' + cls : '')}><span>{label}</span><span>{value}</span></span>
           ))}

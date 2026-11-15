@@ -32,7 +32,7 @@ function Rail() {
     <ol id="rail">
       {APPS.map(a => (
         <li key={a.id}>
-          <button type="button" title={a.hint} className={played(a) ? 'played' : undefined}
+          <button type="button" data-id={a.id} title={a.hint} className={played(a) ? 'played' : undefined}
             aria-current={H.current ? String(H.current === a) as 'true' | 'false' : undefined} onClick={() => P.choose(a)}>
             <span className="pic"><img src={webp(a.shot, true)} alt="" loading="lazy" /></span>
             <span className="name">{a.name}</span>
@@ -247,6 +247,10 @@ function Player() {
       </div>
       <TourBox />
       <div className="screen" id="screen" style={H.screenH !== null ? { height: H.screenH + 'px' } : undefined}>
+        {/* The app's own controls can be many stops (Minesweeper's tiles): the keyboard's way past them to the rest of the page. */}
+        <button type="button" className="btn skip-app" onClick={() => document.getElementById('player-prev')!.focus()}>
+          {'Skip past ' + (a ? a.name : FIRST.name) + ' to the app list'}
+        </button>
         <iframe key={H.frame.key} id="player-frame" title={H.frame.title} src={H.frame.src} allow="autoplay; clipboard-write; microphone" onLoad={P.frameLoaded}
           style={size ? { width: size.w + 'px', height: size.h + 'px', transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined } : undefined} />
       </div>
@@ -390,14 +394,15 @@ function Gallery() {
   const t = H.take, c = H.clip, news = H.news.view, records = useRecordLines(), rank = H.filter === 'yours' ? playedRank() : null;
   return (
     <ul className="apps" id="apps">
-      {APPS.map(a => {
+      {/* Yours puts the last played first in the page itself (not with CSS order), so Tab goes in the order shown. */}
+      {(rank ? [...APPS].sort((x, y) => (rank[x.id] ?? APPS.length) - (rank[y.id] ?? APPS.length)) : APPS).map(a => {
         const ok = !!t.saved[a.id];
         const cls = [played(a) && 'played', H.current === a && 'playing', news && news.changed[a.id] && 'updated',
           t.checked && t.offline && !ok && 'unavailable', c.current === a.id && c.playing && 'previewing'].filter(Boolean).join(' ');
         return (
           <li key={a.id} data-app={a.id} data-clip={a.clip && !c.broken[a.id] ? '' : undefined} data-then={a.then ? '' : undefined}
               data-origin={a.origin} data-cat={a.cat} data-min-width={a.minWidth} data-min-height={a.minHeight}
-              className={cls || undefined} hidden={!inFilter(a, H.filter)} style={rank ? { order: rank[a.id] } : undefined}
+              className={cls || undefined} hidden={!inFilter(a, H.filter)}
               onMouseEnter={() => cardEnter(a.id)} onMouseLeave={() => cardLeave(a.id)} onFocus={e => cardFocus(e, a.id)} onBlur={e => cardBlur(e, a.id)}>
             <a className="thumb" href={page(a.id)} onClick={e => P.cardClick(e, a)}>
               <img src={webp(a.shot)} alt={a.alt} loading="lazy" />
@@ -416,8 +421,8 @@ function Gallery() {
               <span>{a.hint}</span>
               {records[a.id] && <p className="record">{records[a.id]}</p>}
               <div className="actions">
-                <a className="btn primary play" href={page(a.id)} onClick={e => P.cardClick(e, a)}>Play</a>
-                <a className="btn" href={page(a.id)}>Full page</a>
+                <a className="btn primary play" href={page(a.id)} aria-label={'Play ' + a.name} onClick={e => P.cardClick(e, a)}>Play</a>
+                <a className="btn" href={page(a.id)} aria-label={'Full page: ' + a.name}>Full page</a>
               </div>
             </div>
           </li>
