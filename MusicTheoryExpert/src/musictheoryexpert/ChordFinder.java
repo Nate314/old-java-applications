@@ -8,6 +8,7 @@ import java.awt.Cursor;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.KeyEvent;
@@ -31,7 +32,8 @@ import synthesizer.MySynthesizer;
  * The Chord finder tab: hold notes on the keyboard (click keys, or type on the computer keyboard like a piano) and it
  * names the chord they make, spells it on a grand staff, lists the keys it belongs to and its other names. Chords
  * added to a trail are matched to the keys that hold them all, and any of those keys writes the trail into the
- * Songwriter. It also builds any chord from a root and a type. The original demo plays from its header.
+ * Songwriter. It also builds any chord from a root and a type. The original demo plays from its header. The keyboard
+ * can turn into a guitar neck, which shows how to finger the chord held and holds the frets clicked.
  */
 @SuppressWarnings("serial")
 public final class ChordFinder extends JPanel {
@@ -69,11 +71,15 @@ public final class ChordFinder extends JPanel {
 	private Quality buildQuality = Quality.MAJOR;
 	private String notice = "";
 	private Object hover;
+	/** True when a guitar neck stands in for the keyboard. */
+	private boolean guitar;
+	/** The fret held on each string while on the guitar (see {@link Guitar}), or null when the held notes cannot be fingered. */
+	private int[] frets;
 
 	// Where things were last drawn, for the mouse.
 	private Rectangle card = new Rectangle(), staff = new Rectangle(), keyboard = new Rectangle();
 	private Rectangle demoButton = new Rectangle(), playButton = new Rectangle(), clearButton = new Rectangle();
-	private Rectangle addButton = new Rectangle();
+	private Rectangle addButton = new Rectangle(), instrumentButton = new Rectangle();
 	private final List<Rectangle> slots = new ArrayList<>();
 	private final List<Rectangle> removers = new ArrayList<>();
 	private final List<Rectangle> fitButtons = new ArrayList<>();
@@ -135,11 +141,20 @@ public final class ChordFinder extends JPanel {
 		return fits;
 	}
 
+	public boolean isGuitar() {
+		return guitar;
+	}
+
+	/** The frets held on the guitar, low E first, or null. */
+	public int[] frets() {
+		return frets == null ? null : frets.clone();
+	}
+
 	// ---- what the controls do ----
 
 	/** Holds or lets go of {@code note}; a note pressed sounds on its own. */
 	public void toggle(int note) {
-		if (note < LOW_NOTE || note > HIGH_NOTE) {
+		if (note < Guitar.TUNING[0] || note > HIGH_NOTE) {
 			return;
 		}
 		notice = "";
@@ -150,10 +165,11 @@ public final class ChordFinder extends JPanel {
 		changed();
 	}
 
-	/** Holds exactly {@code notes} and plays them. */
+	/** Holds exactly {@code notes} and plays them; on the guitar, a chord is held as the easiest shape that plays it. */
 	public void hold(List<Integer> notes) {
+		int[] shape = guitar && Integer.bitCount(ChordNamer.maskOf(notes)) >= 3 ? Guitar.shape(notes) : null;
 		held.clear();
-		held.addAll(notes);
+		held.addAll(shape == null ? notes : Guitar.notes(shape));
 		notice = "";
 		changed();
 		play();
@@ -232,6 +248,41 @@ public final class ChordFinder extends JPanel {
 		songwriting.write(fit.position, fit.minor, toArray(degrees));
 	}
 
+	/** Swaps the keyboard for a guitar neck, showing the held chord's shape, or back again. */
+	public void setGuitar(boolean on) {
+		guitar = on;
+		frets = null;
+		if (on && !held.isEmpty()) {
+			hold(held());
+			return;
+		}
+		// The guitar goes below the keyboard's C3: raise such chords an octave at a time, so they can be seen and let go.
+		while (!held.isEmpty() && held.first() < LOW_NOTE && held.last() + 12 <= HIGH_NOTE) {
+			List<Integer> notes = held();
+			held.clear();
+			for (int note : notes) {
+				held.add(note + 12);
+			}
+		}
+		notice = "";
+		changed();
+	}
+
+	/** Holds {@code fret} on {@code string} (0 is the low E), or lets the string go when that fret is already held. */
+	public void fret(int string, int fret) {
+		if (frets == null) {
+			frets = new int[] { -1, -1, -1, -1, -1, -1 };
+		}
+		frets[string] = frets[string] == fret ? -1 : fret;
+		held.clear();
+		held.addAll(Guitar.notes(frets));
+		notice = "";
+		if (frets[string] >= 0) {
+			player.play(new int[][] { { Guitar.TUNING[string] + fret } }, ARPEGGIO_MILLIS);
+		}
+		changed();
+	}
+
 	public void shiftTyped(int octaves) {
 		typedBase = Math.max(LOW_NOTE, Math.min(HIGH_NOTE - 16, typedBase + 12 * octaves));
 		notice = "Typed keys now start at C" + (typedBase / 12 - 1) + ".";
@@ -244,6 +295,12 @@ public final class ChordFinder extends JPanel {
 
 	private void changed() {
 		List<Integer> notes = held();
+		if (guitar && (frets == null || !Guitar.notes(frets).equals(notes))) {
+			frets = Guitar.place(notes);
+			if (frets == null) {
+				notice = "No hand can hold all these notes at once: the neck shows where each one is.";
+			}
+		}
 		readings = ChordNamer.name(notes);
 		if (!readings.isEmpty()) {
 			buildRoot = readings.get(0).root;
@@ -275,6 +332,8 @@ public final class ChordFinder extends JPanel {
 			clearHeld();
 		} else if (code == KeyEvent.VK_Z || code == KeyEvent.VK_X) {
 			shiftTyped(code == KeyEvent.VK_X ? 1 : -1);
+		} else if (code == KeyEvent.VK_I) {
+			setGuitar(!guitar);
 		} else {
 			return false;
 		}
@@ -291,6 +350,10 @@ public final class ChordFinder extends JPanel {
 		}
 		if (target instanceof Integer) {
 			toggle((Integer) target);
+		} else if (target instanceof Point) {
+			fret(((Point) target).x, ((Point) target).y);
+		} else if (target == instrumentButton) {
+			setGuitar(!guitar);
 		} else if (target == demoButton) {
 			demo.run();
 		} else if (target == playButton) {
@@ -328,6 +391,7 @@ public final class ChordFinder extends JPanel {
 		int width = getWidth(), height = getHeight();
 		int x = 16, w = width - 32;
 		demoButton = new Rectangle(width - 16 - 128, 9, 128, 28);
+		instrumentButton = new Rectangle(demoButton.x - 8 - 96, 9, 96, 28);
 		card = new Rectangle(x, HEADER + 6, w, 150);
 		int staffWidth = w >= 600 ? 230 : 0;
 		staff = new Rectangle(card.x + card.width - staffWidth, card.y, staffWidth, card.height);
@@ -370,11 +434,19 @@ public final class ChordFinder extends JPanel {
 
 	private Object targetAt(int x, int y) {
 		layOut();
-		int note = Look.keyAt(keyboard.x, keyboard.y, keyboard.width, keyboard.height, x, y);
-		if (note >= 0) {
-			return note;
+		if (guitar) {
+			Point spot = fretAt(x, y);
+			if (spot != null) {
+				return spot;
+			}
+		} else {
+			int note = Look.keyAt(keyboard.x, keyboard.y, keyboard.width, keyboard.height, x, y);
+			if (note >= 0) {
+				return note;
+			}
 		}
 		List<Rectangle> all = new ArrayList<>();
+		all.add(instrumentButton);
 		all.add(demoButton);
 		all.add(playButton);
 		all.add(clearButton);
@@ -410,7 +482,11 @@ public final class ChordFinder extends JPanel {
 		paintKeys(g);
 		paintTrail(g);
 		paintBuild(g);
-		paintKeyboard(g);
+		if (guitar) {
+			paintNeck(g);
+		} else {
+			paintKeyboard(g);
+		}
 	}
 
 	private void paintHeader(Graphics2D g) {
@@ -423,7 +499,8 @@ public final class ChordFinder extends JPanel {
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 		String hint = "Type A W S E D F T G Y H U J K like a piano (C" + (typedBase / 12 - 1) + " up), Z / X: octave";
-		g.drawString(Look.fit(g, hint, demoButton.x - titleEnd - 10), titleEnd, 29);
+		g.drawString(Look.fit(g, hint, instrumentButton.x - titleEnd - 10), titleEnd, 29);
+		paintButton(g, instrumentButton, guitar ? "Piano (I)" : "Guitar (I)", false);
 		paintButton(g, demoButton, "Original demo", false);
 	}
 
@@ -567,7 +644,9 @@ public final class ChordFinder extends JPanel {
 		int lastStep = Integer.MIN_VALUE;
 		boolean shifted = false;
 		int accidentalColumn = 0;
-		for (int note : notes) {
+		for (int sounded : notes) {
+			// Guitar music is written an octave above where it sounds, which keeps the low strings near the staff.
+			int note = guitar ? sounded + 12 : sounded;
 			String name = spelled[note % 12];
 			int accidental = name.length() - 1;
 			if (name.endsWith("b")) {
@@ -604,7 +683,7 @@ public final class ChordFinder extends JPanel {
 		}
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
-		String caption = notes.isEmpty() ? "Held notes show here" : "As written";
+		String caption = notes.isEmpty() ? "Held notes show here" : guitar ? "As written for guitar, an octave up" : "As written";
 		g.drawString(caption, staff.x + (staff.width - g.getFontMetrics().stringWidth(caption)) / 2, staff.y + staff.height - 14);
 	}
 
@@ -756,6 +835,148 @@ public final class ChordFinder extends JPanel {
 			}
 		}
 		Look.paintKeyboard(g, keyboard.x, keyboard.y, keyboard.width, keyboard.height, colors);
+	}
+
+	// ---- the guitar neck, in the keyboard's place: high E on top as a player looking down sees it ----
+
+	private static final int NECK_LABEL = 22, NECK_OPEN = 30, NECK_NUMBERS = 16;
+	private static final Color WOOD = new Color(70, 48, 36);
+	private static final Color FRET_WIRE = new Color(176, 178, 188);
+	private static final Color STRING = new Color(214, 210, 200);
+
+	private int nutX() {
+		return keyboard.x + NECK_LABEL + NECK_OPEN;
+	}
+
+	private double fretWidth() {
+		return (keyboard.x + keyboard.width - nutX()) / (double) Guitar.FRETS;
+	}
+
+	private double rowHeight() {
+		return (keyboard.height - NECK_NUMBERS) / 6.0;
+	}
+
+	private int stringY(int string) {
+		return (int) (keyboard.y + (5 - string + 0.5) * rowHeight());
+	}
+
+	private int fretX(int fret) {
+		return fret == 0 ? nutX() - NECK_OPEN / 2 : (int) (nutX() + (fret - 0.5) * fretWidth());
+	}
+
+	/** The string (x) and fret (y, 0 for open) under the point, or null. */
+	private Point fretAt(int x, int y) {
+		int row = (int) Math.floor((y - keyboard.y) / rowHeight());
+		if (x < keyboard.x + NECK_LABEL || x >= keyboard.x + keyboard.width || y < keyboard.y || row > 5) {
+			return null;
+		}
+		int fret = x < nutX() ? 0 : Math.min(Guitar.FRETS, (int) ((x - nutX()) / fretWidth()) + 1);
+		return new Point(5 - row, fret);
+	}
+
+	/** The neck: the held shape as dots named by note, its barre, where else the chord's notes lie, and the frets. */
+	private void paintNeck(Graphics2D g) {
+		int nut = nutX(), right = keyboard.x + keyboard.width, top = keyboard.y;
+		int bottom = (int) (top + 6 * rowHeight());
+		double fw = fretWidth();
+		int dot = (int) Math.max(10, Math.min(rowHeight(), fw) * 0.86);
+		g.setColor(WOOD);
+		g.fillRoundRect(nut, top, right - nut, bottom - top, 8, 8);
+		g.setColor(new Color(230, 220, 200, 36));
+		for (int fret : new int[] { 3, 5, 7, 9, 12 }) {
+			int cx = fretX(fret), cy = (top + bottom) / 2;
+			int[] ys = fret == 12 ? new int[] { stringY(4) + (int) (rowHeight() / 2), stringY(1) - (int) (rowHeight() / 2) } : new int[] { cy };
+			for (int y : ys) {
+				g.fillOval(cx - 5, y - 5, 10, 10);
+			}
+		}
+		g.setColor(FRET_WIRE);
+		for (int fret = 1; fret <= Guitar.FRETS; fret++) {
+			int fx = (int) (nut + fret * fw);
+			g.drawLine(fx, top, fx, bottom);
+		}
+		g.setColor(new Color(236, 228, 206));
+		g.fillRect(nut - 3, top, 4, bottom - top);
+		Reading best = readings.isEmpty() ? null : readings.get(0);
+		int mask = ChordNamer.maskOf(held());
+		String[] spelled = ChordNamer.spellings(held());
+		for (int string = 0; string < 6; string++) {
+			g.setColor(STRING);
+			g.setStroke(new BasicStroke(2.6f - string * 0.35f));
+			g.drawLine(nut - NECK_OPEN + 6, stringY(string), right, stringY(string));
+		}
+		g.setStroke(new BasicStroke(1f));
+		int barre = frets == null ? 0 : Guitar.barre(frets);
+		if (barre > 0) {
+			int first = 0;
+			while (frets[first] != barre) {
+				first++;
+			}
+			// One finger across the strings, from the lowest it holds to the top one.
+			g.setColor(new Color(60, 100, 200));
+			int bx = fretX(barre);
+			g.fillRoundRect(bx - dot / 2, stringY(5) - dot / 2, dot, stringY(first) - stringY(5) + dot, dot, dot);
+		}
+		for (int string = 0; string < 6; string++) {
+			int y = stringY(string);
+			boolean muted = frets != null && frets[string] < 0;
+			Object here = hover instanceof Point && ((Point) hover).x == string ? hover : null;
+			g.setColor(muted ? DIM : SOFT);
+			g.setFont(new Font("SansSerif", Font.BOLD, 12));
+			g.drawString(Guitar.STRING_NAMES[string], keyboard.x + 4, y + 5);
+			if (muted && (here == null || ((Point) here).y != 0)) {
+				g.setColor(WRONG);
+				g.drawString("x", fretX(0) - 3, y + 4);
+			}
+			for (int fret = 0; fret <= Guitar.FRETS; fret++) {
+				int note = Guitar.TUNING[string] + fret, cx = fretX(fret);
+				boolean fingered = frets != null ? frets[string] == fret : held.contains(note);
+				if (fingered) {
+					boolean lit = false;
+					for (int n : sounding == null ? new int[0] : sounding) {
+						lit |= n == note;
+					}
+					String name = spelled[note % 12];
+					g.setColor(lit ? GOLD : HELD);
+					if (fret == 0) {
+						g.setStroke(new BasicStroke(2.4f));
+						g.drawOval(cx - dot / 2, y - dot / 2, dot, dot);
+						g.setStroke(new BasicStroke(1f));
+					} else {
+						g.fillOval(cx - dot / 2, y - dot / 2, dot, dot);
+					}
+					if (best != null && note % 12 == best.root) {
+						g.setColor(Color.WHITE);
+						g.setStroke(new BasicStroke(2f));
+						g.drawOval(cx - dot / 2 - 2, y - dot / 2 - 2, dot + 4, dot + 4);
+						g.setStroke(new BasicStroke(1f));
+					}
+					g.setColor(fret == 0 ? lit ? GOLD : HELD : BACKGROUND);
+					g.setFont(Look.fitFont(g, name, Font.BOLD, Math.max(10, dot * 3 / 5), dot));
+					g.drawString(name, cx - g.getFontMetrics().stringWidth(name) / 2, y + g.getFontMetrics().getAscent() / 2 - 1);
+				} else if ((mask >> (note % 12) & 1) != 0) {
+					// Where else the chord's notes lie: click one to move this string's note there.
+					g.setColor(new Color(120, 170, 255, 160));
+					g.fillOval(cx - 4, y - 4, 8, 8);
+				}
+				if (here != null && ((Point) here).y == fret && !fingered) {
+					g.setColor(new Color(255, 255, 255, 120));
+					g.setStroke(new BasicStroke(1.5f));
+					g.drawOval(cx - dot / 2, y - dot / 2, dot, dot);
+					g.setStroke(new BasicStroke(1f));
+				}
+			}
+		}
+		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+		g.setColor(SOFT);
+		for (int fret : new int[] { 3, 5, 7, 9, 12 }) {
+			String number = String.valueOf(fret);
+			g.drawString(number, fretX(fret) - g.getFontMetrics().stringWidth(number) / 2, bottom + 12);
+		}
+		g.setColor(GOLD);
+		g.setFont(new Font("SansSerif", Font.BOLD, 11));
+		String shape = frets == null ? "" : Guitar.text(frets);
+		g.drawString(Look.fit(g, shape, nut - keyboard.x + (int) fw * 2), keyboard.x + 4, bottom + 12);
 	}
 
 	private static int[] toArray(List<Integer> list) {
