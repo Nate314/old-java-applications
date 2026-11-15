@@ -457,7 +457,7 @@ public final class CircleCreatorWindow extends JFrame {
       }
       String name = this.shapeName();
       this.status.setText(Character.toUpperCase(name.charAt(0)) + name.substring(1) + ", " + this.slices.size()
-         + " windows. Drag it, throw it or click to scatter.");
+         + " windows. Drag it, or click to scatter.");
    }
 
    /** One frame of building: shows the next few windows. */
