@@ -81,6 +81,10 @@ final class DeskPanel extends JPanel {
    /** Whether the chart card shows the race against the rivals instead of the picked stock. */
    private boolean race;
    private final Rectangle[] rows = new Rectangle[Desk.MAX_SYMBOLS * 2];
+   /** The big chart's plot box and price range as last drawn (null when no chart shows), for placing order lines. */
+   private Rectangle plot;
+   private double plotLow;
+   private double plotSpan;
    DeskPanel(Desk desk) {
       this.desk = desk;
       setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -174,7 +178,9 @@ final class DeskPanel extends JPanel {
       int every = desk.speed == Desk.FAST ? 2 : desk.speed == Desk.NORMAL ? 10 : 0;
       if (every > 0 && ticks % every == 0) {
          boolean opening = desk.market.minute == 0;
-         if (desk.tick()) {
+         boolean closing = desk.tick();
+         announceFills();
+         if (closing) {
             bell.ring(3);
             startOverArmed = false;
          } else if (opening && !desk.market.closed()) {
@@ -182,6 +188,83 @@ final class DeskPanel extends JPanel {
          }
       }
       repaint();
+   }
+
+   /** Says what the orders the last tick reached did, and rings the bell twice when one traded. */
+   private void announceFills() {
+      for (Portfolio.Trade fill : desk.fills) {
+         String at = Market.clock(fill.minute) + ": your " + fill.symbol + " line ";
+         if (fill.shares > 0) {
+            say(at + "bought " + fill.shares + " at " + Money.dollars(fill.price) + ".", UP);
+         } else if (fill.shares < 0) {
+            say(at + "sold " + -fill.shares + " at " + Money.dollars(fill.price) + ".", DOWN);
+         } else {
+            say(at + "was reached at " + Money.dollars(fill.price) + ", with nothing to trade.", WARN);
+         }
+      }
+      if (!desk.fills.isEmpty()) {
+         bell.ring(2);
+      }
+   }
+
+   /** The order a click at {@code y} on the chart would cancel (its line within 5 px), or null. */
+   private Desk.Order orderAt(String symbol, int y) {
+      for (Desk.Order order : desk.orders) {
+         if (order.symbol.equals(symbol) && Math.abs(yOfPlot(order.price) - y) <= 5) {
+            return order;
+         }
+      }
+      return null;
+   }
+
+   private int yOfPlot(double price) {
+      return plot.y + plot.height - (int) Math.round((price - plotLow) / plotSpan * plot.height);
+   }
+
+   private double priceOfPlot(int y) {
+      return plotLow + (double) (plot.y + plot.height - y) / plot.height * plotSpan;
+   }
+
+   /** Whether the pointer is over the chart where a click places or cancels an order. */
+   private boolean onPlot(int x, int y) {
+      return plot != null && !race && !desk.market.closed() && symbol() != null && plot.contains(x, y);
+   }
+
+   /** A click on the chart: cancels the order line under it, or puts one at that price. */
+   private void clickPlot(int y) {
+      String symbol = symbol();
+      Desk.Order order = orderAt(symbol, y);
+      if (order != null) {
+         desk.cancel(order);
+         say("Cancelled the " + symbol + " line at " + Money.dollars(order.price) + ".", MUTED);
+      } else {
+         placed(desk.setOrder(symbol, priceOfPlot(y)));
+      }
+   }
+
+   /** - and =: a line 1% below or above the price, or the line on that side moved 1% further out. */
+   private void nudgeOrder(boolean above) {
+      String symbol = symbol();
+      if (symbol == null || desk.market.closed()) {
+         return;
+      }
+      Desk.Order order = desk.order(symbol, above);
+      double from = order != null ? order.price : desk.market.price(symbol);
+      placed(desk.setOrder(symbol, from * (above ? 1.01 : 0.99)));
+   }
+
+   private void placed(Desk.Order order) {
+      if (order == null) {
+         say("Put the line a little further from the price.", WARN);
+      } else {
+         say(describe(order) + ". Click the line to cancel it.", order.buy ? UP : DOWN);
+      }
+   }
+
+   /** "Buy max if CRM falls to $75.00", "Sell all if CRM rises to $80.00". */
+   private static String describe(Desk.Order order) {
+      return (order.buy ? "Buy max" : "Sell all") + " if " + order.symbol + (order.above ? " rises to " : " falls to ")
+         + Money.dollars(order.price);
    }
 
    private void speed(int speed) {
@@ -257,6 +340,10 @@ final class DeskPanel extends JPanel {
             return;
          }
       }
+      if (onPlot(x, y)) {
+         startOverArmed = false;
+         clickPlot(y);
+      }
    }
 
    private void key(KeyEvent event) {
@@ -283,6 +370,18 @@ final class DeskPanel extends JPanel {
          race = !race;
          return;
       }
+      if (key == '-' || key == '=' || key == '+') {
+         nudgeOrder(key != '-');
+         return;
+      }
+      if (key == 'o') {
+         String symbol = symbol();
+         if (symbol != null && desk.orders.removeIf(order -> order.symbol.equals(symbol))) {
+            desk.save();
+            say("Cancelled the " + symbol + " lines.", MUTED);
+         }
+         return;
+      }
       for (Button button : buttons) {
          if (button.key == key && button.shown.getAsBoolean()) {
             if (!button.label.equals("Start over")) {
@@ -305,6 +404,7 @@ final class DeskPanel extends JPanel {
       g.fillRect(0, 0, getWidth(), getHeight());
       paintHeader(g);
       paintWatch(g);
+      plot = null;
       if (desk.market.closed()) {
          if (race) {
             paintStandings(g);
@@ -409,6 +509,15 @@ final class DeskPanel extends JPanel {
          low = Math.min(low, stock.path[m]);
          high = Math.max(high, stock.path[m]);
       }
+      if (big) {
+         // Keep every order line on the chart.
+         for (Desk.Order order : desk.orders) {
+            if (order.symbol.equals(stock.symbol)) {
+               low = Math.min(low, order.price);
+               high = Math.max(high, order.price);
+            }
+         }
+      }
       // At least a 1% range, so a quiet morning is not drawn as wild swings.
       double room = Math.max(high - low, stock.open() * 0.01);
       double mid = (high + low) / 2;
@@ -416,6 +525,11 @@ final class DeskPanel extends JPanel {
       high = mid + room * 0.6;
       double lowF = low;
       double span = high - low;
+      if (big) {
+         plot = box;
+         plotLow = low;
+         plotSpan = span;
+      }
       java.util.function.DoubleToIntFunction yOf = price -> box.y + box.height - (int) Math.round((price - lowF) / span * box.height);
       java.util.function.IntUnaryOperator xOf = m -> box.x + (int) Math.round((double) m * box.width / Market.CLOSE);
       boolean up = stock.path[now] >= stock.open();
@@ -491,6 +605,7 @@ final class DeskPanel extends JPanel {
                }
             }
          }
+         paintOrders(g, stock.symbol, box);
          for (Portfolio.Trade trade : desk.portfolio.trades) {
             if (trade.symbol.equals(stock.symbol) && trade.minute <= now) {
                int x = xOf.applyAsInt(trade.minute);
@@ -505,6 +620,58 @@ final class DeskPanel extends JPanel {
             }
          }
       }
+   }
+
+   /**
+    * The picked stock's order lines (green to buy, red to sell, with a tag saying what each does), and under the
+    * pointer a preview of the line a click would put, or the hint that the chart takes clicks.
+    */
+   private void paintOrders(Graphics2D g, String symbol, Rectangle box) {
+      for (Desk.Order order : desk.orders) {
+         if (order.symbol.equals(symbol)) {
+            orderLine(g, box, yOfPlot(order.price), order.buy ? UP : DOWN, describe(order), 230, false);
+         }
+      }
+      if (!onPlot(mouseX, mouseY)) {
+         if (desk.order(symbol, true) == null && desk.order(symbol, false) == null) {
+            text(g, "Click the chart to set a buy or sell line (- and = keys)", SMALL, withAlpha(MUTED, 170), box.x + 4, box.y + 12);
+         }
+         return;
+      }
+      Desk.Order under = orderAt(symbol, mouseY);
+      if (under != null) {
+         orderLine(g, box, yOfPlot(under.price), WARN, "Click to cancel: " + describe(under), 255, false);
+         return;
+      }
+      double price = Math.round(priceOfPlot(mouseY) * 100) / 100.0;
+      double now = desk.market.price(symbol);
+      if (Math.abs(price / now - 1) < 0.001) {
+         return;
+      }
+      boolean buy = desk.portfolio.shares(symbol) == 0;
+      Desk.Order preview = new Desk.Order(symbol, buy, price > now, price);
+      orderLine(g, box, mouseY, withAlpha(buy ? UP : DOWN, 150), "Click: " + describe(preview), 150, true);
+   }
+
+   /**
+    * A dashed line across {@code box} at {@code y}, with a tag holding {@code label} at its left end (or its right end, for the preview, so it never covers the tag of a line beside it).
+    */
+   private void orderLine(Graphics2D g, Rectangle box, int y, Color color, String label, int alpha, boolean right) {
+      g.setColor(color);
+      g.setStroke(new BasicStroke(1.5f));
+      for (int x = box.x; x < box.x + box.width; x += 11) {
+         g.drawLine(x, y, Math.min(x + 6, box.x + box.width), y);
+      }
+      g.setStroke(new BasicStroke(1f));
+      String tag = fit(g, label, SMALL, box.width - 12);
+      int w = width(g, tag, SMALL) + 10;
+      int left = right ? box.x + box.width - 2 - w : box.x + 2;
+      int top = y - 17 < box.y ? y + 2 : y - 17;
+      g.setColor(new Color(10, 16, 40, alpha));
+      g.fillRoundRect(left, top, w, 15, 8, 8);
+      g.setColor(color);
+      g.drawRoundRect(left, top, w, 15, 8, 8);
+      text(g, tag, SMALL, TEXT, left + 5, top + 11);
    }
 
    private void paintChart(Graphics2D g) {

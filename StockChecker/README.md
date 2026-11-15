@@ -17,6 +17,15 @@ Originally an editable list of ticker symbols with a price label beside each, re
 - **Closing bell**: at 4:00 PM a bell rings (tubular bells on the MIDI synthesizer) and the chart gives way to the day's results: net worth, the change today and since day 1, the best and worst stock, and a bar chart of net worth at every close so far (the last 14). **Next day** (Enter or N) opens the next day. **Start over** (X, press twice) goes back to day 1 with $10,000.
 - The desk is saved in `~/.stockchecker-desk.txt` (on trades, speed changes, every 15 market minutes and at the close), so it carries on from the same minute next time. The rivals are saved there too (`rival=`, `rhold=`, `rtrade=` and `rclose=` lines).
 
+## Order lines
+
+You do not have to watch every minute: draw a line on the chart and the desk trades when the price gets there.
+
+- **Click the chart** at a price to put a line there. While you hold none of the stock, a line is a buy: below the price it buys the dip, above it buys the breakout. While you hold some, a line is a sell: below the price it is a stop, above it a target. Pointing at the chart previews the line and what it would do ("Click: Buy max if CRM falls to $76.14").
+- Each stock has at most one line above the price and one below; a new click on that side moves it. Click a line (or point within 5 px of it) to cancel it. **-** puts the line below the price 1% under it (or moves it 1% further down), **=** does the same above, and **O** cancels the picked stock's lines.
+- A buy line spends all the cash it can and a sell line sells every share held, at the price of the first minute that reaches the line (so a fast drop can fill under a buy line or a stop). The bell rings twice, the line under the chart says what was traded, and the stock's other line is cancelled, so a stop and a target work as a pair.
+- Lines are green for a buy and red for a sell, each with a tag saying what it does, and the chart's scale stretches to keep them in view. Selling every share by hand drops the stock's sell lines, a stock that leaves the desk takes its lines with it, and lines last only the day: they are gone at the next open. They are saved in the desk file as `order=` lines.
+
 ## The rivals
 
 Four computer traders start with $10,000 each and trade the same market, the same minutes, at the same prices as you. Each follows one plain rule, decided only from the prices and headlines up to that minute, so their trades are the same for everybody and the rule is all there is to beat:
