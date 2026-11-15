@@ -95,7 +95,67 @@ public class WindowsKeyCheck {
             l.keyPressed(new KeyEvent(shelf, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_UP, KeyEvent.CHAR_UNDEFINED));
             l.keyPressed(new KeyEvent(shelf, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_UP, KeyEvent.CHAR_UNDEFINED));
          }
-         check(shelf.picked() == ShortcutShelf.count() - 1, "Up from the first wraps round to the last");
+         check(shelf.picked() == ShortcutShelf.HOVER_ROW, "Up from the first wraps round to the last, hover to press");
+         log.clear();
+         java.awt.Rectangle hoverRow = shelf.rect(ShortcutShelf.HOVER_ROW);
+         check(hoverRow.y > shelf.rect(ShortcutShelf.count() - 1).y && hoverRow.y + hoverRow.height <= ShortcutShelf.HEIGHT
+            && shelf.at(hoverRow.x + 5, hoverRow.y + 5) == ShortcutShelf.HOVER_ROW, "the hover to press row is below the arrows, inside the shelf");
+         // Hover to press, timed by hand: a time far ahead, so the real timer never reaches it.
+         long t = System.currentTimeMillis() + 1_000_000_000L;
+         boolean[] on = {false};
+         int[] toggles = {0};
+         ShortcutShelf hovering = new ShortcutShelf(keys, () -> on[0], () -> {
+            on[0] = !on[0];
+            toggles[0]++;
+         });
+         hovering.setSize(Test.WIDTH, ShortcutShelf.HEIGHT);
+         Dwell d = hovering.dwell();
+         d.at(0, t);
+         d.tick(t + 5000);
+         check(log.isEmpty() && d.progress(0, t + 500) == 0, "with hover to press off, resting on a shortcut presses nothing: " + log);
+         click(hovering, hoverRow.x + 5, hoverRow.y + 5, hoverRow.x + 5, hoverRow.y + 5);
+         check(on[0] && toggles[0] == 1 && log.isEmpty(), "a click on the hover row turns it on and presses no key: " + log);
+         check(hovering.getAccessibleContext().getAccessibleName().contains("Win+E"), "the shelf still names its picked shortcut");
+         d.at(-1, t);
+         d.at(1, t);
+         d.tick(t + Dwell.MS - 1);
+         check(log.isEmpty() && Math.abs(d.progress(1, t + Dwell.MS / 2) - 0.5) < 1e-9 && d.progress(0, t + 500) == 0,
+            "just short of a second, nothing yet, half way at half a second: " + log);
+         d.tick(t + Dwell.MS);
+         check(log.equals(List.of("+" + win, "+" + KeyEvent.VK_D, "-" + KeyEvent.VK_D, "-" + win)), "a second on Desktop presses Win+D: " + log);
+         d.tick(t + 3 * Dwell.MS);
+         check(log.size() == 4 && d.progress(1, t + 3 * Dwell.MS) == 0, "and only once while the pointer stays: " + log);
+         paint(hovering);
+         d.at(-1, t + 3 * Dwell.MS);
+         d.at(1, t + 4 * Dwell.MS);
+         d.tick(t + 5 * Dwell.MS);
+         check(log.size() == 8, "leaving and coming back presses it again: " + log);
+         log.clear();
+         d.at(2, t);
+         d.clicked();
+         d.tick(t + 2 * Dwell.MS);
+         check(log.isEmpty(), "a click while waiting calls the wait off: " + log);
+         d.at(ShortcutShelf.HOVER_ROW, t);
+         d.tick(t + Dwell.MS);
+         check(!on[0] && toggles[0] == 2 && log.isEmpty(), "resting on the hover row turns it off again, hands free: " + log);
+         d.at(-1, t);
+         on[0] = true;
+         WindowsKey resting = new WindowsKey(keys, () -> on[0]);
+         resting.setSize(100, 106);
+         resting.dwell().at(0, t);
+         resting.dwell().tick(t + Dwell.MS / 3);
+         paint(resting);
+         resting.dwell().tick(t + Dwell.MS);
+         check(log.equals(List.of("+" + win, "-" + win)) && !resting.isDown(), "resting on the key a second taps it, for Start: " + log);
+         resting.dwell().at(-1, t);
+         log.clear();
+         resting.dwell().at(0, t);
+         mouse(resting, MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
+         mouse(resting, MouseEvent.MOUSE_RELEASED, MouseEvent.BUTTON1);
+         resting.dwell().tick(t + 2 * Dwell.MS);
+         check(log.equals(List.of("+" + win, "-" + win)), "a click is one press, the hover not a second: " + log);
+         resting.dwell().at(-1, t);
+         log.clear();
          BufferedImage image = new BufferedImage(Test.WIDTH, ShortcutShelf.HEIGHT, BufferedImage.TYPE_INT_ARGB);
          shelf.paint(image.getGraphics());
          // The large key's shelf: the same shortcuts, twice as big, found where they are drawn.
@@ -123,9 +183,11 @@ public class WindowsKeyCheck {
       left.bottom = 500;
       left.size = 2;
       left.shelf = true;
+      left.hover = true;
       left.save(file);
       Placement back = Placement.load(file);
-      check(back.x == 300 && back.bottom == 500 && back.size == 2 && back.shelf && back.scale() == 2, "a place comes back as it was saved");
+      check(back.x == 300 && back.bottom == 500 && back.size == 2 && back.shelf && back.hover && back.scale() == 2, "a place comes back as it was saved");
+      check(!fresh.hover, "hover to press starts off");
       java.nio.file.Files.write(file.toPath(), "x=12\nbottom=oops\nsize=9\nshelf=on\njunk\n".getBytes("utf-8"));
       back = Placement.load(file);
       check(back.x == -1 && back.bottom == -1 && back.size == 0 && back.shelf, "damaged lines are skipped, half a place is none");
@@ -146,9 +208,19 @@ public class WindowsKeyCheck {
             frame.validate();
             ShortcutShelf shelf = (ShortcutShelf) find(frame.getContentPane(), null);
             check(shelf.isVisible() && shelf.getHeight() == ShortcutShelf.HEIGHT, "the shelf gets its height: " + shelf.getHeight());
+            java.awt.Rectangle row = shelf.rect(ShortcutShelf.HOVER_ROW);
+            click(shelf, row.x + 5, row.y + 5, row.x + 5, row.y + 5);
+            check(Placement.load(file).hover, "hover to press is kept once turned on");
+            WindowsKey frameKey = (WindowsKey) frame.getContentPane().getComponent(1);
+            frameKey.dwell().at(0, System.currentTimeMillis() - Dwell.MS * 2 / 3);
+            shelf.dwell().at(1, System.currentTimeMillis() - Dwell.MS / 3);
             if (System.getProperty("shot") != null) {
                shot(frame, System.getProperty("shot"));
             }
+            frameKey.dwell().at(-1);
+            shelf.dwell().at(-1);
+            click(shelf, row.x + 5, row.y + 5, row.x + 5, row.y + 5);
+            check(!Placement.load(file).hover, "and off");
             more.doClick();
             check(frame.getHeight() == Test.HEIGHT && frame.getY() + frame.getHeight() == bottom && !shelf.isVisible(), "and close again");
             check(Placement.load(file).x == frame.getX() && Placement.load(file).bottom == bottom, "the place is kept once the user acts");
@@ -238,7 +310,7 @@ public class WindowsKeyCheck {
    }
 
    /** Draws the key into an image, up and down, so a drawing mistake throws here. */
-   private static void paint(WindowsKey key) {
+   private static void paint(javax.swing.JComponent key) {
       BufferedImage image = new BufferedImage(key.getWidth(), key.getHeight(), BufferedImage.TYPE_INT_ARGB);
       key.paint(image.getGraphics());
    }
