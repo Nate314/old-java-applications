@@ -15,10 +15,13 @@ A full-screen gallery of ten screen savers written in Java. The first is the ori
 
 By default it moves on to the next saver every 30 seconds. It closes if you move the mouse.
 
+**G** shows all ten at once, live, each on a small screen of its own in a grid (four across on a wide screen, two on a phone), with its number and name under it. Pick one with the arrow keys and Enter (or Space), its number, or a click (a tap in the browser): it grows from its little screen to the whole one and stays there, as a number key would. **G** again goes back to the saver that was showing, cycling as before. In the grid the mouse does not close anything; it lights up the screen under it. Each saver is drawn at full screen size and scaled into its own picture, so it looks as it will when picked.
+
 ## Controls / usage
 
 - **N** or **Space** / **P**: next / previous saver.
 - **1** to **9**, and **0** for the tenth (number row): show that saver and stop cycling, so it stays on screen.
+- **G**: all the savers at once, to pick one (see above). In it, the arrow keys (or N and P) move, Enter, Space, a number or a click picks, G goes back and Esc closes.
 - **C**: cycle on or off (every 30 seconds).
 - **Left / Right**: slower / faster, by a factor of 1.1 per press (from 0.05x to 250x; at 250x the tiles step every millisecond, as the original's fastest). The moving savers stop speeding up at 8x.
 - **Up / Down** (tile savers): shrink / grow the tiles by a factor of 1.1 (at least 10 px). The grid is rebuilt for the new size and the cycle starts over.
@@ -35,13 +38,14 @@ By default it moves on to the next saver every 30 seconds. It closes if you move
 - `src/screensaver/Main.java`: the full-screen `JFrame`, the input listeners, a 16 ms Swing timer that advances the current saver by the time elapsed (times the speed), the fade in from black on each change, and the caption. It paints through a `JPanel` content pane.
 - `src/screensaver/Saver.java`: the interface each saver implements: `reset` to a screen size, `tick` by milliseconds, `paint`.
 - `src/screensaver/Tiles.java` (the original and its two variants), `Starfield.java`, `Mystify.java`, `Pipes.java`, `BouncingLogo.java`, `DotClock.java`, `Aquarium.java`, `Maze.java`: the savers.
+- `src/screensaver/Gallery.java`: the grid of all the savers (G): its layout, the selection, and painting each saver scaled into its own image.
 - `src/screensaver/Settings.java`: reads and writes `~/.screensaver.txt`, with the tank's lines.
 
 The original jar set a custom cursor from `cursor.png`, which did not ship. The cursor is now only changed if a `cursor.png` is present in the working directory.
 
 ## Self-check
 
-`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. For the Maze, over 30 mazes: every room carved with no loops, the route joining start and orb, the walker always reaching the orb, and a new maze after the map. From `ScreenSaver/`:
+`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. For the Maze, over 30 mazes: every room carved with no loops, the route joining start and orb, the walker always reaching the orb, and a new maze after the map. For the gallery: ten same-sized screens inside the window and under its header, none overlapping, at 1920x1080, 900x600, 375x600 and 400x700; every saver showing on its little screen; a click on each screen picking it; and the arrow keys moving through the grid. From `ScreenSaver/`:
 
 ```
 javac -d ../out/check/ScreenSaver src/screensaver/*.java test/screensaver/*.java

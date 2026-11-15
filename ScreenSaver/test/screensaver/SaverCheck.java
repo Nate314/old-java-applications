@@ -116,8 +116,51 @@ public class SaverCheck {
 
       checkTank();
       checkMaze();
+      checkGallery();
 
       System.out.println("SaverCheck passed");
+   }
+
+   /** The gallery (G): ten same-sized screens inside the window, under the header, never overlapping; keys move. */
+   private static void checkGallery() {
+      for (int[] size : new int[][] {{1920, 1080}, {375, 600}, {900, 600}, {400, 700}}) {
+         java.awt.Rectangle[] cells = Gallery.layout(size[0], size[1], 10, 16 / 9.0);
+         String at = " at " + size[0] + "x" + size[1];
+         for (int i = 0; i < cells.length; i++) {
+            java.awt.Rectangle c = cells[i];
+            check(c.x >= 0 && c.y > Gallery.textSize(size[0], size[1]) * 2 && c.x + c.width <= size[0]
+               && c.y + c.height + Gallery.textSize(size[0], size[1]) * 2 <= size[1], "screen " + i + " fits" + at + ": " + c);
+            check(c.width == cells[0].width && c.height == cells[0].height && c.width > 40, "screens the same size" + at);
+            for (int j = 0; j < i; j++) {
+               check(!c.intersects(cells[j]), "screens " + j + " and " + i + " apart" + at);
+            }
+         }
+         System.out.println("Gallery" + at + ": " + Gallery.columns(cells) + " across, " + cells[0].width + "x" + cells[0].height);
+      }
+      check(Gallery.columns(Gallery.layout(1920, 1080, 10, 16 / 9.0)) == 4, "four across on 1920x1080 (larger than five)");
+      List<Saver> list = savers();
+      for (Saver s : list) {
+         s.reset(1920, 1080, new Random(5));
+         s.tick(2000);
+      }
+      Gallery gallery = new Gallery(list, 0);
+      BufferedImage image = new BufferedImage(960, 540, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = image.createGraphics();
+      gallery.paint(g, 960, 540, 1920, 1080);
+      g.dispose();
+      for (int i = 0; i < 10; i++) {
+         java.awt.Rectangle c = gallery.cell(i);
+         check(gallery.at(c.x + c.width / 2, c.y + c.height / 2) == i, "a click on screen " + i + " picks it");
+         check(litPixels(image.getSubimage(c.x, c.y, c.width, c.height)) > 0, list.get(i).name() + " shows on its little screen");
+      }
+      check(gallery.at(0, 0) == -1, "a click on the header picks nothing");
+      gallery.move(-1, 0);
+      check(gallery.selected == 9, "Left from the first wraps to the last");
+      gallery.move(0, -1);
+      check(gallery.selected == 5, "Up goes a row up (four across): " + gallery.selected);
+      gallery.move(0, -1);
+      gallery.move(0, -1);
+      check(gallery.selected == 1, "Up on the top row stays: " + gallery.selected);
    }
 
    private static List<Saver> savers() {
