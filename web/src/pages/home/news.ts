@@ -1,28 +1,20 @@
-// What's new on the home page (#news): the latest changes as cards, each with its app's picture and a Play button
-// that swaps the app into the player, and Show all for the whole history back to the first commit of the recovered
-// apps. Apps the visitor has played that changed since they last played them are named at the top, with a button
-// that plays the newest, and get an Updated tag on their gallery card. news.js (the runtime's lazy/news.tsx) reads
-// history.txt and keeps when each app was last played; this works out what the panel shows, into H.news.view.
+// What's new on the home page (#news; WhatsNew.tsx draws it). Apps the visitor has played that changed since they
+// last played them are named at the top, with a button that plays the newest, and get an Updated tag on their
+// gallery card. news.js (the runtime's lazy/news.tsx) reads history.txt and keeps when each app was last played;
+// this works out that lead text, the Play button and which apps changed, into H.news.view.
 import { H, draw, type NewsItem } from './model';
 
-const SHOWN = 6;        // cards before Show all
-const MANY = 4;         // a change to more apps than this is the whole arcade's, not one app's
+export const MANY = 4;         // a change to more apps than this is the whole arcade's, not one app's
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const LAST_KEY = 'oldjava.lastPlayed';
 const PLAYED_KEY = 'oldjava.played';
 
-/** A card: the change, whether it is to an app the visitor played since, and the app whose picture it shows. */
-export interface NewsCard { it: NewsItem; updated: boolean; focus?: OldjavaCatalogApp; site: boolean; one: OldjavaCatalogApp | null }
-export interface NewsView {
-  text: string; play: { label: string; app: string } | null; fresh: boolean; cards: NewsCard[];
-  more: boolean; allLabel: string; changed: Record<string, boolean>;
-}
+export interface NewsView { text: string; play: { label: string; app: string } | null; fresh: boolean; changed: Record<string, boolean> }
 
 let news: NonNullable<Window['oldjavaNews']> | null = null;
 let playLabel = 'Play it';   // the Play button keeps its last words while it is hidden
 
 export function day(t: number) { return news!.day(t); }
-export function isMany(it: NewsItem) { return it.apps.length > MANY; }
 
 function names(apps: OldjavaCatalogApp[]) {
   var n = apps.map(function (a) { return a.name; });
@@ -56,23 +48,8 @@ function render() {
     text = 'This arcade keeps changing: ' + items.length + ' changes since the recovered apps were first committed on ' +
       MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear() + '. The latest first.';
   }
-
-  // Updates to what the visitor played lead, then the rest, newest first.
-  var lead: NewsItem[] = [];
-  order.forEach(function (a) {
-    changed[a.id].forEach(function (it) { if (lead.indexOf(it) < 0) lead.push(it); });
-  });
-  lead.sort(function (a, b) { return b.t - a.t; });
-  var shown = lead.concat(items.filter(function (it) { return lead.indexOf(it) < 0; }));
-  var all = H.news.all;
-  var count = all ? shown.length : Math.max(SHOWN, Math.min(lead.length, 12));
   H.news.view = {
     text, play: order.length ? { label: playLabel, app: order[0].id } : { label: playLabel, app: '' }, fresh: order.length > 0,
-    cards: shown.slice(0, count).map(function (it) {
-      var mine = it.apps.filter(function (a) { return changed[a.id] && changed[a.id].indexOf(it) >= 0; })[0];
-      return { it, updated: !!mine, focus: mine, site: !it.apps.length || it.apps.length > MANY, one: it.apps.length === 1 ? it.apps[0] : null };
-    }),
-    more: !(shown.length <= count && !all), allLabel: all ? 'Show fewer' : 'Show all ' + items.length,
     changed: Object.fromEntries(Object.keys(changed).map(id => [id, true])),
   };
   draw();
