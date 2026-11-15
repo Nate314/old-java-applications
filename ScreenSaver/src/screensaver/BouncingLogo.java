@@ -5,6 +5,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.Random;
 
 /**
@@ -39,6 +40,16 @@ class BouncingLogo implements Saver {
    private final double[] sparkDy = new double[SPARKS];
    private final Color[] sparkColor = new Color[SPARKS];
    private double sparkAge = SPARK_MILLIS;
+   /** Its drifting speed, which a thrown logo slows back down to. */
+   private double cruise;
+   /** Play (T): where on the logo the pointer holds it, or null when it is not held. */
+   private Point grip;
+   private Point lastAt;
+   private double clock;
+   private double lastAtClock;
+   /** The held logo's speed, from how the pointer moved; it keeps it when let go. */
+   private double throwX;
+   private double throwY;
 
    @Override
    public String name() {
@@ -60,6 +71,64 @@ class BouncingLogo implements Saver {
       this.sinceBounceX = Double.MAX_VALUE;
       this.sinceBounceY = Double.MAX_VALUE;
       this.sparkAge = SPARK_MILLIS;
+      this.cruise = Math.hypot(this.dx, this.dy);
+      this.grip = null;
+   }
+
+   /** Press on the logo to pick it up, drag it, and let go to throw it (at up to eight times its speed). */
+   @Override
+   public void touch(Point at, boolean down) {
+      if (this.grip == null) {
+         if (at != null && down && this.boxWidth > 0 && at.x >= this.x && at.x <= this.x + this.boxWidth
+            && at.y >= this.y && at.y <= this.y + this.boxHeight) {
+            this.grip = new Point(at.x - (int)this.x, at.y - (int)this.y);
+            this.lastAt = at;
+            this.lastAtClock = this.clock;
+            this.throwX = 0;
+            this.throwY = 0;
+         }
+         return;
+      }
+      if (at != null) {
+         double gap = this.clock - this.lastAtClock;
+         if (gap > 0) {
+            // Smoothed, so the last jittery move before letting go does not decide the throw alone.
+            double keep = Math.exp(-gap / 60);
+            this.throwX = this.throwX * keep + (at.x - this.lastAt.x) / gap * (1 - keep);
+            this.throwY = this.throwY * keep + (at.y - this.lastAt.y) / gap * (1 - keep);
+            this.lastAt = at;
+            this.lastAtClock = this.clock;
+         }
+         this.x = Math.max(0, Math.min(this.width - this.boxWidth, at.x - this.grip.x));
+         this.y = Math.max(0, Math.min(this.height - this.boxHeight, at.y - this.grip.y));
+      }
+      if (at == null || !down) {
+         this.grip = null;
+         // Held still before letting go: the throw has died down.
+         double v = Math.hypot(this.throwX, this.throwY) * Math.exp(-(this.clock - this.lastAtClock) / 60);
+         if (v > this.cruise / 2) {
+            double most = Math.max(this.cruise, Math.min(v, this.cruise * 8));
+            double raw = Math.hypot(this.throwX, this.throwY);
+            this.dx = this.throwX / raw * most;
+            this.dy = this.throwY / raw * most;
+         }
+      }
+   }
+
+   double cruise() {
+      return this.cruise;
+   }
+
+   boolean held() {
+      return this.grip != null;
+   }
+
+   double speed() {
+      return Math.hypot(this.dx, this.dy);
+   }
+
+   double[] at() {
+      return new double[] {this.x, this.y};
    }
 
    /** Sets the logo's size and position directly (the self-check aims it at a corner). */
@@ -78,14 +147,22 @@ class BouncingLogo implements Saver {
 
    @Override
    public void tick(double millis) {
+      this.clock += millis;
       this.sparkAge += millis;
       for (int i = 0; i < SPARKS; i++) {
          this.sparkX[i] += this.sparkDx[i] * millis;
          this.sparkY[i] += this.sparkDy[i] * millis;
          this.sparkDy[i] += 0.0004 * millis;
       }
-      if (this.boxWidth == 0) {
+      if (this.boxWidth == 0 || this.grip != null) {
          return;
+      }
+      double v = this.speed();
+      if (v > this.cruise) {
+         // A thrown logo slows back to its drift over a few seconds, still bouncing and counting corners.
+         double slower = Math.max(this.cruise, v * Math.exp(-millis / 2500)) / v;
+         this.dx *= slower;
+         this.dy *= slower;
       }
       this.sinceBounceX += millis;
       this.sinceBounceY += millis;

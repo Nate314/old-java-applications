@@ -32,6 +32,9 @@ class Tiles implements Saver {
    private int revealedCount;
    private boolean adding;
    private double waited;
+   /** Play (T): the pointer, which pushes the tiles near it aside (harder while pressed), or null. */
+   private Point pointer;
+   private boolean pressed;
 
    Tiles(int style) {
       this.style = style;
@@ -76,6 +79,7 @@ class Tiles implements Saver {
       this.width = width;
       this.height = height;
       this.random = random;
+      this.pointer = null;
       if (this.size <= 0) {
          this.size = autoSize(width, height);
       }
@@ -150,15 +154,28 @@ class Tiles implements Saver {
    }
 
    @Override
+   public void touch(Point at, boolean down) {
+      this.pointer = at;
+      this.pressed = down;
+   }
+
+   @Override
    public void paint(Graphics2D g) {
       int s = (int)this.size;
+      double radius = s * (this.pressed ? 4.5 : 3);
+      double most = s * (this.pressed ? 1.6 : 0.9);
       for (int i = 0; i < this.revealedCount; i++) {
          Point position = this.positions.get(this.order.get(i));
          g.setColor(this.colors.get(i));
+         double[] push = Saver.away(position.x + s / 2.0, position.y + s / 2.0, this.pointer, radius, most);
+         // A pushed tile also shrinks a little, so neighbors pushed together do not pile up.
+         int t = (int)Math.round(s * (1 - 0.35 * Math.min(1, Math.hypot(push[0], push[1]) / s)));
+         int x = (int)Math.round(position.x + push[0]) + (s - t) / 2;
+         int y = (int)Math.round(position.y + push[1]) + (s - t) / 2;
          if (this.style == GREEN_SQUARES) {
-            g.fillRect(position.x, position.y, s, s);
+            g.fillRect(x, y, t, t);
          } else {
-            g.fillOval(position.x, position.y, s, s);
+            g.fillOval(x, y, t, t);
          }
       }
    }

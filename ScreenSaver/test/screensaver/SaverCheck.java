@@ -2,6 +2,7 @@ package screensaver;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.Arrays;
@@ -117,6 +118,7 @@ public class SaverCheck {
       checkTank();
       checkMaze();
       checkGallery();
+      checkPlay();
 
       System.out.println("SaverCheck passed");
    }
@@ -161,6 +163,150 @@ public class SaverCheck {
       gallery.move(0, -1);
       gallery.move(0, -1);
       check(gallery.selected == 1, "Up on the top row stays: " + gallery.selected);
+   }
+
+   /** Play (T): what the pointer does to each saver, and that letting go or a reset puts it back. */
+   private static void checkPlay() {
+      double[] none = Saver.away(10, 10, null, 50, 20);
+      double[] near = Saver.away(110, 100, new Point(100, 100), 50, 20);
+      double[] far = Saver.away(200, 100, new Point(100, 100), 50, 20);
+      check(none[0] == 0 && none[1] == 0 && far[0] == 0, "nothing is pushed with no pointer or out of reach");
+      check(near[0] > 0 && Math.abs(near[1]) < 1e-9 && near[0] < 20, "a thing right of the pointer is pushed right: " + near[0]);
+      check(Saver.away(100, 100, new Point(100, 100), 50, 20)[1] == -20, "on the pointer, pushed straight up the most");
+
+      // The tile savers and the dot clock paint differently with the pointer over them, and the same after it goes.
+      for (Saver s : Arrays.asList(new Tiles(Tiles.BRIGHT_CIRCLES), new DotClock(() -> new Date(2026 - 1900, 10, 2, 12, 34)))) {
+         s.reset(900, 600, new Random(3));
+         s.tick(60_000);
+         BufferedImage before = shot(s);
+         s.touch(new Point(450, 300), false);
+         BufferedImage pushed = shot(s);
+         s.touch(null, false);
+         check(!same(before, pushed) && same(before, shot(s)), s.name() + ": the pointer pushes things aside, and they come back");
+      }
+
+      // Starfield: the stars stream out of a point most of the way to the pointer, then back to the middle.
+      Starfield stars = new Starfield();
+      stars.reset(1000, 600, new Random(1));
+      stars.touch(new Point(900, 100), true);
+      for (int i = 0; i < 200; i++) {
+         stars.tick(16);
+      }
+      double[] c = stars.center();
+      check(Math.abs(c[0] - 820) < 5 && Math.abs(c[1] - 140) < 5, "stars come from near the pointer: " + c[0] + "," + c[1]);
+      stars.touch(null, false);
+      for (int i = 0; i < 200; i++) {
+         stars.tick(16);
+      }
+      c = stars.center();
+      check(Math.abs(c[0] - 500) < 5 && Math.abs(c[1] - 300) < 5, "and from the middle once it goes");
+
+      // Mystify: held, the corners speed up toward the pointer, at most three times their speed; let go, they slow back.
+      Mystify mystify = new Mystify();
+      mystify.reset(900, 600, new Random(2));
+      mystify.touch(new Point(450, 300), true);
+      mystify.tick(3000);
+      boolean faster = false;
+      boolean capped = true;
+      for (int s = 0; s < 2; s++) {
+         for (int k = 0; k < 4; k++) {
+            faster |= mystify.speed(s, k) > mystify.cruise(s, k) * 1.5;
+            capped &= mystify.speed(s, k) <= mystify.cruise(s, k) * 3 + 1e-9;
+         }
+      }
+      check(faster && capped, "held, the corners speed up, up to three times");
+      mystify.touch(null, false);
+      mystify.tick(20_000);
+      boolean back = true;
+      for (int s = 0; s < 2; s++) {
+         for (int k = 0; k < 4; k++) {
+            back &= Math.abs(mystify.speed(s, k) - mystify.cruise(s, k)) < mystify.cruise(s, k) * 0.05;
+         }
+      }
+      check(back, "let go, the corners slow back to their own speed");
+
+      // Pipes: a press on a free cell starts a pipe there, and held, it grows to the pointer.
+      Pipes pipes = new Pipes();
+      pipes.reset(900, 600, new Random(4));
+      pipes.touch(new Point(20, 20), true);
+      check(pipes.head()[0] == 0 && pipes.head()[1] == 0, "a press starts a pipe at the top left cell");
+      pipes.touch(new Point(880, 580), true);
+      for (int i = 0; i < 60; i++) {
+         pipes.tick(Pipes.STEP_MILLIS);
+      }
+      int[] head = pipes.head();
+      check(head[0] == 23 && head[1] == 15, "held, the pipe grows to the pointer and waits there: " + head[0] + "," + head[1]);
+      pipes.touch(null, false);
+
+      // Bouncing logo: a press off it does nothing; on it, it is held and follows; thrown, it flies fast, then slows.
+      BouncingLogo logo = new BouncingLogo();
+      logo.reset(900, 600, new Random(6));
+      logo.place(100, 50, 400, 300, 0.1, 0.08);
+      double drift = Math.hypot(0.1, 0.08);
+      logo.touch(new Point(10, 10), true);
+      check(!logo.held(), "a press off the logo does not pick it up");
+      logo.touch(new Point(10, 10), false);
+      logo.touch(new Point(450, 320), true);
+      check(logo.held(), "a press on the logo picks it up");
+      for (int i = 1; i <= 10; i++) {
+         logo.tick(16);
+         logo.touch(new Point(450 - i * 10, 320 - i * 6), true);
+      }
+      check(Math.abs(logo.at()[0] - 300) < 1 && Math.abs(logo.at()[1] - 240) < 1, "held, the logo follows the pointer");
+      logo.touch(new Point(350, 260), false);
+      check(!logo.held() && logo.speed() > 0.4, "thrown, it flies fast: " + logo.speed());
+      logo.tick(16);
+      check(logo.at()[0] < 300, "the way it was thrown");
+      for (int i = 0; i < 1000; i++) {
+         logo.tick(16);
+      }
+      check(Math.abs(logo.speed() - logo.cruise()) < 1e-9, "then slows back to its drift");
+
+      // Aquarium: one press drops one pinch of flakes, where it was.
+      Aquarium tank = new Aquarium(new Tank(), () -> new Date(2026 - 1900, 10, 2, 12, 0), () -> { });
+      tank.reset(900, 600, new Random(7));
+      tank.touch(new Point(300, 300), true);
+      int pinch = tank.flakeCount();
+      tank.touch(new Point(310, 300), true);
+      check(pinch > 0 && tank.flakeCount() == pinch, "a press drops one pinch, a drag no more");
+      tank.touch(new Point(310, 300), false);
+      tank.touch(new Point(600, 300), true);
+      check(tank.flakeCount() == pinch * 2, "the next press drops another");
+
+      // Maze: held, the walker takes three times the steps.
+      Maze slow = new Maze();
+      Maze quick = new Maze();
+      slow.reset(900, 600, new Random(8));
+      quick.reset(900, 600, new Random(8));
+      quick.touch(new Point(1, 1), true);
+      for (int i = 0; i < 300; i++) {
+         slow.tick(16);
+         quick.tick(16);
+      }
+      check(quick.steps > slow.steps * 2, "held, the walker hurries: " + quick.steps + " vs " + slow.steps);
+
+      for (Saver s : savers()) {
+         check(!Main.playHint(s).isEmpty(), s.name() + " says what the mouse does");
+      }
+   }
+
+   private static BufferedImage shot(Saver s) {
+      BufferedImage image = new BufferedImage(900, 600, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = image.createGraphics();
+      s.paint(g);
+      g.dispose();
+      return image;
+   }
+
+   private static boolean same(BufferedImage a, BufferedImage b) {
+      for (int y = 0; y < a.getHeight(); y++) {
+         for (int x = 0; x < a.getWidth(); x++) {
+            if (a.getRGB(x, y) != b.getRGB(x, y)) {
+               return false;
+            }
+         }
+      }
+      return true;
    }
 
    private static List<Saver> savers() {

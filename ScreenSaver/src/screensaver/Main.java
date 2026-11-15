@@ -66,6 +66,8 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    private double zoomLeft;
    /** When a saver was last picked from the gallery: the mouse that picked it needs a moment to come to rest. */
    private long pickedMillis;
+   /** Play (T): the mouse (or a finger) plays with the saver instead of closing it; Esc still closes. */
+   private boolean play;
 
    public Main() {
       this.savers = Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
@@ -105,6 +107,9 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    /** Switches to saver number index, fading in from black, and shows the caption. */
    private void show(int index, boolean save) {
+      if (this.saver != null) {
+         this.saver.touch(null, false);
+      }
       this.saver = this.savers.get(index);
       this.saver.reset(this.SCREEN_WIDTH, this.SCREEN_HEIGHT, this.random);
       this.settings.saver = index;
@@ -148,6 +153,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    /** G: every saver at once. The ones not on screen start over at full size, to be painted small. */
    private void openGallery() {
+      this.saver.touch(null, false);
       for (Saver s : this.savers) {
          if (s != this.saver) {
             s.reset(this.SCREEN_WIDTH, this.SCREEN_HEIGHT, this.random);
@@ -219,14 +225,42 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       String keys = "N / P: next, previous   1-9, 0: pick   G: see all   " + cycle;
       if (this.saver instanceof Aquarium) {
          return new String[] {head, ((Aquarium)this.saver).status(), keys,
-            "Left / Right: speed " + speed + "   H: names and these keys", "Esc or move the mouse to close"};
+            "Left / Right: speed " + speed + "   H: names and these keys", this.closeLine()};
       }
       return new String[] {
          head,
          keys,
          "Left / Right: speed " + speed + (this.saver instanceof Tiles ? "   Up / Down: tile size" : "") + "   H: these keys",
-         "Esc or move the mouse to close",
+         this.closeLine(),
       };
+   }
+
+   /** The last caption line: how to close, or in play what the mouse does to this saver. */
+   private String closeLine() {
+      if (!this.play) {
+         return "Esc or move the mouse to close   T: play with it";
+      }
+      return "Playing: " + playHint(this.saver) + "   T: hands off   Esc: close";
+   }
+
+   /** What the mouse does to each saver in play (T). */
+   static String playHint(Saver s) {
+      if (s instanceof Tiles) {
+         return "the mouse pushes the " + (s.name().endsWith("squares") ? "squares" : "circles") + " aside, harder when held";
+      } else if (s instanceof Starfield) {
+         return "point to steer, hold for warp speed";
+      } else if (s instanceof Mystify) {
+         return "hold to pull the shapes in";
+      } else if (s instanceof Pipes) {
+         return "press to start a pipe, hold and it follows";
+      } else if (s instanceof BouncingLogo) {
+         return "grab the logo and throw it at a corner";
+      } else if (s instanceof DotClock) {
+         return "the mouse scatters the dots";
+      } else if (s instanceof Aquarium) {
+         return "click to drop flakes there";
+      }
+      return "hold to hurry the walker";
    }
 
    /** Bottom left, fading out over its last second, scaled down until its widest line fits the screen. */
@@ -292,6 +326,13 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
          // Picking a saver keeps it on screen; 0 is the tenth.
          this.settings.cycle = false;
          this.show(keyCode == KeyEvent.VK_0 ? 9 : keyCode - KeyEvent.VK_1, true);
+      } else if (keyCode == KeyEvent.VK_T) {
+         this.play = !this.play;
+         this.saver.touch(null, false);
+         this.captionLeft = CAPTION_MILLIS;
+         // Coming out of play, the hand still on the mouse gets a moment before a move closes the saver.
+         this.pickedMillis = System.currentTimeMillis();
+         this.firstMouse = null;
       } else if (keyCode == KeyEvent.VK_C) {
          this.settings.cycle = !this.settings.cycle;
          this.shownFor = 0;
@@ -345,7 +386,9 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    /** Any click closes the saver, except in the gallery (where letting go picks) and just after a pick. */
    private void clicked(MouseEvent e, boolean release) {
-      if (this.gallery != null) {
+      if (this.playing()) {
+         this.saver.touch(e.getPoint(), !release);
+      } else if (this.gallery != null) {
          int index = release ? this.gallery.at(e.getX(), e.getY()) : -1;
          if (index >= 0) {
             this.pick(index, true);
@@ -357,7 +400,14 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    @Override
    public void mouseClicked(MouseEvent e) {
-      this.clicked(e, false);
+      if (!this.playing()) {
+         this.clicked(e, false);
+      }
+   }
+
+   /** Play is on and a saver (not the gallery) is showing. */
+   private boolean playing() {
+      return this.play && this.gallery == null;
    }
 
    @Override
@@ -376,7 +426,9 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    @Override
    public void mouseExited(MouseEvent e) {
-      if (!this.inGrace() && this.gallery == null) {
+      if (this.playing()) {
+         this.saver.touch(null, false);
+      } else if (!this.inGrace() && this.gallery == null) {
          this.kill();
       }
    }
@@ -386,9 +438,11 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    }
 
    /** Closes once the mouse has really moved after the grace period. */
-   private void mouseMovedTo(MouseEvent e) {
+   private void mouseMovedTo(MouseEvent e, boolean down) {
       Point point = e.getLocationOnScreen();
-      if (this.gallery != null) {
+      if (this.playing()) {
+         this.saver.touch(e.getPoint(), down);
+      } else if (this.gallery != null) {
          int index = this.gallery.at(e.getX(), e.getY());
          if (index >= 0) {
             this.gallery.selected = index;
@@ -406,11 +460,11 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    @Override
    public void mouseDragged(MouseEvent e) {
-      this.mouseMovedTo(e);
+      this.mouseMovedTo(e, true);
    }
 
    @Override
    public void mouseMoved(MouseEvent e) {
-      this.mouseMovedTo(e);
+      this.mouseMovedTo(e, false);
    }
 }

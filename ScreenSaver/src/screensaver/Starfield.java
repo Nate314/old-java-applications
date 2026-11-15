@@ -3,6 +3,7 @@ package screensaver;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.Random;
 
 /** Flying through space: stars come from the middle of the screen and streak past the edges. */
@@ -20,6 +21,12 @@ class Starfield implements Saver {
    private int width;
    private int height;
    private Random random;
+   /** Play (T): where the stars come from eases toward the pointer, and holding it down is warp speed. */
+   private Point pointer;
+   private boolean pressed;
+   private double centerX;
+   private double centerY;
+   private double boost = 1;
 
    @Override
    public String name() {
@@ -31,6 +38,11 @@ class Starfield implements Saver {
       this.width = width;
       this.height = height;
       this.random = random;
+      this.pointer = null;
+      this.pressed = false;
+      this.centerX = width / 2.0;
+      this.centerY = height / 2.0;
+      this.boost = 1;
       for (int i = 0; i < STARS; i++) {
          this.place(i, NEAREST + random.nextDouble() * (1 - NEAREST));
       }
@@ -43,9 +55,30 @@ class Starfield implements Saver {
    }
 
    @Override
+   public void touch(Point at, boolean down) {
+      this.pointer = at;
+      this.pressed = at != null && down;
+   }
+
+   /** The point the stars stream out of: the middle, or most of the way to the pointer. */
+   double[] center() {
+      return new double[] {this.centerX, this.centerY};
+   }
+
+   @Override
    public void tick(double millis) {
+      double tx = this.width / 2.0;
+      double ty = this.height / 2.0;
+      if (this.pointer != null) {
+         tx += (this.pointer.x - tx) * 0.8;
+         ty += (this.pointer.y - ty) * 0.8;
+      }
+      double ease = 1 - Math.exp(-millis / 300);
+      this.centerX += (tx - this.centerX) * ease;
+      this.centerY += (ty - this.centerY) * ease;
+      this.boost += ((this.pressed ? 5 : 1) - this.boost) * ease;
       for (int i = 0; i < STARS; i++) {
-         this.z[i] -= millis * DEPTH_PER_MILLI;
+         this.z[i] -= millis * DEPTH_PER_MILLI * this.boost;
          if (this.z[i] < NEAREST || !this.onScreen(this.screenX(i, this.z[i]), this.screenY(i, this.z[i]))) {
             this.place(i, 1.0);
          }
@@ -57,15 +90,19 @@ class Starfield implements Saver {
    }
 
    private double screenX(int i, double depth) {
-      return this.width / 2.0 + this.x[i] / depth * this.scale() * 0.5;
+      return this.centerX + this.x[i] / depth * this.scale() * 0.5;
    }
 
    private double screenY(int i, double depth) {
-      return this.height / 2.0 + this.y[i] / depth * this.scale() * 0.5;
+      return this.centerY + this.y[i] / depth * this.scale() * 0.5;
    }
 
    private boolean onScreen(double sx, double sy) {
       return sx >= -20 && sy >= -20 && sx <= this.width + 20 && sy <= this.height + 20;
+   }
+
+   private double streak() {
+      return STREAK * this.boost;
    }
 
    @Override
@@ -77,8 +114,8 @@ class Starfield implements Saver {
          g.setColor(new Color(shade * 3 / 4 + 10, shade * 4 / 5 + 10, Math.min(255, shade + 30)));
          float thickness = (float)Math.max(1, nearness * nearness * 4);
          g.setStroke(new BasicStroke(thickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-         int x1 = (int)this.screenX(i, Math.min(1, this.z[i] + STREAK));
-         int y1 = (int)this.screenY(i, Math.min(1, this.z[i] + STREAK));
+         int x1 = (int)this.screenX(i, Math.min(1, this.z[i] + this.streak()));
+         int y1 = (int)this.screenY(i, Math.min(1, this.z[i] + this.streak()));
          int x2 = (int)this.screenX(i, this.z[i]);
          int y2 = (int)this.screenY(i, this.z[i]);
          if (x1 == x2 && y1 == y2) {

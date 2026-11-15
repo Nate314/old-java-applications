@@ -3,6 +3,7 @@ package screensaver;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -54,6 +55,8 @@ class Pipes implements Saver {
    private int usedCount;
    private Color color;
    private double waited;
+   /** Play (T): the cell the pointer holds down, which the growing pipe heads for, or null. */
+   private int[] lead;
 
    @Override
    public String name() {
@@ -68,6 +71,7 @@ class Pipes implements Saver {
       this.rows = Math.max(2, (int)(height / this.cell));
       this.left = (width - this.columns * this.cell) / 2;
       this.top = (height - this.rows * this.cell) / 2;
+      this.lead = null;
       this.clear();
    }
 
@@ -94,6 +98,10 @@ class Pipes implements Saver {
          return;
       }
       int[] start = free.get(this.random.nextInt(free.size()));
+      this.begin(start);
+   }
+
+   private void begin(int[] start) {
       this.headX = start[0];
       this.headY = start[1];
       this.direction = this.random.nextInt(4);
@@ -110,6 +118,49 @@ class Pipes implements Saver {
 
    private boolean free(int x, int y) {
       return x >= 0 && y >= 0 && x < this.columns && y < this.rows && !this.used[x][y];
+   }
+
+   /**
+    * A press on a free cell starts a new pipe there (the one growing ends in a ball joint); while held, the pipe
+    * grows toward the pointer and waits there.
+    */
+   @Override
+   public void touch(Point at, boolean down) {
+      int[] was = this.lead;
+      this.lead = null;
+      if (at == null || !down) {
+         return;
+      }
+      int x = (int)Math.floor((at.x - this.left) / this.cell);
+      int y = (int)Math.floor((at.y - this.top) / this.cell);
+      this.lead = new int[] {Math.max(0, Math.min(this.columns - 1, x)), Math.max(0, Math.min(this.rows - 1, y))};
+      if (was == null && this.free(this.lead[0], this.lead[1])) {
+         this.pieces.add(new Piece(this.headX, this.headY, this.headX, this.headY, this.color));
+         this.begin(this.lead);
+      }
+   }
+
+   int[] head() {
+      return new int[] {this.headX, this.headY};
+   }
+
+   /** Toward the held cell: the free way that closes the larger gap first, or -1 for none (or when there). */
+   private int towardLead() {
+      if (this.lead == null) {
+         return -1;
+      }
+      int gx = this.lead[0] - this.headX;
+      int gy = this.lead[1] - this.headY;
+      int across = gx > 0 ? 0 : 2;
+      int down = gy > 0 ? 1 : 3;
+      int[] order = Math.abs(gx) >= Math.abs(gy) ? new int[] {across, down} : new int[] {down, across};
+      for (int i = 0; i < 2; i++) {
+         boolean gap = order[i] % 2 == 0 ? gx != 0 : gy != 0;
+         if (gap && this.free(this.headX + DX[order[i]], this.headY + DY[order[i]])) {
+            return order[i];
+         }
+      }
+      return -1;
    }
 
    int pieceCount() {
@@ -136,8 +187,16 @@ class Pipes implements Saver {
          this.clear();
          return;
       }
-      int next = this.direction;
-      if (this.random.nextInt(5) == 0 || !this.free(this.headX + DX[next], this.headY + DY[next])) {
+      if (this.lead != null && this.lead[0] == this.headX && this.lead[1] == this.headY) {
+         // There: the pipe waits under the pointer for it to move on.
+         return;
+      }
+      int next = this.towardLead();
+      if (next < 0) {
+         next = this.direction;
+      }
+      // Heading for the pointer takes no random turns.
+      if (!this.free(this.headX + DX[next], this.headY + DY[next]) || this.lead == null && this.random.nextInt(5) == 0) {
          // Try a turn to one side, then the other; going back the way it came is never possible.
          int turn = this.random.nextBoolean() ? 1 : 3;
          next = (this.direction + turn) % 4;
@@ -150,7 +209,7 @@ class Pipes implements Saver {
       }
       int x = this.headX + DX[next];
       int y = this.headY + DY[next];
-      if (!this.free(x, y) || this.length >= MAX_LENGTH) {
+      if (!this.free(x, y) || this.length >= MAX_LENGTH && this.lead == null) {
          this.pieces.add(new Piece(this.headX, this.headY, this.headX, this.headY, this.color));
          this.startPipe();
          return;
