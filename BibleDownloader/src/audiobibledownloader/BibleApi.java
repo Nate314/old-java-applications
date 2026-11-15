@@ -53,30 +53,34 @@ public final class BibleApi {
       if (hit != null) {
          return hit;
       }
-      String json;
+      long slot;
       synchronized (BibleApi.class) {
          hit = cache.get(translation + "/" + book + "/" + chapter);
          if (hit != null) {
             return hit;
          }
-         long wait = lastRequest + SPACING_MS - System.currentTimeMillis();
-         if (wait > 0) {
-            try {
-               Thread.sleep(wait);
-            } catch (InterruptedException e) {
-               Thread.currentThread().interrupt();
-               throw new IOException("interrupted");
-            }
-         }
-         lastRequest = System.currentTimeMillis();
+         // Each request books the next free slot, so the lock is never held while sleeping or downloading: in the
+         // browser a thread that finds it held (the page's own, for cached) cannot wait for it.
+         slot = Math.max(System.currentTimeMillis(), lastRequest + SPACING_MS);
+         lastRequest = slot;
+      }
+      long wait = slot - System.currentTimeMillis();
+      if (wait > 0) {
          try {
-            json = new WebpageDownloader().readHtmlPage(url(translation, book, chapter));
-         } catch (FileNotFoundException e) {
-            throw new IOException(Books.NAMES[book] + " " + chapter + " is not in this translation");
-         } catch (IOException e) {
-            String message = String.valueOf(e.getMessage());
-            throw new IOException(message.contains("429") ? "bible-api.com is busy, try again in a moment" : "could not reach bible-api.com");
+            Thread.sleep(wait);
+         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted");
          }
+      }
+      String json;
+      try {
+         json = new WebpageDownloader().readHtmlPage(url(translation, book, chapter));
+      } catch (FileNotFoundException e) {
+         throw new IOException(Books.NAMES[book] + " " + chapter + " is not in this translation");
+      } catch (IOException e) {
+         String message = String.valueOf(e.getMessage());
+         throw new IOException(message.contains("429") ? "bible-api.com is busy, try again in a moment" : "could not reach bible-api.com");
       }
       Chapter parsed;
       try {

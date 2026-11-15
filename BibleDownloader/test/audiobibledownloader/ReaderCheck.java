@@ -64,6 +64,63 @@ public class ReaderCheck {
       check(pages.get(third).lastVerse >= 3 && (third == 0 || pages.get(third - 1).lastVerse < 3), "verse 3 is first shown on page " + third);
       check(Layout.pageOf(pages, 1) == 0 && Layout.pageOf(pages, 99) == pages.size() - 1, "page of a verse");
 
+      // Side by side: two translations verse by verse. Pages come in pairs, each verse starts on the same line of
+      // both pages, every word of both is placed once, and a verse only one translation has still gets its place.
+      Chapter beside = new Chapter(Books.find("LUK"), 1, "kjv", new int[]{1, 2, 4},
+         new String[]{"a much shorter first verse", long1.toString().trim() + " " + long1.toString().trim(), "only here"});
+      FontMetrics small = metrics(new Font("SansSerif", Font.BOLD, 10));
+      FontMetrics numeral = metrics(new Font("Serif", Font.BOLD, 51));
+      List<Layout.Page> pairs = Layout.parallel(big, beside, body, small, numeral, 320, 14, null);
+      check(pairs.size() % 2 == 0 && pairs.size() > 4, "pages in pairs: " + pairs.size());
+      int[] placed = new int[2];
+      for (int p = 0; p < pairs.size(); p += 2) {
+         Layout.Page left = pairs.get(p);
+         Layout.Page right = pairs.get(p + 1);
+         check(left.firstVerse == right.firstVerse && left.lastVerse == right.lastVerse, "a pair shows the same verses");
+         for (int v = 1; v <= 4; v++) {
+            int a = firstLine(left, v);
+            int b = firstLine(right, v);
+            check(a < 0 || b < 0 || a == b, "verse " + v + " lines up on pages " + p + ": " + a + " / " + b);
+         }
+         for (int side = 0; side < 2; side++) {
+            for (Layout.Run run : pairs.get(p + side).runs) {
+               check(run.line >= 0 && run.line < 14, "parallel line inside the page");
+               if (run.kind == Layout.WORD) {
+                  placed[side]++;
+                  check(run.x + run.width <= 320 || run.x == 0, "parallel word inside the width");
+               }
+            }
+         }
+      }
+      check(placed[0] == 404 && placed[1] == 5 + 800 + 2, "every word of both placed once: " + placed[0] + " / " + placed[1]);
+      check(pairs.get(0).runs.get(0).kind == Layout.TITLE && pairs.get(1).runs.get(0).kind == Layout.TITLE, "both open with the title");
+      check(pairs.get(Layout.pageOf(pairs, 4)).lastVerse >= 4 && firstLine(pairs.get(pairs.size() - 1), 4) >= 0, "a verse in one translation only");
+      List<Layout.Page> stacked = Layout.parallel(big, beside, body, small, numeral, 320, 14, metrics(new Font("Serif", Font.ITALIC, 17)));
+      int mine = 0;
+      int theirs = 0;
+      for (Layout.Page page : stacked) {
+         for (Layout.Run run : page.runs) {
+            check(run.line >= 0 && run.line < 14, "stacked line inside the page");
+            check(run.verse == 0 || run.verse >= page.firstVerse && run.verse <= page.lastVerse, "the running head covers verse " + run.verse);
+            mine += run.kind == Layout.WORD ? 1 : 0;
+            theirs += run.kind == Layout.ALT_WORD ? 1 : 0;
+         }
+      }
+      check(mine == 404 && theirs == 807, "stacked: both translations placed once: " + mine + " / " + theirs);
+      Layout.Page firstStacked = stacked.get(0);
+      int lastMine = -1;
+      int firstTheirs = 99;
+      for (Layout.Run run : firstStacked.runs) {
+         if (run.verse == 1 && run.kind == Layout.WORD) {
+            lastMine = Math.max(lastMine, run.line);
+         } else if (run.verse == 1 && run.kind == Layout.ALT_WORD) {
+            firstTheirs = Math.min(firstTheirs, run.line);
+         }
+      }
+      check(lastMine >= 0 && (firstTheirs == 99 || firstTheirs > lastMine), "stacked: the second translation follows the verse");
+      check(Shelf.nextCompare("web", "").equals("kjv") && Shelf.nextCompare("kjv", "").equals("web") && Shelf.nextCompare("web", "kjv").equals("asv")
+         && Shelf.nextCompare("darby", "bbe").isEmpty() && Shelf.nextCompare("web", "darby").isEmpty(), "compare cycles the other translations, then off");
+
       // The shelf keeps place, size, read chapters and highlights across a reload; bad lines are skipped.
       File file = File.createTempFile("bibleshelf", ".txt");
       Shelf shelf = Shelf.load(file);
@@ -73,6 +130,7 @@ public class ReaderCheck {
       shelf.chapter = 23;
       shelf.verse = 4;
       shelf.size = 2;
+      shelf.compare = "asv";
       shelf.markRead(Books.find("PSA"), 23);
       shelf.markRead(Books.find("REV"), 22);
       check(shelf.toggleMark(Books.find("JHN"), 3, 16), "highlight on");
@@ -80,6 +138,7 @@ public class ReaderCheck {
       shelf.save();
       Shelf again = Shelf.load(file);
       check(again.translation.equals("kjv") && again.book == Books.find("PSA") && again.chapter == 23 && again.verse == 4 && again.size == 2, "place kept");
+      check(again.compare.equals("asv") && Shelf.load(new File(file.getPath() + ".missing")).compare.isEmpty(), "side by side kept");
       check(again.readCount() == 2 && again.isRead(Books.find("REV"), 22) && again.readCount(Books.find("PSA")) == 1, "read chapters kept");
       check(again.isMarked(Books.find("JHN"), 3, 16) && again.markCount() == 2, "highlights kept");
       int[] next = again.nextMark(Books.find("JHN"), 3, 16);
@@ -233,6 +292,16 @@ public class ReaderCheck {
       check(!DownloadManager.chapterHtml(chapter, false).contains("<b>"), "verse numbers off");
       check(ReaderPanel.commas(1189).equals("1,189") && ReaderPanel.commas(42).equals("42"), "commas");
       System.out.println("ReaderCheck: all checks passed");
+   }
+
+   /** The line a verse's first word or number is on, or -1 when the page does not show it. */
+   private static int firstLine(Layout.Page page, int verse) {
+      for (Layout.Run run : page.runs) {
+         if (run.verse == verse && (run.kind == Layout.WORD || run.kind == Layout.VERSE_NUMBER)) {
+            return run.line;
+         }
+      }
+      return -1;
    }
 
    private static FontMetrics metrics(Font font) {
