@@ -57,6 +57,7 @@ public class GroupBoard extends JPanel {
    private static final Font TEXT = new Font("SansSerif", Font.PLAIN, 13);
    static final Font BOLD = new Font("SansSerif", Font.BOLD, 13);
    private static final Font SMALL = new Font("SansSerif", Font.PLAIN, 11);
+   private static final Font CLOCK = new Font("SansSerif", Font.BOLD, 22);
 
    /** What the board's buttons and edits ask the window to do. */
    public interface Actions {
@@ -80,6 +81,9 @@ public class GroupBoard extends JPanel {
 
       /** The roles were shown or hidden: save the class. */
       void rolesShown(boolean shown);
+
+      /** The work time's length changed: save the class. */
+      void workChanged();
    }
 
    private final class Button {
@@ -110,6 +114,12 @@ public class GroupBoard extends JPanel {
    private final Button chartButton;
    private final Button clear;
    private final Button rolesButton;
+   private final Button workButton;
+   /** The work-time countdown (the window gives it the class's own, with its saved length). */
+   WorkTimer work = new WorkTimer();
+   private Timer workTick;
+   private final Rectangle workLess = new Rectangle();
+   private final Rectangle workMore = new Rectangle();
    private final Button spin;
    private final Button putBack;
    private final Button startOver;
@@ -162,6 +172,15 @@ public class GroupBoard extends JPanel {
       buttons.add(new Button("New round", 'n', actions::newRound));
       reshuffle = new Button("Reshuffle", 'r', actions::reshuffle);
       buttons.add(reshuffle);
+      workButton = new Button("", 'w', () -> {
+         if (work.running()) {
+            work.stop();
+         } else {
+            work.start(System.currentTimeMillis());
+            workTick.start();
+         }
+      });
+      buttons.add(workButton);
       chartButton = new Button("Partner chart", 'c', () -> {
          chart = !chart;
          unpick();
@@ -222,6 +241,15 @@ public class GroupBoard extends JPanel {
          }
       });
       buttons.add(clear);
+      workTick = new Timer(250, event -> {
+         if (work.ring(System.currentTimeMillis())) {
+            wheel.sound.chime();
+         }
+         if (!work.running()) {
+            ((Timer) event.getSource()).stop();
+         }
+         repaint();
+      });
       dealTimer = new Timer(16, event -> {
          if (!dealing()) {
             ((Timer) event.getSource()).stop();
@@ -328,6 +356,10 @@ public class GroupBoard extends JPanel {
    }
 
    private void press(int x, int y) {
+      if (work.running() && (workLess.contains(x, y) || workMore.contains(x, y))) {
+         adjustWork(workMore.contains(x, y) ? 1 : -1);
+         return;
+      }
       if (y >= getHeight() - BAR) {
          for (Button button : buttons()) {
             if (button.enabled && button.bounds.contains(x, y)) {
@@ -398,6 +430,10 @@ public class GroupBoard extends JPanel {
          return;
       }
       char key = Character.toLowerCase(event.getKeyChar());
+      if (key == '+' || key == '=' || key == '-') {
+         adjustWork(key == '-' ? -1 : 1);
+         return;
+      }
       if (key == ' ') {
          key = picking ? 's' : 'n';
       }
@@ -409,6 +445,13 @@ public class GroupBoard extends JPanel {
             button.action.run();
             return;
          }
+      }
+   }
+
+   /** A minute more or less on the work time (and on its length, which the class keeps). */
+   private void adjustWork(int delta) {
+      if (work.adjust(delta, System.currentTimeMillis())) {
+         actions.workChanged();
       }
    }
 
@@ -448,6 +491,9 @@ public class GroupBoard extends JPanel {
       putBack.enabled = !wheel.spinning() && !picks.picked(present).isEmpty();
       keepApartButton.label = keepApart ? "Keep apart: on" : "Keep apart";
       startOver.enabled = putBack.enabled;
+      long now = System.currentTimeMillis();
+      workButton.on = work.running();
+      workButton.label = work.up(now) ? "Time's up" : work.running() ? "Stop timer" : "Work " + work.minutes + " min";
       String[] header;
       if (picking) {
          header = paintPick(g, w, h - BAR);
@@ -460,6 +506,14 @@ public class GroupBoard extends JPanel {
       }
       if (message != null) {
          header = new String[] {header[0], message, "error"};
+      } else if (!picking && !rollCall && workButton.bounds.contains(mouseX, mouseY)) {
+         header = new String[] {header[0], work.running() ? "W stops the work time. + and - (or the buttons by the clock) add or take a minute."
+            : "Work time: a " + work.minutes + " minute countdown for the groups, shown on each Timer's tag. + and - change the length.", ""};
+      } else if (!picking && !rollCall && !chart && hoverGroup < 0 && pickedGroup < 0 && work.running() && work.left(now) <= 60_000) {
+         header = work.up(now)
+            ? new String[] {header[0], "Time's up!" + (roles && largest() >= 4 ? " Reporters, tell the class what your group found." : "")
+               + " W stops the timer.", "error"}
+            : new String[] {header[0], "One minute left" + (roles && largest() >= 3 ? ": Timers, help your group wrap up." : "."), "again"};
       }
       paintHeader(g, w, header);
       paintBar(g, w, h);
@@ -467,9 +521,46 @@ public class GroupBoard extends JPanel {
 
    /** Two lines for the header: a title, and a detail line drawn in the color of the third entry. */
    private void paintHeader(Graphics2D g, int w, String[] header) {
-      text(g, header[0], TITLE, INK, 16, 22);
+      int room = w - 32 - (work.running() ? paintWorkClock(g, w) + 10 : 0);
+      text(g, fit(g, header[0], TITLE, room), TITLE, INK, 16, 22);
       Color color = header[2].equals("fresh") ? FRESH : header[2].equals("again") ? AGAIN : header[2].equals("error") ? ERROR : MUTED;
-      text(g, fit(g, header[1], TEXT, w - 32), TEXT, color, 16, 41);
+      text(g, fit(g, header[1], TEXT, room), TEXT, color, 16, 41);
+   }
+
+   /** The running work time at the header's right, between a minute less and a minute more. Returns its width. */
+   private int paintWorkClock(Graphics2D g, int w) {
+      long now = System.currentTimeMillis();
+      long left = work.left(now);
+      String clock = work.up(now) ? "Time's up" : WorkTimer.clock(left);
+      int clockWidth = Math.max(width(g, "00:00", CLOCK), width(g, clock, CLOCK));
+      int d = 22;
+      int pillWidth = 8 + d + 8 + clockWidth + 8 + d + 8;
+      int x = w - 16 - pillWidth;
+      int y = 7;
+      int h = 36;
+      // Dark while there is time, amber in the last minute, red (blinking) when it is up.
+      boolean blink = work.up(now) && (now / 500) % 2 == 0;
+      g.setColor(work.up(now) ? (blink ? mix(ERROR, Color.WHITE, 0.25f) : ERROR) : left <= 60_000 ? AGAIN : INK);
+      g.fillRoundRect(x, y, pillWidth, h, h, h);
+      workLess.setBounds(x + 8, y + (h - d) / 2, d, d);
+      workMore.setBounds(x + pillWidth - 8 - d, y + (h - d) / 2, d, d);
+      for (Rectangle button : new Rectangle[] {workLess, workMore}) {
+         boolean hover = button.contains(mouseX, mouseY);
+         g.setColor(new Color(255, 255, 255, hover ? 120 : 60));
+         g.fillOval(button.x, button.y, d, d);
+         centered(g, button == workLess ? "-" : "+", TITLE, Color.WHITE, button.x + d / 2, button.y + d / 2 + 5);
+      }
+      centered(g, clock, CLOCK, Color.WHITE, x + pillWidth / 2, y + h / 2 + 8);
+      return pillWidth;
+   }
+
+   /** The size of the biggest group in the round shown. */
+   private int largest() {
+      int most = 0;
+      for (List<String> group : groups) {
+         most = Math.max(most, group.size());
+      }
+      return most;
    }
 
    private String[] paintGroups(Graphics2D g, int w, int bottom) {
@@ -493,6 +584,14 @@ public class GroupBoard extends JPanel {
          g.fillRoundRect(card.x, card.y, card.width, 26, 14, 14);
          g.fillRect(card.x, card.y + 14, card.width, 12);
          text(g, "Group " + (c + 1), BOLD, Color.WHITE, card.x + 10, card.y + 18);
+         if (work.running()) {
+            // The work time left, as a strip along the bottom of the card's band that runs down.
+            int track = card.width - 20;
+            g.setColor(new Color(255, 255, 255, 70));
+            g.fillRect(card.x + 10, card.y + 22, track, 2);
+            g.setColor(new Color(255, 255, 255, 230));
+            g.fillRect(card.x + 10, card.y + 22, Math.round(track * (1 - work.gone(System.currentTimeMillis()))), 2);
+         }
          String size = groups.get(c).size() + (groups.get(c).size() == 1 ? " name" : " names");
          if (card.width >= 30 + width(g, "Group " + (c + 1), BOLD) + width(g, size, SMALL)) {
             text(g, size, SMALL, Color.WHITE, card.x + card.width - 10 - width(g, size, SMALL), card.y + 18);
@@ -508,6 +607,7 @@ public class GroupBoard extends JPanel {
       // The deal: each name flies from the top of the board to its place.
       long elapsed = dealStart > 0 ? System.currentTimeMillis() - dealStart : Long.MAX_VALUE / 2;
       List<int[]> order = dealOrder();
+      String timerClock = work.running() ? WorkTimer.clock(work.left(System.currentTimeMillis())) : null;
       hoverGroup = -1;
       hoverIndex = -1;
       for (int i = 0; i < order.size(); i++) {
@@ -527,7 +627,7 @@ public class GroupBoard extends JPanel {
             hoverIndex = k;
          }
          int role = roles ? Roles.of(k, groups.get(c).size()) : -1;
-         paintChip(g, groups.get(c).get(k), role, landed && role >= 0 && hadRole(c, k), x, y, slot.width, slot.height,
+         paintChip(g, groups.get(c).get(k), role, landed && role >= 0 && hadRole(c, k), timerClock, x, y, slot.width, slot.height,
             landed ? metAgain(c, k) : false,
             c == pickedGroup && k == pickedIndex, c == hoverGroup && k == hoverIndex);
          if (landed && clashes(c, k)) {
@@ -658,8 +758,11 @@ public class GroupBoard extends JPanel {
       return null;
    }
 
-   /** A name on a card, with its role's tag (ringed in orange when they had that role before) when role is not -1. */
-   private void paintChip(Graphics2D g, String name, int role, boolean hadRole, int x, int y, int width, int height,
+   /**
+    * A name on a card, with its role's tag (ringed in orange when they had that role more than another) when role is
+    * not -1. A Timer's tag shows the work time left while it runs ({@code timerClock} is not null).
+    */
+   private void paintChip(Graphics2D g, String name, int role, boolean hadRole, String timerClock, int x, int y, int width, int height,
          boolean again, boolean picked, boolean hover) {
       g.setColor(picked ? PICKED : again ? AGAIN_FILL : Color.WHITE);
       g.fillRoundRect(x, y, width, height, 8, 8);
@@ -672,9 +775,10 @@ public class GroupBoard extends JPanel {
       int room = width - 16 - (again ? 14 : 0);
       if (role >= 0 && height >= 12) {
          // The role's tag at the right; only its first letter when the name would be squeezed.
-         String tag = Roles.NAMES[role];
+         boolean timing = role == 2 && timerClock != null;
+         String tag = timing ? "Timer " + timerClock : Roles.NAMES[role];
          if (room - width(g, tag, SMALL) - 16 < Math.min(60, width(g, name, font))) {
-            tag = tag.substring(0, 1);
+            tag = timing ? timerClock : tag.substring(0, 1);
          }
          int tagWidth = width(g, tag, SMALL) + 10;
          int tagHeight = Math.min(16, height - 4);
@@ -699,9 +803,9 @@ public class GroupBoard extends JPanel {
       }
    }
 
-   /** True when name k of group c has the role of their place this round in an earlier round too. */
+   /** True when name k of group c had the role of their place more often than another role of the group. */
    private boolean hadRole(int c, int k) {
-      return !Roles.roundsAs(before, groups.get(c).get(k), k).isEmpty();
+      return Roles.repeatsEarly(before, groups.get(c).get(k), k, groups.get(c).size());
    }
 
    /** True when name k of group c shares this group with someone they were grouped with before. */
@@ -1017,20 +1121,25 @@ public class GroupBoard extends JPanel {
       g.fillRect(0, top, w, BAR);
       int gap = 8;
       List<Button> buttons = buttons();
-      // Narrower padding, then gaps, when the buttons would not fit (the Groups bar with "Sure? Press again").
+      // Narrower padding, then gaps, then no key letters, when the buttons would not fit (the Groups bar's eight).
       int pad = 12;
-      int total = barWidth(g, buttons, pad, gap);
+      boolean keys = true;
+      int total = barWidth(g, buttons, pad, gap, keys);
       if (total > w - 16) {
          pad = 7;
-         total = barWidth(g, buttons, pad, gap);
+         total = barWidth(g, buttons, pad, gap, keys);
       }
       if (total > w - 16) {
          gap = 3;
-         total = barWidth(g, buttons, pad, gap);
+         total = barWidth(g, buttons, pad, gap, keys);
+      }
+      if (total > w - 16) {
+         keys = false;
+         total = barWidth(g, buttons, pad, gap, keys);
       }
       int x = (w - total) / 2;
       for (Button button : buttons) {
-         int bw = buttonWidth(g, button, pad);
+         int bw = buttonWidth(g, button, pad, keys);
          button.bounds.setBounds(x, top + 10, bw, 30);
          boolean hover = button.enabled && button.bounds.contains(mouseX, mouseY);
          boolean armed = button == clear && clearArmed;
@@ -1042,22 +1151,24 @@ public class GroupBoard extends JPanel {
          g.setStroke(new BasicStroke(1f));
          Color ink = armed ? Color.WHITE : button.enabled ? INK : new Color(170, 166, 158);
          text(g, button.label, BOLD, ink, x + pad, top + 30);
-         String key = String.valueOf(Character.toUpperCase(button.key));
-         text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - pad - width(g, key, SMALL), top + 30);
+         if (keys) {
+            String key = String.valueOf(Character.toUpperCase(button.key));
+            text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - pad - width(g, key, SMALL), top + 30);
+         }
          x += bw + gap;
       }
    }
 
-   private static int barWidth(Graphics2D g, List<Button> buttons, int pad, int gap) {
+   private static int barWidth(Graphics2D g, List<Button> buttons, int pad, int gap, boolean keys) {
       int total = -gap;
       for (Button button : buttons) {
-         total += buttonWidth(g, button, pad) + gap;
+         total += buttonWidth(g, button, pad, keys) + gap;
       }
       return total;
    }
 
-   private static int buttonWidth(Graphics2D g, Button button, int pad) {
-      return pad + width(g, button.label, BOLD) + 10 + width(g, String.valueOf(Character.toUpperCase(button.key)), SMALL) + pad;
+   private static int buttonWidth(Graphics2D g, Button button, int pad, boolean keys) {
+      return pad + width(g, button.label, BOLD) + (keys ? 10 + width(g, String.valueOf(Character.toUpperCase(button.key)), SMALL) : 0) + pad;
    }
 
    /** The class's names, each once, in the order typed. */

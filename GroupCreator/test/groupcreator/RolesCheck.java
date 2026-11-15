@@ -25,6 +25,16 @@ public class RolesCheck {
       check(Roles.roundsAs(history, "a", 1).equals(Arrays.asList(2)), "a was Scribe in round 2");
       check(Roles.roundsAs(history, "e", 2).equals(Arrays.asList(2)), "e was Timer in round 2");
 
+      // A ringed repeat is one the rotation could have avoided: in a pair, Leader once and Scribe once is fair.
+      PartnerHistory pairs = new PartnerHistory();
+      pairs.add(groups("a,b"));
+      check(Roles.repeatsEarly(pairs, "a", 0, 2), "Leader twice before any Scribe is a repeat");
+      check(!Roles.repeatsEarly(pairs, "a", 1, 2), "Scribe after Leader is not");
+      pairs.add(groups("b,a"));
+      check(!Roles.repeatsEarly(pairs, "a", 0, 2) && !Roles.repeatsEarly(pairs, "b", 1, 2), "after one of each, either role is fair");
+      check(Roles.repeatsEarly(pairs, "a", 0, 3), "in a three, a Leader who was never Timer repeats");
+      check(!Roles.repeatsEarly(pairs, "a", 0, 1), "a group of one has no role to repeat");
+
       // Rotation only reorders: every group keeps its names.
       List<String> twelve = GroupMaker.parseNames(Roster.EXAMPLE);
       for (int trial = 0; trial < 100; trial++) {
