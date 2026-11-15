@@ -165,6 +165,8 @@ export function init() {
       ? 'A friend sent you a tune. Press Play to hear it, then play it back.'
       : /[?&]challenge=[0-4][0-9a-z-]+(?:&|$)/i.test(location.search)
         ? 'A friend sent you a number to find. Press Play and try to beat their guesses.'
-        : '';
+        : /[?&]song=[0-9ab][Mm][1-7]/.test(location.search)
+          ? 'A friend sent you a song. Press Play to hear it, change it, and keep it if you like it.'
+          : '';
   window.oldjavaShare = { open: openShare };
 }
