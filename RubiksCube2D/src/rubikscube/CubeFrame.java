@@ -51,9 +51,9 @@ public final class CubeFrame extends JFrame implements ActionListener {
                + "Each level mixes the cube<br>one move more while you<br>watch. Turn it back to<br>solved: at par for 3 stars.<br><br>"
                + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>T: Teach me. G: patterns.<br>C: your cube. K: timer.</html>");
    private static final String HELP_3D =
-         "<html>Drag a square to turn<br>its row, column or ring.<br>Drag around the cube<br>(or press the arrow keys)<br>to look at other sides.<br>"
-               + "Or click a square, then<br>press W A S D.<br><br>"
-               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: flat net. T: Teach me.<br>G: patterns to make.<br>C: your cube. K: timer.</html>";
+         "<html>Drag a square to turn<br>its row, column or ring.<br>Drag around the cube<br>(or arrow keys) to look<br>at other sides, or click<br>a mirror to bring its side<br>"
+               + "round. Or click a square,<br>then press W A S D.<br>"
+               + "Keys: Z undo, H hint,<br>R retry, N next, P prev.<br>V: flat net. T: Teach me.<br>G: patterns. C: your cube.<br>K: timer. X: mirrors.</html>";
    private final String helpNet;
    private final JButton viewButton = new JButton();
    private final JButton teachButton = new JButton("Teach me");
@@ -197,6 +197,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.panel.add(this.timerPanel);
       // Last, so it lies under every other control.
       this.panel.add(this.view);
+      this.view.setMirrors(this.records.mirrors());
       this.showView(this.records.netView());
       this.startLevel(this.records.lastLevel());
    }
@@ -293,6 +294,14 @@ public final class CubeFrame extends JFrame implements ActionListener {
    /** V: the other view. */
    final void toggleView() {
       this.showView(this.view.isVisible());
+   }
+
+   /** X: the 3D cube's mirrors of its hidden sides off or on (saved). */
+   final void toggleMirrors() {
+      if (this.view.isVisible()) {
+         this.view.setMirrors(!this.view.mirrors());
+         this.records.setMirrors(this.view.mirrors());
+      }
    }
 
    /** The arrow keys: turn the 3D cube to look at another side. */

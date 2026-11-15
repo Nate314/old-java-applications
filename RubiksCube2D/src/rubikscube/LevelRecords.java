@@ -15,7 +15,8 @@ import java.util.Set;
 /**
  * The best stars and fewest moves on each solved level and the level played last, kept in a small text file of
  * {@code name=value} lines: {@code level=4}, then one line such as {@code 3=3,3} (stars, moves) per solved level, and
- * {@code view=net} when the flat net was picked over the 3D cube, and {@code patterns=spots,checkerboard} for the
+ * {@code view=net} when the flat net was picked over the 3D cube, {@code mirrors=off} when the 3D cube's mirrors
+ * were turned off, and {@code patterns=spots,checkerboard} for the
  * patterns made by hand, and {@code times=12340,9870} for the speed timer's latest solves in milliseconds, oldest first.
  */
 public final class LevelRecords {
@@ -27,6 +28,7 @@ public final class LevelRecords {
    private final int[] moves = new int[LEVELS + 1];
    private int lastLevel = 1;
    private boolean netView = false;
+   private boolean mirrorsOff = false;
    private final Set<String> patterns = new LinkedHashSet<>();
    private final List<Long> times = new ArrayList<>();
 
@@ -57,6 +59,10 @@ public final class LevelRecords {
       try {
          if (name.equals("view")) {
             this.netView = value.equals("net");
+            return;
+         }
+         if (name.equals("mirrors")) {
+            this.mirrorsOff = value.equals("off");
             return;
          }
          if (name.equals("patterns")) {
@@ -147,6 +153,18 @@ public final class LevelRecords {
       }
    }
 
+   /** True unless the 3D cube's mirrors of its hidden sides were turned off (X). */
+   public boolean mirrors() {
+      return !this.mirrorsOff;
+   }
+
+   public void setMirrors(boolean on) {
+      if (this.mirrorsOff == on) {
+         this.mirrorsOff = !on;
+         this.save();
+      }
+   }
+
    /** The keys of the patterns made by hand (see {@link Patterns}). */
    public Set<String> patternsMade() {
       return Collections.unmodifiableSet(this.patterns);
@@ -204,6 +222,9 @@ public final class LevelRecords {
          writer.write("level=" + this.lastLevel + "\n");
          if (this.netView) {
             writer.write("view=net\n");
+         }
+         if (this.mirrorsOff) {
+            writer.write("mirrors=off\n");
          }
          if (!this.patterns.isEmpty()) {
             writer.write("patterns=" + String.join(",", this.patterns) + "\n");
