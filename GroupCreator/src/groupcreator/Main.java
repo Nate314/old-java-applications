@@ -38,6 +38,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       roster = Roster.load(new File(System.getProperty("user.home"), ".groupcreator-class.txt"));
       board = new GroupBoard(roster.history, roster.picks, roster.rules, this);
       board.roles = roster.roles;
+      board.work = roster.work;
 
       JPanel names = new JPanel();
       names.add(new JLabel("Names, separated by commas:"));
@@ -152,6 +153,11 @@ public class Main extends JFrame implements GroupBoard.Actions {
    }
 
    @Override
+   public void workChanged() {
+      picksChanged();
+   }
+
+   @Override
    public void rulesChanged() {
       picksChanged();
    }
@@ -174,7 +180,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       }
       if (groups != null) {
          try {
-            writeOutput(GroupMaker.describe(groups));
+            writeOutput(GroupMaker.describe(groups, roster.roles));
          } catch (IOException ex) {
             return "Could not write output.txt: " + ex.getMessage();
          }

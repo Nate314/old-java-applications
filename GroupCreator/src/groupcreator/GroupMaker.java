@@ -66,9 +66,20 @@ public final class GroupMaker {
 
    /** One line per group: "Group 1 --- name, name". */
    public static List<String> describe(List<List<String>> groups) {
+      return describe(groups, false);
+   }
+
+   /** The same lines, with each member's role after their name ("Alice (Leader), Bob (Scribe)") when roles is set. */
+   public static List<String> describe(List<List<String>> groups, boolean roles) {
       List<String> lines = new ArrayList<>();
       for (int i = 0; i < groups.size(); i++) {
-         lines.add("Group " + (i + 1) + " --- " + String.join(", ", groups.get(i)));
+         List<String> group = groups.get(i);
+         List<String> names = new ArrayList<>();
+         for (int k = 0; k < group.size(); k++) {
+            int role = roles ? Roles.of(k, group.size()) : -1;
+            names.add(role < 0 ? group.get(k) : group.get(k) + " (" + Roles.NAMES[role] + ")");
+         }
+         lines.add("Group " + (i + 1) + " --- " + String.join(", ", names));
       }
       return lines;
    }

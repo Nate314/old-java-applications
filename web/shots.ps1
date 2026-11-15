@@ -60,7 +60,7 @@ $Recipes = [ordered]@{
     CircleSpawner       = @{ Steps = @('wait:1500', (Pick 'Clock'), 'wait:3000') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:4000', 'key:B', 'wait:3000', 'key:-', 'key:=', 'wait:300') }
     SynthesizerKeyboard = @{ Steps = $SynthLoop + @('wait:1300') }
-    GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500') }
+    GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500', 'key:W', 'wait:2200') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:800') }
     NumberGuess         = @{ Steps = @('wait:800', $NumberGuessDuel, 'wait:300', 'key:3', 'key:7', 'key:Enter', 'wait:300') + (Repeat 3 @($NumberGuessMiddle, 'wait:1300')) }
     SimpleAlgorithms    = @{ Steps = @('wait:800', 'key:5', 'wait:3500') }

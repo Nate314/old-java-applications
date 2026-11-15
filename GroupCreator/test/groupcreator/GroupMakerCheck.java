@@ -60,6 +60,8 @@ public class GroupMakerCheck {
 
       check(GroupMaker.describe(Arrays.asList(Arrays.asList("a", "b"), Arrays.asList("c"))).equals(
          Arrays.asList("Group 1 --- a, b", "Group 2 --- c")), "describe format");
+      check(GroupMaker.describe(Arrays.asList(Arrays.asList("a", "b", "c"), Arrays.asList("d")), true).equals(
+         Arrays.asList("Group 1 --- a (Leader), b (Scribe), c (Timer)", "Group 2 --- d")), "describe with roles");
       System.out.println("GroupMakerCheck passed");
    }
 

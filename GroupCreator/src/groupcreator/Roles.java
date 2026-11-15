@@ -37,6 +37,26 @@ public final class Roles {
    }
 
    /**
+    * True when {@code name}, in place {@code k} of a group of {@code size}, has had that place's role in
+    * {@code history} more often than another role this group has: a repeat the rotation could have avoided. In a pair,
+    * a Leader who was once Leader and once Scribe is not one.
+    */
+   static boolean repeatsEarly(PartnerHistory history, String name, int k, int size) {
+      int role = of(k, size);
+      if (role < 0) {
+         return false;
+      }
+      int had = roundsAs(history, name, role).size();
+      for (int place = 0; place < size; place++) {
+         int other = of(place, size);
+         if (other >= 0 && other != role && roundsAs(history, name, other).size() < had) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   /**
     * The same groups with each one's names reordered so that, as far as possible, nobody gets a role they had before
     * in {@code history}. A role had n times costs n squared, so a twice-held role is avoided first; ties go at random.
     */

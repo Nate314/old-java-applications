@@ -6,6 +6,8 @@ It has since become a tool for a class or team that is split into groups again a
 
 Each group also gets its jobs: the cards give every member a role (Leader, Scribe, Timer, Reporter, Checker), and the roles rotate from round to round so people take on roles they have not had yet.
 
+And once the groups are dealt, the work starts: a work-time countdown runs in the corner of the board, along every card and on each group's Timer tag, and chimes when the time is up.
+
 ## Controls / usage
 
 - **Names field**: names separated by commas, for example `Alice,Bob,Carol,Dave`. Spaces around names and empty entries are ignored. It starts with twelve example names.
@@ -27,9 +29,16 @@ Each group also gets its jobs: the cards give every member a role (Leader, Scrib
 
 - Every card labels its members' roles, by place: the first name is the **Leader**, then the **Scribe**, the **Timer**, the **Reporter** and the **Checker**. A group of two has a Leader and a Scribe, a group of three adds a Timer, and so on; a sixth name and later ones have no role, and a group of one has none.
 - Each new or reshuffled round orders every group so its members get roles they have not had in earlier rounds: from 8 random orders, it swaps two members' places while that lowers the cost, and keeps the cheapest. A role held n times before costs n squared. A team of four kept together for four rounds has each person in each role once.
-- A role tag ringed in orange is one that person had before (with only two roles in a pair, that comes soon). Pointing at a name adds its role to the line in the header, for example "Scribe for the first time" or "Leader again (round 2)". Swapping two names by hand swaps their roles too. On narrow cards the tag shrinks to its first letter.
+- A role tag ringed in orange is one that person has had more often than another role their group has, a repeat the rotation could not avoid. In a pair, someone who was Leader once and Scribe once is not ringed for a second turn as Leader. Pointing at a name adds its role to the line in the header, for example "Scribe for the first time" or "Leader again (round 2)". Swapping two names by hand swaps their roles too. On narrow cards the tag shrinks to its first letter.
 - **Roles** (O) hides or shows the tags (the button is yellow while they are shown). They are shown at first; the roles still rotate while hidden, so they are fair when shown again.
 - Rounds made before roles existed count as if their order had been roles.
+
+### Work time
+
+- **Work 10 min** (W) starts a countdown for the groups. It shows in a dark pill at the top right of the board (in every view), as a white strip along the bottom of each card's colored band that runs down, and on each Timer's tag ("Timer 7:42", or only the time on a narrow card). The button reads **Stop timer** while it runs; W or a click stops it.
+- **+** (or =) and **-** add or take a minute, as do the - and + buttons in the pill. Before a start they change the length (1 to 60 minutes, kept with the class); while it runs they change the time left (never below 0:00) and the length with it, so the next work time is as long.
+- In the last minute the pill turns amber and the header says "One minute left: Timers, help your group wrap up" (with roles shown and a group of three or more). At 0:00 the wheel's chime rings once, the pill blinks red with "Time's up", and the header calls on the Reporters (with roles shown and a group of four or more). It stays up until W stops it, and + gives the groups another minute (and rings again at its end).
+- When the eight buttons of the Groups bar do not fit with their key letters, the letters are left off; the keys still work.
 
 ### Roll call and keep apart
 
@@ -49,8 +58,8 @@ Each group also gets its jobs: the cards give every member a role (Leader, Scrib
 
 ### Files
 
-- The class (the names as typed, min, max, every round and the wheel's picks) is kept in `~/.groupcreator-class.txt`: lines `names=...`, `min=...`, `max=...`, `roles=off` (when the role tags are hidden), `picked=...` (the names picked this time around, oldest first, once the wheel has picked someone), `away=...` (the names marked away, when there are some), one `apart=a,b` line per keep-apart rule and one `round=` line per round, oldest first, with its groups separated by `|` and each group's names in role order (so names should not contain `|`). A spin also saves the names field as typed.
-- Each new, reshuffled or edited round is also written to `output.txt` in the working directory, one line per group, `Group 1 --- name, name`, as before.
+- The class (the names as typed, min, max, every round and the wheel's picks) is kept in `~/.groupcreator-class.txt`: lines `names=...`, `min=...`, `max=...`, `roles=off` (when the role tags are hidden), `work=` (the work time's length in minutes, when it is not 10), `picked=...` (the names picked this time around, oldest first, once the wheel has picked someone), `away=...` (the names marked away, when there are some), one `apart=a,b` line per keep-apart rule and one `round=` line per round, oldest first, with its groups separated by `|` and each group's names in role order (so names should not contain `|`). A spin also saves the names field as typed.
+- Each new, reshuffled or edited round is also written to `output.txt` in the working directory, one line per group, `Group 1 --- name, name`, as before. While the roles are shown, each name with a role is followed by it: `Group 1 --- Alice (Leader), Bob (Scribe)`.
 - The window is 760 px wide and not resizable. Title "Group Creator". No command-line arguments.
 
 ## Code layout
@@ -61,7 +70,8 @@ Each group also gets its jobs: the cards give every member a role (Leader, Scrib
 - `src/groupcreator/PickWheel.java`: the name wheel: its slices, pegs and pointer, and the spin that slows to a stop on the chosen name.
 - `src/groupcreator/PickBag.java`: who the wheel has picked this time around, and the pick from those still to go.
 - `src/groupcreator/WheelSound.java`: the peg clicks and the landing chime, on the MIDI synthesizer.
-- `src/groupcreator/Roles.java`: the roles by place in a group, the rounds each name had a role, and the rotation that orders a new round's groups.
+- `src/groupcreator/Roles.java`: the roles by place in a group, the rounds each name had a role, the repeats worth ringing, and the rotation that orders a new round's groups.
+- `src/groupcreator/WorkTimer.java`: the work-time countdown: its length, the time left, the one ring when it is up, and a minute more or less.
 - `src/groupcreator/FreshMix.java`: the mix that avoids pairs from earlier rounds and keeps kept-apart pairs out of one group.
 - `src/groupcreator/PartnerHistory.java`: the rounds made so far, and how often each pair shared a group.
 - `src/groupcreator/Roster.java`: reads and writes `~/.groupcreator-class.txt`.
@@ -76,7 +86,7 @@ From the repo root: `./run.ps1 old GroupCreator` (or `./run.ps1 old GroupCreator
 
 ## Self-check
 
-`test/groupcreator/GroupMakerCheck.java` checks group sizes, that every trimmed name lands in exactly one group, the refusal of impossible splits, and that the shuffle is even. `test/groupcreator/FreshMixCheck.java` checks that the fresh mix keeps legal sizes and every name, plays a four-person round robin in pairs with no repeated pair, never repeats a pair in a second round of twelve in threes, usually finds four repeat-free rounds of nine in threes, repeats fewer pairs than a plain shuffle after six rounds, and that the partner history and the class file round-trip. `test/groupcreator/PickBagCheck.java` checks that the wheel picks all twelve example names once each before a new time around, that the new time around never starts with the last pick, that each name is equally likely to come first, put back and start over, that names not in the class and duplicates are handled, and that the picks round-trip through the class file in order. `test/groupcreator/ClassRulesCheck.java` checks marking away and here, that rules work either way round and ignore names not in the class, that 300 trials of four rounds of twelve in threes with eight keep-apart rules never break one, that away names are not dealt, that a pair the sizes force together is reported, and that away names and rules round-trip through the class file (skipping bad lines). `test/groupcreator/RolesCheck.java` checks which places have a role, the rounds a name had one, that rotation keeps every group's names, that a team of four kept together for four rounds has each person in each role once (300 trials), that twelve in threes for three rounds repeat under a third as many roles as the plain mix's order, and that `roles=off` round-trips through the class file. From `GroupCreator/`:
+`test/groupcreator/GroupMakerCheck.java` checks group sizes, that every trimmed name lands in exactly one group, the refusal of impossible splits, and that the shuffle is even. `test/groupcreator/FreshMixCheck.java` checks that the fresh mix keeps legal sizes and every name, plays a four-person round robin in pairs with no repeated pair, never repeats a pair in a second round of twelve in threes, usually finds four repeat-free rounds of nine in threes, repeats fewer pairs than a plain shuffle after six rounds, and that the partner history and the class file round-trip. `test/groupcreator/PickBagCheck.java` checks that the wheel picks all twelve example names once each before a new time around, that the new time around never starts with the last pick, that each name is equally likely to come first, put back and start over, that names not in the class and duplicates are handled, and that the picks round-trip through the class file in order. `test/groupcreator/ClassRulesCheck.java` checks marking away and here, that rules work either way round and ignore names not in the class, that 300 trials of four rounds of twelve in threes with eight keep-apart rules never break one, that away names are not dealt, that a pair the sizes force together is reported, and that away names and rules round-trip through the class file (skipping bad lines). `test/groupcreator/RolesCheck.java` checks which places have a role, the rounds a name had one, that rotation keeps every group's names, that a team of four kept together for four rounds has each person in each role once (300 trials), that twelve in threes for three rounds repeat under a third as many roles as the plain mix's order, that a role is ringed only when another role of the group was had fewer times, and that `roles=off` round-trips through the class file. `GroupMakerCheck` also checks the `output.txt` lines with roles. `test/groupcreator/WorkTimerCheck.java` checks the clock text (seconds rounded up), the countdown, that it rings once at 0:00 and again after a minute more, that a minute less stops at 0:00, the 1 to 60 minute length, and that `work=` round-trips through the class file (a bad value keeps 10 minutes, a long one is cut to an hour). From `GroupCreator/`:
 
 ```
 javac -d ../out/check/GroupCreator src/groupcreator/*.java test/groupcreator/*.java
@@ -85,4 +95,5 @@ java -ea -cp ../out/check/GroupCreator groupcreator.FreshMixCheck
 java -ea -cp ../out/check/GroupCreator groupcreator.PickBagCheck
 java -ea -cp ../out/check/GroupCreator groupcreator.ClassRulesCheck
 java -ea -cp ../out/check/GroupCreator groupcreator.RolesCheck
+java -ea -cp ../out/check/GroupCreator groupcreator.WorkTimerCheck
 ```

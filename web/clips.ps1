@@ -87,7 +87,7 @@ $Recipes = [ordered]@{
     CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', (Pick 'Heart'), 'wait:2600', (Pick 'Star')) }
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:2500', 'rec', 'wait:1200', 'key:F') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'key:B', 'key:-', 'key:=', 'rec') }
-    GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:P', 'wait:600', 'key:Space') }
+    GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:W', 'wait:1200', 'key:P', 'wait:600', 'key:Space') }
     SimpleAlgorithms    = @{ Steps = @('wait:800', 'key:5', 'rec') }
 }
 if (-not $Apps) { $Apps = @($Recipes.Keys) }
