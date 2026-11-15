@@ -1,7 +1,10 @@
 package audiobibledownloader;
 
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
@@ -312,7 +315,51 @@ public class ReaderCheck {
       check(html.contains("<h2>Genesis 1</h2>") && html.contains("<b>1</b> a &lt; b &amp; c"), "chapter html: " + html);
       check(!DownloadManager.chapterHtml(chapter, false).contains("<b>"), "verse numbers off");
       check(ReaderPanel.commas(1189).equals("1,189") && ReaderPanel.commas(42).equals("42"), "commas");
+      pageTurns();
       System.out.println("ReaderCheck: all checks passed");
+   }
+
+   /** A page turn shows the old pages at its start, the new ones at its end, and the leaf over the spine between. */
+   private static void pageTurns() {
+      Rectangle[] two = {new Rectangle(0, 0, 100, 50), new Rectangle(100, 0, 100, 50)};
+      int red = 0xff0000, green = 0x00ff00, blue = 0x0000ff, yellow = 0xffff00;
+      BufferedImage[] before = {solid(red), solid(green)};
+      BufferedImage[] after = {solid(blue), solid(yellow)};
+      check(turnAt(two, true, before, after, 0, 50) == red && turnAt(two, true, before, after, 0, 150) == green, "turn starts on the old pages");
+      check(turnAt(two, true, before, after, 1, 50) == blue && turnAt(two, true, before, after, 1, 150) == yellow, "turn ends on the new pages");
+      // A quarter in, the old right page has narrowed to half over the new one; three quarters in, its back lands on the left.
+      check(turnAt(two, true, before, after, 0.25, 20) == red && turnAt(two, true, before, after, 0.25, 180) == yellow, "rising leaf, forward");
+      int leaf = turnAt(two, true, before, after, 0.25, 125);
+      check((leaf & 0xff00) != 0 && (leaf & 0xff00) < 0xff00 && (leaf & 0xff00ff) == 0, "the rising leaf is the old page, shaded: " + Integer.toHexString(leaf));
+      check(turnAt(two, true, before, after, 0.75, 20) == red && (turnAt(two, true, before, after, 0.75, 75) & 0xffff00) == 0, "landing leaf, forward");
+      check(turnAt(two, false, before, after, 0.25, 180) == green && turnAt(two, false, before, after, 0.25, 20) == blue, "rising leaf, back");
+      int back = turnAt(two, false, before, after, 0.75, 125);
+      check((back & 0xff) == 0 && (back & 0xff0000) != 0 && turnAt(two, false, before, after, 0.75, 180) == green, "landing leaf, back: " + Integer.toHexString(back));
+      Rectangle[] one = {new Rectangle(0, 0, 200, 50)};
+      check(turnAt(one, true, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 180) == blue
+         && (turnAt(one, true, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 40) & 0xff) == 0, "one page folds away to the left");
+      check(turnAt(one, false, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 180) == red, "one page back unfolds from the left");
+   }
+
+   /** The colour at (x, 25) of a turn frame drawn over the new pages. */
+   private static int turnAt(Rectangle[] sheets, boolean forward, BufferedImage[] before, BufferedImage[] after, double t, int x) {
+      BufferedImage frame = new BufferedImage(200, 50, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = frame.createGraphics();
+      for (int i = 0; i < sheets.length; i++) {
+         g.drawImage(after[i], sheets[i].x, sheets[i].y, sheets[i].width, sheets[i].height, null);
+      }
+      PageTurn.paint(g, sheets, forward, before, after, t);
+      g.dispose();
+      return frame.getRGB(x, 25) & 0xffffff;
+   }
+
+   private static BufferedImage solid(int rgb) {
+      BufferedImage image = new BufferedImage(200 * PageTurn.SCALE, 50 * PageTurn.SCALE, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = image.createGraphics();
+      g.setColor(new Color(rgb));
+      g.fillRect(0, 0, image.getWidth(), image.getHeight());
+      g.dispose();
+      return image;
    }
 
    /** The line a verse's first word or number is on, or -1 when the page does not show it. */

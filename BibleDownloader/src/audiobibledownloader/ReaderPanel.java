@@ -9,10 +9,12 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -166,6 +168,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private int foundVerse;
    private long foundAt;
    private final Timer glowTimer;
+   private final PageTurn pageTurn = new PageTurn(this);
 
    public ReaderPanel(Shelf shelf) {
       this.shelf = shelf;
@@ -305,6 +308,43 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    }
 
    private void next() {
+      this.turn(true, this::forward);
+   }
+
+   private void previous() {
+      this.turn(false, this::backward);
+   }
+
+   /** Moves through the book, and turns the page over when both the old and the new pages are set. */
+   private void turn(boolean forward, Runnable move) {
+      boolean motion = !Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+      String from = this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread;
+      BufferedImage before = motion && this.view == View.READ && this.goTo == null && this.chapterShown() && this.getWidth() > 0 ? this.snapshot() : null;
+      move.run();
+      if (before != null && this.view == View.READ && this.chapterShown() && !from.equals(this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread)) {
+         this.pageTurn.start(forward, before, this.snapshot(), this.sheets());
+      }
+   }
+
+   /** The panel as painted now, without a turn running over it, at {@link PageTurn#SCALE}. */
+   private BufferedImage snapshot() {
+      BufferedImage image = new BufferedImage(this.getWidth() * PageTurn.SCALE, this.getHeight() * PageTurn.SCALE, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = image.createGraphics();
+      g.scale(PageTurn.SCALE, PageTurn.SCALE);
+      this.draw(g, false);
+      g.dispose();
+      return image;
+   }
+
+   /** Whether the open chapter is fetched (in both translations when side by side), so its pages can be set. */
+   private boolean chapterShown() {
+      return this.chapter != null && this.chapter.book == this.shelf.book
+         && this.chapter.number == this.shelf.chapter && this.chapter.translation.equals(this.shelf.translation)
+         && (this.shelf.compare.isEmpty() || this.other != null && this.other.book == this.chapter.book
+            && this.other.number == this.chapter.number && this.other.translation.equals(this.shelf.compare));
+   }
+
+   private void forward() {
       if (this.view != View.READ) {
          return;
       }
@@ -315,7 +355,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }
    }
 
-   private void previous() {
+   private void backward() {
       if (this.view != View.READ) {
          return;
       }
@@ -527,10 +567,10 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             this.showBooks();
             break;
          case 'n':
-            this.nextChapter();
+            this.turn(true, this::nextChapter);
             break;
          case 'p':
-            this.previousChapter();
+            this.turn(false, this::previousChapter);
             break;
          case 't':
             this.cycleTranslation();
@@ -1033,6 +1073,22 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    @Override
    protected void paintComponent(Graphics graphics) {
       Graphics2D g = (Graphics2D) graphics;
+      this.draw(g, true);
+   }
+
+   private Rectangle bookArea() {
+      return new Rectangle(20, 16, this.getWidth() - 40, this.getHeight() - BAR - 26);
+   }
+
+   private Rectangle[] sheets() {
+      Rectangle book = this.bookArea();
+      return this.perView() == 2
+         ? new Rectangle[]{new Rectangle(book.x, book.y, book.width / 2, book.height), new Rectangle(book.x + book.width / 2, book.y, book.width - book.width / 2, book.height)}
+         : new Rectangle[]{book};
+   }
+
+   /** Paints the panel, with a page turn running over the book when withTurn is set. */
+   private void draw(Graphics2D g, boolean withTurn) {
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
       g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
       this.hits.clear();
@@ -1043,10 +1099,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setColor(LEATHER_LIGHT);
       g.drawRoundRect(6, 6, w - 13, h - BAR - 4, 14, 14);
 
-      Rectangle book = new Rectangle(20, 16, w - 40, h - BAR - 26);
-      Rectangle[] sheets = this.perView() == 2
-         ? new Rectangle[]{new Rectangle(book.x, book.y, book.width / 2, book.height), new Rectangle(book.x + book.width / 2, book.y, book.width - book.width / 2, book.height)}
-         : new Rectangle[]{book};
+      Rectangle book = this.bookArea();
+      Rectangle[] sheets = this.sheets();
       this.paintPaper(g, book, sheets);
       Rectangle[] text = new Rectangle[sheets.length];
       for (int i = 0; i < sheets.length; i++) {
@@ -1075,6 +1129,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             break;
          default:
             this.paintRead(g, sheets, text);
+      }
+      if (withTurn) {
+         this.pageTurn.paint(g, sheets);
       }
       this.paintBar(g, w, h);
    }
@@ -1115,10 +1172,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private void paintRead(Graphics2D g, Rectangle[] sheets, Rectangle[] text) {
       int lh = this.lineHeight();
       int lines = Math.max(1, text[0].height / lh);
-      if (this.chapter == null || this.chapter.book != this.shelf.book || this.chapter.number != this.shelf.chapter
-            || !this.chapter.translation.equals(this.shelf.translation)
-            || !this.shelf.compare.isEmpty() && (this.other == null || this.other.book != this.chapter.book
-               || this.other.number != this.chapter.number || !this.other.translation.equals(this.shelf.compare))) {
+      if (!this.chapterShown()) {
          String ref = Books.NAMES[this.shelf.book] + " " + this.shelf.chapter;
          if (this.loadError != null) {
             this.centered(g, text[0], ref, this.loadError, "Try again");
@@ -1289,7 +1343,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       } else {
          this.centered(g, area, "Next: " + next, "Turn the page to keep reading", "Next chapter \u203a");
       }
-      this.hits.add(new Hit(this.lastButton, this::nextChapter, 0));
+      this.hits.add(new Hit(this.lastButton, () -> this.turn(true, this::nextChapter), 0));
    }
 
    private Rectangle lastButton;
