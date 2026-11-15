@@ -3,7 +3,7 @@ import { fetchOk } from './fetch-ok';
 // An app in apps.json, as catalog() hands it out.
 export type CatalogApp = OldjavaCatalogApp;
 // An entry as apps.json writes it.
-interface AppsJsonEntry { id: string; cat: string; origin?: string; then?: boolean; name: string; hint: string; shot: string }
+interface AppsJsonEntry { id: string; cat: string; origin?: string; then?: boolean; clip?: boolean; name: string; hint: string; shot: string }
 
 let catalogPromise: Promise<CatalogApp[]> | null;
 export let catalogDoc: Document | null;
@@ -27,6 +27,7 @@ export function catalog() {
           cat: a.cat,
           origin: a.origin || 'decompiled',
           then: !!a.then,
+          clip: !!a.clip,
           name: a.name,
           hint: a.hint,
           shot: root() + a.shot
