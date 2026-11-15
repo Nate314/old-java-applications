@@ -7,6 +7,7 @@ import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
 import { FIRST, H, draw, useHomeDraw } from './model';
 import { TourBox, TourStart } from './TourBox';
+import { MoreButton, MoreMenu, useMore } from './PlayerMore';
 import { Records } from './Records';
 import { HeroWall } from './HeroWall';
 import { Mrz, Stamp, stampDate } from './Stamp';
@@ -111,7 +112,7 @@ function Player() {
   const zoom = window.oldjavaZoom.fit();
   const arcade = window.oldjavaSkin.get() === 'arcade';
   const size = H.frame.size;
-  const [more, setMore] = useState(false);
+  const [more, setMore, moreAt] = useMore();
   return (
     <section className={'player' + (H.then ? ' then' : '') + (H.big ? ' big' : '')} id="player" aria-label="Now playing">
       <div className="player-bar">
@@ -131,56 +132,31 @@ function Player() {
             Controls
           </button>
           {' '}
-          <button className="btn" type="button" id="player-restart" onClick={P.restart}>Restart</button>
+          <button className="btn" type="button" id="player-restart" title="Start the app again from the beginning" onClick={P.restart}><span aria-hidden="true">↻</span> Restart</button>
           {' '}
           <button className="btn" type="button" id="player-big" aria-pressed={big} title="Fill the screen with the player" onClick={P.bigClick}>
-            {big ? 'Exit big screen' : 'Big screen'}
+            <span aria-hidden="true">⛶</span> {big ? 'Exit big screen' : 'Big screen'}
           </button>
           {' '}
           <button className="btn" type="button" id="player-share" data-sound="none" title="Share this app: its link, with a preview card" onClick={e => P.shareClick(e.currentTarget)}>
             ↗ Share
           </button>
           {' '}
-          <button className="btn" type="button" id="player-replay" data-sound="none" hidden={!H.replay} onClick={e => P.replayClick(e.currentTarget)}
+          <button className="btn" type="button" id="player-replay" data-sound="none" hidden={!H.replay} aria-label="Instant replay" onClick={e => P.replayClick(e.currentTarget)}
             title="Instant replay: the last 10 to 20 seconds of play, as a video to watch, save or share">
-            ⟲ Replay
+            <span className="shim-replay-dot" aria-hidden="true" /> Replay
           </button>
           {' '}
           <button className="btn" type="button" id="player-photo" data-sound="none" hidden={!H.photo} aria-label="Take a photo" onClick={e => P.photoClick(e.currentTarget)}
             title="Photo: a picture of the app to save, copy or share, in an instant print or postcard frame">
-            📷
+            <span aria-hidden="true">📷</span> Photo
           </button>
           {' '}
           <a className="btn primary" id="player-full" href={a ? P.pageOf(a) + linkState(a.id, H.frame.src).replace('&', '?') : page(FIRST.id)}>Full page</a>
           {' '}
-          <button className="btn" type="button" id="player-more-toggle" aria-expanded={more} aria-controls="player-more"
-            title="Arcade mode, Your skin, Fit, Pop out and Source" onClick={() => setMore(!more)}>
-            {more ? 'Less ▴' : 'More ▾'}
-          </button>
+          <MoreButton open={more} setOpen={setMore} />
         </Actions>
-        {/* Looks for the whole site and the less used tools, out of the first view until asked for. */}
-        <div className="more" id="player-more" role="group" aria-label="More player buttons" hidden={!more}>
-          <button className="btn arcade" type="button" id="player-arcade" aria-pressed={arcade} title="Neon CRT arcade look for every app (the Arcade skin)"
-            onClick={e => P.arcadeClick(e.currentTarget)}>
-            Arcade mode
-          </button>
-          {' '}
-          <button className="btn" type="button" id="player-own-skin" data-skin-maker="" data-sound="none" title="Make your own skin for every page and app: a color, a desk, corners and windows">
-            🎨 Your skin
-          </button>
-          {' '}
-          <button className="btn" type="button" id="player-zoom" aria-pressed={zoom} onClick={e => P.zoomClick(e.currentTarget)}
-            title={zoom ? 'Small apps are zoomed to fill the player. Click for their actual size.' : 'Apps are shown at their actual size. Click to zoom small ones to fill the player.'}>Fit</button>
-          {' '}
-          <button className="btn" type="button" id="player-pop" aria-pressed={H.pop.on} data-sound="none" hidden={!H.pop.shown} onClick={P.popClick}
-            title={!H.pop.synced ? undefined : H.pop.on ? 'Bring the app back into the player' : 'Play this app in its own small window that stays on top of your other windows'}>
-            {H.pop.on ? 'Bring back' : 'Pop out'}
-          </button>
-          {' '}
-          <a className="btn" id="player-source" href={(a ? P.pageOf(a) : page(FIRST.id)) + '#source'} title="Open the app's page with its Java source beside it">
-            {"</> Source"}
-          </a>
-        </div>
+        <MoreMenu open={more} setOpen={setMore} at={moreAt} zoom={zoom} arcade={arcade} source={a ? P.pageOf(a) : page(FIRST.id)} />
       </div>
       <TourBox />
       <div className="screen" id="screen" style={H.screenH !== null ? { height: H.screenH + 'px' } : undefined}>

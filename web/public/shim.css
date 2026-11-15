@@ -5460,11 +5460,14 @@ html[data-saver] * {
 
 /* ---- one-row toolbar (boot.js bandMore): controls that do not fit wait under More ----
    The band keeps to one row (two on narrow pages, the name's row and the controls' row). The least needed
-   controls step out of it (.shim-more-out) and More at its end lists them in a menu that drops from the band. */
+   controls step out of it (.shim-more-out) and More at its end lists them in a menu that drops from the band.
+   The home player's More (pages/home/PlayerMore.tsx) drops the same menu from the player bar. */
 
 .shim-toolbar > .shim-more-out,
 .shim-toolbar > .shim-more[hidden],
-.shim-toolbar > .shim-more-menu[hidden] {
+.shim-toolbar > .shim-more-menu[hidden],
+.player-bar > .shim-more-menu[hidden],
+.shim-more-menu > .shim-more-item[hidden] {
   display: none !important;
 }
 
@@ -5483,7 +5486,7 @@ html[data-saver] * {
   }
 }
 
-.shim-toolbar .shim-more-menu {
+:is(.shim-toolbar, .player-bar) .shim-more-menu {
   position: absolute;
   top: calc(100% + 6px);
   z-index: 1;
@@ -5512,12 +5515,12 @@ html[data-saver] * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shim-toolbar .shim-more-menu {
+  :is(.shim-toolbar, .player-bar) .shim-more-menu {
     animation: none;
   }
 }
 
-.shim-toolbar .shim-more-menu .shim-more-item {
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -5533,13 +5536,19 @@ html[data-saver] * {
   cursor: pointer;
 }
 
-.shim-toolbar .shim-more-menu .shim-more-item:hover,
-.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+/* a link entry (the home player's Source) sized and drawn as the buttons are */
+.shim-more-menu a.shim-more-item {
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item:hover,
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item:focus-visible {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   outline: none;
 }
 
-.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item:focus-visible {
   box-shadow: inset 0 0 0 2px var(--focus-ring, var(--accent));
 }
 
@@ -5615,16 +5624,16 @@ html[data-saver] * {
 .shim-more-swatch[data-swatch="arcade"] { background: linear-gradient(135deg, #ff2bd6, #110a22); }
 .shim-more-swatch[data-swatch="own"] { background: conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444); }
 
-:root[data-skin="classic"] .shim-toolbar .shim-more-menu {
+:root[data-skin="classic"] :is(.shim-toolbar, .player-bar) .shim-more-menu {
   border-radius: 0;
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
 }
 
-:root[data-skin="classic"] .shim-toolbar .shim-more-menu .shim-more-item {
+:root[data-skin="classic"] :is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item {
   border-radius: 0;
 }
 
-:root[data-skin="arcade"] .shim-toolbar .shim-more-menu {
+:root[data-skin="arcade"] :is(.shim-toolbar, .player-bar) .shim-more-menu {
   border-color: #ff2bd6;
   box-shadow: 0 0 18px rgba(255, 43, 214, 0.45);
 }

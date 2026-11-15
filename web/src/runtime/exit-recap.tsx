@@ -44,7 +44,7 @@ export function ExitRecap({ name, replayLive }: { name: string | null; replayLiv
         <button type="button" className="shim-recap-clip" data-sound="none" title="Watch, save or share the last moments of play"
           onClick={e => openClip(clip!, e.currentTarget)}>
           <video src={url} autoPlay muted loop playsInline aria-hidden="true" />
-          <span>{'⟲ Your last ' + clip!.seconds + ' s: save or share'}</span>
+          <span><i className="shim-replay-dot" aria-hidden="true" />{' Replay your last ' + clip!.seconds + ' s: save or share'}</span>
         </button>
       )}
       <div className="shim-recap-text">
