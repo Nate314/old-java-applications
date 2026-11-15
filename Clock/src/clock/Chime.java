@@ -8,7 +8,7 @@ import javax.swing.Timer;
 
 /**
  * The timer's alarm: a falling-then-rising bell phrase on the MIDI synthesizer, repeated until stopped. Focus
- * sessions ring shorter phrases on the same bell.
+ * sessions ring shorter phrases on the same bell, and the clock's quarter chimes toll once ({@link #toll}).
  */
 final class Chime {
    private static final int TUBULAR_BELLS = 14;
@@ -30,6 +30,9 @@ final class Chime {
    private int note;
    private int phrases;
    private int sounding = -1;
+   /** When the last bell was struck, and which; the face draws a ripple for it. */
+   long struckAt;
+   int struck;
 
    boolean isRinging() {
       return this.phraseTimer.isRunning();
@@ -42,7 +45,20 @@ final class Chime {
 
    /** Rings {@code phrase} now and then every few seconds, {@code repeats} times in all. */
    void ring(int[] phrase, int repeats) {
+      this.ring(phrase, repeats, NOTE_MILLIS, PHRASE_MILLIS);
+   }
+
+   /** Rings {@code steps} once, one every {@code stepMillis}; see {@link Westminster#REST} and {@link Westminster#HUSH}. */
+   void toll(int[] steps, int stepMillis) {
+      this.ring(steps, 1, stepMillis, (steps.length + 1) * stepMillis);
+   }
+
+   private void ring(int[] phrase, int repeats, int noteMillis, int phraseMillis) {
       this.stop();
+      this.noteTimer.setDelay(noteMillis);
+      this.noteTimer.setInitialDelay(noteMillis);
+      this.phraseTimer.setDelay(phraseMillis);
+      this.phraseTimer.setInitialDelay(phraseMillis);
       this.phrase = phrase;
       this.repeats = repeats;
       this.phrases = 0;
@@ -67,6 +83,12 @@ final class Chime {
    }
 
    private void nextNote() {
+      if (this.note < this.phrase.length && this.phrase[this.note] < 0) {
+         if (this.phrase[this.note++] == Westminster.HUSH) {
+            this.release();
+         }
+         return;
+      }
       this.release();
       if (this.note >= this.phrase.length) {
          this.noteTimer.stop();
@@ -81,6 +103,8 @@ final class Chime {
          this.sounding = this.phrase[this.note];
          bell.noteOn(this.sounding, 110);
       }
+      this.struckAt = System.currentTimeMillis();
+      this.struck = this.phrase[this.note];
       this.note++;
    }
 

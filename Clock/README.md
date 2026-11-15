@@ -8,6 +8,7 @@ The timer, stopwatch and focus sessions count against the wall clock, not the wi
 
 - **Tabs**: click Clock, Timer, Stopwatch, Focus or World at the top, or press **1** to **5** (or **C**, **T**, **S**, **F**, **W**). A running timer, stopwatch or focus session shows its time on its tab ("Timer 4:59", "Focus 18:22"), so it can be watched from the others. The line at the bottom lists the current tab's controls.
 - **Clock**: left click (on mouse release) switches between analog and digital, right click between 12-hour and 24-hour time. While a focus session or break runs, the analog face shows it as a red (focus) or green (break) band round the rim, from the minute hand to when it ends.
+- **Chimes**: the **Chimes off** / **Chimes on** button in the Clock tab's top left corner (or **B** on the Clock tab) turns on the Westminster quarters, the tune of Big Ben's clock tower, on the bell of the MIDI synthesizer: one four-note change at quarter past, two at half past, three at quarter to, and four on the hour followed by one stroke of a low bell per hour (twelve at noon and midnight). They ring on whatever tab is showing. Turning them on rings the quarter just gone at once, so you hear them (in the browser that click also lets the page play sound); turning them off silences them. Each bell struck sends a brass ring in from the rim of the analog face, further and bolder for the hour bell. Only a quarter that begins while the window is open rings, not one missed while it was closed or the computer slept, and the timer's and the focus sessions' bells cut the chimes short. They start off.
 - **Timer**:
   - Drag the knob (or click anywhere on the dial) to set whole minutes from 1 to 60. The knob stops at 0 and at 60 instead of wrapping round past 12. Turning it while the timer runs keeps it running from the new time.
   - The preset buttons set 1, 3, 5, 10, 25 or 60 minutes.
@@ -37,7 +38,7 @@ On the web site the clock follows you: while a timer, stopwatch or focus session
 
 ## Saved state
 
-`~/.clock.txt` (in `user.home`) keeps the tab, analog or digital, 12 or 24 hours, the timer (its length, and when it ends while running or the time left while paused) the stopwatch (when it started while running, the time banked before the last stop, and the laps), the focus session (the lengths, session or break, the sessions done in the set, and when it ends while running or the time left otherwise) the minutes focused and sessions finished on each of the last 14 days, and the World tab's cities (`world=London,New York,Tokyo`). A missing or damaged file, or a damaged line, leaves the defaults: the Clock tab and a 5-minute timer.
+`~/.clock.txt` (in `user.home`) keeps the tab, analog or digital, 12 or 24 hours, the timer (its length, and when it ends while running or the time left while paused) the stopwatch (when it started while running, the time banked before the last stop, and the laps), the focus session (the lengths, session or break, the sessions done in the set, and when it ends while running or the time left otherwise) the minutes focused and sessions finished on each of the last 14 days, and the World tab's cities (`world=London,New York,Tokyo`) and whether the chimes are on (`chimes=on`). A missing or damaged file, or a damaged line, leaves the defaults: the Clock tab and a 5-minute timer.
 
 ## Code layout
 
@@ -51,6 +52,7 @@ On the web site the clock follows you: while a timer, stopwatch or focus session
 - `src/clock/FocusView.java` and `src/clock/Focus.java`: the focus ring, the week of bars and the controls, and the sessions, breaks and day log themselves.
 - `src/clock/WorldView.java` and `src/clock/Zone.java`: the world dial, the strips, the city picker and the hours that suit everyone, and the cities' time zones, their daylight saving rules and the calendar math behind them.
 - `src/clock/Chime.java`: the bell, played with Swing timers so the event thread never sleeps (a system beep where there is no synthesizer).
+- `src/clock/Westminster.java`: the notes of each quarter's chime and the hour's strokes.
 - `src/clock/ClockState.java`: reads and writes `~/.clock.txt`.
 - `src/clock/Ui.java`: the shared colors (the original cyan, black, white and red), fonts, buttons and time formats.
 
@@ -62,7 +64,7 @@ From the repo root: `./run.ps1 old Clock` (or `./run.ps1 old Clock -Build` to bu
 
 ## Self-check
 
-`test/clock/TimerCheck.java` checks the countdown (start, pause, resume, running out exactly once, the one-hour cap, Up and Down while running), the stopwatch's laps, fastest and slowest, focus sessions (breaks starting by themselves, catching up after the window was closed, the long break after four, skips, lengths, the day log), the time formats, and that the state file round-trips a running timer, stopwatch and focus session, rings a timer that ran out while closed at its own time, and survives damaged lines. `test/clock/WorldCheck.java` compares every city's offset with the JDK's time zone database every six hours from 2023 to 2030 and every quarter hour around each daylight saving change (about 640,000 instants), checks the calendar math day by day over 400 years, the hours that suit everyone, and that the saved cities round-trip, with unknown names, repeats and more than five dropped. From `Clock/`:
+`test/clock/TimerCheck.java` checks the countdown (start, pause, resume, running out exactly once, the one-hour cap, Up and Down while running), the stopwatch's laps, fastest and slowest, focus sessions (breaks starting by themselves, catching up after the window was closed, the long break after four, skips, lengths, the day log), the time formats, and that the state file round-trips a running timer, stopwatch and focus session, rings a timer that ran out while closed at its own time, and survives damaged lines, and the notes and strokes of the Westminster quarters. `test/clock/WorldCheck.java` compares every city's offset with the JDK's time zone database every six hours from 2023 to 2030 and every quarter hour around each daylight saving change (about 640,000 instants), checks the calendar math day by day over 400 years, the hours that suit everyone, and that the saved cities round-trip, with unknown names, repeats and more than five dropped. From `Clock/`:
 
 ```
 javac -d ../out/check/Clock src/clock/*.java test/clock/*.java

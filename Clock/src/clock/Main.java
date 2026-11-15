@@ -11,6 +11,8 @@ public class Main extends JFrame {
 
    ClockState state;
    final Chime chime = new Chime();
+   /** The quarter chimes, on a bell of their own so the timer's alarm can cut them short. */
+   final Chime bells = new Chime();
    ClockPanel clockPanel = new ClockPanel(this);
    public int month;
    public int dayOfMonth;
@@ -62,6 +64,7 @@ public class Main extends JFrame {
 
    /** The timer ran out: ring, and show the Timer tab. */
    void timerFinished() {
+      this.bells.stop();
       this.chime.ring();
       this.clockPanel.show(ClockState.TIMER);
       this.state.save();
@@ -73,10 +76,25 @@ public class Main extends JFrame {
     */
    void focusFinished(int event, long now) {
       if (now - this.state.focus.eventAt() < Countdown.MINUTE) {
+         this.bells.stop();
          this.chime.ring(event == Focus.FOCUS_DONE ? Chime.BREAK_TIME : Chime.BACK_TO_WORK, 2);
          this.clockPanel.show(ClockState.FOCUS);
       }
       this.state.save();
+   }
+
+   /** A quarter hour has come round: ring it, unless the chimes are off or the timer or a focus bell is ringing. */
+   void quarterStruck(int hours, int quarter) {
+      if (this.state.chimes && !this.chime.isRinging()) {
+         this.bells.toll(Westminster.steps(hours, quarter), Westminster.STEP_MILLIS);
+      }
+   }
+
+   /** Turns the chimes on, ringing the last quarter so it is heard at once, or off, silencing them. */
+   void toggleChimes() {
+      this.state.chimes = !this.state.chimes;
+      this.bells.stop();
+      this.quarterStruck(this.hours, this.minutes / 15);
    }
 
    public static void main(String[] args) {

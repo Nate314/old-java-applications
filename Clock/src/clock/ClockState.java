@@ -29,6 +29,8 @@ final class ClockState {
    String mode = CLOCK;
    boolean analog = true;
    boolean twentyFour = false;
+   /** Whether the Westminster quarters ring. */
+   boolean chimes = false;
    final Countdown countdown = new Countdown();
    final Stopwatch stopwatch = new Stopwatch();
    final Focus focus = new Focus();
@@ -75,6 +77,8 @@ final class ClockState {
                   this.analog = !value.equals("digital");
                } else if (key.equals("hours")) {
                   this.twentyFour = value.equals("24");
+               } else if (key.equals("chimes")) {
+                  this.chimes = value.equals("on");
                } else if (key.equals("timer")) {
                   length = Long.parseLong(value);
                } else if (key.equals("timerEnd")) {
@@ -143,6 +147,7 @@ final class ClockState {
       text.append("mode=").append(this.mode).append('\n');
       text.append("face=").append(this.analog ? "analog" : "digital").append('\n');
       text.append("hours=").append(this.twentyFour ? "24" : "12").append('\n');
+      text.append("chimes=").append(this.chimes ? "on" : "off").append('\n');
       text.append("timer=").append(this.countdown.length()).append('\n');
       if (this.countdown.isRunning()) {
          text.append("timerEnd=").append(this.countdown.endsAt()).append('\n');
