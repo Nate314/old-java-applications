@@ -174,6 +174,27 @@ public class ProgressionCheck {
 				"bad values keep the defaults");
 		check(loaded.melody().size() == 2 && loaded.notesAt(0).get(0)[2] == 2, "bad melody notes are skipped");
 		check(Progression.load(new File(file.getPath() + ".missing")).matchingPreset() == Preset.ORIGINAL, "no file: the demo");
+
+		// The song as a link: the code carries all of it, and anything else is refused.
+		check(new Progression().code().equals("1M1451.100.00"), "the demo's code: " + new Progression().code());
+		Progression sent = Progression.fromCode(song.code());
+		check(sent != null && sent.code().equals(song.code()) && sent.position() == 10 && sent.isMinor()
+				&& Arrays.equals(sent.degrees(), new int[] { 1, 6, 7 }) && sent.tempo() == 120 && sent.style() == Style.ARPEGGIO
+				&& sent.voicing() == Voicing.ROOT, "a sent song arrives the same: " + song.code());
+		check(sent.melody().size() == 3 && sent.notesAt(5).get(0)[1] == song.notesAt(5).get(0)[1]
+				&& sent.notesAt(3).get(0)[2] == Progression.LONGEST_NOTE, "with its melody");
+		Progression full = Progression.fromCode("bM12345671.180.21");
+		check(full != null && full.position() == 11 && full.size() == 8 && full.melody().isEmpty(), "eight chords, no melody");
+		for (String bad : new String[] { null, "", "1M1451", "cM1451.100.00", "1M.100.00", "1M123456712.100.00", "1M1851.100.00",
+				"1M1451.59.00", "1M1451.181.00", "1M1451.100.30", "1M1451.100.02", "1M1451.100.00.", "1M1451.100.00.ABC",
+				"1M1451.100.00.ACAA", "1M1451.100.00.ACAJ", "1M1451.100.00.AH__", "1m1451.100.00.ABC<", "1M1451.100.00 ", "1M1451.100.00.ABAB.ABAB", "1M1451..100.00" }) {
+			check(Progression.fromCode(bad) == null, "refused: " + bad);
+		}
+		StringBuilder huge = new StringBuilder("1M1.100.00.");
+		while (huge.length() <= Progression.MAX_CODE) {
+			huge.append("ABAB");
+		}
+		check(Progression.fromCode(huge.toString()) == null, "a code longer than the tab writes is refused");
 		System.out.println("ProgressionCheck passed");
 	}
 
