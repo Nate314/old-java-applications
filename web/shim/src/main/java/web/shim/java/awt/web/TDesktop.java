@@ -259,6 +259,7 @@ public final class TDesktop {
             dragMouseX = Js.clientX(e);
             dragMouseY = Js.clientY(e);
             Js.preventDefault(e);
+            Js.takeKeys(e);
             return;
         }
         if (window != null && c.acceptsFocus() && c.isEnabled()) {
@@ -266,6 +267,7 @@ public final class TDesktop {
         }
         if (!Js.targetIsTextInput(e) && !c.acceptsFocus()) {
             Js.preventDefault(e); // keep keyboard focus where AWT has it, and avoid text selection
+            Js.takeKeys(e); // but a press here still brings the keys back from a frame beside (Side by side)
         }
         pressTarget = mouseTarget(c, false);
         post(pressTarget, TMouseEvent.MOUSE_PRESSED, e);
