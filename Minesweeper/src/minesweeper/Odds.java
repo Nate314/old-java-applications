@@ -231,7 +231,13 @@ public final class Odds {
          }
          this.cells.clear();
          this.cells.addAll(order);
-         int cap = Math.min(mines, n);
+         // Every mine here touches one of the numbers, so the group holds at most their sum; a tight cap keeps the
+         // per-state arrays short (this runs in the browser, where 40-long arrays made some moves take up to 0.4 s).
+         int needed = 0;
+         for (int need : this.needs) {
+            needed += need;
+         }
+         int cap = Math.min(Math.min(mines, n), needed);
          int[][] at = new int[this.numbers.size()][];
          for (int j = 0; j < at.length; j++) {
             at[j] = new int[this.numbers.get(j).length];
@@ -262,6 +268,9 @@ public final class Odds {
                }
                budget[0] -= cap * cap;
                for (int a = 0; a <= cap; a++) {
+                  if (left.getValue()[a] == 0) {
+                     continue;
+                  }
                   for (int b = 0; a + b <= cap; b++) {
                      this.mineWays[a + b][i] += left.getValue()[a] * right[b];
                   }
