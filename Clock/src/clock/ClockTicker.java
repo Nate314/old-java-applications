@@ -29,7 +29,7 @@ final class ClockTicker implements ActionListener {
       this.clock.milliseconds = (int)(millis % 1000);
       // Only a quarter just begun rings: not one passed while the computer slept, nor the one the window opened in.
       int quarter = this.clock.hours * 4 + this.clock.minutes / 15;
-      if (this.quarter >= 0 && quarter != this.quarter && this.clock.minutes % 15 == 0) {
+      if (this.quarter >= 0 && quarter != this.quarter && this.clock.minutes % 15 == 0 && !this.clock.state.alarm.quiet(millis)) {
          this.clock.quarterStruck(this.clock.hours, this.clock.minutes / 15);
       }
       this.quarter = quarter;
@@ -51,6 +51,13 @@ final class ClockTicker implements ActionListener {
       int focusEvent = this.clock.state.focus.update(millis);
       if (focusEvent != Focus.NONE) {
          this.clock.focusFinished(focusEvent, millis);
+      }
+      Alarm alarm = this.clock.state.alarm;
+      if (alarm.update(millis)) {
+         this.clock.alarmRang();
+      } else if (alarm.isRinging() && !this.clock.chime.isRinging()) {
+         alarm.stop(); // it rang itself out, or the timer's Stop silenced the bell
+         this.clock.state.save();
       }
       this.clock.refresh();
    }

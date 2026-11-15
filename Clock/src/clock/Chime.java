@@ -17,6 +17,9 @@ final class Chime {
    static final int[] BREAK_TIME = {84, 79, 76, 72};
    /** The break is over: the same notes rising. */
    static final int[] BACK_TO_WORK = {72, 76, 79, 84};
+   /** Time to get up: a bright rising phrase, rung for about a minute. */
+   static final int[] WAKE_UP = {72, 76, 79, 84, 79, 84, 88};
+   static final int WAKE_REPEATS = 25;
    private static final int NOTE_MILLIS = 220;
    private static final int PHRASE_MILLIS = 2400;
    private static final int REPEATS = 8;

@@ -5,15 +5,27 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.event.KeyEvent;
 
 /**
  * The original clock: an analog face with a red second hand, or the day, date and time as text. A button in the corner
- * turns on the Westminster quarters; each bell they strike sends a ripple across the analog face.
+ * turns on the Westminster quarters; each bell they strike sends a ripple across the analog face. The analog face has a
+ * fourth, brass hand, as a wind-up alarm clock does: drag its knob to set the alarm, which the other corner's button
+ * turns on and off.
  */
 final class ClockFace implements Tab {
    private static final Color BRASS = new Color(200, 140, 20);
+   /** The alarm hand while the alarm is off. */
+   private static final Color UNSET = new Color(205, 205, 205);
    private final Main clock;
    private Rectangle chimesBox;
+   private Rectangle alarmBox;
+   /** The analog face's middle and the alarm knob, for dragging it; knobRadius is 0 on the digital face. */
+   private int centerX;
+   private int centerY;
+   private int knobX;
+   private int knobY;
+   private int knobRadius;
 
    ClockFace(Main clock) {
       this.clock = clock;
@@ -26,7 +38,11 @@ final class ClockFace implements Tab {
 
    @Override
    public String hint() {
-      return (this.clock.state.analog ? "Click: digital" : "Click: analog") + "   Right click: 12/24 h   B: chimes   1-5: tabs";
+      if (this.clock.state.alarm.isRinging()) {
+         return "Space or click: snooze 9 min   A or Stop: stop until tomorrow";
+      }
+      return (this.clock.state.analog ? "Drag knob: alarm   Click: digital" : "Up/Down: alarm   Click: analog")
+            + "   Right click: 12/24 h   B: chimes";
    }
 
    @Override
@@ -34,6 +50,12 @@ final class ClockFace implements Tab {
       int margin = Math.min(area.width, area.height) / 50;
       int boxHeight = Math.max(20, Math.min(30, area.height / 12));
       this.chimesBox = new Rectangle(area.x, area.y, Math.min(area.width / 3, boxHeight * 4), boxHeight);
+      this.alarmBox = new Rectangle(area.x + area.width - this.chimesBox.width, area.y, this.chimesBox.width, boxHeight);
+      this.knobRadius = 0;
+      Alarm alarm = this.clock.state.alarm;
+      // Ringing, the clock shakes on its feet like a bell-topped alarm clock.
+      int shake = alarm.isRinging() ? (int)Math.round(Math.sin(now / 18.0) * Math.max(2, margin * 0.8)) : 0;
+      g2.translate(shake, 0);
       if (this.clock.state.analog) {
          g2.setStroke(new BasicStroke((float)margin));
          int diameter = Math.min(area.width, area.height) - (margin << 1);
@@ -67,12 +89,14 @@ final class ClockFace implements Tab {
          }
          g2.setColor(Ui.INK);
          g2.drawOval(left, top, diameter, diameter);
+         this.paintAlarm(g2, alarm, centerX, centerY, radius, margin, now);
+         g2.setColor(Ui.INK);
          drawHand(g2, centerX, centerY, radius / 2, (Math.PI / 2) - hours * (Math.PI / 6));
          drawHand(g2, centerX, centerY, (radius << 1) / 3, (Math.PI / 2) - minutes * (Math.PI / 30));
          g2.setColor(Ui.HAND);
          drawHand(g2, centerX, centerY, radius * 9 / 10, (Math.PI / 2) - seconds * (Math.PI / 30));
       } else {
-         area = new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight); // clear of the button
+         area = new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight); // clear of the buttons
          g2.setColor(Ui.INK);
          String[] lines = this.clock.timeText.split("\\n");
          Font font = new Font(Ui.DIGITS, Font.BOLD, 100);
@@ -89,7 +113,38 @@ final class ClockFace implements Tab {
             g2.drawString(lines[lineIndex], area.x + 10, top + font.getSize() + lineIndex * font.getSize());
          }
       }
+      g2.translate(-shake, 0);
       Ui.button(g2, this.chimesBox, this.clock.state.chimes ? "Chimes on" : "Chimes off", this.clock.state.chimes);
+      Ui.button(g2, this.alarmBox, alarm.isRinging() ? "Stop"
+            : alarm.isOn() ? "Alarm " + Ui.wallTime(Alarm.next(alarm.minute(), now), this.clock.state.twentyFour) : "Alarm off",
+            alarm.isOn());
+   }
+
+   /** The alarm hand with its knob (brass when set, grey when not) and, under the middle, when it rings. */
+   private void paintAlarm(Graphics2D g2, Alarm alarm, int centerX, int centerY, int radius, int margin, long now) {
+      double angle = (Math.PI / 2) - (alarm.minute() % 720) * (Math.PI / 360);
+      int reach = radius * 62 / 100;
+      this.centerX = centerX;
+      this.centerY = centerY;
+      this.knobX = (int)Math.round(centerX + reach * Math.cos(angle));
+      this.knobY = (int)Math.round(centerY - reach * Math.sin(angle));
+      this.knobRadius = Math.max(7, radius / 14);
+      g2.setColor(alarm.isOn() ? BRASS : UNSET);
+      g2.setStroke(new BasicStroke(Math.max(2f, margin * 0.6f)));
+      g2.drawLine(centerX, centerY, this.knobX, this.knobY);
+      g2.fillOval(this.knobX - this.knobRadius, this.knobY - this.knobRadius, this.knobRadius * 2, this.knobRadius * 2);
+      g2.setColor(Ui.FACE);
+      int dot = Math.max(2, this.knobRadius / 3);
+      g2.fillOval(this.knobX - dot, this.knobY - dot, dot * 2, dot * 2);
+      g2.setStroke(new BasicStroke((float)margin));
+      if (alarm.isOn()) {
+         long snooze = alarm.snoozeUntil();
+         String when = alarm.isRinging() ? "Wake up!"
+               : snooze > now ? "Snoozing, rings at " + Ui.wallTime(snooze, this.clock.state.twentyFour)
+               : "Rings in " + Alarm.wait(alarm.nextAt(now), now);
+         g2.setColor(BRASS);
+         Ui.line(g2, when, Ui.LABELS, new Rectangle(centerX - radius / 2, centerY + radius * 45 / 100, radius, Math.max(10, radius / 10)));
+      }
    }
 
    /** A brass channel {@code amount} of the way from the white face. */
@@ -111,21 +166,49 @@ final class ClockFace implements Tab {
 
    private boolean rightPressed;
    private boolean chimesPressed;
+   private boolean alarmPressed;
+   private boolean knobPressed;
+   /** The press silenced a ringing alarm, so its release does nothing more. */
+   private boolean hushed;
 
    @Override
    public void press(int x, int y, boolean rightButton, long now) {
       this.rightPressed = rightButton;
       this.chimesPressed = this.chimesBox != null && this.chimesBox.contains(x, y);
+      this.alarmPressed = this.alarmBox != null && this.alarmBox.contains(x, y);
+      this.hushed = this.clock.state.alarm.isRinging() && !this.chimesPressed;
+      if (this.hushed) {
+         this.clock.hushAlarm(!this.alarmPressed);
+         return;
+      }
+      int dx = x - this.knobX;
+      int dy = y - this.knobY;
+      int grab = this.knobRadius * 2;
+      this.knobPressed = !rightButton && !this.chimesPressed && !this.alarmPressed && this.knobRadius > 0
+            && dx * dx + dy * dy <= grab * grab;
    }
 
+   /** Dragging the knob turns the alarm hand, in five-minute steps, and sets the alarm. */
    @Override
    public void drag(int x, int y, long now) {
+      if (this.knobPressed) {
+         double turn = Math.atan2(x - this.centerX, this.centerY - y) / (2 * Math.PI);
+         int dialMinute = (int)Math.round((turn < 0 ? turn + 1 : turn) * 720 / Alarm.STEP) * Alarm.STEP;
+         this.clock.state.alarm.setFromDial(dialMinute, this.clock.hours * 60 + this.clock.minutes, now);
+      }
    }
 
    /** As in the original, on release: left click switches analog and digital, right click 12 and 24 hours. */
    @Override
    public void release(int x, int y, long now) {
-      if (this.chimesPressed) {
+      if (this.hushed || this.knobPressed) {
+         this.hushed = false;
+         this.knobPressed = false;
+      } else if (this.alarmPressed) {
+         if (this.alarmBox.contains(x, y)) {
+            this.clock.state.alarm.toggle(now);
+         }
+      } else if (this.chimesPressed) {
          if (this.chimesBox.contains(x, y)) {
             this.clock.toggleChimes();
          }
@@ -138,10 +221,21 @@ final class ClockFace implements Tab {
 
    @Override
    public boolean key(int keyCode, long now) {
-      if (keyCode == java.awt.event.KeyEvent.VK_B) {
+      Alarm alarm = this.clock.state.alarm;
+      boolean ringing = alarm.isRinging();
+      if (keyCode == KeyEvent.VK_B) {
          this.clock.toggleChimes();
-         return true;
+      } else if (ringing && (keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ENTER)) {
+         this.clock.hushAlarm(true);
+      } else if (ringing && (keyCode == KeyEvent.VK_A || keyCode == KeyEvent.VK_ESCAPE)) {
+         this.clock.hushAlarm(false);
+      } else if (keyCode == KeyEvent.VK_A) {
+         alarm.toggle(now);
+      } else if (keyCode == KeyEvent.VK_UP || keyCode == KeyEvent.VK_DOWN) {
+         alarm.set(alarm.minute() / Alarm.STEP * Alarm.STEP + (keyCode == KeyEvent.VK_UP ? Alarm.STEP : -Alarm.STEP), now);
+      } else {
+         return false;
       }
-      return false;
+      return true;
    }
 }

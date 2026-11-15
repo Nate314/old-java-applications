@@ -52,9 +52,12 @@ public class Main extends JFrame {
       long now = System.currentTimeMillis();
       Countdown countdown = this.state.countdown;
       Focus focus = this.state.focus;
-      String title = countdown.isDone() ? "Time's up! - Clock"
+      Alarm alarm = this.state.alarm;
+      String title = alarm.isRinging() ? "Wake up! - Clock"
+            : countdown.isDone() ? "Time's up! - Clock"
             : countdown.isRunning() ? Ui.countdown(countdown.remaining(now)) + " left - Clock"
             : focus.isRunning() ? (focus.onBreak() ? "Break " : "Focus ") + Ui.countdown(focus.remaining(now)) + " - Clock"
+            : alarm.snoozeUntil() > now ? "Snoozing " + Ui.countdown(alarm.snoozeUntil() - now) + " - Clock"
             : "Clock";
       if (!title.equals(this.getTitle())) {
          this.setTitle(title);
@@ -68,6 +71,24 @@ public class Main extends JFrame {
       this.chime.ring();
       this.clockPanel.show(ClockState.TIMER);
       this.state.save();
+   }
+
+   /** The alarm (or a snooze) came due: ring for about a minute, and show the clock. */
+   void alarmRang() {
+      this.bells.stop();
+      this.chime.ring(Chime.WAKE_UP, Chime.WAKE_REPEATS);
+      this.clockPanel.show(ClockState.CLOCK);
+      this.state.save();
+   }
+
+   /** Snooze for nine minutes, or (when {@code snooze} is false) stop until tomorrow. */
+   void hushAlarm(boolean snooze) {
+      this.chime.stop();
+      if (snooze) {
+         this.state.alarm.snooze(System.currentTimeMillis());
+      } else {
+         this.state.alarm.stop();
+      }
    }
 
    /**

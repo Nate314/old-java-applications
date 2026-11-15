@@ -151,6 +151,50 @@ public class TimerCheck {
       state.save();
       check(ClockState.load(file).chimes && !damaged.chimes, "the chimes are remembered, off by default");
 
+      // The alarm: every day at its time, once, with a 9-minute snooze; one missed while closed or asleep does not ring.
+      long six = t0; // 6 am today
+      Alarm alarm = new Alarm();
+      check(!alarm.isOn() && !alarm.update(six) && !alarm.quiet(six), "the alarm starts off");
+      alarm.set(6 * 60 + 30, six);
+      check(alarm.nextAt(six) == six + 30 * M, "set at 6 for 6:30 rings in half an hour");
+      check(Alarm.next(6 * 60, six) > six + 22 * 60 * M, "a time just gone is tomorrow");
+      check(!alarm.update(six + 30 * M - 1) && alarm.update(six + 30 * M) && alarm.isRinging(), "rings on time");
+      check(!alarm.update(six + 31 * M), "rings once");
+      alarm.snooze(six + 31 * M);
+      check(!alarm.isRinging() && alarm.nextAt(six + 31 * M) == six + 40 * M, "snooze rings again 9 minutes later");
+      check(alarm.update(six + 40 * M) && !alarm.update(six + 41 * M), "the snooze rings once");
+      alarm.stop();
+      check(!alarm.isRinging() && alarm.nextAt(six + 41 * M) > six + 23 * 60 * M, "stopped, it rings again tomorrow");
+      check(alarm.quiet(alarm.nextAt(six) - 60 * M) && !alarm.quiet(alarm.nextAt(six) - 9 * 60 * M),
+            "the chimes keep quiet for eight hours before it");
+      long tomorrow = alarm.nextAt(six);
+      check(!alarm.update(tomorrow + 11 * M) && alarm.nextAt(tomorrow + 11 * M) > tomorrow + 23 * 60 * M,
+            "found more than 10 minutes late, it is skipped");
+      // The hand points at a 12-hour dial: it means the next time that hour comes round.
+      alarm.setFromDial(7 * 60, 6 * 60, six);
+      check(alarm.minute() == 7 * 60, "at 6 am, the hand at 7 means 7 am");
+      alarm.setFromDial(5 * 60, 6 * 60, six);
+      check(alarm.minute() == 17 * 60, "at 6 am, the hand at 5 means 5 pm");
+      alarm.setFromDial(6 * 60, 6 * 60, six);
+      check(alarm.minute() == 18 * 60, "the hand on now means 12 hours away");
+      alarm.set(-5, six);
+      check(alarm.minute() == 23 * 60 + 55, "Down past midnight wraps round");
+      alarm.toggle(six);
+      check(!alarm.isOn() && alarm.nextAt(six) == 0 && !alarm.quiet(six), "off, it never rings");
+      check(Alarm.wait(six + 8 * 60 * M + 5 * M - 1, six).equals("8 h 5 min") && Alarm.wait(six + 45 * M, six).equals("45 min"), "waits");
+      // Saved: the time, on or off, and a waiting snooze; a newly opened window does not ring one missed while closed.
+      state.alarm.set(6 * 60 + 45, six);
+      state.alarm.snooze(six);
+      state.save();
+      ClockState woke = ClockState.load(file);
+      check(woke.alarm.isOn() && woke.alarm.minute() == 6 * 60 + 45 && woke.alarm.snoozeUntil() == six + 9 * M, "the alarm round-trips");
+      check(woke.text().equals(state.text()), "the alarm lines round-trip");
+      ClockState late = ClockState.load(file);
+      check(!late.alarm.update(six + 2 * 60 * M) && late.alarm.nextAt(six + 2 * 60 * M) > six + 2 * 60 * M,
+            "an alarm missed while closed does not ring when the window opens");
+      java.nio.file.Files.write(file.toPath(), Arrays.asList("alarm=9999", "alarmOn=on"));
+      check(ClockState.load(file).alarm.minute() == 7 * 60 && !damaged.alarm.isOn(), "a bad alarm time keeps 7 am, off by default");
+
       System.out.println("TimerCheck passed");
    }
 

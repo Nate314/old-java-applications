@@ -34,6 +34,7 @@ final class ClockState {
    final Countdown countdown = new Countdown();
    final Stopwatch stopwatch = new Stopwatch();
    final Focus focus = new Focus();
+   final Alarm alarm = new Alarm();
    /** The cities on the World tab, in the order they were picked. */
    final List<Zone> cities = new ArrayList<>();
 
@@ -62,6 +63,8 @@ final class ClockState {
       int[] focus = {0, Focus.FOCUS, 0};
       long focusEnd = 0;
       long focusLeft = -1;
+      int[] alarm = {-1, 0};
+      long snoozeUntil = 0;
       try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), "utf-8"))) {
          for (String line; (line = reader.readLine()) != null;) {
             int split = line.indexOf('=');
@@ -79,6 +82,12 @@ final class ClockState {
                   this.twentyFour = value.equals("24");
                } else if (key.equals("chimes")) {
                   this.chimes = value.equals("on");
+               } else if (key.equals("alarm")) {
+                  alarm[0] = Integer.parseInt(value);
+               } else if (key.equals("alarmOn")) {
+                  alarm[1] = value.equals("on") ? 1 : 0;
+               } else if (key.equals("alarmSnooze")) {
+                  snoozeUntil = Long.parseLong(value);
                } else if (key.equals("timer")) {
                   length = Long.parseLong(value);
                } else if (key.equals("timerEnd")) {
@@ -131,6 +140,7 @@ final class ClockState {
       this.countdown.restore(length, endsAt, left < 0 ? length : left, finishedAt);
       this.stopwatch.restore(watchStart, watchBanked, laps);
       this.focus.restore(focus[0], focus[1], focus[2], focusEnd, focusLeft);
+      this.alarm.restore(alarm[0], alarm[1] == 1, snoozeUntil);
    }
 
    void save() {
@@ -148,6 +158,11 @@ final class ClockState {
       text.append("face=").append(this.analog ? "analog" : "digital").append('\n');
       text.append("hours=").append(this.twentyFour ? "24" : "12").append('\n');
       text.append("chimes=").append(this.chimes ? "on" : "off").append('\n');
+      text.append("alarm=").append(this.alarm.minute()).append('\n');
+      text.append("alarmOn=").append(this.alarm.isOn() ? "on" : "off").append('\n');
+      if (this.alarm.snoozeUntil() > 0) {
+         text.append("alarmSnooze=").append(this.alarm.snoozeUntil()).append('\n');
+      }
       text.append("timer=").append(this.countdown.length()).append('\n');
       if (this.countdown.isRunning()) {
          text.append("timerEnd=").append(this.countdown.endsAt()).append('\n');
