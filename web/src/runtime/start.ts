@@ -16,7 +16,7 @@ import { pretendWindows } from './pretend-windows';
 import { AGAIN_KEY, followTitle } from './records';
 import { clockFollows, clockOpen, clockPage } from './clock-follows';
 import { preload, titleScreen } from './title-screen';
-import { overlay } from './ui/overlay';
+import { overlay, runAgain } from './ui/overlay';
 import { showConsole } from './system-out';
 import { playSound } from './sounds';
 import { whenShown } from './toolbar-more';
@@ -109,7 +109,11 @@ export function init() {
     })).then(function () {
       if (loading) loading.remove();
       if (typeof main !== 'function') {
-        overlay(programFile() + ' is missing. Build the site with Maven first (see web/README.md).');
+        // A visitor's download failed (a dropped or slow connection), so say so and offer a retry; a local
+        // checkout that was never built gets the same box, with the build hint in the console.
+        console.warn(programFile() + ' did not load. Building the site yourself? Run Maven first (see web/README.md).');
+        overlay('This app did not finish downloading. Check your connection, then try again.', 'Try again');
+        window.addEventListener('online', runAgain, { once: true });   // the connection came back: try by itself
         return;
       }
       if (title) title.ready(start); else whenShown(start);   // no app runs unseen in a prerendered page
