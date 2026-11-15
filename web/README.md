@@ -124,7 +124,9 @@ boolean calm = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopPropert
 - Any other name is `null` in the shim, as on the desktop for names a toolkit does not know.
 - What to do with it is the app's choice: drop shake and flashes, skip slow motion, jump to the end of a zoom. Keep the game itself the same.
 
-TankGame and Clock read it: TankGame drops its screen shake and plays the blast that destroys a tank at full speed (its light and ring stay), and Clock's ringing alarm stops shaking (its ring and bell stay). Other apps with motion that could adopt it: DinoGame (the crash shake), FlappyBird (the crash's white flash and shake) and ScreenSaver (the gallery's zoom into a saver). The site's own page code already reads the setting itself (stage glow, the band's news, passport stamps, the photo booth, preview clips).
+TankGame and Clock read it: TankGame drops its screen shake and plays the blast that destroys a tank at full speed (its light and ring stay), and Clock's ringing alarm stops shaking (its ring and bell stay). Other apps with motion that could adopt it: DinoGame (the crash shake) and ScreenSaver (the gallery's zoom into a saver).
+
+FlappyBird reads it too: its crash keeps the thud and the feathers but drops the white flash and the shake, and its night sky's stars stop twinkling. The site's own page code already reads the setting itself (stage glow, the band's news, passport stamps, the photo booth, preview clips).
 
 ### Images, files and sound
 
