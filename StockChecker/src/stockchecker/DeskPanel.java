@@ -66,6 +66,7 @@ final class DeskPanel extends JPanel {
 
    private final Desk desk;
    private final Bell bell = new Bell();
+   private final ChartEar ear = new ChartEar();
    private final List<Button> buttons = new ArrayList<>();
    private final Timer timer;
    private Color background = new Color(14, 24, 96);
@@ -83,6 +84,8 @@ final class DeskPanel extends JPanel {
    private final Rectangle[] rows = new Rectangle[Desk.MAX_SYMBOLS * 2];
    /** The big chart's plot box and price range as last drawn (null when no chart shows), for placing order lines. */
    private Rectangle plot;
+   /** The trade markers on the big chart as last drawn, which order line tags keep clear of. */
+   private final List<Rectangle> marks = new ArrayList<>();
    private double plotLow;
    private double plotSpan;
    DeskPanel(Desk desk) {
@@ -107,6 +110,10 @@ final class DeskPanel extends JPanel {
       Button raceTab = new Button("Race", 'r', null, new Rectangle(648, 60, 56, 22), always, () -> race = true);
       raceTab.lit = () -> race;
       buttons.add(raceTab);
+      // At the chart card's bottom right corner, under the price labels.
+      Button hear = new Button("Hear", 'h', null, new Rectangle(660, 259, 46, 16), () -> open.getAsBoolean() && !race, this::hear);
+      hear.lit = () -> ear.hearing() != null;
+      buttons.add(hear);
       String[] labels = {"Buy 1", "Buy 10", "Buy max", "Sell 1", "Sell 10", "Sell all"};
       char[] keys = {'b', 'v', 'm', 's', 'd', 'a'};
       int[] counts = {1, 10, Integer.MAX_VALUE, -1, -10, Integer.MIN_VALUE};
@@ -175,6 +182,11 @@ final class DeskPanel extends JPanel {
 
    private void tick() {
       ticks++;
+      String symbol = symbol();
+      if (ear.hearing() != null && (!ear.hearing().equals(symbol) || race || desk.market.closed())) {
+         ear.stop();
+      }
+      ear.tick();
       int every = desk.speed == Desk.FAST ? 2 : desk.speed == Desk.NORMAL ? 10 : 0;
       if (every > 0 && ticks % every == 0) {
          boolean opening = desk.market.minute == 0;
@@ -186,8 +198,47 @@ final class DeskPanel extends JPanel {
          } else if (opening && !desk.market.closed()) {
             bell.ring(1);
          }
+         if (!closing && symbol != null) {
+            Market.Stock stock = desk.market.stock(symbol);
+            double[] range = range(stock, true);
+            ear.minute(stock.path[desk.market.minute], range[0], range[1]);
+         }
+      }
+      String name = summary();
+      if (!name.equals(getAccessibleContext().getAccessibleName())) {
+         getAccessibleContext().setAccessibleName(name);
       }
       repaint();
+   }
+
+   /** H: plays the picked stock's day so far as notes, or stops the one playing. */
+   private void hear() {
+      String symbol = symbol();
+      if (ear.hearing() != null) {
+         ear.stop();
+      } else if (symbol != null) {
+         Market.Stock stock = desk.market.stock(symbol);
+         double[] range = range(stock, true);
+         ear.hear(stock, desk.market.minute, range[0], range[1], desk.portfolio.trades);
+         say("Hearing " + symbol + ": high notes, high prices; chimes at trades. L: live.", MUTED);
+      }
+   }
+
+   /** What a screen reader says for the desk: the time, the picked stock and your money. */
+   private String summary() {
+      Market market = desk.market;
+      StringBuilder out = new StringBuilder("Trading desk, day " + market.day + ", " + Market.clock(market.minute)
+         + (market.closed() ? ", closed. " : desk.speed == Desk.PAUSED ? ", paused. " : ", open. "));
+      String symbol = symbol();
+      if (symbol != null) {
+         Market.Stock stock = market.stock(symbol);
+         double price = stock.path[market.minute];
+         out.append(symbol).append(' ').append(Money.dollars(price)).append(", ").append(Money.percent(stock.open(), price))
+            .append(" today").append(desk.portfolio.shares(symbol) > 0 ? ", you hold " + desk.portfolio.shares(symbol) + ". " : ". ");
+      }
+      out.append("Net worth ").append(Money.dollars(desk.portfolio.worth(market))).append(", ").append(ordinal(desk.rank(false)))
+         .append(" of ").append(desk.rivals.size() + 1).append(". H hears the chart, L listens live.");
+      return out.toString();
    }
 
    /** Says what the orders the last tick reached did, and rings the bell twice when one traded. */
@@ -374,6 +425,12 @@ final class DeskPanel extends JPanel {
          nudgeOrder(key != '-');
          return;
       }
+      if (key == 'l') {
+         ear.live = !ear.live;
+         say(ear.live ? "Listening live: a note each minute for the picked stock, higher when it is higher on the chart. L stops."
+            : "Stopped listening live.", MUTED);
+         return;
+      }
       if (key == 'o') {
          String symbol = symbol();
          if (symbol != null && desk.orders.removeIf(order -> order.symbol.equals(symbol))) {
@@ -503,28 +560,10 @@ final class DeskPanel extends JPanel {
    /** The stock's day so far inside {@code box}: the line, and for the big chart a fill, grid, labels and trades. */
    private void paintLine(Graphics2D g, Market.Stock stock, Rectangle box, boolean big) {
       int now = desk.market.minute;
-      double low = stock.open();
-      double high = stock.open();
-      for (int m = 0; m <= now; m++) {
-         low = Math.min(low, stock.path[m]);
-         high = Math.max(high, stock.path[m]);
-      }
-      if (big) {
-         // Keep every order line on the chart.
-         for (Desk.Order order : desk.orders) {
-            if (order.symbol.equals(stock.symbol)) {
-               low = Math.min(low, order.price);
-               high = Math.max(high, order.price);
-            }
-         }
-      }
-      // At least a 1% range, so a quiet morning is not drawn as wild swings.
-      double room = Math.max(high - low, stock.open() * 0.01);
-      double mid = (high + low) / 2;
-      low = mid - room * 0.6;
-      high = mid + room * 0.6;
+      double[] range = range(stock, big);
+      double low = range[0];
       double lowF = low;
-      double span = high - low;
+      double span = range[1];
       if (big) {
          plot = box;
          plotLow = low;
@@ -584,6 +623,7 @@ final class DeskPanel extends JPanel {
       g.fillOval(xOf.applyAsInt(now) - dot / 2, yOf.applyAsInt(stock.path[now]) - dot / 2, dot, dot);
 
       if (big) {
+         marks.clear();
          // The rivals' trades in this stock: a dot in their color with their initial, filled for a buy, a ring for a sell.
          for (Rival rival : desk.rivals) {
             for (Portfolio.Trade trade : rival.portfolio.trades) {
@@ -594,6 +634,7 @@ final class DeskPanel extends JPanel {
                   boolean buy = trade.shares > 0;
                   g.setColor(buy ? color : new Color(10, 16, 40, 160));
                   g.fillOval(x - 7, y - 7, 14, 14);
+                  marks.add(new Rectangle(x - 8, y - 8, 16, 16));
                   if (!buy) {
                      g.setColor(color);
                      g.setStroke(new BasicStroke(2f));
@@ -605,7 +646,6 @@ final class DeskPanel extends JPanel {
                }
             }
          }
-         paintOrders(g, stock.symbol, box);
          for (Portfolio.Trade trade : desk.portfolio.trades) {
             if (trade.symbol.equals(stock.symbol) && trade.minute <= now) {
                int x = xOf.applyAsInt(trade.minute);
@@ -617,9 +657,56 @@ final class DeskPanel extends JPanel {
                g.fillPolygon(tx, ty, 3);
                g.setColor(Color.WHITE);
                g.drawPolygon(tx, ty, 3);
+               marks.add(new Rectangle(x - 7, Math.min(ty[0], ty[2]) - 1, 14, 12));
+            }
+         }
+         paintOrders(g, stock.symbol, box);
+         // While the chart is heard, a playhead at the minute playing, with its time and price.
+         int heard = ear.minute();
+         if (stock.symbol.equals(ear.hearing()) && heard <= now) {
+            int x = xOf.applyAsInt(heard);
+            int y = yOf.applyAsInt(stock.path[heard]);
+            g.setColor(withAlpha(accent, 200));
+            g.setStroke(new BasicStroke(2f));
+            g.drawLine(x, box.y, x, box.y + box.height);
+            g.setStroke(new BasicStroke(1f));
+            g.fillOval(x - 6, y - 6, 12, 12);
+            String tag = Market.clock(heard) + "  " + Money.dollars(stock.path[heard]);
+            int w = width(g, tag, SMALL) + 10;
+            int left = Math.min(x + 6, box.x + box.width - w);
+            g.setColor(new Color(10, 16, 40, 230));
+            g.fillRoundRect(left, box.y + 2, w, 15, 8, 8);
+            g.setColor(accent);
+            g.drawRoundRect(left, box.y + 2, w, 15, 8, 8);
+            text(g, tag, SMALL, TEXT, left + 5, box.y + 13);
+         }
+      }
+   }
+
+   /**
+    * {@code stock}'s price scale so far as {low, span}; with {@code orders}, the big chart's (stretched to keep its
+    * order lines in view), which the ear plays on too.
+    */
+   private double[] range(Market.Stock stock, boolean orders) {
+      double low = stock.open();
+      double high = stock.open();
+      for (int m = 0; m <= desk.market.minute; m++) {
+         low = Math.min(low, stock.path[m]);
+         high = Math.max(high, stock.path[m]);
+      }
+      if (orders) {
+         // Keep every order line on the chart.
+         for (Desk.Order order : desk.orders) {
+            if (order.symbol.equals(stock.symbol)) {
+               low = Math.min(low, order.price);
+               high = Math.max(high, order.price);
             }
          }
       }
+      // At least a 1% range, so a quiet morning is not drawn as wild swings.
+      double room = Math.max(high - low, stock.open() * 0.01);
+      double mid = (high + low) / 2;
+      return new double[] {mid - room * 0.6, room * 1.2};
    }
 
    /**
@@ -667,6 +754,17 @@ final class DeskPanel extends JPanel {
       int w = width(g, tag, SMALL) + 10;
       int left = right ? box.x + box.width - 2 - w : box.x + 2;
       int top = y - 17 < box.y ? y + 2 : y - 17;
+      // Slide a left tag along past any trade marker it would cover (a rival's 9:30 dot sits right at the edge).
+      for (boolean moved = !right; moved; ) {
+         moved = false;
+         for (Rectangle mark : marks) {
+            if (mark.x < left + w && left < mark.x + mark.width && mark.y < top + 15 && top < mark.y + mark.height
+               && mark.x + mark.width + 2 + w <= box.x + box.width) {
+               left = mark.x + mark.width + 2;
+               moved = true;
+            }
+         }
+      }
       g.setColor(new Color(10, 16, 40, alpha));
       g.fillRoundRect(left, top, w, 15, 8, 8);
       g.setColor(color);

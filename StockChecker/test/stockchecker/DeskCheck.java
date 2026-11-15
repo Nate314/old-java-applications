@@ -223,6 +223,17 @@ public class DeskCheck {
       check(Money.percent(100, 98.75).equals("-1.25%") && Money.percent(100, 100).equals("+0.00%"), Money.percent(100, 98.75));
       check(Money.dollars(1234567.891).equals("$1,234,567.89"), Money.dollars(1234567.891));
 
+      // Hearing the chart: the chart's bottom is the low note, its top the high one, and a hearing runs open to now.
+      check(ChartEar.note(90, 90, 10) == ChartEar.LOW_NOTE && ChartEar.note(100, 90, 10) == ChartEar.HIGH_NOTE, "chart edges");
+      check(ChartEar.note(95, 90, 10) == (ChartEar.LOW_NOTE + ChartEar.HIGH_NOTE) / 2, "middle of the chart");
+      check(ChartEar.note(50, 90, 10) == ChartEar.LOW_NOTE && ChartEar.note(500, 90, 10) == ChartEar.HIGH_NOTE, "off the chart clamps");
+      check(ChartEar.note(95, 95, 0) == (ChartEar.LOW_NOTE + ChartEar.HIGH_NOTE) / 2, "no span plays the middle");
+      check(ChartEar.minuteAt(0, 200) == 0 && ChartEar.minuteAt(ChartEar.STEPS - 1, 200) == 200, "a hearing runs from the open to now");
+      for (int step = 1; step < ChartEar.STEPS; step++) {
+         check(ChartEar.minuteAt(step, 390) >= ChartEar.minuteAt(step - 1, 390), "the playhead only moves forward");
+      }
+      check(ChartEar.minuteAt(ChartEar.STEPS / 2, 0) == 0, "a hearing at the open stays on the open");
+
       System.out.println("DeskCheck passed");
    }
 
