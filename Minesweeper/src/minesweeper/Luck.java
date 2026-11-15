@@ -12,6 +12,8 @@ public final class Luck {
    /** Cells (x * height + y) guessed on, and the chance each was a mine, in the order played. */
    final List<Integer> cells = new ArrayList<>();
    final List<Double> risks = new ArrayList<>();
+   /** Moves made while Odds gave up on the board (too open to read), so whether they were guesses is not known. */
+   int unread;
 
    /** Notes a move on that cell; a certain one (0%) is not a guess and is not kept. */
    void add(int cell, double risk) {
@@ -32,6 +34,21 @@ public final class Luck {
          chance *= 1 - this.risks.get(i);
       }
       return chance;
+   }
+
+   /** After a win: what can honestly be said about guessing, or null when every move was counted and none was a guess. */
+   String clearedLine() {
+      int n = this.guesses();
+      String some = n + (n == 1 ? " guess" : " guesses");
+      if (this.unread == 0) {
+         return n == 0 ? null : "Cleared, with " + some + ".";
+      }
+      return (n == 0 ? "Cleared, no guesses" : "Cleared, with " + some) + " in the moves counted.";
+   }
+
+   /** After a win with moves Odds could not read and no guesses to tag: says so. */
+   String unreadLine() {
+      return this.unread + (this.unread == 1 ? " move was" : " moves were") + " on a board too open to count.";
    }
 
    /** After a win: how lucky the guesses were, or null with none. */

@@ -410,13 +410,17 @@ public class MineFieldCheck {
    /** Guesses: certain moves are not kept, and the chance of coming through is the product of each survival. */
    private static void checkLuck() {
       Luck luck = new Luck();
-      check(luck.winLine() == null, "no guesses, no luck line");
+      check(luck.winLine() == null && luck.clearedLine() == null, "no guesses, no luck line");
+      luck.unread = 2;
+      check(luck.clearedLine().equals("Cleared, no guesses in the moves counted.") && luck.unreadLine().startsWith("2 moves were"),
+         "moves Odds could not read: " + luck.clearedLine());
+      luck.unread = 0;
       luck.add(3, 0);
       luck.add(7, 0.5);
       luck.add(9, 0.25);
       check(luck.guesses() == 2 && luck.cells.get(0) == 7 && luck.cells.get(1) == 9, "only the guesses are kept");
       check(Math.abs(luck.survival(2) - 0.375) < 1e-12, "survival is the product");
-      check(luck.winLine().contains("38%"), "win line: " + luck.winLine());
+      check(luck.winLine().contains("38%") && luck.clearedLine().equals("Cleared, with 2 guesses."), "win line: " + luck.winLine());
       String[] loss = luck.lossLines();
       check(loss[0].contains("25%") && loss[1].contains("50%"), "loss lines: " + loss[0] + " / " + loss[1]);
       System.out.println("Luck: " + luck.winLine());

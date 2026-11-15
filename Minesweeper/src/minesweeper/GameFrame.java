@@ -232,6 +232,9 @@ public final class GameFrame extends JFrame {
       this.moveRisk = -1;
       double[][] odds = this.watching ? null : Odds.of(this.view(), this.level.mines);
       if (odds == null) {
+         if (!this.watching) {
+            this.luck.unread++;
+         }
          return;
       }
       int[] worst = cells.get(0);
@@ -324,10 +327,11 @@ public final class GameFrame extends JFrame {
          }
          if (!this.computerPlayed) {
             int guesses = this.luck.guesses();
+            String cleared = this.luck.clearedLine();
             this.setHintLines(this.oddsCounted ? "Cleared with the odds showing." : this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
-               : guesses > 0 ? "Cleared, with " + guesses + (guesses == 1 ? " guess." : " guesses.")
+               : cleared != null ? cleared
                : this.fairBoard ? "Cleared by logic alone, no guesses." : "Cleared without a single guess.",
-               guesses > 0 ? this.luck.winLine() : this.hints > 0 ? "A game won with hints sets no best time." : " ");
+               guesses > 0 ? this.luck.winLine() : this.luck.unread > 0 ? this.luck.unreadLine() : this.hints > 0 ? "A game won with hints sets no best time." : " ");
          }
          if (this.computerPlayed) {
             // Not a best time: the computer played some or all of it.
