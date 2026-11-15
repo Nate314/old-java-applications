@@ -1,4 +1,4 @@
-import { embedded } from './skin';
+import { clipMode, embedded } from './skin';
 import { toolbar } from './install';
 import { centerWindows, stageEdge } from './band-news';
 import { bringBack } from './pop-out';
@@ -93,8 +93,10 @@ export function init() {
       });
       if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
       if (extras && !embedded) howToPlay();
-      if (watch) watchApp(desktop); else if (extras) stampOnPlay();
-      if (extras && !shell && !replay) setReplay(startReplay(desktop));
+      var record = function () { if (extras && !shell && !replay) setReplay(startReplay(desktop)); };
+      // While the computer plays, replay waits for the visitor to take over: drawing the demo cost a slow phone a sixth of its time.
+      if (watch) watchApp(desktop, record); else if (extras) stampOnPlay();
+      if (!watch || clipMode) record();   // a preview clip (clips.ps1) records the computer playing
       if (extras && !shell) {   // the photo booth draws the app's windows (pretend Windows is drawn by the page)
         setPhotoDesk(desktop);
         document.documentElement.setAttribute('data-photo', '');

@@ -23,7 +23,8 @@ export function watchWanted() {
   return /[?&]watch(=|&|$)/.test(location.search) && !!WATCH[appId()!] && !isThen();
 }
 
-export function watchApp(desktop: HTMLElement) {
+/** taken runs once the visitor takes over (start.ts starts instant replay then). */
+export function watchApp(desktop: HTMLElement, taken: () => void) {
   var key = WATCH[appId()!];
   var fade!: () => void;
   const close = openLayer(<WatchNote onMount={f => { fade = f; }} />);
@@ -45,6 +46,7 @@ export function watchApp(desktop: HTMLElement) {
     clearTimeout(wait);
     if (pressed && !ownKey) press();
     setAppMuted(false);
+    taken();
     fade();
     setTimeout(close, 400);
     // A reload now starts the app for the visitor.
