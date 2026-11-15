@@ -14,6 +14,7 @@ public final class LessonCheck {
          throw new IllegalStateException("Run with -ea");
       }
       checkSongs();
+      checkFall();
       checkLesson();
       checkRecords();
       checkTunes();
@@ -42,6 +43,24 @@ public final class LessonCheck {
          // as it should be
       }
       assert Song.noteName(12).equals("C") && Song.noteName(6).equals("F#");
+      assert mary.start(0) == 0 && mary.start(7) == 8 && mary.start(mary.length()) == 32 : "Mary's notes start on their beats";
+      assert row.start(1) == 1.5 && row.start(4) == 4.5 : "Row Row: dotted and half beats";
+   }
+
+   /** The falling notes take the top of the piano during a lesson, and the keys stay where they are drawn. */
+   private static void checkFall() {
+      PianoPanel piano = new PianoPanel();
+      piano.setSize(802, 300);
+      assert piano.keyAt(50, 10) == 0 && piano.keyAt(50, 299) == 0 : "no lesson: the keys fill the panel";
+      piano.setSong(Song.ALL[0]);
+      assert piano.keyAt(50, 10) == -1 && piano.keyAt(50, 119) == -1 : "the falling notes are not keys";
+      assert piano.keyAt(50, 120) == 0 && piano.keyAt(50, 299) == 0 && piano.keyAt(100, 130) == 1 : "the keys moved below them";
+      piano.follow(7, 0);
+      assert piano.shownBeat() == 8 : "follow moves the song to the note's beat";
+      piano.play(2, 0);
+      assert piano.shownBeat() == 3 : "Listen moves on to the end of the note it plays";
+      piano.setSong(null);
+      assert piano.keyAt(50, 10) == 0 : "free play gives the keys their room back";
    }
 
    private static void checkLesson() {
