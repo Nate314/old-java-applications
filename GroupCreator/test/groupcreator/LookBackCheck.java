@@ -1,6 +1,10 @@
 package groupcreator;
 
 import java.awt.event.KeyEvent;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -8,7 +12,7 @@ import java.util.List;
 
 /** Self-check for Look back: an earlier round's groups again for the class here now, and stepping through rounds. */
 public class LookBackCheck {
-   public static void main(String[] args) {
+   public static void main(String[] args) throws IOException {
       List<List<String>> round = groups("Alice,Bob", "Carol,Dave", "Erin,Frank");
       check(GroupMaker.again(round, names("Alice,Bob,Carol,Dave,Erin,Frank")).equals(round), "the same class gets the same groups");
       check(GroupMaker.again(round, names("Bob,Carol,Dave,Erin,Frank")).equals(groups("Bob", "Carol,Dave", "Erin,Frank")),
@@ -24,7 +28,7 @@ public class LookBackCheck {
       history.add(round);
       history.add(groups("Alice,Carol", "Bob,Erin", "Dave,Frank"));
       history.add(groups("Alice,Dave", "Bob,Frank", "Carol,Erin"));
-      List<List<List<String>>> reused = new ArrayList<>();
+      List<Integer> reused = new ArrayList<>();
       GroupBoard board = new GroupBoard(history, new PickBag(), new ClassRules(), new Stub(reused));
       board.setSize(760, 440);
       board.showRound(names("Alice,Bob,Carol,Dave,Erin,Frank"), false);
@@ -36,10 +40,10 @@ public class LookBackCheck {
       key(board, KeyEvent.CHAR_UNDEFINED, KeyEvent.VK_LEFT);
       paint(board);
       key(board, 'u', KeyEvent.VK_U);
-      check(reused.size() == 1 && reused.get(0).equals(round), "three Lefts stop at round 1, and U uses it again");
+      check(reused.size() == 1 && reused.get(0) == 1, "three Lefts stop at round 1, and U uses it again");
       key(board, KeyEvent.CHAR_UNDEFINED, KeyEvent.VK_RIGHT);
       key(board, 'u', KeyEvent.VK_U);
-      check(reused.size() == 2 && reused.get(1).equals(history.round(2)), "Right steps forward to round 2");
+      check(reused.size() == 2 && reused.get(1) == 2, "Right steps forward to round 2");
       key(board, KeyEvent.CHAR_UNDEFINED, KeyEvent.VK_ESCAPE);
       key(board, 'u', KeyEvent.VK_U);
       check(reused.size() == 2, "Esc goes back to the newest round");
@@ -47,6 +51,25 @@ public class LookBackCheck {
       key(board, KeyEvent.CHAR_UNDEFINED, KeyEvent.VK_RIGHT);
       key(board, 'u', KeyEvent.VK_U);
       check(reused.size() == 2, "Right from the last round before the newest ends looking back");
+
+      // The class file remembers which round the newest one dealt again, so its header survives a reload.
+      File file = File.createTempFile("groupcreator", ".txt");
+      file.deleteOnExit();
+      Roster roster = Roster.load(file);
+      roster.history.add(round);
+      roster.history.add(groups("Alice,Carol", "Bob,Erin", "Dave,Frank"));
+      roster.history.add(round);
+      roster.again = 1;
+      roster.save();
+      check(roster.text().contains("again=1\n") && Roster.load(file).again == 1, "again= round trips through the class file");
+      roster.again = 0;
+      roster.save();
+      check(!roster.text().contains("again=") && Roster.load(file).again == 0, "a plain newest round writes no again= line");
+      for (String bad : new String[] {"again=3", "again=0", "again=x"}) {
+         Files.write(file.toPath(), (roster.text() + bad + "\n").getBytes(StandardCharsets.UTF_8));
+         Roster read = Roster.load(file);
+         check(read.again == 0 && read.history.size() == 3, bad + " is read as a plain newest round");
+      }
       System.out.println("LookBackCheck: all checks passed");
    }
 
@@ -81,14 +104,14 @@ public class LookBackCheck {
 
    /** Records each round handed to Use again; the rest does nothing. */
    private static final class Stub implements GroupBoard.Actions {
-      private final List<List<List<String>>> reused;
+      private final List<Integer> reused;
 
-      Stub(List<List<List<String>>> reused) {
+      Stub(List<Integer> reused) {
          this.reused = reused;
       }
 
-      public void reuse(List<List<String>> round) {
-         reused.add(round);
+      public void reuse(int from) {
+         reused.add(from);
       }
 
       public void present(boolean on) {

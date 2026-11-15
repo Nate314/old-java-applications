@@ -71,8 +71,8 @@ public class GroupBoard extends JPanel {
 
       void clearHistory();
 
-      /** An earlier round's groups, dealt again as a new round (Look back's Use again). */
-      void reuse(List<List<String>> round);
+      /** Round {@code from}'s groups, dealt again as a new round (Look back's Use again). */
+      void reuse(int from);
 
       /** The newest round was changed by hand (two names swapped). */
       void edited(List<List<String>> groups);
@@ -236,14 +236,7 @@ public class GroupBoard extends JPanel {
       earlier = new Button("Earlier", '<', () -> lookAt(current() - 1));
       backButtons.add(earlier);
       backButtons.add(new Button("Later", '>', () -> lookAt(current() + 1)));
-      backButtons.add(new Button("Use again", 'u', () -> {
-         int from = shownRound;
-         int size = history.size();
-         actions.reuse(history.round(from));
-         if (history.size() > size) {
-            reusedFrom = from;
-         }
-      }));
+      backButtons.add(new Button("Use again", 'u', () -> actions.reuse(shownRound)));
       backButtons.add(new Button("New round", 'n', actions::newRound));
       backButtons.add(new Button("Newest", ESC, () -> lookAt(history.size())));
       spin = new Button("Spin", 's', this::spin);
@@ -363,6 +356,12 @@ public class GroupBoard extends JPanel {
    /** Shows a message (why groups could not be made) in place of the round's summary. */
    public void showMessage(String text) {
       message = text;
+      repaint();
+   }
+
+   /** Says the newest round is round {@code from}'s groups dealt again (0 when it is not); call after showRound. */
+   public void dealtAgain(int from) {
+      reusedFrom = from;
       repaint();
    }
 

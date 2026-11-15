@@ -25,12 +25,14 @@ import java.util.List;
  * away=Dave
  * apart=Alice,Bob
  * round=Alice,Carol|Bob,Dave
+ * again=1
  * </pre>
  *
  * with one {@code round=} line per round, oldest first, its groups separated by {@code |}, and a {@code picked=} line
  * (the names the wheel has picked this time around, oldest first) once the wheel has picked someone, an {@code away=}
  * line for the names marked away in the roll call, one {@code apart=} line per keep-apart rule, and {@code roles=off} when
- * the cards hide the roles, and {@code work=} for a work time other than 10 minutes.
+ * the cards hide the roles, {@code work=} for a work time other than 10 minutes, and {@code again=} when the newest
+ * round is an earlier round's groups dealt again by Use again (the number of that round; older builds skip the line).
  */
 public final class Roster {
    static final String EXAMPLE = "Alice,Bob,Carol,Dave,Erin,Frank,Grace,Heidi,Ivan,Judy,Mallory,Niaj";
@@ -45,6 +47,8 @@ public final class Roster {
    final PartnerHistory history = new PartnerHistory();
    final PickBag picks = new PickBag();
    final ClassRules rules = new ClassRules();
+   /** The round whose groups the newest round dealt again (Use again), or 0. */
+   int again;
 
    private Roster(File file) {
       this.file = file;
@@ -75,6 +79,12 @@ public final class Roster {
                } catch (NumberFormatException e) {
                   // A bad length keeps the 10 minutes.
                }
+            } else if (key.equals("again")) {
+               try {
+                  roster.again = Integer.parseInt(value.trim());
+               } catch (NumberFormatException e) {
+                  // A bad number: the newest round is read as a plain one.
+               }
             } else if (key.equals("picked")) {
                roster.picks.load(value);
             } else if (key.equals("away")) {
@@ -96,6 +106,9 @@ public final class Roster {
          }
       } catch (IOException e) {
          // No file yet: the example class.
+      }
+      if (roster.again < 1 || roster.again >= roster.history.size()) {
+         roster.again = 0;
       }
       return roster;
    }
@@ -133,6 +146,9 @@ public final class Roster {
             groups.add(String.join(",", group));
          }
          text.append("round=").append(String.join("|", groups)).append('\n');
+      }
+      if (again > 0) {
+         text.append("again=").append(again).append('\n');
       }
       return text.toString();
    }

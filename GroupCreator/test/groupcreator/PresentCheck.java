@@ -105,7 +105,7 @@ public class PresentCheck {
       public void edited(List<List<String>> groups) {
       }
 
-      public void reuse(List<List<String>> round) {
+      public void reuse(int from) {
       }
 
       public List<String> classNames() {

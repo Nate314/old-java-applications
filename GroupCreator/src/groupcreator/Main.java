@@ -72,6 +72,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       this.add(inputs, BorderLayout.NORTH);
       this.add(board, BorderLayout.CENTER);
       board.showRound(GroupMaker.parseNames(roster.names), false);
+      board.dealtAgain(roster.again);
       this.pack();
       this.setLocationRelativeTo(null);
       this.setVisible(visibility);
@@ -121,6 +122,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       roster.names = textField.getText().trim();
       roster.min = String.valueOf(min);
       roster.max = String.valueOf(max);
+      roster.again = 0;
       String problem = save(groups);
       board.showRound(typed, true);
       if (problem != null) {
@@ -130,7 +132,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
    }
 
    @Override
-   public void reuse(List<List<String>> round) {
+   public void reuse(int from) {
       List<String> typed = GroupMaker.parseNames(textField.getText());
       List<String> here = roster.rules.present(typed);
       if (here.isEmpty()) {
@@ -139,11 +141,13 @@ public class Main extends JFrame implements GroupBoard.Actions {
          return;
       }
       // The same groups, with the roles rotated against every round so far.
-      List<List<String>> groups = Roles.rotate(GroupMaker.again(round, here), roster.history, random);
+      List<List<String>> groups = Roles.rotate(GroupMaker.again(roster.history.round(from), here), roster.history, random);
       roster.history.add(groups);
       roster.names = textField.getText().trim();
+      roster.again = from;
       String problem = save(groups);
       board.showRound(typed, true);
+      board.dealtAgain(from);
       if (problem != null) {
          board.showMessage(problem);
       }
@@ -153,6 +157,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
    @Override
    public void edited(List<List<String>> groups) {
       roster.history.replaceLast(groups);
+      roster.again = 0;
       String problem = save(groups);
       board.showRound(GroupMaker.parseNames(roster.names), false);
       if (problem != null) {
@@ -163,6 +168,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
    @Override
    public void clearHistory() {
       roster.history.clear();
+      roster.again = 0;
       save(null);
       board.showRound(GroupMaker.parseNames(roster.names), false);
    }
