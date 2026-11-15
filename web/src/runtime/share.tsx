@@ -163,6 +163,8 @@ export function init() {
     ? 'A friend sent you a game, and it is your move. Press Play to answer it.'
     : /[?&]tune=(?:[a-m][1-8]){2,}(?:&|$)/i.test(location.search)
       ? 'A friend sent you a tune. Press Play to hear it, then play it back.'
-      : '';
+      : /[?&]challenge=[0-4][0-9a-z-]+(?:&|$)/i.test(location.search)
+        ? 'A friend sent you a number to find. Press Play and try to beat their guesses.'
+        : '';
   window.oldjavaShare = { open: openShare };
 }

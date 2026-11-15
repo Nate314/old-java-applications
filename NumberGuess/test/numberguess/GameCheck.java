@@ -206,6 +206,35 @@ public class GameCheck {
 		}
 		back = Records.load(file);
 		check(back.duels(Duel.Result.LOST) == 0 && back.best(Level.TEN) == 3, "a bad duel line is skipped");
+
+		// Challenge: a won game survives its code, in every range, and the code does not show the number.
+		Random seeded = new Random(9);
+		for (Level level : Level.values()) {
+			for (int i = 0; i < 300; i++) {
+				Game game = new Game(level, i < 2 ? (i == 0 ? 1 : level.max()) : seeded.nextInt(level.max()) + 1);
+				while (!game.isOver()) {
+					game.guess(game.low() + seeded.nextInt(game.high() - game.low() + 1));
+				}
+				if (game.isFound()) { // only won games are sent
+					String code = Challenge.encode(game);
+					Challenge back2 = Challenge.decode(code);
+					check(back2 != null && back2.level() == level && back2.guesses().equals(game.guesses()) && back2.number() == game.number(),
+							level + " challenge round trip " + code);
+				}
+			}
+		}
+		Game game = new Game(Level.THOUSAND, 549);
+		game.guess(500);
+		game.guess(750);
+		game.guess(549);
+		String code = Challenge.encode(game);
+		check(!code.contains(Long.toString(549, 36)) && Challenge.decode(code).number() == 549, "challenge hides the number: " + code);
+		check(Challenge.decode(code + "-0") == null, "a guess after the number is found is no challenge");
+		check(Challenge.decode(null) == null && Challenge.decode("") == null && Challenge.decode("9ab") == null && Challenge.decode("2zz!") == null
+				&& Challenge.decode("2") == null && Challenge.decode("2-") == null, "bad codes");
+		check(Challenge.codeIn("https://x.io/apps/NumberGuess.html?challenge=2AB-c&shared=3").equals("2ab-c") && Challenge.codeIn(" 2ab ").equals("2ab"), "code in a link");
+		check("https://x.io/a.html".equals(Challenge.pageOf("https://x.io/a.html?challenge=2a#t")) && Challenge.pageOf("2ab") == null, "page of a link");
+		check(Challenge.message(null, game).equals(code) && Challenge.message("https://x.io/a.html", game).equals("https://x.io/a.html?challenge=" + code), "message");
 	}
 
 	private static void check(boolean condition, String what) {

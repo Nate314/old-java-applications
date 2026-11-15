@@ -34,6 +34,7 @@ const BODY: Record<string, Record<string, string>> = {
       'bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png myStocks.txt stockCheck.csv',
     ].join(' '),
   },
+  NumberGuess: { 'data-args-page': '' },
   StockChecker: { 'data-files': 'myStocks.txt stockCheck.csv' },
   SynthesizerKeyboard: { 'data-args-page': '' },
   UltimateTicTacToe: { 'data-args-page': '' },

@@ -71,6 +71,8 @@ public final class Board extends JPanel {
 	private Color headlineColor = TEXT;
 	private boolean newBest;
 	private Level opened;
+	/** The friend's won game this number came from, or null. */
+	private Challenge challenge;
 
 	// The lit part of the top line slides to its new size instead of jumping.
 	private double shownLow, shownHigh;
@@ -137,9 +139,14 @@ public final class Board extends JPanel {
 		return isDuel() ? DUEL_TAB : isMagic() ? MAGIC_TAB : isPicking() ? PICK_TAB : level.ordinal();
 	}
 
-	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic. */
+	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic, 3 for a won range (Challenge a friend). */
 	private int kind() {
-		return isMagic() ? 2 : isPicking() ? 1 : 0;
+		return isMagic() ? 2 : isPicking() ? 1 : canChallenge() ? 3 : 0;
+	}
+
+	/** True when a range was just won, so it can be sent to a friend to beat. */
+	public boolean canChallenge() {
+		return game != null && !isDuel() && game.isFound();
 	}
 
 	/** Tells the window when a switch of tab needs other buttons. */
@@ -163,8 +170,22 @@ public final class Board extends JPanel {
 		game = new Game(level, random);
 		newBest = false;
 		opened = null;
+		challenge = null;
 		say("Guess a number from 1 to " + Level.commas(level.max()), TEXT,
 				"Par " + level.par() + ": guess the middle of what is left. " + level.limit() + " guesses before it is given away.");
+		reset();
+		switched(before);
+	}
+
+	/** A friend's won game: the same number in the same range, with their guesses to beat (even in a range not yet open). */
+	public void startChallenge(Challenge challenge) {
+		int before = kind();
+		start(challenge.level());
+		this.challenge = challenge;
+		game = new Game(level, challenge.number());
+		int theirs = challenge.guesses().size();
+		say("A friend found a number in " + guesses(theirs), GOLD, "The same number, 1 to " + Level.commas(level.max()) + ". Can you find it in "
+				+ (theirs == 1 ? "1 too?" : "fewer? The gold ring is theirs."));
 		reset();
 		switched(before);
 	}
@@ -224,7 +245,8 @@ public final class Board extends JPanel {
 		} else if (isPicking()) {
 			startPicking();
 		} else {
-			start(opened != null ? opened : level);
+			// After a friend's challenge in a range not yet open, the next number is in one that is.
+			start(opened != null ? opened : records.isOpen(level) ? level : records.suggested());
 		}
 	}
 
@@ -301,7 +323,8 @@ public final class Board extends JPanel {
 		case TOO_HIGH:
 			boolean low = number < game.number();
 			if (game.isOver()) {
-				say("Out of guesses. It was " + Level.commas(game.number()), HIGH, "Press Enter or click the line for a new number.");
+				say("Out of guesses. It was " + Level.commas(game.number()), HIGH, (challenge != null ? "Your friend found it in "
+						+ guesses(challenge.guesses().size()) + ". " : "") + "Press Enter or click the line for a new number.");
 			} else {
 				say(Level.commas(number) + (low ? " is too low" : " is too high"), low ? LOW : HIGH, readText(lastRead())
 						+ " It is from " + Level.commas(game.low()) + " to " + Level.commas(game.high()) + ". "
@@ -310,6 +333,7 @@ public final class Board extends JPanel {
 			break;
 		case CORRECT:
 			win();
+			modeChanged.run(); // Challenge a friend shows
 			break;
 		default:
 			break;
@@ -346,9 +370,18 @@ public final class Board extends JPanel {
 	private void win() {
 		Level next = level.ordinal() + 1 < Level.values().length ? Level.values()[level.ordinal() + 1] : null;
 		boolean wasOpen = next != null && records.isOpen(next);
-		newBest = records.add(game);
+		// A friend's challenge can be in a range not yet open; winning it there keeps no record.
+		newBest = records.isOpen(level) && records.add(game);
 		opened = next != null && !wasOpen && records.isOpen(next) ? next : null;
 		int guesses = game.getGuesses();
+		if (challenge != null) {
+			int theirs = challenge.guesses().size();
+			say(guesses < theirs ? "You beat your friend: " + guesses(guesses) + " to " + theirs
+					: guesses == theirs ? "A tie with your friend: " + guesses(guesses) + " each"
+							: "Your friend wins: " + theirs + " guesses to your " + guesses, guesses <= theirs ? RIGHT : GOLD,
+					(newBest ? "New best! " : "") + "Both paths are below. Enter plays a new number.");
+			return;
+		}
 		String more = opened != null ? " " + opened.label() + " is open: Enter plays it."
 				: game.stars() < 3 ? " Par is " + level.par() + "." : " Press Enter for another.";
 		say("Got it: " + Level.commas(game.number()) + " in " + guesses + (guesses == 1 ? " guess" : " guesses"), RIGHT,
@@ -759,6 +792,11 @@ public final class Board extends JPanel {
 				g.setColor(par ? DIM : WARN.darker().darker());
 				g.drawOval(dotX, y, size, size);
 			}
+			if (challenge != null && i == challenge.guesses().size() - 1) {
+				// The friend's count: find it by this dot to tie, before it to win.
+				g.setColor(GOLD);
+				g.drawOval(dotX - 3, y - 3, size + 6, size + 6);
+			}
 		}
 	}
 
@@ -819,11 +857,12 @@ public final class Board extends JPanel {
 		List<Long> yours = Hindsight.left(level, number, game.guesses());
 		List<Long> theirs = Hindsight.left(level, number, halving);
 		List<Hindsight.Read> reads = Hindsight.reads(level, number, game.guesses());
+		List<Long> friend = challenge != null ? Hindsight.left(level, number, challenge.guesses()) : null;
 		Rectangle box = new Rectangle(MARGIN, 134, getWidth() - 2 * MARGIN, 120);
 		g.setColor(CARD);
 		g.fillRoundRect(box.x, box.y, box.width, box.height, 10, 10);
 		Rectangle plot = new Rectangle(box.x + 62, box.y + 46, box.width - 84, box.height - 58);
-		int steps = Math.max(yours.size(), theirs.size()) - 1;
+		int steps = Math.max(Math.max(yours.size(), theirs.size()), friend != null ? friend.size() : 0) - 1;
 		g.setFont(new Font("SansSerif", Font.BOLD, 13));
 		g.setColor(TEXT);
 		g.drawString(hindsightSummary(halving.size()), box.x + 12, box.y + 20);
@@ -841,6 +880,9 @@ public final class Board extends JPanel {
 		g.drawLine(plot.x, plot.y + plot.height, plot.x + plot.width, plot.y + plot.height);
 		g.setStroke(new BasicStroke(2f));
 		paintPath(g, theirs, plot, steps, DIM);
+		if (friend != null) {
+			paintPath(g, friend, plot, steps, GOLD);
+		}
 		g.setStroke(new BasicStroke(3f));
 		paintPath(g, yours, plot, steps, POSSIBLE);
 		g.setStroke(new BasicStroke(1f));
@@ -849,6 +891,10 @@ public final class Board extends JPanel {
 			if (i < theirs.size()) {
 				g.setColor(DIM);
 				g.fillOval(x - 3, yOn(plot, theirs.get(i)) - 3, 7, 7);
+			}
+			if (friend != null && i < friend.size()) {
+				g.setColor(GOLD);
+				g.drawOval(x - 4, yOn(plot, friend.get(i)) - 4, 8, 8);
 			}
 			if (i < yours.size()) {
 				boolean last = i == yours.size() - 1;
@@ -866,6 +912,12 @@ public final class Board extends JPanel {
 		g.fillRoundRect(keyX + 56, keyY - 4, 18, 4, 3, 3);
 		g.setColor(SOFT);
 		g.drawString("Halving", keyX + 80, keyY);
+		if (friend != null) {
+			g.setColor(GOLD);
+			g.fillRoundRect(keyX, keyY + 12, 18, 4, 3, 3);
+			g.setColor(SOFT);
+			g.drawString("Friend", keyX + 24, keyY + 16);
+		}
 	}
 
 	/** The line under the game: yours against always guessing the middle. */

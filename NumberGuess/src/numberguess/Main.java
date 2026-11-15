@@ -1,6 +1,8 @@
 package numberguess;
 
 import java.awt.BorderLayout;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
@@ -31,14 +33,22 @@ public class Main extends JFrame implements ActionListener {
 	private final JButton no = new JButton("No");
 	private final JButton how = new JButton("How it works");
 	private final JButton again = new JButton("Again");
+	private final JButton send = new JButton("Challenge a friend");
 	private final Board board;
+	/** The page the game runs on (the browser build passes it), for the links it sends; null on the desktop. */
+	private final String page;
 
-	public Main() {
+	/** {@code challenge}: a friend's won game to play first, or null. */
+	public Main(String page, Challenge challenge) {
+		this.page = page;
 		this.setTitle("Number Guess");
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		// Read after the window exists, so the browser build has put the saved file back.
 		Records records = Records.load(new File(System.getProperty("user.home"), ".numberguess-record.txt"));
 		board = new Board(records, this::showButtons);
+		if (challenge != null) {
+			board.startChallenge(challenge);
+		}
 		panel.add(textField);
 		panel.add(button);
 		panel.add(lower);
@@ -48,6 +58,7 @@ public class Main extends JFrame implements ActionListener {
 		panel.add(no);
 		panel.add(how);
 		panel.add(again);
+		panel.add(send);
 		this.add(board, BorderLayout.CENTER);
 		this.add(panel, BorderLayout.SOUTH);
 		textField.setColumns(10);
@@ -61,6 +72,7 @@ public class Main extends JFrame implements ActionListener {
 		no.addActionListener(event -> answer(() -> board.magicAnswer(false)));
 		how.addActionListener(event -> answer(board::explain));
 		again.addActionListener(event -> answer(board::again));
+		send.addActionListener(event -> sendChallenge());
 		KeyAdapter keys = new KeyAdapter() {
 			@Override
 			public void keyPressed(KeyEvent event) {
@@ -91,6 +103,7 @@ public class Main extends JFrame implements ActionListener {
 		how.setVisible(read && board.canExplain());
 		how.setText(board.isExplaining() ? "Hide how" : "How it works");
 		again.setVisible(read);
+		send.setVisible(typing && board.canChallenge());
 		panel.revalidate();
 		panel.repaint();
 		if (!typing) {
@@ -98,6 +111,20 @@ public class Main extends JFrame implements ActionListener {
 		} else {
 			textField.requestFocusInWindow();
 		}
+	}
+
+	/** Puts a link to this won game (or its code, on the desktop) on the clipboard, for a friend to beat. */
+	private void sendChallenge() {
+		String what = page == null ? "Code" : "Link";
+		String message = Challenge.message(page, board.game());
+		try {
+			Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(message), null);
+			int guesses = board.game().getGuesses();
+			board.notice(what + " copied: your friend gets the same number and " + guesses + (guesses == 1 ? " guess" : " guesses") + " to beat.");
+		} catch (RuntimeException e) {
+			board.notice("Could not copy the " + what.toLowerCase() + ". Send this: " + message); // headless, or the clipboard is busy
+		}
+		textField.requestFocusInWindow();
 	}
 
 	private void answer(Runnable action) {
@@ -163,7 +190,23 @@ public class Main extends JFrame implements ActionListener {
 		}
 	}
 
+	/**
+	 * Arguments, both optional: a challenge code or link a friend sent, and the address of the page the game runs on
+	 * (the browser build passes its own address, which carries ?challenge= when opened from a friend's link).
+	 */
 	public static void main(String args[]) {
-		SwingUtilities.invokeLater(Main::new);
+		String page = null;
+		Challenge challenge = null;
+		for (String arg : args) {
+			String argPage = Challenge.pageOf(arg);
+			page = argPage != null ? argPage : page;
+			if (argPage == null || arg.contains("challenge=")) {
+				Challenge decoded = Challenge.decode(Challenge.codeIn(arg));
+				challenge = decoded != null ? decoded : challenge;
+			}
+		}
+		String sendPage = page;
+		Challenge first = challenge;
+		SwingUtilities.invokeLater(() -> new Main(sendPage, first));
 	}
 }
