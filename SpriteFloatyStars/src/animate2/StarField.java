@@ -106,8 +106,8 @@ public final class StarField extends Component {
          this.initStar(star);
       }
 
+      this.hintShown = animate; // a field drawn small (the settings window's tiles) shows no help
       if (animate) {
-         this.hintShown = true;
          this.badgeAt = 0.0;
          new StarHand(this);
          new Timer(15, event -> this.tick()).start();
