@@ -35,6 +35,9 @@ public final class GameFrame extends JFrame {
    private static final int WATCH_NEXT_GAME_MILLIS = 3000;
    /** Review: how long the search looks at each position of the game, one position per tick (the page waits that long). */
    private static final int REVIEW_THINK_MILLIS = 120;
+   /** Hints: the search on the position grows this long per tick, until it has had HINT_THINK_MILLIS in all. */
+   private static final int HINT_TICK_MILLIS = 60;
+   private static final int HINT_THINK_MILLIS = 900;
    private static final Color TEXT = new Color(230, 235, 245);
    private static final Color QUIET_TEXT = new Color(150, 162, 186);
    private static final Color BUTTON = new Color(46, 58, 86);
@@ -109,6 +112,20 @@ public final class GameFrame extends JFrame {
    private final JPanel lessonBar = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
    private final JButton lessonBack = new JButton("Back");
    private final JButton lessonNext = new JButton("Next");
+   /** Hints (H): on your turn, every move you may make shows its chances from Hard's search, the best in a gold ring. */
+   private boolean hints;
+   private final JButton hintsButton = new JButton("Hints");
+   /** The search behind the hints, the position (game code) it is for, and how long it has searched so far. */
+   private Computer.Think think;
+   private String thinkFor;
+   private int thinkSpent;
+   /** What the board shows: each move's chances for the side to move (NaN where none), and the best; null while hidden. */
+   private double[] hintChances;
+   private double[] hintDoubts;
+   private int hintBest = -1;
+   private final Timer hintTimer = new Timer(HINT_TICK_MILLIS, event -> this.hintStep());
+   /** Hints were shown in this game against the computer, so it does not count in the record. */
+   private boolean hinted;
 
    /** {@code page} and {@code code} come from the arguments (see Main); either may be null. */
    public GameFrame(String page, String code) {
@@ -236,6 +253,10 @@ public final class GameFrame extends JFrame {
       this.learnButton.setToolTipText("Learn the rules in six moves (L)");
       this.learnButton.addActionListener(event -> this.startLesson());
       this.reviewButtonHolder.add(this.learnButton);
+      this.hintsButton.setFocusable(false);
+      this.hintsButton.setToolTipText("Show how good each move is (H)");
+      this.hintsButton.addActionListener(event -> this.toggleHints());
+      this.reviewButtonHolder.add(this.hintsButton);
       this.addReviewButton("<", "Back a move (left arrow)", () -> this.reviewJump(this.reviewAt - 1, false));
       this.addReviewButton(">", "Forward a move (right arrow)", () -> this.reviewJump(this.reviewAt + 1, true));
       this.addReviewButton("Next mistake", "The next mistake or blunder (N)", this::nextMistake);
@@ -279,6 +300,7 @@ public final class GameFrame extends JFrame {
       this.computerTimer.stop();
       this.nextGameTimer.stop();
       this.computerPlayedX = this.watching;
+      this.hinted = false;
       boolean backToFriend = choice == Mode.FRIEND && this.mode != Mode.FRIEND;
       this.mode = choice;
       this.record.setLastMode(choice);
@@ -458,9 +480,12 @@ public final class GameFrame extends JFrame {
 
    /** True if the player at this screen may make that move now (not while the computer or a friend is to move). */
    private boolean canPreview(int move) {
-      boolean ours = this.lessonStep >= 0 ? !this.lessonDone
-         : this.review == null && !this.watching && !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting);
-      return ours && this.state.canPlay(move / 9, move % 9);
+      return (this.lessonStep >= 0 ? !this.lessonDone : this.ours()) && this.state.canPlay(move / 9, move % 9);
+   }
+
+   /** A game is on (not a lesson or a review) and the next move is made at this screen. */
+   private boolean ours() {
+      return this.lessonStep < 0 && this.review == null && !this.watching && !this.computerToMove() && !(this.mode == Mode.FRIEND && this.friendWaiting);
    }
 
    /** The mouse (or, with {@code keyboard}, the arrow keys) is on that cell: show what playing there would do. */
@@ -565,7 +590,7 @@ public final class GameFrame extends JFrame {
 
    /** After any move: count a finished game against the computer, redraw, and hand the turn to the computer if it is O's. */
    private void moved() {
-      if (this.state.winner != null && this.mode.vsComputer() && !this.computerPlayedX) {
+      if (this.state.winner != null && this.mode.vsComputer() && !this.computerPlayedX && !this.hinted) {
          this.record.add(this.mode, this.state.winner);
       }
       this.refresh();
@@ -611,7 +636,8 @@ public final class GameFrame extends JFrame {
          : winner == null ? "Ultimate Tic-Tac-Toe: " + (this.state.xTurn ? "X" : "O") + " to move"
          : GameState.DRAW.equals(winner) ? "Ultimate Tic-Tac-Toe: draw. Click to play again."
          : "Ultimate Tic-Tac-Toe: " + winner + " wins! Click to play again.");
-      this.statusLine = this.notice != null ? this.notice : this.statusText();
+      this.updateHints();
+      this.statusLine = this.notice != null ? this.notice : this.hintsShown() ? this.hintText() : this.statusText();
       this.notice = null;
       this.updatePreview();
       // Once a game ends, Review game sits beside the record (shortened to leave it room), or in place of Open.
@@ -620,12 +646,17 @@ public final class GameFrame extends JFrame {
       boolean fresh = winner == null && this.moves.isEmpty() && !this.watching;
       String level = this.mode == Mode.HARD ? "Hard" : "Easy";
       this.tally.setText(this.watching ? "Games the computer plays X in do not count."
-         : this.mode.vsComputer() ? (reviewable || fresh ? level : "Your record on " + level) + ": " + this.record.describe(this.mode)
+         : this.hinted && winner == null ? "With hints, this game won't count."
+         : this.mode.vsComputer() ? level + ": " + this.record.describe(this.mode)
          : " ");
       boolean friend = this.mode == Mode.FRIEND;
+      // One button beside the record: Review game at the end, How to play before the first move (unless hints are on), else Hints.
       this.reviewButton.setVisible(reviewable);
-      this.learnButton.setVisible(!reviewable);
-      this.showSlots(false, !friend, friend, (reviewable || fresh) && !friend);
+      this.learnButton.setVisible(fresh && !this.hints);
+      this.hintsButton.setVisible(winner == null && !(fresh && !this.hints));
+      this.hintsButton.setBackground(this.hints ? CellButton.X_COLOR : BUTTON);
+      this.hintsButton.setForeground(this.hints ? Color.BLACK : TEXT);
+      this.showSlots(false, !friend, friend, !friend && !this.watching);
       this.openButton.setVisible(!reviewable);
       this.friendReviewButton.setVisible(reviewable);
       this.friendField.setText(FriendLink.message(this.friendPage, this.moves));
@@ -730,6 +761,93 @@ public final class GameFrame extends JFrame {
       this.showSlots(false, true, false, false);
    }
 
+   // ---- hints ----
+
+   /** H or Hints: on (or off) for every game until turned off again. */
+   final void toggleHints() {
+      this.hints = !this.hints;
+      this.refresh();
+   }
+
+   /** Hints are on and it is your move in a game going on. */
+   private boolean hintsWanted() {
+      return this.hints && this.state.winner == null && this.ours();
+   }
+
+   /** The board shows the hints for the position on it (they are left off in a lesson and a review). */
+   private boolean hintsShown() {
+      return this.hintsWanted() && this.hintChances != null && this.moves.equals(this.thinkFor);
+   }
+
+   /** Starts a search for a new position once its last move has drawn in, or stops the search when hints are not wanted. */
+   private void updateHints() {
+      if (!this.hintsWanted()) {
+         this.hintTimer.stop();
+         this.hintChances = null;
+         return;
+      }
+      this.hinted |= this.mode.vsComputer();
+      if (!this.moves.equals(this.thinkFor)) {
+         this.think = new Computer.Think(this.state);
+         this.thinkFor = this.moves;
+         this.thinkSpent = 0;
+      }
+      this.takeHints();
+      if (this.thinkSpent < HINT_THINK_MILLIS && !this.hintTimer.isRunning()) {
+         this.hintTimer.setInitialDelay((int) Math.max(HINT_TICK_MILLIS, this.animateUntil - System.currentTimeMillis()));
+         this.hintTimer.restart();
+      }
+   }
+
+   /** One slice of the search; the board shows the chances settle, and the status line names the best once done. */
+   private void hintStep() {
+      if (!this.hintsWanted() || !this.moves.equals(this.thinkFor)) {
+         this.hintTimer.stop();
+         return;
+      }
+      this.think.grow(this.random, HINT_TICK_MILLIS);
+      this.thinkSpent += HINT_TICK_MILLIS;
+      this.takeHints();
+      if (this.thinkSpent >= HINT_THINK_MILLIS) {
+         this.hintTimer.stop();
+         this.refresh();   // the status line and the cells' names for screen readers
+      } else {
+         this.repaintCells();
+      }
+   }
+
+   private void takeHints() {
+      this.hintChances = this.think.chances();
+      this.hintDoubts = this.think.doubts();
+      this.hintBest = this.think.best();
+   }
+
+   /** Short, to fit over a phone-sized board. */
+   private String hintText() {
+      return this.thinkSpent < HINT_THINK_MILLIS || this.hintBest < 0 ? "Hints: thinking..."
+         : "Hints: the gold ring is best (" + percent(this.hintChances[this.hintBest]) + ").";
+   }
+
+   /** The chances of that move for the side to move, or NaN when the board shows no hint for it. */
+   final double hintChance(int move) {
+      return this.hintsShown() ? this.hintChances[move] : Double.NaN;
+   }
+
+   /** The search's pick while hints show, else -1. */
+   final int hintBest() {
+      return this.hintsShown() ? this.hintBest : -1;
+   }
+
+   /**
+    * How a move compares with the pick, graded as a review would grade it, counting only the shortfall beyond what the
+    * search is unsure of (Think.doubts); null where no hint shows.
+    */
+   final Review.Grade hintGrade(int move) {
+      double chance = this.hintChance(move);
+      return Double.isNaN(chance) || this.hintBest < 0 ? null
+         : Review.Grade.of(move == this.hintBest, Math.max(0, this.hintChances[this.hintBest] - chance - this.hintDoubts[move]));
+   }
+
    // ---- review ----
 
    /** The review being shown, or null. */
@@ -826,6 +944,10 @@ public final class GameFrame extends JFrame {
          }
          if (keyCode == KeyEvent.VK_L) {
             this.startLesson();
+            return true;
+         }
+         if (keyCode == KeyEvent.VK_H) {
+            this.toggleHints();
             return true;
          }
          return false;
