@@ -50,6 +50,7 @@ public final class BattleCheck
         pointerDrivesAndFires();
         buildYourOwnBattlefield();
         computerFightsOnABuiltBattlefield();
+        narrowWindowSetsABlockingFieldAside();
         System.out.println("BattleCheck: all checks passed");
     }
 
@@ -631,5 +632,29 @@ public final class BattleCheck
         assert battle.arena().name().equals("Your Battlefield");
         assert battle.phase() == Battle.Phase.MATCH_OVER : "a match on a built battlefield did not end in 10 minutes";
         System.out.println("  built battlefield: " + battle.redWins() + "-" + battle.greenWins() + " in " + ticks / 60 + " s");
+    }
+
+    /**
+     * A battlefield built at full width (a gap the tanks fit through) can shut them apart in a phone-wide window: there
+     * the rounds go back to the four layouts, and the battlefield is kept for a wider window.
+     */
+    private static void narrowWindowSetsABlockingFieldAside()
+    {
+        String text = "############/############/############/###.......##/#..........#/#..........#/#.....#....#"
+                        + "/#...####...#/############/############/############/############";
+        Tank red = new Tank("Red", Color.RED, new Script(), 100, 250, 90);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
+        Battle wide = new Battle(red, green, new ComputerControls(new Random(1)), null);
+        wide.setField(Arena.cells(text));
+        wide.tick(W, H);
+        assert !wide.fieldBlocked() && wide.arena().name().equals("Your Battlefield");
+        int narrow = 384;
+        Tank red2 = new Tank("Red", Color.RED, new Script(), 100, 250, 90);
+        Tank green2 = new Tank("Green", Color.GREEN, new Script(), 400 - 120, 250, 270);
+        Battle small = new Battle(red2, green2, new ComputerControls(new Random(1)), null);
+        small.setField(Arena.cells(text));
+        small.tick(narrow, H);
+        assert small.fieldBlocked() && small.arena().name().equals("Stepping Stones") : small.arena().name();
+        assert small.hasField() : "the battlefield should be kept for a wider window";
     }
 }

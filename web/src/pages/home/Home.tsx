@@ -4,6 +4,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import './home.css';
 import { APPS, app, type App } from '../../shared/catalog';
+import { linkState } from '../../shared/link-state';
 import { FIRST, H, draw, useHomeDraw } from './model';
 import { TOUR } from './tour';
 import { Records } from './Records';
@@ -241,7 +242,7 @@ function Player() {
             {"</> Source"}
           </a>
           {' '}
-          <a className="btn primary" id="player-full" href={a ? P.pageOf(a) : page(FIRST.id)}>Full page</a>
+          <a className="btn primary" id="player-full" href={a ? P.pageOf(a) + linkState(a.id, H.frame.src).replace('&', '?') : page(FIRST.id)}>Full page</a>
         </Actions>
       </div>
       <TourBox />

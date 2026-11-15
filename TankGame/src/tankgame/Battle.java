@@ -71,6 +71,8 @@ public class Battle
     /** The player's battlefield on the grid; with any wall on it, every round is fought there. */
     private boolean[][]      field              = new boolean[Arena.GRID][Arena.GRID];
     private boolean          refused;
+    /** Whether this window is too small for the player's battlefield to leave the tanks a way through. */
+    private boolean          fieldBlocked;
     private Arena            arena              = Arena.EMPTY;
     /** The round, field width and height the arena was placed for, so it is placed again when one changes. */
     private int              arenaRound         = -1;
@@ -246,6 +248,9 @@ public class Battle
         int r = Math.max(round, 1);
         if (r == arenaRound && width == arenaWidth && height == arenaHeight) return;
         arena = Arena.build(layouts.get((r - 1) % layouts.size()), width, height, red, green);
+        // A battlefield built in a wider window can shut the tanks apart in a narrower one: then fight on the layouts.
+        fieldBlocked = phase != Phase.BUILD && hasField() && !arena.connected(width, height, red, green);
+        if (fieldBlocked) arena = Arena.build(Arena.LAYOUTS.get((r - 1) % Arena.LAYOUTS.size()), width, height, red, green);
         arenaRound = r;
         arenaWidth = width;
         arenaHeight = height;
@@ -595,6 +600,12 @@ public class Battle
     public List<Spark> sparks()
     {
         return sparks;
+    }
+
+    /** Whether the player's battlefield was set aside for this round because it shuts the tanks apart at this size. */
+    public boolean fieldBlocked()
+    {
+        return fieldBlocked;
     }
 
     /** The battlefield of this round (or of the first round, on the title). */

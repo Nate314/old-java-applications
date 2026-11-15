@@ -541,8 +541,9 @@ public class GamePanel extends JPanel
                 panel(g, new Line[] { new Line("TANK GAME", BIG, TEXT),
                                 new Line("Three hits destroy a tank. First to " + Battle.ROUNDS_TO_WIN + " rounds wins.", SMALL, DIM),
                                 new Line("Hide behind walls. Shells bounce once.", SMALL, DIM),
-                                new Line(battle.hasField() ? "Every round is on your battlefield."
-                                                : "Each round is a new battlefield.", SMALL, DIM),
+                                new Line(battle.fieldBlocked() ? BLOCKED_NOTE : battle.hasField()
+                                                ? "Every round is on your battlefield." : "Each round is a new battlefield.",
+                                                SMALL, battle.fieldBlocked() ? Color.YELLOW : DIM),
                                 new Line("Drive over supply crates for powers.", SMALL, DIM),
                                 new Line("Red: W A S D to drive, Q to fire", SMALL, light(red)),
                                 new Line("Or point: hold to drive there, tap to fire there", SMALL, light(red)),
@@ -557,7 +558,8 @@ public class GamePanel extends JPanel
                 boolean go = battle.phaseTicks() > Battle.ROUND_START_TICKS - 25;
                 panel(g, new Line[] { new Line(go ? "FIGHT!" : "ROUND " + battle.round(), BIG, go ? Color.YELLOW : TEXT),
                                 new Line(battle.arena().name(), MEDIUM, TEXT),
-                                new Line(battle.redWins() + " - " + battle.greenWins(), SMALL, DIM) });
+                                new Line(battle.redWins() + " - " + battle.greenWins(), SMALL, DIM),
+                                new Line(battle.fieldBlocked() ? BLOCKED_NOTE : "", SMALL, Color.YELLOW) });
                 break;
             case ROUND_OVER:
                 // The blast plays out in slow motion before the banner covers it.
@@ -611,6 +613,9 @@ public class GamePanel extends JPanel
         return new Line(battle.supplies() ? "Supply drops on: tap or press X to turn off"
                         : "Supply drops off: tap or press X to turn on", SMALL, CRATE, battle::toggleSupplies);
     }
+
+    /** Said when the player's battlefield is set aside because this window is too narrow for it (Battle#fieldBlocked). */
+    private static final String BLOCKED_NOTE = "Your battlefield has no way through at this size";
 
     private Line fieldLine()
     {
