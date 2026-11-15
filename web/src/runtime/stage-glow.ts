@@ -59,12 +59,23 @@ export function init() {
         }
       });
     }
-    function tick(t: number) {
-      requestAnimationFrame(tick);   // paused with the tab
-      if (t - last < (calm.matches ? CALM_MS : EVERY_MS)) return;
+    // Drawn again only after a change (or once a second), so an app at rest stays as quiet as replay keeps it:
+    // the shim's paint flag is shared with replay, which clears it, so it is watched through a setter here.
+    var dirty = true, settle = 0, flag = window.__shimPainted;
+    Object.defineProperty(window, '__shimPainted', { configurable: true,
+      get: function () { return flag; }, set: function (v) { flag = v; if (v) dirty = true; } });
+    if (window.MutationObserver) new MutationObserver(function () { dirty = true; })
+      .observe(desktop, { subtree: true, childList: true, attributes: true, characterData: true });
+    function tick() {
+      setTimeout(tick, calm.matches ? CALM_MS : EVERY_MS);   // a timer, not frames: it never keeps the page painting
+      var t = performance.now();
+      if (document.hidden) return;
+      if (dirty) { dirty = false; settle = 8; }   // a few more pictures, so the eased light reaches the new colors
+      if (settle <= 0 && t - last < CALM_MS) return;
+      settle--;
       last = t;
       draw();
     }
-    requestAnimationFrame(tick);
+    tick();
   });
 }
