@@ -84,6 +84,8 @@ public final class GamePanel extends JPanel implements KeyListener {
    private int rewinds = 0;
    /** Where the bird's body met a pipe in the last crash, marked until the next run or rewind; null for the ground. */
    private float[] contact;
+   /** The time of day ({@link Sky}), easing toward the score's. */
+   private float skyPhase;
 
    /**
     * A picture from the classpath (a jar of the app), or else from the folder the game is started in (as in the
@@ -195,6 +197,9 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
 
       float fade = 4.0F / (float)this.stepsPerSecond;
+      // The sky turns a tenth of a phase per pipe, over about half a second (and back again in a rewind).
+      float skyPace = 0.2F / (float)this.stepsPerSecond;
+      this.skyPhase += Math.max(-skyPace, Math.min(skyPace, this.score() / (float)Sky.PIPES_PER_PHASE - this.skyPhase));
       this.flash = Math.max(0.0F, this.flash - fade);
       this.shake = Math.max(0.0F, this.shake - fade);
       this.scorePop = Math.max(0.0F, this.scorePop - fade);
@@ -269,8 +274,9 @@ public final class GamePanel extends JPanel implements KeyListener {
       if (this.rewinds == 0 && this.daily && this.course.offer(this.score(), this.samples)) {
          this.course.save(DailyCourse.FILE);
       }
-      this.flash = 1.0F;
-      this.shake = 1.0F;
+      // With reduced motion the crash keeps its thud and feathers but neither flashes nor shakes.
+      this.flash = calm() ? 0.0F : 1.0F;
+      this.shake = this.flash;
       this.sounds.hit();
       this.puff(12, new Color(250, 200, 40), Bird.HEIGHT / 6.0F);
       this.bird.stall();
@@ -374,6 +380,7 @@ public final class GamePanel extends JPanel implements KeyListener {
             g2.drawRect((int)tile.x, (int)tile.y, this.background.backgroundImage.getWidth(null), this.background.backgroundImage.getHeight(null));
          }
       }
+      Sky.paintSky(g2, this.skyPhase, Main.FRAME_WIDTH, Main.FRAME_HEIGHT, Background.groundY, calm());
 
       for (int pipeIndex = 0; pipeIndex < this.pipes.positions.size(); pipeIndex++) {
          Position pipe = this.pipes.positions.get(pipeIndex);
@@ -392,6 +399,7 @@ public final class GamePanel extends JPanel implements KeyListener {
             g2.drawRect(0, Main.FRAME_HEIGHT * 7 / 8, Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8);
          }
       }
+      Sky.paintDim(g2, this.skyPhase, Main.FRAME_WIDTH, Main.FRAME_HEIGHT);
 
       boolean rewound = this.state == REWINDING || this.state == REWOUND;
       if (this.daily && (this.state == READY || this.state == PLAYING || rewound) && this.course.hasGhost()) {
@@ -498,6 +506,11 @@ public final class GamePanel extends JPanel implements KeyListener {
             g2.drawString(debugLines[line], Main.FRAME_WIDTH - 11 * this.consoleFontSize, Main.FRAME_HEIGHT - this.consoleFontSize * 10 + this.consoleFontSize * line);
          }
       }
+   }
+
+   /** Whether the visitor asked for reduced motion (the web page's shim answers; the desktop JDK gives null, so false). */
+   private static boolean calm() {
+      return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
    }
 
    static String rewindCount(int rewinds) {
@@ -785,6 +798,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       this.stateSteps = 0;
       this.lastScore = 0;
       this.scorePop = 0.0F;
+      this.skyPhase = 0.0F;   // every run starts at sunrise
       this.puffs.clear();
       this.steps = 0;
       this.rewind.clear();

@@ -6,13 +6,19 @@ It moves and sounds like the original Flappy Bird:
 
 - The bird hovers on the title screen, tilts nose up with each flap and turns into a nose-down dive as it falls, and each flap stretches it for a moment and puffs a little air.
 - The score is big white digits outlined in black, and it pops bigger with each pipe passed.
-- A crash flashes the screen white, shakes it and scatters feathers; after hitting a pipe the bird drops to the ground before the game over screen rises into place. For half a second that screen ignores Space, a click or a tap, so a flap pressed at the moment of the crash does not skip it.
+- A crash flashes the screen white, shakes it and scatters feathers (on the web page, when the system asks for reduced motion, it only scatters feathers); after hitting a pipe the bird drops to the ground before the game over screen rises into place. For half a second that screen ignores Space, a click or a tap, so a flap pressed at the moment of the crash does not skip it.
 - Sounds on the MIDI synthesizer: a tick for each flap, a two-note ding for each pipe, a thud for a crash and a falling run of notes as the bird drops. M turns them off and on.
 
 There are two courses, chosen on the title screen:
 
 - **Endless**: new random pipes every run (the original game).
 - **Today's course**: the pipes are seeded by the date, so every run on the same day meets the same pipes, and a new course starts each day. Your best run of the day is kept and flies beside you as a see-through ghost labelled with its score. Passing its score shows "You passed your ghost!", and a better run replaces it.
+
+## From sunrise into night
+
+A long run is a day's flight. The sky starts at the sunrise the art is drawn at and turns a little with every pipe passed: clear blue noon by 10 pipes (Bronze), a purple and orange sunset by 20 (Silver), and night by 30 (Gold), when the pipes and ground darken, stars twinkle and a moon is up, while the bird stays bright. At 40 (Platinum) it is sunrise again, and the day goes round. Each pipe moves the sky a tenth of the way to the next time of day over about half a second, a rewind turns it back with the score, and every run starts at sunrise. With reduced motion the stars hold still.
+
+The sky is drawn over the background picture in code (`Sky.java`): bands of color down to the horizon, blended between the four times of day, then the stars and moon, and a see-through wash over the pipes and ground.
 
 ## Fair crashes
 
@@ -52,6 +58,7 @@ The game over screen shows your score, best and today's best, and a medal: Bronz
 
 - `src/flappyBird/Main.java`: the `JFrame`; sizes the window, parses the argument and wires the key listener.
 - `src/flappyBird/GamePanel.java`: loads images; a Swing timer runs fixed game steps based on elapsed time, then repaints. Draws the game, the ghost and the title, pause and game over screens (with the medal), the tilted bird, its puffs and feathers, the crash's flash and shake; checks collisions, handles keys, clicks and the saved best score, records the run for today's course, and runs a rewind (tape, backwards playback, the frozen wait and the last flight's path).
+- `src/flappyBird/Sky.java`: the time of day the score has reached: the sky's colors at sunrise, noon, sunset and night and the blend between them, the stars and the moon, and the dimming of the pipes and ground.
 - `src/flappyBird/Hitbox.java`: what counts as touching a pipe: the bird's round body (turned with its tilt) against a pipe's shaft and flange, and where they touch.
 - `src/flappyBird/Rewind.java`: the rewind tape: the last 2.5 seconds as one moment per game step (what the bird, pipes and background remember), given back newest first, and the path into the crash.
 - `src/flappyBird/Sounds.java`: the flap, pipe, crash, fall and rewind sounds on the MIDI synthesizer, opened on a background thread.
@@ -72,11 +79,12 @@ The images are original art for this repo (a teal bird, copper pipes, hills at s
 
 ## Self-check
 
-`test/flappyBird/CourseCheck.java` checks that the same day gives the same pipes and the next day different ones, that only a better run replaces today's ghost, that the ghost fills in the steps between samples and ends with its run, that the course file loads back the same ghost while a file from another day or a broken one is ignored, and the medal names and lines. `test/flappyBird/RewindCheck.java` checks that the rewind tape keeps only its latest moments and gives them back newest first with the path into the crash, that pipes put back from memory scroll on into exactly the same pipes (including pairs not yet made), and that a bird put back flies the same way again. `test/flappyBird/HitboxCheck.java` checks the body's place as drawn and as it tilts, the shaft and flange of a top and a bottom pipe, that the picture's empty corner over a flange and the margin beside a shaft are not crashes, and that a body dipping into a flange or brushing a shaft is, at the spot it touches. From `FlappyBird/`:
+`test/flappyBird/CourseCheck.java` checks that the same day gives the same pipes and the next day different ones, that only a better run replaces today's ghost, that the ghost fills in the steps between samples and ends with its run, that the course file loads back the same ghost while a file from another day or a broken one is ignored, and the medal names and lines. `test/flappyBird/RewindCheck.java` checks that the rewind tape keeps only its latest moments and gives them back newest first with the path into the crash, that pipes put back from memory scroll on into exactly the same pipes (including pairs not yet made), and that a bird put back flies the same way again. `test/flappyBird/HitboxCheck.java` checks the body's place as drawn and as it tilts, the shaft and flange of a top and a bottom pipe, that the picture's empty corner over a flange and the margin beside a shaft are not crashes, and that a body dipping into a flange or brushing a shaft is, at the spot it touches. `test/flappyBird/SkyCheck.java` checks that sunrise leaves the art as drawn and 40 pipes come round to it again, that a time of day fades in from a clear sky in its own color rather than through black, and that the stars come out through dusk and are gone by day. From `FlappyBird/`:
 
 ```
 javac -d ../out/check/FlappyBird src/flappyBird/*.java test/flappyBird/*.java
 java -ea -cp ../out/check/FlappyBird flappyBird.CourseCheck
 java -ea -cp ../out/check/FlappyBird flappyBird.RewindCheck
 java -ea -cp ../out/check/FlappyBird flappyBird.HitboxCheck
+java -ea -cp ../out/check/FlappyBird flappyBird.SkyCheck
 ```
