@@ -6,24 +6,29 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
  * The best stars and fewest moves on each solved level and the level played last, kept in a small text file of
  * {@code name=value} lines: {@code level=4}, then one line such as {@code 3=3,3} (stars, moves) per solved level, and
  * {@code view=net} when the flat net was picked over the 3D cube, and {@code patterns=spots,checkerboard} for the
- * patterns made by hand.
+ * patterns made by hand, and {@code times=12340,9870} for the speed timer's latest solves in milliseconds, oldest first.
  */
 public final class LevelRecords {
    public static final int LEVELS = 20;
+   /** The speed timer keeps this many of the latest times. */
+   public static final int TIMES_KEPT = 100;
    private final File file;
    private final int[] stars = new int[LEVELS + 1];
    private final int[] moves = new int[LEVELS + 1];
    private int lastLevel = 1;
    private boolean netView = false;
    private final Set<String> patterns = new LinkedHashSet<>();
+   private final List<Long> times = new ArrayList<>();
 
    private LevelRecords(File file) {
       this.file = file;
@@ -58,6 +63,15 @@ public final class LevelRecords {
             for (String key : value.split(",")) {
                if (Patterns.byKey(key.trim()) != null) {
                   this.patterns.add(key.trim());
+               }
+            }
+            return;
+         }
+         if (name.equals("times")) {
+            for (String time : value.split(",")) {
+               long millis = Long.parseLong(time.trim());
+               if (millis > 0) {
+                  this.times.add(millis);
                }
             }
             return;
@@ -145,6 +159,28 @@ public final class LevelRecords {
       }
    }
 
+   /** The speed timer's times in milliseconds, oldest first. */
+   public List<Long> times() {
+      return Collections.unmodifiableList(this.times);
+   }
+
+   /** Keeps a speed timer time (dropping the oldest past {@link #TIMES_KEPT}) and saves. */
+   public void addTime(long millis) {
+      this.times.add(millis);
+      while (this.times.size() > TIMES_KEPT) {
+         this.times.remove(0);
+      }
+      this.save();
+   }
+
+   /** Deletes the latest time (a start by mistake) and saves. */
+   public void dropLastTime() {
+      if (!this.times.isEmpty()) {
+         this.times.remove(this.times.size() - 1);
+         this.save();
+      }
+   }
+
    /** Records a solve; keeps the most stars and the fewest moves seen on that level and saves. */
    public void record(int level, int starCount, int moveCount) {
       this.stars[level] = Math.max(this.stars[level], starCount);
@@ -171,6 +207,13 @@ public final class LevelRecords {
          }
          if (!this.patterns.isEmpty()) {
             writer.write("patterns=" + String.join(",", this.patterns) + "\n");
+         }
+         if (!this.times.isEmpty()) {
+            StringBuilder line = new StringBuilder("times=");
+            for (int i = 0; i < this.times.size(); i++) {
+               line.append(i == 0 ? "" : ",").append(this.times.get(i));
+            }
+            writer.write(line + "\n");
          }
          for (int level = 1; level <= LEVELS; level++) {
             if (this.stars[level] > 0) {

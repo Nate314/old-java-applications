@@ -150,6 +150,12 @@ export function init() {
       });
       var made = /^patterns=(.+)$/m.exec(text), parts = solved ? ['Your levels: ' + solved + ' of 20 solved, ' + stars + ' of 60 stars'] : [];
       if (made) parts.push((parts.length ? 'patterns' : 'Your patterns') + ': ' + made[1].split(',').length + ' of 7 made');
+      // The Timer's times in ms (rubikscube.LevelRecords); shown as SolveTimer.format does: hundredths cut, m:ss.cc past a minute.
+      var times = /^times=(.+)$/m.exec(text), best = times ? Math.min.apply(null, times[1].split(',').map(Number).filter(function (t) { return t > 0; })) : Infinity;
+      if (isFinite(best)) {
+        var cs = Math.floor(best / 10), sec = Math.floor(cs / 100), frac = '.' + String(cs % 100).padStart(2, '0');
+        parts.push((parts.length ? 'best timed solve' : 'Your best timed solve') + ': ' + (sec < 60 ? sec + frac : Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') + frac));
+      }
       return parts.join('; ');
     } },
     // The Songwriter's song (musictheoryexpert.Progression): key=<fifths up from C>, minor=, chords=<degrees>, melody=<notes>.
