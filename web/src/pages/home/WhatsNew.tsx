@@ -7,13 +7,12 @@ import { useEffect, useRef } from 'react';
 import './whats-new.css';
 import { webp } from '../../shared/catalog';
 import { H, type NewsItem } from './model';
-import { allClick, day, openApp } from './news';
+import { MANY, allClick, day, openApp } from './news';
 
 const GAP = 10 * 60 * 1000;   // changes further apart than this are separate updates
 const SHOWN = 6;              // headline changes before Show all
 const SEEN_KEY = 'oldjava.newsSeen';   // the newest change the visitor has had on screen
 const SITE_ICON = new URL('icons/icon.svg', location.href).href;
-const MANY = 4;               // a change to more apps than this is the whole arcade's (as news.ts counts it)
 
 function seenAt() { try { return Number(localStorage.getItem(SEEN_KEY)) || 0; } catch (e) { return 0; } }
 const seen = seenAt();        // as it was when the page opened, so New tags stay while the visitor reads them
