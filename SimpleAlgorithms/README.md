@@ -13,7 +13,7 @@ On start, `main` prints the original output, in order:
 - `5! = 120` and `5^3 = 125.0`
 - each step of the division search, then `4/2 = ...`
 
-Then the Algorithm Lab window opens. Its tabs (click them, or press 1 to 6) are:
+Then the Algorithm Lab window opens. Its tabs (click them, or press 1 to 7) are:
 
 - **Sorting race**: six sorts (bubble, selection, insertion, merge, quicksort and heapsort) on the same numbers, side by side. The window opens on it, already racing. Each tick every sort gets the same number of steps: a compare or a write of one value is one step, a swap is two. Bars light orange for a compare and red for a swap or write. When a sort finishes, a green check runs along its bars and it gets its place (1st for the fewest steps; equal runs share a place). At the end the page says which sort won, in how many steps, and how many times as many the slowest took. Each sort shows its compares and writes, and how its work grows for random numbers (n² or n log n).
   - Click a sort to listen to it (Quicksort at first): each tick plays a vibraphone note pitched by the value it just touched, and the green check plays a rising run. M: sound on or off.
@@ -31,9 +31,13 @@ Then the Algorithm Lab window opens. Its tabs (click them, or press 1 to 6) are:
   - Space: Play or Pause (Again once done). S or Right: one cell, paused. M: a new random maze (with some loops and mud patches). X: the example map. C: clear the walls and mud. F: speed (Slow, Normal, Fast, Turbo).
   - The example it opens on shows the differences: the goal sits behind a cup that opens toward the start, and a band of mud lies between them with a dry way round at the top. Breadth-first finds the fewest steps (36) by wading through the mud (cost 48); Dijkstra and A* walk round it (38 steps, cost 38), A* after looking at 184 cells to Dijkstra's 454; Greedy looks at the fewest cells but walks into the cup and through the mud; depth-first wanders 98 steps.
   - The map and the picked search are saved in `~/.simplealgorithms-paths.txt` (one line per row: `.` open, `#` wall, `~` mud, `S`, `G`), so a drawn map is still there next time.
+- **Division**: steps through `MyMath.divide`, the search behind the `4/2 = ...` line. It counts: it adds 1 to its guess until guess * b passes a, steps back 1, counts on by 0.1, passes a again, steps back, counts by 0.01, and stops once a step back is smaller than 0.01. Each step size gets its own ruler, and each ruler is a tenfold zoom of the one step above it where the count passed a (shaded, with lines down to the next ruler). Every guess is a hop along its ruler (red when guess * b passes a, grey arching under for a step back, green for the answer), a green mark shows the real a / b, and beside the rulers are the lines `divide` prints, with `returns` and the answer last (the last step back is not printed). The two lines under the rulers multiply the guess out against a and say what happens next. It opens on 22/7 (3.14).
+  - Type a division (digits, `.` and `/`, for example `22/7`; up to 12 characters, a and b above 0, a / b at most 100); Backspace deletes.
+  - Space: Play or Pause. S or Right: next step. B or Left: previous step. N: next example (22/7, 4/2 as the original program prints it, 7/2, 1/3, 100/7, 2/3).
+  - Some things it shows: tenths do not add up exactly in a `double`, so 7/2 counts to 3.5000000000000004, which times 2 is a hair more than 7, and it ends on 3.4999999999999982 rather than 3.5. Whether it stops at hundredths (22/7 gives 3.14) or goes on to thousandths (1/3 gives 0.333) is the same kind of rounding: the step back from 3.15 to 3.14 comes out a hair under 0.01, from 0.34 to 0.33 a hair over.
 - **Printout**: the lines `main` printed at start, as a terminal shows them. H adds what `Hanoi.solve(3, true)` prints (`main` has a commented-out call to `solve(5, true)`).
 
-On the Square root tab, the digit keys type the number, so switch tabs there by clicking.
+On the Square root and Division tabs, the digit keys type the number, so switch tabs there by clicking.
 
 ## Code layout
 
@@ -48,7 +52,8 @@ On the Square root tab, the digit keys type the number, so switch tabs there by 
 - `src/simplealgorithms/Paths.java`: the five searches. Each records the order it looked at cells in and when it first saw each one, so the page can replay it.
 - `src/simplealgorithms/PathPage.java`: the Pathfinding tab.
 - `src/simplealgorithms/LabPanel.java`: the window's graph-paper panel: tabs, the button bar, and routing of clicks, drags, keys and a 30 ms tick to the page showing.
-- `src/simplealgorithms/Page.java`: base class of the six pages, with the shared colors, fonts and number formatting.
+- `src/simplealgorithms/Page.java`: base class of the seven pages, with the shared colors, fonts and number formatting.
+- `src/simplealgorithms/DividePage.java`: the Division tab; `steps` reads the lines `divide` prints back into hops, step backs and the answer.
 - `src/simplealgorithms/HanoiPage.java`, `RootPage.java`, `TaylorPage.java`, `PrintoutPage.java`: the other four tabs.
 - `src/simplealgorithms/Conversions.java`: empty class.
 
@@ -58,7 +63,7 @@ From the repo root: `./run.ps1 old SimpleAlgorithms` (or `./run.ps1 old SimpleAl
 
 ## Self-check
 
-`test/simplealgorithms/MyMathCheck.java` checks the sine, cosine, square root, factorial, power and division results against `java.lang.Math`. `test/simplealgorithms/HanoiCheck.java` plays `Hanoi.moves` for 1 to 10 disks and checks every move is legal, matches the shortest solution and ends with the tower on the right peg, and that from scrambled positions the solver finishes in exactly `movesLeft` moves. `test/simplealgorithms/PathCheck.java` runs the five searches on 300 random maps and checks each finds a way exactly when there is one, never looks at a wall or a cell twice, and that its way is a real one whose cost adds up; that breadth-first finds the fewest steps and Dijkstra and A* the cheapest way (against a slow search that tries every step until nothing improves), with A* looking at no more cells than Dijkstra; the lessons of the example map above; that 100 random mazes all have a way through; and that a saved map loads back. `test/simplealgorithms/SortCheck.java` plays back each sort's recorded steps for every order and several counts and checks they sort the numbers, checks the lessons above (insertion sort wins on nearly sorted numbers, merge sort beats bubble sort by far on random ones, quicksort is slow on reversed ones), and that the race gives every sort the same steps and places the cheapest first; that each print starts on the numbers and ends sorted, and that moving the clock to a row's moment (forward or back, and past either end) gives the values that row shows. From `SimpleAlgorithms/`:
+`test/simplealgorithms/MyMathCheck.java` checks the sine, cosine, square root, factorial, power and division results against `java.lang.Math`. `test/simplealgorithms/HanoiCheck.java` plays `Hanoi.moves` for 1 to 10 disks and checks every move is legal, matches the shortest solution and ends with the tower on the right peg, and that from scrambled positions the solver finishes in exactly `movesLeft` moves. `test/simplealgorithms/PathCheck.java` runs the five searches on 300 random maps and checks each finds a way exactly when there is one, never looks at a wall or a cell twice, and that its way is a real one whose cost adds up; that breadth-first finds the fewest steps and Dijkstra and A* the cheapest way (against a slow search that tries every step until nothing improves), with A* looking at no more cells than Dijkstra; the lessons of the example map above; that 100 random mazes all have a way through; and that a saved map loads back. `test/simplealgorithms/SortCheck.java` plays back each sort's recorded steps for every order and several counts and checks they sort the numbers, checks the lessons above (insertion sort wins on nearly sorted numbers, merge sort beats bubble sort by far on random ones, quicksort is slow on reversed ones), and that the race gives every sort the same steps and places the cheapest first; that each print starts on the numbers and ends sorted, and that moving the clock to a row's moment (forward or back, and past either end) gives the values that row shows. `test/simplealgorithms/DivideCheck.java` checks the Division page's reading of `divide` on 22/7, 4/2 and 7/2 (which passes 3.5 by a hair), and on about 2,000 random divisions that every step is one hop of its ruler's size, that only a guess that passes a is marked as passing it, that each step back drops one size, at most to 0.001, and that the last step is what `divide` returns, within 0.01 below a / b. From `SimpleAlgorithms/`:
 
 ```
 javac -d ../out/check/SimpleAlgorithms src/simplealgorithms/*.java test/simplealgorithms/*.java
@@ -66,6 +71,7 @@ java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.MyMathCheck
 java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.HanoiCheck
 java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.SortCheck
 java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.PathCheck
+java -ea -cp ../out/check/SimpleAlgorithms simplealgorithms.DivideCheck
 ```
 
 ## Fixed bugs
