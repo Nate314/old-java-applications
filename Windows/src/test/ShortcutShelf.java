@@ -33,6 +33,7 @@ final class ShortcutShelf extends JButton {
    /** The row after the arrows, which turns hover to press on and off; it comes after the shortcuts. */
    static final int HOVER_ROW = CODES.length;
    static final String HOVER_NAME = "Hover to press";
+   private static final String TIP = "Click a shortcut for Win+that key";
    private static final int PAD = 4;
    private static final int ROW = 26;
    static final int HEIGHT = 2 * PAD + (ROWS + 2) * ROW;
@@ -65,7 +66,7 @@ final class ShortcutShelf extends JButton {
       this.setBorderPainted(false);
       this.setContentAreaFilled(false);
       this.setPreferredSize(new Dimension(Test.WIDTH, HEIGHT));
-      this.setToolTipText("Click a shortcut for Win+that key");
+      this.setToolTipText(TIP);
       this.name();
       MouseAdapter mouse = new MouseAdapter() {
          @Override
@@ -196,6 +197,9 @@ final class ShortcutShelf extends JButton {
       this.dwell.at(i);
       if (i != this.hover) {
          this.hover = i;
+         // The arrows' caps carry no names, so the one pointed at says what it does.
+         this.setToolTipText(i == HOVER_ROW ? HOVER_NAME + ": resting the pointer on the key or a shortcut a second presses it"
+            : i >= 0 ? "Win+" + CAPS[i] + ": " + NAMES[i] : TIP);
          this.repaint();
       }
    }

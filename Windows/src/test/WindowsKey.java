@@ -40,6 +40,8 @@ final class WindowsKey extends JButton {
    private static final int MARGIN = 8;
    /** How far the pointer must slide from where it pressed the key before the release makes Win+an arrow. */
    static final int SLIDE = 28;
+   /** What letting go after a slide left, up, right or down does, shown on the key while it is held there. */
+   static final String[] SLIDE_NAMES = {"Snap left", "Fill screen", "Snap right", "Shrink"};
 
    private final Keys keys;
    /** Hover to press, when it is on: resting on the key taps it. */
@@ -220,7 +222,23 @@ final class WindowsKey extends JButton {
       g.fillRect(x + half + 3, y, half, half);
       g.fillRect(x, y + half + 3, half, half);
       g.fillRect(x + half + 3, y + half + 3, half, half);
-      String caption = !this.down ? "Start" : this.slide == 0 ? "+ a key" : "+ " + "←↑→↓".charAt(this.slide - KeyEvent.VK_LEFT);
+      if (this.down) {
+         // Held, the key shows the four ways it can slide, the one picked lit, so the slide is found by holding it.
+         int cx = x + size / 2;
+         int cy = y + size / 2;
+         int reach = size / 2 + 12;
+         for (int a = 0; a < 4; a++) {
+            int dx = a == 0 ? -1 : a == 2 ? 1 : 0;
+            int dy = a == 1 ? -1 : a == 3 ? 1 : 0;
+            int tx = cx + dx * reach;
+            int ty = cy + dy * (reach - 4);
+            g.setColor(this.slide == KeyEvent.VK_LEFT + a ? Color.WHITE : ACCENT_SIDE);
+            // A small triangle pointing that way.
+            g.fillPolygon(new int[] {tx + 5 * dx, tx - 3 * dx + 4 * dy, tx - 3 * dx - 4 * dy},
+               new int[] {ty + 5 * dy, ty - 3 * dy + 4 * dx, ty - 3 * dy - 4 * dx}, 3);
+         }
+      }
+      String caption = !this.down ? "Start" : this.slide == 0 ? "+ a key" : SLIDE_NAMES[this.slide - KeyEvent.VK_LEFT];
       g.setColor(this.down ? Color.WHITE : TEXT);
       g.setFont(new Font("SansSerif", Font.BOLD, 12));
       g.drawString(caption, (w - g.getFontMetrics().stringWidth(caption)) / 2, y + size + 22);
