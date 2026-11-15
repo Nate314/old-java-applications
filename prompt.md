@@ -2,6 +2,22 @@
 
 This repo's PRs from #10 onward were made by a chain of Claude Code subagents, one bold change per attempt, each PR stacked on the one before. The rules for that chain grew over the run as problems came up. Below is a single prompt that sets up the same chain from the start, with every rule that was learned along the way, for 100 attempts. Paste it into Claude Code from the repo root.
 
+## Continuing the chain
+
+To run more attempts, start a new Claude Code session from the repo root and give it this, with `<N>` the number of attempts:
+
+> Run the chain in prompt.md for `<N>` more attempts, following its "Continuing the chain" section.
+
+The prompt below is kept as it ran for attempts 1 to 100. A continued run follows it with these changes, because the site changed after the run (#92 moved the pages to React and TypeScript under `web/src/`, #93 added Docker and #95 added `run.sh`):
+
+- **Numbering.** Attempts are numbered on from the last one in HISTORY.md (the first continued run starts at 101), and "100 attempts" means the `<N>` asked for. Finish with a single-builder round if `<N>` isn't a multiple of three.
+- **Base.** The first round branches from an up-to-date master; each later round branches from the previous round's branch, and its PR is based on it. Run `npm ci` in `web/` first, since master's packages may have changed.
+- **The brief's PR list** starts with a short summary of the earlier work from HISTORY.md, so the attempts don't redo what is already there.
+- **Lane C** works in `web/src/` instead of `web/site/`: pages in `web/src/pages/`, site features in `web/src/runtime/` (one file per feature with an `init`, imported in `main.ts`), shared code and styles in `web/src/shared/`. A new feature goes in a new file. Edits to shared files (`main.ts`, `start.ts`, `web/src/shared/`) stay small and additive: no moving, renaming or reformatting.
+- **Checks.** `npm run typecheck` in `web/` replaces `node --check`. The integrator runs it, the app self-checks under `<App>/test/` and a full `mvn -f web/pom.xml package` before verifying in Chrome.
+- **Ports.** Attempt N serves on port 8100 + (N - 100) for the first continued run. Never touch port 8000, and never stop or rebuild Docker containers started by `run.ps1` or `run.sh`.
+- **At the end,** one final PR on top of the last round adds a HISTORY.md section for the continued run (the PR range, what changed, and the model, agents, tokens and time counted from the transcripts as in "The run in numbers"), and a matching chapter on the story page (`web/src/pages/story/Story.tsx`, the `CHAPTERS` list in `panels.tsx` and the hero's chapter list). Every fact comes from the repo or the transcripts.
+
 ---
 
 Run a chain of 100 attempts to improve this project. Each attempt is a fresh subagent given the same task, and each ships one pull request. Do not merge anything; I'll review and merge.
