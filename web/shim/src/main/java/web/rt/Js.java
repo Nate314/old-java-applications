@@ -253,6 +253,15 @@ public final class Js {
     @JSBody(params = "e", script = "e.preventDefault();")
     public static native void preventDefault(JSObject e);
 
+    /**
+     * A press whose default is prevented (so the focus stays where AWT has it) leaves the browser's focus where it was,
+     * which may be another frame: Side by side's docked app, or the page around an embedded one. The press brings it
+     * back to this page (out of a frame on it, or into this frame), so the keys follow the click.
+     */
+    @JSBody(params = "e", script = "var _d = (e.target && e.target.ownerDocument) || document, _w = _d.defaultView, _a = _d.activeElement;"
+            + " if (_a && _a.tagName === 'IFRAME') _a.blur(); if (_w && !_d.hasFocus()) _w.focus();")
+    public static native void takeKeys(JSObject e);
+
 
     @JSBody(params = "e", script = "var _t = e.target; return !!(_t && _t.closest && _t.closest('input, select, textarea'));")
     public static native boolean targetIsTextInput(JSObject e);
