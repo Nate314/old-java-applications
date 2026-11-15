@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -32,6 +33,7 @@ public final class CircleCreatorWindow extends JFrame {
    private static final String BLUE = "Blue";
    private static final String RAINBOW = "Rainbow";
    private static final String SUNSET = "Sunset";
+   static final String[] COLOR_NAMES = {RAINBOW, BLUE, SUNSET};
    private static final int WIDTH = 380;
    private static final int HEIGHT = 130;
    /** The window with the drawing pad beside its controls, or (on a narrow screen) under them. */
@@ -55,10 +57,16 @@ public final class CircleCreatorWindow extends JFrame {
 
    private final JComboBox<String> shapeBox = new JComboBox<>(Shapes.ALL);
    private final JTextField sizeField = new JTextField("200", 4);
-   private final JComboBox<String> colorBox = new JComboBox<>(new String[] {RAINBOW, BLUE, SUNSET});
+   private final JComboBox<String> colorBox = new JComboBox<>(COLOR_NAMES);
    private final JTextField wordField = new JTextField("HELLO", 8);
    private final JButton createButton = new JButton("Build it");
    private final JButton spinButton = new JButton("Spin");
+   private final JButton sendButton = new JButton("Send");
+   /** Puts a link (or, on the desktop, a code) on the clipboard; the address of this page in the browser, else null. */
+   private final Consumer<String> copy;
+   private final String page;
+   /** True when the app opened on a shape from a friend's link: nothing is saved, so the visitor's own stays. */
+   private final boolean fromFriend;
    private final JLabel status = new JLabel(" ");
    private final DrawPad pad = new DrawPad(() -> {
       this.stopPlaying();
@@ -123,14 +131,18 @@ public final class CircleCreatorWindow extends JFrame {
    private int scatterFrame;
    private boolean settingUp = true;
 
-   public CircleCreatorWindow() {
+   /** sent: the shape of a friend's link, shown instead of the saved one, or null. */
+   public CircleCreatorWindow(Consumer<String> copy, String page, Link sent) {
+      this.copy = copy;
+      this.page = page;
+      this.fromFriend = sent != null;
       this.setTitle("Circle Creator");
       this.setDefaultCloseOperation(3);
-      this.shapeBox.setSelectedItem(this.saved.get("shape", Shapes.CIRCLE));
-      this.colorBox.setSelectedItem(this.saved.get("colors", RAINBOW));
+      this.shapeBox.setSelectedItem(sent != null ? sent.shape : this.saved.get("shape", Shapes.CIRCLE));
+      this.colorBox.setSelectedItem(sent != null ? sent.colors : this.saved.get("colors", RAINBOW));
       this.sizeField.setText(this.saved.get("size", "200"));
-      this.wordField.setText(this.saved.get("word", "HELLO"));
-      String drawing = this.saved.get("drawing", "");
+      this.wordField.setText(sent != null && sent.word != null ? sent.word : this.saved.get("word", "HELLO"));
+      String drawing = sent != null && sent.drawing != null ? sent.drawing : this.saved.get("drawing", "");
       if (drawing.isEmpty()) {
          this.pad.smile();
       } else {
@@ -147,6 +159,7 @@ public final class CircleCreatorWindow extends JFrame {
       panel.add(this.wordField);
       panel.add(this.createButton);
       panel.add(this.spinButton);
+      panel.add(this.sendButton);
       panel.add(this.status);
 
       JButton clearButton = new JButton("Clear");
@@ -209,6 +222,8 @@ public final class CircleCreatorWindow extends JFrame {
             this.startSpin();
          }
       });
+      this.sendButton.setToolTipText("Copy a link that builds this shape on a friend's screen");
+      this.sendButton.addActionListener(event -> this.send());
       clearButton.addActionListener(event -> this.pad.clear());
       previousButton.addActionListener(event -> this.turnTo(this.pad.frame() - 1));
       nextButton.addActionListener(event -> this.turnTo(this.pad.frame() + 1));
@@ -250,6 +265,27 @@ public final class CircleCreatorWindow extends JFrame {
       this.settingUp = false;
       this.build();
       this.clockTimer.start();
+      if (this.fromFriend && this.drawing() && this.pad.frameCount() > 1) {
+         this.playButton.doClick();   // a friend's flipbook plays as it opens
+      }
+   }
+
+   /** The shape chosen, as a link to this page (or a code on the desktop) on the clipboard. */
+   private void send() {
+      String shape = String.valueOf(this.shapeBox.getSelectedItem());
+      if (Shapes.WORD.equals(shape) && Shapes.cleanWord(this.wordField.getText()).isEmpty()) {
+         this.status.setText("Type a word to send");
+         return;
+      }
+      String code = Link.code(shape, String.valueOf(this.colorBox.getSelectedItem()), this.wordField.getText(),
+         this.pad.text());
+      String text = this.page == null ? code : this.page + "?shape=" + code;
+      try {
+         this.copy.accept(text);
+         this.status.setText(this.page == null ? "Code " + code + " copied." : "Link copied: send it to a friend.");
+      } catch (RuntimeException e) {
+         this.status.setText("Send this: " + text);   // headless, or the clipboard is busy
+      }
    }
 
    /**
@@ -386,6 +422,9 @@ public final class CircleCreatorWindow extends JFrame {
 
    /** Saves the current choices and drawing for next time. */
    private void remember() {
+      if (this.fromFriend) {
+         return;
+      }
       this.saved.put("shape", String.valueOf(this.shapeBox.getSelectedItem()));
       this.saved.put("colors", String.valueOf(this.colorBox.getSelectedItem()));
       this.saved.put("size", this.sizeField.getText().trim());
@@ -467,7 +506,8 @@ public final class CircleCreatorWindow extends JFrame {
          return;
       }
       if (this.playTimer.isRunning()) {
-         this.status.setText("Playing your flipbook, " + this.slices.size() + " windows. Draw to stop.");
+         this.status.setText(this.fromFriend ? "Playing a friend's flipbook. Send one back!"
+            : "Playing your flipbook, " + this.slices.size() + " windows. Draw to stop.");
          return;
       }
       if (this.spin != null) {
@@ -475,6 +515,11 @@ public final class CircleCreatorWindow extends JFrame {
          return;
       }
       String name = this.shapeName();
+      if (this.fromFriend) {
+         this.status.setText("From a friend: " + (Shapes.DRAW.equals(this.builtShape) ? "a drawing" : name)
+            + ". Send one back!");
+         return;
+      }
       this.status.setText(Character.toUpperCase(name.charAt(0)) + name.substring(1) + ", " + this.slices.size()
          + " windows. Drag it, or click to scatter.");
    }
