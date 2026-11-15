@@ -6,6 +6,8 @@ import java.util.Date;
 
 final class ClockTicker implements ActionListener {
    private final Main clock;
+   /** The quarter hour of the last tick (hours * 4 + quarter), or -1 before the first. */
+   private int quarter = -1;
 
    ClockTicker(Main clock) {
       this.clock = clock;
@@ -25,6 +27,12 @@ final class ClockTicker implements ActionListener {
       this.clock.minutes = now.getMinutes();
       this.clock.seconds = now.getSeconds();
       this.clock.milliseconds = (int)(millis % 1000);
+      // Only a quarter just begun rings: not one passed while the computer slept, nor the one the window opened in.
+      int quarter = this.clock.hours * 4 + this.clock.minutes / 15;
+      if (this.quarter >= 0 && quarter != this.quarter && this.clock.minutes % 15 == 0) {
+         this.clock.quarterStruck(this.clock.hours, this.clock.minutes / 15);
+      }
+      this.quarter = quarter;
       boolean twentyFour = this.clock.state.twentyFour;
       String hourText = twentyFour
          ? twoDigits(this.clock.hours)

@@ -134,6 +134,23 @@ public class TimerCheck {
             "a damaged file keeps the defaults for its bad lines");
       check(ClockState.load(new File(file.getPath() + ".missing")).mode.equals(ClockState.CLOCK), "a missing file gives defaults");
 
+      // The Westminster quarters: one change at quarter past, two at half past, three at quarter to, four and the hour.
+      int[] quarterPast = Westminster.steps(9, 1);
+      check(Arrays.equals(quarterPast, new int[]{68, 66, 64, 59, Westminster.REST, Westminster.HUSH}), "quarter past rings the first change");
+      check(Westminster.steps(9, 2).length == 12 && Westminster.steps(9, 3).length == 18, "half past two changes, quarter to three");
+      check(Arrays.equals(Arrays.copyOfRange(Westminster.steps(9, 3), 12, 18), quarterPast), "quarter to ends on the first change");
+      for (int hour = 0; hour < 24; hour++) {
+         int strokes = 0;
+         for (int step : Westminster.steps(hour, 0)) {
+            strokes += step == Westminster.HOUR_BELL ? 1 : 0;
+         }
+         check(strokes == (hour % 12 == 0 ? 12 : hour % 12), "the hour struck at " + hour);
+         check(Westminster.steps(hour, 0)[0] == 64 && Westminster.steps(hour, 0)[18] == 59, "the hour opens with changes 2 to 5");
+      }
+      state.chimes = true;
+      state.save();
+      check(ClockState.load(file).chimes && !damaged.chimes, "the chimes are remembered, off by default");
+
       System.out.println("TimerCheck passed");
    }
 
