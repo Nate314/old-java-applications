@@ -797,19 +797,20 @@ public final class GamePanel extends JPanel implements KeyListener {
       return width;
    }
 
-   /** The scoreboard's rows: the score, the best, and today's best once there is one. */
-   private int scoreboardRows() {
+   /** The scoreboard's tiles: the score, the best, and today's best once there is one. */
+   private int scoreboardTiles() {
       return this.daily || this.course.bestScore() > 0 ? 3 : 2;
    }
 
    /**
     * Where the game over screen goes, top to bottom, in units that fit both a wide window and a narrow (portrait)
-    * page: {unit, card x, card y, card width, card height, button y, title baseline, first line baseline}.
+    * page: {unit, panel x, panel y, panel width, panel height, button y, title baseline, first line baseline}.
     */
    private int[] scoreboardLayout() {
       int u = Math.max(8, Math.min(Main.FRAME_HEIGHT / 24, Main.FRAME_WIDTH / 17));
       int cardW = Math.min(Main.FRAME_WIDTH * 23 / 25, u * 15);
-      int cardH = this.scoreboardRows() * u * 13 / 5 + u * 3 / 5;
+      // The medal on top, then a row of tiles.
+      int cardH = u * 9 / 10 + medalSize(u) + u * 7 / 2;
       int lines = this.practiceNote() != null ? 2 : 1;
       int total = u * 3 + cardH + lines * u * 3 / 2 + u * 5;
       int top = Math.max(u / 2, (Background.groundY - total) / 2);
@@ -819,10 +820,16 @@ public final class GamePanel extends JPanel implements KeyListener {
       return new int[]{u, (Main.FRAME_WIDTH - cardW) / 2, cardY, cardW, cardH, buttonY, cardY - u * 3 / 5, linesY};
    }
 
+   /** The game over medal's diameter for a layout unit. */
+   private static int medalSize(int u) {
+      return u * 17 / 5;
+   }
+
    /**
-    * The game over screen as a scoreboard, like the original game's: "Game Over", then a card with the medal (or the
-    * empty slot and the pipes it needs) beside the score, which counts up, and the best, tagged NEW when beaten; under
-    * it the medal line, the rewind button and how to go on. With reduced motion the numbers and medal show at once.
+    * The game over screen: "Game Over", then a panel of deep teal glass in a copper rim (the bird's and the pipes'
+    * colors) with the medal centered on top (or an empty ring with the pipes the first medal needs) and a row of tiles
+    * for the score, which counts up, the best and today's best, a beaten one lit in copper and labelled NEW; under it
+    * the medal line, the rewind button and how to go on. With reduced motion the numbers and medal show at once.
     */
    private void drawScoreboard(Graphics2D g2) {
       int[] layout = this.scoreboardLayout();
@@ -832,54 +839,36 @@ public final class GamePanel extends JPanel implements KeyListener {
       int w = layout[3];
       int h = layout[4];
       int center = Main.FRAME_WIDTH / 2;
+      Color lightCopper = new Color(255, 199, 154);
       int titleWidth = sans(g2, "Game Over", u * 12 / 5, Main.FRAME_WIDTH * 9 / 10);
-      outlined(g2, "Game Over", center - titleWidth / 2, layout[6], new Color(255, 200, 70));
+      outlined(g2, "Game Over", center - titleWidth / 2, layout[6], new Color(255, 226, 196));
 
-      // The card: parchment in a brown frame with a light inner edge.
-      g2.setColor(new Color(0, 0, 0, 80));
-      g2.fillRoundRect(x + u / 6, y + u / 4, w, h, u, u);
-      g2.setColor(new Color(120, 80, 40));
-      g2.fillRoundRect(x, y, w, h, u, u);
-      int rim = Math.max(2, u / 5);
-      g2.setColor(new Color(252, 242, 205));
-      g2.fillRoundRect(x + rim, y + rim, w - rim * 2, h - rim * 2, u * 3 / 4, u * 3 / 4);
+      // The panel: teal glass the sky shows through, in a copper rim with a lighter copper inner line.
+      g2.setColor(new Color(0, 0, 0, 70));
+      g2.fillRoundRect(x + u / 6, y + u / 4, w, h, u * 3 / 2, u * 3 / 2);
+      g2.setColor(new Color(12, 64, 60, 215));
+      g2.fillRoundRect(x, y, w, h, u * 3 / 2, u * 3 / 2);
       Graphics2D edge = (Graphics2D)g2.create();
-      edge.setStroke(new BasicStroke(Math.max(1.0F, u / 12.0F)));
-      edge.setColor(new Color(232, 210, 160));
-      edge.drawRoundRect(x + rim * 2, y + rim * 2, w - rim * 4, h - rim * 4, u / 2, u / 2);
+      edge.setStroke(new BasicStroke(Math.max(2.0F, u / 5.0F)));
+      edge.setColor(new Color(196, 106, 53));
+      edge.drawRoundRect(x, y, w, h, u * 3 / 2, u * 3 / 2);
+      edge.setStroke(new BasicStroke(Math.max(1.0F, u / 14.0F)));
+      edge.setColor(new Color(232, 149, 90, 160));
+      int inner = Math.max(3, u / 3);
+      edge.drawRoundRect(x + inner, y + inner, w - inner * 2, h - inner * 2, u, u);
       edge.dispose();
 
-      // The score counts up once the screen has risen (up to 0.8 s for a long run); the medal and NEW tags follow it.
+      // The score counts up once the screen has risen (up to 0.8 s for a long run); the medal and NEW labels follow it.
       int score = this.score();
       float sps = (float)this.stepsPerSecond;
       float countSteps = sps * Math.min(0.8F, 0.1F + 0.04F * score);
       float since = this.stateSteps - sps / 3.0F;
       float counted = calm() ? 1.0F : Math.max(0.0F, Math.min(1.0F, since / countSteps));
       float pop = calm() ? 1.0F : Math.max(0.0F, Math.min(1.0F, (since - countSteps) / (sps * 0.2F)));
-      Color labels = new Color(215, 105, 45);
 
-      int right = x + w - u;
-      String[] names = {"SCORE", "BEST", "TODAY"};
-      String[] values = {String.valueOf(Math.round(score * counted)), String.valueOf(this.highScore), String.valueOf(this.course.bestScore())};
-      boolean[] fresh = {false, this.newBest, this.newToday};
-      for (int row = 0; row < this.scoreboardRows(); row++) {
-         int rowY = y + u * 3 / 10 + row * u * 13 / 5;
-         int labelWidth = sans(g2, names[row], u * 3 / 4, w / 2);
-         g2.setColor(labels);
-         g2.drawString(names[row], right - labelWidth, rowY + u);
-         int valueWidth = sans(g2, values[row], u * 8 / 5, w / 2);
-         outlined(g2, values[row], right - valueWidth, rowY + u * 12 / 5, new Color(255, 255, 255));
-         if (fresh[row] && pop > 0.0F) {
-            drawNewTag(g2, right - valueWidth - u / 2, rowY + u * 7 / 5, u, pop);
-         }
-      }
-
-      int d = Math.min(h - u * 2, u * 22 / 5);
-      int medalX = x + u + d / 2;
-      int medalY = y + u * 6 / 5 + (h - u * 6 / 5) / 2;
-      int labelWidth = sans(g2, "MEDAL", u * 3 / 4, w / 2);
-      g2.setColor(labels);
-      g2.drawString("MEDAL", medalX - labelWidth / 2, y + u * 13 / 10);
+      int d = medalSize(u);
+      int medalX = center;
+      int medalY = y + u * 7 / 10 + d / 2;
       Color medal = medalColor(score);
       if (medal != null && pop > 0.0F) {
          // Lands with a little bounce: big, then settling to its size.
@@ -889,16 +878,46 @@ public final class GamePanel extends JPanel implements KeyListener {
             this.drawTwinkle(g2, medalX, medalY, d);
          }
       } else {
-         // The empty slot, until the medal lands; with no medal won it shows the pipes the first one needs.
-         g2.setColor(new Color(236, 222, 180));
-         g2.fillOval(medalX - d / 2, medalY - d / 2, d, d);
-         g2.setColor(new Color(205, 185, 135));
-         g2.drawOval(medalX - d / 2, medalY - d / 2, d, d);
+         // An empty ring until the medal lands; with no medal won it holds the pipes the first one needs.
+         Graphics2D ring = (Graphics2D)g2.create();
+         ring.setColor(new Color(255, 255, 255, 25));
+         ring.fillOval(medalX - d / 2, medalY - d / 2, d, d);
+         ring.setStroke(new BasicStroke(Math.max(1.0F, u / 8.0F)));
+         ring.setColor(new Color(255, 255, 255, 90));
+         ring.drawOval(medalX - d / 2, medalY - d / 2, d, d);
+         ring.dispose();
+         if (medal == null) {
+            String next = String.valueOf((score / 10 + 1) * 10);
+            int nextWidth = sans(g2, next, d * 2 / 5, d * 3 / 4);
+            g2.setColor(lightCopper);
+            g2.drawString(next, medalX - nextWidth / 2, medalY + d * 3 / 20);
+         }
       }
-      if (medal == null) {
-         String next = String.valueOf((score / 10 + 1) * 10);
-         int nextWidth = sans(g2, next, d * 2 / 5, d * 3 / 4);
-         g2.drawString(next, medalX - nextWidth / 2, medalY + d * 3 / 20);
+
+      int tiles = this.scoreboardTiles();
+      int gap = u / 2;
+      int tileY = y + u * 9 / 10 + d;
+      int tileH = u * 3;
+      int tileW = (w - u - gap * (tiles - 1)) / tiles;
+      String[] names = {"SCORE", "BEST", "TODAY"};
+      String[] values = {String.valueOf(Math.round(score * counted)), String.valueOf(this.highScore), String.valueOf(this.course.bestScore())};
+      boolean[] fresh = {false, this.newBest, this.newToday};
+      for (int tile = 0; tile < tiles; tile++) {
+         int tileX = x + u / 2 + tile * (tileW + gap);
+         boolean lit = fresh[tile] && pop > 0.0F;
+         g2.setColor(new Color(0, 0, 0, 70));
+         g2.fillRoundRect(tileX, tileY, tileW, tileH, u * 3 / 4, u * 3 / 4);
+         Graphics2D frame = (Graphics2D)g2.create();
+         frame.setStroke(new BasicStroke(Math.max(1.0F, lit ? u / 6.0F * pop : u / 14.0F)));
+         frame.setColor(lit ? new Color(232, 149, 90) : new Color(255, 255, 255, 60));
+         frame.drawRoundRect(tileX, tileY, tileW, tileH, u * 3 / 4, u * 3 / 4);
+         frame.dispose();
+         String name = lit ? "NEW " + names[tile] : names[tile];
+         int nameWidth = sans(g2, name, u * 13 / 20, tileW - u / 2);
+         g2.setColor(lit ? new Color(255, 226, 120) : lightCopper);
+         g2.drawString(name, tileX + (tileW - nameWidth) / 2, tileY + u);
+         int valueWidth = sans(g2, values[tile], u * 3 / 2, tileW - u / 2);
+         outlined(g2, values[tile], tileX + (tileW - valueWidth) / 2, tileY + u * 13 / 5, new Color(255, 255, 255));
       }
 
       int lineY = layout[7];
@@ -920,16 +939,6 @@ public final class GamePanel extends JPanel implements KeyListener {
       String hint = "Space, click or tap for the title screen";
       int hintWidth = sans(g2, hint, u * 4 / 5, Main.FRAME_WIDTH * 19 / 20);
       outlined(g2, hint, center - hintWidth / 2, hintY, new Color(255, 255, 255));
-   }
-
-   /** A red NEW tag ending at x = right with its top at y = top, growing in as it pops. */
-   private static void drawNewTag(Graphics2D g2, int right, int top, int u, float pop) {
-      int width = sans(g2, "NEW", Math.max(8, Math.round(u * 3 / 5 * (0.6F + 0.4F * pop))), u * 3);
-      int pad = u / 4;
-      g2.setColor(new Color(225, 50, 50));
-      g2.fillRoundRect(right - width - pad * 2, top, width + pad * 2, u * 4 / 5, u / 3, u / 3);
-      g2.setColor(new Color(255, 255, 255));
-      g2.drawString("NEW", right - width - pad, top + u * 3 / 5);
    }
 
    /** A medal of diameter d centered at (x, y): a rim, a ring and a star, with a shine. */
