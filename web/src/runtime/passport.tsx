@@ -190,6 +190,8 @@ export function init() {
   });
   passport = window.oldjavaPassport = {
     has: function (id: string) { return !!played[id]; },
+    // When the app was first played (ms), or 0 when not played or not known; the home passport dates its stamp with it.
+    when: function (id: string) { var t = Number(played[id]); return t > 0 ? t : 0; },
     stamp: function (id: string) {
       // When it was last played, for What's new (news.js): changes since then are news to this visitor.
       // Left as is when what is kept cannot be read (storedJson would start it afresh).

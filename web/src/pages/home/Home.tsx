@@ -9,6 +9,7 @@ import { FIRST, H, draw, useHomeDraw } from './model';
 import { TOUR } from './tour';
 import { Records } from './Records';
 import { HeroWall } from './HeroWall';
+import { Mrz, Stamp, stampDate } from './Stamp';
 import * as P from './player';
 import { TABS, badge, stampCount, tabClick, tabKey, tabShown } from './tabs';
 import { allClick, day, openApp } from './news';
@@ -50,8 +51,9 @@ function Stamps() {
       {APPS.map(a => (
         <li key={a.id}>
           <button type="button" className={[played(a) && 'played', a.id === H.fresh && 'fresh'].filter(Boolean).join(' ') || undefined}
-            title={a.name + (played(a) ? ': played' : ': not played yet')} onClick={() => P.choose(a)}>
-            <span className="seal"><img src={webp(a.shot, true)} alt="" loading="lazy" /></span>
+            title={a.name + (!played(a) ? ': not played yet' : window.oldjavaPassport.when(a.id) ? ': first played ' + stampDate(window.oldjavaPassport.when(a.id)) : ': played')}
+            onClick={() => P.choose(a)}>
+            <span className="seal"><Stamp a={a} when={window.oldjavaPassport.when(a.id)} /></span>
             <span className="label">{a.name}</span>
           </button>
         </li>
@@ -359,6 +361,7 @@ function Passport() {
         </div>
       </div>
       <Stamps />
+      <Mrz count={count} />
     </section>
   );
 }
