@@ -30,26 +30,15 @@ $ErrorActionPreference = 'Stop'
 $ShellUp = "!!document.querySelector('.shim-shell > *')"
 # WindowsE's own window (its shortcut keyboard), lower right in front of the File Explorer windows it opened.
 $WindowsEFront = "js:(function (d) { var w = d.firstElementChild; d.style.zIndex = 1000000; document.querySelector('.shim-shell').style.zIndex = 1; w.style.left = (innerWidth - w.offsetWidth - 24) + 'px'; w.style.top = (innerHeight - w.offsetHeight - 24) + 'px'; })(document.getElementById('desktop'))"
-# SynthesizerKeyboard's looper: clear any old loop (Delete twice), record a melody layer after the count-in, then a
-# bass layer an octave down at the next bar. Keys are held (keydown, then keyup after ms) so notes get their lengths.
-function SynthHold([string]$key, [int]$code, [int]$ms) {
-    "js:(function (t) { function f(type) { t.dispatchEvent(new KeyboardEvent(type, { key: '$key', keyCode: $code, which: $code, bubbles: true })); } f('keydown'); setTimeout(function () { f('keyup'); }, $ms); })(document.activeElement || document.body)"
-}
-$SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Delete' 46 20), 'wait:200', 'key:Space', 'wait:2450') +
-    (@(@('z', 90), @('c', 67), @('b', 66), @('c', 67), @('z', 90), @('c', 67), @('b', 66), @(',', 188)) | ForEach-Object { (SynthHold $_[0] $_[1] 450), 'wait:625' }) +
-    @('wait:400', 'key:ArrowLeft', 'key:Space', 'wait:2300') +
-    (@(@('z', 90), @('b', 66), @('v', 86), @('c', 67)) | ForEach-Object { (SynthHold $_[0] $_[1] 1100), 'wait:1250' })
 # NathaNOS: a sunset picture saved as if painted in its Paint and made the wallpaper (written into the page's saves,
 # then the page reloads), then opened from its desktop icon (the 19th icon: column 4, row 4 at 960 x 600).
 $NathaNOSPicture = "js:(function () { var W = 200, H = 125, p = [], x, y, c, s = '', i = 0, j; for (y = 0; y < H; y++) for (x = 0; x < W; x++) { c = y < 20 ? 14 : y < 38 ? 15 : y < 55 ? 11 : y < 70 ? 4 : 12; if (y < 34 && (x * 7 + y * 13) % 89 == 0) c = 8; if ((x - 100) * (x - 100) + (y - 78) * (y - 78) < 500 && !(y > 74 && y % 5 == 0)) c = 5; if (y > 84 + 7 * Math.sin(x / 17)) c = 2; if (y > 100 + 6 * Math.sin(x / 11 + 1)) c = 0; p.push(c); } while (i < p.length) { j = i; while (j < p.length && p[j] == p[i]) j++; s += String.fromCharCode(65 + p[i]) + (j - i > 1 ? (j - i).toString(36) : ''); i = j; } localStorage.setItem('oldjava.saves.NathaNOS', JSON.stringify({ '/.nathanos-pictures.txt': 'picture=Sunset:' + s + '\n', '/.nathanos.txt': 'wallpaper=picture:Sunset\n' })); location.reload(); })()"
-# A double click there (cdp.ps1's clicks are single: the shim reads a mouse click's count from its detail).
-$NathaNOSOpen = "js:(function (x, y) { var t = document.elementFromPoint(x, y); [1, 2].forEach(function (n) { ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: n, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }); })(348, 318)"
+# A double click there.
+$NathaNOSOpen = "js:(function () { $Tap tap(348, 318, 2); })()"
 # NumberGuess: Page Down opens the Duel tab (from 1-10, where a fresh visitor starts; the locked ranges are passed over).
 $NumberGuessDuel = "js:(function (t) { ['keydown', 'keyup'].forEach(function (type) { t.dispatchEvent(new KeyboardEvent(type, { key: 'PageDown', keyCode: 34, which: 34, bubbles: true })); }); })(document.activeElement || document.body)"
 # Then a click on the middle of the lower line of its lane, which guesses the middle of what is left.
-$NumberGuessMiddle = "js:(function (c) { var r = c.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height * 180 / 350, t = document.elementFromPoint(x, y); ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: 1, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); })(document.querySelector('#desktop canvas.paint'))"
-# SpriteFloatyStars Orbits: two more suns, clicked into the biggest window's field (upper left and lower right).
-$StarsSuns = "js:(function (c) { var r = c.getBoundingClientRect(); [[0.27, 0.3], [0.72, 0.7]].forEach(function (p) { var x = r.left + r.width * p[0], y = r.top + r.height * p[1], t = document.elementFromPoint(x, y); ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: 1, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }); })([].slice.call(document.querySelectorAll('#desktop canvas.paint')).sort(function (a, b) { return b.width * b.height - a.width * a.height; })[0])"
+$NumberGuessMiddle = "js:(function (c) { $Tap var r = c.getBoundingClientRect(); tap(r.left + r.width / 2, r.top + r.height * 180 / 350); })(document.querySelector('#desktop canvas.paint'))"
 $Recipes = [ordered]@{
     Clock               = @{ Steps = @('wait:800', 'key:W', 'wait:300', (ClockAt 10.25), 'wait:800') }
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', 'wait:500', 'key:Space', 'wait:450', 'key:Space', 'wait:350') }
