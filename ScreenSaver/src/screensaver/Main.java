@@ -29,7 +29,7 @@ import javax.swing.Timer;
 /**
  * A full-screen gallery of screen savers: the original green circles and its two variants, then Starfield, Mystify,
  * Pipes, a bouncing logo, a dot clock, an aquarium of fish that stay yours between runs and a brick maze walked in first person. It moves on to the next one
- * every 30 seconds unless one was picked, and closes when the mouse moves.
+ * every 30 seconds unless one was picked, and closes when the mouse moves. M plays music made by the saver on screen.
  */
 public class Main extends JFrame implements KeyListener, MouseListener, MouseMotionListener {
    static final double CYCLE_MILLIS = 30_000;
@@ -68,6 +68,8 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    private long pickedMillis;
    /** Play (T): the mouse (or a finger) plays with the saver instead of closing it; Esc still closes. */
    private boolean play;
+   /** Music (M): off at every start and never saved, so the site's idle screen saver stays silent. */
+   private boolean music;
 
    public Main() {
       this.savers = Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
@@ -129,6 +131,9 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       long now = System.nanoTime();
       double millis = Math.min(100, (now - this.lastTick) / 1e6);
       this.lastTick = now;
+      // The gallery's ten savers at once would be a din: music only plays for the one on screen.
+      Music.live(this.music && this.gallery == null);
+      Music.tick(millis);
       if (this.gallery != null) {
          for (Saver s : this.savers) {
             s.tick(millis * this.speedFor(s));
@@ -225,14 +230,18 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       String keys = "N / P: next, previous   1-9, 0: pick   G: see all   " + cycle;
       if (this.saver instanceof Aquarium) {
          return new String[] {head, ((Aquarium)this.saver).status(), keys,
-            "Left / Right: speed " + speed + "   H: names and these keys", this.closeLine()};
+            "Left / Right: speed " + speed + "   " + this.musicKey() + "   H: names and these keys", this.closeLine()};
       }
       return new String[] {
          head,
          keys,
-         "Left / Right: speed " + speed + (this.saver instanceof Tiles ? "   Up / Down: tile size" : "") + "   H: these keys",
+         "Left / Right: speed " + speed + (this.saver instanceof Tiles ? "   Up / Down: tile size" : "") + "   " + this.musicKey() + "   H: these keys",
          this.closeLine(),
       };
+   }
+
+   private String musicKey() {
+      return this.music ? "M: stop the music" : "M: music";
    }
 
    /** The last caption line: how to close, or in play what the mouse does to this saver. */
@@ -301,6 +310,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    /** Closes the window as its close button would: exits when run alone, and only closes itself inside NathaNOS. */
    private void kill() {
       this.timer.stop();
+      Music.live(false);
       this.dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
    }
 
@@ -333,6 +343,9 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
          // Coming out of play, the hand still on the mouse gets a moment before a move closes the saver.
          this.pickedMillis = System.currentTimeMillis();
          this.firstMouse = null;
+      } else if (keyCode == KeyEvent.VK_M) {
+         this.music = !this.music;
+         this.captionLeft = CAPTION_MILLIS;
       } else if (keyCode == KeyEvent.VK_C) {
          this.settings.cycle = !this.settings.cycle;
          this.shownFor = 0;

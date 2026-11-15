@@ -80,6 +80,10 @@ class Starfield implements Saver {
       for (int i = 0; i < STARS; i++) {
          this.z[i] -= millis * DEPTH_PER_MILLI * this.boost;
          if (this.z[i] < NEAREST || !this.onScreen(this.screenX(i, this.z[i]), this.screenY(i, this.z[i]))) {
+            if (this.z[i] < 0.3) {
+               // Music (M): a near star streaking past twinkles, pitched by where round the middle it went.
+               Music.ring(Music.STARS, (Math.atan2(this.y[i], this.x[i]) / Math.PI + 1) / 2, this.boost > 2 ? 0.6 : 0.35);
+            }
             this.place(i, 1.0);
          }
       }

@@ -216,6 +216,8 @@ class Pipes implements Saver {
       }
       if (next != this.direction) {
          this.pieces.add(new Piece(this.headX, this.headY, this.headX, this.headY, this.color));
+         // Music (M): a ball joint knocks a note, higher the nearer the top.
+         Music.ring(Music.PIPES, 1 - (this.headY + 0.5) / this.rows, 0.55);
       }
       Piece last = this.pieces.get(this.pieces.size() - 1);
       if (next == this.direction && last.toX == this.headX && last.toY == this.headY && (last.fromX != last.toX || last.fromY != last.toY)) {

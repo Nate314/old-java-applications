@@ -183,9 +183,12 @@ class BouncingLogo implements Saver {
       }
       if (bounced) {
          this.hue = (this.hue + 0.17F + this.random.nextFloat() * 0.5F) % 1F;
+         // Music (M): each bounce a note in the logo's new color (red low, through the rainbow, violet high).
+         Music.ring(Music.LOGO, this.hue, 0.5);
          if (this.sinceBounceX < CORNER_MILLIS && this.sinceBounceY < CORNER_MILLIS) {
             this.corners++;
             this.burst();
+            Music.chord(Music.LOGO, 0.5, 0.9);
             // One corner hit, not two: forget both bounces.
             this.sinceBounceX = Double.MAX_VALUE;
             this.sinceBounceY = Double.MAX_VALUE;

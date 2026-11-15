@@ -141,16 +141,24 @@ class Tiles implements Saver {
    private void step() {
       if (this.adding) {
          this.revealedCount++;
+         this.chime(this.revealedCount - 1, 0.55);
          if (this.revealedCount >= this.order.size()) {
             this.adding = false;
          }
       } else {
          this.revealedCount--;
+         this.chime(this.revealedCount, 0.3);
          if (this.revealedCount <= 0) {
             this.adding = true;
             Collections.shuffle(this.order, this.random);
          }
       }
+   }
+
+   /** Music (M): a tile coming or going rings a note, higher the nearer the top of the screen it sits. */
+   private void chime(int index, double loudness) {
+      Point position = this.positions.get(this.order.get(index));
+      Music.ring(Music.BEADS, 1 - (position.y + this.size / 2) / this.height, loudness);
    }
 
    @Override

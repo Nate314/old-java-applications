@@ -59,6 +59,8 @@ class DotClock implements Saver {
       this.now = now;
    }
 
+   private boolean colonWas;
+
    @Override
    public String name() {
       return "Dot clock";
@@ -137,16 +139,25 @@ class DotClock implements Saver {
       Date date = this.now.get();
       String face = face(date);
       boolean colonOn = date.getTime() % 1000 < 500;
+      int grown = 0;
       for (int c = 0; c < COLUMNS; c++) {
          for (int r = 0; r < 5; r++) {
             boolean on = dotOn(face, c, r, colonOn);
             if (on && !this.lit[c][r]) {
                this.litFor[c][r] = 0;
+               grown += c == 8 ? 0 : 1;
             }
             this.lit[c][r] = on;
             this.litFor[c][r] += millis;
          }
       }
+      // Music (M): the colon coming on ticks the second, low; new digits chime, higher later in the hour.
+      if (grown > 0) {
+         Music.chord(Music.CLOCK, date.getMinutes() / 59.0, 0.6);
+      } else if (colonOn && !this.colonWas) {
+         Music.ring(Music.CLOCK, date.getSeconds() % 2 == 0 ? 0.2 : 0.1, 0.25);
+      }
+      this.colonWas = colonOn;
    }
 
    @Override
