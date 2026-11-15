@@ -53,8 +53,9 @@ public class GamePanel extends JPanel
     {
         this.battle = battle;
         this.setBackground(FIELD);
-        // A click (or a tap, on a touch screen) on the supply drops line turns them on or off, like X.
-        this.addMouseListener(new MouseAdapter()
+        // A click (or a tap, on a touch screen) on the supply drops line turns them on or off, like X. Anywhere else
+        // it plays red with the pointer (PointerControls), or starts a match against the computer, like Q.
+        MouseAdapter mouse = new MouseAdapter()
         {
             @Override
             public void mousePressed(MouseEvent e)
@@ -63,9 +64,61 @@ public class GamePanel extends JPanel
                 {
                     battle.toggleSupplies();
                     repaint();
+                    return;
                 }
+                PointerControls pointer = pointer();
+                if (pointer == null) return;
+                if (battle.phase() == Battle.Phase.TITLE || battle.phase() == Battle.Phase.MATCH_OVER) pointer.tapToStart();
+                else pointer.press(e.getX(), e.getY());
             }
-        });
+
+            @Override
+            public void mouseDragged(MouseEvent e)
+            {
+                PointerControls pointer = pointer();
+                if (pointer != null) pointer.drag(e.getX(), e.getY());
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e)
+            {
+                PointerControls pointer = pointer();
+                if (pointer != null) pointer.release(e.getX(), e.getY());
+            }
+        };
+        this.addMouseListener(mouse);
+        this.addMouseMotionListener(mouse);
+    }
+
+    /** Red's pointer controls, or null while the computer drives red (watch). */
+    private PointerControls pointer()
+    {
+        Controls controls = battle.red().controls();
+        return controls instanceof PointerControls ? (PointerControls) controls : null;
+    }
+
+    /** Where the pointer sends red: a ring it drives to while held, or cross hairs it is turning to fire at. */
+    private void pointerMark(Graphics2D g)
+    {
+        PointerControls pointer = pointer();
+        double[] goal = pointer == null || battle.phase() != Battle.Phase.FIGHT ? null : pointer.goal();
+        if (goal == null || !battle.red().isAlive()) return;
+        int x = (int) Math.round(goal[0]);
+        int y = (int) Math.round(goal[1]);
+        int r = pointer.holding() ? 12 + (ticks / 3) % 6 : 10;
+        g.setStroke(new BasicStroke(2.5f));
+        g.setColor(new Color(0, 0, 0, 90));
+        g.drawOval(x - r + 1, y - r + 2, r * 2, r * 2);
+        g.setColor(light(battle.red()));
+        g.drawOval(x - r, y - r, r * 2, r * 2);
+        if (!pointer.holding())
+        {
+            g.drawLine(x - r - 5, y, x - r + 5, y);
+            g.drawLine(x + r - 5, y, x + r + 5, y);
+            g.drawLine(x, y - r - 5, x, y - r + 5);
+            g.drawLine(x, y + r - 5, x, y + r + 5);
+        }
+        g.setStroke(new BasicStroke(1f));
     }
 
     public void start()
@@ -208,6 +261,7 @@ public class GamePanel extends JPanel
         // A landed crate lies under the tanks; a falling one is above everything on the ground.
         Supply supply = battle.supply();
         if (supply != null && supply.landed()) supply.paint(g, ticks);
+        pointerMark(g);
         if (battle.phase() != Battle.Phase.TITLE)
         {
             battle.red().paint(g);
@@ -340,9 +394,10 @@ public class GamePanel extends JPanel
                                 new Line("Each round is a new battlefield.", SMALL, DIM),
                                 new Line("Drive over supply crates for powers.", SMALL, DIM),
                                 new Line("Red: W A S D to drive, Q to fire", SMALL, light(red)),
+                                new Line("Or point: hold to drive there, tap to fire there", SMALL, light(red)),
                                 new Line("Green: arrow keys to drive, M to fire", SMALL, light(green)),
                                 new Line("", SMALL, TEXT),
-                                new Line("Press Q to play the computer", MEDIUM, light(red)),
+                                new Line("Press Q or tap to play the computer", MEDIUM, light(red)),
                                 new Line("Press M for two players", MEDIUM, light(green)),
                                 new Line("Press C to watch the computer play itself", SMALL, DIM),
                                 suppliesLine(), recordLine() });
@@ -367,7 +422,7 @@ public class GamePanel extends JPanel
                 boolean ready = battle.phaseTicks() >= Battle.MATCH_OVER_TICKS;
                 panel(g, new Line[] { new Line(title, MEDIUM, light(winner)), new Line(score, BIG, TEXT),
                                 battle.vsComputer() ? recordLine() : new Line("", SMALL, TEXT),
-                                new Line(ready ? "Press Q to play the computer" : "", SMALL, light(red)),
+                                new Line(ready ? "Press Q or tap to play the computer" : "", SMALL, light(red)),
                                 new Line(ready ? "Press M for two players" : "", SMALL, light(green)),
                                 ready ? suppliesLine() : new Line("", SMALL, TEXT) });
                 break;
