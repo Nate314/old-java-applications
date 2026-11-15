@@ -110,6 +110,7 @@ function Player() {
   const zoom = window.oldjavaZoom.fit();
   const arcade = window.oldjavaSkin.get() === 'arcade';
   const size = H.frame.size;
+  const [more, setMore] = useState(false);
   return (
     <section className={'player' + (H.then ? ' then' : '') + (H.big ? ' big' : '')} id="player" aria-label="Now playing">
       <div className="player-bar">
@@ -122,15 +123,6 @@ function Player() {
         </div>
         <Hint />
         <Actions>
-          <button className="btn arcade" type="button" id="player-arcade" aria-pressed={arcade} title="Neon CRT arcade look for every app (the Arcade skin)"
-            onClick={e => P.arcadeClick(e.currentTarget)}>
-            Arcade mode
-          </button>
-          {' '}
-          <button className="btn" type="button" id="player-own-skin" data-skin-maker="" data-sound="none" title="Make your own skin for every page and app: a color, a desk, corners and windows">
-            🎨 Your skin
-          </button>
-          {' '}
           <button className="btn" type="button" id="player-shuffle" title="Play a random app" onClick={P.shuffle}>Shuffle</button>
           {' '}
           <button className="btn" type="button" id="player-pad-toggle" aria-pressed={H.pad.called ? H.pad.shown : true} title="Show or hide the on-screen controller"
@@ -140,16 +132,8 @@ function Player() {
           {' '}
           <button className="btn" type="button" id="player-restart" onClick={P.restart}>Restart</button>
           {' '}
-          <button className="btn" type="button" id="player-zoom" aria-pressed={zoom} onClick={e => P.zoomClick(e.currentTarget)}
-            title={zoom ? 'Small apps are zoomed to fill the player. Click for their actual size.' : 'Apps are shown at their actual size. Click to zoom small ones to fill the player.'}>Fit</button>
-          {' '}
           <button className="btn" type="button" id="player-big" aria-pressed={big} title="Fill the screen with the player" onClick={P.bigClick}>
             {big ? 'Exit big screen' : 'Big screen'}
-          </button>
-          {' '}
-          <button className="btn" type="button" id="player-pop" aria-pressed={H.pop.on} data-sound="none" hidden={!H.pop.shown} onClick={P.popClick}
-            title={!H.pop.synced ? undefined : H.pop.on ? 'Bring the app back into the player' : 'Play this app in its own small window that stays on top of your other windows'}>
-            {H.pop.on ? 'Bring back' : 'Pop out'}
           </button>
           {' '}
           <button className="btn" type="button" id="player-share" data-sound="none" title="Share this app: its link, with a preview card" onClick={e => P.shareClick(e.currentTarget)}>
@@ -166,12 +150,36 @@ function Player() {
             📷
           </button>
           {' '}
+          <a className="btn primary" id="player-full" href={a ? P.pageOf(a) + linkState(a.id, H.frame.src).replace('&', '?') : page(FIRST.id)}>Full page</a>
+          {' '}
+          <button className="btn" type="button" id="player-more-toggle" aria-expanded={more} aria-controls="player-more"
+            title="Arcade mode, Your skin, Fit, Pop out and Source" onClick={() => setMore(!more)}>
+            {more ? 'Less ▴' : 'More ▾'}
+          </button>
+        </Actions>
+        {/* Looks for the whole site and the less used tools, out of the first view until asked for. */}
+        <div className="more" id="player-more" role="group" aria-label="More player buttons" hidden={!more}>
+          <button className="btn arcade" type="button" id="player-arcade" aria-pressed={arcade} title="Neon CRT arcade look for every app (the Arcade skin)"
+            onClick={e => P.arcadeClick(e.currentTarget)}>
+            Arcade mode
+          </button>
+          {' '}
+          <button className="btn" type="button" id="player-own-skin" data-skin-maker="" data-sound="none" title="Make your own skin for every page and app: a color, a desk, corners and windows">
+            🎨 Your skin
+          </button>
+          {' '}
+          <button className="btn" type="button" id="player-zoom" aria-pressed={zoom} onClick={e => P.zoomClick(e.currentTarget)}
+            title={zoom ? 'Small apps are zoomed to fill the player. Click for their actual size.' : 'Apps are shown at their actual size. Click to zoom small ones to fill the player.'}>Fit</button>
+          {' '}
+          <button className="btn" type="button" id="player-pop" aria-pressed={H.pop.on} data-sound="none" hidden={!H.pop.shown} onClick={P.popClick}
+            title={!H.pop.synced ? undefined : H.pop.on ? 'Bring the app back into the player' : 'Play this app in its own small window that stays on top of your other windows'}>
+            {H.pop.on ? 'Bring back' : 'Pop out'}
+          </button>
+          {' '}
           <a className="btn" id="player-source" href={(a ? P.pageOf(a) : page(FIRST.id)) + '#source'} title="Open the app's page with its Java source beside it">
             {"</> Source"}
           </a>
-          {' '}
-          <a className="btn primary" id="player-full" href={a ? P.pageOf(a) + linkState(a.id, H.frame.src).replace('&', '?') : page(FIRST.id)}>Full page</a>
-        </Actions>
+        </div>
       </div>
       <TourBox />
       <div className="screen" id="screen" style={H.screenH !== null ? { height: H.screenH + 'px' } : undefined}>
@@ -365,14 +373,17 @@ export function Home() {
       <HeroWall />
       <h1>Old Java Applications</h1>
       <p className="lead">
-        Java Swing and AWT programs recovered from old jars
+        <strong>{APPS.length} games, music toys and tools</strong> from old Java jars, running in your browser.
+        {' '}One is already playing below: click it to take over.
         <span className="tech">
-          , compiled to JavaScript with TeaVM. Each runs on a small AWT/Swing layer that draws the original windows and widgets in the page
+          {' '}They are Swing and AWT programs compiled to JavaScript with TeaVM, on a small AWT/Swing layer that draws the original windows and widgets.
         </span>
-        . One is already running below: pick any other to swap it in.
       </p>
-      <p className="story-link"><a href="story.html">How twenty old programs came back: read the story, with the real code →</a></p>
-      <TourStart />
+      {/* What to do first, in one row: the tour, and the story for those who want to know how. */}
+      <div className="start">
+        <TourStart />
+        <p className="story-link"><a href="story.html">How they came back: the story →</a></p>
+      </div>
       <p className="offline-banner" id="offline-banner" role="status" hidden={!(t.checked && t.offline)}>{t.checked ? bannerText() : null}</p>
       <Player />
       <section className="arcade" id="arcade" aria-label="Your arcade">
