@@ -39,7 +39,7 @@ const BODY: Record<string, Record<string, string>> = {
   SynthesizerKeyboard: { 'data-args-page': '' },
   UltimateTicTacToe: { 'data-args-page': '' },
   Windows: { 'data-shell': '', 'data-own-layout': '' },
-  WindowsE: { 'data-shell': '' },
+  WindowsE: { 'data-shell': '', 'data-args-page': '' },
 };
 
 /**

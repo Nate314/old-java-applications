@@ -54,6 +54,7 @@ public class WindowsECheck {
       check(Shortcut.EXPLORER.times == 10, "Win+E still offers 10, as the original did");
       screenChecks();
       boardChecks();
+      sendChecks();
       System.out.println("WindowsECheck: all checks passed");
       System.exit(0);
    }
@@ -78,6 +79,61 @@ public class WindowsECheck {
          check(seen.size() == Shortcut.values().length, "every shortcut has a key (pocket " + pocket + ")");
          check(pocket ? size.width <= 400 : size.width > 800, "board width " + size.width + " (pocket " + pocket + ")");
       }
+   }
+
+   /** Send's codes read back as the same list, a bad code is no list, and a friend's list is loaded without a press. */
+   static void sendChecks() throws Exception {
+      String sides = Step.code(WindowsEWindow.SIDE_BY_SIDE);
+      check(sides.equals("E-Left-E-Right"), "Side by side's code: " + sides);
+      List<Step> mixed = steps(Shortcut.START, 1, Shortcut.EXPLORER, 40, Shortcut.TASKS, 1, Shortcut.DESKTOP, 2, Shortcut.RUN, 1,
+         Shortcut.UP, 1, Shortcut.DOWN, 3);
+      String code = Step.code(mixed);
+      check(code.equals("Win-Ex40-Tab-Dx2-R-Up-Downx3"), "a mixed list's code: " + code);
+      check(WindowsEWindow.labels(Step.parse(code)).equals(WindowsEWindow.labels(mixed)), "the code reads back as the list");
+      check(WindowsEWindow.labels(Step.parse("ex10-LEFT-right")).equals("Win+E x10, Win+Left, Win+Right"), "codes in any case");
+      for (String bad : new String[] {"", "Q", "E-", "Ex0", "Ex1000", "Exy", "E-E-E-E-E-E-E-E-E", "Win+E"}) {
+         check(Step.parse(bad) == null, "'" + bad + "' is no list");
+      }
+      check(Step.parse("Ex999") != null && Step.parse("E-E-E-E-E-E-E-E") != null, "999 times and 8 steps are allowed");
+      if (java.awt.GraphicsEnvironment.isHeadless()) {
+         System.out.println("WindowsECheck: headless, the window's Send checks skipped");
+         return;
+      }
+      for (boolean pocket : new boolean[] {false, true}) {
+         for (String page : new String[] {null, "https://example.test/WindowsE/"}) {
+            Recorder keys = new Recorder();
+            List<String> copied = new ArrayList<>();
+            String[] got = new String[3];
+            SwingUtilities.invokeAndWait(() -> {
+               WindowsEWindow w = new WindowsEWindow(keys, copied::add, page, Step.parse("Ex3-Left"), pocket);
+               got[0] = w.getTitle();
+               button(w, "Send").doClick();
+               got[1] = w.getTitle();
+               got[2] = String.valueOf(w.getWidth());
+               w.dispose();
+            });
+            String where = " (pocket " + pocket + ", page " + page + ")";
+            check(got[0].contains("a friend sent this list"), "a friend's list is announced" + where + ": " + got[0]);
+            check(keys.log.isEmpty(), "a friend's list presses nothing" + where);
+            check(copied.equals(Collections.singletonList(page == null ? "Ex3-Left" : page + "?keys=Ex3-Left")), "Send copies " + copied + where);
+            check(got[1].equals(page == null ? "Windows+E: code Ex3-Left copied" : "Windows+E: link copied, send it to a friend"), "Send says so: " + got[1]);
+            check(pocket ? Integer.parseInt(got[2]) <= 400 : true, "the window is " + got[2] + " wide" + where);
+            System.out.println("WindowsECheck: window " + got[2] + " px wide" + where);
+         }
+      }
+   }
+
+   private static javax.swing.JButton button(java.awt.Container in, String text) {
+      for (java.awt.Component c : in.getComponents()) {
+         if (c instanceof javax.swing.JButton && text.equals(((javax.swing.JButton) c).getText())) {
+            return (javax.swing.JButton) c;
+         }
+         javax.swing.JButton b = c instanceof java.awt.Container ? button((java.awt.Container) c, text) : null;
+         if (b != null) {
+            return b;
+         }
+      }
+      return null;
    }
 
    /** The little screen: what each shortcut does to it, and the words for it. */

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -20,7 +21,8 @@ import javax.swing.JTextField;
  * A keyboard of Windows shortcuts: pick a key (Win+E, as ever, or Win+D, Win+R, Win+Tab, the Windows key alone or the
  * snapping arrows), say how many times, and DO IT!!! presses it that many times. Add step puts the pick on a list
  * instead, and DO IT!!! then presses the whole list in order. While it runs the button is Stop. A little screen
- * beside the keyboard shows what that will do, and Preview plays it there without pressing any key.
+ * beside the keyboard shows what that will do, and Preview plays it there without pressing any key. Send copies a
+ * link (on the desktop, a code) that opens the window with the same list.
  */
 public final class WindowsEWindow extends JFrame {
    private static final String TITLE = "Windows+E";
@@ -46,18 +48,26 @@ public final class WindowsEWindow extends JFrame {
    private final JButton sideBySideButton = new JButton("Side by side");
    private final JButton addButton = new JButton("Add step");
    private final JButton clearButton = new JButton("Clear");
+   private final JButton sendButton = new JButton("Send");
    private final JButton previewButton = new JButton("Preview");
    private final JButton doItButton = new JButton("DO IT!!!");
    private final List<Step> steps = new ArrayList<>();
+   /** Puts text on the clipboard (the check passes one that only keeps it). */
+   private final Consumer<String> copy;
+   /** The page's address in the browser, without its query; null on the desktop. */
+   private final String page;
    private Shortcut shortcut;
    private WindowsEPresser presser;
 
-   WindowsEWindow(Keys keys) {
-      this(keys, Toolkit.getDefaultToolkit().getScreenSize().width < POCKET_BELOW);
+   /** page: see {@link #page}; friend: the list a friend's link or code brought, or null. */
+   WindowsEWindow(Keys keys, Consumer<String> copy, String page, List<Step> friend) {
+      this(keys, copy, page, friend, Toolkit.getDefaultToolkit().getScreenSize().width < POCKET_BELOW);
    }
 
-   WindowsEWindow(Keys keys, boolean pocket) {
+   WindowsEWindow(Keys keys, Consumer<String> copy, String page, List<Step> friend, boolean pocket) {
       this.keys = keys;
+      this.copy = copy;
+      this.page = page;
       this.board = new ShortcutBoard(this::pick, this::pickAndPress, pocket);
       this.setTitle(TITLE);
       this.setDefaultCloseOperation(3);
@@ -78,6 +88,9 @@ public final class WindowsEWindow extends JFrame {
       this.addButton.setToolTipText("Puts the picked key on the list; DO IT!!! then presses the list in order");
       this.addButton.addActionListener(event -> this.addStep());
       this.clearButton.addActionListener(event -> this.setSteps(Collections.emptyList()));
+      this.sendButton.setToolTipText(page == null ? "Copies a code for this list: a friend opens it with ./run.ps1 old WindowsE and the code"
+         : "Copies a link to this list: a friend who opens it gets the same list on their pretend Windows");
+      this.sendButton.addActionListener(event -> this.send());
       this.previewButton.setToolTipText("Plays it on the little screen first, without pressing any key");
       this.previewButton.addActionListener(event -> this.doIt(true));
       this.doItButton.addActionListener(event -> this.doIt(false));
@@ -88,8 +101,14 @@ public final class WindowsEWindow extends JFrame {
       row.add(this.countField);
       row.add(new JLabel("times"));
       JPanel more = pocket ? buttonRow() : row;   // pocket: the buttons go on a second row
+      if (pocket) {
+         row.add(this.sendButton);   // the first row has room for it, the second does not
+      }
       more.add(this.addButton);
       more.add(this.clearButton);
+      if (!pocket) {
+         more.add(this.sendButton);
+      }
       more.add(this.previewButton);
       more.add(this.doItButton);
       if (pocket) {
@@ -101,7 +120,10 @@ public final class WindowsEWindow extends JFrame {
       this.add(row, BorderLayout.SOUTH);   // added first, so the field has the keyboard when the window opens
       this.add(this.board, BorderLayout.CENTER);
       this.pick(Shortcut.EXPLORER);
-      this.setSteps(Collections.emptyList());
+      this.setSteps(friend != null ? friend : Collections.emptyList());
+      if (friend != null) {
+         this.setTitle(TITLE + ": a friend sent this list. Preview it, then DO IT!!!");
+      }
       this.pack();
    }
 
@@ -153,6 +175,7 @@ public final class WindowsEWindow extends JFrame {
    }
 
    private void planChanged() {
+      this.setTitle(TITLE);
       this.board.plan(this.plan());
       this.idle();
    }
@@ -176,6 +199,23 @@ public final class WindowsEWindow extends JFrame {
       this.planChanged();
    }
 
+   /** The list (or the picked key and its count) as a link to this page, or a code on the desktop, on the clipboard. */
+   private void send() {
+      List<Step> plan = this.plan();
+      if (plan.isEmpty()) {
+         this.count();   // the title says what is wrong with the count
+         return;
+      }
+      String code = Step.code(plan);
+      String text = this.page == null ? code : this.page + "?keys=" + code;
+      try {
+         this.copy.accept(text);
+         this.setTitle(TITLE + (this.page == null ? ": code " + code + " copied" : ": link copied, send it to a friend"));
+      } catch (RuntimeException e) {
+         this.setTitle(TITLE + ": send this: " + text);   // headless, or the clipboard is busy
+      }
+   }
+
    /**
     * DO IT!!! presses the list, or the picked key when the list is empty; while that runs, the same button stops it.
     * dry (Preview): the same presses, on the little screen only.
@@ -195,7 +235,7 @@ public final class WindowsEWindow extends JFrame {
       }
       this.doItButton.setText("Stop");
       this.doItButton.getAccessibleContext().setAccessibleName("Stop");
-      for (JButton b : new JButton[] {this.sideBySideButton, this.addButton, this.clearButton, this.previewButton}) {
+      for (JButton b : new JButton[] {this.sideBySideButton, this.addButton, this.clearButton, this.sendButton, this.previewButton}) {
          b.setEnabled(false);
       }
       this.countField.setEnabled(false);
@@ -210,6 +250,7 @@ public final class WindowsEWindow extends JFrame {
       this.doItButton.setText("DO IT!!!");
       this.countField.setEnabled(true);
       this.sideBySideButton.setEnabled(true);
+      this.sendButton.setEnabled(true);
       this.previewButton.setEnabled(true);
       this.idle();
    }
