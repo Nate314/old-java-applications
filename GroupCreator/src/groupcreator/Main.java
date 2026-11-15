@@ -1,6 +1,9 @@
 package groupcreator;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -29,6 +32,9 @@ public class Main extends JFrame implements GroupBoard.Actions {
    private final Roster roster;
    private final GroupBoard board;
    private final Random random = new Random();
+   private final JPanel inputs = new JPanel(new BorderLayout());
+   /** Where the window was before Present filled the screen. */
+   private Rectangle windowed;
 
    public Main(Boolean visibility) {
       this.setDefaultCloseOperation(3);
@@ -61,10 +67,9 @@ public class Main extends JFrame implements GroupBoard.Actions {
       sizes.add(new JLabel("max: "));
       sizes.add(maxTextField);
       sizes.add(button);
-      JPanel panel = new JPanel(new BorderLayout());
-      panel.add(names, BorderLayout.NORTH);
-      panel.add(sizes, BorderLayout.SOUTH);
-      this.add(panel, BorderLayout.NORTH);
+      inputs.add(names, BorderLayout.NORTH);
+      inputs.add(sizes, BorderLayout.SOUTH);
+      this.add(inputs, BorderLayout.NORTH);
       this.add(board, BorderLayout.CENTER);
       board.showRound(GroupMaker.parseNames(roster.names), false);
       this.pack();
@@ -155,6 +160,20 @@ public class Main extends JFrame implements GroupBoard.Actions {
    @Override
    public void workChanged() {
       picksChanged();
+   }
+
+   @Override
+   public void present(boolean on) {
+      inputs.setVisible(!on);
+      if (on) {
+         windowed = getBounds();
+         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+         setBounds(0, 0, screen.width, screen.height);
+      } else if (windowed != null) {
+         setBounds(windowed);
+      }
+      validate();
+      board.requestFocusInWindow();
    }
 
    @Override

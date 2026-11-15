@@ -84,6 +84,9 @@ public class GroupBoard extends JPanel {
 
       /** The work time's length changed: save the class. */
       void workChanged();
+
+      /** Present was turned on or off: the window gives the board the whole screen, or puts the inputs back. */
+      void present(boolean on);
    }
 
    private final class Button {
@@ -129,6 +132,11 @@ public class GroupBoard extends JPanel {
    private boolean rollCall;
    /** Whether the cards label each member's role (see {@link Roles}). */
    boolean roles;
+   /** Present: the groups or the wheel drawn as large as fit, without the button bar, for a projector. */
+   private boolean presenting;
+   /** How much the board is enlarged while presenting (mouse positions are divided by it). */
+   private double scale = 1;
+   private final Rectangle presentButton = new Rectangle();
 
    // Roll call: the name tiles, the keep-apart list beside them, and the keyboard's place among the tiles.
    private boolean keepApart;
@@ -262,14 +270,14 @@ public class GroupBoard extends JPanel {
          public void mousePressed(MouseEvent event) {
             requestFocusInWindow();
             keyboard = false;
-            press(event.getX(), event.getY());
+            press((int) (event.getX() / scale), (int) (event.getY() / scale));
             repaint();
          }
 
          @Override
          public void mouseMoved(MouseEvent event) {
-            mouseX = event.getX();
-            mouseY = event.getY();
+            mouseX = (int) (event.getX() / scale);
+            mouseY = (int) (event.getY() / scale);
             repaint();
          }
 
@@ -360,7 +368,11 @@ public class GroupBoard extends JPanel {
          adjustWork(workMore.contains(x, y) ? 1 : -1);
          return;
       }
-      if (y >= getHeight() - BAR) {
+      if (presentable() && presentButton.contains(x, y)) {
+         present(!presenting);
+         return;
+      }
+      if (!presenting && y >= getHeight() - BAR) {
          for (Button button : buttons()) {
             if (button.enabled && button.bounds.contains(x, y)) {
                if (button != clear) {
@@ -425,11 +437,18 @@ public class GroupBoard extends JPanel {
          return;
       }
       if (event.getKeyCode() == KeyEvent.VK_ESCAPE) {
+         if (pickedGroup < 0 && presenting) {
+            present(false);
+         }
          unpick();
          clearArmed = false;
          return;
       }
       char key = Character.toLowerCase(event.getKeyChar());
+      if (key == 'f' && presentable()) {
+         present(!presenting);
+         return;
+      }
       if (key == '+' || key == '=' || key == '-') {
          adjustWork(key == '-' ? -1 : 1);
          return;
@@ -442,10 +461,43 @@ public class GroupBoard extends JPanel {
             if (button != clear) {
                clearArmed = false;
             }
+            if (presenting && (button == chartButton || button.key == 'a')) {
+               present(false);   // the chart and the roll call are for the teacher's screen
+            }
             button.action.run();
             return;
          }
       }
+   }
+
+   /** Present is offered in Groups and Pick someone (not in the partner chart or the roll call). */
+   private boolean presentable() {
+      return !rollCall && !chart;
+   }
+
+   private void present(boolean on) {
+      presenting = on;
+      clearArmed = false;
+      unpick();
+      actions.present(on);
+   }
+
+   /**
+    * How much to enlarge a w x h board while presenting: the groups as much as lets the cards keep their full size
+    * (see {@link #fullColumns}), the wheel (or the empty deck) as much as its 760 x 390 view fits. Never less than 1
+    * or more than 4.
+    */
+   static double presentScale(int w, int h, int count, int longest, boolean wheel) {
+      if (wheel || count == 0) {
+         return Math.max(1, Math.min(4, Math.min(w / (double) WIDTH, h / (double) (HEIGHT - BAR))));
+      }
+      for (int step = 80; step > 20; step--) {
+         double s = step / 20.0;
+         if (fullColumns((int) (w / s), (int) (h / s) - HEADER - 12, count, longest) > 0) {
+            return s;
+         }
+      }
+      return 1;
    }
 
    /** A minute more or less on the work time (and on its length, which the class keeps). */
@@ -481,6 +533,13 @@ public class GroupBoard extends JPanel {
       int h = getHeight();
       g.setColor(DESK);
       g.fillRect(0, 0, w, h);
+      scale = presenting ? presentScale(w, h, groups.size(), largest(), picking) : 1;
+      if (scale != 1) {
+         g.scale(scale, scale);
+         w = (int) (w / scale);
+         h = (int) (h / scale);
+      }
+      int bottom = presenting ? h : h - BAR;
       reshuffle.enabled = !history.isEmpty();
       clear.enabled = !history.isEmpty();
       chartButton.label = chart ? "Groups" : "Partner chart";
@@ -496,13 +555,13 @@ public class GroupBoard extends JPanel {
       workButton.label = work.up(now) ? "Time's up" : work.running() ? "Stop timer" : "Work " + work.minutes + " min";
       String[] header;
       if (picking) {
-         header = paintPick(g, w, h - BAR);
+         header = paintPick(g, w, bottom);
       } else if (rollCall) {
-         header = paintRollCall(g, w, h - BAR);
+         header = paintRollCall(g, w, bottom);
       } else if (chart) {
-         header = paintChart(g, w, h - BAR);
+         header = paintChart(g, w, bottom);
       } else {
-         header = paintGroups(g, w, h - BAR);
+         header = paintGroups(g, w, bottom);
       }
       if (message != null) {
          header = new String[] {header[0], message, "error"};
@@ -516,26 +575,55 @@ public class GroupBoard extends JPanel {
             : new String[] {header[0], "One minute left" + (roles && largest() >= 3 ? ": Timers, help your group wrap up." : "."), "again"};
       }
       paintHeader(g, w, header);
-      paintBar(g, w, h);
+      if (!presenting) {
+         paintBar(g, w, h);
+      }
    }
 
    /** Two lines for the header: a title, and a detail line drawn in the color of the third entry. */
    private void paintHeader(Graphics2D g, int w, String[] header) {
-      int room = w - 32 - (work.running() ? paintWorkClock(g, w) + 10 : 0);
+      int right = w - 16;
+      presentButton.setBounds(0, 0, 0, 0);
+      if (presentable()) {
+         right = paintPresentButton(g, right) - 10;
+      }
+      if (work.running()) {
+         right = paintWorkClock(g, right) - 10;
+      }
+      int room = right - 16;
       text(g, fit(g, header[0], TITLE, room), TITLE, INK, 16, 22);
       Color color = header[2].equals("fresh") ? FRESH : header[2].equals("again") ? AGAIN : header[2].equals("error") ? ERROR : MUTED;
       text(g, fit(g, header[1], TEXT, room), TEXT, color, 16, 41);
    }
 
-   /** The running work time at the header's right, between a minute less and a minute more. Returns its width. */
-   private int paintWorkClock(Graphics2D g, int w) {
+   /** The Present (or, while presenting, Back) button, ending at x = right. Returns its left edge. */
+   private int paintPresentButton(Graphics2D g, int right) {
+      String label = presenting ? "Back" : "Present";
+      String key = presenting ? "Esc" : "F";
+      int bw = 10 + width(g, label, BOLD) + 8 + width(g, key, SMALL) + 10;
+      int x = right - bw;
+      presentButton.setBounds(x, 11, bw, 28);
+      boolean hover = presentButton.contains(mouseX, mouseY);
+      g.setColor(hover ? new Color(255, 250, 238) : Color.WHITE);
+      g.fillRoundRect(x, 11, bw, 28, 14, 14);
+      g.setColor(INK);
+      g.setStroke(new BasicStroke(hover ? 2f : 1.2f));
+      g.drawRoundRect(x, 11, bw, 28, 14, 14);
+      g.setStroke(new BasicStroke(1f));
+      text(g, label, BOLD, INK, x + 10, 30);
+      text(g, key, SMALL, MUTED, x + bw - 10 - width(g, key, SMALL), 30);
+      return x;
+   }
+
+   /** The running work time in the header, ending at x = right, between a minute less and a minute more. Returns its left edge. */
+   private int paintWorkClock(Graphics2D g, int right) {
       long now = System.currentTimeMillis();
       long left = work.left(now);
       String clock = work.up(now) ? "Time's up" : WorkTimer.clock(left);
       int clockWidth = Math.max(width(g, "00:00", CLOCK), width(g, clock, CLOCK));
       int d = 22;
       int pillWidth = 8 + d + 8 + clockWidth + 8 + d + 8;
-      int x = w - 16 - pillWidth;
+      int x = right - pillWidth;
       int y = 7;
       int h = 36;
       // Dark while there is time, amber in the last minute, red (blinking) when it is up.
@@ -551,7 +639,7 @@ public class GroupBoard extends JPanel {
          centered(g, button == workLess ? "-" : "+", TITLE, Color.WHITE, button.x + d / 2, button.y + d / 2 + 5);
       }
       centered(g, clock, CLOCK, Color.WHITE, x + pillWidth / 2, y + h / 2 + 8);
-      return pillWidth;
+      return x;
    }
 
    /** The size of the biggest group in the round shown. */
@@ -963,17 +1051,8 @@ public class GroupBoard extends JPanel {
       for (List<String> group : groups) {
          longest = Math.max(longest, group.size());
       }
-      // The fewest rows whose cards are at least 110 px wide and fit at full height.
-      int columns = -1;
+      int columns = fullColumns(w, height, count, longest);
       int row = 22;
-      for (int rows = 1; rows <= count; rows++) {
-         int c = (count + rows - 1) / rows;
-         int cardWidth = (w - 2 * GAP - (c - 1) * GAP) / c;
-         if (cardWidth >= 110 && rows * (38 + longest * row) + (rows - 1) * GAP <= height) {
-            columns = c;
-            break;
-         }
-      }
       if (columns < 0) {
          // Too many to fit at full size: as many columns as fit, with shorter rows.
          columns = Math.max(1, Math.min(count, (w - GAP) / (100 + GAP)));
@@ -993,6 +1072,18 @@ public class GroupBoard extends JPanel {
          }
       }
       return cards;
+   }
+
+   /** The columns of the fewest rows whose cards are at least 110 px wide and fit at full height, or -1 when none do. */
+   static int fullColumns(int w, int height, int count, int longest) {
+      for (int rows = 1; rows <= count; rows++) {
+         int c = (count + rows - 1) / rows;
+         int cardWidth = (w - 2 * GAP - (c - 1) * GAP) / c;
+         if (cardWidth >= 110 && rows * (38 + longest * 22) + (rows - 1) * GAP <= height) {
+            return c;
+         }
+      }
+      return -1;
    }
 
    private int rowHeight(Rectangle[] cards) {
