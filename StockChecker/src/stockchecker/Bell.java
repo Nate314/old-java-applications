@@ -37,15 +37,26 @@ final class Bell {
 
    private MidiChannel channel() {
       if (this.channel == null && !this.noSynth) {
-         try {
-            Synthesizer synthesizer = MidiSystem.getSynthesizer();
-            synthesizer.open();
-            this.channel = synthesizer.getChannels()[0];
-            this.channel.programChange(TUBULAR_BELLS);
-         } catch (Exception e) {
-            this.noSynth = true;
-         }
+         this.channel = channel(0, TUBULAR_BELLS);
+         this.noSynth = this.channel == null;
       }
       return this.channel;
+   }
+
+   private static Synthesizer synthesizer;
+
+   /** Channel {@code index} of the one synthesizer the desk opens, set to {@code program}; null without one. */
+   static MidiChannel channel(int index, int program) {
+      try {
+         if (synthesizer == null) {
+            synthesizer = MidiSystem.getSynthesizer();
+            synthesizer.open();
+         }
+         MidiChannel channel = synthesizer.getChannels()[index];
+         channel.programChange(program);
+         return channel;
+      } catch (Exception e) {
+         return null;
+      }
    }
 }

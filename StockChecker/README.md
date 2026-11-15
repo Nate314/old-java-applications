@@ -26,6 +26,15 @@ You do not have to watch every minute: draw a line on the chart and the desk tra
 - A buy line spends all the cash it can and a sell line sells every share held, at the price of the first minute that reaches the line (so a fast drop can fill under a buy line or a stop). The bell rings twice, the line under the chart says what was traded, and the stock's other line is cancelled, so a stop and a target work as a pair.
 - Lines are green for a buy and red for a sell, each with a tag saying what it does, and the chart's scale stretches to keep them in view. Selling every share by hand drops the stock's sell lines, a stock that leaves the desk takes its lines with it, and lines last only the day: they are gone at the next open. They are saved in the desk file as `order=` lines.
 
+## Hear the chart
+
+The chart can be listened to as well as looked at, so you can follow a stock without watching it, or without seeing the screen at all.
+
+- **Hear** (H, at the chart's bottom right corner) plays the picked stock's day so far, from the open to now, in about three seconds: one note at a time, higher for a higher price on the chart's own scale (the bottom of the chart is C3, the top C6), so the tune rises and falls with the line. A chime sounds at each of your trades in it, high for a buy and low for a sell. A playhead runs across the chart with the time and price it is playing. H again stops it, as does picking another stock, the Race tab or the closing bell.
+- **L** listens live: while the market runs, a short note each market minute for the picked stock's price, on the same scale. L again stops.
+- For screen readers, the desk's accessible name says the day, the time, whether the market is open, the picked stock's price and change, the shares you hold, your net worth and your place, and that H and L listen.
+- An order line's tag slides right past any trade marker it would cover, such as a rival's dot at 9:30 at the chart's left edge.
+
 ## The rivals
 
 Four computer traders start with $10,000 each and trade the same market, the same minutes, at the same prices as you. Each follows one plain rule, decided only from the prices and headlines up to that minute, so their trades are the same for everybody and the rule is all there is to beat:
@@ -60,7 +69,8 @@ Mo, Val and Nell hold one stock at a time, buy nothing new after 3:30 PM and sel
 - `src/stockchecker/Portfolio.java`: cash, holdings with their cost, today's trades, the net worth at each close and through today (worked back from the trades).
 - `src/stockchecker/Rival.java`: the four computer traders and their rules.
 - `src/stockchecker/Money.java`: dollar and percent text.
-- `src/stockchecker/Bell.java`: the opening and closing bell.
+- `src/stockchecker/Bell.java`: the opening and closing bell, and the one MIDI synthesizer the desk opens.
+- `src/stockchecker/ChartEar.java`: hearing the chart (Hear and listening live).
 - `src/stockchecker/StockChecker.java`: from the original app: builds the retired Yahoo URL and downloads it to `stockCheck.csv` (no longer called), and looks up a symbol's price in the CSV rows (used for day 1).
 - `src/stockchecker/WebpageDownloader.java`, `CSVReader.java`, `TextReader.java`: from the original app: copy a URL into a file, read a CSV into rows, read a `.txt` file.
 
@@ -72,7 +82,7 @@ The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCh
 
 ## Self-check
 
-`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them) and the money text. From `StockChecker/`:
+`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the money text and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
 
 ```
 javac -d ../out/check/StockChecker src/stockchecker/*.java test/stockchecker/*.java
