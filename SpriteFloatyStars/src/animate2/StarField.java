@@ -76,6 +76,9 @@ public final class StarField extends Component {
    private BufferedImage trailImage;
    private final Orbits orbits = new Orbits(this);
    private final SkyWriting skyWriting;
+   private final StarMusic music = new StarMusic();
+   /** What the badge in the top left corner says: the mode's name after a change, or whether the music is on. */
+   private String badge;
 
    public StarField(int mode, Dimension size, int starCount, int starSize) {
       this(mode, size, starCount, starSize, true);
@@ -108,7 +111,7 @@ public final class StarField extends Component {
 
       if (animate) {
          this.hintShown = true;
-         this.badgeAt = 0.0;
+         this.showBadge(this.modeBadge());
          new StarHand(this);
          new Timer(15, event -> this.tick()).start();
       }
@@ -175,7 +178,31 @@ public final class StarField extends Component {
       for (int star = 0; star < this.starCount; star++) {
          this.initStar(star);
       }
+      this.showBadge(this.modeBadge());
+   }
+
+   private String modeBadge() {
+      return "Mode " + (this.mode + 1) + ": " + MODE_NAMES[this.mode];
+   }
+
+   private void showBadge(String text) {
+      this.badge = text;
       this.badgeAt = this.clock;
+   }
+
+   /** S: star music on or off (see {@link StarMusic}). */
+   final void toggleMusic() {
+      this.music.toggle();
+      this.showBadge(this.music.on() ? "Star music on" : "Star music off");
+   }
+
+   final StarMusic music() {
+      return this.music;
+   }
+
+   /** A star at its center (x, y) asks to ring the note {@code share} of the way up the scale. */
+   final void ring(double share, double loudness, double x, double y) {
+      this.music.ring(share, loudness, x, y, this.clock);
    }
 
    /** Orbits and Sky writing open on a dark sky with the trails on, and show their own help. */
@@ -335,6 +362,7 @@ public final class StarField extends Component {
       this.ringX = x;
       this.ringY = y;
       this.ringRadius = reach;
+      this.music.burst(strength * (this.mode == ORBITS ? Orbits.BURST_SHARE : 1.0), x, y, this.clock);
    }
 
    /** Space: a burst from the middle of the field. */
@@ -372,6 +400,7 @@ public final class StarField extends Component {
 
    private void move(double steps) {
       this.clock += steps / STEPS_PER_SECOND;
+      this.music.update(this.clock);
       if (this.mode == 4) {
          this.flock();
       }
@@ -392,19 +421,25 @@ public final class StarField extends Component {
             // The drift only goes left and down; a kick can carry a star off any edge, and it wraps there too.
             if (this.x[star] < (double)(0 - this.starSize)) {
                this.x[star] = this.x[star] + (double)(this.fieldWidth + 2 * this.starSize);
+               this.edgeNote(star, false, 0.5);
             } else if (this.x[star] > (double)(this.fieldWidth + this.starSize)) {
                this.x[star] = this.x[star] - (double)(this.fieldWidth + 2 * this.starSize);
+               this.edgeNote(star, false, 0.5);
             }
             if (this.y[star] > (double)(this.fieldHeight + this.starSize)) {
                this.y[star] = this.y[star] - (double)(this.fieldHeight + 2 * this.starSize);
+               this.edgeNote(star, true, 0.5);
             } else if (this.y[star] < (double)(0 - this.starSize)) {
                this.y[star] = this.y[star] + (double)(this.fieldHeight + 2 * this.starSize);
+               this.edgeNote(star, true, 0.5);
             }
          } else {
             this.x[star] = this.x[star] - this.velocityX[star] * steps;
             this.y[star] = this.y[star] - this.velocityY[star] * steps;
             // Bounce by heading back inside, so a star never sticks to an edge by flipping every frame.
             // A kick bounces off the edges too, losing some of itself.
+            double headingX = this.velocityX[star];
+            double headingY = this.velocityY[star];
             if (this.x[star] < 0) {
                this.velocityX[star] = Math.abs(this.velocityX[star]) * -1.0;
                this.kickX[star] = Math.abs(this.kickX[star]) * 0.7;
@@ -419,8 +454,25 @@ public final class StarField extends Component {
                this.velocityY[star] = Math.abs(this.velocityY[star]) * -1.0;
                this.kickY[star] = Math.abs(this.kickY[star]) * 0.7;
             }
+            // A bounce is a turn of heading (a star still past the edge after one is already on its way back).
+            double speed = Math.min(1.0, Math.hypot(headingX, headingY) / 1.4);
+            if (headingX != this.velocityX[star]) {
+               this.edgeNote(star, false, speed);
+            } else if (headingY != this.velocityY[star]) {
+               this.edgeNote(star, true, speed);
+            }
          }
       }
+   }
+
+   /**
+    * A star meeting an edge rings the note for its place along it: higher toward the top of a side edge, or toward
+    * the right of the top and bottom edges.
+    */
+   private void edgeNote(int star, boolean topOrBottom, double loudness) {
+      double x = Math.max(0, Math.min(this.fieldWidth, this.centerX(star)));
+      double y = Math.max(0, Math.min(this.fieldHeight, this.centerY(star)));
+      this.ring(topOrBottom ? x / Math.max(1, this.fieldWidth) : 1.0 - y / Math.max(1, this.fieldHeight), loudness, x, y);
    }
 
    /**
@@ -512,6 +564,7 @@ public final class StarField extends Component {
       if (this.mode == SKY_WRITING) {
          this.skyWriting.drawCaret(g2);
       }
+      this.music.draw(g2, this.clock);
       this.drawHand(g2);
    }
 
@@ -552,7 +605,7 @@ public final class StarField extends Component {
       double badgeAge = this.clock - this.badgeAt;
       if (badgeAge >= 0.0 && badgeAge < BADGE_SECONDS) {
          g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, this.textSize() * 3 / 2));
-         this.tag(g2, "Mode " + (this.mode + 1) + ": " + MODE_NAMES[this.mode], 14, 14, fade(BADGE_SECONDS - badgeAge));
+         this.tag(g2, this.badge, 14, 14, fade(BADGE_SECONDS - badgeAge));
       }
       boolean writing = this.mode == SKY_WRITING && this.skyWriting.writing();
       if (this.hintVisible() || writing) {
@@ -565,13 +618,16 @@ public final class StarField extends Component {
             : this.mode == SKY_WRITING
             ? new String[]{"Enter: write your own message in the stars.",
                            "Hold to pull the stars, let go to fling them: they find their letters again.",
-                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help"}
+                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help",
+                           "S: star music, a note for each star landing in its letter"}
             : this.mode == ORBITS
             ? new String[]{"Click to place a sun (up to " + Orbits.MAX_SUNS + "). Drag a sun to move it.",
                            "Drag it off the edge to take it away. Hold to pull the stars.",
-                           "1-7 or N: mode   T: trails   Space: burst   H: help"}
+                           "1-7 or N: mode   T: trails   Space: burst   H: help",
+                           "S: star music, a note for each star swinging past its sun"}
             : new String[]{"Hold to pull the stars in, let go to fling them. Click to burst.",
-                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help"};
+                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help",
+                           "S: star music, a note for each star meeting an edge"};
          int top = this.getHeight() - 8 - lines.length * lineHeight;
          for (String line : lines) {
             this.tag(g2, line, 14, top, alpha);
