@@ -13,6 +13,7 @@ import { TABS, badge, stampCount, tabClick, tabKey, tabShown } from './tabs';
 import { allClick, day, openApp } from './news';
 import { bannerText, installClick, saveClick } from './takeaway';
 import { cardBlur, cardEnter, cardFocus, cardLeave, clipBroken, clipPlaying } from './clips';
+import { inFilter, playedRank, useRecordLines } from './yours';
 
 const page = (id: string) => id + '/index.html';
 // What's new pictures a change to the whole arcade with the site's icon, at its full address as news.js gave it.
@@ -385,7 +386,7 @@ function Takeaway() {
  * checked, and a preview clip while it is wanted (clips.ts).
  */
 function Gallery() {
-  const t = H.take, c = H.clip, news = H.news.view;
+  const t = H.take, c = H.clip, news = H.news.view, records = useRecordLines(), rank = H.filter === 'yours' ? playedRank() : null;
   return (
     <ul className="apps" id="apps">
       {APPS.map(a => {
@@ -395,7 +396,7 @@ function Gallery() {
         return (
           <li key={a.id} data-app={a.id} data-clip={a.clip && !c.broken[a.id] ? '' : undefined} data-then={a.then ? '' : undefined}
               data-origin={a.origin} data-cat={a.cat} data-min-width={a.minWidth} data-min-height={a.minHeight}
-              className={cls || undefined} hidden={H.filter !== 'all' && a.cat !== H.filter}
+              className={cls || undefined} hidden={!inFilter(a, H.filter)} style={rank ? { order: rank[a.id] } : undefined}
               onMouseEnter={() => cardEnter(a.id)} onMouseLeave={() => cardLeave(a.id)} onFocus={e => cardFocus(e, a.id)} onBlur={e => cardBlur(e, a.id)}>
             <a className="thumb" href={page(a.id)} onClick={e => P.cardClick(e, a)}>
               <img src={a.shot} alt={a.alt} loading="lazy" />
@@ -412,6 +413,7 @@ function Gallery() {
             <div className="body">
               <strong>{a.name}</strong>
               <span>{a.hint}</span>
+              {records[a.id] && <p className="record">{records[a.id]}</p>}
               <div className="actions">
                 <a className="btn primary play" href={page(a.id)} onClick={e => P.cardClick(e, a)}>Play</a>
                 <a className="btn" href={page(a.id)}>Full page</a>
@@ -427,6 +429,7 @@ function Gallery() {
 export function Home() {
   useHomeDraw();
   const t = H.take;
+  if (H.filter === 'yours' && !stampCount()) H.filter = 'all';   // the passport was reset, here or on another page
   return (
     <main>
       <HeroWall />
@@ -461,7 +464,7 @@ export function Home() {
       </section>
       <h2>Play in the browser</h2>
       <div className="filters" role="group" aria-label="Filter apps">
-        {[['all', 'All'], ['game', 'Games'], ['music', 'Music'], ['toy', 'Toys'], ['tool', 'Tools']].map(([f, label], i) => [
+        {[['all', 'All'], ['game', 'Games'], ['music', 'Music'], ['toy', 'Toys'], ['tool', 'Tools'], ...(stampCount() ? [['yours', 'Yours']] : [])].map(([f, label], i) => [
           i ? ' ' : null,
           <button key={f} type="button" data-filter={f} aria-pressed={H.filter === f} onClick={() => P.filterClick(f)}>{label}</button>,
         ])}

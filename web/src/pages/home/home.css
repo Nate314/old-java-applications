@@ -394,3 +394,6 @@ p.tour-start span { opacity: 0.75; }
 :root[data-skin="arcade"] .tour { background: rgba(255, 43, 214, 0.08); }
 :root[data-skin="arcade"] .tour-count { color: #7df9ff; text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
 :root[data-skin="arcade"] .tour-steps button[aria-current="step"] { box-shadow: 0 0 8px rgba(255, 43, 214, 0.8); }
+/* A card's record line (yours.ts): what the visitor has done in that app here. */
+ul.apps p.record { margin: 0; padding: 4px 8px; border-radius: 6px; background: rgba(22, 163, 74, 0.12); font-size: 13px;
+  line-height: 1.35; overflow-wrap: anywhere; }
