@@ -28,6 +28,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules')) return 'react';
           if (id.includes('/src/shared/link-state')) return 'link-state';   // boot.js needs it too, not the rest of shared
+          if (id.includes('/src/shared/menu-keys')) return 'menu-keys';     // the same for the More menu's keys
           if (id.includes('/src/shared/')) return 'shared';
         },
       },
