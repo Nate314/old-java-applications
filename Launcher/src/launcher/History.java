@@ -22,10 +22,12 @@ public final class History {
 
    /** One commit that changed an app's folder. */
    public static final class Change {
+      public final String hash;
       public final long millis;
       public final String subject;
 
-      Change(long millis, String subject) {
+      Change(String hash, long millis, String subject) {
+         this.hash = hash;
          this.millis = millis;
          this.subject = subject;
       }
@@ -49,6 +51,22 @@ public final class History {
          this.readme = readme;
          this.about = firstParagraph(readme);
          this.warning = warning;
+      }
+
+      /** The hash of its newest change, or null when it has none. */
+      public String newest() {
+         return changes.isEmpty() ? null : changes.get(0).hash;
+      }
+
+      /**
+       * The changes after the one seen at the last launch, newest first; when that one is unknown (a launch before
+       * the launcher kept it, or history rewritten), the changes committed after the last launch.
+       */
+      public List<Change> since(String seen, long lastLaunch) {
+         for (int i = 0; i < changes.size(); i++) if (changes.get(i).hash.equals(seen)) return changes.subList(0, i);
+         List<Change> out = new ArrayList<>();
+         for (Change c : changes) if (c.millis > lastLaunch) out.add(c);
+         return out;
       }
    }
 
@@ -131,7 +149,7 @@ public final class History {
 
    /** The commits since first restored that touched each app's folder, newest first. Merges are left out. */
    private static Map<String, List<Change>> changes(Git git, Collection<String> ids) throws IOException {
-      List<String> args = new ArrayList<>(List.of("log", "--no-merges", "--format=@@%ct %s", "--name-only",
+      List<String> args = new ArrayList<>(List.of("log", "--no-merges", "--format=@@%H %ct %s", "--name-only",
          THEN + "..HEAD", "--"));
       args.addAll(ids);
       return parseLog(git.run(args.toArray(new String[0])));
@@ -144,9 +162,9 @@ public final class History {
       for (String line : log.split("\n")) {
          line = line.trim();
          if (line.startsWith("@@")) {
-            int space = line.indexOf(' ');
+            String[] parts = line.substring(2).split(" ", 3);
             try {
-               current = new Change(Long.parseLong(line.substring(2, space)) * 1000L, line.substring(space + 1).trim());
+               current = new Change(parts[0], Long.parseLong(parts[1]) * 1000L, parts.length > 2 ? parts[2].trim() : "");
             } catch (RuntimeException e) {
                current = null;
             }

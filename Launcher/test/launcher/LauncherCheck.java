@@ -36,7 +36,7 @@ public class LauncherCheck {
       check(find(apps, "TankGame").original && !find(apps, "Minesweeper").original, "origin from \"origin\"");
       check(find(apps, "Windows").warning != null && find(apps, "WindowsE").warning != null
          && find(apps, "BibleDownloader").warning == null && find(apps, "DinoGame").warning == null, "Robot apps warn");
-      check(find(apps, "Windows").hint.startsWith("Presses the Windows key once, then exits"),
+      check(find(apps, "Windows").hint.startsWith("An on-screen Windows key that stays on top of the real desktop"),
          "the Robot apps describe the real desktop, not the browser's pretend Windows: " + find(apps, "Windows").hint);
 
       // Search looks at the name, id, category and hint, ignoring case and spaces around it.
@@ -64,6 +64,14 @@ public class LauncherCheck {
       again.launched("TankGame", now);
       again.launched("TankGame", now);
       check(again.describe("TankGame", now + 4 * day, utc).equals("Played 3 times, last 4 days ago"), "days ago");
+      // The newest change seen at a launch is kept in a file beside it, so the play record keeps its old format.
+      check(again.seen("TankGame") == null, "nothing seen yet");
+      again.launched("TankGame", now, "abc123");
+      again.launched("TankGame", now);   // history not read yet: the one seen before stays
+      Path seenFile = file.resolveSibling(file.getFileName().toString().replace(".txt", "-seen.txt"));
+      check(new PlayLog(file).seen("TankGame").equals("abc123") && new PlayLog(file).count("TankGame") == 5, "seen kept");
+      check(new String(Files.readAllBytes(file), StandardCharsets.UTF_8).contains("TankGame 5 "), "play record format unchanged");
+      Files.delete(seenFile);
       Files.delete(file);
 
       // README view: headings, lists, code and inline marks, with HTML escaped.
@@ -166,8 +174,26 @@ public class LauncherCheck {
       check(History.sentences("One. Two. Three.", 2).equals("One. Two.") && History.sentences("One.", 2).equals("One."), "sentences");
       check(History.firstParagraph("# T\n\nA `b` **c** [d](e)\nmore.\n\nNext").equals("A b c d more."), "first paragraph");
       check(History.lines("rev:Clock/src/a/B.java:12\nrev:Clock/src/C.java:3\nrev:web/x.java:9\n").toString().equals("{Clock=15}"), "lines per app");
-      Map<String, List<History.Change>> parsed = History.parseLog("@@100 Two apps\n\nClock/README.md\nTankGame/src/A.java\nClock/src/B.java\n@@50 One\n\nClock/x\n");
-      check(parsed.get("Clock").size() == 2 && parsed.get("TankGame").size() == 1 && parsed.get("Clock").get(0).millis == 100_000L, "log per app");
+      Map<String, List<History.Change>> parsed = History.parseLog("@@h2 100 Two apps: both\n\nClock/README.md\nTankGame/src/A.java\nClock/src/B.java\n@@h1 50 One\n\nClock/x\n");
+      check(parsed.get("Clock").size() == 2 && parsed.get("TankGame").size() == 1 && parsed.get("Clock").get(0).millis == 100_000L
+         && parsed.get("Clock").get(0).hash.equals("h2") && parsed.get("Clock").get(0).subject.equals("Two apps: both"), "log per app");
+      // What is new since the last launch: the changes above the one seen then, or by time when none was kept.
+      History.Change c3 = parsed.get("Clock").get(0);
+      List<History.Change> three = List.of(new History.Change("h3", 300_000L, "Clock: a third"), c3, parsed.get("Clock").get(1));
+      History.Story clockStory = new History.Story(1, 2, true, three, "# Clock\n\nOld.", null);
+      check(clockStory.newest().equals("h3"), "newest change");
+      check(clockStory.since("h2", 999_999L).size() == 1 && clockStory.since("h3", 0).isEmpty(), "since the seen change");
+      check(clockStory.since(null, 60_000L).size() == 2 && clockStory.since("gone", 400_000L).isEmpty(), "since by time");
+      Catalog.App clockApp = find(apps, "Clock");
+      check(LauncherWindow.tidy(clockApp, "Clock: chimes every quarter").equals("Chimes every quarter")
+         && LauncherWindow.tidy(clockApp, "Clock README: words").equals("Words")
+         && LauncherWindow.tidy(find(apps, "RubiksCube2D"), "Rubik's Cube: x").equals("Rubik's Cube: x")
+         && LauncherWindow.tidy(find(apps, "WindowsE"), "Windows+E: y").equals("Y")
+         && LauncherWindow.tidy(find(apps, "Windows"), "WindowsE: y").equals("WindowsE: y")
+         && LauncherWindow.tidy(clockApp, "Run the site: z").equals("Run the site: z"), "subjects tidied");
+      String fresh = LauncherWindow.whatsNew(clockApp, three);
+      check(fresh.equals("New since you last played:\n\u2022 A third\n\u2022 Two apps: both\n1 more in History (Alt+H)."), fresh);
+      check(LauncherWindow.whatsNew(clockApp, List.of()) == null, "nothing new, no word");
       check(Runner.homeOption("-Xmx1g", Paths.get("/h o")).endsWith("\"-Duser.home=" + Paths.get("/h o").toAbsolutePath() + "\"")
          && Runner.homeOption(null, Paths.get("/h")).startsWith("\"-D"), "then home option");
       // The unpacker refuses entries that would land outside its folder.

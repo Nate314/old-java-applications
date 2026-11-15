@@ -59,11 +59,12 @@ public final class Catalog {
 
    /** The apps that press real keys: { desktop hint, warning }, written from their READMEs. */
    private static final Map<String, String[]> REAL_KEYS = Map.of(
-      "Windows", new String[] {"Presses the Windows key once, then exits. It has no window.",
-         "It presses the real Windows key as soon as it starts, which opens the Start menu."},
+      "Windows", new String[] {
+         "An on-screen Windows key that stays on top of the real desktop: click it for Start, hold it and press a key for Win+that key, or slide off it to snap the window in front.",
+         "It presses the real Windows key as soon as it starts, which opens the Start menu, and every click on its key presses the real one."},
       "WindowsE", new String[] {
-         "A keyboard of Windows shortcuts that presses the one you pick a chosen number of times: Win+E by default, which opens that many File Explorer windows. Add steps to press a list in a row: Side by side opens two windows on the two halves.",
-         "Clicking its DO IT!!! button presses real Windows shortcuts: 10 File Explorer windows by default."});
+         "A keyboard of Windows shortcuts that presses the one you pick a chosen number of times: Win+E by default, which opens that many File Explorer windows. Add steps to press a list in a row: Side by side opens two windows on the two halves. A little monitor shows what it will do first, and Preview plays it there without pressing a key.",
+         "Clicking its DO IT!!! button presses real Windows shortcuts: 10 File Explorer windows by default. Preview shows what it will do without pressing any."});
 
    private Catalog() {
    }

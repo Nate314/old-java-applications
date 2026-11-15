@@ -13,14 +13,27 @@ import java.util.Map;
 
 /**
  * How often and when each app was last launched from the launcher, kept in a text file
- * (one line per app: id, count, last launch in epoch milliseconds).
+ * (one line per app: id, count, last launch in epoch milliseconds). Beside it, {@code <name>-seen.txt} keeps the
+ * newest change each app had when it was last launched (id, commit hash), so the launcher can tell what is new since.
+ * It is a file of its own so that a launcher from before it still reads the play record.
  */
 public final class PlayLog {
    private final Path file;
+   private final Path seenFile;
    private final Map<String, long[]> entries = new LinkedHashMap<>();   // id -> {count, last millis}
+   private final Map<String, String> seen = new LinkedHashMap<>();      // id -> newest commit hash at its last launch
 
    public PlayLog(Path file) {
       this.file = file;
+      seenFile = file.resolveSibling(file.getFileName().toString().replaceFirst("\\.txt$", "") + "-seen.txt");
+      try {
+         for (String line : Files.readAllLines(seenFile, StandardCharsets.UTF_8)) {
+            String[] parts = line.trim().split("\\s+");
+            if (parts.length == 2) seen.put(parts[0], parts[1]);
+         }
+      } catch (IOException ignored) {
+         // none kept yet
+      }
       try {
          for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
             String[] parts = line.trim().split("\\s+");
@@ -46,8 +59,20 @@ public final class PlayLog {
       return e == null ? 0 : e[1];
    }
 
-   /** Records a launch now and saves the file. A file that cannot be written only loses the record. */
+   /** The hash of the app's newest change when it was last launched, or null when not known. */
+   public String seen(String id) {
+      return seen.get(id);
+   }
+
    public void launched(String id, long now) {
+      launched(id, now, null);
+   }
+
+   /**
+    * Records a launch now, with the app's newest change at that moment (null keeps the one kept before), and saves
+    * the files. A file that cannot be written only loses the record.
+    */
+   public void launched(String id, long now, String newest) {
       long[] e = entries.computeIfAbsent(id, k -> new long[2]);
       e[0]++;
       e[1] = now;
@@ -55,10 +80,19 @@ public final class PlayLog {
       for (Map.Entry<String, long[]> en : entries.entrySet()) {
          out.append(en.getKey()).append(' ').append(en.getValue()[0]).append(' ').append(en.getValue()[1]).append('\n');
       }
+      write(file, out);
+      if (newest == null) return;
+      seen.put(id, newest);
+      StringBuilder kept = new StringBuilder();
+      for (Map.Entry<String, String> en : seen.entrySet()) kept.append(en.getKey()).append(' ').append(en.getValue()).append('\n');
+      write(seenFile, kept);
+   }
+
+   private static void write(Path to, CharSequence text) {
       try {
-         Files.write(file, out.toString().getBytes(StandardCharsets.UTF_8));
+         Files.write(to, text.toString().getBytes(StandardCharsets.UTF_8));
       } catch (IOException ex) {
-         System.err.println("Could not save " + file + ": " + ex.getMessage());
+         System.err.println("Could not save " + to + ": " + ex.getMessage());
       }
    }
 

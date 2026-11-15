@@ -33,6 +33,7 @@ final class Ui {
    static final Color WARN = new Color(0xffb547);
    static final Color THEN = new Color(0xd2aa7c);        // the first restored apps: old paper
    static final Color THEN_FILL = new Color(0x8c6438);
+   static final Color FRESH = new Color(0xb48cff);       // changed since you last played
 
    static final String FAMILY = "Segoe UI";
 
