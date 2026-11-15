@@ -14,13 +14,14 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { fetchOk } from '../fetch-ok';
 import { storedJson } from '../stored';
+import { quiet, titledApp } from './news-kind';
 
-interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[] }
+interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[]; quiet: boolean }
 interface NewsData { items: NewsItem[]; apps: OldjavaCatalogApp[] }
 
 declare global {
   interface Window {
-    oldjavaNews?: { load(): Promise<NewsData>; Story: ComponentType<{ id: string }>; lastPlayed(id: string): number; day(t: number): string };
+    oldjavaNews?: { load(): Promise<NewsData>; Story: ComponentType<{ id: string }>; lastPlayed(id: string): number; day(t: number): string; titledApp: typeof titledApp };
   }
 }
 let load!: () => Promise<NewsData>, day!: (t: number) => string, lastPlayed!: (id: string) => number;
@@ -34,12 +35,15 @@ function Story({ id }: { id: string }) {
   if (!data) return <details className="shim-title-story" aria-hidden="true" />;   // empty: keeps the line's room (shim.css)
   if (!mine.length) return <details className="shim-title-story" hidden />;
   const since = lastPlayed(id);
-  const fresh = since ? mine.filter(it => it.t > since).length : 0;
+  const fresh = since ? mine.filter(it => it.t > since && !it.quiet).length : 0;
+  const lead = mine.find(it => !it.quiet) || mine[0];   // the latest change a player would notice
+  // "Clock: a flip clock face ..." says "A flip clock face ...", since the page is already the app's
+  const said = titledApp(lead) && lead.more ? lead.more.charAt(0).toUpperCase() + lead.more.slice(1) : lead.title;
   return (
     <details className={'shim-title-story' + (fresh > 0 ? ' fresh' : '')}>
       <summary>
         <span className="shim-story-label">{fresh ? fresh + (fresh === 1 ? ' change' : ' changes') + ' since you played' : 'Latest change'}</span>
-        {' ' + mine[0].title + ' '}
+        {' ' + said + ' '}
         <span className="shim-story-count">{'Its story (' + mine.length + ')'}</span>
       </summary>
       <ol>
@@ -92,7 +96,8 @@ function Story({ id }: { id: string }) {
           t: +m[1] * 1000,
           title: colon < 0 ? subject : subject.slice(0, colon),
           more: more,
-          apps: []
+          apps: [],
+          quiet: quiet(subject)
         });
       } else if (items.length && byId[line]) {
         items[items.length - 1].apps.push(byId[line]);
@@ -110,7 +115,7 @@ function Story({ id }: { id: string }) {
   // When the visitor last played the app (0 if never).
   lastPlayed = function (id: string) { return storedJson(LAST_KEY)[id] || storedJson(PLAYED_KEY)[id] || 0; };
 
-  window.oldjavaNews = { load: load, Story: Story, lastPlayed: lastPlayed, day: day };
+  window.oldjavaNews = { load: load, Story: Story, lastPlayed: lastPlayed, day: day, titledApp: titledApp };
 })();
 
 export {};   // a module, imported when it is needed (its chunk is assets/news.js)
