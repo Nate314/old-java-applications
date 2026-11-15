@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for ScreenSaver: a monitor showing the aquarium saver, a yellow fish among bubbles over
+       sand and weed. Original art for this repo. -->
+  <path d="M104 200 h48 l10 26 h-68 Z" fill="#5d6878"/>
+  <rect x="78" y="222" width="100" height="12" rx="6" fill="#3e4652"/>
+  <rect x="12" y="24" width="232" height="180" rx="18" fill="#2a3240"/>
+  <rect x="26" y="38" width="204" height="152" rx="6" fill="#1f6fae"/>
+  <path d="M26 44 a6 6 0 0 1 6 -6 h192 a6 6 0 0 1 6 6 V80 Q128 70 26 84 Z" fill="#3c95d0"/>
+  <path d="M26 166 Q70 150 120 162 T230 158 V184 a6 6 0 0 1 -6 6 H32 a6 6 0 0 1 -6 -6 Z" fill="#d8b36a"/>
+  <path d="M60 170 Q48 130 62 100" stroke="#2f9a54" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <path d="M196 166 Q210 134 198 112" stroke="#2f9a54" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <g fill="none" stroke="#bfe3ff" stroke-width="4"><circle cx="164" cy="74" r="7"/><circle cx="174" cy="56" r="5"/><circle cx="160" cy="98" r="4"/></g>
+  <path d="M90 116 Q118 80 150 106 Q118 140 90 116 Z" fill="#ffd21f"/>
+  <path d="M148 106 L174 86 L168 107 L176 128 Z" fill="#ffd21f"/>
+  <path d="M106 96 L124 78 L134 98 Z" fill="#f2b705"/>
+  <circle cx="104" cy="108" r="6" fill="#1c2430"/>
+</svg>

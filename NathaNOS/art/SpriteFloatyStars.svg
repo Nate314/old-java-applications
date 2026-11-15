@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- NathaNOS desktop icon for SpriteFloatyStars: a glowing sun in a night sky with trails of floating star dots
+       around it. Original art for this repo. -->
+  <defs>
+    <radialGradient id="glow"><stop offset="0" stop-color="#fff3b0"/><stop offset="0.35" stop-color="#ffc94d"/><stop offset="1" stop-color="#ffc94d" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="28" fill="#0d1430"/>
+  <g fill="none" stroke-linecap="round" stroke-width="11" stroke-dasharray="0.1 20" transform="translate(128 128) scale(0.86) translate(-128 -128)">
+    <path d="M60 196 A80 80 0 0 1 128 48" stroke="#a9c8ff"/>
+    <path d="M76 66 A84 84 0 0 1 206 150" stroke="#f0a04b"/>
+    <path d="M212 126 A88 88 0 0 1 96 212" stroke="#c46be0"/>
+  </g>
+  <circle cx="128" cy="128" r="70" fill="url(#glow)"/>
+  <circle cx="128" cy="128" r="22" fill="#fff7d6"/>
+</svg>

@@ -29,7 +29,7 @@ const BODY: Record<string, Record<string, string>> = {
     'data-files': [
       'assets/NOS.png assets/NathaNOS.png assets/background.jpg assets/background.png assets/clock.png assets/cursor.png assets/transparent.png',
       'assets/Clock.jar assets/CircleSpawner.jar assets/FlappyBird.jar assets/Minesweeper.jar assets/RubiksCube2D.jar assets/ScreenSaver.jar assets/SpriteFloatyStars.jar assets/StockChecker.jar assets/SynthesizerKeyboard.jar assets/UltimateTicTacToe.jar assets/GroupCreator.jar assets/MusicTheoryExpert.jar assets/NumberGuess.jar assets/SimpleAlgorithms.jar assets/TankGame.jar assets/BibleDownloader.jar assets/DinoGame.jar',
-      'assets/BibleDownloader.png assets/DinoGame.png assets/Minesweeper.png assets/NumberGuess.png assets/RubiksCube2D.png assets/StockChecker.png assets/SynthesizerKeyboard.png assets/UltimateTicTacToe.png',
+      'assets/BibleDownloader.png assets/CircleSpawner.png assets/DinoGame.png assets/FlappyBird.png assets/GroupCreator.png assets/Minesweeper.png assets/MusicTheoryExpert.png assets/NumberGuess.png assets/RubiksCube2D.png assets/ScreenSaver.png assets/SimpleAlgorithms.png assets/SpriteFloatyStars.png assets/StockChecker.png assets/SynthesizerKeyboard.png assets/TankGame.png assets/UltimateTicTacToe.png',
       'bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png myStocks.txt stockCheck.csv',
     ].join(' '),
   },

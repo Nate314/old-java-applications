@@ -29,6 +29,14 @@ $jobs = @(
     @{ Svg = 'NathaNOS/art/SynthesizerKeyboard.svg';     Out = 'NathaNOS/assets/SynthesizerKeyboard.png' }
     @{ Svg = 'NathaNOS/art/UltimateTicTacToe.svg';       Out = 'NathaNOS/assets/UltimateTicTacToe.png' }
     @{ Svg = 'NathaNOS/art/cursor.svg';                  Out = 'NathaNOS/assets/cursor.png' }
+    @{ Svg = 'NathaNOS/art/CircleSpawner.svg';           Out = 'NathaNOS/assets/CircleSpawner.png' }
+    @{ Svg = 'NathaNOS/art/FlappyBird.svg';              Out = 'NathaNOS/assets/FlappyBird.png' }
+    @{ Svg = 'NathaNOS/art/GroupCreator.svg';            Out = 'NathaNOS/assets/GroupCreator.png' }
+    @{ Svg = 'NathaNOS/art/MusicTheoryExpert.svg';       Out = 'NathaNOS/assets/MusicTheoryExpert.png' }
+    @{ Svg = 'NathaNOS/art/ScreenSaver.svg';             Out = 'NathaNOS/assets/ScreenSaver.png' }
+    @{ Svg = 'NathaNOS/art/SimpleAlgorithms.svg';        Out = 'NathaNOS/assets/SimpleAlgorithms.png' }
+    @{ Svg = 'NathaNOS/art/SpriteFloatyStars.svg';       Out = 'NathaNOS/assets/SpriteFloatyStars.png' }
+    @{ Svg = 'NathaNOS/art/TankGame.svg';                Out = 'NathaNOS/assets/TankGame.png' }
 )
 
 $profileDir = Join-Path ([IO.Path]::GetTempPath()) "oldjava-art-chrome-$PID"

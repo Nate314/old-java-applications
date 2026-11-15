@@ -94,7 +94,7 @@ public class LauncherWindow extends JInternalFrame {
       for (int i = 0; i < this.shown.size(); i++) {
          TaskList.Task task = this.shown.get(i);
          int at = i;
-         FlatButton button = new FlatButton(task.icon, task.name, task.name, null, HOVER, ON, () -> this.tasks.press(task, this.buttonBounds(at)));
+         FlatButton button = new FlatButton(task.icon, task.name, AppIcon.words(task.name), null, HOVER, ON, () -> this.tasks.press(task, this.buttonBounds(at)));
          button.setBounds(left + i * width, 0, width, this.getHeight());
          this.taskButtons.add(button);
          this.panel.add(button);
