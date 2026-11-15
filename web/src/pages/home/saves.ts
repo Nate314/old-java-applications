@@ -17,6 +17,15 @@ export function readJson(key: string): Record<string, any> {
   try { const v = JSON.parse(localStorage.getItem(key) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
 }
 
+/** Calls back when saves here may have changed: another page's write (a storage event), or every 5 s while this
+ *  page is on view, since the player's app saves on this page and no storage event comes for that. Returns the stop. */
+export function onSavesChange(refresh: () => void) {
+  const onStorage = (e: StorageEvent) => { if (e.key === null || e.key.indexOf(PREFIX) === 0) refresh(); };
+  window.addEventListener('storage', onStorage);
+  const timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+  return () => { window.removeEventListener('storage', onStorage); clearInterval(timer); };
+}
+
 function storeNames(): string[] {
   const names: string[] = [];
   try {

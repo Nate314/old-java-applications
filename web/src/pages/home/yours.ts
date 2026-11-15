@@ -2,7 +2,7 @@
 // shows, records.ts), and the Yours filter keeps only the apps played here, the last one played first.
 import { useEffect, useState } from 'react';
 import type { App } from '../../shared/catalog';
-import { PLAYED, PREFIX, collect, readJson } from './saves';
+import { PLAYED, collect, onSavesChange, readJson } from './saves';
 
 /** Whether a card shows under a filter: all, a category, or yours (stamped in the passport). */
 export const inFilter = (a: App, f: string) => f === 'all' || (f === 'yours' ? window.oldjavaPassport.has(a.id) : a.cat === f);
@@ -19,9 +19,8 @@ export function playedRank(): Record<string, number> {
 function lines() {
   const saves = collect().saves, out: Record<string, string> = {};
   Object.keys(saves).forEach(store => {
-    const line = /\.then$/.test(store) ? '' : window.oldjavaRecords.line(store, saves[store]);
-    // The fallback that only names files ("Saved here from last time: ...") is no record to show on a card.
-    if (line && line.indexOf('Saved here') !== 0) out[store] = line;
+    const line = window.oldjavaRecords.line(store, saves[store]);
+    if (line) out[store] = line;
   });
   return out;
 }
@@ -29,13 +28,6 @@ function lines() {
 /** The record line of each app with one, kept in step with saves from the player and from other pages. */
 export function useRecordLines() {
   const [now, set] = useState(lines);
-  useEffect(() => {
-    const refresh = () => set(prev => { const next = lines(); return JSON.stringify(next) === JSON.stringify(prev) ? prev : next; });
-    const onStorage = (e: StorageEvent) => { if (e.key === null || e.key.indexOf(PREFIX) === 0) refresh(); };
-    window.addEventListener('storage', onStorage);
-    // The player's app saves while it runs, on this page, so no storage event comes for it.
-    const timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
-    return () => { window.removeEventListener('storage', onStorage); clearInterval(timer); };
-  }, []);
+  useEffect(() => onSavesChange(() => set(prev => { const next = lines(); return JSON.stringify(next) === JSON.stringify(prev) ? prev : next; })), []);
   return now;
 }
