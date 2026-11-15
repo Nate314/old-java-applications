@@ -6,7 +6,8 @@ import { catalog, catalogDoc, root, type CatalogApp } from './catalog';
 import { indexOf } from './then-and-now';
 import { EmbedSection } from './embed';
 import { playSound } from './sounds';
-import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { CloseButton, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 
 export let shareBox: HTMLElement | null;
 export let SHARED: RegExpExecArray | null;
@@ -20,14 +21,7 @@ export function openShare(id: string | null, opener?: Element | null) {
   if (shareBox) return;
   // The panel belongs to the page, which a fullscreen player (Big screen) would cover.
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
-  function shut() {
-    playSound('close');
-    close();
-    shareBox = null;
-    if (opener && opener.isConnected) (opener as HTMLElement).focus();
-  }
-  const close = openLayer(<SharePanel id={id} onClose={shut} onPanel={el => { shareBox = el; }} />);
-  playSound('open');
+  openPanel(shut => <SharePanel id={id} onClose={shut} onPanel={el => { shareBox = el; }} />, opener, () => { shareBox = null; });
 }
 
 /** What the panel says once the catalog is in: the link, its preview card's text and the message. */

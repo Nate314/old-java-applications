@@ -8,6 +8,7 @@ import { JAR_KEYS, JAR_KEYS_LABEL, NO_QUIRKS, eraPage, indexOf, isThen, picks, q
 import { openShare } from './share';
 import { Overlay } from './ui/overlay';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { AppCard, JarLink, PassportLine, Quirk } from './ui/cards';
 import { playSound } from './sounds';
 import { fetchOk } from './fetch-ok';
@@ -160,18 +161,12 @@ export function sourceFromHash() {
 
 function openSource(file: string | null, line: number) {
   if (sourcePanel) { sourcePanel.show(file as string, line); return; }
-  var opener = document.activeElement as HTMLElement | null;
-  function shut() {
-    playSound('close');
-    close();
+  openPanel(shut => <SourcePanel file={file} line={line} onClose={shut} onShow={show => { sourcePanel = { show }; }} />, document.activeElement, () => {
     document.documentElement.removeAttribute('data-source');
     sourcePanel = null;
     history.replaceState(null, '', location.pathname + location.search);
-    if (opener && opener.focus && document.contains(opener)) opener.focus();
-  }
-  const close = openLayer(<SourcePanel file={file} line={line} onClose={shut} onShow={show => { sourcePanel = { show }; }} />);
+  });
   document.documentElement.setAttribute('data-source', '');
-  playSound('open');
 }
 
 /** What the page shows: a README, a Java file, why a file could not load, or nothing yet. */

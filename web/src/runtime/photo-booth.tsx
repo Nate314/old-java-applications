@@ -5,6 +5,7 @@ import { drawDesk } from './replay';
 import { appId, catalog } from './catalog';
 import { indexOf } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { playSound } from './sounds';
 import { store, stored } from './stored';
 
@@ -225,17 +226,12 @@ function openPhoto(photo: Photo, opener: HTMLElement | null) {
   if (photoBox) return;
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
   var urls: { src: string; out: string | null } = { src: URL.createObjectURL(photo.blob), out: null };
-  function shut() {
-    playSound('close');
+  var save: HTMLElement | null = null;
+  openPanel(shut => <PhotoPanel photo={photo} urls={urls} onClose={shut} onPanel={(el, s) => { photoBox = el; save = s; }} />, opener, () => {
     URL.revokeObjectURL(urls.src);
     if (urls.out) URL.revokeObjectURL(urls.out);
-    close();
     photoBox = null;
-    if (opener && opener.isConnected) opener.focus();
-  }
-  var save: HTMLElement | null = null;
-  const close = openLayer(<PhotoPanel photo={photo} urls={urls} onClose={shut} onPanel={(el, s) => { photoBox = el; save = s; }} />);
-  playSound('open');
+  });
   save!.focus();
 }
 

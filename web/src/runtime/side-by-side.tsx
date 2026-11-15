@@ -6,6 +6,7 @@ import { appId, catalog, root } from './catalog';
 import type { CatalogApp } from './catalog';
 import { indexOf } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { AppCard } from './ui/cards';
 import { openShare } from './share';
 import { AGAIN_KEY } from './records';
@@ -231,17 +232,8 @@ function DockEdge() {
 // The picker: good companions for this app first, then every app, in the same cards as Switch app.
 export function openDockPicker(opener: HTMLElement) {
   if (dockPicker) return;
-  function shut() {
-    playSound('close');
-    gone();
-    if (opener && opener.isConnected) opener.focus();
-  }
-  function gone() {
-    close();
-    dockPicker = null;
-  }
-  const close = openLayer(<DockPicker onClose={shut} onPick={id => { gone(); dockOpen(id, true); }} onPanel={el => { dockPicker = el; }} />);
-  playSound('open');
+  const close = openPanel(shut => <DockPicker onClose={shut} onPick={id => { close(); dockPicker = null; dockOpen(id, true); }} onPanel={el => { dockPicker = el; }} />,
+    opener, () => { dockPicker = null; });
 }
 
 function DockPicker({ onClose, onPick, onPanel }: { onClose: () => void; onPick: (id: string) => void; onPanel: (el: HTMLElement) => void }) {

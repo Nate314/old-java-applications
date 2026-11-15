@@ -4,7 +4,8 @@ import { siteRoot } from './install';
 import { popped } from './pop-out';
 import { appId, catalog } from './catalog';
 import { indexOf } from './then-and-now';
-import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { CloseButton, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { appOut, audio } from './midi';
 import { playSound } from './sounds';
 import { real } from './slow-mo';
@@ -343,16 +344,11 @@ export function openClip(clip: ReplayClip, opener: HTMLElement | null) {
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
   var url = URL.createObjectURL(clip.blob);
   var video: HTMLVideoElement | null = null, save: HTMLElement | null = null;
-  function shut() {
-    playSound('close');
+  openPanel(shut => <ClipPanel clip={clip} url={url} onClose={shut} onPanel={(el, v, s) => { clipBox = el; video = v; save = s; }} />, opener, () => {
     video!.pause();
     URL.revokeObjectURL(url);
-    close();
     clipBox = null;
-    if (opener && opener.isConnected) opener.focus();
-  }
-  const close = openLayer(<ClipPanel clip={clip} url={url} onClose={shut} onPanel={(el, v, s) => { clipBox = el; video = v; save = s; }} />);
-  playSound('open');
+  });
   // Started by the visitor's click, so it may play with sound; muted if the browser says otherwise.
   video!.play().catch(function () { video!.muted = true; video!.play().catch(function () {}); });
   save!.focus();
