@@ -15,10 +15,11 @@ import java.awt.event.KeyEvent;
  * turns on and off.
  */
 final class ClockFace implements Tab {
-   private static final Color BRASS = new Color(200, 140, 20);
+   static final Color BRASS = new Color(200, 140, 20);
    /** The alarm hand while the alarm is off. */
    private static final Color UNSET = new Color(205, 205, 205);
    private final Main clock;
+   private final FlipFace flip = new FlipFace();
    private Rectangle chimesBox;
    private Rectangle alarmBox;
    /** The analog face's middle and the alarm knob, for dragging it; knobRadius is 0 on the digital face. */
@@ -42,7 +43,8 @@ final class ClockFace implements Tab {
       if (this.clock.state.alarm.isRinging()) {
          return "Space or click: snooze 9 min   A or Stop: stop until tomorrow";
       }
-      return (this.clock.state.analog ? "Drag knob: alarm   Click: digital" : "Up/Down: alarm   Click: analog")
+      ClockState state = this.clock.state;
+      return (state.analog ? "Drag knob: alarm   Click: digital" : "Up/Down: alarm   Click: " + (state.flip ? "analog" : "flip clock"))
             + "   Right click: 12/24 h   B: chimes";
    }
 
@@ -96,6 +98,9 @@ final class ClockFace implements Tab {
          drawHand(g2, centerX, centerY, (radius << 1) / 3, (Math.PI / 2) - minutes * (Math.PI / 30));
          g2.setColor(Ui.HAND);
          drawHand(g2, centerX, centerY, radius * 9 / 10, (Math.PI / 2) - seconds * (Math.PI / 30));
+      } else if (this.clock.state.flip) {
+         this.flip.paint(g2, new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight), this.clock,
+               alarm.isOn() ? this.alarmWhen(alarm, now) : null, now);
       } else {
          area = new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight); // clear of the buttons
          g2.setColor(Ui.INK);
@@ -139,13 +144,17 @@ final class ClockFace implements Tab {
       g2.fillOval(this.knobX - dot, this.knobY - dot, dot * 2, dot * 2);
       g2.setStroke(new BasicStroke((float)margin));
       if (alarm.isOn()) {
-         long snooze = alarm.snoozeUntil();
-         String when = alarm.isRinging() ? "Wake up!"
-               : snooze > now ? "Snoozing, rings at " + Ui.wallTime(snooze, this.clock.state.twentyFour)
-               : "Rings in " + Alarm.wait(alarm.nextAt(now), now);
          g2.setColor(BRASS);
-         Ui.line(g2, when, Ui.LABELS, new Rectangle(centerX - radius / 2, centerY + radius * 45 / 100, radius, Math.max(10, radius / 10)));
+         Ui.line(g2, this.alarmWhen(alarm, now), Ui.LABELS, new Rectangle(centerX - radius / 2, centerY + radius * 45 / 100, radius, Math.max(10, radius / 10)));
       }
+   }
+
+   /** When an alarm that is on rings, as said under the face. */
+   private String alarmWhen(Alarm alarm, long now) {
+      long snooze = alarm.snoozeUntil();
+      return alarm.isRinging() ? "Wake up!"
+            : snooze > now ? "Snoozing, rings at " + Ui.wallTime(snooze, this.clock.state.twentyFour)
+            : "Rings in " + Alarm.wait(alarm.nextAt(now), now);
    }
 
    /** A brass channel {@code amount} of the way from the white face. */
@@ -199,7 +208,7 @@ final class ClockFace implements Tab {
       }
    }
 
-   /** As in the original, on release: left click switches analog and digital, right click 12 and 24 hours. */
+   /** As in the original, on release: left click switches the face (analog, digital, flip clock), right click 12 and 24 hours. */
    @Override
    public void release(int x, int y, long now) {
       if (this.hushed || this.knobPressed) {
@@ -216,7 +225,9 @@ final class ClockFace implements Tab {
       } else if (this.rightPressed) {
          this.clock.state.twentyFour = !this.clock.state.twentyFour;
       } else {
-         this.clock.state.analog = !this.clock.state.analog;
+         ClockState state = this.clock.state;
+         state.flip = !state.analog && !state.flip;
+         state.analog = !state.analog && !state.flip;
       }
    }
 
