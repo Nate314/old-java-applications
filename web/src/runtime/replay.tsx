@@ -8,6 +8,7 @@ import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { appOut, audio } from './midi';
 import { playSound } from './sounds';
 import { real } from './slow-mo';
+import { paintWatch } from './painted';
 
 /** A recorded clip: its video, how many seconds it holds, and the app it shows. */
 export interface ReplayClip { blob: Blob; seconds: number; app: string }
@@ -29,7 +30,7 @@ let clipBox: HTMLElement | null;
 // them always holds between half a segment and a whole one. Replay (toolbar, exit screen, the home page's
 // player bar) stops that one and shows its video (openClip) with the app's own sound, if it made any
 // (appOut), to watch, save or share. The video stays in the page unless the visitor saves or shares it.
-// Only a changed app is drawn again: the shim flags every canvas it draws on (window.__shimPainted) and a
+// Only a changed app is drawn again: the shim flags every canvas it draws on (painted.ts) and a
 // MutationObserver sees the rest (text, buttons, windows moving), so an app at rest (a solved cube, a clock
 // between ticks, a menu) costs one frame a second (REPLAY_IDLE), and the encoder has nothing new to encode.
 // Nothing is drawn or recorded while nobody can see the app: its tab is hidden, or the page has scrolled the
@@ -213,6 +214,7 @@ export function startReplay(desktop: Element): Replay | null {
   var canvas = document.createElement('canvas');
   var g = canvas.getContext('2d')!;
   var track: MediaStreamTrack | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
+  var drew = paintWatch();
   function look() { changed = true; }
   if (window.MutationObserver) {
     new MutationObserver(look).observe(desktop, { subtree: true, childList: true, attributes: true, characterData: true });
@@ -271,10 +273,7 @@ export function startReplay(desktop: Element): Replay | null {
     (popped && !popped.win.closed ? popped.win : window).requestAnimationFrame(frame);
     var t = real.now();   // not the frame's time, which a popped out window counts from its own start
     if (away()) return;
-    if (window.__shimPainted) {
-      window.__shimPainted = false;
-      changed = true;
-    }
+    if (drew()) changed = true;
     // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
     // less often: the app keeps at least nine tenths of the time.
     if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;

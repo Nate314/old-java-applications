@@ -1,4 +1,5 @@
 import { embedded } from './skin';
+import { paintWatch } from './painted';
 
 // ---- stage glow: the app lights the room ----
 // On a dark desk (Modern in dark mode, Arcade, a dark Yours skin) an app page's windows cast their own colors on the
@@ -59,18 +60,15 @@ export function init() {
         }
       });
     }
-    // Drawn again only after a change (or once a second), so an app at rest stays as quiet as replay keeps it:
-    // the shim's paint flag is shared with replay, which clears it, so it is watched through a setter here.
-    var dirty = true, settle = 0, flag = window.__shimPainted;
-    Object.defineProperty(window, '__shimPainted', { configurable: true,
-      get: function () { return flag; }, set: function (v) { flag = v; if (v) dirty = true; } });
+    // Drawn again only after a change (or once a second), so an app at rest stays as quiet as replay keeps it.
+    var dirty = true, settle = 0, drew = paintWatch();
     if (window.MutationObserver) new MutationObserver(function () { dirty = true; })
       .observe(desktop, { subtree: true, childList: true, attributes: true, characterData: true });
     function tick() {
       setTimeout(tick, calm.matches ? CALM_MS : EVERY_MS);   // a timer, not frames: it never keeps the page painting
       var t = performance.now();
       if (document.hidden) return;
-      if (dirty) { dirty = false; settle = 8; }   // a few more pictures, so the eased light reaches the new colors
+      if (drew() || dirty) { dirty = false; settle = 8; }   // a few more pictures, so the eased light reaches the new colors
       if (settle <= 0 && t - last < CALM_MS) return;
       settle--;
       last = t;
