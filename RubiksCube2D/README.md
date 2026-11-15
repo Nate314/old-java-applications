@@ -13,6 +13,7 @@ Level n starts from a solved cube and mixes it with n moves while you watch (eac
 - **3D cube / Flat net** (top right, or V): switch between the two views. Both show the same cube, and every control below works in both. The choice is saved (see below).
 - **Drag a square** (3D cube): turns the row, column or ring through that square the way the drag goes, as if the square were pushed with a finger. The move is counted like a key press.
 - **Drag around the cube** (3D cube), or the **arrow keys**: turns the whole cube to look at another side. Moves never depend on how the cube is turned.
+- **Mirrors** (3D cube): the sides turned away from you are shown again at the left and right edges of the view, so the whole cube can be read without turning it (see Mirrors below). **Click a mirror** to turn that side round to you. **X** turns the mirrors off or on; the choice is saved.
 - **Click a square**: select that face and square. The selected square shrinks inside a black ring (in 3D, inside a white ring).
 - **W / A / S / D** (or the on-screen `w` `a` `s` `d` buttons): turn the row, column or ring through the selected square. Nothing happens until a square is selected. Moves are ignored while a mix or Solve is playing.
 - **Levels** (bottom right): the level, its par (the number of mixing moves), your moves and time, and your best on that level. Solving at par or better wins 3 stars, within twice par plus 2 wins 2, otherwise 1. Using a hint caps the level at 1 star. Solving a level unlocks the next one; the total of stars out of 60 is shown under the buttons.
@@ -26,12 +27,22 @@ Level n starts from a solved cube and mixes it with n moves while you watch (eac
 - **Solve**: plays the way back to solved, one move at a time. A level solved this way is not counted. After a long Mix it solves the cube layer by layer the Teach me way instead, when that takes fewer moves than turning back every move of the mix (about 150 against up to 1000). Hint gives that way's next move too.
 - **Mix** with **Moves** (default 1000) and **Secs** (default 0.5): free play, scrambling with that many random moves (any face, any square, any of the four directions) spread over that many seconds in total. Hint and Solve also work after a Mix.
 - Typing in the Moves and Secs fields no longer turns the cube. The title bar shows the level and your move count. Non-numeric Moves or Secs show a message there instead of mixing.
-- The best stars and fewest moves per level, the level played last, the view and the patterns made by hand are saved to `~/.rubikscube-levels.txt` (lines like `level=4` and `3=3,3` for level 3: 3 stars, 3 moves, `view=net` once the flat net is picked, and `patterns=spots,checkerboard`, and `times=` with the Timer's latest 100 times in milliseconds, oldest first). The app opens on that level and in that view.
+- The best stars and fewest moves per level, the level played last, the view and the patterns made by hand are saved to `~/.rubikscube-levels.txt` (lines like `level=4` and `3=3,3` for level 3: 3 stars, 3 moves, `view=net` once the flat net is picked, `mirrors=off` while the mirrors are off, and `patterns=spots,checkerboard`, and `times=` with the Timer's latest 100 times in milliseconds, oldest first). The app opens on that level and in that view.
 - No command-line arguments. The window is 550x700.
 
 Hint and Solve know the way back because every move is recorded as a path of cube positions from the solved cube. A move that returns to a position already on the path (its inverse, or the fourth turn of one slice) cuts the path back there, so the hints never retrace a loop. A level's mix never simply undoes its previous move and always ends that many steps along the path from solved, which is the level's par.
 
 Face layout in the net: top blue, left white, front red, right yellow, bottom green, back orange (below bottom).
+
+## Mirrors
+
+A cube drawn in 3D shows three of its six sides. Real cubers turn the cube in their hands to check the rest; on screen that meant dragging the cube round between moves. Now the three hidden sides are shown too, as small mirrors beside the cube.
+
+- Each side turned away from you is drawn a little way beyond the cube, smaller, as a mirror standing behind that side would show it, so it reads back to front, in perspective. Then it is moved out to the left or right edge of the view: a side behind and to the left stands at the left, one behind and to the right at the right, and the side underneath (or on top, when you look from below) at the bottom (or top) of the right edge, under the row of buttons.
+- A mirror fades in as its side turns away and is gone once the side faces you. When you turn the cube so that a hidden side moves from one edge to the other, its mirror glides across behind the cube.
+- A click (or tap) on a mirror turns the cube to show that side, as Hint does for a square out of view.
+- The mirrors show where every square is after the last move; while a layer is turning they wait for it to finish.
+- X (only in the 3D cube) turns them off and on, saved as `mirrors=off` in `~/.rubikscube-levels.txt` while they are off. The flat net has no hidden sides and no mirrors.
 
 ## Teach me
 
@@ -73,7 +84,7 @@ The moves are now the quarter turns of a real cube (`CubeGeometry`): the net is 
 
 - `src/rubikscube/Main.java`: entry point; shows the `CubeFrame`.
 - `src/rubikscube/CubeFrame.java`: the window; lays out the 3D cube or the six faces of the net, the w/a/s/d buttons, the Mix controls and the level panel for the view shown; applies and counts moves; plays a level's mix and Solve on a Swing timer; Hint and Undo.
-- `src/rubikscube/CubeView3D.java`: the 3D cube. Teach me can stand it with another side up (a whole-cube turn applied before the view's own). Draws the 26 cubies in perspective with simple lighting, slab by slab along the turning axis from far to near, so a turning layer is drawn correctly in front of or behind the rest; animates each turn (240 ms, quicker when more are waiting, and skipped to the latest position when a Mix runs far ahead); turns the view on a drag or arrow key; maps a click to a square and a drag to the key whose move carries that square most nearly along the drag on screen; draws the selection ring and the hint arrow.
+- `src/rubikscube/CubeView3D.java`: the 3D cube. Teach me can stand it with another side up (a whole-cube turn applied before the view's own). Draws the 26 cubies in perspective with simple lighting, slab by slab along the turning axis from far to near, so a turning layer is drawn correctly in front of or behind the rest; animates each turn (240 ms, quicker when more are waiting, and skipped to the latest position when a Mix runs far ahead); turns the view on a drag or arrow key; maps a click to a square and a drag to the key whose move carries that square most nearly along the drag on screen; draws the selection ring and the hint arrow; draws the mirrors of the hidden sides and turns a clicked one to the front.
 - `src/rubikscube/CubeGeometry.java`: where each sticker of the net sits on the cube (cubie position and the direction its face points), the layer turn of every W/A/S/D move, and applying a turn to the stickers.
 - `src/rubikscube/Cube.java`: holds the six `Face` objects, refreshes them, resets them to solved, takes a snapshot of all 54 stickers and checks whether the cube is solved; tells the 3D view about every turn and reset.
 - `src/rubikscube/Face.java`: one face's nine sticker buttons and colors; reports which square was clicked and rings the selected one.
@@ -90,7 +101,7 @@ The moves are now the quarter turns of a real cube (`CubeGeometry`): the net is 
 - `src/rubikscube/MoveHistory.java`: the path of positions from the solved cube; applies and records moves and gives the next move back (Hint, Solve).
 - `src/rubikscube/LevelRecords.java`: the 20 levels' best stars and moves, the last level, the patterns made and the Timer's times, read from and saved to `~/.rubikscube-levels.txt`; the star rule.
 - `src/rubikscube/Move.java`: applies a W/A/S/D move for the selected face and square as a layer turn (see A real cube).
-- `src/rubikscube/MoveKeyDispatcher.java`: global key dispatcher that turns W/A/S/D presses into moves, Z/H/R/N/P into the level keys, T into Teach me, C into My cube (1 to 6 then pick its colors), K into the Timer (Space then holds, starts and stops it), G, 1 to 7, M and Backspace into Patterns, V into the view switch and the arrow keys into turning the 3D cube, except while typing in a text field.
+- `src/rubikscube/MoveKeyDispatcher.java`: global key dispatcher that turns W/A/S/D presses into moves, Z/H/R/N/P into the level keys, T into Teach me, C into My cube (1 to 6 then pick its colors), K into the Timer (Space then holds, starts and stops it), G, 1 to 7, M and Backspace into Patterns, V into the view switch, X into the mirrors and the arrow keys into turning the 3D cube, except while typing in a text field.
 - `src/rubikscube/Scrambler.java`: the Mix feature; applies random moves through the `MoveHistory` on a Swing timer. Also makes the random moves for a level's mix.
 - `src/rubikscube/ColorPalette.java`: maps color names to `Color`s.
 
@@ -133,6 +144,13 @@ java -ea -cp ../out/check/RubiksCube2D rubikscube.RealCubeCheck
 ```
 javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
 java -ea -cp ../out/check/RubiksCube2D rubikscube.TimerCheck
+```
+
+`test/rubikscube/MirrorCheck.java` checks the mirrors: from 48 points of view (eight turns round, six heights) every hidden side has a mirror, each inside the view and under the row of buttons, clear of the cube's middle and of the other mirrors; a click on the mirror of the side underneath turns that side to the front; X's setting hides them; and `mirrors=off` is saved, read back beside the level records and dropped when they are turned on again. From `RubiksCube2D/`:
+
+```
+javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
+java -ea -Djava.awt.headless=true -cp ../out/check/RubiksCube2D rubikscube.MirrorCheck
 ```
 
 The check found that `d` on the yellow and white faces turned the top or bottom face the wrong way (so `a` then `d` did not undo), which is now fixed.
