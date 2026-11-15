@@ -63,6 +63,8 @@ export function titleScreen(files: string[]) {
     html.removeAttribute('data-title');
     var start = started;
     started = null;
+    // Let go of Play, so the app's first button or field can take the keyboard (the shim's TDesktop.show).
+    if (screen!.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     start();
     setTimeout(function () { close(); titleLog = null; }, 400);
   }

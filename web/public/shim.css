@@ -391,7 +391,7 @@ canvas.paint.top {
 }
 
 .button:disabled {
-  color: #8e8f91;
+  color: #8e8f91 !important; /* Swing paints disabled text grey even on a button the app gave its own color */
 }
 
 .button .icon.empty {

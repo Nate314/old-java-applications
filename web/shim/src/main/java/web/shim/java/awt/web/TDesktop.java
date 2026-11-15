@@ -121,7 +121,14 @@ public final class TDesktop {
         TWindow shown = w;
         Edt.post(() -> {
             if (shown.isVisible() && shown.focusOwner() == null) {
-                shown.setFocusOwnerQuietly(firstFocusable(shown));
+                // As in Swing, the keyboard starts on the first button or field (Space presses it, typing fills it),
+                // unless the page's focus is elsewhere (another control, or the player on the home page).
+                TComponent first = firstFocusable(shown);
+                if (first != null && Js.pageFocusFree(shown.element())) {
+                    shown.setFocusOwner(first);
+                } else {
+                    shown.setFocusOwnerQuietly(first);
+                }
             }
         });
     }

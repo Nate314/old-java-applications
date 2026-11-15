@@ -105,6 +105,15 @@ public final class Js {
             + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a)) _a.blur();")
     public static native void focusComponent(JSObject el);
 
+    /**
+     * True when the page's keyboard focus is free for the app to take: the element's page is focused, nothing on it
+     * has the focus (it is on the body), and the screen is not touch-first (a focused field there raises the phone's
+     * keyboard). The home page's player is not focused, so it never grabs the keyboard.
+     */
+    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body)"
+            + " && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);")
+    public static native boolean pageFocusFree(JSObject el);
+
     /** Says the text to a screen reader through a polite live region (unseen on the page). */
     @JSBody(params = "text", script = "var _D = window.__shimDoc || document, _r = _D.getElementById('shim-live');"
             + " if (!_r) { _r = document.createElement('div'); _r.id = 'shim-live'; _r.className = 'shim-live';"
