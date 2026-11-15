@@ -14,15 +14,16 @@ const BLANK = ' ';
 const SYMBOL: Record<string, number> = { ' ': 32, ',': 188, '.': 190, '/': 191, ';': 186, '=': 187, '-': 189, '[': 219, '\\': 220, ']': 221, "'": 222, '`': 192 };
 
 // A key event the shim cannot tell from a real one (keyCode cannot be set through the constructor).
-function send(type: string, key: string, which: number, shift: boolean) {
-  var e = new KeyboardEvent(type, { key: key, shiftKey: shift, bubbles: true, cancelable: true });
+// touch-pad.tsx's fireKey (the controller, gamepads, Watch) sends through it too.
+export function sendKey(type: string, init: KeyboardEventInit, which: number) {
+  var e = new KeyboardEvent(type, { ...init, bubbles: true, cancelable: true });
   Object.defineProperty(e, 'keyCode', { get: function () { return which; } });
   Object.defineProperty(e, 'which', { get: function () { return which; } });
   document.body.dispatchEvent(e);
 }
 function press(key: string, which: number, shift: boolean) {
-  send('keydown', key, which, shift);
-  send('keyup', key, which, shift);
+  sendKey('keydown', { key: key, shiftKey: shift }, which);
+  sendKey('keyup', { key: key, shiftKey: shift }, which);
 }
 /** Presses the key that types `ch`, as a hardware keyboard reports it. */
 export function typeChar(ch: string) {
@@ -75,7 +76,7 @@ export function PhoneKeys() {
     e.stopPropagation();
     if (!PASSED.test(e.key)) return;
     e.preventDefault();
-    send(e.type, e.key, e.keyCode, e.shiftKey);
+    sendKey(e.type, { key: e.key, shiftKey: e.shiftKey }, e.keyCode);
   }
   return (
     <span className="shim-keys">
