@@ -115,6 +115,7 @@ public class SaverCheck {
       check(missing.cycle && missing.speed == 1.0, "no file: defaults");
 
       checkTank();
+      checkMaze();
 
       System.out.println("SaverCheck passed");
    }
@@ -122,7 +123,38 @@ public class SaverCheck {
    private static List<Saver> savers() {
       return Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
          new Starfield(), new Mystify(), new Pipes(), new BouncingLogo(), new DotClock(Date::new),
-         new Aquarium(new Tank(), Date::new, () -> { }));
+         new Aquarium(new Tank(), Date::new, () -> { }), new Maze());
+   }
+
+   /** The maze: one way between any two rooms, and the left-hand walker always gets through, then a new maze. */
+   private static void checkMaze() {
+      Maze maze = new Maze();
+      for (int seed = 0; seed < 30; seed++) {
+         maze.reset(800, 600, new Random(seed));
+         int openBlocks = 0;
+         int links = 0;
+         for (int y = 0; y < Maze.SIZE; y++) {
+            for (int x = 0; x < Maze.SIZE; x++) {
+               if (maze.open[y][x]) {
+                  openBlocks++;
+                  links += (x + 1 < Maze.SIZE && maze.open[y][x + 1] ? 1 : 0) + (y + 1 < Maze.SIZE && maze.open[y + 1][x] ? 1 : 0);
+               }
+            }
+         }
+         // A tree of rooms and doorways: every room carved, and one link fewer than blocks means no loops.
+         check(openBlocks == Maze.ROOMS * Maze.ROOMS * 2 - 1, "every room carved: " + openBlocks);
+         check(links == openBlocks - 1, "no loops in maze " + seed);
+         check(maze.route[1][1] && maze.route[Maze.SIZE - 2][Maze.SIZE - 2], "the route joins start and goal");
+         double walked = 0;
+         while (!maze.showingMap() && walked < 4_000_000) {
+            maze.tick(50);
+            walked += 50;
+         }
+         check(maze.showingMap() && maze.atGoal(), "the walker reaches the orb in maze " + seed);
+         check(maze.steps < Maze.SIZE * Maze.SIZE * 2, "and walks no block more than twice each way: " + maze.steps);
+         maze.tick(Maze.MAP_MILLIS);
+         check(!maze.showingMap() && maze.bx == 1 && maze.by == 1 && maze.steps == 0, "then a new maze from the start");
+      }
    }
 
    /** The aquarium's tank: arrivals by day, growth, feeding, and the saved lines. */

@@ -1,6 +1,6 @@
 # ScreenSaver
 
-A full-screen gallery of nine screen savers written in Java. The first is the original: it fills the screen with black and adds randomly shaded green circles one at a time at random grid positions until the grid is full, then removes them one at a time in reverse order, and repeats. The others:
+A full-screen gallery of ten screen savers written in Java. The first is the original: it fills the screen with black and adds randomly shaded green circles one at a time at random grid positions until the grid is full, then removes them one at a time in reverse order, and repeats. The others:
 
 1. **Green circles**: the original.
 2. **Green squares**: the same with squares.
@@ -11,13 +11,14 @@ A full-screen gallery of nine screen savers written in Java. The first is the or
 7. **Bouncing logo**: an "OLD JAVA" logo drifts and bounces, changing color on every bounce. When it hits a corner exactly, the corner bursts into sparks and a counter says how many corners it has hit.
 8. **Dot clock**: the time (12-hour) in green dots like the original's, with a row of 60 small dots for the seconds and the date underneath. Dots grow in as the digits change, and the whole clock drifts slowly so nothing stays in one place.
 9. **Aquarium**: a painted tank of fish that are yours. They live in the settings file, so the same fish are there the next time, with their names. The first time the aquarium is shown three fish move in; on each later day it is shown, one more swims in from the side with a "new today" name tag, until there are 12 (one new fish per day you look in, however long you were away). There are six kinds (clownfish, blue tang, neon tetra, angelfish, goldfish, yellow tang), each new fish being of a kind the tank has fewest of. **F** drops a pinch of flakes and every fish goes for the nearest one; flakes they miss settle on the sand and fade. Fish grow from 60% to full size over a fortnight, a little faster for every flake eaten. The water follows the clock: sunlit from 7:00 to 19:00, dark blue from 20:30 to 5:30 (easing between), when the fish swim slower and keep low among the weed. Neon tetras keep together. Every name shows for a few seconds when the aquarium comes up and on **H**.
+10. **Maze**: walking a brick maze in first person, at night, toward a gold orb hovering in the far corner. Each maze is 9 by 9 rooms with exactly one way between any two, carved at random. The walker keeps a hand on its left wall, so it tries dead ends on the way but always arrives. When it reaches the orb, the maze is shown from above for a few seconds: the way through in gold, the dead ends it tried in dim amber, and how many steps it took. Then a new maze.
 
 By default it moves on to the next saver every 30 seconds. It closes if you move the mouse.
 
 ## Controls / usage
 
 - **N** or **Space** / **P**: next / previous saver.
-- **1** to **9** (number row): show that saver and stop cycling, so it stays on screen.
+- **1** to **9**, and **0** for the tenth (number row): show that saver and stop cycling, so it stays on screen.
 - **C**: cycle on or off (every 30 seconds).
 - **Left / Right**: slower / faster, by a factor of 1.1 per press (from 0.05x to 250x; at 250x the tiles step every millisecond, as the original's fastest). The moving savers stop speeding up at 8x.
 - **Up / Down** (tile savers): shrink / grow the tiles by a factor of 1.1 (at least 10 px). The grid is rebuilt for the new size and the cycle starts over.
@@ -33,14 +34,14 @@ By default it moves on to the next saver every 30 seconds. It closes if you move
 
 - `src/screensaver/Main.java`: the full-screen `JFrame`, the input listeners, a 16 ms Swing timer that advances the current saver by the time elapsed (times the speed), the fade in from black on each change, and the caption. It paints through a `JPanel` content pane.
 - `src/screensaver/Saver.java`: the interface each saver implements: `reset` to a screen size, `tick` by milliseconds, `paint`.
-- `src/screensaver/Tiles.java` (the original and its two variants), `Starfield.java`, `Mystify.java`, `Pipes.java`, `BouncingLogo.java`, `DotClock.java`, `Aquarium.java`: the savers.
+- `src/screensaver/Tiles.java` (the original and its two variants), `Starfield.java`, `Mystify.java`, `Pipes.java`, `BouncingLogo.java`, `DotClock.java`, `Aquarium.java`, `Maze.java`: the savers.
 - `src/screensaver/Settings.java`: reads and writes `~/.screensaver.txt`, with the tank's lines.
 
 The original jar set a custom cursor from `cursor.png`, which did not ship. The cursor is now only changed if a `cursor.png` is present in the working directory.
 
 ## Self-check
 
-`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. From `ScreenSaver/`:
+`test/screensaver/SaverCheck.java` checks the tile size rule, one tile per 250 ms filling and emptying the grid, that every saver runs and draws at 1920x1080 and 375x600, that Pipes clears the screen so it stays bounded, the dot clock's 12-hour face and digit dots, that the bouncing logo counts a corner hit but not a side bounce, and that the settings file round-trips and survives damaged lines. For the Aquarium: day numbers (local midnight, leap years), three fish on the first look, none more that day or when the clock goes back, one on a later day however long the gap, a full tank of 12 with unique names and an even mix of kinds, growth, flakes eaten and counted, flakes not staying forever, day and night, and fish lines round-tripping and damaged ones skipped. For the Maze, over 30 mazes: every room carved with no loops, the route joining start and orb, the walker always reaching the orb, and a new maze after the map. From `ScreenSaver/`:
 
 ```
 javac -d ../out/check/ScreenSaver src/screensaver/*.java test/screensaver/*.java
