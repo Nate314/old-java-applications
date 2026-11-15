@@ -33,11 +33,11 @@ public final class CircleCreatorWindow extends JFrame {
    private static final String RAINBOW = "Rainbow";
    private static final String SUNSET = "Sunset";
    private static final int WIDTH = 380;
-   private static final int HEIGHT = 112;
+   private static final int HEIGHT = 130;
    /** The window with the drawing pad beside its controls, or (on a narrow screen) under them. */
    private static final int DRAW_WIDTH = 620;
    private static final int DRAW_HEIGHT = 290;
-   private static final int DRAW_BELOW_HEIGHT = 370;
+   private static final int DRAW_BELOW_HEIGHT = 388;
    /** About how many frames building a shape takes, whatever its window count. */
    private static final int BUILD_FRAMES = 45;
    private static final int SCATTER_FRAMES = 50;
@@ -58,6 +58,7 @@ public final class CircleCreatorWindow extends JFrame {
    private final JComboBox<String> colorBox = new JComboBox<>(new String[] {RAINBOW, BLUE, SUNSET});
    private final JTextField wordField = new JTextField("HELLO", 8);
    private final JButton createButton = new JButton("Build it");
+   private final JButton spinButton = new JButton("Spin");
    private final JLabel status = new JLabel(" ");
    private final DrawPad pad = new DrawPad(() -> {
       this.stopPlaying();
@@ -77,6 +78,10 @@ public final class CircleCreatorWindow extends JFrame {
    private final Timer clockTimer = new Timer(TICK_MILLIS, event -> this.tick());
    private final Timer playTimer = new Timer(PLAY_MILLIS, event -> this.playStep());
    private final Timer jellyTimer = new Timer(FRAME_MILLIS, event -> this.jellyStep());
+   private final Timer spinTimer = new Timer(FRAME_MILLIS, event -> this.spinStep());
+   private Spin spin;
+   /** When the spin began, in nanoTime milliseconds (so the web page's Slow-mo slows it too). */
+   private long spinStart;
    /** How far a press must move to pick the shape up rather than click it. */
    private static final int DRAG_START = 5;
    /** Presses and drags on the shape's windows: a click scatters it, a drag picks it up (see Jelly). */
@@ -141,6 +146,7 @@ public final class CircleCreatorWindow extends JFrame {
       panel.add(new JLabel("Word"));
       panel.add(this.wordField);
       panel.add(this.createButton);
+      panel.add(this.spinButton);
       panel.add(this.status);
 
       JButton clearButton = new JButton("Clear");
@@ -194,6 +200,15 @@ public final class CircleCreatorWindow extends JFrame {
          this.movedY = 0;
          this.build();
       });
+      this.spinButton.setToolTipText("Turn the shape round like a coin");
+      this.spinButton.addActionListener(event -> {
+         if (this.spin != null) {
+            this.endSpin();
+            this.showBuilt();
+         } else {
+            this.startSpin();
+         }
+      });
       clearButton.addActionListener(event -> this.pad.clear());
       previousButton.addActionListener(event -> this.turnTo(this.pad.frame() - 1));
       nextButton.addActionListener(event -> this.turnTo(this.pad.frame() + 1));
@@ -244,7 +259,7 @@ public final class CircleCreatorWindow extends JFrame {
    private void tick() {
       if (!Shapes.CLOCK.equals(this.builtShape) || !Shapes.CLOCK.equals(this.shapeBox.getSelectedItem())
             || this.slices.isEmpty() || this.buildTimer.isRunning() || this.scatterTimer.isRunning()
-            || this.morphTimer.isRunning() || this.jellyTimer.isRunning()
+            || this.morphTimer.isRunning() || this.jellyTimer.isRunning() || this.spin != null
             || Shapes.clockText(new Date()).equals(this.shownTime)) {
          return;
       }
@@ -455,6 +470,10 @@ public final class CircleCreatorWindow extends JFrame {
          this.status.setText("Playing your flipbook, " + this.slices.size() + " windows. Draw to stop.");
          return;
       }
+      if (this.spin != null) {
+         this.status.setText("Spinning " + this.slices.size() + " windows. Click it to scatter.");
+         return;
+      }
       String name = this.shapeName();
       this.status.setText(Character.toUpperCase(name.charAt(0)) + name.substring(1) + ", " + this.slices.size()
          + " windows. Drag it, or click to scatter.");
@@ -642,8 +661,53 @@ public final class CircleCreatorWindow extends JFrame {
       this.jelly = null;
    }
 
-   /** Stops building, scattering, morphing and carrying; a morph's leftover windows close where they are. */
+   /** Turns the shape round like a coin until Spin is pressed again or anything else changes it. */
+   private void startSpin() {
+      if (this.slices.isEmpty() || this.buildTimer.isRunning() || this.scatterTimer.isRunning()) {
+         return;
+      }
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         this.status.setText("Spin is off while reduced motion is on.");
+         return;
+      }
+      this.stopPlaying();
+      this.stopAll();
+      List<Rectangle> home = new ArrayList<>();
+      List<Color> colors = new ArrayList<>();
+      for (CircleSliceWindow slice : this.slices) {
+         home.add(slice.getBounds());
+         colors.add(slice.color());
+      }
+      this.spin = new Spin(home, colors);
+      this.spinStart = System.nanoTime() / 1_000_000;
+      this.spinButton.setText("Stop");
+      this.showBuilt();
+      this.spinTimer.start();
+   }
+
+   private void spinStep() {
+      double angle = Spin.angle(System.nanoTime() / 1_000_000 - this.spinStart);
+      for (int i = 0; i < this.slices.size(); i++) {
+         this.slices.get(i).place(this.spin.at(i, angle), this.spin.colorAt(i, angle));
+      }
+   }
+
+   /** Stops the spin with every window back flat in its place and color. */
+   private void endSpin() {
+      if (this.spin == null) {
+         return;
+      }
+      this.spinTimer.stop();
+      for (int i = 0; i < this.slices.size(); i++) {
+         this.slices.get(i).place(this.spin.home(i), this.spin.color(i));
+      }
+      this.spin = null;
+      this.spinButton.setText("Spin");
+   }
+
+   /** Stops building, scattering, morphing, carrying and spinning; a morph's leftover windows close where they are. */
    private void stopAll() {
+      this.endSpin();
       this.endJelly();
       this.buildTimer.stop();
       this.scatterTimer.stop();
