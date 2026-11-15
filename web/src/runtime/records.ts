@@ -1,4 +1,5 @@
 import { lazyScript } from './lazy-script';
+import { storedJson } from './stored';
 
 interface RecordRule { file: string; show(text: string, saved: (name: string) => string | null): string }
 type NewsStory = { Story: NonNullable<Window['oldjavaNews']>['Story'] | null };
@@ -61,9 +62,7 @@ export function followTitle(desktop: Element) {
 }
 
 export function savedRecord(id: string) {
-  var saves;
-  try { saves = JSON.parse(localStorage.getItem('oldjava.saves.' + id) || '{}'); } catch (e) { return ''; }
-  return recordOf(id, saves);
+  return recordOf(id, storedJson('oldjava.saves.' + id));
 }
 
 // The line an app's saved files ({ path: contents }) earn on its title screen: its record, else the files named.

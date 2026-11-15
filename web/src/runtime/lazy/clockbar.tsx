@@ -18,6 +18,7 @@
  * - On the Clock page there is no chip (Clock shows its own time) and no bell, only the game for the break.
  */
 import type { ReactNode } from 'react';
+import { storedJson } from '../stored';
 // Clock's saved state: the fields of ~/.clock.txt (ClockState.java) as numbers.
 interface ClockState {
   plan: number; phase: number; done: number; focusEnd: number;
@@ -41,8 +42,7 @@ type Moment =
 
   // Clock's saved state, or null: the fields of ~/.clock.txt (ClockState.java) as numbers.
   function read(): ClockState | null {
-    var saves: Record<string, unknown>;
-    try { saves = JSON.parse(localStorage.getItem(SAVES) || '{}') || {}; } catch (e) { return null; }
+    var saves = storedJson(SAVES);
     var path = Object.keys(saves).filter(function (p) { return p.split('/').pop() === '.clock.txt'; })[0];
     if (!path) return null;
     var v: Record<string, number> = {};

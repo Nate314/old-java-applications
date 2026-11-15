@@ -13,6 +13,7 @@
 
 import { useEffect, useState, type ComponentType } from 'react';
 import { fetchOk } from '../fetch-ok';
+import { storedJson } from '../stored';
 
 interface NewsItem { t: number; title: string; more: string; apps: OldjavaCatalogApp[] }
 interface NewsData { items: NewsItem[]; apps: OldjavaCatalogApp[] }
@@ -59,13 +60,6 @@ function Story({ id }: { id: string }) {
   var LAST_KEY = 'oldjava.lastPlayed';
   var PLAYED_KEY = 'oldjava.played';
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  function read(key: string): Record<string, number> {
-    try {
-      var v = JSON.parse(localStorage.getItem(key) || '{}');
-      return v && typeof v === 'object' ? v : {};
-    } catch (e) { return {}; }
-  }
 
   // [{ t: ms, title, more, apps: [catalog entries] }], newest first, and the catalog.
   var dataPromise: Promise<NewsData> | null = null;
@@ -114,7 +108,7 @@ function Story({ id }: { id: string }) {
   };
 
   // When the visitor last played the app (0 if never).
-  lastPlayed = function (id: string) { return read(LAST_KEY)[id] || read(PLAYED_KEY)[id] || 0; };
+  lastPlayed = function (id: string) { return storedJson(LAST_KEY)[id] || storedJson(PLAYED_KEY)[id] || 0; };
 
   window.oldjavaNews = { load: load, Story: Story, lastPlayed: lastPlayed, day: day };
 })();

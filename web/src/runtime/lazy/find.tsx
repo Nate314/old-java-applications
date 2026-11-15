@@ -13,6 +13,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { openLayer } from '../ui/layer';
+import { storedJson } from '../stored';
 
 declare global {
   interface Window {
@@ -148,9 +149,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
   }
 
   // ---- what it can find ----
-  function lastPlayed() {
-    try { return JSON.parse(localStorage.getItem('oldjava.lastPlayed') || '{}') || {}; } catch (e) { return {}; }
-  }
+  function lastPlayed() { return storedJson('oldjava.lastPlayed'); }
 
   function go(href: string) {
     var u = new URL(href, location.href);

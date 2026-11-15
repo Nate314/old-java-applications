@@ -5,6 +5,7 @@ import { indexOf, isThen, pageOf, picks } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { openShare } from './share';
 import { playSound } from './sounds';
+import { storedJson } from './stored';
 
 declare global {
   interface OldjavaPassport { stamp(id: string): void }
@@ -21,12 +22,7 @@ export let passport: OldjavaPassport;
 // other pages (the home page hears its player's iframe) through the storage event.
 const PLAYED_KEY = 'oldjava.played';
 
-function readPlayed(): Played {
-  try {
-    var v = JSON.parse(localStorage.getItem(PLAYED_KEY) || '{}');
-    return v && typeof v === 'object' ? v : {};
-  } catch (e) { return {}; }
-}
+function readPlayed(): Played { return storedJson(PLAYED_KEY); }
 
 const passportListeners: ((fresh: string | null) => void)[] = [];
 
@@ -196,6 +192,7 @@ export function init() {
     has: function (id: string) { return !!played[id]; },
     stamp: function (id: string) {
       // When it was last played, for What's new (news.js): changes since then are news to this visitor.
+      // Left as is when what is kept cannot be read (storedJson would start it afresh).
       if (!isThen()) try {
         var last = JSON.parse(localStorage.getItem('oldjava.lastPlayed') || '{}') || {};
         last[id] = Date.now();
