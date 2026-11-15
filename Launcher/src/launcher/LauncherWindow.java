@@ -4,6 +4,7 @@ import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -58,7 +59,8 @@ public final class LauncherWindow extends JFrame {
    private static final int GAP = 14;
    private static final int PAD = 22;
    private static final String[][] FILTERS = {
-      {"all", "All"}, {"game", "Games"}, {"music", "Music"}, {"toy", "Toys"}, {"tool", "Tools"}, {"keys", "Real keys"}};
+      {"all", "All"}, {"game", "Games"}, {"music", "Music"}, {"toy", "Toys"}, {"tool", "Tools"}, {"keys", "Real keys"},
+      {"updated", "Updated"}};   // last: updatedChip() hides it with the gap before it
 
    private final List<Catalog.App> apps;
    private final PlayLog log;
@@ -110,7 +112,14 @@ public final class LauncherWindow extends JFrame {
       content.setBackground(Ui.DESK);
       content.add(header(), BorderLayout.NORTH);
       content.add(scroll, BorderLayout.CENTER);
-      content.add(detail, BorderLayout.EAST);
+      // On a window too short for the whole pane (its picture gives way first) the pane scrolls, so Play stays reachable.
+      JScrollPane detailScroll = new JScrollPane(detail, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+         JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+      detailScroll.setBorder(null);
+      detailScroll.setPreferredSize(new Dimension(Detail.W, 400));   // a scroll bar takes from the pane, not the cards
+      detailScroll.getViewport().setBackground(Ui.PANEL);
+      Ui.ThinScrollBarUI.apply(detailScroll.getVerticalScrollBar());
+      content.add(detailScroll, BorderLayout.EAST);
       content.add(statusBar(), BorderLayout.SOUTH);
       setContentPane(content);
       wireKeys();
@@ -156,22 +165,51 @@ public final class LauncherWindow extends JFrame {
 
       JPanel row = new JPanel(new BorderLayout());
       row.setOpaque(false);
-      JPanel chipRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+      JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+      // The chips wrap onto a second row when the window is too narrow for them all (FlowLayout places them so,
+      // but asks only for one row's height), measured from the window's width, which is set before the header's.
+      JPanel chipRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 8)) {
+         @Override
+         public Dimension getPreferredSize() {
+            Dimension one = super.getPreferredSize();
+            int w = getContentPane().getWidth() - 2 * PAD - buttons.getPreferredSize().width;
+            if (w <= 0) return one;
+            int rows = 1;
+            int x = 0;
+            for (Component c : getComponents()) {
+               if (!c.isVisible()) continue;
+               int cw = c.getPreferredSize().width;
+               if (x > 0 && x + cw > w) {
+                  rows++;
+                  x = 0;
+               }
+               x += cw;
+            }
+            return new Dimension(one.width, rows * (one.height - 8) + 8);
+         }
+      };
       chipRow.setOpaque(false);
+      addComponentListener(new java.awt.event.ComponentAdapter() {
+         @Override
+         public void componentResized(java.awt.event.ComponentEvent e) {
+            chipRow.revalidate();   // the header keeps its height until told: the rows may have changed
+         }
+      });
       for (String[] f : FILTERS) {
          Ui.FlatButton chip = new Ui.FlatButton(f[1] + "  " + count(f[0]), false);
          chip.addActionListener(e -> {
             filter = f[0];
             applyFilter();
          });
+         if (!chips.isEmpty()) chipRow.add(Box.createHorizontalStrut(8));
          chips.put(f[0], chip);
          chipRow.add(chip);
-         chipRow.add(Box.createHorizontalStrut(8));
       }
+      updatedChip();   // hidden until git says what changed
       row.add(chipRow, BorderLayout.CENTER);
       Ui.FlatButton pick = new Ui.FlatButton("Pick for me", false);
       pick.setMnemonic(KeyEvent.VK_K);
-      pick.setToolTipText("Plays an app you have not launched yet (Alt+K)");
+      pick.setToolTipText("Plays an app you have not launched yet, or else one changed since you played it (Alt+K)");
       pick.addActionListener(e -> pickForMe());
       Ui.FlatButton saves = new Ui.FlatButton("Saves", false);
       saves.setMnemonic(KeyEvent.VK_S);
@@ -181,15 +219,14 @@ public final class LauncherWindow extends JFrame {
          id -> apps.stream().filter(a -> a.id.equals(id)).map(a -> a.name).findFirst().orElse(id);
       saves.addActionListener(e -> SavesMenu.open(this, home, log, nameOf, this::status));
       setTransferHandler(SavesMenu.drops(this, home, nameOf, this::status));
-      JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
       buttons.setOpaque(false);
       buttons.add(saves);
       buttons.add(pick);
       row.add(buttons, BorderLayout.EAST);
 
-      JPanel header = new JPanel(new BorderLayout(0, 14));
+      JPanel header = new JPanel(new BorderLayout(0, 6));   // + the chips' 8 px above and below
       header.setBackground(Ui.DESK);
-      header.setBorder(BorderFactory.createEmptyBorder(18, PAD, 12, PAD));
+      header.setBorder(BorderFactory.createEmptyBorder(18, PAD, 4, PAD));
       header.add(top, BorderLayout.NORTH);
       header.add(row, BorderLayout.SOUTH);
       return header;
@@ -255,8 +292,27 @@ public final class LauncherWindow extends JFrame {
       return n;
    }
 
-   private static boolean inFilter(Catalog.App a, String f) {
-      return f.equals("all") || (f.equals("keys") ? a.pressesKeys() : a.category.equals(f));
+   private boolean inFilter(Catalog.App a, String f) {
+      return f.equals("all") || (f.equals("keys") ? a.pressesKeys() : f.equals("updated") ? !news(a).isEmpty()
+         : a.category.equals(f));
+   }
+
+   /** What changed in an app since it was last launched here, newest first; nothing for an app never launched. */
+   List<History.Change> news(Catalog.App a) {
+      History.Story s = history.of(a.id);
+      if (s == null || log.count(a.id) == 0) return List.of();
+      return s.since(log.seen(a.id), log.last(a.id));
+   }
+
+   /** The Updated chip's count follows launches; it shows only while some app has news (or it is the filter). */
+   private void updatedChip() {
+      Ui.FlatButton chip = chips.get("updated");
+      int n = count("updated");
+      chip.setText("Updated  " + n);
+      boolean show = n > 0 || filter.equals("updated");
+      chip.setVisible(show);
+      Container row = chip.getParent();
+      row.getComponent(row.getComponentCount() - 2).setVisible(show);   // the gap before it
    }
 
    // ---- state ---------------------------------------------------------------------------------------------
@@ -309,6 +365,12 @@ public final class LauncherWindow extends JFrame {
       history = h;
       if (!h.available()) then = false;
       refresh();
+      int changed = count("updated");
+      if (changed > 0 && statusText().startsWith("Welcome back")) {
+         status((changed == 1 ? "1 app you have played has" : changed + " apps you have played have")
+            + " changed since you last played " + (changed == 1 ? "it" : "them")
+            + ". The Updated filter shows " + (changed == 1 ? "it" : "them") + ", each with what is new.");
+      }
    }
 
    /** Switches Play between today's apps and the apps as first restored. */
@@ -365,16 +427,21 @@ public final class LauncherWindow extends JFrame {
       play(app, false);   // today's: the pick is an app not launched yet, and only today's launches count
    }
 
-   /** The pickable apps among these: the ones never launched, or if none, all that are not running. */
+   /**
+    * The pickable apps among these: the ones never launched, or if none, the ones changed since they were last
+    * launched, or if none, all that are not running.
+    */
    private List<Catalog.App> candidates(List<Catalog.App> among) {
       List<Catalog.App> fresh = new ArrayList<>();
+      List<Catalog.App> updated = new ArrayList<>();
       List<Catalog.App> any = new ArrayList<>();
       for (Catalog.App a : among) {
          if (a.pressesKeys() || isRunning(a.id)) continue;
          any.add(a);
          if (log.count(a.id) == 0) fresh.add(a);
+         else if (!news(a).isEmpty()) updated.add(a);
       }
-      return fresh.isEmpty() ? any : fresh;
+      return !fresh.isEmpty() ? fresh : !updated.isEmpty() ? updated : any;
    }
 
    /** Plays the app in the current mode: as first restored in Then mode, when its code has changed since. */
@@ -402,7 +469,8 @@ public final class LauncherWindow extends JFrame {
          status("Could not start " + name + ": " + e.getMessage());
          return;
       }
-      if (!old) log.launched(app.id, clock.getAsLong());
+      History.Story story = history.of(app.id);
+      if (!old) log.launched(app.id, clock.getAsLong(), story == null ? null : story.newest());
       running.add(key(app, old));
       status(old ? "Starting " + name + ": the first time, its code is unpacked from git history into out/then;"
             + " that commit's run.ps1 compiles it."
@@ -420,6 +488,7 @@ public final class LauncherWindow extends JFrame {
    }
 
    private void refresh() {
+      updatedChip();
       for (Tile t : tiles) t.repaint();
       detail.show(selected);
    }
@@ -582,6 +651,7 @@ public final class LauncherWindow extends JFrame {
          // badge on the picture
          if (isRunning(app.id)) badge(g2, w, running.contains(app.id) ? "RUNNING" : "RUNNING THEN", Ui.GO);
          else if (log.count(app.id) == 0 && !then) badge(g2, w, "NEW", Ui.ACCENT);
+         else if (!then && !news(app).isEmpty()) badge(g2, w, "UPDATED", Ui.FRESH);
          // words
          g2.setFont(Ui.font(Font.BOLD, 15f));
          g2.setColor(Ui.TEXT);
@@ -590,9 +660,11 @@ public final class LauncherWindow extends JFrame {
          if (app.pressesKeys()) Ui.chip(g2, x + 6, ph + 40, "Real keys", Ui.WARN);
          g2.setFont(Ui.font(Font.PLAIN, 12f));
          History.Story story = then ? history.of(app.id) : null;
-         g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : Ui.MUTED);
+         int fresh = then ? 0 : news(app).size();
+         g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : fresh > 0 ? Ui.FRESH : Ui.MUTED);
          String line = isRunning(app.id) ? "Running now"
             : story != null ? growth(story)
+            : fresh > 0 ? (fresh == 1 ? "1 change" : fresh + " changes") + " since you played"
             : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
          g2.drawString(fit(g2, line, w - 24), 12, h - 12);
          if (sel) {
@@ -629,7 +701,7 @@ public final class LauncherWindow extends JFrame {
    // ---- the detail pane -----------------------------------------------------------------------------------
 
    /** The selected app: a big picture, its name, origin, hint, any warning, its record and Play. */
-   private final class Detail extends JPanel {
+   private final class Detail extends JPanel implements Scrollable {
       private static final int W = 340;
       private Catalog.App app;
       private final JComponent picture = new JComponent() {
@@ -663,6 +735,7 @@ public final class LauncherWindow extends JFrame {
       };
       private final JTextArea hint = wrapping();
       private final JTextArea warning = wrapping();
+      private final JTextArea whatsNew = wrapping();   // in the hint's place, for an app changed since you played
       private final JLabel record = new JLabel();
       private final Ui.FlatButton play = new Ui.FlatButton("Play", true);
       private final Ui.FlatButton readme = new Ui.FlatButton("Read me", false);
@@ -676,7 +749,6 @@ public final class LauncherWindow extends JFrame {
          setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, Ui.LINE),
             BorderFactory.createEmptyBorder(PAD, 20, PAD, 20)));
          setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-         setPreferredSize(new Dimension(W, 400));
          int inner = W - 41;
          fixed(picture, inner, 200);
          picture.setMinimumSize(new Dimension(inner, 0));   // the picture gives way first on a short window
@@ -691,6 +763,10 @@ public final class LauncherWindow extends JFrame {
             BorderFactory.createEmptyBorder(8, 10, 8, 10)));
          warning.setOpaque(true);
          warning.setBackground(new Color(0x2a2116));
+         whatsNew.setFont(Ui.font(Font.PLAIN, 13f));
+         whatsNew.setForeground(new Color(0xc9cdd8));
+         whatsNew.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 3, 0, 0, Ui.FRESH),
+            BorderFactory.createEmptyBorder(2, 10, 2, 0)));
          record.setFont(Ui.font(Font.PLAIN, 12.5f));
          record.setForeground(Ui.MUTED);
          play.setMnemonic(KeyEvent.VK_P);
@@ -736,7 +812,7 @@ public final class LauncherWindow extends JFrame {
          modes.add(old);
          modes.setMaximumSize(new Dimension(inner, 40));
 
-         for (JComponent c : new JComponent[] {picture, name, tags, hint, warning, modes, record, play, buttons, startRow}) {
+         for (JComponent c : new JComponent[] {picture, name, tags, hint, whatsNew, warning, modes, record, play, buttons, startRow}) {
             c.setAlignmentX(Component.LEFT_ALIGNMENT);
          }
          add(picture);
@@ -746,6 +822,7 @@ public final class LauncherWindow extends JFrame {
          add(tags);
          add(Box.createVerticalStrut(12));
          add(hint);
+         add(whatsNew);
          add(Box.createVerticalStrut(12));
          add(warning);
          add(Box.createVerticalStrut(10));
@@ -759,6 +836,38 @@ public final class LauncherWindow extends JFrame {
          add(buttons);
          add(Box.createVerticalStrut(8));
          add(startRow);
+      }
+
+      /** As tall as it can shrink to: the picture's full height is spare room, not a reason to scroll. */
+      @Override
+      public Dimension getPreferredSize() {
+         return new Dimension(W, getMinimumSize().height);
+      }
+
+      @Override
+      public Dimension getPreferredScrollableViewportSize() {
+         return new Dimension(W, 400);
+      }
+
+      @Override
+      public int getScrollableUnitIncrement(Rectangle r, int orientation, int direction) {
+         return 32;
+      }
+
+      @Override
+      public int getScrollableBlockIncrement(Rectangle r, int orientation, int direction) {
+         return r.height - 40;
+      }
+
+      @Override
+      public boolean getScrollableTracksViewportWidth() {
+         return true;
+      }
+
+      /** Fills the pane's height (the picture taking what is spare) unless that is less than it needs. */
+      @Override
+      public boolean getScrollableTracksViewportHeight() {
+         return getParent() == null || getParent().getHeight() >= getMinimumSize().height;
       }
 
       private void fixed(JComponent c, int w, int h) {
@@ -778,6 +887,11 @@ public final class LauncherWindow extends JFrame {
          String warn = playsOld ? s.warning : a.warning;
          name.setText(a.name);
          hint.setText(s != null ? "As first restored: " + History.sentences(s.about, 2) : a.hint);
+         String word = s == null ? whatsNew(a, news(a)) : null;
+         hint.setVisible(word == null);
+         whatsNew.setVisible(word != null);
+         if (word != null) whatsNew.setText(word);
+         whatsNew.setToolTipText(a.hint);
          warning.setVisible(warn != null);
          if (warn != null) warning.setText("Heads up: " + warn);
          modes.setVisible(history.available());
@@ -873,6 +987,28 @@ public final class LauncherWindow extends JFrame {
          t.setWrapStyleWord(true);
          return t;
       }
+   }
+
+   /**
+    * The detail pane's word on what is new since the app was last launched: the newest two changes, and how many
+    * more; null when nothing is.
+    */
+   static String whatsNew(Catalog.App app, List<History.Change> news) {
+      if (news.isEmpty()) return null;
+      StringBuilder t = new StringBuilder("New since you last played:");
+      for (History.Change c : news.subList(0, Math.min(2, news.size()))) t.append("\n\u2022 ").append(tidy(app, c.subject));
+      if (news.size() > 2) t.append("\n").append(news.size() - 2).append(" more in History (Alt+H).");
+      return t.toString();
+   }
+
+   /** A commit subject without its leading "Minesweeper: " (or "Minesweeper README: "), starting with a capital. */
+   static String tidy(Catalog.App app, String subject) {
+      int colon = subject.indexOf(": ");
+      String head = colon < 0 ? "" : subject.substring(0, colon);
+      boolean own = head.equals(app.id) || head.equals(app.name) || head.startsWith(app.id + " ")
+         || head.startsWith(app.name + " ");
+      String rest = own ? subject.substring(colon + 2) : subject;
+      return rest.isEmpty() ? subject : Character.toUpperCase(rest.charAt(0)) + rest.substring(1);
    }
 
    static String changeCount(History.Story s) {
