@@ -22,6 +22,8 @@ public class DeskCheck {
       check(a.stock("ZZZ").open() == Math.round(Market.madeUpPrice("ZZZ") * 100) / 100.0, "unknown symbol opens at its made-up price");
       check(Arrays.equals(a.stock("CRM").path, b.stock("CRM").path), "a stock's day does not depend on the other symbols");
       check(!Arrays.equals(a.stock("CRM").path, new Market(2, symbols, none, first).stock("CRM").path), "each day differs");
+      double pushed = 0;
+      int pushes = 0;
       for (int day = 1; day <= 200; day++) {
          Market market = new Market(day, symbols, none, first);
          for (Market.Stock stock : market.stocks()) {
@@ -38,8 +40,17 @@ public class DeskCheck {
          for (Market.Headline headline : market.news(symbols)) {
             check(headline.minute >= last, "headlines in time order");
             last = headline.minute;
+            // The chart shades each headline's push over its length: 15 to 45 minutes for a stock, 30 to 60 for the market.
+            check(headline.symbol == null ? headline.length >= 30 && headline.length <= 60 : headline.length >= 15 && headline.length <= 45,
+               "a headline's push length: " + headline.length);
+            if (headline.symbol != null) {
+               double[] path = market.stock(headline.symbol).path;
+               pushed += Math.log(path[Math.min(Market.CLOSE, headline.minute + headline.length)] / path[headline.minute - 1]) * (headline.up ? 1 : -1);
+               pushes++;
+            }
          }
       }
+      check(pushes > 100 && pushed / pushes > 0.004, "news moves its stock its way over the shaded minutes, on average: " + pushed / pushes);
       Market quiet = new Market(3, symbols, none, first);
       quiet.minute = Market.CLOSE;
       for (Market.Headline headline : quiet.news(Arrays.asList("CRM"))) {
