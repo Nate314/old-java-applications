@@ -50,6 +50,8 @@ public final class PianoPanel extends JPanel {
    private final boolean[] pressed = new boolean[KEYS];
    private int hint = -1;
    private int heard = -1;
+   /** Whether the keys are labelled with their chords (chord keys on) rather than their notes. */
+   private boolean chords;
    /** The song shown falling, or null when there is no lesson (the keys then fill the panel). */
    private Song song;
    /** The note drawn in gold, the one on the keys. */
@@ -80,6 +82,11 @@ public final class PianoPanel extends JPanel {
          this.hint = key;
          this.repaint();
       }
+   }
+
+   public void setChords(boolean on) {
+      this.chords = on;
+      this.repaint();
    }
 
    /** Tints the keys of pitch class {@code pitchClass} (0 for C, both Cs) as the note the microphone hears; -1 for none. */
@@ -316,7 +323,7 @@ public final class PianoPanel extends JPanel {
       g.fillRect(0, top - 3, width, 3);
    }
 
-   /** The computer key's letter at the bottom of a key, with the note name above it. */
+   /** The computer key's letter at the bottom of a key, with the note name (or chord name) above it. */
    private void drawLabels(Graphics2D g, int key, int x, int keyWidth, int baseline, Font letterFont, Font noteFont, Color letter, Color note) {
       g.setFont(letterFont);
       FontMetrics metrics = g.getFontMetrics();
@@ -325,7 +332,7 @@ public final class PianoPanel extends JPanel {
       int letterHeight = metrics.getAscent();
       g.setFont(noteFont);
       metrics = g.getFontMetrics();
-      String name = Song.noteName(key);
+      String name = this.chords ? Chord.name(key) : Song.noteName(key);
       g.setColor(note);
       g.drawString(name, x + (keyWidth - metrics.stringWidth(name)) / 2, baseline - letterHeight - 4);
    }

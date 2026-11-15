@@ -52,6 +52,15 @@ Build a little band out of your own playing: the looper records two bars at a ti
 - Up to four layers. The loop, its tempo, click and mutes are saved to `.synthesizer-loop.txt` in the user's home folder (`tempo=96`, `click=1`, then one `layer=program,muted,step.length.note;...` line per layer), so it is still there next time: "Your loop is back: P plays it".
 - The loop runs on a quick Swing timer that reads the clock, so its beat does not drift when a timer runs late. The click is a wood block on the General MIDI drum channel; in the browser it sounds as a short tone, since the web synthesizer has no drums. While the loop's notes sound, the microphone ignores what it hears, as it does for the keys' own notes.
 
+## Chord keys
+
+Turn on chord keys (**Q**, or the Chords button left of Sing along) and each key plays a three-note chord built up from it, so one finger accompanies a song:
+
+- The white keys play the chords of C major: C, Dm, Em, F, G, Am, Bdim and C again on the high C. The black keys play major chords: C#, D#, F#, G#, A#.
+- The keys show their chord's name in place of the note name, a held chord lights its three keys (a note above the high C lights the key of the same name below it), and the button names the chord last played. **Q** again turns them off.
+- Chords that share notes can overlap: holding C and then pressing Am keeps C and E sounding, and a shared note stops only when the last key holding it is let go.
+- In the looper a chord records all three notes, so a layer of chords can back a melody played on top. Lessons and recorded tunes count the key pressed (the chord's lowest note), since a tune keeps one note at a time.
+
 ## Controls / usage
 
 - **Computer keyboard**: hold to sound a note, release to stop. Every key shows its computer key and note name, and turns grey while held.
@@ -62,6 +71,7 @@ Build a little band out of your own playing: the looper records two bars at a ti
 - **Space**: start or stop recording a tune. **Enter**: copy the tune's link (or code) again. While recording, the song keys wait; the piano, octave and instrument keys work.
 - **L**: listen to the current song (the first one in free play). **R**: restart the current song.
 - **I**: turn the microphone on or off (see Sing along). Clicking the Sing along button does the same.
+- **Q**: chord keys on or off (see Chord keys). Clicking the Chords button does the same.
 - **O**: the looper on or off (see Looper, for its own keys). While it is on, the song keys wait.
 - **Left / Right**: shift the notes down / up one octave (5 down to 4 up). Notes already held keep the pitch they started with and stop when released. Lessons follow the keys, so they work in any octave.
 - **Up / Down**: next / previous MIDI instrument (program 0 to 120).
@@ -71,10 +81,11 @@ Build a little band out of your own playing: the looper records two bars at a ti
 ## Code layout
 
 - `src/synthesizer/Main.java`: entry point; reads a tune code or link and the page address from the arguments, and creates a `KeyboardWindow`.
-- `src/synthesizer/KeyboardWindow.java`: the window; handles key presses, mouse presses on the keys, songs, Listen, recording, copying the tune and the fanfare.
+- `src/synthesizer/KeyboardWindow.java`: the window; handles key presses, mouse presses on the keys, chord keys, songs, Listen, recording, copying the tune and the fanfare.
 - `src/synthesizer/PianoPanel.java`: draws the keys with their labels, the held keys and the lit next key, and the lesson's falling notes above them, and finds the key under the mouse.
 - `src/synthesizer/LessonBar.java`: the strip above the keys (song list with stars, Record and Looper, upcoming notes, the recording, result, the looper's buttons, and notices such as "Link copied").
 - `src/synthesizer/Song.java`: the five songs, written as note names with lengths.
+- `src/synthesizer/Chord.java`: the chord each key plays with chord keys on, the keys it lights and its name.
 - `src/synthesizer/Lesson.java`: playing along with one song: next note, misses, stars.
 - `src/synthesizer/SongRecords.java`: reads and writes the best result per song.
 - `src/synthesizer/Tune.java`: the tune code and links, the saved tune, and `Tune.Recorder`, which turns timed key presses into a song.
@@ -94,7 +105,7 @@ From the repo root: `./run.ps1 old SynthesizerKeyboard` (or `./run.ps1 old Synth
 
 ## Self-check
 
-`test/synthesizer/LessonCheck.java` checks that every song parses to keys on the keyboard with positive lengths and starts each note on the right beat, that the falling notes take the top of the keyboard only during a lesson (where they are not keys) and scroll to the right beat, that a lesson only moves on for the right key and counts misses, the star rules, that the saved records keep the best run and skip bad lines, and that recorded tunes get their lengths from the timing, stop at 64 notes, survive their code, link and saved file, and that broken codes are refused. `test/synthesizer/MicrophoneCheck.java` needs no microphone: it checks that pitches from a low voice to a whistle (pure and rich in overtones, at 44.1 and 48 kHz) read as the right note within 3 cents, that silence, quiet and noise read as none, that a note counts once however long it is held and again after a pause or a new attack but not for an octave slip, a fading string or a slide through notes, and that a made-up line singing E D C D E E E is heard as those seven notes. `test/synthesizer/LoopCheck.java` checks that a take snaps notes to steps (an early downbeat, a short tap, a note wrapping round from just after the pass, a held note ending with the pass, a take from the second bar ringing on into the first), skips presses outside the take and stops at 64 notes, that the loop keeps at most four layers with mutes, Undo and Clear, the tempo limits, and that the saved file comes back the same and skips bad lines. From `SynthesizerKeyboard/`:
+`test/synthesizer/LessonCheck.java` checks that every song parses to keys on the keyboard with positive lengths and starts each note on the right beat, that the falling notes take the top of the keyboard only during a lesson (where they are not keys) and scroll to the right beat, that a lesson only moves on for the right key and counts misses, the star rules, that the saved records keep the best run and skip bad lines, and that recorded tunes get their lengths from the timing, stop at 64 notes, survive their code, link and saved file, and that broken codes are refused, and that every chord key names its chord and lights three keys of the right pitches on the keyboard. `test/synthesizer/MicrophoneCheck.java` needs no microphone: it checks that pitches from a low voice to a whistle (pure and rich in overtones, at 44.1 and 48 kHz) read as the right note within 3 cents, that silence, quiet and noise read as none, that a note counts once however long it is held and again after a pause or a new attack but not for an octave slip, a fading string or a slide through notes, and that a made-up line singing E D C D E E E is heard as those seven notes. `test/synthesizer/LoopCheck.java` checks that a take snaps notes to steps (an early downbeat, a short tap, a note wrapping round from just after the pass, a held note ending with the pass, a take from the second bar ringing on into the first), skips presses outside the take and stops at 64 notes, that the loop keeps at most four layers with mutes, Undo and Clear, the tempo limits, and that the saved file comes back the same and skips bad lines. From `SynthesizerKeyboard/`:
 
 ```
 javac -d ../out/check/SynthesizerKeyboard src/synthesizer/*.java test/synthesizer/*.java

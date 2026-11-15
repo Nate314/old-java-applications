@@ -13,7 +13,8 @@ import javax.swing.JPanel;
  * The strip above the keys. In free play it lists the songs with their best stars, the recorded tune if there is
  * one, and Record; during a song it shows the notes coming up (the computer key and note name, wider for longer
  * notes) with the next one lit; after a song it shows the stars won. While recording it shows the notes so far.
- * The microphone button sits at the top right, and doubles as a tuner while the microphone listens. With the
+ * The microphone button sits at the top right, and doubles as a tuner while the microphone listens; the chord keys
+ * button sits left of it, and names the chord last played while they are on. With the
  * looper on, the strip holds the looper's buttons instead, each with its key.
  */
 public final class LessonBar extends JPanel {
@@ -59,6 +60,10 @@ public final class LessonBar extends JPanel {
    /** The note the microphone hears (MIDI), or -1, and how far off it is in cents. */
    private int micNote = -1;
    private int micCents;
+   /** Whether chord keys are on, and the chord last played (null before the first). */
+   private boolean chords;
+   private String chordName;
+   private static final Color CHORDS_ON = new Color(34, 52, 88);
    /** The looper, while it is on; null otherwise. */
    private Looper looper;
    private static final int LOOP_CHIPS = 8;
@@ -133,6 +138,22 @@ public final class LessonBar extends JPanel {
       }
    }
 
+   /** Shows chord keys on or off, and while on the chord just played ({@code name} null to keep the last one). */
+   public void setChords(boolean on, String name) {
+      this.chordName = on && name == null && this.chords ? this.chordName : name;
+      this.chords = on;
+      this.repaint();
+   }
+
+   /** Whether a point is on the chord keys button. */
+   public boolean chordsAt(int x, int y) {
+      return y >= MIC_TOP && y < MIC_TOP + MIC_HEIGHT && x >= this.chordsLeft() && x < this.micLeft() - 6;
+   }
+
+   private int chordsLeft() {
+      return this.micLeft() - 6 - (this.getWidth() < 420 ? 34 : 100);
+   }
+
    /** Whether a point is on the microphone button. */
    public boolean micAt(int x, int y) {
       return y >= MIC_TOP && y < MIC_TOP + MIC_HEIGHT && x >= this.micLeft() && x < this.getWidth() - MARGIN;
@@ -184,7 +205,7 @@ public final class LessonBar extends JPanel {
             this.paintNotes(g, this.recorded, this.lastFitting(this.recorded), notes - 1, RECORD);
          }
       } else if (this.lesson == null) {
-         this.header(g, "Free play", TEXT, "Pick a song: click it, or T or 1-" + this.menu.length + "   Space record   O looper");
+         this.header(g, "Free play", TEXT, "Pick a song: click it, or T or 1-" + this.menu.length + "   Space record   O looper   Q chords");
          this.paintMenu(g);
       } else if (this.lesson.finished()) {
          this.header(g, this.lesson.song().title() + ": done!", TEXT,
@@ -217,7 +238,8 @@ public final class LessonBar extends JPanel {
       g.drawString(headline, x, 24);
       int headlineEnd = x + g.getFontMetrics().stringWidth(headline);
       this.paintMic(g);
-      int rightEdge = this.micLeft() - MARGIN;
+      this.paintChords(g);
+      int rightEdge = this.chordsLeft() - MARGIN;
       String right = this.notice != null ? this.notice : help;
       g.setFont(this.notice != null ? HEADLINE : HELP);
       g.setColor(this.notice != null ? NEXT : SOFT);
@@ -277,6 +299,29 @@ public final class LessonBar extends JPanel {
       g.setFont(CHIP_FONT);
       g.setColor(color);
       g.drawString(label, left + 30, MIC_TOP + 17);
+   }
+
+   /** The chord keys button: three stacked notes, then "Chords" while off, or the chord last played while on. */
+   private void paintChords(Graphics2D g) {
+      int left = this.chordsLeft();
+      int width = this.micLeft() - 6 - left;
+      g.setColor(this.chords ? CHORDS_ON : CHIP);
+      g.fillRoundRect(left, MIC_TOP, width, MIC_HEIGHT, MIC_HEIGHT, MIC_HEIGHT);
+      if (this.chords) {
+         g.setColor(LISTEN);
+         g.drawRoundRect(left, MIC_TOP, width - 1, MIC_HEIGHT - 1, MIC_HEIGHT, MIC_HEIGHT);
+      }
+      g.setColor(this.chords ? LISTEN : TEXT);
+      for (int dot = 0; dot < 3; dot++) {
+         g.fillOval(left + 12 + (dot == 1 ? 4 : 0), MIC_TOP + 4 + dot * 6, 7, 5);
+      }
+      g.drawLine(left + 23, MIC_TOP + 3, left + 23, MIC_TOP + 19);
+      if (width < 80) {
+         return;
+      }
+      g.setFont(CHIP_FONT);
+      g.setColor(TEXT);
+      g.drawString(this.chords && this.chordName != null ? this.chordName : "Chords", left + 32, MIC_TOP + 17);
    }
 
    private void paintLine(Graphics2D g, String line) {

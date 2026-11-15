@@ -21,6 +21,7 @@ import javax.swing.Timer;
  * records a tune of your own, which goes to the clipboard as a link (see Tune) for a friend to hear and learn.
  * With the microphone on (I, or its button), notes sung, whistled or played on a real instrument count like keys.
  * The looper (O) records two bars at a time into up to four layers that play round and round under the keys.
+ * With chord keys on (Q, or its button), each key plays its chord (see Chord).
  */
 public final class KeyboardWindow extends JFrame implements KeyListener {
    private static final int MOUSE = -1;
@@ -49,8 +50,13 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    };
    private int octaveShift = 0;
    private int instrument = 0;
-   /** Keys sounding, by what holds them (a key code, or MOUSE): {key index, MIDI note}, so a release after an octave change stops the right note. */
-   private final Map<Integer, int[]> heldNotes = new HashMap<>();
+   /**
+    * Keys sounding, by what holds them (a key code, or MOUSE): {the keys lit, the MIDI notes}, one of each for a
+    * note and three for a chord, so a release after an octave change stops the right notes.
+    */
+   private final Map<Integer, int[][]> heldNotes = new HashMap<>();
+   /** Whether each key plays its chord rather than its note. */
+   private boolean chords;
    /** The song being played along with, or null in free play. */
    private Lesson lesson;
    private boolean newBest;
@@ -146,6 +152,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
             int chip = window.bar.chipAt(event.getX(), event.getY());
             if (window.bar.micAt(event.getX(), event.getY())) {
                window.toggleMic();
+            } else if (window.bar.chordsAt(event.getX(), event.getY())) {
+               window.toggleChords();
             } else if (window.looping) {
                window.loopButton(window.bar.loopChipAt(event.getX(), event.getY()));
             } else if (window.recorder != null) {
@@ -355,7 +363,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    }
 
    private void updateTitle() {
-      this.setTitle("Synthesizer: instrument " + this.instrument + ", octave " + (this.octaveShift >= 0 ? "+" : "") + this.octaveShift);
+      this.setTitle("Synthesizer: instrument " + this.instrument + ", octave " + (this.octaveShift >= 0 ? "+" : "") + this.octaveShift
+         + (this.chords ? ", chord keys" : ""));
    }
 
    /** Shows the lesson state on the bar and lights the next key. */
@@ -370,14 +379,33 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (this.heldNotes.containsKey(holder)) {
          return;
       }
-      int note = this.midiNote(key);
-      this.heldNotes.put(holder, new int[]{key, note});
-      this.midiPlayer.noteOn(note);
-      this.piano.setPressed(key, true);
-      if (this.looping) {
-         this.looper.press(note);
+      int[] keys = this.chords ? Chord.keys(key) : new int[]{key};
+      int[] notes = this.chords ? Chord.intervals(key).clone() : new int[]{0};
+      for (int tone = 0; tone < notes.length; tone++) {
+         notes[tone] += this.midiNote(key);
+         // A note another held chord is sounding already sounds on; starting it again would cut it short on release.
+         if (!this.holdsNote(notes[tone])) {
+            this.midiPlayer.noteOn(notes[tone]);
+            if (this.looping) {
+               this.looper.press(notes[tone]);
+            }
+         }
+         this.piano.setPressed(keys[tone], true);
+      }
+      this.heldNotes.put(holder, new int[][]{keys, notes});
+      if (this.chords) {
+         this.bar.setChords(true, Chord.name(key));
       }
       this.played(key);
+   }
+
+   /** Turns chord keys on or off; notes already held keep sounding until released. */
+   private void toggleChords() {
+      this.chords = !this.chords;
+      this.bar.setChords(this.chords, null);
+      this.piano.setChords(this.chords);
+      this.bar.setNotice(this.chords ? "Chord keys: each key plays its chord, Z for C, X for Dm..." : null);
+      this.updateTitle();
    }
 
    /** Lets the microphone go when the window closes without ending the program (NathaNOS disposes its apps' windows). */
@@ -459,12 +487,22 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    }
 
    private void release(int holder) {
-      int[] held = this.heldNotes.remove(holder);
-      if (held != null) {
-         this.midiPlayer.noteOff(held[1]);
-         this.piano.setPressed(held[0], false);
-         if (this.looping) {
-            this.looper.release(held[1]);
+      int[][] held = this.heldNotes.remove(holder);
+      if (held == null) {
+         return;
+      }
+      for (int note : held[1]) {
+         // Overlapping chords share notes: a note stops with the last key holding it (Listen's note stops at its time).
+         if (!this.holdsNote(note) && (this.listenKey < 0 || note != this.listenMidi)) {
+            this.midiPlayer.noteOff(note);
+            if (this.looping) {
+               this.looper.release(note);
+            }
+         }
+      }
+      for (int key : held[0]) {
+         if (!this.isHeld(key) && key != this.listenKey) {
+            this.piano.setPressed(key, false);
          }
       }
    }
@@ -528,20 +566,36 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       later(millis, () -> this.listenStep(run, note + 1));
    }
 
+   /** Whether a held key or chord lights key {@code key}. */
    private boolean isHeld(int key) {
-      for (int[] held : this.heldNotes.values()) {
-         if (held[0] == key) {
-            return true;
+      return this.holds(key, 0);
+   }
+
+   /** Whether a held key or chord sounds MIDI note {@code note}. */
+   private boolean holdsNote(int note) {
+      return this.holds(note, 1);
+   }
+
+   private boolean holds(int value, int part) {
+      for (int[][] held : this.heldNotes.values()) {
+         for (int each : held[part]) {
+            if (each == value) {
+               return true;
+            }
          }
       }
       return false;
    }
 
-   /** Stops the note Listen is sounding, unless the visitor has taken over on that same key. */
+   /** Stops the note Listen is sounding, unless the visitor has taken over on that same key or note. */
    private void endListenNote() {
-      if (this.listenKey >= 0 && !this.isHeld(this.listenKey)) {
-         this.midiPlayer.noteOff(this.listenMidi);
-         this.piano.setPressed(this.listenKey, false);
+      if (this.listenKey >= 0) {
+         if (!this.holdsNote(this.listenMidi)) {
+            this.midiPlayer.noteOff(this.listenMidi);
+         }
+         if (!this.isHeld(this.listenKey)) {
+            this.piano.setPressed(this.listenKey, false);
+         }
       }
       this.listenKey = -1;
    }
@@ -598,6 +652,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.copyTune();
       } else if (keyCode == KeyEvent.VK_I) {
          this.toggleMic();
+      } else if (keyCode == KeyEvent.VK_Q) {
+         this.toggleChords();
       } else if (keyCode == KeyEvent.VK_LEFT && this.octaveShift > -5) {
          this.octaveShift--;
       } else if (keyCode == KeyEvent.VK_RIGHT && this.octaveShift < 4) {
