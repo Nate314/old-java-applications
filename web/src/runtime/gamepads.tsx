@@ -58,7 +58,7 @@ const GAMEPADS: Record<string, GamepadMap[]> = {
                    b: ['Space', 'Pause'], start: ['R', 'Race'] }],
   GroupCreator: [{ x: ['N', 'New round'], y: ['R', 'Reshuffle'], b: ['Space', 'New round / spin'],
                    start: ['P', 'Pick someone / groups'] }],
-  SimpleAlgorithms: [{ b: ['Space', 'Play / pause'], right: ['ArrowRight', 'One move'], x: ['R', 'Reset'], y: ['F', 'Speed'] }]
+  SimpleAlgorithms: [{ b: ['Space', 'Play / pause'], right: ['ArrowRight', 'One move'], left: ['ArrowLeft', 'One back'], x: ['R', 'Reset'], y: ['F', 'Speed'] }]
 };
 
 // Standard layout button numbers.

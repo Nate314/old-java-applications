@@ -42,7 +42,47 @@ public class HanoiCheck {
 		HanoiTower tower = new HanoiTower(3);
 		check(tower.move(0, 1) == 0 && !tower.canMove(0, 1) && tower.canMove(1, 2), "no disk on a smaller one");
 		check(tower.move(2, 0) == -1, "an empty peg has nothing to move");
+		checkBack();
 		System.out.println("HanoiCheck passed");
+	}
+
+	/** The page's Back takes moves back one at a time, hand moves too, and returns to the printed path. */
+	private static void checkBack() {
+		HanoiPage page = new HanoiPage();
+		for (int i = 0; i < 6; i++) {
+			page.step();
+		}
+		check(page.onPath == 6, "six printed moves are on the path");
+		int[] before = pegs(page.tower);
+		int[] hand = page.tower.nextMove();
+		int from = hand[0] == 0 ? 1 : 0; // any legal move that is not the printed one
+		int to = 3 - from - hand[0];
+		if (!page.tower.canMove(from, to)) {
+			int swap = from;
+			from = to;
+			to = swap;
+		}
+		page.click(from * LabPanel.WIDTH / 3 + 10, 200);
+		page.click(to * LabPanel.WIDTH / 3 + 10, 200);
+		check(page.onPath == -1, "a hand move leaves the printed path");
+		page.back();
+		check(page.onPath == 6 && java.util.Arrays.equals(pegs(page.tower), before), "Back undoes the hand move, back on the path");
+		for (int i = 0; i < 6; i++) {
+			page.back();
+		}
+		check(page.onPath == 0 && page.tower.height(0) == page.tower.disks, "Back returns to the start");
+		page.back();
+		check(page.onPath == 0 && page.tower.height(0) == page.tower.disks, "Back at the start does nothing");
+		page.step();
+		check(page.onPath == 1, "Step goes on along the printed path after Back");
+	}
+
+	private static int[] pegs(HanoiTower tower) {
+		int[] pegs = new int[tower.disks];
+		for (int disk = 0; disk < pegs.length; disk++) {
+			pegs[disk] = tower.pegOf(disk);
+		}
+		return pegs;
 	}
 
 	private static void check(boolean condition, String message) {
