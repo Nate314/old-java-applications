@@ -32,16 +32,20 @@ public final class SaveBundle {
       FILES.put("DinoGame", List.of(".dinogame.txt"));
       FILES.put("UltimateTicTacToe", List.of(".ultimatetictactoe-record.txt"));
       FILES.put("TankGame", List.of(".tankgame-record.txt"));
-      FILES.put("SynthesizerKeyboard", List.of(".synthesizer-songs.txt", ".synthesizer-tune.txt"));
+      FILES.put("SynthesizerKeyboard", List.of(".synthesizer-songs.txt", ".synthesizer-tune.txt", ".synthesizer-loop.txt"));
       FILES.put("RubiksCube2D", List.of(".rubikscube-levels.txt"));
-      FILES.put("MusicTheoryExpert", List.of(".musictheory-drills.txt"));
+      FILES.put("MusicTheoryExpert", List.of(".musictheory-drills.txt", ".musictheory-songwriter.txt"));
       FILES.put("NumberGuess", List.of(".numberguess-record.txt"));
-      FILES.put("SpriteFloatyStars", List.of(".spritefloatystars-nights.txt"));
+      FILES.put("SpriteFloatyStars", List.of(".spritefloatystars-nights.txt", ".spritefloatystars-message.txt"));
       FILES.put("GroupCreator", List.of(".groupcreator-class.txt"));
       FILES.put("Clock", List.of(".clock.txt"));
       FILES.put("ScreenSaver", List.of(".screensaver.txt"));
       FILES.put("StockChecker", List.of(".stockchecker-desk.txt"));
       FILES.put("BibleDownloader", List.of(".bibledownloader.txt"));
+      FILES.put("CircleSpawner", List.of(".circlespawner.txt"));
+      FILES.put("NathaNOS", List.of(".nathanos.txt", ".nathanos-pictures.txt"));
+      FILES.put("SimpleAlgorithms", List.of(".simplealgorithms-paths.txt"));
+      FILES.put("Windows", List.of(".windows-key.txt"));
    }
 
    /** App -> (web path -> contents), in a stable order. */

@@ -26,11 +26,15 @@ public final class Shelf {
 
    private final File file;
    public String translation = "web";
+   /** The translation set beside it, verse by verse ("" when reading one). */
+   public String compare = "";
    public int book = Books.find("LUK");
    public int chapter = 1;
    /** The verse at the top of the open page, so a different text size or window keeps the place. */
    public int verse = 1;
    public int size = 1;
+   /** Night pages: dark paper and light ink. */
+   public boolean night;
    private final BitSet read = new BitSet(Books.TOTAL);
    /** "LUK.1.3": a highlighted verse, in any translation. */
    private final TreeSet<String> marks = new TreeSet<>();
@@ -76,6 +80,11 @@ public final class Shelf {
                this.translation = value;
             }
             break;
+         case "compare":
+            if (BibleApi.translationIndex(value) >= 0) {
+               this.compare = value;
+            }
+            break;
          case "at": {
             String[] p = value.split("\\.");
             int b = Books.find(p[0]);
@@ -88,6 +97,9 @@ public final class Shelf {
          }
          case "size":
             this.size = clamp(Integer.parseInt(value), 0, SIZES.length - 1);
+            break;
+         case "night":
+            this.night = value.equals("1");
             break;
          case "read":
             for (String ref : value.split(",")) {
@@ -151,9 +163,11 @@ public final class Shelf {
 
    public void save() {
       String text = "translation=" + this.translation + "\n"
+         + (this.compare.isEmpty() || this.compare.equals(this.translation) ? "" : "compare=" + this.compare + "\n")
          + "place=" + Books.NAMES[this.book] + " " + this.chapter + ":" + this.verse + "\n"
          + "at=" + Books.IDS[this.book] + "." + this.chapter + "." + this.verse + "\n"
          + "size=" + this.size + "\n"
+         + (this.night ? "night=1\n" : "")
          + "read=" + refs(this.read) + "\n"
          + "marks=" + String.join(",", this.marks) + "\n"
          + (this.plan == null ? "" : "plan=" + this.plan.id + "\n"
@@ -169,6 +183,15 @@ public final class Shelf {
       } catch (IOException e) {
          System.err.println("Could not save " + this.file + ": " + e);
       }
+   }
+
+   /** The translation to set beside {@code open} after {@code compare}: each other one in turn, then "" (off). */
+   public static String nextCompare(String open, String compare) {
+      int i = compare.isEmpty() ? -1 : BibleApi.translationIndex(compare);
+      do {
+         i++;
+      } while (i < BibleApi.TRANSLATIONS.length && BibleApi.TRANSLATIONS[i].equals(open));
+      return i < BibleApi.TRANSLATIONS.length ? BibleApi.TRANSLATIONS[i] : "";
    }
 
    public boolean isRead(int book, int chapter) {

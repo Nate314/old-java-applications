@@ -1,7 +1,9 @@
+import { fetchOk } from './fetch-ok';
+
 // An app in apps.json, as catalog() hands it out.
 export type CatalogApp = OldjavaCatalogApp;
 // An entry as apps.json writes it.
-interface AppsJsonEntry { id: string; cat: string; origin?: string; then?: boolean; name: string; hint: string; shot: string }
+interface AppsJsonEntry { id: string; cat: string; origin?: string; then?: boolean; clip?: boolean; name: string; hint: string; shot: string }
 
 let catalogPromise: Promise<CatalogApp[]> | null;
 export let catalogDoc: Document | null;
@@ -18,16 +20,14 @@ export function catalog() {
     else fetch('../index.html').then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
       catalogDoc = new DOMParser().parseFromString(html, 'text/html');
     }).catch(function () { /* the share panel then leaves out the home page's description */ });
-    catalogPromise = fetch(root() + 'apps.json').then(function (r) {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.json();
-    }).then(function (apps: AppsJsonEntry[]) {
+    catalogPromise = fetchOk(root() + 'apps.json').then(function (r) { return r.json(); }).then(function (apps: AppsJsonEntry[]) {
       return apps.map(function (a) {
         return {
           id: a.id,
           cat: a.cat,
           origin: a.origin || 'decompiled',
           then: !!a.then,
+          clip: !!a.clip,
           name: a.name,
           hint: a.hint,
           shot: root() + a.shot

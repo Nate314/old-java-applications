@@ -23,10 +23,12 @@ export default defineConfig({
         entryFileNames: 'assets/[name].js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name][extname]',
-        // Two shared chunks with fixed names: React, and the pages' own shared code (src/shared). Shared styles
+        // Shared chunks with fixed names: React, the friend-link table, and the pages' own shared code (src/shared). Shared styles
         // (src/shared/styles) are @import-ed by each page's stylesheet, so every page links one, in source order.
         manualChunks(id) {
           if (id.includes('node_modules')) return 'react';
+          if (id.includes('/src/shared/link-state')) return 'link-state';   // boot.js needs it too, not the rest of shared
+          if (id.includes('/src/shared/menu-keys')) return 'menu-keys';     // the same for the More menu's keys
           if (id.includes('/src/shared/')) return 'shared';
         },
       },

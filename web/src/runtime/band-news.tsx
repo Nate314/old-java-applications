@@ -1,4 +1,5 @@
 import { redrawBar } from './install';
+import { store, stored } from './stored';
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
@@ -160,11 +161,11 @@ const ZOOM_ROOM = 0.9;
 const zoomListeners: ((on: boolean) => void)[] = [];
 
 export function zoomFit() {
-  try { return localStorage.getItem(ZOOM_KEY) !== 'actual'; } catch (e) { return true; }
+  return stored(ZOOM_KEY) !== 'actual';
 }
 
 export function setZoomFit(on: boolean) {
-  try { localStorage.setItem(ZOOM_KEY, on ? 'fit' : 'actual'); } catch (e) { /* this page only */ }
+  store(ZOOM_KEY, on ? 'fit' : 'actual');
   zoomChanged();
 }
 
@@ -186,14 +187,30 @@ export function windowsBox(desktop: HTMLElement) {
   return { key: k, box: x1 < x0 ? null : [x0, y0, x1, y1] };
 }
 
+// ?embed&full: an app showing one window fills the frame with it, drawn without its title bar, border or shadow
+// (data-full-one, shim.css): the box fitted is the window's content, scaled to the frame's width or height,
+// whichever comes first. An app with more than one window open (or a <body data-shell> page, which draws its
+// own Windows desktop) is centered and framed as in plain ?embed.
+function fullBox(desktop: HTMLElement) {
+  var shown = Array.prototype.filter.call(desktop.children, function (c: HTMLElement) { return c.offsetWidth > 0; }) as HTMLElement[];
+  var one = shown.length === 1 && !document.body.hasAttribute('data-shell');
+  document.documentElement.toggleAttribute('data-full-one', one);
+  if (!one) return { key: 'framed,' + windowsBox(desktop).key, box: windowsBox(desktop).box, one: false };
+  var win = shown[0];
+  var body = (Array.prototype.find.call(win.children, function (c: HTMLElement) { return !c.classList.contains('titlebar') && c.offsetWidth > 0; }) as HTMLElement | undefined) || win;
+  var x0 = win.offsetLeft + (body === win ? 0 : body.offsetLeft), y0 = win.offsetTop + (body === win ? 0 : body.offsetTop);
+  return { key: 'full,' + body.offsetWidth + 'x' + body.offsetHeight, box: [x0, y0, x0 + body.offsetWidth, y0 + body.offsetHeight], one: true };
+}
+
 export function centerWindows(desktop: HTMLElement) {
   var key = '', size = '', box: number[] | null = null, fit = zoomFit();
+  var full = document.documentElement.hasAttribute('data-full'), one = false;
   zoomListeners.push(function (on: boolean) { fit = on; size = ''; });
   setInterval(function () {
-    var now = windowsBox(desktop), k = now.key;
+    var now = full ? fullBox(desktop) : windowsBox(desktop), k = now.key;
     var z = desktop.clientWidth + 'x' + desktop.clientHeight + ',' + (window.devicePixelRatio || 1);
     if (k === key && z === size) return;
-    if (k !== key) box = now.box;
+    if (k !== key) { box = now.box; one = full && (now as { one?: boolean }).one === true; }
     key = k;
     size = z;
     if (!box) return;
@@ -201,7 +218,7 @@ export function centerWindows(desktop: HTMLElement) {
     var w = desktop.clientWidth, h = desktop.clientHeight;
     var s = Math.min(w / (x1 - x0), h / (y1 - y0));
     // Zoomed up in quarter steps, so resizing the browser a little does not redraw every canvas.
-    s = s < 1 ? s : fit ? Math.max(1, Math.min(ZOOM_MAX, Math.floor(s * ZOOM_ROOM * 4) / 4)) : 1;
+    if (!one) s = s < 1 ? s : fit ? Math.max(1, Math.min(ZOOM_MAX, Math.floor(s * ZOOM_ROOM * 4) / 4)) : 1;
     // About the desktop's center (the default transform origin, which the Arcade power-on's scale shares).
     var dx = s * (w - x0 - x1) / 2;
     var dy = s * (h - y0 - y1) / 2;

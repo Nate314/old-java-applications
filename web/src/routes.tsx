@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react';
 import { SKIN_SCRIPT } from './shared/skin';
 import { EarlyScript, RuntimeScript } from './shared/EarlyScript';
+import { SITE, ShareTags } from './shared/ShareTags';
 import apps from './shared/apps.json';
 
 export interface Route {
@@ -19,11 +20,15 @@ export interface Route {
   anyDepth?: boolean;
 }
 
-const SITE = 'Old Java Applications';
 const ICON = <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />;
 const skin = <script dangerouslySetInnerHTML={{ __html: SKIN_SCRIPT }} />;
 const homeDescription = 'Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play ' +
   apps.length + ' of them in the browser, installed as an app or offline.';
+/** The home page's card, which play.html shares too. */
+const homeCard = { image: 'cards/index.jpg', alt: 'Thumbnails of six of the ' + apps.length + ' apps' };
+
+const storyDescription = 'How 20 Java Swing and AWT programs written more than ten years ago were recovered from old jars, ' +
+  'fixed up and brought to the browser, told with their real code and the apps themselves.';
 
 export const ROUTES: Route[] = [
   // The home page: the player, Your arcade and the gallery. boot.js (the site's shared runtime, as on every app
@@ -39,16 +44,7 @@ export const ROUTES: Route[] = [
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{SITE}</title>
         <meta name="description" content={homeDescription} />
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content={SITE} />
-        <meta property="og:title" content={SITE} />
-        <meta property="og:description" content={homeDescription} />
-        <meta property="og:url" content="index.html" />
-        <meta property="og:image" content="cards/index.jpg" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content={'Thumbnails of six of the ' + apps.length + ' apps'} />
-        <meta name="twitter:card" content="summary_large_image" />
+        <ShareTags title={SITE} description={homeDescription} url="index.html" {...homeCard} />
         <link rel="stylesheet" href="shim.css" />
         {/* The first frame waits for the player, so an app page's stage can shrink into it (see boot.js, one machine). */}
         <link rel="expect" href="#player-frame" blocking="render" />
@@ -74,6 +70,9 @@ export const ROUTES: Route[] = [
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{SITE}</title>
         <meta name="description" content={'An old Java app, playable right here. Part of ' + SITE + ': 20 Java Swing and AWT programs recovered from old jars and running in the browser.'} />
+        {/* The link preview, for a play.html address pasted on its own: one page serves every app (?app= is read by
+            its script, which link previews do not run), so it shows the home page's card. */}
+        <ShareTags title={'Play an old Java app: ' + SITE} description={homeDescription} url="play.html" {...homeCard} />
         {ICON}
       </>
     ),
@@ -94,7 +93,28 @@ export const ROUTES: Route[] = [
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{'The story: ' + SITE}</title>
-        <meta name="description" content="How 20 Java Swing and AWT programs written more than ten years ago were recovered from old jars, fixed up and brought to the browser, told with their real code and the apps themselves." />
+        <meta name="description" content={storyDescription} />
+        {/* The link preview: the card web/cards.ps1 renders from card.html?story, as the home page's. */}
+        <ShareTags type="article" title="Twenty old programs, brought back to play" description={storyDescription} url="story.html"
+          image="cards/story.jpg" alt="Flappy Bird's decompiled class b beside the same code renamed to class Bird" />
+        {ICON}
+        <link rel="stylesheet" href="shim.css" />
+        {skin}
+      </>
+    ),
+  },
+  // Then and now: compare.html?app=<App> plays an app as first restored and as it is today side by side (two
+  // play.html frames, one with &then), over every change to it in between (history.txt). The title screens link it.
+  // It wears the visitor's skin from shim.css, as the story does. See web/README.md, Then and now side by side.
+  {
+    file: 'compare.html',
+    entry: 'src/pages/compare/main.tsx',
+    head: (
+      <>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{'Then and now: ' + SITE}</title>
+        <meta name="description" content="An old Java app as it was first restored and as it is today, both playable side by side, with every change in between." />
         {ICON}
         <link rel="stylesheet" href="shim.css" />
         {skin}

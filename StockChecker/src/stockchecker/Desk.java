@@ -37,7 +37,28 @@ final class Desk {
       }
    }
 
+   /**
+    * A standing order: a line on a stock's chart that trades by itself when the price reaches it, from above
+    * ({@code above} false: a dip to buy, or a stop to sell) or from below ({@code above} true: a breakout to buy, or
+    * a target to sell). A buy spends all the cash it can, a sell sells every share held. Orders last the day.
+    */
+   static final class Order {
+      final String symbol;
+      final boolean buy;
+      final boolean above;
+      final double price;
+
+      Order(String symbol, boolean buy, boolean above, double price) {
+         this.symbol = symbol;
+         this.buy = buy;
+         this.above = above;
+         this.price = price;
+      }
+   }
+
    static final int MAX_SYMBOLS = 8;
+   /** Finished days kept per stock for the Days chart (today's candle makes 20). */
+   static final int HISTORY = 19;
    /** Speeds: paused, normal (a day in about 2.5 minutes) and fast (about 30 seconds). */
    static final int PAUSED = 0;
    static final int NORMAL = 1;
@@ -48,8 +69,14 @@ final class Desk {
    /** Each symbol's last close (the price its next day opens from), or its starting price before any close. */
    private final Map<String, Double> bases = new LinkedHashMap<>();
    private List<String> watch = new ArrayList<>();
+   /** Each stock's finished days, oldest first, the last {@link #HISTORY}: {day, open, high, low, close}. */
+   final Map<String, List<double[]>> days = new LinkedHashMap<>();
    final Portfolio portfolio = new Portfolio();
    final List<Rival> rivals = Rival.all();
+   /** Your standing orders, at most one above and one below the price per stock. */
+   final List<Order> orders = new ArrayList<>();
+   /** The orders that the last tick reached, as the trades they made (0 shares when there was no cash or nothing held). */
+   final List<Portfolio.Trade> fills = new ArrayList<>();
    Market market;
    int speed = NORMAL;
 
@@ -107,6 +134,13 @@ final class Desk {
                         Integer.parseInt(parts[3]), Double.parseDouble(parts[4])));
                      break;
                   case "rclose": desk.rival(parts[0]).closes.add(Double.parseDouble(parts[1])); break;
+                  case "order":
+                     desk.orders.add(new Order(parts[0], parts[1].equals("buy"), parts[2].equals("above"), Double.parseDouble(parts[3])));
+                     break;
+                  case "bar":
+                     desk.days.computeIfAbsent(parts[0], k -> new ArrayList<>()).add(new double[] {Integer.parseInt(parts[1]),
+                        Double.parseDouble(parts[2]), Double.parseDouble(parts[3]), Double.parseDouble(parts[4]), Double.parseDouble(parts[5])});
+                     break;
                   default: break;
                }
             }
@@ -209,6 +243,8 @@ final class Desk {
       for (String symbol : marketSymbols()) {
          market.add(symbol, bases, firstPrices);
       }
+      List<String> shown = symbols();
+      orders.removeIf(order -> !shown.contains(order.symbol));
       save();
    }
 
@@ -218,6 +254,7 @@ final class Desk {
          return false;
       }
       market.minute++;
+      fill();
       for (Rival rival : rivals) {
          rival.act(market, watch);
       }
@@ -231,17 +268,76 @@ final class Desk {
       return false;
    }
 
+   /** Trades every order the price has reached this minute, at this minute's price; the stock's other order is cancelled. */
+   private void fill() {
+      fills.clear();
+      for (Order order : new ArrayList<>(orders)) {
+         double price = market.price(order.symbol);
+         if (!orders.contains(order) || (order.above ? price < order.price : price > order.price)) {
+            continue;
+         }
+         orders.removeIf(other -> other.symbol.equals(order.symbol));
+         int done = order.buy ? portfolio.buy(order.symbol, Integer.MAX_VALUE, price, market.minute)
+            : -portfolio.sell(order.symbol, Integer.MAX_VALUE, price, market.minute);
+         fills.add(new Portfolio.Trade(market.minute, order.symbol, done, price));
+      }
+      if (!fills.isEmpty()) {
+         save();
+      }
+   }
+
+   /** The order on {@code symbol} above or below its price, or null. */
+   Order order(String symbol, boolean above) {
+      for (Order order : orders) {
+         if (order.symbol.equals(symbol) && order.above == above) {
+            return order;
+         }
+      }
+      return null;
+   }
+
+   /**
+    * Puts an order on {@code symbol} at {@code price}, in place of the one on that side of the price: a sell while
+    * you hold the stock, a buy while you do not. Returns null (and changes nothing) when the market is closed or the
+    * price is within 0.1% of the current one.
+    */
+   Order setOrder(String symbol, double price) {
+      double now = market.price(symbol);
+      price = Math.round(price * 100) / 100.0;
+      if (market.closed() || now <= 0 || price <= 0 || Math.abs(price / now - 1) < 0.001) {
+         return null;
+      }
+      boolean above = price > now;
+      cancel(order(symbol, above));
+      Order order = new Order(symbol, portfolio.shares(symbol) == 0, above, price);
+      orders.add(order);
+      save();
+      return order;
+   }
+
+   void cancel(Order order) {
+      if (order != null && orders.remove(order)) {
+         save();
+      }
+   }
+
    /** After the close: notes the day's net worth and opens the next day from today's closing prices. */
    void nextDay() {
       if (!market.closed()) {
          return;
       }
       portfolio.closeDay(market);
+      orders.clear();
       for (Rival rival : rivals) {
          rival.portfolio.closeDay(market);
       }
       for (Market.Stock stock : market.stocks()) {
          bases.put(stock.symbol, stock.close());
+         List<double[]> bars = days.computeIfAbsent(stock.symbol, k -> new ArrayList<>());
+         bars.add(market.bar(stock));
+         while (bars.size() > HISTORY) {
+            bars.remove(0);
+         }
       }
       market = new Market(market.day + 1, marketSymbols(), bases, firstPrices);
       save();
@@ -250,10 +346,12 @@ final class Desk {
    /** Back to day 1 with the starting cash and nothing held. */
    void startOver() {
       portfolio.reset();
+      orders.clear();
       for (Rival rival : rivals) {
          rival.portfolio.reset();
       }
       bases.clear();
+      days.clear();
       market = new Market(1, symbols(), bases, firstPrices);
       save();
    }
@@ -266,6 +364,10 @@ final class Desk {
 
    int sell(String symbol, int want) {
       int done = market.closed() ? 0 : portfolio.sell(symbol, want, market.price(symbol), market.minute);
+      if (portfolio.shares(symbol) == 0) {
+         // Nothing left for a sell order to sell.
+         orders.removeIf(order -> order.symbol.equals(symbol) && !order.buy);
+      }
       save();
       return done;
    }
@@ -288,6 +390,16 @@ final class Desk {
          out.append("base=").append(base.getKey()).append(':').append(base.getValue()).append('\n');
       }
       write(out, "", portfolio);
+      for (Map.Entry<String, List<double[]>> bars : days.entrySet()) {
+         for (double[] bar : bars.getValue()) {
+            out.append("bar=").append(bars.getKey()).append(':').append((int) bar[0]).append(':').append(bar[1]).append(':')
+               .append(bar[2]).append(':').append(bar[3]).append(':').append(bar[4]).append('\n');
+         }
+      }
+      for (Order order : orders) {
+         out.append("order=").append(order.symbol).append(':').append(order.buy ? "buy" : "sell").append(':')
+            .append(order.above ? "above" : "below").append(':').append(order.price).append('\n');
+      }
       for (Rival rival : rivals) {
          out.append("rival=").append(rival.name).append(':').append(rival.portfolio.cash).append('\n');
          write(out, rival.name, rival.portfolio);

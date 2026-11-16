@@ -18,6 +18,7 @@ public final class ColorPalette {
          case "green": return this.green;
          case "orange": return this.orange;
          case "white": return this.white;
+         case RealCube.NONE: return Color.GRAY;
          default: return null;
       }
    }

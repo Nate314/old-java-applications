@@ -3,11 +3,10 @@ package circlewindow;
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
-/** One undecorated window of the shape: a solid rectangle of color. Pressing it runs onPress. */
+/** One undecorated window of the shape: a solid rectangle of color. The hand hears its presses and drags. */
 public final class CircleSliceWindow extends JFrame {
    /** Where it flies to when the shape is scattered, in pixels per frame. */
    double velocityX;
@@ -17,13 +16,9 @@ public final class CircleSliceWindow extends JFrame {
    private final JPanel panel = new JPanel();
    private Color color;
 
-   public CircleSliceWindow(Rectangle bounds, Color color, String title, boolean onTop, Runnable onPress) {
-      this.panel.addMouseListener(new MouseAdapter() {
-         @Override
-         public void mousePressed(MouseEvent e) {
-            onPress.run();
-         }
-      });
+   public CircleSliceWindow(Rectangle bounds, Color color, String title, boolean onTop, MouseAdapter hand) {
+      this.panel.addMouseListener(hand);
+      this.panel.addMouseMotionListener(hand);
       this.setTitle(title);
       this.setUndecorated(true);
       this.add(this.panel);

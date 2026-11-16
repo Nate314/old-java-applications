@@ -1,6 +1,8 @@
 // The embeddable player (play.html?app=<App>): a poster first, the app only after Play, in a frame scaled to the widget.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { APPS, type App } from '../../shared/catalog';
+import { APPS, webp, type App } from '../../shared/catalog';
+import { linkState } from '../../shared/link-state';
+import { Shot } from './Shot';
 import './play.css';
 
 // The same four apps the runtime's WATCH table lets the computer play.
@@ -29,7 +31,7 @@ function first(): Shown {
 }
 
 function page(app: App, watch: boolean) {
-  return app.id + '/' + (then && app.then ? 'then.html' : 'index.html') + '?embed' + (watch ? '&watch' : '');
+  return app.id + '/' + (then && app.then ? 'then.html' : 'index.html') + '?embed' + (watch ? '&watch' : '') + linkState(app.id, location.search);
 }
 
 export function Play() {
@@ -96,11 +98,10 @@ export function Play() {
     <>
       <div className="main" ref={main}>
         <div className={'poster' + (thenPoster ? ' then' : '')} id="poster" hidden={shown.mode !== 'poster'}>
-          <img className="bg" id="poster-bg" alt="" src={poster ? poster.shot : undefined} />
+          <img className="bg" id="poster-bg" alt="" src={poster ? webp(poster.shot) : undefined} />
           {' '}
           {/* The thumbnail and hint show today's app, so the Then poster keeps only a faded backdrop of it. */}
-          <img className="shot" id="poster-shot" alt={poster ? poster.alt : ''} src={poster ? poster.shot : undefined}
-            hidden={thenPoster} onClick={() => run(poster!, false)} />
+          <Shot app={poster} still={thenPoster} shown={shown.mode === 'poster'} onPlay={() => run(poster!, false)} />
           <div className="text">
             <p className="kicker" id="poster-kicker">{thenPoster ? 'Then: as first restored' : 'Play in your browser'}</p>
             <h1 id="poster-name">{poster ? poster.name : null}</h1>
@@ -137,7 +138,7 @@ export function Play() {
             else document.documentElement.requestFullscreen().catch(() => {});
           }}>⛶</button>
           {' '}
-          <a key={lit} id="full" className={lit ? 'lit' : undefined} href={app ? app.id + '/' + (thenApp ? 'then.html' : 'index.html') : 'index.html'}
+          <a key={lit} id="full" className={lit ? 'lit' : undefined} href={app ? app.id + '/' + (thenApp ? 'then.html' : 'index.html') + linkState(app.id, location.search).replace('&', '?') : 'index.html'}
             target="_blank" rel="noopener" title="Open this app on its own page, with its source and more" hidden={shown.mode === 'oops'} ref={fullLink}>
             Full page ↗
           </a>

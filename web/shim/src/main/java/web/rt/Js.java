@@ -98,12 +98,28 @@ public final class Js {
     @JSBody(params = "el", script = "if (!window.__shimKeyed) { window.__shimKeyed = { on: false };"
             + " addEventListener('keydown', function () { window.__shimKeyed.on = true; }, true);"
             + " addEventListener('pointerdown', function () { window.__shimKeyed.on = false; }, true); }"
+            + " var _k = el.ownerDocument.activeElement;" // the phone Keyboard's box (phone-keys.tsx) keeps the focus, or the phone's keyboard drops
+            + " if (_k && _k.classList.contains('shim-keys-box') && !el.matches('input, textarea')) return;"
             + " if (el.matches('button, input, select, textarea')) {"
-            + " if (el.ownerDocument.activeElement !== el && el.isConnected)"
+            // a frame without the keyboard (the home page's player, a docked app) never takes it: el.focus() would pull it in
+            + " if (el.ownerDocument.activeElement !== el && el.isConnected && (el.ownerDocument.hasFocus() || !el.ownerDocument.defaultView.frameElement))"
             + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
             + " var _a = el.ownerDocument.activeElement;"
-            + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a)) _a.blur();")
+            + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a) && _a !== el.closest('.window')) _a.blur();")
     public static native void focusComponent(JSObject el);
+
+    /** Gives a window itself the page's keyboard focus (no ring), so a screen reader names it and keys are plainly the app's. */
+    @JSBody(params = "el", script = "el.setAttribute('tabindex', '-1'); el.focus({preventScroll: true, focusVisible: false});")
+    public static native void focusWindow(JSObject el);
+
+    /**
+     * True when the page's keyboard focus is free for the app to take: the element's page is focused, nothing on it
+     * has the focus (it is on the body, or on an app window itself), and the screen is not touch-first (a focused field there raises the phone's
+     * keyboard). The home page's player is not focused, so it never grabs the keyboard.
+     */
+    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body || _d.activeElement.classList.contains('window'))"
+            + " && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);")
+    public static native boolean pageFocusFree(JSObject el);
 
     /** Says the text to a screen reader through a polite live region (unseen on the page). */
     @JSBody(params = "text", script = "var _D = window.__shimDoc || document, _r = _D.getElementById('shim-live');"
@@ -117,13 +133,14 @@ public final class Js {
             + " || !!(_t.closest && _t.closest('.window'));")
     public static native boolean targetIsAppOrPage(JSObject e);
 
-    @JSBody(params = { "el", "id" }, script = "el.__cid = id;")
-    public static native void setComponentId(JSObject el, int id);
+    /** The element remembers its component itself, so a disposed window's components go when its elements do. */
+    @JSBody(params = { "el", "c" }, script = "el.__c = c;")
+    public static native void setComponent(JSObject el, Object c);
 
     /** Walks up from a DOM node to the nearest element that belongs to a Java component. */
     @JSBody(params = "node", script =
-            "for (var _e = node; _e; _e = _e.parentNode) { if (_e.__cid !== undefined) return _e.__cid; } return -1;")
-    public static native int componentIdOf(JSObject node);
+            "for (var _e = node; _e; _e = _e.parentNode) { if (_e.__c) return _e.__c; } return null;")
+    public static native Object componentOf(JSObject node);
 
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb);")
     public static native void listen(JSObject el, String type, EventCallback cb);
@@ -201,6 +218,11 @@ public final class Js {
     @JSBody(script = "return performance.now();")
     public static native double now();
 
+    /** True while the visitor's system asks for less motion (prefers-reduced-motion), read live so it follows a change. */
+    @JSBody(script = "var _m = window.__shimCalm || (window.matchMedia && (window.__shimCalm = matchMedia('(prefers-reduced-motion: reduce)')));"
+            + " return !!(_m && _m.matches);")
+    public static native boolean reducedMotion();
+
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb, true);")
     public static native void listenCapture(JSObject el, String type, EventCallback cb);
 
@@ -234,6 +256,15 @@ public final class Js {
 
     @JSBody(params = "e", script = "e.preventDefault();")
     public static native void preventDefault(JSObject e);
+
+    /**
+     * A press whose default is prevented (so the focus stays where AWT has it) leaves the browser's focus where it was,
+     * which may be another frame: Side by side's docked app, or the page around an embedded one. The press brings it
+     * back to this page (out of a frame on it, or into this frame), so the keys follow the click.
+     */
+    @JSBody(params = "e", script = "var _d = (e.target && e.target.ownerDocument) || document, _w = _d.defaultView, _a = _d.activeElement;"
+            + " if (_a && _a.tagName === 'IFRAME') _a.blur(); if (_w && !_d.hasFocus()) _w.focus();")
+    public static native void takeKeys(JSObject e);
 
 
     @JSBody(params = "e", script = "var _t = e.target; return !!(_t && _t.closest && _t.closest('input, select, textarea'));")
@@ -389,12 +420,24 @@ public final class Js {
             + "_a.remove(); setTimeout(function () { URL.revokeObjectURL(_u); }, 10000);")
     public static native void download(String name, String data);
 
-    /** Replaces the app's saved files. A full localStorage logs an error and keeps the previous copy. */
-    @JSBody(params = { "key", "paths", "data" }, script =
-            "var _s = {}; for (var _i = 0; _i < paths.length; _i++) _s[paths[_i]] = data[_i];"
-            + "try { if (paths.length) localStorage.setItem(key, JSON.stringify(_s)); else localStorage.removeItem(key); }"
+    /**
+     * Writes the files this page changed (and drops the ones it deleted) into the app's store, keeping every other
+     * file in it, since other pages of the site share it. A full localStorage logs an error and keeps the previous copy.
+     */
+    @JSBody(params = { "key", "paths", "data", "drops" }, script =
+            "var _s; try { _s = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { _s = null; }"
+            + "if (!_s || typeof _s !== 'object' || Array.isArray(_s)) _s = {};"
+            + "for (var _i = 0; _i < paths.length; _i++) _s[paths[_i]] = data[_i];"
+            + "for (var _j = 0; _j < drops.length; _j++) delete _s[drops[_j]];"
+            + "try { if (Object.keys(_s).length) localStorage.setItem(key, JSON.stringify(_s)); else localStorage.removeItem(key); }"
             + " catch (e) { console.error('Could not keep the saved files: ' + e); }")
-    public static native void storeSaves(String key, String[] paths, String[] data);
+    public static native void storeSaves(String key, String[] paths, String[] data, String[] drops);
+
+    /** Calls back when another page changes (or clears) the store; savedPaths and savedData then read the new copy. */
+    @JSBody(params = { "key", "cb" }, script =
+            "window.addEventListener('storage', function (e) {"
+            + " if ((e.key === key || e.key === null) && e.storageArea === localStorage) cb(); });")
+    public static native void onSavesChanged(String key, Callback cb);
 
     @JSBody(params = { "ms", "cb" }, script = "setInterval(cb, ms);")
     public static native void every(int ms, Callback cb);

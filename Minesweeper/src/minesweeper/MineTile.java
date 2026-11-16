@@ -11,6 +11,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.event.MouseAdapter;
 import javax.swing.JButton;
 
 /**
@@ -73,6 +74,11 @@ public final class MineTile extends JButton implements MouseListener {
    private static final Color CLUE_GOLD = new Color(245, 176, 0);
    private static final Color SAFE_GLOW = new Color(255, 252, 214);
    private int hint = HINT_NONE;
+   /** Odds (O): the chance this hidden tile is a mine, 0 to 1, or -1 when not shown. */
+   private double odds = -1;
+   /** Once the game is over: the chance this tile was a mine when the player guessed on it, or -1 if it was no guess. */
+   private double gamble = -1;
+   private static final Color GAMBLE = new Color(123, 31, 162);
    private boolean cursor;
    private boolean hover;
    private boolean pressed;
@@ -90,6 +96,12 @@ public final class MineTile extends JButton implements MouseListener {
       this.setBorderPainted(false);
       this.setContentAreaFilled(false);
       this.addMouseListener(this);
+      this.addMouseMotionListener(new MouseAdapter() {
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            MineTile.this.dragged(event);
+         }
+      });
       this.addKeyListener(new KeyAdapter() {
          @Override
          public void keyPressed(KeyEvent event) {
@@ -134,6 +146,24 @@ public final class MineTile extends JButton implements MouseListener {
          this.hint = role;
          this.repaint();
       }
+   }
+
+   /** Shows this hidden tile's chance of being a mine (0 to 1), or nothing (-1). */
+   void setOdds(double chance) {
+      if (this.odds != chance) {
+         this.odds = chance;
+         this.repaint();
+         if (this.shown == SHOW_HIDDEN && this.mark == HIDDEN) {
+            this.describe(chance < 0 ? "hidden" : "hidden, " + Odds.percent(chance) + " chance of a mine");
+         }
+      }
+   }
+
+   /** Tags this tile as one the player guessed on, with its chance of being a mine at the time (shown once the game ends). */
+   void setGamble(double risk) {
+      this.gamble = risk;
+      this.repaint();
+      this.getAccessibleContext().setAccessibleName(this.getAccessibleContext().getAccessibleName() + ", your guess, " + Odds.percent(risk) + " chance of a mine");
    }
 
    /** Shows or hides the keyboard cursor on this tile. */
@@ -227,6 +257,9 @@ public final class MineTile extends JButton implements MouseListener {
 
       if (this.shown == SHOW_HIDDEN || this.shown == SHOW_WRONG_FLAG) {
          this.paintGrass(g, s, dark, 1);
+         if (this.odds >= 0 && this.shown == SHOW_HIDDEN) {
+            this.paintOdds(g, s);
+         }
          if (this.shown == SHOW_WRONG_FLAG || this.mark == FLAG && now >= this.animStart) { // a won game's flags wait their turn
             this.paintFlag(g, s, this.shown == SHOW_WRONG_FLAG ? 1 : t);
          } else if (this.mark == QUESTION) {
@@ -256,6 +289,9 @@ public final class MineTile extends JButton implements MouseListener {
          }
       }
       this.paintHint(g, s);
+      if (this.gamble >= 0) {
+         this.paintGamble(g, s);
+      }
       if (this.cursor) {
          g.setColor(CURSOR);
          g.setStroke(new BasicStroke(Math.max(2, s / 14f)));
@@ -322,6 +358,57 @@ public final class MineTile extends JButton implements MouseListener {
          g.setColor(safe ? Color.WHITE : new Color(190, 20, 20));
       }
       g.drawRoundRect(inset, inset, w - 2 * inset - 1, h - 2 * inset - 1, arc, arc);
+   }
+
+   /**
+    * Odds on the grass: a light glow at 0% (safe), otherwise red, deeper the likelier a mine, with the percent in white
+    * on a plain tile big enough to read it (a flag or question mark keeps its place).
+    */
+   private void paintOdds(Graphics2D g, int s) {
+      int w = this.getWidth();
+      int h = this.getHeight();
+      int inset = Math.max(2, s / 10);
+      int arc = Math.max(6, s / 3);
+      boolean safe = this.odds < 1e-9;
+      g.setColor(safe ? withAlpha(SAFE_GLOW, 150) : withAlpha(HIT, (int) (20 + 200 * this.odds)));
+      g.fillRoundRect(inset, inset, w - 2 * inset, h - 2 * inset, arc, arc);
+      if (this.mark != HIDDEN || s < 22) {
+         return;
+      }
+      String text = Odds.percent(this.odds);
+      g.setFont(new Font("Dialog", Font.BOLD, Math.max(9, (int) (s * 0.3))));
+      FontMetrics fm = g.getFontMetrics();
+      int x = (w - fm.stringWidth(text)) / 2;
+      int y = (h + fm.getAscent() - fm.getDescent()) / 2;
+      if (!safe) { // white on red, with a dark edge so it reads on light pink too
+         g.setColor(new Color(90, 10, 10));
+         g.drawString(text, x + 1, y + 1);
+      }
+      g.setColor(safe ? GRASS_EDGE : Color.WHITE);
+      g.drawString(text, x, y);
+   }
+
+   /** A guess the player made: a purple ring, and the chance it was a mine on a tag along the bottom (if it fits). */
+   private void paintGamble(Graphics2D g, int s) {
+      int w = this.getWidth();
+      int h = this.getHeight();
+      int inset = Math.max(1, s / 16);
+      g.setColor(GAMBLE);
+      g.setStroke(new BasicStroke(Math.max(2, s / 14f)));
+      g.drawRoundRect(inset, inset, w - 2 * inset - 1, h - 2 * inset - 1, s / 4, s / 4);
+      if (s < 22) {
+         return;
+      }
+      String text = Odds.percent(this.gamble);
+      g.setFont(new Font("Dialog", Font.BOLD, Math.max(8, (int) (s * 0.28))));
+      FontMetrics fm = g.getFontMetrics();
+      int tw = fm.stringWidth(text) + 6;
+      int th = fm.getAscent() + 2;
+      int x = (w - tw) / 2;
+      int y = h - th - inset;
+      g.fillRoundRect(x, y, tw, th, th, th);
+      g.setColor(Color.WHITE);
+      g.drawString(text, x + 3, y + fm.getAscent());
    }
 
    /** Revealed ground: a flat sand square, with a faint line where it meets the next one. */
@@ -441,6 +528,9 @@ public final class MineTile extends JButton implements MouseListener {
 
    @Override
    public final void mouseClicked(MouseEvent event) {
+      if (this.game.wasDragged()) { // the press dragged the zoomed board
+         return;
+      }
       this.game.moveCursor(null);
       if (this.game.gameOver || event.getButton() == MouseEvent.BUTTON1) {
          this.play(true);
@@ -491,8 +581,17 @@ public final class MineTile extends JButton implements MouseListener {
 
    @Override
    public final void mousePressed(MouseEvent event) {
+      this.game.pressBoard(this.getX() + event.getX(), this.getY() + event.getY());
       if (event.getButton() == MouseEvent.BUTTON1 && this.shown == SHOW_HIDDEN && this.mark != FLAG && !this.game.gameOver) {
          this.pressed = true;
+         this.repaint();
+      }
+   }
+
+   /** Zoomed, a press that moves drags the board (in the board's own pixels, since this tile moves with it). */
+   private void dragged(MouseEvent event) {
+      if (this.game.dragBoard(this.getX() + event.getX(), this.getY() + event.getY()) && this.pressed) {
+         this.pressed = false;
          this.repaint();
       }
    }

@@ -13,10 +13,12 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { openLayer } from '../ui/layer';
+import { storedJson } from '../stored';
+import { findKey } from '../find';
 
 declare global {
   interface Window {
-  oldjavaFind?: { open(opener?: Element | null): void; isOpen(): boolean; key: string };
+  oldjavaFind?: { open(opener?: Element | null): void; isOpen(): boolean };
   }
 }
 // What boot.js's find.ts has lent window.oldjavaSite by the time this file runs.
@@ -29,8 +31,6 @@ interface Item {
 }
 /** What the box shows: its groups of rows, the row picked (-1 for none) and the line under them. */
 interface FindView { groups: [string, Item[]][]; active: number; status: string }
-
-const KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K';
 
 function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMount }: {
   view: FindView; home: boolean; onSearch: () => void; onKey: (e: KeyboardEvent) => void; onClose: () => void;
@@ -83,7 +83,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
         </div>
         <p className="shim-find-status" role="status">{view.status}</p>
         <div className="shim-find-foot">
-          {[['↑↓', 'move'], ['Enter', 'open'], ['Shift Enter', 'full page'], [KEY, 'close']].map((k, i) => i === 2 && !home ? null : (
+          {[['↑↓', 'move'], ['Enter', 'open'], ['Shift Enter', 'full page'], [findKey, 'close']].map((k, i) => i === 2 && !home ? null : (
             <span key={i}><kbd>{k[0]}</kbd>{' ' + k[1]}</span>
           ))}
         </div>
@@ -99,10 +99,10 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
   var box: { close(): void } | null = null;
 
   function onHome() { return !document.body.hasAttribute('data-app'); }
-  // A control of this page, if it is there and shown.
+  // A control of this page, if it is there and shown (waiting under a More, the band's or the home player's, counts).
   function shown(selector: string | HTMLElement) {
     var n = typeof selector === 'string' ? document.querySelector<HTMLElement>(selector) : selector;
-    return n && !n.hidden && n.getClientRects().length ? n : null;
+    return n && !n.hidden && (n.getClientRects().length || n.classList.contains('shim-more-out') || n.closest('#player-more')) ? n : null;
   }
   function toolbarButton(text: string) {
     var all = document.querySelectorAll<HTMLElement>('.shim-toolbar button');
@@ -148,9 +148,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
   }
 
   // ---- what it can find ----
-  function lastPlayed() {
-    try { return JSON.parse(localStorage.getItem('oldjava.lastPlayed') || '{}') || {}; } catch (e) { return {}; }
-  }
+  function lastPlayed() { return storedJson('oldjava.lastPlayed'); }
 
   function go(href: string) {
     var u = new URL(href, location.href);
@@ -224,8 +222,13 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
       var big = shown('#player-big');
       add(clickAction('#player-big', big && big.getAttribute('aria-pressed') === 'true' ? 'Exit big screen' : 'Big screen',
         'Fill the screen with the player', '⛶', 'fullscreen big screen large'));
-      add(clickAction('#player-photo', 'Take a photo', 'A picture of the app in the player, in an instant print or postcard frame', '▣', 'photo picture screenshot snapshot camera image postcard print'));
+      add(clickAction('#player-photo', 'Take a photo', 'A picture of the app in the player, in an instant print or postcard frame', '📷', 'photo picture screenshot snapshot camera image postcard print'));
+      add(clickAction('#player-replay', 'Instant replay', 'The last 10 to 20 seconds in the player as a video', '●', 'replay video record clip save'));
       add(clickAction('#player-restart', 'Restart the player\'s app', 'Start it again from the beginning', '↻', 'restart reload again'));
+      add(clickAction('#player-zoom', window.oldjavaZoom && window.oldjavaZoom.fit() ? 'Actual size' : 'Fit to the player',
+        'Zoom small apps to fill the player, or back to their own size', '⤢', 'zoom fit actual size bigger smaller'));
+      add(clickAction('#player-pop', 'Pop out', 'Keep the player’s app in a small window on top of everything', '⧉', 'pop out picture in picture window'));
+      add(clickAction('#player-source', 'Read the source', 'The player’s app on its page, with its Java beside it', '</>', 'source code java read'));
       add(tabAction('tab-news', 'What\'s new', 'The latest changes to the apps', '★', 'news changes updates history'));
       add(tabAction('tab-passport', 'Arcade passport', 'A stamp for every app you have played', '✓', 'passport stamps badges progress'));
       add(tabAction('tab-records', 'Your records', 'Best times, scores and stars; send them to your phone', '☰', 'records saves scores best export phone qr download'));
@@ -234,7 +237,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
       add(clickAction('.shim-help', 'How to play', 'Show this app\'s hint in the toolbar', '?', 'help how to play hint keys controls'));
       add(clickAction('.shim-source-open', 'Read the source', 'The Java this app was compiled from, beside it', '</>', 'source code java read'));
       add(clickAction('.shim-share-open', 'Share this app', 'Its link with a preview card', '↗', 'share link send'));
-      add(clickAction('.shim-photo-open', 'Take a photo', 'A picture of the app in an instant print or postcard frame', '▣', 'photo picture screenshot snapshot camera image postcard print'));
+      add(clickAction('.shim-photo-open', 'Take a photo', 'A picture of the app in an instant print or postcard frame', '📷', 'photo picture screenshot snapshot camera image postcard print'));
       add(clickAction('.shim-replay', 'Instant replay', 'The last 10 to 20 seconds as a video', '●', 'replay video record clip save'));
       var zoom = shown('.shim-zoom');
       if (zoom) add(action(zoom.getAttribute('aria-pressed') === 'false' ? 'Fit to screen' : 'Actual size',
@@ -428,7 +431,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
     });
   }
 
-  window.oldjavaFind = { open: open, isOpen: function () { return !!box; }, key: KEY };
+  window.oldjavaFind = { open: open, isOpen: function () { return !!box; } };
 })();
 
 export {};   // a module, imported when it is needed (its chunk is assets/find.js)

@@ -1,5 +1,6 @@
 package numberguess;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -23,7 +24,8 @@ import javax.swing.Timer;
  * line is the whole range with what is still possible lit; the bottom one zooms in on just that part, so a click on
  * it guesses the number under the pointer, even in 1 to 1,000,000. The guesses so far sit underneath as chips.
  * The Magic tab is a card trick instead: see {@link MagicCards}, drawn by {@link MagicView}. The Duel tab is a race
- * against the computer to find each other's number: see {@link Duel}, drawn by {@link DuelView}.
+ * against the computer to find each other's number: see {@link Duel}, drawn by {@link DuelView}. Hot and cold answers
+ * only warmer or colder than the guess before: see {@link Warmth}, drawn by {@link WarmthView}.
  */
 @SuppressWarnings("serial")
 public final class Board extends JPanel {
@@ -44,6 +46,9 @@ public final class Board extends JPanel {
 	static final Color GOLD = new Color(255, 198, 64);
 	static final Color WARN = new Color(255, 170, 70);
 	static final Color RIGHT = new Color(80, 205, 120);
+	/** You pick with a lie allowed: a number that fits all but one answer. */
+	static final Color ONE_LIE = new Color(214, 142, 64);
+	static final Color ONE_LIE_DARK = new Color(122, 82, 42);
 
 	private static final int MARGIN = 20;
 	private static final int TABS_Y = 10, TAB_HEIGHT = 44;
@@ -51,7 +56,7 @@ public final class Board extends JPanel {
 	private static final int ZOOM_Y = 198, ZOOM_HEIGHT = 36;
 	private static final int CHIPS_Y = 264;
 	/** The tabs after the five ranges. */
-	private static final int DUEL_TAB = Level.values().length, PICK_TAB = DUEL_TAB + 1, MAGIC_TAB = DUEL_TAB + 2;
+	private static final int DUEL_TAB = Level.values().length, PICK_TAB = DUEL_TAB + 1, MAGIC_TAB = DUEL_TAB + 2, WARM_TAB = DUEL_TAB + 3;
 
 	private final Records records;
 	private final Random random = new Random();
@@ -59,10 +64,14 @@ public final class Board extends JPanel {
 	private Level level;
 	private Game game;
 	private MindReader reader;
+	/** You pick allows one lie. */
+	private boolean lying;
 	private MagicCards magic;
 	private final MagicView magicView = new MagicView(this::repaint);
 	private Duel duel;
 	private final DuelView duelView = new DuelView(this::repaint);
+	private Warmth warm;
+	private final WarmthView warmView = new WarmthView();
 	/** Makes the computer's guess in a duel, a moment after yours. */
 	private final Timer computerTurn = new Timer(DuelView.thinkMillis(), event -> computerGuesses());
 	private String headline = "";
@@ -70,6 +79,8 @@ public final class Board extends JPanel {
 	private Color headlineColor = TEXT;
 	private boolean newBest;
 	private Level opened;
+	/** The friend's won game this number came from, or null. */
+	private Challenge challenge;
 
 	// The lit part of the top line slides to its new size instead of jumping.
 	private double shownLow, shownHigh;
@@ -104,6 +115,9 @@ public final class Board extends JPanel {
 			public void mouseExited(MouseEvent event) {
 				hoverTab = -1;
 				hoverX = -1;
+				if (isWarm()) {
+					warmView.hover(warm, -1, -1);
+				}
 				repaint();
 			}
 		};
@@ -127,18 +141,27 @@ public final class Board extends JPanel {
 		return duel != null;
 	}
 
+	public boolean isWarm() {
+		return warm != null;
+	}
+
 	public boolean isOver() {
-		return isDuel() ? duel.isOver() : isMagic() ? magic.isDone() : isPicking() ? reader.isOver() : game.isOver();
+		return isWarm() ? warm.isOver() : isDuel() ? duel.isOver() : isMagic() ? magic.isDone() : isPicking() ? reader.isOver() : game.isOver();
 	}
 
 	/** The open tab: a range's ordinal, then Duel, You pick and Magic. */
 	private int tab() {
-		return isDuel() ? DUEL_TAB : isMagic() ? MAGIC_TAB : isPicking() ? PICK_TAB : level.ordinal();
+		return isWarm() ? WARM_TAB : isDuel() ? DUEL_TAB : isMagic() ? MAGIC_TAB : isPicking() ? PICK_TAB : level.ordinal();
 	}
 
-	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic. */
+	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic, 3 for a won range (Challenge a friend). */
 	private int kind() {
-		return isMagic() ? 2 : isPicking() ? 1 : 0;
+		return isMagic() ? 2 : isPicking() ? 1 : canChallenge() ? 3 : 0;
+	}
+
+	/** True when a range was just won, so it can be sent to a friend to beat. */
+	public boolean canChallenge() {
+		return game != null && !isDuel() && game.isFound();
 	}
 
 	/** Tells the window when a switch of tab needs other buttons. */
@@ -158,12 +181,27 @@ public final class Board extends JPanel {
 		this.level = level;
 		reader = null;
 		magic = null;
+		warm = null;
 		endDuel();
 		game = new Game(level, random);
 		newBest = false;
 		opened = null;
+		challenge = null;
 		say("Guess a number from 1 to " + Level.commas(level.max()), TEXT,
 				"Par " + level.par() + ": guess the middle of what is left. " + level.limit() + " guesses before it is given away.");
+		reset();
+		switched(before);
+	}
+
+	/** A friend's won game: the same number in the same range, with their guesses to beat (even in a range not yet open). */
+	public void startChallenge(Challenge challenge) {
+		int before = kind();
+		start(challenge.level());
+		this.challenge = challenge;
+		game = new Game(level, challenge.number());
+		int theirs = challenge.guesses().size();
+		say("A friend found a number in " + guesses(theirs), GOLD, "The same number, 1 to " + Level.commas(level.max()) + ". Can you find it in "
+				+ (theirs == 1 ? "1 too?" : "fewer? The gold ring is theirs."));
 		reset();
 		switched(before);
 	}
@@ -171,9 +209,10 @@ public final class Board extends JPanel {
 	/** You think of a number and the computer guesses it. */
 	public void startPicking() {
 		int before = kind();
-		reader = new MindReader();
+		reader = new MindReader(lying ? 1 : 0);
 		game = null;
 		magic = null;
+		warm = null;
 		endDuel();
 		askReader();
 		reset();
@@ -185,6 +224,7 @@ public final class Board extends JPanel {
 		magic = new MagicCards(random);
 		reader = null;
 		game = null;
+		warm = null;
 		endDuel();
 		magicView.dealt(false);
 		askMagic();
@@ -201,7 +241,23 @@ public final class Board extends JPanel {
 		reader = null;
 		game = null;
 		magic = null;
+		warm = null;
 		say("Duel: hide a number from 1 to " + Duel.MAX, TEXT, "Then race the computer to find each other's. You guess first each round.");
+		slide.stop();
+		repaint();
+		switched(before);
+	}
+
+	/** Hot and cold: a new number, found only by warmer or colder. */
+	public void startWarm() {
+		int before = kind();
+		endDuel();
+		warm = new Warmth(random);
+		reader = null;
+		game = null;
+		magic = null;
+		say("Hot and cold: find a number from 1 to " + Warmth.MAX, TEXT, "Each answer only says warmer or colder than your last guess. Par " + Warmth.PAR
+				+ ", " + Warmth.LIMIT + " guesses.");
 		slide.stop();
 		repaint();
 		switched(before);
@@ -214,7 +270,9 @@ public final class Board extends JPanel {
 
 	/** The same game again: a new number in this range, a new duel, or a new round of You pick. */
 	public void again() {
-		if (isDuel()) {
+		if (isWarm()) {
+			startWarm();
+		} else if (isDuel()) {
 			startDuel();
 		} else if (isMagic()) {
 			if (!magicView.isFlipping()) {
@@ -223,7 +281,8 @@ public final class Board extends JPanel {
 		} else if (isPicking()) {
 			startPicking();
 		} else {
-			start(opened != null ? opened : level);
+			// After a friend's challenge in a range not yet open, the next number is in one that is.
+			start(opened != null ? opened : records.isOpen(level) ? level : records.suggested());
 		}
 	}
 
@@ -234,7 +293,7 @@ public final class Board extends JPanel {
 		while (index > 0 && index < DUEL_TAB && !records.isOpen(Level.values()[index])) {
 			index += by;
 		}
-		if (index >= 0 && index <= MAGIC_TAB) {
+		if (index >= 0 && index <= WARM_TAB) {
 			openTab(index);
 		}
 	}
@@ -248,7 +307,7 @@ public final class Board extends JPanel {
 
 	/** The top of the range being played. */
 	int max() {
-		return isDuel() ? Duel.MAX : isPicking() ? MindReader.MAX : level.max();
+		return isWarm() ? Warmth.MAX : isDuel() ? Duel.MAX : isPicking() ? MindReader.MAX : level.max();
 	}
 
 	private int low() {
@@ -277,6 +336,10 @@ public final class Board extends JPanel {
 
 	/** A typed or clicked guess. */
 	public void guess(int number) {
+		if (isWarm()) {
+			warmGuess(number);
+			return;
+		}
 		if (isDuel()) {
 			duelGuess(number);
 			return;
@@ -300,21 +363,44 @@ public final class Board extends JPanel {
 		case TOO_HIGH:
 			boolean low = number < game.number();
 			if (game.isOver()) {
-				say("Out of guesses. It was " + Level.commas(game.number()), HIGH, "Press Enter or click the line for a new number.");
+				say("Out of guesses. It was " + Level.commas(game.number()), HIGH, (challenge != null ? "Your friend found it in "
+						+ guesses(challenge.guesses().size()) + ". " : "") + "Press Enter or click the line for a new number.");
 			} else {
-				say(Level.commas(number) + (low ? " is too low" : " is too high"), low ? LOW : HIGH,
-						"It is from " + Level.commas(game.low()) + " to " + Level.commas(game.high()) + ". "
+				say(Level.commas(number) + (low ? " is too low" : " is too high"), low ? LOW : HIGH, readText(lastRead())
+						+ " It is from " + Level.commas(game.low()) + " to " + Level.commas(game.high()) + ". "
 								+ guessesLeft(game.guessesLeft()) + ".");
 			}
 			break;
 		case CORRECT:
 			win();
+			modeChanged.run(); // Challenge a friend shows
 			break;
 		default:
 			break;
 		}
 		slide.start();
 		repaint();
+	}
+
+	/** How the latest guess narrowed it, compared with guessing the middle. */
+	private Hindsight.Read lastRead() {
+		List<Hindsight.Read> reads = Hindsight.reads(level, game.number(), game.guesses());
+		return reads.get(reads.size() - 1);
+	}
+
+	private static String readText(Hindsight.Read read) {
+		switch (read) {
+		case HALVED:
+			return "Halved it.";
+		case LUCKY:
+			return "Lucky: off the middle, and it paid off.";
+		default:
+			return "Costly: the middle would have left less.";
+		}
+	}
+
+	private static Color readColor(Hindsight.Read read) {
+		return read == Hindsight.Read.HALVED ? POSSIBLE : read == Hindsight.Read.LUCKY ? GOLD : WARN;
 	}
 
 	private static String guessesLeft(int left) {
@@ -324,13 +410,68 @@ public final class Board extends JPanel {
 	private void win() {
 		Level next = level.ordinal() + 1 < Level.values().length ? Level.values()[level.ordinal() + 1] : null;
 		boolean wasOpen = next != null && records.isOpen(next);
-		newBest = records.add(game);
+		// A friend's challenge can be in a range not yet open; winning it there keeps no record.
+		newBest = records.isOpen(level) && records.add(game);
 		opened = next != null && !wasOpen && records.isOpen(next) ? next : null;
 		int guesses = game.getGuesses();
+		if (challenge != null) {
+			int theirs = challenge.guesses().size();
+			say(guesses < theirs ? "You beat your friend: " + guesses(guesses) + " to " + theirs
+					: guesses == theirs ? "A tie with your friend: " + guesses(guesses) + " each"
+							: "Your friend wins: " + theirs + " guesses to your " + guesses, guesses <= theirs ? RIGHT : GOLD,
+					(newBest ? "New best! " : "") + "Both paths are below. Enter plays a new number.");
+			return;
+		}
 		String more = opened != null ? " " + opened.label() + " is open: Enter plays it."
 				: game.stars() < 3 ? " Par is " + level.par() + "." : " Press Enter for another.";
 		say("Got it: " + Level.commas(game.number()) + " in " + guesses + (guesses == 1 ? " guess" : " guesses"), RIGHT,
 				(newBest ? "New best! " : "") + more.trim());
+	}
+
+	// ---- Hot and cold ----
+
+	private void warmGuess(int number) {
+		if (warm.isOver()) {
+			startWarm();
+			return;
+		}
+		Integer before = warm.previous();
+		Warmth.Read read = warm.guess(number);
+		int left = warm.left();
+		String fit = left + (left == 1 ? " number fits" : " numbers fit") + ". " + guessesLeft(warm.guessesLeft()) + ".";
+		switch (read) {
+		case OUT_OF_RANGE:
+			notice("Pick a number from 1 to " + Warmth.MAX + ". Not counted.");
+			return;
+		case REPEAT:
+			notice(number + " was your last guess: it would be just as warm. Not counted.");
+			return;
+		case FOUND:
+			int count = warm.guesses().size();
+			say("Got it: " + number + " in " + guesses(count), RIGHT, (count <= Warmth.PAR ? "Within par! " : "Par is " + Warmth.PAR + ". ")
+					+ "The best plan never needs more than " + Warmth.PAR + ". Enter plays again.");
+			break;
+		default:
+			if (warm.isOver()) {
+				say("Out of guesses. It was " + warm.number(), HIGH, "Press Enter or click the line for a new number.");
+			} else if (read == Warmth.Read.FIRST) {
+				say("Not " + number + ". Now guess again", TEXT, "The answer will say if that guess is warmer or colder than " + number + ".");
+			} else if (read == Warmth.Read.SAME) {
+				say("Just as close as " + before, GOLD, "So it is exactly halfway between them. " + guessesLeft(warm.guessesLeft()) + ".");
+			} else {
+				boolean warmer = read == Warmth.Read.WARMER;
+				boolean above = (number > before) == warmer;
+				say(number + (warmer ? " is warmer" : " is colder") + " than " + before, warmer ? HIGH : LOW, (warmer ? "Closer" : "Further")
+						+ ", so it is " + (above ? "above" : "below") + " halfway, " + half(number + before) + ". " + fit);
+			}
+			break;
+		}
+		repaint();
+	}
+
+	/** Half of {@code twice}, as "49" or "49.5". */
+	static String half(int twice) {
+		return twice / 2 + (twice % 2 == 0 ? "" : ".5");
 	}
 
 	// ---- Duel ----
@@ -418,8 +559,22 @@ public final class Board extends JPanel {
 
 	// ---- You pick ----
 
+	/** You pick: allow one lie, or go back to the truth (a new round either way). */
+	public void toggleLies() {
+		if (isPicking()) {
+			lying = !lying;
+			startPicking();
+		}
+	}
+
+	public boolean isLying() {
+		return lying;
+	}
+
 	private void askReader() {
-		if (reader.isFound()) {
+		if (reader.allowsLie()) {
+			askLiar();
+		} else if (reader.isFound()) {
 			int guesses = reader.guesses().size();
 			say("Your number is " + reader.guess() + "!", RIGHT, "Found in " + guesses + (guesses == 1 ? " guess" : " guesses")
 					+ ". Guessing the middle never needs more than " + MindReader.par() + ".");
@@ -430,6 +585,23 @@ public final class Board extends JPanel {
 			say("Is it " + reader.guess() + "?", TEXT, number == 1
 					? "Think of a number from 1 to " + MindReader.MAX + ". Is yours lower, higher, or this one?"
 					: "Guess " + number + ". It is from " + reader.low() + " to " + reader.high() + ", if you told the truth.");
+		}
+	}
+
+	private void askLiar() {
+		int number = reader.guesses().size();
+		if (reader.isFound()) {
+			int lie = reader.lie();
+			int guess = reader.guess();
+			say("Your number is " + guess + "!", RIGHT, lie < 0 ? "Found in " + guesses(number) + ", and you told the truth every time."
+					: "Found in " + guesses(number) + ". Your lie was answer " + (lie + 1) + ": " + guess + " is not " + (reader.answers().get(lie) > 0 ? "higher" : "lower")
+							+ " than " + reader.guesses().get(lie) + ".");
+		} else if (reader.isCaught()) {
+			say("That's two lies!", HIGH, "Every number breaks at least two of your answers. One lie is allowed.");
+		} else {
+			say("Is it " + reader.guess() + "?", TEXT, number == 1
+					? "Think of a number from 1 to " + MindReader.MAX + ". Lie once if you like: I will still find it in " + MindReader.LIAR_PAR + "."
+					: "Guess " + number + ". Green fits every answer, orange all but one.");
 		}
 	}
 
@@ -535,6 +707,10 @@ public final class Board extends JPanel {
 	// ---- mouse ----
 
 	private void openTab(int index) {
+		if (index == WARM_TAB) {
+			startWarm();
+			return;
+		}
 		if (index == MAGIC_TAB) {
 			startMagic();
 			return;
@@ -565,6 +741,14 @@ public final class Board extends JPanel {
 				return;
 			}
 		}
+		if (isWarm()) {
+			int number = warmView.numberAt(x, y);
+			if (number > 0 || warm.isOver() && y > TABS_Y + TAB_HEIGHT) {
+				guess(number);
+				warmView.hover(warm, x, y);
+			}
+			return;
+		}
 		if (isDuel()) {
 			int number = duelView.numberAt(duel, x, y);
 			if (number > 0 || duel.isOver() && y > TABS_Y + TAB_HEIGHT) {
@@ -584,6 +768,15 @@ public final class Board extends JPanel {
 			if (tabs.get(i).contains(x, y)) {
 				tab = i;
 			}
+		}
+		if (isWarm()) {
+			boolean changed = warmView.hover(warm, x, y);
+			if (tab != hoverTab || changed) {
+				hoverTab = tab;
+				setCursor(Cursor.getPredefinedCursor(tab >= 0 || warmView.hoverNumber() > 0 ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+				repaint();
+			}
+			return;
 		}
 		if (isDuel()) {
 			boolean changed = duelView.hover(duel, x, y);
@@ -631,7 +824,7 @@ public final class Board extends JPanel {
 
 	private void layOut() {
 		int width = getWidth();
-		int count = MAGIC_TAB + 1;
+		int count = WARM_TAB + 1;
 		int gap = 6;
 		int tabWidth = (width - 2 * MARGIN - gap * (count - 1)) / count;
 		tabs.clear();
@@ -663,13 +856,21 @@ public final class Board extends JPanel {
 			magicView.paint(g, magic, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
 			return;
 		}
+		if (isWarm()) {
+			warmView.paint(g, warm, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
+			return;
+		}
 		if (isDuel()) {
 			duelView.paint(g, duel, records, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
 			return;
 		}
 		paintGuessMeter(g);
-		paintFullLine(g);
-		paintZoom(g);
+		if (!isPicking() && game.isOver()) {
+			paintHindsight(g);
+		} else {
+			paintFullLine(g);
+			paintZoom(g);
+		}
 		paintChips(g);
 	}
 
@@ -679,6 +880,7 @@ public final class Board extends JPanel {
 			boolean duelTab = i == DUEL_TAB;
 			boolean picking = i == PICK_TAB;
 			boolean magicTab = i == MAGIC_TAB;
+			boolean warmTab = i == WARM_TAB;
 			Level tabLevel = i < DUEL_TAB ? Level.values()[i] : null;
 			boolean selected = i == tab();
 			boolean open = tabLevel == null || records.isOpen(tabLevel);
@@ -690,7 +892,7 @@ public final class Board extends JPanel {
 			}
 			g.setFont(new Font("SansSerif", Font.BOLD, 13));
 			g.setColor(open ? TEXT : DIM);
-			String label = duelTab ? "Duel" : picking ? "You pick" : magicTab ? "Magic" : tabLevel.label();
+			String label = warmTab ? "Hot & cold" : duelTab ? "Duel" : picking ? "You pick" : magicTab ? "Magic" : tabLevel.label();
 			if (g.getFontMetrics().stringWidth(label) > tab.width - 6) {
 				g.setFont(new Font("SansSerif", Font.BOLD, 11));
 			}
@@ -700,7 +902,7 @@ public final class Board extends JPanel {
 			if (tabLevel == null) {
 				g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 				g.setColor(SOFT);
-				String sub = duelTab ? "Race me" : picking ? "I guess yours" : "Card trick";
+				String sub = warmTab ? "Warmer?" : duelTab ? "Race me" : picking ? "I guess yours" : "Card trick";
 				g.drawString(sub, centerX - g.getFontMetrics().stringWidth(sub) / 2, tab.y + 35);
 			} else if (!open) {
 				paintLock(g, centerX, tab.y + 31);
@@ -733,6 +935,11 @@ public final class Board extends JPanel {
 				g.setColor(par ? DIM : WARN.darker().darker());
 				g.drawOval(dotX, y, size, size);
 			}
+			if (challenge != null && i == challenge.guesses().size() - 1) {
+				// The friend's count: find it by this dot to tie, before it to win.
+				g.setColor(GOLD);
+				g.drawOval(dotX - 3, y - 3, size + 6, size + 6);
+			}
 		}
 	}
 
@@ -752,7 +959,16 @@ public final class Board extends JPanel {
 		int left = xOn(line, shownLow - 1, 0, max);
 		int right = Math.max(left + 3, xOn(line, shownHigh, 0, max));
 		boolean caught = isPicking() && reader.isCaught();
-		if (!caught) {
+		if (isPicking() && reader.allowsLie() && !isOver()) {
+			// Not one stretch: numbers drop out only on their second broken answer.
+			for (int n = 1; n <= max; n++) {
+				if (reader.isPossible(n)) {
+					int x0 = xOn(line, n - 1, 0, max);
+					g.setColor(reader.broken(n) == 0 ? POSSIBLE : ONE_LIE);
+					g.fillRect(x0, line.y, Math.max(1, xOn(line, n, 0, max) - x0), line.height);
+				}
+			}
+		} else if (!caught) {
 			g.setColor(isOver() ? RIGHT : POSSIBLE);
 			g.fillRoundRect(left, line.y, right - left, line.height, 6, 6);
 		}
@@ -780,6 +996,109 @@ public final class Board extends JPanel {
 			g.setColor(POSSIBLE_DARK);
 			g.drawLine(left, line.y + line.height + 1, zoom.x, zoom.y - 2);
 			g.drawLine(right, line.y + line.height + 1, zoom.x + zoom.width, zoom.y - 2);
+		}
+	}
+
+	/**
+	 * After the game, in place of the number lines: how many numbers were left after each guess (on a log scale, so
+	 * every halving is the same step down), yours beside the halving search's for the same number.
+	 */
+	private void paintHindsight(Graphics2D g) {
+		int number = game.number();
+		List<Integer> halving = Hindsight.halving(level, number);
+		List<Long> yours = Hindsight.left(level, number, game.guesses());
+		List<Long> theirs = Hindsight.left(level, number, halving);
+		List<Hindsight.Read> reads = Hindsight.reads(level, number, game.guesses());
+		List<Long> friend = challenge != null ? Hindsight.left(level, number, challenge.guesses()) : null;
+		Rectangle box = new Rectangle(MARGIN, 134, getWidth() - 2 * MARGIN, 120);
+		g.setColor(CARD);
+		g.fillRoundRect(box.x, box.y, box.width, box.height, 10, 10);
+		Rectangle plot = new Rectangle(box.x + 62, box.y + 46, box.width - 84, box.height - 58);
+		int steps = Math.max(Math.max(yours.size(), theirs.size()), friend != null ? friend.size() : 0) - 1;
+		g.setFont(new Font("SansSerif", Font.BOLD, 13));
+		g.setColor(TEXT);
+		g.drawString(hindsightSummary(halving.size()), box.x + 12, box.y + 20);
+		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+		g.setColor(SOFT);
+		int[] counts = new int[3];
+		for (Hindsight.Read read : reads) {
+			counts[read.ordinal()]++;
+		}
+		g.drawString(counts[0] + " halved, " + counts[1] + " lucky, " + counts[2] + " costly. Steep drops are lucky, shallow ones cost guesses.",
+				box.x + 12, box.y + 36);
+		g.drawString(Level.commas(level.max()), plot.x - 8 - g.getFontMetrics().stringWidth(Level.commas(level.max())), plot.y + 4);
+		g.drawString("found", plot.x - 8 - g.getFontMetrics().stringWidth("found"), plot.y + plot.height + 4);
+		g.setColor(RULED_OUT);
+		g.drawLine(plot.x, plot.y + plot.height, plot.x + plot.width, plot.y + plot.height);
+		g.setStroke(new BasicStroke(2f));
+		paintPath(g, theirs, plot, steps, DIM);
+		if (friend != null) {
+			paintPath(g, friend, plot, steps, GOLD);
+		}
+		g.setStroke(new BasicStroke(3f));
+		paintPath(g, yours, plot, steps, POSSIBLE);
+		g.setStroke(new BasicStroke(1f));
+		for (int i = 0; i <= steps; i++) {
+			int x = plot.x + plot.width * i / steps;
+			if (i < theirs.size()) {
+				g.setColor(DIM);
+				g.fillOval(x - 3, yOn(plot, theirs.get(i)) - 3, 7, 7);
+			}
+			if (friend != null && i < friend.size()) {
+				g.setColor(GOLD);
+				g.drawOval(x - 4, yOn(plot, friend.get(i)) - 4, 8, 8);
+			}
+			if (i < yours.size()) {
+				boolean last = i == yours.size() - 1;
+				g.setColor(i == 0 ? POSSIBLE : last && !game.isFound() ? HIGH : readColor(reads.get(i - 1)));
+				g.fillOval(x - 5, yOn(plot, yours.get(i)) - 5, 11, 11);
+			}
+		}
+		// The key, top right.
+		int keyX = box.x + box.width - 150, keyY = box.y + 16;
+		g.setColor(POSSIBLE);
+		g.fillRoundRect(keyX, keyY - 4, 18, 4, 3, 3);
+		g.setColor(SOFT);
+		g.drawString("You", keyX + 24, keyY);
+		g.setColor(DIM);
+		g.fillRoundRect(keyX + 56, keyY - 4, 18, 4, 3, 3);
+		g.setColor(SOFT);
+		g.drawString("Halving", keyX + 80, keyY);
+		if (friend != null) {
+			g.setColor(GOLD);
+			g.fillRoundRect(keyX, keyY + 12, 18, 4, 3, 3);
+			g.setColor(SOFT);
+			g.drawString("Friend", keyX + 24, keyY + 16);
+		}
+	}
+
+	/** The line under the game: yours against always guessing the middle. */
+	private String hindsightSummary(int halving) {
+		int yours = game.getGuesses();
+		String number = Level.commas(game.number());
+		String takes = "Halving finds " + number + " in " + guesses(halving);
+		if (!game.isFound()) {
+			return takes + ".";
+		}
+		if (yours < halving) {
+			return "Luck saved you " + guesses(halving - yours) + ". " + takes + ".";
+		}
+		if (yours == halving) {
+			return "Even with halving: it finds " + number + " in " + guesses(halving) + " too.";
+		}
+		return takes + ": " + (yours - halving) + " fewer than you.";
+	}
+
+	/** {@code left} numbers on a log scale: the whole range at the top, the number found at the bottom. */
+	private int yOn(Rectangle plot, long left) {
+		double scale = Math.log(left + 1) / Math.log(level.max() + 1.0);
+		return (int) Math.round(plot.y + plot.height * (1 - scale));
+	}
+
+	private void paintPath(Graphics2D g, List<Long> left, Rectangle plot, int steps, Color color) {
+		g.setColor(color);
+		for (int i = 1; i < left.size(); i++) {
+			g.drawLine(plot.x + plot.width * (i - 1) / steps, yOn(plot, left.get(i - 1)), plot.x + plot.width * i / steps, yOn(plot, left.get(i)));
 		}
 	}
 
@@ -850,6 +1169,9 @@ public final class Board extends JPanel {
 		if (isPicking() && number == reader.guess()) {
 			return SELECTED;
 		}
+		if (isPicking() && reader.allowsLie()) {
+			return !reader.isPossible(number) ? RULED_OUT : reader.broken(number) == 0 ? POSSIBLE_DARK : ONE_LIE_DARK;
+		}
 		return POSSIBLE_DARK;
 	}
 
@@ -884,8 +1206,11 @@ public final class Board extends JPanel {
 		if (!isPicking()) {
 			return guess < game.number() ? LOW : guess > game.number() ? HIGH : RIGHT;
 		}
-		if (index + 1 < guesses.size()) {
-			return guesses.get(index + 1) > guess ? LOW : HIGH;
+		if (index == reader.lie()) {
+			return ONE_LIE;
+		}
+		if (index < reader.answers().size()) {
+			return reader.answers().get(index) > 0 ? LOW : HIGH;
 		}
 		return reader.isFound() ? RIGHT : reader.isCaught() ? WARN : GOLD;
 	}
@@ -904,6 +1229,7 @@ public final class Board extends JPanel {
 				}
 			}
 		}
+		List<Hindsight.Read> reads = isPicking() ? null : Hindsight.reads(level, game.number(), guesses);
 		for (int i = 0; i < guesses.size(); i++) {
 			String label = Level.commas(guesses.get(i));
 			int width = metrics.stringWidth(label) + 26;
@@ -921,12 +1247,19 @@ public final class Board extends JPanel {
 			g.drawRoundRect(x, y, width - 1, height - 1, 10, 10);
 			g.drawString(label, x + 8, y + 16);
 			int arrowX = x + width - 11;
-			if (color == LOW) {
+			// The lie, in its own colour, still points the way it was told.
+			boolean up = color == LOW || color == ONE_LIE && reader.answers().get(i) > 0;
+			if (up) {
 				g.fillPolygon(new int[] { arrowX - 4, arrowX + 4, arrowX }, new int[] { y + 14, y + 14, y + 8 }, 3);
-			} else if (color == HIGH) {
+			} else if (color == HIGH || color == ONE_LIE) {
 				g.fillPolygon(new int[] { arrowX - 4, arrowX + 4, arrowX }, new int[] { y + 8, y + 8, y + 14 }, 3);
 			} else {
 				g.fillOval(arrowX - 3, y + 8, 7, 7);
+			}
+			if (reads != null) {
+				// How the guess narrowed it: teal halved, gold lucky, orange costly.
+				g.setColor(readColor(reads.get(i)));
+				g.fillRoundRect(x + 6, y + height + 1, width - 12, 3, 3, 3);
 			}
 			x += width + 6;
 		}

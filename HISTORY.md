@@ -63,6 +63,41 @@ The 100 attempts are pull requests #10 to #78 (attempts 1 to 69, one at a time) 
 
 These are the usage numbers Claude Code recorded for the session, not a bill: cache reads cost far less than fresh input, and the completion notices' own per-agent token figure (which counts differently) is not used here.
 
+## The continued run (#97 to #134)
+
+After [#91](https://github.com/Nate314/old-java-applications/pull/91) carried the chain to master, [#92](https://github.com/Nate314/old-java-applications/pull/92) moved the site to React and TypeScript, [#93](https://github.com/Nate314/old-java-applications/pull/93) and [#95](https://github.com/Nate314/old-java-applications/pull/95) added Docker and `run.sh`, and [#96](https://github.com/Nate314/old-java-applications/pull/96) wrote the "Continuing the chain" section of [`prompt.md`](prompt.md), the chain was asked on November 14, 2026 (local time) for 150 more attempts, numbered 101 to 250. They ran in 38 rounds, rounds 12 to 49, with one pull request per round: [#97](https://github.com/Nate314/old-java-applications/pull/97) (round 12, based on master) to [#134](https://github.com/Nate314/old-java-applications/pull/134) (round 49), each based on the round before. A round had four builders at once, each committing to a local branch in its own worktree, and an integrator that merged the four branches in the main checkout, ran the type check, the self-checks and the full build, checked every feature in Chrome and opened the round's pull request. The last round had two builders, for attempts 249 and 250. The run paused after round 12 for review, then went on unattended.
+
+Each round's builders had a lane:
+
+- **Lane A**: one game or toy app.
+- **Lane B**: one tool or music app.
+- **Lane C**: the site itself, its runtime and the AWT/Swing shim, never an app's sources.
+- **Lane D**: the app with the fewest attempts so far. From round 14 on, at the user's request, Lane D in every even round was instead a behavior-preserving refactor of the web app's own code, merged first so the round's features were fitted onto the cleaned code.
+
+The shared brief gained rules along the way, several after something went wrong: no test may write the system clipboard (round 28 overwrote it from a desktop test), every app's sound is muted in tests (round 39 played a song aloud), `rm -rf` is never run on a relative or computed path (two builders' commands nearly deleted folders outside the scratch folder), each builder serves its own worktree's build (two served the main checkout's), headless Chrome profiles stay in the scratch folder (round 46 left one in `%TEMP%`), no screen is modeled on a commercial game or product, and commit subjects are written for visitors, since the site shows them in What's new, with refactors starting `Refactor:` and docs-only changes `Docs:` or `README:` so What's new folds them into Behind the scenes.
+
+Roughly, the work fell into four groups:
+
+1. **The apps, deeper** (Lanes A, B and D): for example the on-screen Windows key (#97), ScreenSaver's Maze saver (#98), a guitar neck in MusicTheoryExpert's chord finder (#100), exact mine odds in Minesweeper (#102, counted on every board from #130), My cube for RubiksCube2D (#104), Westminster chimes and an alarm hand for the Clock (#104, #108), TankGame's battlefield builder (#110), sheet music in MusicTheoryExpert (#124) and Ultimate Tic-Tac-Toe showing where each move sends you (#134).
+2. **The site** (Lane C): a head script cut from about 200 KB to about 7 KB (#97), Slow-mo (#101), high contrast (#103), WebP thumbnails that took a phone's home page load from about 11.5 to about 4.5 seconds (#112), passport stamps (#118), an exit screen recap (#119), Then and Now side by side (#120), What's new as release notes (#123), calmer app pages (#127) and Try again when an app fails to download (#130).
+3. **The shim** (Lane C): saves merged per file across open pages (#107), a reduced-motion setting the apps can read (#108), adopted by TankGame, Clock, FlappyBird, DinoGame and ScreenSaver, and memory fixes that free closed windows and removed layers (#131, #133), with NathaNOS windows kept under its taskbar (#134).
+4. **Refactors** (Lane D, the 18 even rounds from 14 to 48): one script loader (#99), one `fetchOk` (#101), one storage helper (#105), one `openPanel` for six panels (#109), and the home page's tour, Take it with you and Passport tabs moved into their own files (#119, #127, #131), each checked to leave the built site working as before.
+
+### The continued run in numbers
+
+A final pull request on top of #134 adds this section and the story page's chapter for it.
+
+![Timeline of the continued run: 38 rounds of four builders (two in the last) and an integrator, with the output tokens of each pull request](web/public/continued-timeline.svg)
+
+- **Model**: every agent, and the orchestrator session that started them and read their reports, ran on Claude Opus 5.5 (model id `claude-opus-5-5`) in Claude Code.
+- **Agents**: 188 finished agents: 150 builders (attempts 101 to 250) and 38 round integrators (rounds 12 to 49). The agent making this final pull request is not counted.
+- **Tokens of the 188 agents**, summed once per model response in their transcripts: 6,578,546 output tokens; 24,966 input tokens not served from the prompt cache; 37,969,154 tokens written to the prompt cache; 1,291,612,928 tokens read from the prompt cache. That is 1,336,185,594 in all.
+- **The orchestrator's own tokens**, counted the same way from its session (from the request at 04:48 UTC on November 15 to 03:05 UTC on November 16, before the final pull request), are not in the numbers above: 366,007 output tokens; 1,232 uncached input tokens; 1,018,242 written to and 193,275,331 read from the prompt cache; 194,660,812 in all. With them the whole run comes to 6,944,553 output tokens and 1,530,846,406 tokens in all.
+- **Tool calls**: 16,016 by the 188 agents and 297 by the orchestrator, counted from the transcripts.
+- **Time**: the run went from the first builder's start on November 15, 2026 at 04:53 UTC to the last integrator's finish on November 16 at 03:04 UTC, about 22 hours. The time with no agent running, the orchestrator's bookkeeping between rounds, adds up to 59 minutes, with no gap over 10 minutes. The agents' own working time adds up to about 43 hours.
+
+As for the first run, these are the usage numbers Claude Code recorded, not a bill.
+
 ## Original art
 
 Some of the pictures the apps loaded were not their own. FlappyBird's bird, pipes, sky and ground were the original Flappy Bird game's art, and BibleDownloader's icon was the YouVersion Bible App's icon. NathaNOS's desktop icons included Chrome's dinosaur (for DinoGame), a Windows Minesweeper mine and an unused Windows logo; its mouse pointer was a pointing hand from an icon set; and its other icons (Clock, NumberGuess, StockChecker, SynthesizerKeyboard, UltimateTicTacToe, plus unused calculator, converter and ping pong pictures) were clip art of unknown origin. Dino Game's pixel dinosaur and bird, drawn in its code, were modeled closely on Chrome's.

@@ -2,6 +2,7 @@ package tankgame;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -26,7 +27,9 @@ public class Battle
         /** A tank was destroyed; the result is shown before the next round. */
         ROUND_OVER,
         /** Someone won three rounds; a fire key starts the next match. */
-        MATCH_OVER
+        MATCH_OVER,
+        /** The player lays walls on the grid for a battlefield of their own (B); a fire key fights on it. */
+        BUILD
     }
 
     public static final int  ROUNDS_TO_WIN      = 3;
@@ -60,12 +63,23 @@ public class Battle
     /** Marks this tick's blasts left on the ground: x, y and radius. */
     private final List<double[]> scorches       = new ArrayList<>();
     private static final Color CHIPS            = new Color(170, 165, 155);
+    /** How far the field shakes, in px: set by hits and blasts, dying away each tick. */
+    private double           shake;
+    /** Counts the tanks destroyed so far, so the panel can play each one's blast in slow motion. */
+    private int              blasts;
     private List<Arena.Layout> layouts          = Arena.LAYOUTS;
+    /** The player's battlefield on the grid; with any wall on it, every round is fought there. */
+    private boolean[][]      field              = new boolean[Arena.GRID][Arena.GRID];
+    private boolean          refused;
+    /** Whether this window is too small for the player's battlefield to leave the tanks a way through. */
+    private boolean          fieldBlocked;
     private Arena            arena              = Arena.EMPTY;
     /** The round, field width and height the arena was placed for, so it is placed again when one changes. */
     private int              arenaRound         = -1;
     private int              arenaWidth;
     private int              arenaHeight;
+    /** The battle's sounds (V turns them off); silent until the window gives it the synthesizer's. */
+    private Sounds           sounds             = Sounds.silent();
     private Phase            phase              = Phase.TITLE;
     private int              phaseTicks;
     private boolean          vsComputer;
@@ -134,12 +148,111 @@ public class Battle
         arenaRound = -1;
     }
 
+    /** The player's battlefield, as read from the record (see {@link Arena#cells}). */
+    public void setField(boolean[][] cells)
+    {
+        field = cells;
+        useField();
+    }
+
+    /** Rounds are fought on the player's battlefield if it has any wall, else on the four layouts in turn. */
+    private void useField()
+    {
+        setLayouts(hasField() || phase == Phase.BUILD ? Collections.singletonList(Arena.custom(field)) : Arena.LAYOUTS);
+    }
+
+    public boolean hasField()
+    {
+        for (boolean[] row : field)
+            for (boolean wall : row)
+                if (wall) return true;
+        return false;
+    }
+
+    /** B: from the title or match-over screen, opens the builder with both tanks on their starting spots; again, back. */
+    public void toggleBuild()
+    {
+        if (phase == Phase.BUILD) enter(Phase.TITLE);
+        else if (phase == Phase.TITLE || phase == Phase.MATCH_OVER)
+        {
+            red.reset();
+            green.reset();
+            shells.clear();
+            sparks.clear();
+            supply = null;
+            round = 0;
+            refused = false;
+            enter(Phase.BUILD);
+        }
+        useField();
+    }
+
+    /** Leaves the builder and starts a match (on the battlefield just built, if it has any wall). */
+    public void fightHere(boolean againstComputer)
+    {
+        if (phase != Phase.BUILD) return;
+        toggleBuild();
+        startMatch(againstComputer);
+    }
+
+    /** Whether a cell of the grid holds a wall. */
+    public boolean cell(int col, int row)
+    {
+        return field[row][col];
+    }
+
+    /**
+     * Lays or lifts a wall in a cell while building, saved at once. Cells on or beside a tank stay empty, and so does
+     * a cell whose wall would leave the tanks no way to reach each other (see {@link #refused}).
+     */
+    public void setCell(int col, int row, boolean wall, int width, int height)
+    {
+        if (phase != Phase.BUILD || col < 0 || row < 0 || col >= Arena.GRID || row >= Arena.GRID
+                        || field[row][col] == wall || wall && !Arena.cellFree(col, row, width, height, red, green)) return;
+        field[row][col] = wall;
+        if (wall && !Arena.build(Arena.custom(field), width, height, red, green).connected(width, height, red, green))
+        {
+            field[row][col] = false;
+            refused = true;
+        }
+        else saveField();
+    }
+
+    /** A new press in the builder: forgets the last refusal, which otherwise shows for the rest of the stroke. */
+    public void newStroke()
+    {
+        refused = false;
+    }
+
+    /** Whether the last wall laid was left out because it would shut the tanks apart (a match could never end). */
+    public boolean refused()
+    {
+        return refused;
+    }
+
+    /** Lifts every wall of the player's battlefield, so rounds go back to the four layouts. */
+    public void clearField()
+    {
+        field = new boolean[Arena.GRID][Arena.GRID];
+        refused = false;
+        saveField();
+    }
+
+    private void saveField()
+    {
+        useField();
+        if (record != null) record.setField(hasField() ? Arena.text(field) : "");
+    }
+
     /** Places the round's battlefield; the title shows the first round's. */
     private void placeArena(int width, int height)
     {
         int r = Math.max(round, 1);
         if (r == arenaRound && width == arenaWidth && height == arenaHeight) return;
         arena = Arena.build(layouts.get((r - 1) % layouts.size()), width, height, red, green);
+        // A battlefield built in a wider window can shut the tanks apart in a narrower one: then fight on the layouts.
+        fieldBlocked = phase != Phase.BUILD && hasField() && !arena.connected(width, height, red, green);
+        if (fieldBlocked) arena = Arena.build(Arena.LAYOUTS.get((r - 1) % Arena.LAYOUTS.size()), width, height, red, green);
         arenaRound = r;
         arenaWidth = width;
         arenaHeight = height;
@@ -148,6 +261,7 @@ public class Battle
     public void tick(int width, int height)
     {
         scorches.clear();
+        shake = shake < 0.3 ? 0 : shake * 0.8;
         placeArena(width, height);
         sparks.removeIf(spark -> !spark.move());
         red.fadeFlash();
@@ -169,11 +283,20 @@ public class Battle
                 if (redFire || watching && phaseTicks >= WATCH_START_TICKS) startMatch(true);
                 else if (greenFire) startMatch(false);
                 break;
+            case BUILD:
+                boolean redGo = red.controls().fire();
+                boolean greenGo = greenKeys.fire();
+                if (redGo || greenGo) fightHere(redGo);
+                break;
             case ROUND_START:
                 // Presses while waiting are dropped, so nobody fires the instant the round starts.
                 red.controls().fire();
                 green.controls().fire();
-                if (phaseTicks >= ROUND_START_TICKS) enter(Phase.FIGHT);
+                if (phaseTicks >= ROUND_START_TICKS)
+                {
+                    enter(Phase.FIGHT);
+                    sounds.fight();
+                }
                 break;
             case FIGHT:
                 fight(width, height);
@@ -183,6 +306,13 @@ public class Battle
                 if (phaseTicks >= ROUND_OVER_TICKS) finishRound();
                 break;
         }
+        boolean fighting = phase == Phase.FIGHT;
+        sounds.engines(fighting && moving(red), red.turboTicks() > 0, fighting && moving(green), green.turboTicks() > 0);
+    }
+
+    private static boolean moving(Tank tank)
+    {
+        return tank.velocityX() != 0 || tank.velocityY() != 0;
     }
 
     private void fight(int width, int height)
@@ -211,10 +341,11 @@ public class Battle
         if (shells.size() > fired)
         {
             Shell shell = shells.get(fired);
+            sounds.fire();
             Spark.burst(sparks, shell.x(), shell.y(), 8, 2.5, new Color(255, 160, 60));
         }
         // Turbo: a trail of yellow sparks from the back of a moving tank.
-        if (tank.turboTicks() > 0 && (tank.velocityX() != 0 || tank.velocityY() != 0))
+        if (tank.turboTicks() > 0 && moving(tank))
         {
             double heading = Math.toRadians(tank.rotation());
             Spark.burst(sparks, tank.x() - Math.sin(heading) * Tank.SIZE, tank.y() + Math.cos(heading) * Tank.SIZE, 1,
@@ -231,11 +362,14 @@ public class Battle
             if (++supplyClock >= nextDrop) supply = drop(width, height);
             return;
         }
+        boolean falling = !supply.landed();
         supply.tick();
+        if (falling && supply.landed()) sounds.landed();
         for (Tank tank : new Tank[] { red, green })
         {
             if (!supply.takenBy(tank)) continue;
             tank.give(supply.power());
+            sounds.take();
             Spark.burst(sparks, supply.x(), supply.y(), 24, 3.5, supply.power().color);
             noticePower = supply.power();
             noticeTank = tank;
@@ -249,7 +383,10 @@ public class Battle
     private boolean shootCrate(Shell shell)
     {
         if (supply == null || !supply.hitBy(shell)) return false;
+        sounds.crateShot();
         Spark.burst(sparks, supply.x(), supply.y(), 20, 3.5, new Color(170, 120, 66));
+        Spark.blast(sparks, supply.x(), supply.y(), 40);
+        shake(4);
         scorches.add(new double[] { supply.x(), supply.y(), 14 });
         crateGone();
         return true;
@@ -287,11 +424,18 @@ public class Battle
     private boolean fly(Shell shell, int width, int height)
     {
         boolean flying = shell.move(width, height, arena);
-        if (shell.bounced()) Spark.burst(sparks, shell.x(), shell.y(), 5, 2, CHIPS);
+        if (shell.bounced())
+        {
+            Spark.burst(sparks, shell.x(), shell.y(), 5, 2, CHIPS);
+            sounds.ricochet();
+        }
         if (shell.burst())
         {
+            sounds.burst();
             Spark.burst(sparks, shell.x(), shell.y(), 14, 3, CHIPS);
+            Spark.blast(sparks, shell.x(), shell.y(), 22);
             scorches.add(new double[] { shell.x(), shell.y(), 9 });
+            shake(2);
         }
         return flying;
     }
@@ -305,6 +449,12 @@ public class Battle
         boolean popped = shielded && !tank.shielded();
         Spark.burst(sparks, shell.x(), shell.y(), popped ? 22 : 12, 4,
                         damaged ? tank.color() : popped ? Supply.Power.SHIELD.color : CHIPS);
+        if (damaged) Spark.blast(sparks, shell.x(), shell.y(), 34);
+        // The last hit's sound is the destroyed tank's boom (explodeIfDead).
+        if (damaged && tank.isAlive()) sounds.hit();
+        else if (popped) sounds.shieldPop();
+        else if (!damaged) sounds.ricochet();
+        shake(damaged ? 7 : 3);
         return true;
     }
 
@@ -312,7 +462,29 @@ public class Battle
     {
         if (tank.isAlive()) return;
         Spark.burst(sparks, tank.x(), tank.y(), 70, 9, tank.color());
+        Spark.blast(sparks, tank.x(), tank.y(), 150);
+        Spark.scraps(sparks, tank.x(), tank.y(), 14, tank.color());
+        shake(12);
+        sounds.destroyed();
+        blasts++;
         scorches.add(new double[] { tank.x(), tank.y(), 62 });
+    }
+
+    private void shake(double px)
+    {
+        shake = Math.max(shake, px);
+    }
+
+    /** How far the field shakes this tick, in px. */
+    public double shake()
+    {
+        return shake;
+    }
+
+    /** How many tanks have been destroyed since the game started. */
+    public int blasts()
+    {
+        return blasts;
     }
 
     /** A damaged tank smokes, more with each hit, and a wreck smokes most. */
@@ -331,6 +503,7 @@ public class Battle
         }
         winner = redWins > greenWins ? red : green;
         if (vsComputer && !watchedMatch && record != null) record.add(winner == red);
+        sounds.matchOver(vsComputer && !watching && winner != red);
         enter(Phase.MATCH_OVER);
     }
 
@@ -363,6 +536,24 @@ public class Battle
     {
         setSupplies(!supplies);
         if (record != null) record.setSupplies(supplies);
+    }
+
+    /** The sounds the battle plays (the window's on the synthesizer, a self-check's silent ones). */
+    void setSounds(Sounds sounds)
+    {
+        this.sounds = sounds;
+    }
+
+    /** V: the sound on or off, saved with the record. */
+    public void toggleSound()
+    {
+        sounds.setOn(!sounds.isOn());
+        if (record != null) record.setSound(sounds.isOn());
+    }
+
+    public boolean sound()
+    {
+        return sounds.isOn();
     }
 
     public boolean supplies()
@@ -456,6 +647,12 @@ public class Battle
     public List<Spark> sparks()
     {
         return sparks;
+    }
+
+    /** Whether the player's battlefield was set aside for this round because it shuts the tanks apart at this size. */
+    public boolean fieldBlocked()
+    {
+        return fieldBlocked;
     }
 
     /** The battlefield of this round (or of the first round, on the title). */

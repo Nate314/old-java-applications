@@ -46,7 +46,13 @@ public final class BattleCheck
         powersFromCrates();
         cratesFallAndAreTaken();
         suppliesSetting();
+        soundSetting();
         computerAgainstComputerWithSupplies();
+        pointerDrivesAndFires();
+        buildYourOwnBattlefield();
+        computerFightsOnABuiltBattlefield();
+        narrowWindowSetsABlockingFieldAside();
+        sightShowsWhereTheShellGoes();
         System.out.println("BattleCheck: all checks passed");
     }
 
@@ -206,6 +212,8 @@ public final class BattleCheck
         Tank green = new Tank("Green", Color.GREEN, greenKeys, 380, 250, 270);
         Battle battle = new Battle(red, green, new ComputerControls(new Random(1)), Record.load(file));
         battle.setLayouts(Arena.OPEN);           // the rules on an open field; walls are checked on their own
+        Sounds sounds = Sounds.silent();
+        battle.setSounds(sounds);
         battle.tick(W, H);
         assert battle.phase() == Battle.Phase.TITLE;
         greenKeys.fire = true;                   // green's fire picks two players
@@ -223,7 +231,18 @@ public final class BattleCheck
                 battle.tick(W, H);
             }
             assert battle.winner() == red && battle.redWins() == round && green.health() == 0;
+            if (round == 1)
+            {
+                // FIGHT!'s horn, then the cannon, two hits and the boom of the third; nothing else on an open field.
+                List<String> heard = new ArrayList<>(sounds.heard());
+                assert heard.get(0).equals("fight") && heard.contains("fire") : heard;
+                heard.removeIf(name -> name.equals("fire"));
+                assert heard.equals(java.util.Arrays.asList("fight", "hit", "hit", "destroyed")) : heard;
+            }
+            // The destroying hit is one blast (the panel plays it in slow motion) and shakes the field hard.
+            assert battle.blasts() == round && battle.shake() >= 10 : battle.blasts() + " " + battle.shake();
             while (battle.phase() == Battle.Phase.ROUND_OVER) battle.tick(W, H);
+            assert battle.shake() == 0 : "the shake dies down";
             if (round < Battle.ROUNDS_TO_WIN)
             {
                 assert battle.phase() == Battle.Phase.ROUND_START && battle.round() == round + 1;
@@ -233,6 +252,7 @@ public final class BattleCheck
         }
         assert battle.phase() == Battle.Phase.MATCH_OVER && battle.winner() == red;
         assert Record.load(file).wins() + Record.load(file).losses() == 0;   // two-player matches are not recorded
+        assert last(sounds).equals("won") : "a two-player match ends on the fanfare";
         redKeys.fire = true;                     // too early: the match-over screen holds for a moment
         battle.tick(W, H);
         assert battle.phase() == Battle.Phase.MATCH_OVER;
@@ -246,6 +266,7 @@ public final class BattleCheck
         while (battle.phase() != Battle.Phase.MATCH_OVER && ticks++ < 60 * 60 * 10) battle.tick(W, H);
         assert battle.phase() == Battle.Phase.MATCH_OVER : "the computer finished a match against a red tank that sits still";
         assert battle.winner() == green;
+        assert last(sounds).equals("lost") : "losing to the computer ends on the falling line";
         Record saved = Record.load(file);
         assert saved.wins() == 0 && saved.losses() == 1 && saved.toString().equals("0 wins, 1 loss") : saved;
         file.delete();
@@ -439,6 +460,40 @@ public final class BattleCheck
     }
 
     /** X: supply drops are on by default, and turning them off is saved beside the record without losing it. */
+    private static String last(Sounds sounds)
+    {
+        return sounds.heard().get(sounds.heard().size() - 1);
+    }
+
+    /** V: the sound is on by default, off is saved beside the record, and while off nothing is played. */
+    private static void soundSetting() throws Exception
+    {
+        File file = File.createTempFile("tankgame-sound", ".txt");
+        file.delete();
+        assert Record.load(file).sound() : "the sound should start on";
+        Record record = Record.load(file);
+        record.add(true);
+        Script redKeys = new Script();
+        Battle battle = new Battle(tank(redKeys, 100, 250, 90), tank(new Script(), 380, 250, 270),
+                        new ComputerControls(new Random(1)), record);
+        Sounds sounds = Sounds.silent();
+        battle.setSounds(sounds);
+        battle.toggleSound();
+        assert !battle.sound() && !Record.load(file).sound() && Record.load(file).wins() == 1 : "sound=off not saved";
+        String text = new String(java.nio.file.Files.readAllBytes(file.toPath()), "UTF-8");
+        assert text.startsWith("1,0\n") && text.contains("sound=off") : text;
+        redKeys.fire = true;
+        for (int i = 0; i < Battle.ROUND_START_TICKS + 60; i++)
+        {
+            redKeys.fire = true;
+            battle.tick(W, H);
+        }
+        assert battle.phase() == Battle.Phase.FIGHT && sounds.heard().isEmpty() : sounds.heard();
+        battle.toggleSound();
+        assert battle.sound() && Record.load(file).sound() && Record.load(file).wins() == 1;
+        file.delete();
+    }
+
     private static void suppliesSetting() throws Exception
     {
         File file = File.createTempFile("tankgame-supplies", ".txt");
@@ -489,5 +544,201 @@ public final class BattleCheck
                             + " in " + ticks / 60 + " s");
         }
         assert redWins > 0 && redWins < 6 : "one side won every match with crates: " + redWins;
+    }
+
+    /** The mouse or a finger: holding drives to the pointer, a tap turns and fires there, a tap on the title starts. */
+    private static void pointerDrivesAndFires()
+    {
+        PointerControls pointer = new PointerControls(new Script());
+        Tank red = new Tank("Red", Color.RED, pointer, 100, 250, 90);
+        pointer.drive(red);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
+        List<Shell> shells = new ArrayList<>();
+        // Hold at a spot up and to the right: it turns, drives there and stops, without firing.
+        pointer.press(300, 100);
+        for (int i = 0; i < 120; i++) red.update(W, H, shells, green);
+        assert Math.hypot(red.x() - 300, red.y() - 100) <= PointerControls.ARRIVED + Tank.SPEED : red.x() + "," + red.y();
+        assert shells.isEmpty();
+        double x = red.x(), y = red.y();
+        red.update(W, H, shells, green);
+        assert red.x() == x && red.y() == y : "stops at the pointer";
+        pointer.release(300, 100);
+        assert shells.isEmpty() : "a long hold is not a tap";
+        // A tap straight below: it turns to face down (180) without moving, and fires once.
+        pointer.press(red.x(), 400);
+        pointer.release(red.x(), 400);
+        for (int i = 0; i < 60; i++) red.update(W, H, shells, green);
+        assert red.rotation() == 180 : red.rotation();
+        assert red.x() == x && red.y() == y : "a tap does not drive";
+        assert shells.size() == 1 : shells.size();
+        // A tap on the tank fires along the barrel at once.
+        shells.clear();
+        pointer.press(red.x(), red.y());
+        pointer.release(red.x(), red.y());
+        red.update(W, H, shells, green);
+        assert shells.size() == 1 && red.rotation() == 180;
+        // On the title card a tap starts a match against the computer.
+        Tank red2 = new Tank("Red", Color.RED, pointer, 100, 250, 90);
+        pointer.drive(red2);
+        Battle battle = new Battle(red2, green, new ComputerControls(new Random(3)), null);
+        battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.TITLE;
+        pointer.tapToStart();
+        battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.ROUND_START && battle.vsComputer();
+    }
+
+    /**
+     * B: the builder lays walls on the grid (merging a row's run into one wall) but never beside a tank, saves them with
+     * the record, every round is fought on them, and clearing them brings back the four layouts.
+     */
+    private static void buildYourOwnBattlefield() throws Exception
+    {
+        File file = File.createTempFile("tankgame-field", ".txt");
+        file.delete();
+        Record record = Record.load(file);
+        record.add(true);
+        record.setSupplies(false);
+        Script redKeys = new Script();
+        Tank red = new Tank("Red", Color.RED, redKeys, 100, 250, 90);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), W - 120, 250, 270);
+        Battle battle = new Battle(red, green, new ComputerControls(new Random(1)), record);
+        battle.setField(Arena.cells(record.field()));
+        assert !battle.hasField();
+        battle.tick(W, H);
+        assert battle.arena().name().equals("Stepping Stones") : battle.arena().name();
+        battle.setCell(5, 2, true, W, H);
+        assert !battle.cell(5, 2) : "a wall was laid outside the builder";
+        battle.toggleBuild();
+        assert battle.phase() == Battle.Phase.BUILD;
+        battle.tick(W, H);
+        assert battle.arena().walls().isEmpty() : "the builder should start on an empty field";
+        battle.setCell(2, 6, true, W, H);       // under red's starting spot
+        assert !battle.cell(2, 6) : "a wall was laid on a tank";
+        assert !Arena.cellFree(2, 6, W, H, red, green) && Arena.cellFree(5, 2, W, H, red, green);
+        battle.setCell(5, 2, true, W, H);
+        battle.setCell(6, 2, true, W, H);
+        battle.setCell(6, 9, true, W, H);
+        battle.tick(W, H);
+        List<Arena.Wall> walls = battle.arena().walls();
+        assert walls.size() == 2 : "a row's run should be one wall: " + walls.size();
+        Arena.Wall run = walls.get(0);
+        assert Math.abs(run.left - 5.0 * W / Arena.GRID) < 1e-9 && Math.abs(run.right - 7.0 * W / Arena.GRID) < 1e-9
+                        && Math.abs(run.top - 2.0 * H / Arena.GRID) < 1e-9 : "the wall is not on its cells";
+        assert battle.arena().blocks(6.0 * W / Arena.GRID, 2.5 * H / Arena.GRID, 1);
+        // Saved with the record and the supplies setting, and read back.
+        Record back = Record.load(file);
+        assert back.wins() == 1 && !back.supplies() : back;
+        boolean[][] cells = Arena.cells(back.field());
+        assert cells[2][5] && cells[2][6] && cells[9][6] && !cells[2][4] : back.field();
+        assert Arena.text(cells).equals(back.field()) && Arena.cells("#x/garbage")[0][0] && !Arena.cells(null)[0][0];
+        // Q fights on it, round after round.
+        redKeys.fire = true;
+        battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.ROUND_START && battle.vsComputer();
+        battle.tick(W, H);
+        assert battle.arena().name().equals("Your Battlefield") && battle.arena().walls().size() == 2;
+        // Clearing the walls brings back the four layouts.
+        battle.clearField();
+        assert !battle.hasField() && Record.load(file).field().isEmpty();
+        Battle fresh = new Battle(red, green, new ComputerControls(new Random(1)), Record.load(file));
+        fresh.setField(Arena.cells(Record.load(file).field()));
+        fresh.tick(W, H);
+        assert fresh.arena().name().equals("Stepping Stones");
+        assert Record.load(file).wins() == 1 && !Record.load(file).supplies() : "clearing lost the record";
+        file.delete();
+    }
+
+    /** Two computers finish a match on a built battlefield: a broken wall down the middle, cell by cell. */
+    private static void computerFightsOnABuiltBattlefield()
+    {
+        ComputerControls left = new ComputerControls(new Random(7));
+        ComputerControls right = new ComputerControls(new Random(8));
+        Tank red = new Tank("Red", Color.RED, left, 100, 250, 90);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), W - 120, 250, 270);
+        Battle battle = new Battle(red, green, right, null);
+        battle.toggleBuild();
+        // A wall right down the middle would shut the tanks apart, so part of it is refused.
+        for (int row = 0; row < Arena.GRID; row++) battle.setCell(Arena.GRID / 2, row, true, W, H);
+        int laid = 0;
+        for (int row = 0; row < Arena.GRID; row++) laid += battle.cell(Arena.GRID / 2, row) ? 1 : 0;
+        assert laid < Arena.GRID : "a wall shut the tanks apart";
+        assert battle.refused();
+        battle.newStroke();
+        battle.setCell(3, 2, true, W, H);
+        assert !battle.refused();
+        battle.tick(W, H);
+        assert battle.arena().connected(W, H, red, green);
+        battle.setCell(8, 9, true, W, H);
+        battle.fightHere(true);
+        int ticks = 0;
+        while (battle.phase() != Battle.Phase.MATCH_OVER && ticks++ < 60 * 60 * 10)
+        {
+            left.plan(red, green, battle.shells(), W, H, battle.arena());
+            battle.tick(W, H);
+        }
+        assert battle.arena().name().equals("Your Battlefield");
+        assert battle.phase() == Battle.Phase.MATCH_OVER : "a match on a built battlefield did not end in 10 minutes";
+        System.out.println("  built battlefield: " + battle.redWins() + "-" + battle.greenWins() + " in " + ticks / 60 + " s");
+    }
+
+    /**
+     * A battlefield built at full width (a gap the tanks fit through) can shut them apart in a phone-wide window: there
+     * the rounds go back to the four layouts, and the battlefield is kept for a wider window.
+     */
+    private static void narrowWindowSetsABlockingFieldAside()
+    {
+        String text = "############/############/############/###.......##/#..........#/#..........#/#.....#....#"
+                        + "/#...####...#/############/############/############/############";
+        Tank red = new Tank("Red", Color.RED, new Script(), 100, 250, 90);
+        Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
+        Battle wide = new Battle(red, green, new ComputerControls(new Random(1)), null);
+        wide.setField(Arena.cells(text));
+        wide.tick(W, H);
+        assert !wide.fieldBlocked() && wide.arena().name().equals("Your Battlefield");
+        int narrow = 384;
+        Tank red2 = new Tank("Red", Color.RED, new Script(), 100, 250, 90);
+        Tank green2 = new Tank("Green", Color.GREEN, new Script(), 400 - 120, 250, 270);
+        Battle small = new Battle(red2, green2, new ComputerControls(new Random(1)), null);
+        small.setField(Arena.cells(text));
+        small.tick(narrow, H);
+        assert small.fieldBlocked() && small.arena().name().equals("Stepping Stones") : small.arena().name();
+        assert small.hasField() : "the battlefield should be kept for a wider window";
+    }
+
+    /** The aiming line follows the shell the battle would fire: straight, off the edge, round a wall, and it tells the truth. */
+    private static void sightShowsWhereTheShellGoes()
+    {
+        Tank green = tank(new Script(), 380, 250, 270);
+        Tank.Sight straight = tank(new Script(), 100, 250, 90).sight(W, H, Arena.EMPTY, green, null);
+        assert straight.target == green && straight.points.size() == 2 : "a straight shot is a line to the target";
+        Tank up = tank(new Script(), 100, 250, 0);
+        Tank.Sight off = up.sight(W, H, Arena.EMPTY, green, null);
+        assert off.target == null && off.points.size() == 3 : "one bounce off the top, then out";
+        assert Math.abs(off.points.get(1)[0] - 100) < 1e-9 && Math.abs(off.points.get(1)[1]) < 1e-9 : "the bounce is on the edge";
+        up.give(Supply.Power.RICOCHET);
+        assert up.sight(W, H, Arena.EMPTY, green, null).points.size() == 5 : "ricochet shells bounce three times";
+        // Round The Bunker: for every heading, the line's verdict is what a real shell does, and some bank shot hits.
+        int banks = 0;
+        for (int rotation = 0; rotation < 360; rotation += 5)
+        {
+            Tank red = tank(new Script(), 100, 230, rotation);
+            Tank target = tank(new Script(), 380, 230, 270);
+            Arena bunker = Arena.build(Arena.LAYOUTS.get(1), W, H, red, target);
+            Tank.Sight sight = red.sight(W, H, bunker, target, null);
+            List<Shell> shells = new ArrayList<>();
+            red.fireTank(shells);
+            Shell shell = shells.get(0);
+            boolean hit = false;
+            while (shell.move(W, H, bunker))
+                if (shell.hits(target))
+                {
+                    hit = true;
+                    break;
+                }
+            assert hit == (sight.target == target) : "the line was wrong at " + rotation + " degrees";
+            if (hit && sight.points.size() > 2) banks++;
+        }
+        assert banks > 0 : "no bank shot round The Bunker";
     }
 }

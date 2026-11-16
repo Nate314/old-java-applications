@@ -26,16 +26,35 @@ public class TJLayeredPane extends TJComponent {
         }
         layers.put(comp, layer);
         // AWT index 0 is the top. Same-layer position 0 means topmost in that layer, -1 means bottom.
-        int first = 0;
-        while (first < getComponentCount() && layerOf(getComponent(first)) > layer) {
-            first++;
-        }
-        int end = first;
-        while (end < getComponentCount() && layerOf(getComponent(end)) == layer) {
-            end++;
-        }
-        int at = index < 0 ? end : Math.min(first + index, end);
+        int[] order = layersWithout(comp);
+        int end = LayerRun.end(order, layer);
+        int at = index < 0 ? end : Math.min(LayerRun.first(order, layer) + index, end);
         super.addImpl(comp, null, at);
+    }
+
+    /** As in Swing, a child moves only within its own layer: a frame brought forward stays under the taskbar and menus. */
+    @Override
+    public void setComponentZOrder(TComponent comp, int index) {
+        super.setComponentZOrder(comp, LayerRun.clamp(layersWithout(comp), layerOf(comp), index));
+    }
+
+    /** The other children's layers, top first. */
+    private int[] layersWithout(TComponent comp) {
+        int[] order = new int[getComponentCount()];
+        int n = 0;
+        for (int i = 0; i < order.length; i++) {
+            if (getComponent(i) != comp) {
+                order[n++] = layerOf(getComponent(i));
+            }
+        }
+        return java.util.Arrays.copyOf(order, n);
+    }
+
+    /** remove(comp) and removeAll() come here too, so a removed component's layer entry no longer keeps it alive. */
+    @Override
+    public void remove(int index) {
+        layers.remove(getComponent(index));
+        super.remove(index);
     }
 
     private int layerOf(TComponent c) {
@@ -47,7 +66,9 @@ public class TJLayeredPane extends TJComponent {
         return layerOf(c);
     }
 
+    /** Like Swing, a child given a new layer goes to the bottom of that layer. */
     public void setLayer(TComponent c, int layer) {
         layers.put(c, layer);
+        setComponentZOrder(c, Integer.MAX_VALUE);
     }
 }

@@ -54,6 +54,19 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
     * with them): Teach me stands the cube yellow side up with it. It never changes what a drag or key does.
     */
    private int[][] basis = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+   /** Mirrors: how far out beyond its side each hidden side is drawn (which sets its perspective), and its size. */
+   private static final double MIRROR_GAP = 1.0;
+   private static final double MIRROR_SCALE = 0.45;
+   private boolean mirrors = true;
+   /** The frame's row of buttons over the top of the view, which mirrors keep below. */
+   private static final int TOP_ROW = 44;
+   /** Each side's mirror on screen (its center), gliding to where it belongs; null while that side is in view. */
+   private final double[][] mirrorAt = new double[6][];
+   /** The edge of the view each side's mirror stands at: -1 left, 1 right (kept while its side faces straight away). */
+   private final int[] mirrorSide = {1, 1, 1, 1, 1, 1};
+   /** The mirrors as last drawn, for clicks: {face, x0, y0, ...}. */
+   final List<int[]> mirrorHits = new ArrayList<>();
+   private boolean mirrorsGliding = false;
    private int marked = -1;
    private int hinted = -1;
    private String hintKey = null;
@@ -155,6 +168,18 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.wake();
    }
 
+   /** Shows or hides the mirrors of the hidden sides. */
+   void setMirrors(boolean on) {
+      this.mirrors = on;
+      java.util.Arrays.fill(this.mirrorAt, null);
+      this.mirrorHits.clear();
+      this.repaint();
+   }
+
+   boolean mirrors() {
+      return this.mirrors;
+   }
+
    /** Turns the view by a step: an arrow key. */
    void orbit(int right, int down) {
       this.spinStart = 0L;
@@ -250,7 +275,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.yaw = this.targetYaw;
          this.pitch = this.targetPitch;
       }
-      if (!busy) {
+      if (!busy && !this.mirrorsGliding) {
          this.timer.stop();
       }
       this.repaint();
@@ -288,6 +313,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private void released() {
       if (this.pressSticker >= 0 && !this.dragged) {
          this.onSelect.accept(CubeGeometry.FACE_COLORS[this.pressSticker / 9], this.pressSticker % 9 + 1);
+      } else if (!this.dragged) {
+         // A click on a mirror turns its side round to the front.
+         for (int[] mirror : this.mirrorHits) {
+            if (inside(mirror, this.pressX, this.pressY)) {
+               this.lookAt(CubeGeometry.NORMAL[mirror[0] * 9]);
+            }
+         }
       }
       this.pressSticker = -1;
    }
@@ -427,6 +459,9 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          g.fillOval(width / 2 - w / 2, (int)(height / 2.0 + size * 2.45) - h / 2, w, h);
       }
 
+      if (this.mirrors) {
+         this.drawMirrors(g);
+      }
       CubeGeometry.Turn turn = this.pending.isEmpty() ? null : this.pending.get(0);
       int axis = turn == null ? 0 : turn.axis;
       double angle = turn == null ? 0 : turn.dir * this.turnAngle;
@@ -552,6 +587,92 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          }
       }
       return out;
+   }
+
+   /**
+    * Mirrors: each side turned away from the viewer is shown again at the left or right edge of the view, smaller, as
+    * a mirror standing beyond that side would show it (so it reads back to front). A side behind and to the right
+    * stands at the right, one underneath at the bottom. Mirrors fade in as their side turns away and glide (behind
+    * the cube) when it swaps edges.
+    */
+   private void drawMirrors(Graphics2D g) {
+      this.mirrorHits.clear();
+      this.mirrorsGliding = false;
+      double width = this.getWidth();
+      double height = this.getHeight();
+      for (int face = 0; face < 6; face++) {
+         int[] n = CubeGeometry.NORMAL[face * 9];
+         double[] v = this.view(new double[]{n[0], n[1], n[2]});
+         if (-v[2] <= 0.05) {
+            this.mirrorAt[face] = null;
+            continue;
+         }
+         int alpha = (int) Math.round(255 * Math.min(1.0, (-v[2] - 0.05) * 4));
+         int k = n[0] != 0 ? 0 : n[1] != 0 ? 1 : 2;
+         int a = (k + 1) % 3;
+         int b = (k + 2) % 3;
+         double[] middle = new double[3];
+         middle[k] = n[k] * (1.5 + MIRROR_GAP);
+         List<int[]> polys = new ArrayList<>();
+         polys.add(this.fillSquare(null, middle, a, b, 1.5 * MIRROR_SCALE + 0.06, 0.12, 0, 0, null));
+         for (int s = face * 9; s < face * 9 + 9; s++) {
+            double[] center = middle.clone();
+            center[a] = CubeGeometry.POS[s][a] * MIRROR_SCALE;
+            center[b] = CubeGeometry.POS[s][b] * MIRROR_SCALE;
+            int[] poly = this.fillSquare(null, center, a, b, STICKER * MIRROR_SCALE, 0.09 * MIRROR_SCALE, 0, 0, null);
+            poly[0] = s;
+            polys.add(poly);
+         }
+         int[] frame = polys.get(0);
+         double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+         for (int i = 1; i < frame.length; i += 2) {
+            minX = Math.min(minX, frame[i]);
+            maxX = Math.max(maxX, frame[i]);
+            minY = Math.min(minY, frame[i + 1]);
+            maxY = Math.max(maxY, frame[i + 1]);
+         }
+         if (v[0] < -0.02 || v[0] > 0.02) {
+            this.mirrorSide[face] = v[0] < 0 ? -1 : 1;
+         }
+         double halfW = (maxX - minX) / 2;
+         double halfH = (maxY - minY) / 2;
+         double up = v[1] / Math.max(1e-6, Math.hypot(v[0], v[1]));
+         double cy = height / 2;
+         // Above the middle the mirrors stay under the row of buttons.
+         double reach = up > 0 ? cy - TOP_ROW - halfH : height - 8 - halfH - cy;
+         double[] target = {width / 2 + this.mirrorSide[face] * (width / 2 - halfW - 10), cy - up * Math.max(0, reach)};
+         double[] at = this.mirrorAt[face];
+         if (at == null) {
+            at = this.mirrorAt[face] = target;
+         } else {
+            at[0] += (target[0] - at[0]) * 0.25;
+            at[1] += (target[1] - at[1]) * 0.25;
+            this.mirrorsGliding |= Math.abs(target[0] - at[0]) + Math.abs(target[1] - at[1]) > 0.5;
+         }
+         int dx = (int) Math.round(at[0] - (minX + maxX) / 2);
+         int dy = (int) Math.round(at[1] - (minY + maxY) / 2);
+         for (int i = 0; i < polys.size(); i++) {
+            int[] poly = polys.get(i);
+            int corners = (poly.length - 1) / 2;
+            int[] xs = new int[corners];
+            int[] ys = new int[corners];
+            for (int c = 0; c < corners; c++) {
+               xs[c] = poly[1 + 2 * c] += dx;
+               ys[c] = poly[2 + 2 * c] += dy;
+            }
+            g.setColor(i == 0 ? withAlpha(BODY, alpha * 3 / 4) : withAlpha(shade(colorOf(this.shown[poly[0]]), 0.92), alpha));
+            g.fillPolygon(xs, ys, corners);
+         }
+         frame[0] = face;
+         this.mirrorHits.add(frame);
+      }
+      if (this.mirrorsGliding && !this.timer.isRunning()) {
+         this.timer.start();
+      }
+   }
+
+   private static Color withAlpha(Color color, int alpha) {
+      return new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha);
    }
 
    /** An arrow across the hinted square, the way its move carries it. */

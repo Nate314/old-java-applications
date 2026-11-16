@@ -10,7 +10,7 @@ import javax.swing.JInternalFrame;
 import javax.swing.JPanel;
 import javax.swing.plaf.basic.BasicInternalFrameUI;
 
-/** The start menu: the NathaNOS logo, every app in assets/, and Shut Down. Opens above the MENU button. */
+/** The start menu: the NathaNOS logo, every app in assets/, Restart and Shut Down. Opens above the MENU button. */
 public class StartMenu extends JInternalFrame {
    private static final Color BACKGROUND = new Color(26, 35, 54);
    private static final int HEADER = 56;
@@ -60,10 +60,12 @@ public class StartMenu extends JInternalFrame {
 
       for (int i = 0; i < launcher.count(); i++) {
          int app = i;
-         FlatButton row = new FlatButton(launcher.icon(i), launcher.name(i), launcher.name(i), null, LauncherWindow.HOVER, null, () -> {
+         FlatButton[] made = new FlatButton[1];
+         FlatButton row = new FlatButton(launcher.icon(i), launcher.name(i), AppIcon.words(launcher.name(i)), null, LauncherWindow.HOVER, null, () -> {
             this.hideMenu();
-            launcher.launch(app);
+            launcher.launch(app, made[0]);
          });
+         made[0] = row;
          row.setBounds(4 + i / rows * column, HEADER + 4 + i % rows * ROW, column, ROW);
          panel.add(row);
       }
@@ -77,8 +79,12 @@ public class StartMenu extends JInternalFrame {
       };
       divider.setBounds(8, height - FOOTER, width - 16, 1);
       panel.add(divider);
-      FlatButton shutDown = new FlatButton(null, null, "Shut Down", null, new Color(160, 40, 50), null, () -> System.exit(0));
-      shutDown.setBounds(4, height - ROW - 4, column, ROW);
+      int half = (width - 8) / 2;
+      FlatButton restart = new FlatButton(null, null, "Restart", null, LauncherWindow.HOVER, null, () -> screen.power.begin(true));
+      restart.setBounds(4, height - ROW - 4, half, ROW);
+      panel.add(restart);
+      FlatButton shutDown = new FlatButton(null, null, "Shut Down", null, new Color(160, 40, 50), null, () -> screen.power.begin(false));
+      shutDown.setBounds(4 + half, height - ROW - 4, half, ROW);
       panel.add(shutDown);
    }
 

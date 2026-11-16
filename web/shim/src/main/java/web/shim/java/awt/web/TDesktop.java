@@ -11,6 +11,7 @@ import org.teavm.jso.JSObject;
 import web.shim.java.awt.TComponent;
 import web.shim.java.awt.TContainer;
 import web.shim.java.awt.TKeyboardFocusManager;
+import web.shim.java.awt.TRobot;
 import web.shim.java.awt.TWindow;
 import web.shim.java.awt.event.TKeyEvent;
 import web.shim.java.awt.event.TMouseEvent;
@@ -19,11 +20,10 @@ import web.shim.javax.swing.TJDesktopPane;
 import web.shim.javax.swing.TJInternalFrame;
 
 /**
- * The page "screen": a full-viewport div holding one box per top-level window. Owns the component registry,
+ * The page "screen": a full-viewport div holding one box per top-level window. Finds the component under a DOM node,
  * window z-order, keyboard focus, title-bar dragging and translation of DOM input into AWT events.
  */
 public final class TDesktop {
-    private static final List<TComponent> registry = new ArrayList<>();
     private static final List<TWindow> windows = new ArrayList<>();
     private static JSObject element;
     private static TWindow active;
@@ -73,14 +73,8 @@ public final class TDesktop {
     private TDesktop() {
     }
 
-    public static int register(TComponent c) {
-        registry.add(c);
-        return registry.size() - 1;
-    }
-
     private static TComponent lookup(JSObject node) {
-        int id = Js.componentIdOf(node);
-        return id >= 0 && id < registry.size() ? registry.get(id) : null;
+        return (TComponent) Js.componentOf(node);
     }
 
     public static JSObject element() {
@@ -120,7 +114,18 @@ public final class TDesktop {
         TWindow shown = w;
         Edt.post(() -> {
             if (shown.isVisible() && shown.focusOwner() == null) {
-                shown.setFocusOwnerQuietly(firstFocusable(shown));
+                // As in Swing, the keyboard starts on the first button or field (Space presses it, typing fills it),
+                // unless the page's focus is elsewhere (another control, or the player on the home page).
+                TComponent first = firstFocusable(shown);
+                if (first != null && Js.pageFocusFree(shown.element())) {
+                    shown.setFocusOwner(first);
+                } else {
+                    shown.setFocusOwnerQuietly(first);
+                }
+            }
+            // No button or field took it (a game's canvas): the window itself holds the page's keyboard focus.
+            if (shown.isVisible() && shown.getFocusableWindowState() && Js.pageFocusFree(shown.element())) {
+                Js.focusWindow(shown.element());
             }
         });
     }
@@ -150,10 +155,15 @@ public final class TDesktop {
 
     public static void activate(TWindow w) {
         active = w;
-        Js.style(w.element(), "z-index", String.valueOf(w.isAlwaysOnTop() ? 1000000 + ++zCounter : ++zCounter));
+        restack(w);
         for (TWindow other : windows) {
             Js.toggleClass(other.element(), "active", other == w);
         }
+    }
+
+    /** Puts w at the front of its band: the always-on-top windows, or the others below them. */
+    public static void restack(TWindow w) {
+        Js.style(w.element(), "z-index", String.valueOf(w.isAlwaysOnTop() ? 1000000 + ++zCounter : ++zCounter));
     }
 
     public static TWindow activeWindow() {
@@ -247,6 +257,7 @@ public final class TDesktop {
             dragMouseX = Js.clientX(e);
             dragMouseY = Js.clientY(e);
             Js.preventDefault(e);
+            Js.takeKeys(e);
             return;
         }
         if (window != null && c.acceptsFocus() && c.isEnabled()) {
@@ -254,6 +265,7 @@ public final class TDesktop {
         }
         if (!Js.targetIsTextInput(e) && !c.acceptsFocus()) {
             Js.preventDefault(e); // keep keyboard focus where AWT has it, and avoid text selection
+            Js.takeKeys(e); // but a press here still brings the keys back from a frame beside (Side by side)
         }
         pressTarget = mouseTarget(c, false);
         post(pressTarget, TMouseEvent.MOUSE_PRESSED, e);
@@ -456,6 +468,10 @@ public final class TDesktop {
     }
 
     private static void onKey(JSObject e, int id) {
+        if (TRobot.takesKey(Keys.toVk(Js.keyCode(e)), id)) {
+            Js.preventDefault(e);
+            return;
+        }
         TWindow w = active;
         if (w == null || !w.isVisible()) {
             return;

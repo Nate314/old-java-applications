@@ -35,7 +35,7 @@ public final class Main {
          Runner then = Runner.then(shell, git, root, root.resolve("out/then"),
             Paths.get(System.getProperty("user.home"), ".oldjava-then"));
          LauncherWindow window = new LauncherWindow(apps, log, Runner.powerShell(shell, root), then, root,
-            System::currentTimeMillis);
+            System::currentTimeMillis, StartMenu.forUser(shell, root));
          List<String> ids = apps.stream().map(a -> a.id).collect(java.util.stream.Collectors.toList());
          CompletableFuture.supplyAsync(() -> History.load(git, ids))
             .thenAccept(h -> SwingUtilities.invokeLater(() -> window.setHistory(h)));

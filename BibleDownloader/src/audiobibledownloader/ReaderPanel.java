@@ -9,10 +9,12 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -30,25 +32,72 @@ import javax.swing.Timer;
 public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private static final long serialVersionUID = 1L;
 
-   private static final Color LEATHER = new Color(0x2f2219);
-   private static final Color LEATHER_LIGHT = new Color(0x3d2c20);
-   private static final Color PAPER = new Color(0xfbf5e6);
-   static final Color PAPER_EDGE = new Color(0xe3d5b5);
-   static final Color INK = new Color(0x2b2118);
-   static final Color RUBRIC = new Color(0x9e2a2b);
-   static final Color MUTED = new Color(0x8a7a66);
-   private static final Color MARK = new Color(0xf6dc7c);
-   static final Color HOVER = new Color(0xefe4c6);
+   // The palette, set by palette(): ink on cream paper by day; by night (D) cream on dark paper, as under a lamp.
+   private static Color LEATHER;
+   private static Color LEATHER_LIGHT;
+   private static Color PAPER;
+   static Color PAPER_EDGE;
+   /** The darker stripes of the page edges under the book. */
+   private static Color EDGE_SHADE;
+   /** The shadow toward the fold between two pages. */
+   private static Color SPINE;
+   static Color INK;
+   static Color RUBRIC;
+   /** Text and marks on a red (or muted) fill. */
+   static Color ON_RUBRIC;
+   static Color MUTED;
+   private static Color MARK;
+   static Color HOVER;
+   /** A picked row or plan. */
+   static Color PICKED;
+   /** By heart's stage chips and Show word. */
+   static Color CHIP;
+   /** By heart's slips. */
+   static Color SLIP;
+   /** The second translation's words when both share one page. */
+   private static Color ALT_INK;
+   /** A plan's calendar day that passed unread: its fill, its outline and its number. */
+   private static Color MISSED_FILL;
+   private static Color MISSED_LINE;
+   private static Color MISSED_INK;
    private static final Color BUTTON = new Color(0x4a3828);
    private static final Color BUTTON_HOVER = new Color(0x654b34);
    private static final Color BUTTON_TEXT = new Color(0xf3e7cf);
    static final Color GOLD = new Color(0xd8b45e);
+
+   static {
+      palette(false);
+   }
+
+   /** Day pages, or night pages: the same book with its paper dark and its ink light. */
+   static void palette(boolean night) {
+      LEATHER = new Color(night ? 0x17110c : 0x2f2219);
+      LEATHER_LIGHT = new Color(night ? 0x2a1f17 : 0x3d2c20);
+      PAPER = new Color(night ? 0x241d16 : 0xfbf5e6);
+      PAPER_EDGE = new Color(night ? 0x3b3127 : 0xe3d5b5);
+      EDGE_SHADE = new Color(night ? 0x2c241c : 0xcdbd98);
+      SPINE = night ? new Color(0, 0, 0) : new Color(120, 90, 50);
+      INK = new Color(night ? 0xe9dcc3 : 0x2b2118);
+      RUBRIC = new Color(night ? 0xe07a6c : 0x9e2a2b);
+      ON_RUBRIC = night ? PAPER : Color.WHITE;
+      MUTED = new Color(night ? 0xa39178 : 0x8a7a66);
+      MARK = new Color(night ? 0x5c4a1e : 0xf6dc7c);
+      HOVER = new Color(night ? 0x352b20 : 0xefe4c6);
+      PICKED = new Color(night ? 0x3d3224 : 0xf3e6c4);
+      CHIP = new Color(night ? 0x2e261d : 0xf1e8d2);
+      SLIP = new Color(night ? 0xf0705e : 0xc0392b);
+      ALT_INK = new Color(night ? 0xc7b597 : 0x5e4a36);
+      MISSED_FILL = new Color(night ? 0x4d2b26 : 0xe7b9a9);
+      MISSED_LINE = new Color(night ? 0x8c4b43 : 0xc98f80);
+      MISSED_INK = new Color(night ? 0xd98a7e : 0xb0645a);
+   }
    static final Font UI = new Font("SansSerif", Font.BOLD, 13);
    private static final Font UI_SMALL = new Font("SansSerif", Font.PLAIN, 11);
    static final Font HEAD = new Font("SansSerif", Font.BOLD, 10);
    private static final int BAR = 56;
    /** Below this width the book shows one page at a time. */
    private static final int TWO_PAGE_WIDTH = 700;
+   private static final int GLOW_MS = 2400;
 
    private enum View { READ, BOOKS, CHAPTERS, SAVE, PLAN, LEARN }
 
@@ -73,6 +122,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private int pickedBook;
 
    private Chapter chapter;
+   /** The open chapter in the second translation when two are side by side, or null. */
+   private Chapter other;
    private String loadError;
    /** Bumped on every request, so a slow answer for a chapter no longer wanted is dropped. */
    private int request;
@@ -106,9 +157,23 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    /** The verse just highlighted in the open chapter and not being learned, so L can start learning it; 0 for none. */
    private int justMarked;
 
+   /** Go to (G): the passage being typed, or null while closed. */
+   private StringBuilder goTo;
+   private int goPick;
+   /** The first of Go to's click areas in {@link #hits}. */
+   private int goHitsFrom;
+   /** Places left by Go to, newest first, to go back to. */
+   private final List<Passage> goneFrom = new ArrayList<>();
+   /** The verse Go to landed on, glowing while its page first shows; 0 for none. */
+   private int foundVerse;
+   private long foundAt;
+   private final Timer glowTimer;
+   private final PageTurn pageTurn = new PageTurn(this);
+
    public ReaderPanel(Shelf shelf) {
       this.shelf = shelf;
       this.pickedBook = shelf.book;
+      palette(shelf.night);
       this.setPreferredSize(new Dimension(900, 600));
       this.setFocusable(true);
       this.flashTimer = new Timer(2600, e -> {
@@ -116,6 +181,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          this.repaint();
       });
       this.flashTimer.setRepeats(false);
+      this.glowTimer = new Timer(40, e -> {
+         if (System.currentTimeMillis() - this.foundAt > GLOW_MS) {
+            this.foundVerse = 0;
+            ((Timer) e.getSource()).stop();
+         }
+         this.repaint();
+      });
       this.learn = new LearnView(this, shelf);
 
       MouseAdapter mouse = new MouseAdapter() {
@@ -158,33 +230,40 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       this.shelf.chapter = number;
       this.landAtEnd = atEnd;
       this.justMarked = 0;
+      this.foundVerse = 0;
       this.view = View.READ;
       this.loadError = null;
       int ticket = ++this.request;
       String translation = this.shelf.translation;
+      String compare = this.shelf.compare;
       Chapter ready = BibleApi.cached(translation, book, number);
-      if (ready != null) {
-         this.show(ready);
+      Chapter readyOther = compare.isEmpty() ? null : BibleApi.cached(compare, book, number);
+      if (ready != null && (compare.isEmpty() || readyOther != null)) {
+         this.show(ready, readyOther);
          return;
       }
       this.chapter = null;
+      this.other = null;
       this.repaint();
       new Thread(() -> {
          Chapter loaded = null;
+         Chapter loadedOther = null;
          String error = null;
          try {
             loaded = BibleApi.fetch(translation, book, number);
+            loadedOther = compare.isEmpty() ? null : BibleApi.fetch(compare, book, number);
          } catch (IOException e) {
             error = e.getMessage();
          }
-         Chapter result = loaded;
+         Chapter result = error == null ? loaded : null;
+         Chapter resultOther = loadedOther;
          String message = error;
          SwingUtilities.invokeLater(() -> {
             if (ticket != this.request) {
                return;
             }
             if (result != null) {
-               this.show(result);
+               this.show(result, resultOther);
             } else {
                this.loadError = message;
                this.repaint();
@@ -193,8 +272,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }).start();
    }
 
-   private void show(Chapter loaded) {
+   private void show(Chapter loaded, Chapter loadedOther) {
       this.chapter = loaded;
+      this.other = loadedOther;
       this.pages = null;
       this.pagesKey = "";
       this.spread = -1;
@@ -208,17 +288,18 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       if (ordinal >= Books.TOTAL) {
          return;
       }
-      String translation = this.shelf.translation;
       int book = Books.bookOf(ordinal);
       int number = Books.chapterOf(ordinal);
-      if (BibleApi.cached(translation, book, number) == null) {
-         new Thread(() -> {
-            try {
-               BibleApi.fetch(translation, book, number);
-            } catch (IOException e) {
-               // Fetched again when it is opened.
-            }
-         }).start();
+      for (String translation : new String[]{this.shelf.translation, this.shelf.compare}) {
+         if (!translation.isEmpty() && BibleApi.cached(translation, book, number) == null) {
+            new Thread(() -> {
+               try {
+                  BibleApi.fetch(translation, book, number);
+               } catch (IOException e) {
+                  // Fetched again when it is opened.
+               }
+            }).start();
+         }
       }
    }
 
@@ -227,6 +308,43 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    }
 
    private void next() {
+      this.turn(true, this::forward);
+   }
+
+   private void previous() {
+      this.turn(false, this::backward);
+   }
+
+   /** Moves through the book, and turns the page over when both the old and the new pages are set. */
+   private void turn(boolean forward, Runnable move) {
+      boolean motion = !Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+      String from = this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread;
+      BufferedImage before = motion && this.view == View.READ && this.goTo == null && this.chapterShown() && this.getWidth() > 0 ? this.snapshot() : null;
+      move.run();
+      if (before != null && this.view == View.READ && this.chapterShown() && !from.equals(this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread)) {
+         this.pageTurn.start(forward, before, this.snapshot(), this.sheets());
+      }
+   }
+
+   /** The panel as painted now, without a turn running over it, at {@link PageTurn#SCALE}. */
+   private BufferedImage snapshot() {
+      BufferedImage image = new BufferedImage(this.getWidth() * PageTurn.SCALE, this.getHeight() * PageTurn.SCALE, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = image.createGraphics();
+      g.scale(PageTurn.SCALE, PageTurn.SCALE);
+      this.draw(g, false);
+      g.dispose();
+      return image;
+   }
+
+   /** Whether the open chapter is fetched (in both translations when side by side), so its pages can be set. */
+   private boolean chapterShown() {
+      return this.chapter != null && this.chapter.book == this.shelf.book
+         && this.chapter.number == this.shelf.chapter && this.chapter.translation.equals(this.shelf.translation)
+         && (this.shelf.compare.isEmpty() || this.other != null && this.other.book == this.chapter.book
+            && this.other.number == this.chapter.number && this.other.translation.equals(this.shelf.compare));
+   }
+
+   private void forward() {
       if (this.view != View.READ) {
          return;
       }
@@ -237,7 +355,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }
    }
 
-   private void previous() {
+   private void backward() {
       if (this.view != View.READ) {
          return;
       }
@@ -294,12 +412,25 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    private void cycleTranslation() {
       int i = (BibleApi.translationIndex(this.shelf.translation) + 1) % BibleApi.TRANSLATIONS.length;
+      if (BibleApi.TRANSLATIONS[i].equals(this.shelf.compare)) {
+         // The two sides swap rather than show one translation twice.
+         this.shelf.compare = this.shelf.translation;
+      }
       this.shelf.translation = BibleApi.TRANSLATIONS[i];
       this.shelf.save();
-      this.say(BibleApi.TRANSLATION_NAMES[i]);
+      this.say(BibleApi.TRANSLATION_NAMES[i] + (this.shelf.compare.isEmpty() ? "" : " beside " + this.shelf.compare.toUpperCase()));
       if (this.view == View.READ) {
          this.open(this.shelf.book, this.shelf.chapter, false);
       }
+   }
+
+   /** Side by side: off, then each other translation in turn beside the open one, then off again. */
+   private void cycleCompare() {
+      this.shelf.compare = Shelf.nextCompare(this.shelf.translation, this.shelf.compare);
+      this.shelf.save();
+      int i = BibleApi.translationIndex(this.shelf.compare);
+      this.say(i < 0 ? "Side by side off (C: compare again)" : "Side by side: " + BibleApi.TRANSLATION_NAMES[i] + " (C: the next one)", 3200);
+      this.open(this.shelf.book, this.shelf.chapter, false);
    }
 
    private void resize(int step) {
@@ -310,6 +441,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          this.pagesKey = "";
          this.repaint();
       }
+   }
+
+   private void toggleNight() {
+      this.shelf.night = !this.shelf.night;
+      palette(this.shelf.night);
+      this.shelf.save();
+      this.say(this.shelf.night ? "Night pages: light ink on dark paper (D: day)" : "Day pages (D: night)");
    }
 
    private void toggleMark(int verse) {
@@ -349,12 +487,18 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    // ---- Input ----
 
    private void click(int x, int y) {
-      for (int i = this.hits.size() - 1; i >= 0; i--) {
+      // While Go to is open only its own areas answer; a click anywhere else just closes it.
+      int from = this.goTo != null ? this.goHitsFrom : 0;
+      for (int i = this.hits.size() - 1; i >= from; i--) {
          Hit hit = this.hits.get(i);
          if (hit.area.contains(x, y)) {
             hit.action.run();
             return;
          }
+      }
+      if (this.goTo != null) {
+         this.closeGoTo();
+         return;
       }
       // Anywhere else on the book: the left half turns back, the right half forward.
       if (this.view == View.READ && y < this.getHeight() - BAR) {
@@ -385,6 +529,10 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    }
 
    private void key(int code, char c) {
+      if (this.goTo != null) {
+         this.goToKey(code, c);
+         return;
+      }
       if (this.view == View.LEARN && this.learn.key(code, c, this.perView() == 1)) {
          return;
       }
@@ -419,13 +567,16 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             this.showBooks();
             break;
          case 'n':
-            this.nextChapter();
+            this.turn(true, this::nextChapter);
             break;
          case 'p':
-            this.previousChapter();
+            this.turn(false, this::previousChapter);
             break;
          case 't':
             this.cycleTranslation();
+            break;
+         case 'c':
+            this.cycleCompare();
             break;
          case 'm':
             this.nextMark();
@@ -438,6 +589,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             break;
          case 'l':
             this.showLearn();
+            break;
+         case 'd':
+            this.toggleNight();
+            break;
+         case 'g':
+         case '/':
+            this.openGoTo();
             break;
          case '+':
          case '=':
@@ -671,7 +829,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          Rectangle r = new Rectangle(area.x - 8, y + i * rowH, area.width + 16, rowH - 6);
          boolean over = r.contains(this.mouseX, this.mouseY);
          if (i == this.pickedPlan || over) {
-            g.setColor(i == this.pickedPlan ? new Color(0xf3e6c4) : HOVER);
+            g.setColor(i == this.pickedPlan ? PICKED : HOVER);
             g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
          }
          if (i == this.pickedPlan) {
@@ -738,7 +896,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             String label = (plan.behind(done, day) > 0 ? "Catch up: " : plan.dayDone(done, day) ? "Read ahead: " : "Read today's: ")
                + chapterName(plan, first) + " ›";
             go = new Rectangle(area.x, y, g.getFontMetrics().stringWidth(label) + 30, 32);
-            this.pill(g, go, label, RUBRIC, Color.WHITE);
+            this.pill(g, go, label, RUBRIC, ON_RUBRIC);
             this.hits.add(new Hit(go, () -> this.open(plan.bookAt(first), plan.chapterAt(first), false), 0));
          }
          String stop = first < 0 ? ("restart".equals(this.confirm) ? "Click again to start over" : "Start over")
@@ -784,7 +942,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.setFont(UI);
          String label = current == null ? "Start today ›" : key.equals(this.confirm) ? "Click again to switch" : "Switch to this plan";
          Rectangle start = new Rectangle(area.x, y, g.getFontMetrics().stringWidth(label) + 30, 32);
-         this.pill(g, start, label, RUBRIC, Color.WHITE);
+         this.pill(g, start, label, RUBRIC, ON_RUBRIC);
          this.hits.add(new Hit(start, () -> {
             if (current == null || key.equals(this.confirm)) {
                this.startPlan(plan);
@@ -827,7 +985,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.fillRoundRect(chip.x, chip.y, chip.width, chip.height, 24, 24);
          g.setColor(done.get(i) ? RUBRIC : PAPER_EDGE.darker());
          g.drawRoundRect(chip.x, chip.y, chip.width, chip.height, 24, 24);
-         g.setColor(done.get(i) ? Color.WHITE : INK);
+         g.setColor(done.get(i) ? ON_RUBRIC : INK);
          g.drawString(label, chip.x + 10, chip.y + 17);
          int index = i;
          this.hits.add(new Hit(chip, () -> this.open(plan.bookAt(index), plan.chapterAt(index), false), 0));
@@ -866,10 +1024,10 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.fillRoundRect(r.x, r.y, r.width, r.height, arc, arc);
          if (read > 0 && !full) {
             int h = r.height * read / size;
-            g.setColor(new Color(0xe7b9a9));
+            g.setColor(MISSED_FILL);
             g.fillRect(r.x + 1, r.y + r.height - h, r.width - 1, h);
          }
-         g.setColor(full ? RUBRIC : missed ? new Color(0xc98f80) : PAPER_EDGE.darker());
+         g.setColor(full ? RUBRIC : missed ? MISSED_LINE : PAPER_EDGE.darker());
          g.drawRoundRect(r.x, r.y, r.width, r.height, arc, arc);
          if (d == today) {
             g.setColor(GOLD);
@@ -878,7 +1036,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          }
          if (cell >= 18) {
             String label = String.valueOf(d + 1);
-            g.setColor(full ? Color.WHITE : missed ? new Color(0xb0645a) : MUTED);
+            g.setColor(full ? ON_RUBRIC : missed ? MISSED_INK : MUTED);
             g.drawString(label, r.x + (r.width - fm.stringWidth(label)) / 2, r.y + (r.height + fm.getAscent() - fm.getDescent()) / 2);
          }
          if (over) {
@@ -915,6 +1073,22 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    @Override
    protected void paintComponent(Graphics graphics) {
       Graphics2D g = (Graphics2D) graphics;
+      this.draw(g, true);
+   }
+
+   private Rectangle bookArea() {
+      return new Rectangle(20, 16, this.getWidth() - 40, this.getHeight() - BAR - 26);
+   }
+
+   private Rectangle[] sheets() {
+      Rectangle book = this.bookArea();
+      return this.perView() == 2
+         ? new Rectangle[]{new Rectangle(book.x, book.y, book.width / 2, book.height), new Rectangle(book.x + book.width / 2, book.y, book.width - book.width / 2, book.height)}
+         : new Rectangle[]{book};
+   }
+
+   /** Paints the panel, with a page turn running over the book when withTurn is set. */
+   private void draw(Graphics2D g, boolean withTurn) {
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
       g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
       this.hits.clear();
@@ -925,10 +1099,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setColor(LEATHER_LIGHT);
       g.drawRoundRect(6, 6, w - 13, h - BAR - 4, 14, 14);
 
-      Rectangle book = new Rectangle(20, 16, w - 40, h - BAR - 26);
-      Rectangle[] sheets = this.perView() == 2
-         ? new Rectangle[]{new Rectangle(book.x, book.y, book.width / 2, book.height), new Rectangle(book.x + book.width / 2, book.y, book.width - book.width / 2, book.height)}
-         : new Rectangle[]{book};
+      Rectangle book = this.bookArea();
+      Rectangle[] sheets = this.sheets();
       this.paintPaper(g, book, sheets);
       Rectangle[] text = new Rectangle[sheets.length];
       for (int i = 0; i < sheets.length; i++) {
@@ -958,27 +1130,41 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          default:
             this.paintRead(g, sheets, text);
       }
+      if (withTurn) {
+         this.pageTurn.paint(g, sheets);
+      }
       this.paintBar(g, w, h);
    }
 
    private void paintPaper(Graphics2D g, Rectangle book, Rectangle[] sheets) {
       // Page edges under the book, like the stack of paper in a thick book.
       for (int i = 3; i >= 1; i--) {
-         g.setColor(i % 2 == 0 ? PAPER_EDGE : new Color(0xcdbd98));
+         g.setColor(i % 2 == 0 ? PAPER_EDGE : EDGE_SHADE);
          g.fillRoundRect(book.x - i, book.y + i, book.width + 2 * i, book.height, 6, 6);
       }
       g.setColor(PAPER);
       g.fillRect(book.x, book.y, book.width, book.height);
+      if (this.shelf.night) {
+         // A reading lamp: warm light pooling over each page, brightest in the middle (ovals, as the browser has no gradients).
+         for (Rectangle sheet : sheets) {
+            for (int i = 0; i < 12; i++) {
+               int ow = sheet.width * (12 - i) / 12;
+               int oh = sheet.height * (12 - i) / 12;
+               g.setColor(new Color(200, 180, 110, 4));
+               g.fillOval(sheet.x + (sheet.width - ow) / 2, sheet.y + (sheet.height - oh) / 2, ow, oh);
+            }
+         }
+      }
       if (sheets.length == 2) {
          // The spine: shading that deepens toward the fold.
          int fold = sheets[1].x;
          for (int i = 0; i < 26; i++) {
             int a = (26 - i) * 3;
-            g.setColor(new Color(120, 90, 50, a / 2));
+            g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), a / 2));
             g.fillRect(fold - i - 1, book.y, 1, book.height);
             g.fillRect(fold + i, book.y, 1, book.height);
          }
-         g.setColor(new Color(120, 90, 50, 110));
+         g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), 110));
          g.drawLine(fold, book.y, fold, book.y + book.height - 1);
       }
    }
@@ -986,8 +1172,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private void paintRead(Graphics2D g, Rectangle[] sheets, Rectangle[] text) {
       int lh = this.lineHeight();
       int lines = Math.max(1, text[0].height / lh);
-      if (this.chapter == null || this.chapter.book != this.shelf.book || this.chapter.number != this.shelf.chapter
-            || !this.chapter.translation.equals(this.shelf.translation)) {
+      if (!this.chapterShown()) {
          String ref = Books.NAMES[this.shelf.book] + " " + this.shelf.chapter;
          if (this.loadError != null) {
             this.centered(g, text[0], ref, this.loadError, "Try again");
@@ -1002,9 +1187,18 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       Font numeral = new Font("Serif", Font.BOLD, Shelf.SIZES[this.shelf.size] * 3);
       Font title = new Font("Serif", Font.BOLD, Shelf.SIZES[this.shelf.size] * 17 / 10);
       FontMetrics bodyMetrics = g.getFontMetrics(body);
-      String key = this.chapter.title() + "/" + this.chapter.translation + "/" + this.shelf.size + "/" + text[0].width + "/" + lines;
+      Chapter beside = this.shelf.compare.isEmpty() ? null : this.other;
+      String key = this.chapter.title() + "/" + this.chapter.translation + "/" + (beside == null ? "" : beside.translation + "/" + sheets.length)
+         + "/" + this.shelf.size + "/" + text[0].width + "/" + lines;
       if (!key.equals(this.pagesKey)) {
-         this.pages = Layout.paginate(this.chapter, bodyMetrics, g.getFontMetrics(small), g.getFontMetrics(numeral), text[0].width, lines);
+         this.pages = beside == null
+            ? Layout.paginate(this.chapter, bodyMetrics, g.getFontMetrics(small), g.getFontMetrics(numeral), text[0].width, lines)
+            : Layout.parallel(this.chapter, beside, bodyMetrics, g.getFontMetrics(small), g.getFontMetrics(numeral), text[0].width, lines,
+               sheets.length == 1 ? g.getFontMetrics(body.deriveFont(Font.ITALIC)) : null);
+         if (!this.pagesKey.isEmpty()) {
+            // Set again (another size, window or side by side): find the place again by its verse.
+            this.spread = -1;
+         }
          this.pagesKey = key;
       }
       int per = sheets.length;
@@ -1017,7 +1211,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          this.spread -= this.spread % per;
       }
 
+      if (this.foundVerse > 0 && this.foundAt == 0) {
+         // The glow starts when the page shows, not when it was asked for (a fetch can take seconds).
+         this.foundAt = System.currentTimeMillis();
+         this.glowTimer.start();
+      }
       int space = bodyMetrics.stringWidth(" ");
+      Font altBody = body.deriveFont(Font.ITALIC);
       for (int s = 0; s < per; s++) {
          int index = this.spread + s;
          Rectangle area = text[s];
@@ -1056,6 +1256,12 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
                   g.setColor(RUBRIC);
                   g.drawString(run.text, x, base - Shelf.SIZES[this.shelf.size] * 4 / 10);
                   break;
+               case Layout.ALT_WORD:
+                  this.word(g, run, x, top, lh, space);
+                  g.setFont(altBody);
+                  g.setColor(ALT_INK);
+                  g.drawString(run.text, x, base);
+                  break;
                default:
                   this.word(g, run, x, top, lh, space);
                   g.setFont(body);
@@ -1074,6 +1280,11 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.setColor(marked ? MARK : HOVER);
          g.fillRect(x - 1, top + 3, run.width + space + 1, lh - 4);
       }
+      if (run.verse == this.foundVerse && this.foundAt > 0) {
+         float t = Math.min(1f, (System.currentTimeMillis() - this.foundAt) / (float) GLOW_MS);
+         g.setColor(new Color(GOLD.getRed(), GOLD.getGreen(), GOLD.getBlue(), Math.round(200 * (1 - t * t))));
+         g.fillRect(x - 1, top + 3, run.width + space + 1, lh - 4);
+      }
       int verse = run.verse;
       this.hits.add(new Hit(new Rectangle(x - 1, top, run.width + space + 1, lh), () -> this.toggleMark(verse), verse));
    }
@@ -1088,9 +1299,29 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.drawString(ref, x, sheet.y + 24);
       String folio = (this.spread + side + 1) + " / " + this.pages.size();
       g.drawString(folio, area.x + (area.width - fm.stringWidth(folio)) / 2, sheet.y + sheet.height - 14);
-      if (per == 1 || side == 1) {
-         g.drawString(this.shelf.translation.toUpperCase(), area.x, sheet.y + 24);
+      String compare = this.shelf.compare.toUpperCase();
+      if (!compare.isEmpty()) {
+         // Side by side, each page names its translation; on one page the second, in italics, follows each verse.
+         String tag = per == 2 ? (side == 0 ? this.shelf.translation.toUpperCase() : compare) : this.shelf.translation.toUpperCase() + " + " + compare;
+         int tx = per == 2 && side == 0 ? area.x + area.width - fm.stringWidth(tag) : area.x;
+         this.headLink(g, tag + " ⇄", tx, sheet.y + 24);
+      } else if (per == 1 || side == 1) {
+         String open = this.shelf.translation.toUpperCase();
+         g.drawString(open, area.x, sheet.y + 24);
+         this.headLink(g, "⇄ COMPARE", area.x + fm.stringWidth(open + "   "), sheet.y + 24);
       }
+   }
+
+   /** Red running-head text that sets another translation beside the open one (as C does). */
+   private void headLink(Graphics2D g, String label, int x, int base) {
+      FontMetrics fm = g.getFontMetrics();
+      Rectangle r = new Rectangle(x - 4, base - fm.getAscent() - 5, fm.stringWidth(label) + 8, fm.getHeight() + 8);
+      g.setColor(this.over(r) ? HOVER : PAPER);
+      g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+      g.setColor(RUBRIC);
+      g.drawString(label, x, base);
+      g.setColor(MUTED);
+      this.hits.add(new Hit(r, this::cycleCompare, 0));
    }
 
    /** The facing page after a chapter's last page: what comes next. */
@@ -1112,7 +1343,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       } else {
          this.centered(g, area, "Next: " + next, "Turn the page to keep reading", "Next chapter \u203a");
       }
-      this.hits.add(new Hit(this.lastButton, this::nextChapter, 0));
+      this.hits.add(new Hit(this.lastButton, () -> this.turn(true, this::nextChapter), 0));
    }
 
    private Rectangle lastButton;
@@ -1147,7 +1378,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.setFont(UI);
          int bw = g.getFontMetrics().stringWidth(button) + 28;
          this.lastButton = new Rectangle(area.x + (area.width - bw) / 2, cy + 46, bw, 30);
-         this.pill(g, this.lastButton, button, RUBRIC, Color.WHITE);
+         this.pill(g, this.lastButton, button, RUBRIC, ON_RUBRIC);
       }
    }
 
@@ -1184,12 +1415,23 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.setFont(UI);
          String label = (this.shelf.plan != null ? "Your reading plan" : "Reading plans") + " \u203a";
          Rectangle plans = new Rectangle(list.x, list.y + list.height + 8, g.getFontMetrics().stringWidth(label) + 30, 30);
-         this.pill(g, plans, label, RUBRIC, Color.WHITE);
+         this.pill(g, plans, label, RUBRIC, ON_RUBRIC);
          this.hits.add(new Hit(plans, this::showPlan, 0));
          String heart = "By heart \u203a";
          Rectangle learning = new Rectangle(plans.x + plans.width + 8, plans.y, g.getFontMetrics().stringWidth(heart) + 30, 30);
          this.pill(g, learning, heart, PAPER_EDGE, INK);
          this.hits.add(new Hit(learning, this::showLearn, 0));
+         // Night pages too, shortened or left to D when the page is too narrow for it.
+         int room = list.x + list.width - (learning.x + learning.width + 8) - 30;
+         String light = this.shelf.night ? "Day pages" : "Night pages";
+         if (g.getFontMetrics().stringWidth(light) > room) {
+            light = this.shelf.night ? "Day" : "Night";
+         }
+         if (g.getFontMetrics().stringWidth(light) <= room) {
+            Rectangle lamp = new Rectangle(learning.x + learning.width + 8, plans.y, g.getFontMetrics().stringWidth(light) + 30, 30);
+            this.pill(g, lamp, light, PAPER_EDGE, INK);
+            this.hits.add(new Hit(lamp, this::toggleNight, 0));
+         }
       }
       g.setFont(HEAD);
       g.setColor(MUTED);
@@ -1267,7 +1509,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setFont(UI);
       String go = (read == 0 || read == Books.CHAPTERS[b] ? "Start reading" : "Continue at " + start) + " \u203a";
       Rectangle goButton = new Rectangle(info.x, info.y + 80, g.getFontMetrics().stringWidth(go) + 30, 32);
-      this.pill(g, goButton, go, RUBRIC, Color.WHITE);
+      this.pill(g, goButton, go, RUBRIC, ON_RUBRIC);
       this.hits.add(new Hit(goButton, () -> this.open(b, start, false), 0));
       String save = "Save as a web page";
       Rectangle saveButton = new Rectangle(goButton.x + goButton.width + 10, goButton.y, g.getFontMetrics().stringWidth(save) + 30, 32);
@@ -1312,7 +1554,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             g.drawRoundRect(r.x - 2, r.y - 2, r.width + 4, r.height + 4, 8, 8);
          }
          String label = String.valueOf(c);
-         g.setColor(isRead ? Color.WHITE : INK);
+         g.setColor(isRead ? ON_RUBRIC : INK);
          g.drawString(label, r.x + (r.width - fm.stringWidth(label)) / 2, r.y + (r.height + fm.getAscent() - fm.getDescent()) / 2);
          int chosen = c;
          this.hits.add(new Hit(r, () -> this.open(b, chosen, false), 0));
@@ -1349,7 +1591,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setFont(UI);
       String label = this.saving ? "Saving..." : "Save " + (count == 1 ? "1 chapter" : count + " chapters");
       Rectangle button = new Rectangle(area.x, y + 146, g.getFontMetrics().stringWidth(label) + 30, 32);
-      this.pill(g, button, label, this.saving ? MUTED : RUBRIC, Color.WHITE);
+      this.pill(g, button, label, this.saving ? MUTED : RUBRIC, ON_RUBRIC);
       if (!this.saving) {
          this.hits.add(new Hit(button, this::startSave, 0));
       }
@@ -1420,7 +1662,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setColor(on ? RUBRIC : MUTED);
       g.drawRoundRect(x, y, 18, 18, 4, 4);
       if (on) {
-         g.setColor(Color.WHITE);
+         g.setColor(ON_RUBRIC);
          g.drawLine(x + 4, y + 9, x + 8, y + 13);
          g.drawLine(x + 8, y + 13, x + 14, y + 5);
          g.drawLine(x + 4, y + 10, x + 8, y + 14);
@@ -1473,6 +1715,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       right = this.barButtonRight(g, right, y, bh, wide ? "Next \u203a" : "\u203a", this::next, reading);
       if (wide) {
          right = this.barButtonRight(g, right, y, bh, "Save", () -> this.showSave(this.shelf.book), true);
+         right = this.barButtonRight(g, right, y, bh, this.shelf.night ? "Day" : "Night", this::toggleNight, true);
          right = this.barButtonRight(g, right, y, bh, "A+", () -> this.resize(1), this.shelf.size < Shelf.SIZES.length - 1);
          right = this.barButtonRight(g, right, y, bh, "A\u2212", () -> this.resize(-1), this.shelf.size > 0);
       }
@@ -1486,8 +1729,19 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       int room = right - x - 12;
       g.setFont(new Font("Serif", Font.BOLD, 16));
       g.setColor(BUTTON_TEXT);
-      String top = fit(g.getFontMetrics(), Books.NAMES[this.shelf.book] + " " + this.shelf.chapter, room);
-      g.drawString(top, mid - g.getFontMetrics().stringWidth(top) / 2, y + 15);
+      String name = Books.NAMES[this.shelf.book] + " " + this.shelf.chapter;
+      // The arrow saying it opens Go to gives way to the name on a narrow toolbar.
+      String top = g.getFontMetrics().stringWidth(name + " ▾") <= room ? name + " ▾" : fit(g.getFontMetrics(), name, room);
+      int topWidth = g.getFontMetrics().stringWidth(top);
+      // The place is also the way to another: click it (or press G) to type a passage.
+      Rectangle place = new Rectangle(mid - topWidth / 2 - 8, y - 2, topWidth + 16, bh + 4);
+      if (this.over(place)) {
+         g.setColor(BUTTON);
+         g.fillRoundRect(place.x, place.y, place.width, place.height, 10, 10);
+         g.setColor(BUTTON_TEXT);
+      }
+      this.hits.add(new Hit(place, this::openGoTo, 0));
+      g.drawString(top, mid - topWidth / 2, y + 15);
       g.setFont(UI_SMALL);
       g.setColor(new Color(0xb9a888));
       String sub = null;
@@ -1510,6 +1764,172 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          g.fillRoundRect(w / 2 - tw / 2, ty, tw, 26, 26, 26);
          g.setColor(GOLD);
          g.drawString(text, w / 2 - tw / 2 + 14, ty + 17);
+      }
+      if (this.goTo != null) {
+         this.paintGoTo(g, w, h, y, bh);
+      }
+   }
+
+   // ---- Go to ----
+
+   private void openGoTo() {
+      this.goTo = new StringBuilder();
+      this.goPick = 0;
+      this.repaint();
+   }
+
+   private void closeGoTo() {
+      this.goTo = null;
+      this.repaint();
+   }
+
+   /** What Go to offers: the readings of what is typed, or places to go back to and well known ones. */
+   private List<Passage> goOptions() {
+      if (!this.goTo.toString().trim().isEmpty()) {
+         return Passage.matches(this.goTo.toString(), this.shelf.book, 5);
+      }
+      List<Passage> options = new ArrayList<>(this.goneFrom.subList(0, this.backCount()));
+      for (String famous : Passage.FAMOUS) {
+         if (options.size() < 6) {
+            options.add(Passage.parse(famous, -1));
+         }
+      }
+      return options;
+   }
+
+   /** How many places to go back to Go to offers. */
+   private int backCount() {
+      return Math.min(3, this.goneFrom.size());
+   }
+
+   private void goToKey(int code, char c) {
+      List<Passage> options = this.goOptions();
+      switch (code) {
+         case KeyEvent.VK_ESCAPE:
+            this.closeGoTo();
+            return;
+         case KeyEvent.VK_ENTER:
+            if (!options.isEmpty()) {
+               this.goTo(options.get(Math.min(this.goPick, options.size() - 1)));
+            }
+            return;
+         case KeyEvent.VK_BACK_SPACE:
+            if (this.goTo.length() > 0) {
+               this.goTo.setLength(this.goTo.length() - 1);
+            }
+            break;
+         case KeyEvent.VK_UP:
+            this.goPick = Math.max(0, this.goPick - 1);
+            this.repaint();
+            return;
+         case KeyEvent.VK_DOWN:
+            this.goPick = Math.min(Math.max(0, options.size() - 1), this.goPick + 1);
+            this.repaint();
+            return;
+         default:
+            if (!(Character.isLetterOrDigit(c) || c == ' ' || c == ':' || c == '.') || this.goTo.length() >= 40) {
+               return;
+            }
+            this.goTo.append(c);
+      }
+      this.goPick = 0;
+      this.repaint();
+   }
+
+   /** Opens a passage at its verse, which glows as its page shows; the place left can be gone back to. */
+   private void goTo(Passage passage) {
+      Passage here = new Passage(this.shelf.book, this.shelf.chapter, this.shelf.verse);
+      this.goneFrom.removeIf(p -> p.name().equals(here.name()) || p.name().equals(passage.name()));
+      this.goneFrom.add(0, here);
+      this.goTo = null;
+      this.open(passage.book, passage.chapter, false);
+      this.shelf.verse = Math.max(1, passage.verse);
+      this.spread = -1;
+      this.foundVerse = passage.verse;
+      this.foundAt = 0;
+      this.shelf.save();
+      this.repaint();
+   }
+
+   /** The passage field across the toolbar, and its choices above it. */
+   private void paintGoTo(Graphics2D g, int w, int h, int y, int bh) {
+      this.goHitsFrom = this.hits.size();
+      Rectangle field = new Rectangle(14, y, w - 28, bh);
+      g.setColor(LEATHER);
+      g.fillRect(0, h - BAR, w, BAR);
+      g.setColor(PAPER);
+      g.fillRoundRect(field.x, field.y, field.width, field.height, 10, 10);
+      g.setColor(GOLD);
+      g.drawRoundRect(field.x, field.y, field.width - 1, field.height - 1, 10, 10);
+      this.hits.add(new Hit(field, () -> { }, 0));
+      g.setFont(new Font("Serif", Font.BOLD, 16));
+      FontMetrics fm = g.getFontMetrics();
+      int base = y + (bh + fm.getAscent() - fm.getDescent()) / 2;
+      g.setColor(RUBRIC);
+      g.drawString("Go to", field.x + 12, base);
+      int tx = field.x + 22 + fm.stringWidth("Go to");
+      g.setFont(UI_SMALL);
+      String keys = "Enter: go  ·  Esc: close";
+      int keysWidth = field.width >= 420 ? g.getFontMetrics().stringWidth(keys) + 12 : 0;
+      if (keysWidth > 0) {
+         g.setColor(MUTED);
+         g.drawString(keys, field.x + field.width - keysWidth, base);
+      }
+      g.setFont(new Font("Serif", Font.PLAIN, 16));
+      fm = g.getFontMetrics();
+      int room = field.x + field.width - keysWidth - 12 - tx;
+      String typed = this.goTo.toString();
+      int caret = tx;
+      if (typed.isEmpty()) {
+         g.setColor(MUTED);
+         g.drawString(fit(fm, "a passage: John 3:16, Ps 23, 1 Cor 13", room), tx + 4, base);
+      } else {
+         String shown = fitEnd(fm, typed, room - 4);
+         g.setColor(INK);
+         g.drawString(shown, tx, base);
+         caret = tx + fm.stringWidth(shown) + 1;
+      }
+      g.setColor(INK);
+      g.fillRect(caret, y + 8, 2, bh - 16);
+
+      List<Passage> options = this.goOptions();
+      boolean blank = typed.trim().isEmpty();
+      int rowH = 30;
+      int pw = Math.min(field.width, 440);
+      int px = field.x + (field.width - pw) / 2;
+      int rows = Math.max(1, options.size());
+      Rectangle panel = new Rectangle(px, y - 10 - rows * rowH - 30, pw, rows * rowH + 30);
+      g.setColor(new Color(0, 0, 0, 70));
+      g.fillRoundRect(panel.x + 2, panel.y + 4, panel.width, panel.height, 14, 14);
+      g.setColor(PAPER);
+      g.fillRoundRect(panel.x, panel.y, panel.width, panel.height, 14, 14);
+      this.hits.add(new Hit(panel, () -> { }, 0));
+      g.setFont(HEAD);
+      g.setColor(MUTED);
+      g.drawString(!blank ? "GO TO" : this.goneFrom.isEmpty() ? "WELL KNOWN PLACES" : "GO BACK, OR TO A WELL KNOWN PLACE", panel.x + 14, panel.y + 20);
+      if (options.isEmpty()) {
+         g.setFont(UI);
+         g.drawString(fit(g.getFontMetrics(), "No book starts like “" + typed.trim() + "”", pw - 28), panel.x + 14, panel.y + 49);
+         return;
+      }
+      int pick = Math.min(this.goPick, options.size() - 1);
+      for (int i = 0; i < options.size(); i++) {
+         Passage p = options.get(i);
+         Rectangle row = new Rectangle(panel.x + 6, panel.y + 28 + i * rowH, pw - 12, rowH - 2);
+         boolean back = blank && i < this.backCount();
+         if (i == pick || this.over(row)) {
+            g.setColor(i == pick ? MARK : HOVER);
+            g.fillRoundRect(row.x, row.y, row.width, row.height, 8, 8);
+         }
+         g.setFont(new Font("Serif", Font.BOLD, 15));
+         g.setColor(INK);
+         g.drawString((back ? "↩ " : "") + p.name(), row.x + 10, row.y + 20);
+         g.setFont(UI_SMALL);
+         g.setColor(MUTED);
+         int chapters = Books.CHAPTERS[p.book];
+         String note = back ? "back" : this.shelf.isRead(p.book, p.chapter) ? "read" : chapters + (chapters == 1 ? " chapter" : " chapters");
+         g.drawString(note, row.x + row.width - 10 - g.getFontMetrics().stringWidth(note), row.y + 20);
+         this.hits.add(new Hit(row, () -> this.goTo(p), 0));
       }
    }
 

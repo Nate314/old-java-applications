@@ -9,7 +9,8 @@ import java.io.Writer;
 
 /**
  * The player's matches won and lost against the computer, kept in the first line of a text file ({@code wins,losses}),
- * and whether supply drops are on.
+ * whether supply drops are on ({@code supplies=off}), whether the sound is on ({@code sound=off}) and the battlefield the player built ({@code field=}, see
+ * {@link Arena#text}).
  */
 public class Record
 {
@@ -17,6 +18,8 @@ public class Record
     private int        wins;
     private int        losses;
     private boolean    supplies = true;
+    private boolean    sound    = true;
+    private String     field    = "";
 
     private Record(File file)
     {
@@ -32,7 +35,13 @@ public class Record
             String[] parts = reader.readLine().split(",");
             record.wins = Math.max(0, Integer.parseInt(parts[0].trim()));
             record.losses = Math.max(0, Integer.parseInt(parts[1].trim()));
-            record.supplies = !"supplies=off".equals(String.valueOf(reader.readLine()).trim());
+            for (String line; (line = reader.readLine()) != null;)
+            {
+                line = line.trim();
+                if (line.equals("supplies=off")) record.supplies = false;
+                if (line.equals("sound=off")) record.sound = false;
+                if (line.startsWith("field=")) record.field = line.substring(6);
+            }
         }
         catch (IOException | RuntimeException e)
         {
@@ -61,11 +70,36 @@ public class Record
         save();
     }
 
+    /** Whether the battle's sounds are on (the default); saved as a line {@code sound=off} when they are not. */
+    public boolean sound()
+    {
+        return sound;
+    }
+
+    public void setSound(boolean on)
+    {
+        sound = on;
+        save();
+    }
+
+    /** The player's battlefield as {@link Arena#text}, or empty for none. */
+    public String field()
+    {
+        return field;
+    }
+
+    public void setField(String text)
+    {
+        field = text;
+        save();
+    }
+
     private void save()
     {
         try (Writer writer = new FileWriter(file))
         {
-            writer.write(wins + "," + losses + "\n" + (supplies ? "" : "supplies=off\n"));
+            writer.write(wins + "," + losses + "\n" + (supplies ? "" : "supplies=off\n") + (sound ? "" : "sound=off\n")
+                            + (field.isEmpty() ? "" : "field=" + field + "\n"));
         }
         catch (IOException e)
         {

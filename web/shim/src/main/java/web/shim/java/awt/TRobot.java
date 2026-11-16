@@ -44,6 +44,21 @@ public class TRobot {
         }
     }
 
+    /**
+     * A key on the visitor's keyboard pressed while the Robot holds the Windows key down (Windows' on-screen key, held
+     * with the mouse) is the operating system's too: Win+that key. True when the key is taken.
+     */
+    public static boolean takesKey(int keycode, int id) {
+        if (!windowsDown) {
+            return false;
+        }
+        if (id == TKeyEvent.KEY_PRESSED) {
+            windowsCombo = true;
+            Js.shellShortcut(keycode);
+        }
+        return true;
+    }
+
     private static void post(int id, int keycode) {
         TComponent target = TDesktop.keyTarget();
         if (target == null) {

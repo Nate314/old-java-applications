@@ -2,6 +2,7 @@
 import './story.css';
 import { APPS } from '../../shared/catalog';
 import { ChainShow, EraPanel, PickLink, RenamePanel, StoryTop, Tape } from './panels';
+import { ShareStory } from './ShareStory';
 
 // Where each app came from (HISTORY.md, The recovery).
 const FROM: Record<string, string> = {
@@ -59,6 +60,7 @@ export function Story() {
             <li><a href="#restoration">The first restoration</a></li>
             <li><a href="#chain">The Claude Code chain</a></li>
             <li><a href="#numbers">The run in numbers</a></li>
+            <li><a href="#continued">The continued run</a></li>
           </ol>
         </header>
         <section className="chapter" id="originals" aria-labelledby="h-originals">
@@ -223,6 +225,56 @@ export function Story() {
             </p>
           </div>
         </section>
+        <section className="chapter" id="continued" aria-labelledby="h-continued">
+          <div className="words">
+            <p className="kicker">Chapter 6</p>
+            <h2 id="h-continued">The continued run</h2>
+            <p>
+              Then the chain was asked for 150 more attempts, numbered 101 to 250. They became pull requests #97 to #134: 38 rounds in which four agents built at once (two in the last round) and an integrator merged, checked and opened one pull request per round.
+            </p>
+            <p>
+              The fourth lane took the app with the fewest attempts so far. From round 14, every other round it was instead a careful refactor of the site's own code, with nothing visible changing.
+            </p>
+            <ol className="phases">
+              <li>
+                <b>The apps, deeper</b>
+                Minesweeper's exact mine odds, a cube you paint to match your own, Westminster chimes, a battlefield builder, sheet music, and a trail showing where each tic-tac-toe move sends you.
+              </li>
+              <li>
+                <b>The site</b>
+                a far lighter head script and thumbnails, Slow-mo, high contrast, passport stamps, Then and Now side by side, and What's new as release notes.
+              </li>
+              <li>
+                <b>The shim and the code</b>
+                saves merged across open pages, reduced motion the apps can read, freed windows, and 18 refactors.
+              </li>
+            </ol>
+          </div>
+          <div className="show">
+            <div className="panel">
+              <div className="panel-head"><strong>Who worked when</strong><a href="continued-timeline.svg">Full size</a></div>
+              <a className="timeline" href="continued-timeline.svg">
+                <img src="continued-timeline.svg" width="1200" height="640" loading="lazy" alt="Timeline from November 15 to 16, 2026: 38 rounds of four builders (two in the last) and an integrator, with the output tokens of each pull request, all on Claude Opus 5.5" />
+              </a>
+            </div>
+            <div className="panel" style={{ marginTop: "14px" }}>
+              <div className="panel-head"><strong>Tokens</strong><span>from the session's transcripts</span></div>
+              <ul className="usage">
+                <li><span>Agents (150 builders, 38 integrators)</span><b>6,578,546 output</b></li>
+                <li><span>Agents, all tokens incl. cache reads</span><b>1,336,185,594</b></li>
+                <li><span>Orchestrator</span><b>366,007 output</b></li>
+                <li><span>Orchestrator, all tokens incl. cache reads</span><b>194,660,812</b></li>
+                <li><span>Tool calls by the agents</span><b>16,016</b></li>
+                <li><span>From the first attempt to the last</span><b>about 22 hours</b></li>
+              </ul>
+            </div>
+            <p className="caption">
+              {"All on Claude Opus 5.5, November 15 to 16, 2026 (UTC). The breakdown is in "}
+              <a href="https://github.com/Nate314/old-java-applications/blob/master/HISTORY.md#the-continued-run-97-to-134">HISTORY.md</a>
+              .
+            </p>
+          </div>
+        </section>
         <section className="finale" aria-labelledby="h-finale">
           <h2 id="h-finale">Now it's your turn</h2>
           <p>
@@ -234,6 +286,8 @@ export function Story() {
             <PickLink />
             {' '}
             <a className="btn" href="https://github.com/Nate314/old-java-applications">The code on GitHub</a>
+            {' '}
+            <ShareStory className="btn" label="Share the story" />
           </div>
         </section>
       </main>

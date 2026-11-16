@@ -4,9 +4,12 @@ import { siteRoot } from './install';
 import { popped } from './pop-out';
 import { appId, catalog } from './catalog';
 import { indexOf } from './then-and-now';
-import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { CloseButton, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { appOut, audio } from './midi';
 import { playSound } from './sounds';
+import { real } from './slow-mo';
+import { paintWatch } from './painted';
 
 /** A recorded clip: its video, how many seconds it holds, and the app it shows. */
 export interface ReplayClip { blob: Blob; seconds: number; app: string }
@@ -28,7 +31,7 @@ let clipBox: HTMLElement | null;
 // them always holds between half a segment and a whole one. Replay (toolbar, exit screen, the home page's
 // player bar) stops that one and shows its video (openClip) with the app's own sound, if it made any
 // (appOut), to watch, save or share. The video stays in the page unless the visitor saves or shares it.
-// Only a changed app is drawn again: the shim flags every canvas it draws on (window.__shimPainted) and a
+// Only a changed app is drawn again: the shim flags every canvas it draws on (painted.ts) and a
 // MutationObserver sees the rest (text, buttons, windows moving), so an app at rest (a solved cube, a clock
 // between ticks, a menu) costs one frame a second (REPLAY_IDLE), and the encoder has nothing new to encode.
 // Nothing is drawn or recorded while nobody can see the app: its tab is hidden, or the page has scrolled the
@@ -49,7 +52,7 @@ export function setReplay(v: Replay | null) { replay = v; }
 
 const CLIP_SIZE = [640, 400];   // clip mode (?embed&clip): the gallery thumbnail's 16:10, at twice its usual width
 
-const CLIP_BPS = 900000;
+const CLIP_BPS = 400000;   // the clips play in four places, often on phones; 900k made SpriteFloatyStars 1 MB for no visible gain
 
 // MP4 first: phones and most sites take it, and Chrome records it. Firefox records WebM.
 function replayType() {
@@ -212,6 +215,7 @@ export function startReplay(desktop: Element): Replay | null {
   var canvas = document.createElement('canvas');
   var g = canvas.getContext('2d')!;
   var track: MediaStreamTrack | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
+  var drew = paintWatch();
   function look() { changed = true; }
   if (window.MutationObserver) {
     new MutationObserver(look).observe(desktop, { subtree: true, childList: true, attributes: true, characterData: true });
@@ -266,21 +270,23 @@ export function startReplay(desktop: Element): Replay | null {
     while (recs.length > 1) recs.shift()!.rec.stop();
     begin();
   }
+  var on: Window = window;   // the window the next frame was asked of
   function frame() {
-    (popped && !popped.win.closed ? popped.win : window).requestAnimationFrame(frame);
-    var t = performance.now();   // not the frame's time, which a popped out window counts from its own start
+    var w = popped && !popped.win.closed ? popped.win : window;
+    // A closed pop out window never answers, so the drawing would stop for good once the app is brought back.
+    if (w !== on && w !== window) w.addEventListener('pagehide', function () { if (on === w) { on = window; requestAnimationFrame(frame); } });
+    on = w;
+    w.requestAnimationFrame(frame);
+    var t = real.now();   // not the frame's time, which a popped out window counts from its own start
     if (away()) return;
-    if (window.__shimPainted) {
-      window.__shimPainted = false;
-      changed = true;
-    }
+    if (drew()) changed = true;
     // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
     // less often: the app keeps at least nine tenths of the time.
     if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
     last = t;
     changed = false;
-    var t0 = performance.now(), box = drawDesk(g, canvas, desktop);
-    cost = 0.8 * cost + 0.2 * (performance.now() - t0);
+    var t0 = real.now(), box = drawDesk(g, canvas, desktop);
+    cost = 0.8 * cost + 0.2 * (real.now() - t0);
     if (!box) return;
     // A recording keeps the size it started with (Chrome's MP4 does not follow a resize), so windows much
     // bigger or smaller than it (a splash before the app's window, Minesweeper's Expert board) are fitted in at
@@ -301,7 +307,7 @@ export function startReplay(desktop: Element): Replay | null {
     track = canvas.captureStream(REPLAY_FPS).getVideoTracks()[0];
     begin();
     if (!first) return;
-    setInterval(rotate, REPLAY_SEG / 2);
+    real.setInterval(rotate, REPLAY_SEG / 2);   // real time: a slowed app's clip still covers 10 to 20 s
     document.documentElement.setAttribute('data-replay', '');
     if (embedded && window.parent !== window) window.parent.postMessage({ oldjavaReplay: true }, location.origin);
   }
@@ -343,16 +349,11 @@ export function openClip(clip: ReplayClip, opener: HTMLElement | null) {
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
   var url = URL.createObjectURL(clip.blob);
   var video: HTMLVideoElement | null = null, save: HTMLElement | null = null;
-  function shut() {
-    playSound('close');
+  openPanel(shut => <ClipPanel clip={clip} url={url} onClose={shut} onPanel={(el, v, s) => { clipBox = el; video = v; save = s; }} />, opener, () => {
     video!.pause();
     URL.revokeObjectURL(url);
-    close();
     clipBox = null;
-    if (opener && opener.isConnected) opener.focus();
-  }
-  const close = openLayer(<ClipPanel clip={clip} url={url} onClose={shut} onPanel={(el, v, s) => { clipBox = el; video = v; save = s; }} />);
-  playSound('open');
+  });
   // Started by the visitor's click, so it may play with sound; muted if the browser says otherwise.
   video!.play().catch(function () { video!.muted = true; video!.play().catch(function () {}); });
   save!.focus();

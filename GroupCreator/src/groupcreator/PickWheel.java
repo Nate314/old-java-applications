@@ -20,7 +20,7 @@ final class PickWheel {
    private static final Color RIM = new Color(52, 56, 66);
    private static final Font HUB = new Font("SansSerif", Font.BOLD, 13);
 
-   private final WheelSound sound = new WheelSound();
+   final WheelSound sound = new WheelSound();
    private final Timer timer;
    private final Random random = new Random();
    private final Color[] colors;

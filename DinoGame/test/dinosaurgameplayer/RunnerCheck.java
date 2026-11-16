@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -242,6 +243,215 @@ public final class RunnerCheck {
       }
       assert dust.count() < 8 : "dust settles";
 
+      // The ghost: a run of yours plays again, jump for jump, from its course and keys.
+      File gfile = File.createTempFile("dinogame", ".txt");
+      gfile.delete();
+      RunnerPanel gp = new RunnerPanel(Records.load(gfile), 11);
+      gp.runner().press();
+      runYou(gp);
+      int mine = gp.runner().score();
+      long crashStep = gp.runner().steps();
+      Ghost kept = Records.load(gfile).ghost;
+      assert kept != null && kept.score == mine && mine > 150 : "your run is kept as a ghost: " + mine;
+      kept.start();
+      while (kept.runner().state() == Runner.State.RUNNING) {
+         kept.step();
+      }
+      assert kept.runner().score() == mine && kept.runner().steps() == crashStep : "the ghost crashes where you did";
+      assert Ghost.decode(kept.encode()).encode().equals(kept.encode()) && Ghost.decode("1,2,9,3") == null && Ghost.decode("x") == null;
+      // T: the whole run in one picture, played again from its keys: same score, its jumps, every row inside the game.
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      RunPicture pic = gp.picture();
+      assert pic != null && pic.you.score == mine && pic.ghost == null && pic.you.jumps > 5 && !pic.you.obstacles.isEmpty()
+         : "the picture replays your run";
+      assert pic.you.steps.size() == crashStep && pic.rowHeight() >= 150 / pic.shrink + 4 : pic.rows + " rows at 1/" + pic.shrink;
+      int[] endAt = pic.at(pic.you.end());
+      assert endAt[1] == pic.rows - 1 && endAt[0] <= Runner.WIDTH - 10 : "the crash is on the last row";
+      BufferedImage shot = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D sg = shot.createGraphics();
+      gp.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+      gp.paint(sg);
+      sg.dispose();
+      int trail = 0;
+      for (int y = 0; y < RunnerPanel.STRIP; y++) {
+         for (int x = 0; x < Runner.WIDTH; x++) {
+            trail += shot.getRGB(x, y) == RunPicture.TRAIL.getRGB() ? 1 : 0;
+         }
+      }
+      assert trail > 300 : "the ribbon is drawn: " + trail;
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      assert gp.picture() == null : "T again goes back";
+      gp.setBot(true);
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      assert gp.picture() == null : "no picture while the bot plays";
+      gp.setBot(false);
+      // The next run is a new course; G races the ghost on its own.
+      gp.runner().restart();
+      for (int i = 0; i < 200; i++) {
+         gp.step();
+      }
+      assert gp.runner().course() != kept.course : "a new course each run";
+      gp.toggleRace();
+      assert gp.runner().state() == Runner.State.READY && gp.ghost() == null : "G drops the run under way";
+      gp.runner().press();
+      gp.step();
+      assert gp.ghost() != null && gp.runner().course() == kept.course;
+      run(gp);   // no keys this time: an early crash
+      assert gp.runner().score() < mine && gp.crashLines()[1].equals("Your ghost runs on to " + mine + ". Watch where it jumps.")
+         : gp.crashLines()[1];
+      double before = gp.ghost().runner().distance();
+      for (int i = 0; i < 30; i++) {
+         gp.step();
+      }
+      assert gp.ghost().runner().distance() > before : "the ghost runs on after you crash";
+      assert Records.load(gfile).ghost.score == mine : "a worse run keeps the ghost";
+      // Raced, the picture has the ghost too, further along, and building it leaves the ghost where it is.
+      double ghostAt = gp.ghost().runner().distance();
+      key(gp, java.awt.event.KeyEvent.VK_T, true);
+      assert gp.picture() != null && gp.picture().ghost.score == mine && gp.picture().ghost.end() > gp.picture().you.end()
+         && gp.picture().you.score == gp.runner().score() && gp.ghost().runner().distance() == ghostAt;
+      for (int i = 0; i < RunnerPanel.STRIP; i++) {
+         gp.step();
+      }
+      key(gp, java.awt.event.KeyEvent.VK_SPACE, true);
+      key(gp, java.awt.event.KeyEvent.VK_SPACE, false);
+      assert gp.picture() == null && gp.runner().state() == Runner.State.RUNNING : "Space goes on: a new run";
+      gp.toggleRace();
+      gp.runner().press();
+      gp.step();
+      assert gp.ghost() == null && gp.runner().course() != kept.course : "G again: new courses";
+      gfile.delete();
+
+      // Two players (P): one course for both, started together, P2 ahead of P1 and clear of it; the further one wins
+      // the round, and duel runs count for nobody's best.
+      File dfile = File.createTempFile("dinogame", ".txt");
+      dfile.delete();
+      Records dr = Records.load(dfile);
+      RunnerPanel dp = new RunnerPanel(dr, 11);
+      dp.setBot(true);
+      dp.togglePlayers();
+      Duel duel = dp.duel();
+      assert duel != null && !dp.bot().isOn() : "P turns the bot off";
+      assert duel.p2.dinoX() >= Runner.DINO_X + Runner.DUCK_W : "P2 stands clear of P1";
+      key(dp, java.awt.event.KeyEvent.VK_UP, true);
+      assert duel.p1.state() == Runner.State.RUNNING && duel.p2.state() == Runner.State.RUNNING : "one key starts both";
+      assert !duel.p1.isJumping() && !duel.p2.isJumping() : "the start is not a jump";
+      assert duel.p1.course() == duel.p2.course();
+      dp.step();
+      key(dp, java.awt.event.KeyEvent.VK_W, true);
+      assert duel.p1.isJumping() && !duel.p2.isJumping() : "W jumps P1 only";
+      key(dp, java.awt.event.KeyEvent.VK_W, false);
+      while (duel.p1.isJumping()) {
+         dp.step();
+      }
+      runYou(dp);   // P1 plays, P2 never jumps
+      for (int i = 0; i < 60 * 600 && duel.running(); i++) {
+         dp.step();
+      }
+      assert duel.over() && duel.winner() == 1 && duel.wins(1) == 1 && duel.wins(2) == 0 : duel.p1.score() + " vs " + duel.p2.score();
+      assert dp.crashLines()[0].equals("P1 wins, " + duel.p1.score() + " to " + duel.p2.score() + ".") : dp.crashLines()[0];
+      assert duel.p2.crashedInto() != null && duel.p2.score() > 0;
+      assert dr.best == 0 && dr.ghost == null && !dfile.exists() : "duel runs do not count";
+      key(dp, java.awt.event.KeyEvent.VK_UP, true);
+      assert duel.over() : "a held key does not start the next round at once";
+      for (int i = 0; i < 30; i++) {
+         dp.step();
+      }
+      long lastCourse = duel.p1.course();
+      key(dp, java.awt.event.KeyEvent.VK_SPACE, true);
+      dp.step();
+      assert duel.running() && dp.crashLines().length == 0 && duel.p1.course() != lastCourse : "the next round, a new course";
+      dp.togglePlayers();
+      assert dp.duel() == null && dp.runner().state() == Runner.State.READY : "P again: one player";
+      dp.runner().press();
+      assert dp.runner().course() != duel.p2.course() : "back to new courses";
+      // Neither jumps: both fall at the first obstacle, P2 first since it stands ahead, and that is a dead heat.
+      dp.togglePlayers();
+      key(dp, java.awt.event.KeyEvent.VK_SPACE, true);
+      for (int i = 0; i < 60 * 60 && dp.duel().running(); i++) {
+         dp.step();
+      }
+      assert dp.duel().over() && dp.duel().winner() == 0 && dp.duel().wins(1) + dp.duel().wins(2) == 0
+         && dp.duel().p2.score() < dp.duel().p1.score() && dp.crashLines()[0].startsWith("A dead heat") : dp.crashLines()[0];
+
+      // Play by ear: a player who never looks, only pressing on the beats (and holding as long as each rings), runs far.
+      int earTotal = 0;
+      int lateTotal = 0;
+      for (long seed = 1; seed <= 40; seed++) {
+         earTotal += earRun(seed, 0);
+         lateTotal += earRun(seed, 2);
+      }
+      assert earTotal / 40 > 1000 : "ear player average " + earTotal / 40;
+      assert lateTotal / 40 > 1000 : "an ear player up to 2 steps late averages " + lateTotal / 40;
+      // Each cactus and low bird gets a low warning then the beat to act on, 14 or 15 steps later; a middle bird two high
+      // ones; a high bird none. Every beat to act on comes before the obstacle reaches the dinosaur.
+      Runner er = new Runner(25);
+      er.press();
+      java.util.Map<Runner.Obstacle, Long> warned = new java.util.HashMap<>();
+      java.util.Set<String> heard = new java.util.HashSet<>();
+      for (int i = 0; i < 60 * 60 && er.state() == Runner.State.RUNNING; i++) {
+         er.step();
+         for (Runner.Obstacle o : er.obstacles()) {
+            assert o.lift != Runner.BIRD_HEIGHTS[2] || o.beats == 0 : "a high bird is silent";
+            assert o.x > Runner.DINO_X + Runner.DINO_W || Ears.need(o) == 0 || o.beats == 2 : "beats come before the obstacle";
+         }
+         for (int[] b : Ears.beats(er)) {
+            Runner.Obstacle o = null;
+            for (Runner.Obstacle c : er.obstacles()) {
+               boolean fresh = b[1] == 0 ? c.beats == 1 && !warned.containsKey(c) : c.beats == 2 && warned.containsKey(c) && warned.get(c) >= 0;
+               if (fresh && Ears.need(c) == b[0]) {
+                  o = c;
+                  break;
+               }
+            }
+            assert o != null : "a beat names an obstacle";
+            assert b[0] == (o.kind == Runner.Kind.BIRD && o.lift == Runner.BIRD_HEIGHTS[1] ? Ears.DUCK : Ears.JUMP);
+            if (b[1] == 0) {
+               warned.put(o, er.steps());
+            } else {
+               assert Math.abs(er.steps() - warned.get(o) - Ears.BEAT + 0.5) <= 0.5 : "the beat to act on is " + (er.steps() - warned.get(o)) + " steps after the warning";
+               assert b[1] > 0 && b[1] < 40 : "hold " + b[1];
+               warned.put(o, -1L);
+               heard.add(o.kind + (o.kind == Runner.Kind.BIRD ? " " + o.lift : ""));
+            }
+         }
+         // A seeing player keeps this run going, so the course reaches the birds.
+         Runner.Obstacle o = er.at(Runner.DINO_X);
+         if (o != null && !er.isJumping() && Ears.need(o) == Ears.JUMP && o.x - Runner.DINO_X - Runner.DINO_W < er.speed() * 5) {
+            er.press();
+         } else if (er.isJumping()) {
+            er.release();
+         }
+         er.duck(o != null && Ears.need(o) == Ears.DUCK && o.x - Runner.DINO_X - Runner.DINO_W < 60);
+      }
+      assert heard.contains("SMALL_CACTUS") && heard.contains("LARGE_CACTUS") : "heard " + heard;
+
+      // L goes from off to beats to the blindfold and back, and is saved; the blindfold hides the obstacles on screen
+      // during a run (the bot's frame still has them), and the crash shows them again.
+      File earFile = File.createTempFile("dinogame", ".txt");
+      earFile.delete();
+      RunnerPanel ep = new RunnerPanel(Records.load(earFile), 3);
+      key(ep, java.awt.event.KeyEvent.VK_L, true);
+      assert Records.load(earFile).ears == Ears.Mode.CUES;
+      key(ep, java.awt.event.KeyEvent.VK_L, true);
+      assert Records.load(earFile).ears == Ears.Mode.BLINDFOLD && !ep.blindfolded() : "the blindfold goes on with the run";
+      ep.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+      key(ep, java.awt.event.KeyEvent.VK_SPACE, true);
+      key(ep, java.awt.event.KeyEvent.VK_SPACE, false);
+      while (ep.runner().at(Runner.DINO_X + Runner.DINO_W) == null || ep.runner().at(Runner.DINO_X + Runner.DINO_W).x > 400) {
+         ep.step();
+      }
+      assert ep.blindfolded() && inkInField(ep) == 0 : "blindfolded, no obstacle drawn";
+      ep.setBot(true);
+      ep.step();
+      assert inkInField(ep) == 0 : "the screen stays blindfolded while the bot plays";
+      run(ep);
+      assert ep.runner().score() > 100 : "the bot still sees through the blindfold: " + ep.runner().score();
+      assert !ep.blindfolded() && inkInField(ep) > 0 : "the crash shows what was hit";
+      key(ep, java.awt.event.KeyEvent.VK_L, true);
+      assert Records.load(earFile).ears == Ears.Mode.OFF && !Files.readString(earFile.toPath()).contains("ears=") : "off is not written";
+      earFile.delete();
+
       // The file keeps both bests and the marker; damaged lines are skipped.
       Records r = Records.load(file);
       r.best = 812;
@@ -272,8 +482,67 @@ public final class RunnerCheck {
       assert broken.sound && broken.best == 0 && broken.botBest == 7 && broken.markerX == PixelBot.DEFAULT_X;
       file.delete();
 
-      System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore() + ")");
+      System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore()
+         + ", ear player average " + earTotal / 40 + ", " + lateTotal / 40 + " when up to 2 steps late)");
       System.exit(0);
+   }
+
+   /**
+    * A run played by ear alone, from seed: on each beat to act on, jump 1 to late + 1 steps after it and hold as long as
+    * the beat rings, or duck at once for as long. Stops at 3,000.
+    */
+   private static int earRun(long seed, int late) {
+      Runner r = new Runner(seed);
+      r.press();
+      r.release();
+      java.util.Random lateness = new java.util.Random(seed);
+      int hold = 0;
+      int duck = 0;
+      int wait = 0;
+      int pendingHold = 0;
+      while (r.state() == Runner.State.RUNNING && r.score() < 3000) {
+         r.step();
+         if (wait > 0 && --wait == 0) {
+            r.duck(false);
+            duck = 0;
+            r.press();
+            hold = pendingHold;
+         }
+         if (hold > 0 && --hold == 0) {
+            r.release();
+         }
+         if (duck > 0 && --duck == 0) {
+            r.duck(false);
+         }
+         for (int[] b : Ears.beats(r)) {
+            if (b[1] == 0) {
+               continue;
+            }
+            if (b[0] == Ears.DUCK) {
+               r.duck(true);
+               duck = b[1];
+            } else {
+               wait = 1 + lateness.nextInt(late + 1);
+               pendingHold = b[1];
+            }
+         }
+      }
+      return r.score();
+   }
+
+   /** Ink-colored pixels the panel draws on screen ahead of the dinosaur, between the score and the ground. */
+   private static int inkInField(RunnerPanel p) {
+      BufferedImage img = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = img.createGraphics();
+      p.paint(g);
+      g.dispose();
+      int n = 0;
+      for (int y = 50; y < Runner.GROUND; y++) {
+         for (int x = Runner.DINO_X + Runner.DUCK_W + 8; x < Runner.WIDTH; x++) {
+            n += (img.getRGB(x, y) & 0xFFFFFF) == (RunnerPanel.INK.getRGB() & 0xFFFFFF) ? 1 : 0;
+         }
+      }
+      return n;
    }
 
    private static int maxOf(List<Integer> list) {
@@ -310,6 +579,37 @@ public final class RunnerCheck {
          p.step();
       }
       assert p.runner().state() == Runner.State.CRASHED : "the run ends";
+   }
+
+   /** Plays like a person would, roughly: jumps cacti and low birds with held or tapped keys, ducks the middle birds. */
+   private static void runYou(RunnerPanel p) {
+      Runner r = p.runner();
+      int held = 0;
+      for (int i = 0; i < 60 * 600 && r.state() == Runner.State.RUNNING; i++) {
+         Runner.Obstacle o = r.at(Runner.DINO_X);
+         double ahead = o == null ? 999 : o.x - Runner.DINO_X - Runner.DINO_W;
+         boolean duck = o != null && o.kind == Runner.Kind.BIRD && o.lift == Runner.BIRD_HEIGHTS[1] && ahead < 60;
+         r.duck(duck);
+         if (!duck && !r.isJumping() && o != null && o.lift < Runner.BIRD_HEIGHTS[1] && ahead < r.speed() * 5 && ahead > 0) {
+            r.press();
+            held = o.kind == Runner.Kind.LARGE_CACTUS ? 14 : 3;
+         } else if (held > 0 && --held == 0) {
+            r.release();
+         }
+         p.step();
+      }
+   }
+
+   private static void key(RunnerPanel p, int code, boolean down) {
+      java.awt.event.KeyEvent e = new java.awt.event.KeyEvent(p, down ? java.awt.event.KeyEvent.KEY_PRESSED : java.awt.event.KeyEvent.KEY_RELEASED,
+         0, 0, code, java.awt.event.KeyEvent.CHAR_UNDEFINED);
+      for (java.awt.event.KeyListener l : p.getKeyListeners()) {
+         if (down) {
+            l.keyPressed(e);
+         } else {
+            l.keyReleased(e);
+         }
+      }
    }
 
    private static int botRun(long seed, int[] marker) throws Exception {

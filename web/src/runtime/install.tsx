@@ -11,10 +11,12 @@ import { EraSwitch, indexOf, openDrawer, pageOf } from './then-and-now';
 import { openShare } from './share';
 import { howToPlay } from './source-viewer';
 import { setSoundOn, soundOn } from './sounds';
-import { findMac, findOff, openFind } from './find';
+import { findKey, findMac, findOff, openFind } from './find';
 import { docked, openDockPicker } from './side-by-side';
 import { openMaker } from './skin-maker';
 import { More, moreOut } from './toolbar-more';
+import { PhoneKeys } from './phone-keys';
+import { SlowMo } from './slow-mo';
 import { openLayer } from './ui/layer';
 
 export let siteRoot: string;
@@ -74,12 +76,12 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
   const blur = (e: { currentTarget: HTMLElement }) => e.currentTarget.blur();
   // A control's class, and More's mark when it has stepped out (toolbar-more.tsx).
   const more = (sel: string, cls: string) => cls + (moreOut(sel) ? ' shim-more-out' : '');
-  const on = soundOn(), fit = zoomFit(), s = window.__shimScale || 1, beside = docked(), key = findMac ? '⌘K' : 'Ctrl K';
+  const on = soundOn(), fit = zoomFit(), s = window.__shimScale || 1, beside = docked();
   // data-sound="none" on Find, Side by side and Edit too: what they open plays its own sound
   const find = !findOff && (
-    <button type="button" className={more('.shim-find-open', 'shim-find-open')} title={'Find an app, something to do or a source file (' + key + ')'}
+    <button type="button" className={more('.shim-find-open', 'shim-find-open')} title={'Find an app, something to do or a source file (' + findKey + ')'}
       aria-keyshortcuts={findMac ? 'Meta+K' : 'Control+K'} data-sound="none" onClick={e => { openFind(e.currentTarget); blur(e); }}>
-      <span aria-hidden="true">{'⌕'}</span><span className="shim-find-label"> Find</span><kbd>{key}</kbd>
+      <span aria-hidden="true">{'⌕'}</span><span className="shim-find-label"> Find</span><kbd>{findKey}</kbd>
     </button>
   );
   return (
@@ -122,6 +124,9 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
             <button type="button" className={more('.shim-controls-open', 'shim-controls-open')} title="Show or hide the on-screen controller" aria-pressed={padShown()}
               onClick={e => { togglePad(); blur(e); }}>Controls</button>
           )}
+          <SlowMo className={more('.shim-slowmo', 'shim-slowmo')} />
+          {/* not in BAND_ORDER: on a phone it is the way to type, so it never steps out under More */}
+          <PhoneKeys />
           <a className={more('.shim-next', 'shim-next')} hidden={!next} href={next ? pageOf(next) : undefined}>{next ? 'Next: ' + next.name + ' ›' : ''}</a>
         </>
       )}

@@ -1,4 +1,4 @@
-import { embedded } from './skin';
+import { clipMode, embedded } from './skin';
 import { toolbar } from './install';
 import { centerWindows, stageEdge } from './band-news';
 import { bringBack } from './pop-out';
@@ -16,7 +16,7 @@ import { pretendWindows } from './pretend-windows';
 import { AGAIN_KEY, followTitle } from './records';
 import { clockFollows, clockOpen, clockPage } from './clock-follows';
 import { preload, titleScreen } from './title-screen';
-import { overlay } from './ui/overlay';
+import { overlay, runAgain } from './ui/overlay';
 import { showConsole } from './system-out';
 import { playSound } from './sounds';
 import { whenShown } from './toolbar-more';
@@ -93,8 +93,10 @@ export function init() {
       });
       if (extras && !embedded) playSound('start');   // in the player, the home page plays it when it swaps an app in
       if (extras && !embedded) howToPlay();
-      if (watch) watchApp(desktop); else if (extras) stampOnPlay();
-      if (extras && !shell && !replay) setReplay(startReplay(desktop));
+      var record = function () { if (extras && !shell && !replay) setReplay(startReplay(desktop)); };
+      // While the computer plays, replay waits for the visitor to take over: drawing the demo cost a slow phone a sixth of its time.
+      if (watch) watchApp(desktop, record); else if (extras) stampOnPlay();
+      if (!watch || clipMode) record();   // a preview clip (clips.ps1) records the computer playing
       if (extras && !shell) {   // the photo booth draws the app's windows (pretend Windows is drawn by the page)
         setPhotoDesk(desktop);
         document.documentElement.setAttribute('data-photo', '');
@@ -107,7 +109,11 @@ export function init() {
     })).then(function () {
       if (loading) loading.remove();
       if (typeof main !== 'function') {
-        overlay(programFile() + ' is missing. Build the site with Maven first (see web/README.md).');
+        // A visitor's download failed (a dropped or slow connection), so say so and offer a retry; a local
+        // checkout that was never built gets the same box, with the build hint in the console.
+        console.warn(programFile() + ' did not load. Building the site yourself? Run Maven first (see web/README.md).');
+        overlay('This app did not finish downloading. Check your connection, then try again.', 'Try again');
+        window.addEventListener('online', runAgain, { once: true });   // the connection came back: try by itself
         return;
       }
       if (title) title.ready(start); else whenShown(start);   // no app runs unseen in a prerendered page

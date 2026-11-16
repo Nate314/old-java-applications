@@ -3,6 +3,7 @@ import { siteRoot } from './install';
 import { tripPlace } from './one-machine';
 import { findOff } from './find';
 import { titleLog } from './title-screen';
+import { fetchOk } from './fetch-ok';
 
 let padsNow: typeof navigator.getGamepads;
 let net: { saveData?: boolean; effectiveType?: string };
@@ -40,8 +41,7 @@ const warmed: Record<string, Promise<string | ArrayBuffer | null> | undefined> =
 
 function warmFile(url: string): Promise<string | ArrayBuffer | null> {
   if (warmed[url]) return warmed[url];
-  warmed[url] = fetch(url, { priority: 'low' } as RequestInit).then(function (r): Promise<string | ArrayBuffer> {
-    if (!r.ok) throw new Error(r.status as unknown as string);
+  warmed[url] = fetchOk(url, { priority: 'low' } as RequestInit).then(function (r): Promise<string | ArrayBuffer> {
     return r.headers.get('Content-Type') && /html/.test(r.headers.get('Content-Type')!) ? r.text() : r.arrayBuffer();
   }).catch(function () { delete warmed[url]; return null; });
   return warmed[url]!;
@@ -58,14 +58,14 @@ function warmApp(id: string, then: boolean) {
 }
 
 // What a pointed-at element would open: { app, then, player } for a link to an app page, or for one of the home
-// page's player controls (its rail, whose buttons follow the gallery's order, and the gallery's Play and picture
+// page's player controls (its rail, whose buttons name their app in data-id, and the gallery's Play and picture
 // links, which play in the player), whose app is warmed rather than prerendered.
 function instantTarget(el: Element | null): { app: string; then: boolean; player: boolean } | null {
   if (!el || !el.closest) return null;
   var rail = el.closest('#rail button');
   if (rail) {
-    var li = document.querySelectorAll('#apps li[data-app]')[([] as Element[]).indexOf.call(document.querySelectorAll('#rail button'), rail)];
-    return li ? { app: li.getAttribute('data-app')!, then: false, player: true } : null;
+    var id = rail.getAttribute('data-id');
+    return id ? { app: id, then: false, player: true } : null;
   }
   var a = el.closest<HTMLAnchorElement>('a[href]');
   var place = a && !a.hasAttribute('download') && tripPlace(a.href);

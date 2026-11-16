@@ -6,13 +6,36 @@ It moves and sounds like the original Flappy Bird:
 
 - The bird hovers on the title screen, tilts nose up with each flap and turns into a nose-down dive as it falls, and each flap stretches it for a moment and puffs a little air.
 - The score is big white digits outlined in black, and it pops bigger with each pipe passed.
-- A crash flashes the screen white, shakes it and scatters feathers; after hitting a pipe the bird drops to the ground before the game over screen rises into place. For half a second that screen ignores Space, a click or a tap, so a flap pressed at the moment of the crash does not skip it.
+- A crash flashes the screen white, shakes it and scatters feathers (on the web page, when the system asks for reduced motion, it only scatters feathers); after hitting a pipe the bird drops to the ground before the game over screen rises into place. For half a second that screen ignores Space, a click or a tap, so a flap pressed at the moment of the crash does not skip it.
 - Sounds on the MIDI synthesizer: a tick for each flap, a two-note ding for each pipe, a thud for a crash and a falling run of notes as the bird drops. M turns them off and on.
 
 There are two courses, chosen on the title screen:
 
 - **Endless**: new random pipes every run (the original game).
 - **Today's course**: the pipes are seeded by the date, so every run on the same day meets the same pipes, and a new course starts each day. Your best run of the day is kept and flies beside you as a see-through ghost labelled with its score. Passing its score shows "You passed your ghost!", and a better run replaces it.
+
+## Flight guide
+
+Most first runs end at the first pipe or two, before the flap has a feel. So until your best reaches 5 pipes, the game flies the next second ahead for you, with the bird's own physics, and draws it in front of the bird: yellow dots for where it goes if you flap now, white dots for where it goes if you do not, and a red ring where either path would hit a pipe or the ground. Flap when the white path ends in a ring; wait when the yellow one does. A line under the score says which dots are which until the first pipe is passed.
+
+Once your best reaches 5, the next title screen says "The flight guide steps aside (G brings it back)", and runs are flown without it. **G** turns the guide on or off, on the title screen or in flight (a note says which); a run flown with the guide brought back after that, even for part of the way, is practice, like a rewind: the score shows "Practice: the flight guide" and the run keeps no best score, no "New best!" and no ghost. While a rewound run waits, frozen, for the flap that flies on, the guide shows what that flap will do.
+
+The paths come from `Guide.java`: it keeps the bird's state, flies a copy of it ahead step by step (moving it right as fast as the pipes scroll left, so the pipes can stay where they are), checks its round body against each pipe's shaft and flange and the ground as a real crash does, and puts the bird back.
+
+## From sunrise into night
+
+A long run is a day's flight. The sky starts at the sunrise the art is drawn at and turns a little with every pipe passed: clear blue noon by 10 pipes (Bronze), a purple and orange sunset by 20 (Silver), and night by 30 (Gold), when the pipes and ground darken, stars twinkle and a moon is up, while the bird stays bright. At 40 (Platinum) it is sunrise again, and the day goes round. Each pipe moves the sky a tenth of the way to the next time of day over about half a second, a rewind turns it back with the score, and every run starts at sunrise. With reduced motion the stars hold still.
+
+The sky is drawn over the background picture in code (`Sky.java`): bands of color down to the horizon, blended between the four times of day, then the stars and moon, and a see-through wash over the pipes and ground.
+
+## Fair crashes
+
+A crash only happens where the drawings really meet. The bird used to count as the whole square picture around it, so a pipe brushing the empty corner beside its round body, or the see-through margin beside a pipe's shaft, ended the run. Now:
+
+- The bird is its round body: the circle drawn in `art/bird.svg` (centre at 48, 54 of 100, radius 36), turning with the bird as it tilts. The beak and the tail tip do not count.
+- A pipe is its shaft (inset 22 of 240 on each side, as drawn in `art/topPipe.svg`) and its flange, full width at the open end. The ground still counts from the bottom of the picture.
+- Where the body met the pipe is marked with a pulsing yellow spark, through the fall and on the game over screen, so a crash shows what was hit. A crash into the ground has no spark.
+- **D** (debug mode) draws these shapes: the body's circle and each pipe's shaft and flange.
 
 ## Rewind a crash
 
@@ -24,15 +47,18 @@ A run with a rewind in it is practice: the score shows "Practice: 1 rewind" unde
 
 The game over screen shows your score, best and today's best, and a medal: Bronze at 10 pipes, Silver at 20, Gold at 30 and Platinum at 40 (the thresholds of the original Flappy Bird), with how many more pipes the next medal needs. In endless mode, beating your best score shows "New best!" during the run.
 
+The game over screen is a scoreboard in the game's own colors: "Game Over" in the score's outlined lettering, then a panel of deep teal glass (the bird's color, with the sky showing through) in a copper rim like the pipes. The medal sits centered on top, and under it a row of tiles reads SCORE, BEST and (once there is a today's best) TODAY. The score counts up from 0 once the screen has risen (in up to 0.8 s), then the medal lands with a small bounce and a sparkle keeps glinting on it, and a best or today's best the run just beat lights its tile in copper and reads NEW BEST or NEW TODAY. With no medal yet, an empty ring shows the pipes the first one needs (10). Under the panel come the medal line, the practice note for a practice run, the Rewind button and how to go back to the title screen. With reduced motion the numbers, medal and NEW labels show at once and the sparkle is off. The layout is measured in one unit that fits both the window's height and a narrow page's width, so the panel stays whole on a phone. Platinum is an icy blue so it does not pass for Silver.
+
 ## Controls / usage
 
 - **Space**, or a **click** or **tap** anywhere in the game: start from the title screen, flap, or (on the game over screen) go back to the title screen.
 - **Z** or **Backspace**: after a crash, rewind the last 2.5 seconds and fly on from there (practice). The game over screen's Rewind button does the same.
 - **M**: sound off / on.
 - **C**: on the title screen, switch between endless pipes and today's course.
+- **G**: turn the flight guide on or off, on the title screen or in flight (it is on by itself until your best reaches 5; after that, a run guided even part of the way is practice).
 - **P**: pause / resume.
 - **R**: reset the game to the title screen.
-- **D**: toggle debug mode. Draws hitboxes, shows a debug text panel, and on collision shows "COLISION" instead of ending the game.
+- **D**: toggle debug mode. Draws hitboxes (the bird's round body, each pipe's shaft and flange), shows a debug text panel, and on collision shows "COLISION" instead of ending the game.
 - **Up / Down**: increase / decrease the debug text font size by 5.
 - **T**: rotate the loaded images one slot (background, ground, top pipe, bottom pipe, bird). Takes effect on the next reset. Prints "test".
 - **Argument**: an optional integer, e.g. `java flappyBird.Main 120`: the game speed in steps per second. Defaults to 120 if omitted or not a number (the original `run.bat` passed 120; the original code printed it but never used it).
@@ -43,6 +69,9 @@ The game over screen shows your score, best and today's best, and a medal: Bronz
 
 - `src/flappyBird/Main.java`: the `JFrame`; sizes the window, parses the argument and wires the key listener.
 - `src/flappyBird/GamePanel.java`: loads images; a Swing timer runs fixed game steps based on elapsed time, then repaints. Draws the game, the ghost and the title, pause and game over screens (with the medal), the tilted bird, its puffs and feathers, the crash's flash and shake; checks collisions, handles keys, clicks and the saved best score, records the run for today's course, and runs a rewind (tape, backwards playback, the frozen wait and the last flight's path).
+- `src/flappyBird/Sky.java`: the time of day the score has reached: the sky's colors at sunrise, noon, sunset and night and the blend between them, the stars and the moon, and the dimming of the pipes and ground.
+- `src/flappyBird/Guide.java`: the flight guide: the bird's next second with and without a flap, as body positions, ending where it would crash.
+- `src/flappyBird/Hitbox.java`: what counts as touching a pipe: the bird's round body (turned with its tilt) against a pipe's shaft and flange, and where they touch.
 - `src/flappyBird/Rewind.java`: the rewind tape: the last 2.5 seconds as one moment per game step (what the bird, pipes and background remember), given back newest first, and the path into the crash.
 - `src/flappyBird/Sounds.java`: the flap, pipe, crash, fall and rewind sounds on the MIDI synthesizer, opened on a background thread.
 - `src/flappyBird/DailyCourse.java`: today's course: the date's pipe seed, today's best score and ghost, and its file.
@@ -62,10 +91,13 @@ The images are original art for this repo (a teal bird, copper pipes, hills at s
 
 ## Self-check
 
-`test/flappyBird/CourseCheck.java` checks that the same day gives the same pipes and the next day different ones, that only a better run replaces today's ghost, that the ghost fills in the steps between samples and ends with its run, that the course file loads back the same ghost while a file from another day or a broken one is ignored, and the medal names and lines. `test/flappyBird/RewindCheck.java` checks that the rewind tape keeps only its latest moments and gives them back newest first with the path into the crash, that pipes put back from memory scroll on into exactly the same pipes (including pairs not yet made), and that a bird put back flies the same way again. From `FlappyBird/`:
+`test/flappyBird/CourseCheck.java` checks that the same day gives the same pipes and the next day different ones, that only a better run replaces today's ghost, that the ghost fills in the steps between samples and ends with its run, that the course file loads back the same ghost while a file from another day or a broken one is ignored, and the medal names and lines. `test/flappyBird/RewindCheck.java` checks that the rewind tape keeps only its latest moments and gives them back newest first with the path into the crash, that pipes put back from memory scroll on into exactly the same pipes (including pairs not yet made), and that a bird put back flies the same way again. `test/flappyBird/HitboxCheck.java` checks the body's place as drawn and as it tilts, the shaft and flange of a top and a bottom pipe, that the picture's empty corner over a flange and the margin beside a shaft are not crashes, and that a body dipping into a flange or brushing a shaft is, at the spot it touches. `test/flappyBird/SkyCheck.java` checks that sunrise leaves the art as drawn and 40 pipes come round to it again, that a time of day fades in from a clear sky in its own color rather than through black, and that the stars come out through dusk and are gone by day. `test/flappyBird/GuideCheck.java` checks that the guide leaves the bird as it was, that without a flap the path falls and with one it rises first, that its first dot is exactly where the bird then flies, and that a path into a pipe or the ground ends at the crash. From `FlappyBird/`:
 
 ```
 javac -d ../out/check/FlappyBird src/flappyBird/*.java test/flappyBird/*.java
 java -ea -cp ../out/check/FlappyBird flappyBird.CourseCheck
 java -ea -cp ../out/check/FlappyBird flappyBird.RewindCheck
+java -ea -cp ../out/check/FlappyBird flappyBird.HitboxCheck
+java -ea -cp ../out/check/FlappyBird flappyBird.SkyCheck
+java -ea -cp ../out/check/FlappyBird flappyBird.GuideCheck
 ```

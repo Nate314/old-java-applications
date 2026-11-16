@@ -23,6 +23,9 @@ p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
 .era button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .player-bar .hint { flex: 1 1 260px; min-width: 0; font-size: 14px; opacity: 0.75; }
 .player-bar .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+/* More: the site-wide looks and the less used tools, in a menu under its button (PlayerMore.tsx; drawn by shim.css). */
+.player-bar { position: relative; }
+#player-more-toggle[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
 .btn { display: inline-block; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--card-border);
        background: transparent; color: inherit; font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1.5;
        text-decoration: none; cursor: pointer; white-space: nowrap; }
@@ -32,6 +35,9 @@ p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
 .screen { position: relative; overflow: hidden; background: var(--desk); }
 /* The iframe keeps a desktop-sized viewport (the apps size their windows from it) and is scaled to fit. */
 .screen iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+/* Skip past the app: out of sight until the keyboard reaches it, then over the screen's corner. */
+.screen .skip-app { position: absolute; z-index: 2; top: 8px; left: 8px; background: var(--card-bg); }
+.screen .skip-app:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); border: 0; }
 
 /* ---- the channel rail: every app one click away, without leaving the player ---- */
 .rail { display: flex; align-items: stretch; gap: 6px; padding: 8px; border-top: 1px solid var(--card-border); }
@@ -83,7 +89,7 @@ body.locked { overflow: hidden; }
   /* What a phone wants first: the app's own page, another app, the whole screen. */
   #player-full { order: -3; }
   #player-shuffle { order: -2; }
-  #player-big { order: -1; }
+  #player-big, #player-more-toggle { order: -1; }
   .rail { padding: 6px 4px; gap: 4px; }
   .rail .step { width: 28px; }
   .rail li button { width: 84px; }
@@ -134,43 +140,11 @@ ul.apps .actions { display: flex; gap: 8px; }
   ul.apps li:not(.text):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); }
 }
 
-/* ---- arcade passport: a stamp for every app played (boot.js keeps the stamps) ---- */
-.passport { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
-            background: var(--card-bg); }
-.passport-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
-.ring { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
-        background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--card-border) 0); }
-.ring span { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: var(--card-bg);
-             font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
-.passport-head .text { flex: 1 1 240px; min-width: 0; }
-.passport-head h2 { margin: 0; }
-.passport-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
-.passport-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.passport-head .btn[hidden], .player-bar .btn[hidden] { display: none; }
-/* 20 stamps: two rows of 10, rows of 5 on smaller pages, or rows of 4 on narrow ones. */
-.stamps { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 12px 10px;
-          margin: 16px 0 0; padding: 0; list-style: none; }
-@media (max-width: 900px) { .stamps { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-@media (max-width: 640px) { .stamps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.stamps button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 0;
-                 border: 0; background: none; color: inherit; cursor: pointer;
-                 font: 600 11px/1.25 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.stamps .seal { position: relative; display: grid; place-items: center; width: 58px; height: 58px; box-sizing: border-box;
-                border-radius: 50%; border: 2px dashed var(--card-border); background: var(--desk);
-                transition: transform 0.2s; }
-.stamps .seal img { max-width: 70%; max-height: 70%; filter: grayscale(1); opacity: 0.55; transition: filter 0.3s, opacity 0.3s; }
-.stamps .label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; }
-.stamps button:hover .seal, .stamps button:focus-visible .seal { transform: scale(1.08); }
-.stamps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
-.stamps .played .seal { border: 3px solid #16a34a; transform: rotate(-8deg); }
-.stamps .played:hover .seal { transform: rotate(-8deg) scale(1.08); }
-.stamps .played .seal img { filter: none; opacity: 1; }
-.stamps .played .label { opacity: 1; }
-.stamps .played .seal::after, .rail li button.played .pic::after { content: "\2713"; position: absolute; right: -4px; bottom: -2px;
+.player-bar .btn[hidden] { display: none; }
+/* The arcade passport (count ring, buttons, page of stamps): passport.css. */
+.rail li button.played .pic::after { content: "¹3"; position: absolute;
                 width: 20px; height: 20px; border-radius: 50%; background: #16a34a; color: #fff;
                 font: 700 12px/20px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
-.stamps .fresh .seal { animation: press 0.6s cubic-bezier(0.3, 1.6, 0.5, 1); }
-@keyframes press { from { transform: scale(1.7) rotate(-25deg); opacity: 0; } }
 .rail .pic { position: relative; }
 .rail li button.played .pic::after { right: 3px; bottom: 3px; width: 16px; height: 16px; font-size: 10px; line-height: 16px; }
 ul.apps .badge { position: absolute; top: 8px; left: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
@@ -266,30 +240,7 @@ dialog.records-in .here { font-size: 13px; opacity: 0.7; }
 dialog.records-in .buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 :root[data-skin="arcade"] dialog.records-in { border-color: #ff2bd6; box-shadow: 0 0 0 1px #ff2bd6, 0 0 32px rgba(255, 43, 214, 0.4); }
 
-/* ---- take it with you: install the site as an app and save every app for offline play (sw.js) ---- */
-.takeaway { position: relative; margin-top: 28px; padding: 18px; border-radius: 14px; overflow: hidden; color: #e6e0ff;
-            background: radial-gradient(120% 140% at 0% 0%, #3b1670 0%, #170a2e 55%, #0b0620 100%);
-            border: 1px solid #35205c; box-shadow: 0 14px 40px rgba(23, 10, 46, 0.35); }
-.takeaway[hidden] { display: none; }
-.takeaway-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
-.takeaway .app-icon { flex: none; width: 76px; height: 76px; filter: drop-shadow(0 6px 16px rgba(255, 43, 214, 0.35)); }
-.takeaway .text { flex: 1 1 260px; min-width: 0; }
-.takeaway h2 { margin: 0; color: #fff; }
-.takeaway p { margin: 2px 0 0; font-size: 14px; opacity: 0.9; }
-.takeaway .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.takeaway .btn { border-color: #7df9ff; color: #7df9ff; }
-.takeaway .btn.primary { background: #ff2bd6; border-color: #ff2bd6; color: #fff; }
-.takeaway .btn[hidden] { display: none; }
-.takeaway .btn:disabled { opacity: 0.6; cursor: progress; }
-.takeaway .meter { height: 6px; margin-top: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.takeaway .meter[hidden] { display: none; }
-.takeaway .meter span { display: block; height: 100%; width: 0; border-radius: inherit;
-                        background: linear-gradient(90deg, #ff2bd6, #7df9ff); transition: width 0.2s; }
-.takeaway .perks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; padding: 0; list-style: none;
-                   font-size: 13px; opacity: 0.85; }
-.takeaway .perks li::before { content: "\2713"; margin-right: 6px; color: #7df9ff; font-weight: 700; }
-.takeaway .note { margin-top: 10px; font-size: 13px; opacity: 0.7; }
-.takeaway .note[hidden] { display: none; }
+/* ---- offline: the gallery cards' Offline chips and the banner (what Take it with you saved, sw.js) ---- */
 ul.apps .saved { position: absolute; top: 8px; right: 8px; z-index: 1; padding: 1px 8px; border-radius: 999px;
                  font-size: 12px; font-weight: 700; background: #170a2e; color: #7df9ff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
 ul.apps .saved[hidden] { display: none; }
@@ -301,8 +252,6 @@ ul.apps li.unavailable { opacity: 0.45; }
 ul.apps li.unavailable .saved { color: #fca5a5; }
 
 /* ---- arcade skin (shim.css draws the scanlines): the page as a neon cabinet ---- */
-:root[data-skin="arcade"] .takeaway { border-color: #ff2bd6; box-shadow: 0 0 0 1px #ff2bd6, 0 0 28px rgba(255, 43, 214, 0.35); }
-.btn.arcade[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 :root[data-skin="arcade"] h1 { color: #fff; letter-spacing: 0.02em;
   text-shadow: 0 0 6px #ff2bd6, 0 0 18px rgba(255, 43, 214, 0.75), 0 0 42px rgba(0, 229, 255, 0.45); }
 :root[data-skin="arcade"] h2 { color: #7df9ff; text-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
@@ -322,7 +271,6 @@ ul.apps li.unavailable .saved { color: #fca5a5; }
 
 /* ---- your arcade: What's new, the passport, your records and Take it with you share one tabbed panel, so
    the gallery starts right under it instead of four panels further down ---- */
-/* section.arcade, not .arcade: the player bar's Arcade mode button is a .btn.arcade too. */
 section.arcade { margin-top: 28px; }
 .arcade-tabs { position: relative; display: flex; gap: 4px; padding: 0 10px; overflow-x: auto; scrollbar-width: none; }
 .arcade-tabs::-webkit-scrollbar { display: none; }
@@ -357,6 +305,9 @@ section.arcade { margin-top: 28px; }
 :root[data-skin="arcade"] .arcade-tabs [role="tab"][aria-selected="true"] { box-shadow: inset 0 3px 0 var(--accent), 0 -4px 14px rgba(255, 43, 214, 0.25); }
 /* The story (story.html): HISTORY.md told with the real code and the apps. */
 p.story-link { margin: -12px 0 20px; font-size: 14px; }
+/* The tour and the story share one row under the lead. */
+.start { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: -8px 0 20px; }
+.start p.tour-start, .start p.story-link { margin: 0; }
 p.story-link a { color: var(--accent); font-weight: 600; text-decoration: none; }
 p.story-link a:hover { text-decoration: underline; }
 
@@ -386,6 +337,8 @@ p.tour-start span { opacity: 0.75; }
 @media (prefers-reduced-motion: reduce) { .tour.yours #tour-next { animation: none; } }
 @media (max-width: 640px) {
   p.tour-start span { display: none; }
+  .start { column-gap: 12px; }
+  .start p.story-link { font-size: 13px; }
   .tour { gap: 4px 10px; padding: 6px 10px 8px; }
   .tour-line { flex: 1 1 100%; font-size: 13px; line-height: 1.4; }
   .tour-actions { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; gap: 6px; scrollbar-width: none; }
@@ -394,3 +347,6 @@ p.tour-start span { opacity: 0.75; }
 :root[data-skin="arcade"] .tour { background: rgba(255, 43, 214, 0.08); }
 :root[data-skin="arcade"] .tour-count { color: #7df9ff; text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
 :root[data-skin="arcade"] .tour-steps button[aria-current="step"] { box-shadow: 0 0 8px rgba(255, 43, 214, 0.8); }
+/* A card's record line (yours.ts): what the visitor has done in that app here. */
+ul.apps p.record { margin: 0; padding: 4px 8px; border-radius: 6px; background: rgba(22, 163, 74, 0.12); font-size: 13px;
+  line-height: 1.35; overflow-wrap: anywhere; }

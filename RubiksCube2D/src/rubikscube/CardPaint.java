@@ -24,6 +24,7 @@ final class CardPaint {
    static final Color DONE = new Color(46, 160, 90);
    static final Color NOW = new Color(40, 96, 220);
    static final Color LATER = new Color(214, 220, 234);
+   static final Color BUTTON = new Color(40, 96, 220);
 
    private CardPaint() {
    }
@@ -34,6 +35,19 @@ final class CardPaint {
       g.fillRoundRect(0, 0, width - 1, height - 1, 14, 14);
       g.setColor(EDGE);
       g.drawRoundRect(0, 0, width - 1, height - 1, 14, 14);
+   }
+
+   /** A card's button, 26 high: blue when primary, else white; darker with the mouse over it. */
+   static void button(Graphics2D g, int x, int y, int width, String label, boolean primary, boolean over) {
+      Color fill = primary ? (over ? BUTTON.darker() : BUTTON) : over ? new Color(222, 230, 246) : Color.WHITE;
+      g.setColor(fill);
+      g.fillRoundRect(x, y, width, 26, 10, 10);
+      g.setColor(primary ? BUTTON.darker() : EDGE);
+      g.drawRoundRect(x, y, width - 1, 25, 10, 10);
+      g.setFont(new Font("Dialog", Font.BOLD, 12));
+      g.setColor(primary ? Color.WHITE : INK);
+      int textWidth = g.getFontMetrics().stringWidth(label);
+      g.drawString(label, x + (width - textWidth) / 2, y + 17);
    }
 
    /**

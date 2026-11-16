@@ -22,7 +22,8 @@
   <properties>
     <!-- master after "Generic example names, Modern as the default skin, and every app in NathaNOS (#9)": the
          recovered apps with the bug fixes of "Modernize all 20 apps" (#6), before the reworks from #10 on. A pinned
-         hash, not master, so "then" stays put when later work is merged. web/then-nathanos uses the same commit. -->
+         hash, not master, so "then" stays put when later work is merged. web/then-nathanos uses the same commit.
+         Change it together with THEN_AT in web/src/pages/compare/Compare.tsx (this commit's time). -->
     <then.commit>5a28e4608fc254e9cc075768a598a965b7fe2d24</then.commit>
     <then.src>${project.build.directory}/then-src</then.src>
   </properties>
@@ -60,7 +61,7 @@
                 <delete dir="${then.src}"/>
                 <mkdir dir="${then.src}"/>
                 <exec executable="git" dir="${repo.dir}" failonerror="true">
-                  <arg line="archive --format=tar -o ${project.build.directory}/then-src.tar ${then.commit} CircleSpawner Clock FlappyBird GroupCreator Minesweeper MusicTheoryExpert NumberGuess RubiksCube2D ScreenSaver SimpleAlgorithms SpriteFloatyStars StockChecker SynthesizerKeyboard TankGame UltimateTicTacToe WindowsE"/>
+                  <arg line="archive --format=tar -o ${project.build.directory}/then-src.tar ${then.commit} CircleSpawner Clock FlappyBird GroupCreator Minesweeper MusicTheoryExpert NumberGuess RubiksCube2D ScreenSaver SimpleAlgorithms SpriteFloatyStars StockChecker SynthesizerKeyboard TankGame UltimateTicTacToe Windows WindowsE"/>
                 </exec>
                 <untar src="${project.build.directory}/then-src.tar" dest="${then.src}"/>
               </target>
@@ -104,6 +105,7 @@
                 <thensource app="SynthesizerKeyboard"/>
                 <thensource app="TankGame"/>
                 <thensource app="UltimateTicTacToe"/>
+                <thensource app="Windows"/>
                 <thensource app="WindowsE"/>
               </target>
             </configuration>
@@ -134,6 +136,7 @@
                 <source>${then.src}/SynthesizerKeyboard/src</source>
                 <source>${then.src}/TankGame/src</source>
                 <source>${then.src}/UltimateTicTacToe/src</source>
+                <source>${then.src}/Windows/src</source>
                 <source>${then.src}/WindowsE/src</source>
               </sources>
             </configuration>
@@ -265,6 +268,14 @@
             <configuration>
               <mainClass>ultimateticktacktoe.Main</mainClass>
               <targetDirectory>${site.dir}/UltimateTicTacToe</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Windows</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>test.Test</mainClass>
+              <targetDirectory>${site.dir}/Windows</targetDirectory>
             </configuration>
           </execution>
           <execution>

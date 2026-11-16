@@ -110,14 +110,14 @@
                 <workjar app="StockChecker" main="stockchecker.Main">
                   <files><zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/></files>
                 </workjar>
-                <!-- NathaNOS as run.ps1 stages it: its assets with a jar of each app it opens (Clock is the older
-                     assets/Clock.jar), and the files those apps read. Windows and WindowsE are left out (they press
+                <!-- NathaNOS as run.ps1 stages it: its assets with a jar of each app it opens (today's Clock, not
+                     the older assets/Clock.jar), and the files those apps read. Windows and WindowsE are left out (they press
                      real keys), as in run.ps1. -->
                 <workjar app="NathaNOS" main="main.Main">
                   <files>
-                    <zipfileset dir="${repo}/NathaNOS/assets" includes="*.png *.jpg Clock.jar"
+                    <zipfileset dir="${repo}/NathaNOS/assets" includes="*.png *.jpg"
                                 excludes="background.png NathaNOS.jpg NOS.png transparent.png" prefix="workfolder/assets"/>
-                    <zipfileset dir="${work}/plain" excludes="Clock.jar NathaNOS.jar Windows.jar WindowsE.jar" prefix="workfolder/assets"/>
+                    <zipfileset dir="${work}/plain" excludes="NathaNOS.jar Windows.jar WindowsE.jar" prefix="workfolder/assets"/>
                     <zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/>
                   </files>
                 </workjar>

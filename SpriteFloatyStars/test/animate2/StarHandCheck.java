@@ -65,6 +65,8 @@ public class StarHandCheck {
       field.setMode(field.mode() + 1);
       check(field.mode() == StarField.ORBITS, "N goes on to Orbits");
       field.setMode(field.mode() + 1);
+      check(field.mode() == StarField.SKY_WRITING, "N goes on to Sky writing");
+      field.setMode(field.mode() + 1);
       check(field.mode() == 0, "N wraps to mode 1");
       run(field, 10.0); // Orbits showed its help; let it fade
       field.setMode(1);

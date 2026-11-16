@@ -10,7 +10,7 @@ export const TOUR: [app: string, tryThis: string][] = ([
   ['RubiksCube2D', 'Drag a square to turn its layer. Mix the cube, then press T and Teach me shows every turn of the solve.'],
   ['Clock', 'Open the Timer tab and drag the red dial (it follows you to every app page), or open World and find an hour that suits three cities.'],
   ['UltimateTicTacToe', 'Two computer players. The square you take picks the board your opponent plays next; click to take over.'],
-  ['ScreenSaver', 'Press N for the next of nine screen savers, 9 for the aquarium, and F to feed the fish.'],
+  ['ScreenSaver', 'Press N for the next of ten screen savers, 9 for the aquarium (F feeds the fish), and 0 for the maze.'],
   ['MusicTheoryExpert', 'Open the Songwriter tab and click chords on the circle of fifths: it loops them into a song.'],
   ['TankGame', 'The computer is driving both tanks. Press a key to take the red one: W A S D drive, Q fires.'],
   ['SpriteFloatyStars', 'A thousand stars orbit a sun. Click to place up to four suns and watch them swing between them.'],
@@ -20,6 +20,6 @@ export const TOUR: [app: string, tryThis: string][] = ([
   ['StockChecker', '$10,000 of play money in a market that opens at its last real 2016 quotes. B buys, S sells, R shows the race.'],
   ['BibleDownloader', 'An open book in five public domain translations. Turn the page, or pick a reading plan.'],
   ['NathaNOS', 'A whole fake desktop: open any app from its icons or the start menu, or paint a picture in Paint.'],
-  ['Windows', 'It presses the Windows key once, then quits. Here the key opens a pretend Start menu of every app: type to search.'],
+  ['Windows', 'An on-screen Windows key: click it for a pretend Start menu of every app, or hold it and press E for File Explorer.'],
   ['WindowsE', 'Win+E as many times as you ask, on a pretend Windows: double-click a folder to play that app.'],
 ] as [string, string][]).filter(t => APPS.some(a => a.id === t[0]));

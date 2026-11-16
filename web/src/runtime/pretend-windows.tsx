@@ -2,7 +2,7 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { played } from './passport';
-import { catalog, type CatalogApp } from './catalog';
+import { appId, catalog, type CatalogApp } from './catalog';
 import { playSound } from './sounds';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { play, playProps } from './ui/cards';
@@ -58,13 +58,24 @@ export function pretendWindows() {
       show();
     }
   }
-  function outside(e: Event) { var box = layer.querySelector('.shim-start'); if (menu && box && !box.contains(e.target as Node)) closeMenu(); }
+  // A press on an app's window that closes the menu may be on a Windows key (Windows' on-screen one), whose release
+  // then sends the key: it closed the menu, so that release must not open it again. Only Windows has such a key:
+  // WindowsE's presses come from its DO IT!!! button, and each one must reach the menu.
+  var closedAt = -1e9;
+  function outside(e: Event) {
+    var box = layer.querySelector('.shim-start');
+    if (!menu || !box || box.contains(e.target as Node)) return;
+    if (appId() === 'Windows' && (e.target as Element).closest && (e.target as Element).closest('#desktop')) closedAt = e.timeStamp;
+    closeMenu();
+  }
   function openMenu() {
     menu = { seq: ++seq, query: '' };
     draw();
     document.addEventListener('pointerdown', outside, true);
     playSound('open');
-    layer.querySelector<HTMLInputElement>('.shim-start-search')!.focus({ preventScroll: true });
+    // A focused text box raises a phone's keyboard over the menu, so on a touch screen the menu itself takes the focus.
+    var touch = !!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches);
+    layer.querySelector<HTMLElement>(touch ? '.shim-start' : '.shim-start-search')!.focus({ preventScroll: true });
     need();
   }
 
@@ -283,7 +294,7 @@ export function pretendWindows() {
 
   // The keys Windows+E's keyboard sends with the Windows key held (Windows itself only sends the key alone).
   var SHORTCUTS: Record<number, () => void> = {
-    524: function () { if (menu) closeMenu(); else openMenu(); },
+    524: function () { if (menu) closeMenu(); else if (performance.now() - closedAt > 1500) openMenu(); closedAt = -1e9; },
     69: openExplorer,
     68: showDesktop,
     82: openRun,
@@ -338,7 +349,7 @@ function StartMenu({ shell, query }: { shell: ShellModel; query: string }) {
   const hit = (app: CatalogApp) => !q || (app.name + ' ' + app.id + ' ' + app.hint).toLowerCase().indexOf(q) >= 0;
   const hits = apps ? apps.filter(hit) : [];
   return (
-    <div className="shim-start" role="dialog" aria-label="Start" ref={box}>
+    <div className="shim-start" role="dialog" aria-label="Start" ref={box} tabIndex={-1}>
       <input className="shim-start-search" type="search" placeholder="Type here to search" aria-label="Search apps"
         onInput={e => shell.filter(e.currentTarget.value)}
         onKeyDownCapture={e => {

@@ -67,12 +67,28 @@ function Pick([string]$option) {
 }
 # Rubik's Cube: makes the turn Teach me asks for next (presses the W/A/S/D key it lit).
 $CoachTurn = "js:(function () { var e = [].slice.call(document.querySelectorAll('#desktop span.text')).filter(function (e) { return /^[wasd]$/.test(e.textContent.trim()) && getComputedStyle(e.parentElement).backgroundColor === 'rgb(80, 220, 80)'; })[0]; if (!e) return; var k = e.textContent.trim(), c = k.toUpperCase().charCodeAt(0); ['keydown', 'keyup'].forEach(function (t) { (document.activeElement || document.body).dispatchEvent(new KeyboardEvent(t, { key: k, code: 'Key' + k.toUpperCase(), keyCode: c, which: c, bubbles: true })); }); })()"
+# A click at x, y of the page as pointer and mouse events to what is there, for a place only the page can measure.
+# Clicks n times (detail 1 to n, as the shim reads a click's count from its detail; Send-Click's clicks are single).
+$Tap = "function tap(x, y, n) { var t = document.elementFromPoint(x, y), i; for (i = 1; i <= (n || 1); i++) ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: i, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }"
+# The biggest painted canvas on the desktop: the app's main field.
+$Biggest = "[].slice.call(document.querySelectorAll('#desktop canvas.paint')).sort(function (a, b) { return b.width * b.height - a.width * a.height; })[0]"
 # Clock's World tab: a click on the strips at an hour of here's day (they span 44% to 97.6% of the panel's width).
 function ClockAt([double]$hour) {
     $f = 0.442 + 0.534 * $hour / 24
-    "js:(function (c) { var r = c.getBoundingClientRect(), x = r.left + r.width * $f, y = r.top + r.height * 0.62, t = document.elementFromPoint(x, y); ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: 1, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); })([].slice.call(document.querySelectorAll('#desktop canvas.paint')).sort(function (a, b) { return b.width * b.height - a.width * a.height; })[0])"
+    "js:(function (c) { $Tap var r = c.getBoundingClientRect(); tap(r.left + r.width * $f, r.top + r.height * 0.62); })($Biggest)"
 }
+# SpriteFloatyStars Orbits: two more suns, clicked into the biggest window's field (upper left and lower right).
+$StarsSuns = "js:(function (c) { $Tap var r = c.getBoundingClientRect(); [[0.27, 0.3], [0.72, 0.7]].forEach(function (p) { tap(r.left + r.width * p[0], r.top + r.height * p[1]); }); })($Biggest)"
 function Repeat([int]$n, [string[]]$steps) { $out = @(); for ($i = 0; $i -lt $n; $i++) { $out += $steps }; $out }
+# SynthesizerKeyboard's looper: clear any old loop (Delete twice), record a melody layer after the count-in, then a
+# bass layer an octave down at the next bar. Keys are held (keydown, then keyup after ms) so notes get their lengths.
+function SynthHold([string]$key, [int]$code, [int]$ms) {
+    "js:(function (t) { function f(type) { t.dispatchEvent(new KeyboardEvent(type, { key: '$key', keyCode: $code, which: $code, bubbles: true })); } f('keydown'); setTimeout(function () { f('keyup'); }, $ms); })(document.activeElement || document.body)"
+}
+$SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Delete' 46 20), 'wait:200', 'key:Space', 'wait:2450') +
+    (@(@('z', 90), @('c', 67), @('b', 66), @('c', 67), @('z', 90), @('c', 67), @('b', 66), @(',', 188)) | ForEach-Object { (SynthHold $_[0] $_[1] 450), 'wait:625' }) +
+    @('wait:400', 'key:ArrowLeft', 'key:Space', 'wait:2300') +
+    (@(@('z', 90), @('b', 66), @('v', 86), @('c', 67)) | ForEach-Object { (SynthHold $_[0] $_[1] 1100), 'wait:1250' })
 
 function Invoke-Steps([string[]]$steps, [scriptblock]$Other) {
     foreach ($step in $steps) {
@@ -89,11 +105,13 @@ function Invoke-Steps([string[]]$steps, [scriptblock]$Other) {
 }
 
 # Starts the site's server and headless Chrome, and connects to Chrome's page. Returns what Stop-Headless needs.
-function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chrome, [string]$name, [int]$Width = 960, [int]$Height = 600) {
+# Chrome's profile is a new folder under ProfileRoot (default %TEMP%) that Stop-Headless deletes.
+function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chrome, [string]$name, [int]$Width = 960, [int]$Height = 600,
+    [string]$ProfileRoot = [IO.Path]::GetTempPath()) {
     if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
     if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
     $server = Start-Process python -ArgumentList '-m', 'http.server', $Port, '--bind', '127.0.0.1', '--directory', $site -PassThru -WindowStyle Hidden
-    $profileDir = Join-Path ([IO.Path]::GetTempPath()) "oldjava-$name-$Port"
+    $profileDir = Join-Path $ProfileRoot ("oldjava-$name-$Port-" + [IO.Path]::GetRandomFileName().Substring(0, 8))
     $browser = Start-Process $Chrome -PassThru -ArgumentList '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio',
         '--autoplay-policy=no-user-gesture-required', "--remote-debugging-port=$DebugPort", "--user-data-dir=$profileDir",
         "--window-size=$Width,$Height", 'about:blank'
@@ -116,10 +134,15 @@ function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chr
 
 function Stop-Headless($session) {
     if ($script:ws) { $script:ws.Dispose(); $script:ws = $null }
-    Stop-Process -Id $session.Browser.Id -ErrorAction SilentlyContinue
+    # The whole tree: Chrome's helper processes (crashpad, GPU, renderers) can outlive the browser and lock the profile.
+    & taskkill.exe /PID $session.Browser.Id /T /F 2>&1 | Out-Null
     Stop-Process -Id $session.Server.Id -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
-    Remove-Item -Recurse -Force $session.Profile -ErrorAction SilentlyContinue
+    $session.Browser.WaitForExit(5000) | Out-Null
+    for ($i = 0; $i -lt 10 -and (Test-Path $session.Profile); $i++) {
+        Start-Sleep -Milliseconds 300
+        Remove-Item -Recurse -Force $session.Profile -ErrorAction SilentlyContinue
+    }
+    if (Test-Path $session.Profile) { Write-Warning "Could not remove Chrome's profile $($session.Profile)" }
 }
 
 # Loads an app page and waits (up to 20 s) until `ready`, a page expression, is true. Returns whether it was.

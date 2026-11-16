@@ -3,10 +3,11 @@
 // (declare global { interface OldjavaSkin { ... } }).
 
 /** An app in boot.js's catalog (read from apps.json). */
-interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: string; then: boolean; shot: string; origin: string }
+interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: string; then: boolean; shot: string; origin: string; clip?: boolean }
 
 interface OldjavaPassport {
   has(id: string): boolean;
+  when(id: string): number;
   reload(): void;
   reset(): void;
   onChange(fn: (fresh: string | null) => void): void;
@@ -89,7 +90,7 @@ interface Window {
 
 interface Navigator {
   standalone?: boolean;   // iOS Safari, added to the home screen
-  connection?: { saveData?: boolean };
+  connection?: { saveData?: boolean; effectiveType?: string };
 }
 
 declare var documentPictureInPicture: DocumentPictureInPicture;

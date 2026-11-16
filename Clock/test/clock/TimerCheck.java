@@ -133,8 +133,114 @@ public class TimerCheck {
       check(damaged.mode.equals(ClockState.CLOCK) && !damaged.analog && damaged.countdown.length() == 5 * M,
             "a damaged file keeps the defaults for its bad lines");
       check(ClockState.load(new File(file.getPath() + ".missing")).mode.equals(ClockState.CLOCK), "a missing file gives defaults");
+      state.flip = true;
+      state.save();
+      back = ClockState.load(file);
+      check(!back.analog && back.flip && back.text().contains("face=flip\n"), "the flip clock face is remembered");
+
+      // The flip clock: its six figures, and a flap falling from standing up, over the hinge, to lying down.
+      check(new String(FlipFace.figures(9, 5, 7, false)).equals(" 90507"), "12-hour flip cards blank the hour's leading zero");
+      check(new String(FlipFace.figures(0, 30, 59, false)).equals("123059"), "midnight is 12 on the flip cards");
+      check(new String(FlipFace.figures(9, 5, 7, true)).equals("090507") && new String(FlipFace.figures(23, 59, 0, true)).equals("235900"),
+            "24-hour flip cards keep both hour figures");
+      check(FlipFace.fold(0, 500) == 1 && FlipFace.fold(500, 500) == -1 && FlipFace.fold(9999, 500) == -1 && FlipFace.fold(-5, 500) == 1,
+            "a flap starts standing and ends lying down");
+      check(FlipFace.fold(250, 500) > 0 && FlipFace.fold(400, 500) < 0, "a flap falls faster as it goes (edge on after half its time)");
+
+      // The analog dial: an hour tick at 12, bare face between the minute ticks, the hours' numbers, the knob's circle clear.
+      java.awt.image.BufferedImage dial = new java.awt.image.BufferedImage(400, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D dialInk = dial.createGraphics();
+      dialInk.setColor(Ui.FACE);
+      dialInk.fillRect(0, 0, 400, 400);
+      ClockFace.paintDial(dialInk, 200, 200, 190, 8);
+      dialInk.dispose();
+      check(dial.getRGB(200, 200 - 172) != Ui.FACE.getRGB(), "an hour tick stands at 12");
+      check(dial.getRGB(200 + (int)(176 * Math.sin(Math.PI / 60)), 200 - (int)(176 * Math.cos(Math.PI / 60))) == Ui.FACE.getRGB(),
+            "the face is bare between two minute ticks");
+      check(inked(dial, 200 + 141, 200 - 12, 200 + 141 + 24, 200 + 12) && inked(dial, 200 - 12, 200 + 132, 200 + 12, 200 + 156),
+            "the numbers 3 and 6 are printed on the dial");
+      check(!inked(dial, 200 - 30, 200 - 30, 200 + 30, 200 + 30), "the middle of the dial stays clear for the hands");
+      for (int hour = 0; hour < 12; hour++) {
+         double knob = hour * Math.PI / 6;
+         int knobX = 200 + (int)Math.round(190 * 0.62 * Math.sin(knob));
+         int knobY = 200 - (int)Math.round(190 * 0.62 * Math.cos(knob));
+         check(!inked(dial, knobX - 13, knobY - 13, knobX + 13, knobY + 13), "the alarm knob at " + hour + " o'clock is clear of the numbers");
+      }
+
+      // The Westminster quarters: one change at quarter past, two at half past, three at quarter to, four and the hour.
+      int[] quarterPast = Westminster.steps(9, 1);
+      check(Arrays.equals(quarterPast, new int[]{68, 66, 64, 59, Westminster.REST, Westminster.HUSH}), "quarter past rings the first change");
+      check(Westminster.steps(9, 2).length == 12 && Westminster.steps(9, 3).length == 18, "half past two changes, quarter to three");
+      check(Arrays.equals(Arrays.copyOfRange(Westminster.steps(9, 3), 12, 18), quarterPast), "quarter to ends on the first change");
+      for (int hour = 0; hour < 24; hour++) {
+         int strokes = 0;
+         for (int step : Westminster.steps(hour, 0)) {
+            strokes += step == Westminster.HOUR_BELL ? 1 : 0;
+         }
+         check(strokes == (hour % 12 == 0 ? 12 : hour % 12), "the hour struck at " + hour);
+         check(Westminster.steps(hour, 0)[0] == 64 && Westminster.steps(hour, 0)[18] == 59, "the hour opens with changes 2 to 5");
+      }
+      state.chimes = true;
+      state.save();
+      check(ClockState.load(file).chimes && !damaged.chimes, "the chimes are remembered, off by default");
+
+      // The alarm: every day at its time, once, with a 9-minute snooze; one missed while closed or asleep does not ring.
+      long six = t0; // 6 am today
+      Alarm alarm = new Alarm();
+      check(!alarm.isOn() && !alarm.update(six) && !alarm.quiet(six), "the alarm starts off");
+      alarm.set(6 * 60 + 30, six);
+      check(alarm.nextAt(six) == six + 30 * M, "set at 6 for 6:30 rings in half an hour");
+      check(Alarm.next(6 * 60, six) > six + 22 * 60 * M, "a time just gone is tomorrow");
+      check(!alarm.update(six + 30 * M - 1) && alarm.update(six + 30 * M) && alarm.isRinging(), "rings on time");
+      check(!alarm.update(six + 31 * M), "rings once");
+      alarm.snooze(six + 31 * M);
+      check(!alarm.isRinging() && alarm.nextAt(six + 31 * M) == six + 40 * M, "snooze rings again 9 minutes later");
+      check(alarm.update(six + 40 * M) && !alarm.update(six + 41 * M), "the snooze rings once");
+      alarm.stop();
+      check(!alarm.isRinging() && alarm.nextAt(six + 41 * M) > six + 23 * 60 * M, "stopped, it rings again tomorrow");
+      check(alarm.quiet(alarm.nextAt(six) - 60 * M) && !alarm.quiet(alarm.nextAt(six) - 9 * 60 * M),
+            "the chimes keep quiet for eight hours before it");
+      long tomorrow = alarm.nextAt(six);
+      check(!alarm.update(tomorrow + 11 * M) && alarm.nextAt(tomorrow + 11 * M) > tomorrow + 23 * 60 * M,
+            "found more than 10 minutes late, it is skipped");
+      // The hand points at a 12-hour dial: it means the next time that hour comes round.
+      alarm.setFromDial(7 * 60, 6 * 60, six);
+      check(alarm.minute() == 7 * 60, "at 6 am, the hand at 7 means 7 am");
+      alarm.setFromDial(5 * 60, 6 * 60, six);
+      check(alarm.minute() == 17 * 60, "at 6 am, the hand at 5 means 5 pm");
+      alarm.setFromDial(6 * 60, 6 * 60, six);
+      check(alarm.minute() == 18 * 60, "the hand on now means 12 hours away");
+      alarm.set(-5, six);
+      check(alarm.minute() == 23 * 60 + 55, "Down past midnight wraps round");
+      alarm.toggle(six);
+      check(!alarm.isOn() && alarm.nextAt(six) == 0 && !alarm.quiet(six), "off, it never rings");
+      check(Alarm.wait(six + 8 * 60 * M + 5 * M - 1, six).equals("8 h 5 min") && Alarm.wait(six + 45 * M, six).equals("45 min"), "waits");
+      // Saved: the time, on or off, and a waiting snooze; a newly opened window does not ring one missed while closed.
+      state.alarm.set(6 * 60 + 45, six);
+      state.alarm.snooze(six);
+      state.save();
+      ClockState woke = ClockState.load(file);
+      check(woke.alarm.isOn() && woke.alarm.minute() == 6 * 60 + 45 && woke.alarm.snoozeUntil() == six + 9 * M, "the alarm round-trips");
+      check(woke.text().equals(state.text()), "the alarm lines round-trip");
+      ClockState late = ClockState.load(file);
+      check(!late.alarm.update(six + 2 * 60 * M) && late.alarm.nextAt(six + 2 * 60 * M) > six + 2 * 60 * M,
+            "an alarm missed while closed does not ring when the window opens");
+      java.nio.file.Files.write(file.toPath(), Arrays.asList("alarm=9999", "alarmOn=on"));
+      check(ClockState.load(file).alarm.minute() == 7 * 60 && !damaged.alarm.isOn(), "a bad alarm time keeps 7 am, off by default");
 
       System.out.println("TimerCheck passed");
+   }
+
+   /** Whether any pixel in the box is not the white face. */
+   private static boolean inked(java.awt.image.BufferedImage image, int left, int top, int right, int bottom) {
+      for (int x = left; x <= right; x++) {
+         for (int y = top; y <= bottom; y++) {
+            if (image.getRGB(x, y) != Ui.FACE.getRGB()) {
+               return true;
+            }
+         }
+      }
+      return false;
    }
 
    private static void check(boolean ok, String what) {

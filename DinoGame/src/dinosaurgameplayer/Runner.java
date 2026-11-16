@@ -50,6 +50,8 @@ final class Runner {
       double x;
       /** Set by the bot when it jumps while this is the next obstacle. */
       boolean botJumped;
+      /** Play by ear's beats sounded for this so far (Ears): 0, 1 after the warning, 2 after the beat to act on. */
+      int beats;
 
       Obstacle(Kind kind, int size, int lift, double x, int gap) {
          this.kind = kind;
@@ -67,6 +69,17 @@ final class Runner {
    }
 
    private final Random random;
+   private final long seed;
+   /** Runs begun, for a fresh course each run; while fixedCourse is set every run is that course instead. */
+   private int runs;
+   private Long fixedCourse;
+   private long course;
+   /** This run's inputs, each step * 4 + one of PRESS, RELEASE, DUCK, STAND: enough for a Ghost to play it again. */
+   private final List<Integer> inputs = new ArrayList<>();
+   static final int PRESS = 0;
+   static final int RELEASE = 1;
+   static final int DUCK = 2;
+   static final int STAND = 3;
    private final List<Obstacle> obstacles = new ArrayList<>();
    private final double[] clouds = { 120, 380, 610 };
    private State state = State.READY;
@@ -81,9 +94,40 @@ final class Runner {
    private boolean released;
    private boolean downHeld;
    private Obstacle crashedInto;
+   /** Where this dinosaur stands: DINO_X, or further right for the second player of a two-player race. */
+   private final int dinoX;
 
    Runner(long seed) {
+      this(seed, DINO_X);
+   }
+
+   Runner(long seed, int dinoX) {
       this.random = new Random(seed);
+      this.seed = seed;
+      this.dinoX = dinoX;
+   }
+
+   /** Every run from now on is this course (a Ghost's), or with null a fresh one each run. */
+   void setCourse(Long course) {
+      this.fixedCourse = course;
+   }
+
+   /** A run begins: its course (the first run is the seed's own, so a seeded game plays as it always did), no inputs yet. */
+   private void begin() {
+      this.course = this.fixedCourse != null ? this.fixedCourse
+         : this.runs == 0 ? this.seed : this.seed ^ this.runs * 0x9E3779B97F4A7C15L;
+      this.runs++;
+      this.random.setSeed(this.course);
+      this.inputs.clear();
+      if (this.downHeld) {
+         this.log(DUCK);
+      }
+   }
+
+   private void log(int input) {
+      if (this.state == State.RUNNING) {
+         this.inputs.add((int) this.steps * 4 + input);
+      }
    }
 
    // ---- input ----
@@ -93,6 +137,10 @@ final class Runner {
       if (this.state == State.READY) {
          this.state = State.RUNNING;
          this.idleSteps = 0;
+         this.begin();
+      }
+      if (!this.jumping) {   // a held key repeats; only presses that do something are kept
+         this.log(PRESS);
       }
       if (this.state == State.RUNNING && !this.jumping) {
          this.jumping = true;
@@ -104,10 +152,16 @@ final class Runner {
 
    /** The jump key comes up: the jump stops rising early (a short hop), but never below MIN_JUMP. */
    void release() {
+      if (!this.released) {
+         this.log(RELEASE);
+      }
       this.released = true;
    }
 
    void duck(boolean held) {
+      if (held != this.downHeld) {
+         this.log(held ? DUCK : STAND);
+      }
       this.downHeld = held;
    }
 
@@ -123,6 +177,7 @@ final class Runner {
       this.jumping = false;
       this.crashedInto = null;
       this.state = State.RUNNING;
+      this.begin();
    }
 
    /** Back to the ready screen, as when the window opened (the run under way, if any, is dropped). */
@@ -208,12 +263,12 @@ final class Runner {
       int oh = o.h - (o.kind == Kind.BIRD ? 12 : 3);
       int top = this.dinoTop();
       if (this.isDucking()) {
-         return overlaps(DINO_X + 2, top + 3, DUCK_W - 6, DUCK_H - 3, ox, oy, ow, oh);
+         return overlaps(this.dinoX + 2, top + 3, DUCK_W - 6, DUCK_H - 3, ox, oy, ow, oh);
       }
       // Head and body.
-      return overlaps(DINO_X + 20, top + 1, 19, 14, ox, oy, ow, oh)
-         || overlaps(DINO_X + 4, top + 14, 26, 20, ox, oy, ow, oh)
-         || overlaps(DINO_X + 10, top + 34, 12, 6, ox, oy, ow, oh);
+      return overlaps(this.dinoX + 20, top + 1, 19, 14, ox, oy, ow, oh)
+         || overlaps(this.dinoX + 4, top + 14, 26, 20, ox, oy, ow, oh)
+         || overlaps(this.dinoX + 10, top + 34, 12, 6, ox, oy, ow, oh);
    }
 
    private static boolean overlaps(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
@@ -259,6 +314,10 @@ final class Runner {
       return GROUND - (int) Math.round(this.height) - (this.isDucking() ? DUCK_H : DINO_H);
    }
 
+   int dinoX() {
+      return this.dinoX;
+   }
+
    double distance() {
       return this.distance;
    }
@@ -269,6 +328,15 @@ final class Runner {
 
    double[] clouds() {
       return this.clouds;
+   }
+
+   /** This run's course: a new Runner with this seed meets the same obstacles on its first run. */
+   long course() {
+      return this.course;
+   }
+
+   List<Integer> inputs() {
+      return this.inputs;
    }
 
    Obstacle crashedInto() {

@@ -1,7 +1,9 @@
 package musictheoryexpert;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.Timer;
 
@@ -11,11 +13,12 @@ import synthesizer.MySynthesizer;
  * Plays the Songwriter's progression round and round, one bar of four beats per chord, on a one-shot Swing timer
  * set for each eighth note by the wall clock. It reads the song again at every bar, so a new key, chord, tempo or style is heard at once.
  * Chords play on MIDI channel 3 (piano) and the bass on channel 4 (acoustic bass), clear of the ear trainer's
- * channel 2 and the original demo's channels 0 and 1.
+ * channel 2 and the original demo's channels 0 and 1. The melody, recorded and played live, is a flute on channel 5.
  */
 public final class ProgressionPlayer {
 	private static final int CHORD_CHANNEL = 3, BASS_CHANNEL = 4;
 	private static final int ACOUSTIC_BASS = 32;
+	private static final int MELODY_CHANNEL = 5, FLUTE = 73;
 	private static final int PREVIEW_MILLIS = 800;
 	/** Which note of the chord (3 is the lowest an octave up) each eighth of a Broken bar plays. */
 	private static final int[] BROKEN = { 0, 1, 2, 3, 2, 1, 2, 1 };
@@ -29,6 +32,10 @@ public final class ProgressionPlayer {
 	private final Listener listener;
 	private final List<Integer> chordNotes = new ArrayList<>();
 	private final List<Integer> bassNotes = new ArrayList<>();
+	/** The melody notes the loop is sounding, as {pitch, eighths left}. */
+	private final List<int[]> melodyNotes = new ArrayList<>();
+	/** Melody notes held down live (the loop leaves those alone). */
+	private final Set<Integer> live = new HashSet<>();
 	private Progression song;
 	private Timer timer;
 	private int index;
@@ -40,6 +47,7 @@ public final class ProgressionPlayer {
 		this.synth = synth;
 		this.listener = listener;
 		synth.setInstrument(BASS_CHANNEL, ACOUSTIC_BASS);
+		synth.setInstrument(MELODY_CHANNEL, FLUTE);
 	}
 
 	public boolean isPlaying() {
@@ -80,10 +88,11 @@ public final class ProgressionPlayer {
 		}
 		song = null;
 		release();
+		releaseMelody();
 		listener.sounding(-1, 0, new ArrayList<>(), new ArrayList<>());
 	}
 
-	private int eighthMillis() {
+	int eighthMillis() {
 		return 30000 / song.tempo();
 	}
 
@@ -128,6 +137,7 @@ public final class ProgressionPlayer {
 			int which = BROKEN[eighth];
 			sound(chordNotes, CHORD_CHANNEL, which == 3 ? chord[0] + 12 : chord[which], eighth == 0 ? 100 : 84);
 		}
+		playMelody();
 		report(index, eighth / 2);
 		if (song == null) {
 			return; // stopped by the listener
@@ -143,6 +153,61 @@ public final class ProgressionPlayer {
 		timer.start();
 	}
 
+	/** Ends the melody notes whose time is up and starts the ones written for this eighth. */
+	private void playMelody() {
+		melodyNotes.removeIf(note -> {
+			if (--note[1] > 0) {
+				return false;
+			}
+			synth.turnOffNote(MELODY_CHANNEL, note[0]);
+			return true;
+		});
+		for (int[] note : song.notesAt(index * Progression.EIGHTHS + eighth)) {
+			if (!live.contains(note[1])) {
+				melodyNotes.removeIf(old -> old[0] == note[1]);
+				synth.turnOnNote(MELODY_CHANNEL, note[1], 92);
+				melodyNotes.add(new int[] { note[1], note[2] });
+			}
+		}
+	}
+
+	/** Starts a melody note played by hand. */
+	public void liveOn(int note) {
+		melodyNotes.removeIf(old -> old[0] == note);
+		live.add(note);
+		synth.turnOnNote(MELODY_CHANNEL, note, 100);
+	}
+
+	public void liveOff(int note) {
+		if (live.remove(note)) {
+			synth.turnOffNote(MELODY_CHANNEL, note);
+		}
+	}
+
+	/** The melody notes sounding now, from the loop or by hand. */
+	public List<Integer> melodySounding() {
+		List<Integer> notes = new ArrayList<>(live);
+		for (int[] note : melodyNotes) {
+			notes.add(note[0]);
+		}
+		return notes;
+	}
+
+	/**
+	 * The loop's eighth-note slot nearest to now ({@code bar * 8 + eighth}), where a note played now is written; -1 when the
+	 * loop is not playing. A note played in the second half of an eighth belongs to the next one.
+	 */
+	public int nearestSlot() {
+		if (!isPlaying()) {
+			return -1;
+		}
+		int slot = index * Progression.EIGHTHS + eighth;
+		if (due - System.currentTimeMillis() <= eighthMillis() / 2) {
+			slot++;
+		}
+		return slot % (song.size() * Progression.EIGHTHS);
+	}
+
 	private void sound(List<Integer> notes, int channel, int note, int velocity) {
 		synth.turnOnNote(channel, note, velocity);
 		notes.add(note);
@@ -151,6 +216,15 @@ public final class ProgressionPlayer {
 	private void release() {
 		release(chordNotes, CHORD_CHANNEL);
 		release(bassNotes, BASS_CHANNEL);
+	}
+
+	private void releaseMelody() {
+		for (int[] note : melodyNotes) {
+			if (!live.contains(note[0])) {
+				synth.turnOffNote(MELODY_CHANNEL, note[0]);
+			}
+		}
+		melodyNotes.clear();
 	}
 
 	private void release(List<Integer> notes, int channel) {

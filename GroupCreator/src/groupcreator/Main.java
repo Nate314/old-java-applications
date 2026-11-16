@@ -1,6 +1,9 @@
 package groupcreator;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -20,7 +23,7 @@ import javax.swing.SwingUtilities;
  * The window: the original names, min and max fields and button across the top, and the {@link GroupBoard} under
  * them. Each round is mixed by {@link FreshMix} against every round before it, kept with the class in
  * {@code ~/.groupcreator-class.txt}, and written to {@code output.txt} as before. Names marked away in the roll call
- * sit a round out, and keep-apart rules hold whenever the group sizes allow.
+ * sit a round out, keep-apart rules hold whenever the group sizes allow, and {@link Roles} hands out the roles.
  */
 public class Main extends JFrame implements GroupBoard.Actions {
    private final JTextField textField = new JTextField();
@@ -29,6 +32,9 @@ public class Main extends JFrame implements GroupBoard.Actions {
    private final Roster roster;
    private final GroupBoard board;
    private final Random random = new Random();
+   private final JPanel inputs = new JPanel(new BorderLayout());
+   /** Where the window was before Present filled the screen. */
+   private Rectangle windowed;
 
    public Main(Boolean visibility) {
       this.setDefaultCloseOperation(3);
@@ -37,6 +43,8 @@ public class Main extends JFrame implements GroupBoard.Actions {
       // Read after the window exists, so the browser build has put the saved file back.
       roster = Roster.load(new File(System.getProperty("user.home"), ".groupcreator-class.txt"));
       board = new GroupBoard(roster.history, roster.picks, roster.rules, this);
+      board.roles = roster.roles;
+      board.work = roster.work;
 
       JPanel names = new JPanel();
       names.add(new JLabel("Names, separated by commas:"));
@@ -59,12 +67,12 @@ public class Main extends JFrame implements GroupBoard.Actions {
       sizes.add(new JLabel("max: "));
       sizes.add(maxTextField);
       sizes.add(button);
-      JPanel panel = new JPanel(new BorderLayout());
-      panel.add(names, BorderLayout.NORTH);
-      panel.add(sizes, BorderLayout.SOUTH);
-      this.add(panel, BorderLayout.NORTH);
+      inputs.add(names, BorderLayout.NORTH);
+      inputs.add(sizes, BorderLayout.SOUTH);
+      this.add(inputs, BorderLayout.NORTH);
       this.add(board, BorderLayout.CENTER);
       board.showRound(GroupMaker.parseNames(roster.names), false);
+      board.dealtAgain(roster.again);
       this.pack();
       this.setLocationRelativeTo(null);
       this.setVisible(visibility);
@@ -101,7 +109,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       PartnerHistory past = replace ? roster.history.first(roster.history.size() - 1) : roster.history;
       List<List<String>> groups;
       try {
-         groups = FreshMix.mix(names, min, max, past, roster.rules, random);
+         groups = Roles.rotate(FreshMix.mix(names, min, max, past, roster.rules, random), past, random);
       } catch (IllegalArgumentException ex) {
          board.showMessage(ex.getMessage());
          return;
@@ -114,6 +122,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       roster.names = textField.getText().trim();
       roster.min = String.valueOf(min);
       roster.max = String.valueOf(max);
+      roster.again = 0;
       String problem = save(groups);
       board.showRound(typed, true);
       if (problem != null) {
@@ -123,8 +132,32 @@ public class Main extends JFrame implements GroupBoard.Actions {
    }
 
    @Override
+   public void reuse(int from) {
+      List<String> typed = GroupMaker.parseNames(textField.getText());
+      List<String> here = roster.rules.present(typed);
+      if (here.isEmpty()) {
+         board.showMessage(typed.isEmpty() ? "Type the class in the names field first."
+            : "Everyone is marked away. Mark who is here in Roll call (A).");
+         return;
+      }
+      // The same groups, with the roles rotated against every round so far.
+      List<List<String>> groups = Roles.rotate(GroupMaker.again(roster.history.round(from), here), roster.history, random);
+      roster.history.add(groups);
+      roster.names = textField.getText().trim();
+      roster.again = from;
+      String problem = save(groups);
+      board.showRound(typed, true);
+      board.dealtAgain(from);
+      if (problem != null) {
+         board.showMessage(problem);
+      }
+      board.requestFocusInWindow();
+   }
+
+   @Override
    public void edited(List<List<String>> groups) {
       roster.history.replaceLast(groups);
+      roster.again = 0;
       String problem = save(groups);
       board.showRound(GroupMaker.parseNames(roster.names), false);
       if (problem != null) {
@@ -135,6 +168,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
    @Override
    public void clearHistory() {
       roster.history.clear();
+      roster.again = 0;
       save(null);
       board.showRound(GroupMaker.parseNames(roster.names), false);
    }
@@ -142,6 +176,31 @@ public class Main extends JFrame implements GroupBoard.Actions {
    @Override
    public List<String> classNames() {
       return GroupMaker.parseNames(textField.getText());
+   }
+
+   @Override
+   public void rolesShown(boolean shown) {
+      roster.roles = shown;
+      picksChanged();
+   }
+
+   @Override
+   public void workChanged() {
+      picksChanged();
+   }
+
+   @Override
+   public void present(boolean on) {
+      inputs.setVisible(!on);
+      if (on) {
+         windowed = getBounds();
+         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+         setBounds(0, 0, screen.width, screen.height);
+      } else if (windowed != null) {
+         setBounds(windowed);
+      }
+      validate();
+      board.requestFocusInWindow();
    }
 
    @Override
@@ -167,7 +226,7 @@ public class Main extends JFrame implements GroupBoard.Actions {
       }
       if (groups != null) {
          try {
-            writeOutput(GroupMaker.describe(groups));
+            writeOutput(GroupMaker.describe(groups, roster.roles));
          } catch (IOException ex) {
             return "Could not write output.txt: " + ex.getMessage();
          }

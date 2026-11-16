@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- The link preview card template web/cards.ps1 renders to public/cards/<App>.jpg (1200 x 630, the Open Graph
      size). The script copies it into the built site and opens it in headless Chrome with the app's gallery
-     entry in the query: ?app=&name=&hint=&cat=&origin= (no app: the home page's card). It is not part of the site. -->
+     entry in the query: ?app=&name=&hint=&cat=&origin= (no app: the home page's card; ?story: the story page's,
+     with lines of Flappy Bird's Bird class as src/pages/story shows them). It is not part of the site. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -41,6 +42,17 @@
                  justify-content: center; background: linear-gradient(135deg, #dfe7f3, #f6f8fb);
                  box-shadow: 0 0 0 2px rgba(255, 43, 214, 0.7), 0 0 30px rgba(255, 43, 214, 0.35), 0 18px 36px rgba(0, 0, 0, 0.45); }
     .fan .tile img { max-width: 226px; max-height: 150px; }
+    /* the story's card: the decompiled class above the same code renamed */
+    .codes { position: absolute; right: 50px; top: 64px; width: 500px; display: flex; flex-direction: column; gap: 26px; }
+    .code { border-radius: 16px; background: #0d1117; overflow: hidden;
+            box-shadow: 0 0 0 2px rgba(255, 43, 214, 0.7), 0 0 30px rgba(255, 43, 214, 0.35), 0 18px 36px rgba(0, 0, 0, 0.45); }
+    .code b { display: block; padding: 8px 18px; font-size: 18px; color: rgba(255, 255, 255, 0.6); background: rgba(255, 255, 255, 0.06); }
+    .code pre { margin: 0; padding: 12px 18px 14px; font: 21px/1.45 Consolas, "Cascadia Mono", monospace; color: #c9d1d9; }
+    .code i { font-style: normal; color: #ff7b72; }
+    .code em { font-style: normal; color: #7df9ff; }
+    .code.then em { color: #ffa657; }
+    .code:first-child { transform: rotate(-2deg); }
+    .code:last-child { transform: rotate(1.5deg); }
   </style>
 </head>
 <body>
@@ -69,6 +81,22 @@
       img.src = 'shots/' + app + '.png';
       desk.appendChild(img);
       document.body.appendChild(desk);
+    } else if (q.has('story')) {
+      document.getElementById('chips').appendChild(el('span', 'chip', 'The story'));
+      document.getElementById('name').textContent = 'Twenty old programs, brought back to play';
+      document.getElementById('name').style.fontSize = '56px';
+      document.getElementById('hint').textContent = 'Recovered from old jars, made readable again and put in your browser.';
+      document.querySelector('.play').textContent = 'Read it, with the real code';
+      document.getElementById('tag').textContent = 'With all 20 apps to play along the way';
+      // The same lines of b.java (4fea701) and Bird.java (#1): src/pages/story/b-decompiled.java.txt, Bird-renamed.java.txt.
+      var codes = el('div', 'codes', '');
+      function code(cls, file, lines) { return '<div class="' + cls + '"><b>' + file + '</b><pre>' + lines.join('\n') + '</pre></div>'; }
+      codes.innerHTML =
+        code('code then', 'b.java, as decompiled', ['<i>public final class</i> <em>b</em> {', '   <i>public</i> Image <em>c</em>;',
+          '   <i>public</i> <em>e</em> <em>d</em>;', '   <i>private float</i> <em>e</em>;', '   <i>private float</i> <em>f</em>;']) +
+        code('code', 'Bird.java, renamed', ['<i>public final class</i> <em>Bird</em> {', '   <i>public</i> Image <em>image</em>;',
+          '   <i>public</i> <em>Position</em> <em>position</em>;', '   <i>private float</i> <em>flapStrength</em>;', '   <i>private float</i> <em>velocity</em>;']);
+      document.body.appendChild(codes);
     } else {
       document.getElementById('chips').appendChild(el('span', 'chip', '20 apps and games'));
       document.getElementById('name').textContent = 'Old Java Applications';

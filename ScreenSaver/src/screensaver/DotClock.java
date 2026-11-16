@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.Date;
 import java.util.Random;
 import java.util.function.Supplier;
@@ -49,11 +50,16 @@ class DotClock implements Saver {
    private double[][] litFor = new double[COLUMNS][5];
    private int[][] shade = new int[COLUMNS][5];
    private Font font;
+   /** Play (T): the pointer scatters the dots near it, or null. */
+   private Point pointer;
+   private boolean pressed;
 
    /** Reads the time from this; Date's getters give local time on the desktop and in the browser. */
    DotClock(Supplier<Date> now) {
       this.now = now;
    }
+
+   private boolean colonWas;
 
    @Override
    public String name() {
@@ -64,6 +70,7 @@ class DotClock implements Saver {
    public void reset(int width, int height, Random random) {
       this.width = width;
       this.height = height;
+      this.pointer = null;
       this.dot = (int)Math.max(4, Math.min(width * 0.6 / COLUMNS, height * 0.3 / 5));
       this.font = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(12, this.dot * 2 / 3));
       this.clockWidth = COLUMNS * this.dot;
@@ -132,16 +139,31 @@ class DotClock implements Saver {
       Date date = this.now.get();
       String face = face(date);
       boolean colonOn = date.getTime() % 1000 < 500;
+      int grown = 0;
       for (int c = 0; c < COLUMNS; c++) {
          for (int r = 0; r < 5; r++) {
             boolean on = dotOn(face, c, r, colonOn);
             if (on && !this.lit[c][r]) {
                this.litFor[c][r] = 0;
+               grown += c == 8 ? 0 : 1;
             }
             this.lit[c][r] = on;
             this.litFor[c][r] += millis;
          }
       }
+      // Music (M): the colon coming on ticks the second, low; new digits chime, higher later in the hour.
+      if (grown > 0) {
+         Music.chord(Music.CLOCK, date.getMinutes() / 59.0, 0.6);
+      } else if (colonOn && !this.colonWas) {
+         Music.ring(Music.CLOCK, date.getSeconds() % 2 == 0 ? 0.2 : 0.1, 0.25);
+      }
+      this.colonWas = colonOn;
+   }
+
+   @Override
+   public void touch(Point at, boolean down) {
+      this.pointer = at;
+      this.pressed = down;
    }
 
    @Override
@@ -152,6 +174,9 @@ class DotClock implements Saver {
          for (int r = 0; r < 5; r++) {
             int cx = left + c * this.dot + this.dot / 2;
             int cy = top + r * this.dot + this.dot / 2;
+            double[] push = Saver.away(cx, cy, this.pointer, this.dot * (this.pressed ? 5 : 3), this.dot * (this.pressed ? 2.2 : 1.2));
+            cx += (int)push[0];
+            cy += (int)push[1];
             int size = this.dot - Math.max(2, this.dot / 8);
             if (this.lit[c][r]) {
                double grown = Math.min(1, this.litFor[c][r] / GROW_MILLIS);

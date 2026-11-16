@@ -126,7 +126,46 @@ public class WorldCheck {
             "unknown and repeated names dropped, at most five kept");
       java.nio.file.Files.write(file.toPath(), "world=\n".getBytes("utf-8"));
       check(ClockState.load(file).cities.isEmpty(), "an empty list stays empty");
+      check(ClockState.load(file).worldMap, "the map shows by default");
+      ClockState dial = ClockState.load(file);
+      dial.worldMap = false;
+      dial.save();
+      check(!ClockState.load(file).worldMap, "the dial is remembered");
       file.delete();
+
+      // The map: the land is the right way up, every city is on (or one degree off) its coast.
+      check(WorldMap.land(20, 15) && WorldMap.land(-25, 135) && WorldMap.land(60, 100) && WorldMap.land(-85, 0)
+            && WorldMap.land(40, -100), "the Sahara, Australia, Siberia, Antarctica and the Great Plains are land");
+      check(!WorldMap.land(0, -30) && !WorldMap.land(0, -150) && !WorldMap.land(-10, 80) && !WorldMap.land(35, -40),
+            "the Atlantic, the Pacific and the Indian Ocean are sea");
+      for (Zone zone : Zone.CITIES) {
+         boolean near = false;
+         for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+               near |= WorldMap.land(zone.latitude + dy, zone.longitude + dx);
+            }
+         }
+         check(near, zone.name + " is by land on the map");
+         check(Math.abs(zone.offset(0) / 60.0 - zone.longitude / 15) < 4.5, zone.name + "'s place agrees with its time zone");
+      }
+      check(Double.isNaN(Zone.HERE.latitude), "here has no place on the map");
+
+      // The sun: overhead at the tropics at the solstices and on the equator at the equinox (published times).
+      check(Math.abs(WorldMap.sun(Instant.parse("2024-06-20T20:51:00Z").toEpochMilli())[0] - 23.44) < 0.05, "June solstice");
+      check(Math.abs(WorldMap.sun(Instant.parse("2024-12-21T09:21:00Z").toEpochMilli())[0] + 23.44) < 0.05, "December solstice");
+      check(Math.abs(WorldMap.sun(Instant.parse("2024-03-20T03:06:00Z").toEpochMilli())[0]) < 0.05, "March equinox");
+      // At noon UTC the sun is over Greenwich give or take the equation of time: 7 min late on 20 March 2024
+      // (1.8 degrees east), 16 min early on 3 November (4.1 degrees west).
+      check(Math.abs(WorldMap.sun(Instant.parse("2024-03-20T12:00:00Z").toEpochMilli())[1] - 1.8) < 0.3, "sun's longitude in March");
+      check(Math.abs(WorldMap.sun(Instant.parse("2024-11-03T12:00:00Z").toEpochMilli())[1] + 4.1) < 0.3, "sun's longitude in November");
+      london = Zone.named("London");
+      double[] winterNoon = WorldMap.sun(Instant.parse("2024-12-21T12:00:00Z").toEpochMilli());
+      check(Math.abs(WorldMap.altitude(london.latitude, london.longitude, winterNoon) - 15.0) < 0.5, "London's midwinter noon sun");
+      double[] winterNight = WorldMap.sun(Instant.parse("2024-12-21T00:00:00Z").toEpochMilli());
+      check(WorldMap.dark(WorldMap.altitude(london.latitude, london.longitude, winterNight)) == 1, "London's midwinter midnight is dark");
+      Zone tokyo = Zone.named("Tokyo");
+      check(WorldMap.dark(WorldMap.altitude(tokyo.latitude, tokyo.longitude, winterNight)) == 0, "while Tokyo has its morning sun");
+      check(WorldMap.dark(-6) == 0.5 && WorldMap.wrap(190) == -170 && WorldMap.wrap(-180) == -180, "dusk and longitudes");
 
       System.out.println("WorldCheck passed (" + compared + " instants compared)");
    }

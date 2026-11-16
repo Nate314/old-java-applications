@@ -6,6 +6,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { APPS } from '../../shared/catalog';
 import { H, draw, setBeforeDraw } from './model';
+import { unseenCount } from './WhatsNew';
 
 const KEY = 'oldjava.arcadeTab';
 export const TABS = ['news', 'passport', 'records', 'takeaway'];
@@ -24,7 +25,7 @@ export function stampCount() { return APPS.filter(a => window.oldjavaPassport.ha
 
 /** A tab's badge: its text ('' for none) and whether it is news. */
 export function badge(id: string): { text: string; isNew: boolean } {
-  if (id === 'news') return { text: H.news.view && H.news.view.fresh ? 'New' : '', isNew: true };
+  if (id === 'news') return { text: !H.news.view ? '' : H.news.view.fresh ? 'New' : unseenCount() ? unseenCount() + ' new' : '', isNew: true };
   if (id === 'passport') { const n = stampCount(); return { text: n > 0 ? n + '/' + APPS.length : '', isNew: false }; }
   if (id === 'records') return { text: H.recordsCount > 0 ? String(H.recordsCount) : '', isNew: false };
   return { text: '', isNew: false };

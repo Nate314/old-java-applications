@@ -127,10 +127,16 @@ final class Orbits {
             double vx = this.field.velocityX(star);
             double vy = this.field.velocityY(star);
             boolean fell = false;
+            int nearest = -1;
+            double nearest2 = Double.POSITIVE_INFINITY;
             for (int sun = 0; sun < this.suns; sun++) {
                double dx = this.sunX[sun] - x;
                double dy = this.sunY[sun] - y;
                double d2 = dx * dx + dy * dy;
+               if (d2 < nearest2) {
+                  nearest = sun;
+                  nearest2 = d2;
+               }
                if (d2 < swallow * swallow) {
                   fell = true;
                   break;
@@ -150,8 +156,13 @@ final class Orbits {
                vx *= MAX_SPEED / speed;
                vy *= MAX_SPEED / speed;
             }
+            double before = y;
             x += vx * dt;
             y += vy * dt;
+            // Star music: crossing the line out to the right of its sun rings a note, higher the closer it orbits.
+            if (nearest >= 0 && x > this.sunX[nearest] && (before < this.sunY[nearest]) != (y < this.sunY[nearest])) {
+               this.field.ring(1.0 - Math.sqrt(nearest2) / (0.5 * this.size()), 0.6, x, y);
+            }
             if (this.suns == 0) { // nothing to hold them: they drift and wrap round, as in Drift
                x = x < 0 ? x + width : x >= width ? x - width : x;
                y = y < 0 ? y + height : y >= height ? y - height : y;

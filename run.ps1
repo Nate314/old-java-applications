@@ -26,9 +26,9 @@ $apps = [ordered]@{
     Clock             = @{ Main = 'clock.Main';                WorkDir = 'Clock' }
     FlappyBird        = @{ Main = 'flappyBird.Main';           WorkDir = 'FlappyBird/src'; Args = @('120') }
     Minesweeper       = @{ Main = 'minesweeper.Main';          WorkDir = 'Minesweeper' }
-    # Apps: built into NathaNOS's taskbar (assets/Clock.jar already ships; Windows and WindowsE would drive the real desktop).
+    # Apps: built into NathaNOS's taskbar (Clock's jar replaces the old assets/Clock.jar; Windows and WindowsE would drive the real desktop).
     NathaNOS          = @{ Main = 'main.Main';                 WorkDir = 'NathaNOS'
-                           Apps = @('Minesweeper', 'UltimateTicTacToe', 'RubiksCube2D', 'FlappyBird', 'SpriteFloatyStars',
+                           Apps = @('Clock', 'Minesweeper', 'UltimateTicTacToe', 'RubiksCube2D', 'FlappyBird', 'SpriteFloatyStars',
                                     'ScreenSaver', 'CircleSpawner', 'StockChecker', 'SynthesizerKeyboard', 'BibleDownloader',
                                     'GroupCreator', 'MusicTheoryExpert', 'NumberGuess', 'SimpleAlgorithms', 'TankGame', 'DinoGame') }
     RubiksCube2D      = @{ Main = 'rubikscube.Main';           WorkDir = 'RubiksCube2D' }

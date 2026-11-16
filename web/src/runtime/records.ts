@@ -1,3 +1,5 @@
+import { lazyScript } from './lazy-script';
+import { storedJson } from './stored';
 
 interface RecordRule { file: string; show(text: string, saved: (name: string) => string | null): string }
 type NewsStory = { Story: NonNullable<Window['oldjavaNews']>['Story'] | null };
@@ -60,14 +62,20 @@ export function followTitle(desktop: Element) {
 }
 
 export function savedRecord(id: string) {
-  var saves;
-  try { saves = JSON.parse(localStorage.getItem('oldjava.saves.' + id) || '{}'); } catch (e) { return ''; }
-  return recordOf(id, saves);
+  return recordOf(id, storedJson('oldjava.saves.' + id));
 }
 
-// The record line for an app's saved files ({ path: contents }), wherever they came from: this browser's store, or
-// saves brought from another device (the home page's Your records, src/pages/home/Records.tsx).
+// The line an app's saved files ({ path: contents }) earn on its title screen: its record, else the files named.
 function recordOf(id: string, saves: Record<string, string>) {
+  var paths = Object.keys(saves || {});
+  if (!paths.length) return '';
+  return ruleLine(id, saves) || 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ');
+}
+
+// The app's own record line for its saved files, wherever they came from: this browser's store, or saves brought
+// from another device (the home page's Your records, src/pages/home/Records.tsx). '' when its rule has nothing to
+// say (saves only in another file, or no record yet), and for a store without a rule (a Then version, "<App>.then").
+function ruleLine(id: string, saves: Record<string, string>) {
   var paths = Object.keys(saves || {});
   var rule = RECORDS[id];
   // The text of a saved file by its name, or null.
@@ -77,17 +85,14 @@ function recordOf(id: string, saves: Record<string, string>) {
     }
     return null;
   }
-  if (rule) {
-    var text = saved(rule.file);
-    return text === null ? '' : rule.show(text, saved);
-  }
-  return paths.length ? 'Saved here from last time: ' + paths.map(function (p) { return p.split('/').pop(); }).join(', ') : '';
+  // A rule reads its listed file ('' when missing) and any other with saved().
+  return rule && paths.length ? rule.show(saved(rule.file) || '', saved) : '';
 }
 
+const newsLoad = lazyScript(() => import('./lazy/news'), () => window.oldjavaNews, 'news.js');
+
 export function newsScript() {
-  if (!newsPromise) newsPromise = new Promise<NewsStory>(function (resolve, reject) {
-    import('./lazy/news').then(function () { resolve(window.oldjavaNews!); }, function () { reject(new Error('news.js did not load')); });
-  }).catch(function (e) { console.warn(e.message); return { Story: null }; });
+  if (!newsPromise) newsPromise = newsLoad().catch(function (e): NewsStory { console.warn(e.message); return { Story: null }; });
   return newsPromise;
 }
 
@@ -145,11 +150,28 @@ export function init() {
       });
       var made = /^patterns=(.+)$/m.exec(text), parts = solved ? ['Your levels: ' + solved + ' of 20 solved, ' + stars + ' of 60 stars'] : [];
       if (made) parts.push((parts.length ? 'patterns' : 'Your patterns') + ': ' + made[1].split(',').length + ' of 7 made');
+      // The Timer's times in ms (rubikscube.LevelRecords); shown as SolveTimer.format does: hundredths cut, m:ss.cc past a minute.
+      var times = /^times=(.+)$/m.exec(text), best = times ? Math.min.apply(null, times[1].split(',').map(Number).filter(function (t) { return t > 0; })) : Infinity;
+      if (isFinite(best)) {
+        var cs = Math.floor(best / 10), sec = Math.floor(cs / 100), frac = '.' + String(cs % 100).padStart(2, '0');
+        parts.push((parts.length ? 'best timed solve' : 'Your best timed solve') + ': ' + (sec < 60 ? sec + frac : Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') + frac));
+      }
       return parts.join('; ');
     } },
-    MusicTheoryExpert: { file: '.musictheory-drills.txt', show: function (text) {
-      var r = starRows(text);
-      return r.won ? 'Your ear training: ' + r.won + ' of 6 drills passed, ' + r.stars + ' of 18 stars' : '';
+    // The Songwriter's song (musictheoryexpert.Progression): key=<fifths up from C>, minor=, chords=<degrees>, melody=<notes>.
+    MusicTheoryExpert: { file: '.musictheory-drills.txt', show: function (text, saved) {
+      var r = starRows(text), song = saved('.musictheory-songwriter.txt') || '';
+      var parts = r.won ? ['Your ear training: ' + r.won + ' of 6 drills passed, ' + r.stars + ' of 18 stars'] : [];
+      var key = /^key=(\d+)$/m.exec(song), chords = /^chords=([\d,]*)$/m.exec(song), notes = /^melody=(.*)$/m.exec(song);
+      if (key && chords) {
+        var p = +key[1] % 12, minor = /^minor=true$/m.test(song), n = chords[1].split(',').filter(Boolean).length;
+        var m = notes ? notes[1].split(',').filter(Boolean).length : 0;
+        var tonic = ((p * 7 + (minor ? 9 : 0)) % 12);
+        var name = (p > 6 ? ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] : ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'])[tonic];
+        parts.push((parts.length ? 'your song' : 'Your song') + ': ' + n + (n === 1 ? ' chord' : ' chords') + ' in ' + name + (minor ? ' minor' : ' major')
+          + (m ? ' with a ' + m + '-note melody' : ''));
+      }
+      return parts.join('; ');
     } },
     // Duels against the computer are a lower-case duel=won,lost,drawn row, which starRows passes by.
     NumberGuess: { file: '.numberguess-record.txt', show: function (text) {
@@ -178,8 +200,9 @@ export function init() {
     } },
     TankGame: { file: '.tankgame-record.txt', show: function (text) {
       var n = text.trim().split('\n')[0].split(',').map(Number);
-      if (n.length !== 2 || !(n[0] + n[1] > 0)) return '';
-      return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses');
+      var field = /^field=.*#/m.test(text) ? 'your own battlefield built' : '';
+      if (n.length !== 2 || !(n[0] + n[1] > 0)) return field ? 'Your tanks: ' + field : '';
+      return 'Your matches vs the computer: ' + n[0] + (n[0] === 1 ? ' win, ' : ' wins, ') + n[1] + (n[1] === 1 ? ' loss' : ' losses') + (field ? '; ' + field : '');
     } },
     // Your best run, the bot's best run and the bots you evolved (generations bred, their record).
     DinoGame: { file: '.dinogame.txt', show: function (text) {
@@ -274,7 +297,7 @@ export function init() {
       return parts.length ? 'Your clock: ' + parts.join(', ') : '';
     } }
   };
-  window.oldjavaRecords = { line: recordOf };
+  window.oldjavaRecords = { line: ruleLine };
   // news.js (What's new), which the home page loads itself, added to an app page once.
   newsPromise = null;
 }

@@ -49,6 +49,7 @@
  *   ?skin= link.
  * - Gets the next page ready before the click (instant open, at the end): speculation rules prerender a pointed-at
  *   app page, and the home page's player warms the app it is pointed at into the browser's cache.
+ * - On a dark desk, lets an app page's windows cast their colors on the stage around them (stageGlow).
  */
 import { init as skin } from './skin';
 import { init as install } from './install';
@@ -79,6 +80,10 @@ import { init as skinMaker } from './skin-maker';
 import { init as instantOpen } from './instant-open';
 import { init as sideBySide } from './side-by-side';
 import { init as toolbarMore } from './toolbar-more';
+import { init as stageGlow } from './stage-glow';
+import { init as slowMo } from './slow-mo';
+import { init as keptKeys } from './kept-keys';
+import { init as exitRecap } from './exit-recap';
 
 // In the order boot.js ran them.
 skin();
@@ -110,3 +115,7 @@ skinMaker();
 instantOpen();
 sideBySide();
 toolbarMore();
+stageGlow();
+slowMo();
+keptKeys();
+exitRecap();

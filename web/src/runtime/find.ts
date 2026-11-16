@@ -4,21 +4,15 @@ import { WATCH } from './watch';
 import { catalog, root } from './catalog';
 import { isThen } from './then-and-now';
 import { playSound } from './sounds';
+import { lazyScript } from './lazy-script';
 
-type OldjavaFind = NonNullable<Window['oldjavaFind']>;
-
-let findPromise: Promise<OldjavaFind> | null;
-export let findMac: boolean;
+export const findMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+export const findKey = findMac ? '⌘K' : 'Ctrl K';   // Find's key as its button and box show it
 export let findOff: boolean;
 let findHeld: string[] | null;
 let findHeldTimer: number | ReturnType<typeof setInterval>;
 
-function findScript() {
-  if (!findPromise) findPromise = new Promise(function (resolve, reject) {
-    import('./lazy/find').then(function () { resolve(window.oldjavaFind!); }, function () { findPromise = null; reject(new Error('find.js did not load')); });
-  });
-  return findPromise;
-}
+const findScript = lazyScript(() => import('./lazy/find'), () => window.oldjavaFind, 'find.js');
 
 export function openFind(opener: Element | null) {
   findScript().then(function (find) { find.open(opener); }, function (e: Error) { console.warn(e.message); });
@@ -32,7 +26,11 @@ function findType(text: string) {
   var input = document.querySelector('.shim-find-input') as HTMLInputElement | null;
   if (!input || !text) return;
   input.value += text;
-  input.dispatchEvent(new Event('input'));
+  input.dispatchEvent(new Event('input', { bubbles: true }));   // React listens at the root
+}
+
+function findChord(e: KeyboardEvent) {   // Ctrl+K, Cmd+K on a Mac
+  return (findMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K');
 }
 
 function findLetGo() {
@@ -54,17 +52,15 @@ export function init() {
   window.oldjavaSite.played = function (id) { return !!played[id]; };
   window.oldjavaSite.watchable = Object.keys(WATCH);
   window.oldjavaSite.sound = function (name) { playSound(name); };
-  findPromise = null;
-  findMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   findOff = clipMode || document.documentElement.hasAttribute('data-shot') || document.documentElement.hasAttribute('data-saver');
   // The first Ctrl+K of a page loads find.js before the box can take the focus: keys typed in that moment are held
   // here and typed into the box once it has the focus, instead of reaching the app behind it (a title screen
   // would start the app on them). In the home page's player, or beside another app, the frame holds them until the
   // page around it has the box open (the frame loses the focus), then sends them up.
   findHeld = null; findHeldTimer = 0;
-  if (!findOff) window.addEventListener('keydown', function (e) {
-    var chord = (findMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K');
-    if (chord) {
+  if (findOff) return;
+  window.addEventListener('keydown', function (e) {
+    if (findChord(e)) {
       if (window.oldjavaFind && window.oldjavaFind.isOpen()) return;   // this one closes it
       clearInterval(findHeldTimer);
       findHeld = [];
@@ -83,14 +79,14 @@ export function init() {
     if (e.key === 'Backspace') findHeld.pop();
     else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) findHeld.push(e.key);
   }, true);
-  if (!findOff) window.addEventListener('keyup', function (e) {
+  window.addEventListener('keyup', function (e) {
     if (findHeld && !findTyping(e.target)) e.stopImmediatePropagation();
   }, true);
-  if (!findOff) window.addEventListener('message', function (e) {
+  window.addEventListener('message', function (e) {
     if (e.origin === location.origin && e.source !== window && e.data && typeof e.data.oldjavaFindKeys === 'string') findType(e.data.oldjavaFindKeys);
   });
-  if (!findOff) window.addEventListener('keydown', function (e) {
-    var chord = (findMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K');
+  window.addEventListener('keydown', function (e) {
+    var chord = findChord(e);
     var slash = e.key === '/' && !root() && !e.ctrlKey && !e.metaKey && !e.altKey && !findTyping(e.target);
     if (!chord && !slash) return;
     if (!chord && window.oldjavaFind && window.oldjavaFind.isOpen()) return;   // a / typed in the box
@@ -100,12 +96,12 @@ export function init() {
     else openFind(document.activeElement);
   }, true);
   // The home page's player asked for it.
-  if (!findOff) window.addEventListener('message', function (e) {
+  window.addEventListener('message', function (e) {
     if (e.origin !== location.origin || !e.data || !e.data.oldjavaFind || root()) return;
     openFind(document.getElementById('player-frame'));
   });
   // Any [data-find] button of the page (the home page has one by its gallery); the toolbar draws its own.
-  if (!findOff) document.addEventListener('DOMContentLoaded', function () {
+  document.addEventListener('DOMContentLoaded', function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-find]'), function (b: Element) {
       b.addEventListener('click', function () { openFind(b); });
     });

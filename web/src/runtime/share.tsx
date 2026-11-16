@@ -6,7 +6,9 @@ import { catalog, catalogDoc, root, type CatalogApp } from './catalog';
 import { indexOf } from './then-and-now';
 import { EmbedSection } from './embed';
 import { playSound } from './sounds';
-import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { CloseButton, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
+import { linkInvite } from '../shared/link-state';
 
 export let shareBox: HTMLElement | null;
 export let SHARED: RegExpExecArray | null;
@@ -20,14 +22,7 @@ export function openShare(id: string | null, opener?: Element | null) {
   if (shareBox) return;
   // The panel belongs to the page, which a fullscreen player (Big screen) would cover.
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
-  function shut() {
-    playSound('close');
-    close();
-    shareBox = null;
-    if (opener && opener.isConnected) (opener as HTMLElement).focus();
-  }
-  const close = openLayer(<SharePanel id={id} onClose={shut} onPanel={el => { shareBox = el; }} />);
-  playSound('open');
+  openPanel(shut => <SharePanel id={id} onClose={shut} onPanel={el => { shareBox = el; }} />, opener, () => { shareBox = null; });
 }
 
 /** What the panel says once the catalog is in: the link, its preview card's text and the message. */
@@ -163,12 +158,8 @@ export function init() {
   // on says so.
   shareBox = null;
   SHARED = /[?&]shared=(\d{1,3})(?:&|$)/.exec(location.search);
-  // A game a friend sent (UltimateTicTacToe's Friend by link) or a tune (SynthesizerKeyboard's Record): the title
-  // screen says what the link brought.
-  INVITE = /[?&]game=[a-i1-9]+(?:&|$)/i.test(location.search)
-    ? 'A friend sent you a game, and it is your move. Press Play to answer it.'
-    : /[?&]tune=(?:[a-m][1-8]){2,}(?:&|$)/i.test(location.search)
-      ? 'A friend sent you a tune. Press Play to hear it, then play it back.'
-      : '';
+  // What a friend's link brought (a game, a tune, a number to find, a song, a shape or a list of shortcuts): the title
+  // screen says so.
+  INVITE = linkInvite(location.search);
   window.oldjavaShare = { open: openShare };
 }

@@ -28,10 +28,17 @@ final class ClockState {
    private final File file;
    String mode = CLOCK;
    boolean analog = true;
+   /** The flip clock face, when not analog. */
+   boolean flip;
    boolean twentyFour = false;
+   /** Whether the Westminster quarters ring. */
+   boolean chimes = false;
+   /** The World tab shows the map of day and night (else the 24-hour dial). */
+   boolean worldMap = true;
    final Countdown countdown = new Countdown();
    final Stopwatch stopwatch = new Stopwatch();
    final Focus focus = new Focus();
+   final Alarm alarm = new Alarm();
    /** The cities on the World tab, in the order they were picked. */
    final List<Zone> cities = new ArrayList<>();
 
@@ -60,6 +67,8 @@ final class ClockState {
       int[] focus = {0, Focus.FOCUS, 0};
       long focusEnd = 0;
       long focusLeft = -1;
+      int[] alarm = {-1, 0};
+      long snoozeUntil = 0;
       try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), "utf-8"))) {
          for (String line; (line = reader.readLine()) != null;) {
             int split = line.indexOf('=');
@@ -72,9 +81,20 @@ final class ClockState {
                if (key.equals("mode") && (value.equals(CLOCK) || value.equals(TIMER) || value.equals(STOPWATCH) || value.equals(FOCUS) || value.equals(WORLD))) {
                   this.mode = value;
                } else if (key.equals("face")) {
-                  this.analog = !value.equals("digital");
+                  this.analog = !value.equals("digital") && !value.equals("flip");
+                  this.flip = value.equals("flip");
                } else if (key.equals("hours")) {
                   this.twentyFour = value.equals("24");
+               } else if (key.equals("chimes")) {
+                  this.chimes = value.equals("on");
+               } else if (key.equals("worldMap")) {
+                  this.worldMap = !value.equals("off");
+               } else if (key.equals("alarm")) {
+                  alarm[0] = Integer.parseInt(value);
+               } else if (key.equals("alarmOn")) {
+                  alarm[1] = value.equals("on") ? 1 : 0;
+               } else if (key.equals("alarmSnooze")) {
+                  snoozeUntil = Long.parseLong(value);
                } else if (key.equals("timer")) {
                   length = Long.parseLong(value);
                } else if (key.equals("timerEnd")) {
@@ -127,6 +147,7 @@ final class ClockState {
       this.countdown.restore(length, endsAt, left < 0 ? length : left, finishedAt);
       this.stopwatch.restore(watchStart, watchBanked, laps);
       this.focus.restore(focus[0], focus[1], focus[2], focusEnd, focusLeft);
+      this.alarm.restore(alarm[0], alarm[1] == 1, snoozeUntil);
    }
 
    void save() {
@@ -141,8 +162,14 @@ final class ClockState {
    String text() {
       StringBuilder text = new StringBuilder();
       text.append("mode=").append(this.mode).append('\n');
-      text.append("face=").append(this.analog ? "analog" : "digital").append('\n');
+      text.append("face=").append(this.analog ? "analog" : this.flip ? "flip" : "digital").append('\n');
       text.append("hours=").append(this.twentyFour ? "24" : "12").append('\n');
+      text.append("chimes=").append(this.chimes ? "on" : "off").append('\n');
+      text.append("alarm=").append(this.alarm.minute()).append('\n');
+      text.append("alarmOn=").append(this.alarm.isOn() ? "on" : "off").append('\n');
+      if (this.alarm.snoozeUntil() > 0) {
+         text.append("alarmSnooze=").append(this.alarm.snoozeUntil()).append('\n');
+      }
       text.append("timer=").append(this.countdown.length()).append('\n');
       if (this.countdown.isRunning()) {
          text.append("timerEnd=").append(this.countdown.endsAt()).append('\n');
@@ -179,6 +206,7 @@ final class ClockState {
          cities.add(zone.name);
       }
       text.append("world=").append(String.join(",", cities)).append('\n');
+      text.append("worldMap=").append(this.worldMap ? "on" : "off").append('\n');
       return text.toString();
    }
 }

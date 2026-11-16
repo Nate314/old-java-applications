@@ -1,8 +1,7 @@
 import { embedded, mix, ownCode, ownCss, ownParse, ownSaved, setSkin, skinOffer, wearOwn } from './skin';
 import { root } from './catalog';
 import { findOff } from './find';
-
-type OldjavaSkinMaker = NonNullable<Window['oldjavaSkinMaker']>;
+import { lazyScript } from './lazy-script';
 
 declare global {
   interface OldjavaSkin {
@@ -16,14 +15,7 @@ declare global {
   }
 }
 
-let makerPromise: Promise<OldjavaSkinMaker> | null;
-
-function makerScript() {
-  if (!makerPromise) makerPromise = new Promise(function (resolve, reject) {
-    import('./lazy/skinmaker').then(function () { resolve(window.oldjavaSkinMaker!); }, function () { makerPromise = null; reject(new Error('skinmaker.js did not load')); });
-  });
-  return makerPromise;
-}
+const makerScript = lazyScript(() => import('./lazy/skinmaker'), () => window.oldjavaSkinMaker, 'skinmaker.js');
 
 export function openMaker(opener?: Element | null) {
   if (embedded && window.parent !== window) { window.parent.postMessage({ oldjavaSkinMaker: true }, location.origin); return; }
@@ -35,7 +27,6 @@ export function init() {
   // Choosing Yours in the toolbar's skin picker opens it, as do the Edit button beside the picker (shown while
   // Yours is worn), Find's "Make your own skin" and any [data-skin-maker] button (the home page has one). The
   // CSS itself is made at the top of this file (ownCss), so every page wears the skin without this script.
-  makerPromise = null;
   // What skinmaker.js borrows from this file.
   window.oldjavaSkin.own = {
     parse: ownParse, code: ownCode, saved: ownSaved, wear: wearOwn, css: ownCss, mix: mix,

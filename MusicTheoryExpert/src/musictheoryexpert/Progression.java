@@ -19,6 +19,10 @@ import musictheoryexpert.Notes.MusicalTerms;
 public final class Progression {
 	public static final int MAX_CHORDS = 8;
 	public static final int MIN_TEMPO = 60, MAX_TEMPO = 180;
+	/** Eighth notes in a bar: a melody note starts on one of them, its slot being {@code bar * 8 + eighth}. */
+	public static final int EIGHTHS = 8;
+	/** The longest melody note, in eighths: one bar. */
+	public static final int LONGEST_NOTE = 8;
 
 	/** How a chord's notes are placed: as the original code builds them, or moved as little as possible. */
 	public enum Voicing {
@@ -95,6 +99,11 @@ public final class Progression {
 	private int tempo = 100;
 	private Style style = Style.BLOCK;
 	private Voicing voicing = Voicing.SMOOTH;
+	/**
+	 * The melody played over the loop, as {slot, pitch, length in eighths}, the pitch kept as if the key's major were C
+	 * major, so it moves round the circle with the chords and stays put for the relative minor, which has the same notes.
+	 */
+	private final List<int[]> melody = new ArrayList<>();
 
 	/** G major, I-IV-V-I: the progression the original program played. */
 	public Progression() {
@@ -345,6 +354,136 @@ public final class Progression {
 		return best;
 	}
 
+	// ---- the melody ----
+
+	/** How far the major key at {@code position} sits from C: -5 (G) to +6 (F#), so a melody moves the shorter way. */
+	static int shift(int position) {
+		int tonic = tonicAt(position, false);
+		return tonic > 6 ? tonic - 12 : tonic;
+	}
+
+	/** Adds a note starting at {@code slot}, in place of one already there at the same pitch. */
+	public void addNote(int slot, int pitch, int length) {
+		if (slot < 0 || slot >= MAX_CHORDS * EIGHTHS || pitch < 0 || pitch > 127) {
+			return;
+		}
+		int inC = pitch - shift(position);
+		melody.removeIf(note -> note[0] == slot && note[1] == inC);
+		melody.add(new int[] { slot, inC, Math.max(1, Math.min(LONGEST_NOTE, length)) });
+	}
+
+	public void clearMelody() {
+		melody.clear();
+	}
+
+	/** The melody in this key, as {slot, pitch, length}, each pitch an octave at a time into the keyboard's C3 to C7. */
+	public List<int[]> melody() {
+		List<int[]> notes = new ArrayList<>();
+		for (int[] note : melody) {
+			int pitch = note[1] + shift(position);
+			while (pitch < Look.LOW_NOTE) {
+				pitch += 12;
+			}
+			while (pitch > Look.HIGH_NOTE) {
+				pitch -= 12;
+			}
+			notes.add(new int[] { note[0], pitch, note[2] });
+		}
+		return notes;
+	}
+
+	/** The melody's notes that start at {@code slot}, as {slot, pitch, length}. */
+	public List<int[]> notesAt(int slot) {
+		List<int[]> notes = melody();
+		notes.removeIf(note -> note[0] != slot);
+		return notes;
+	}
+
+	// ---- the song as a link ----
+
+	/** Melody notes are written in these 64 characters, which a web address carries as they are. */
+	private static final String DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+	/** A longer code is not one this tab wrote (the melody's 64 eighths could hold every note of the keyboard). */
+	static final int MAX_CODE = 4000;
+
+	/**
+	 * The whole song in a few characters, for a link: the key's place on the circle (0 to b) and M or m, the chords
+	 * as digits, then the tempo, the style and voicing, and the melody, four characters a note (its eighth, its pitch
+	 * as if in C in two, its length), all separated by dots. The original demo is {@code 1M1451.100.00}.
+	 */
+	public String code() {
+		StringBuilder code = new StringBuilder(Integer.toString(position, 12)).append(minor ? 'm' : 'M');
+		for (int degree : degrees) {
+			code.append(degree);
+		}
+		code.append('.').append(tempo).append('.').append(style.ordinal()).append(voicing.ordinal());
+		if (!melody.isEmpty()) {
+			code.append('.');
+			for (int[] note : melody) {
+				code.append(DIGITS.charAt(note[0])).append(DIGITS.charAt(note[1] / 64)).append(DIGITS.charAt(note[1] % 64))
+						.append(DIGITS.charAt(note[2]));
+			}
+		}
+		return code.toString();
+	}
+
+	/** The song in a code {@link #code} wrote, or null if the text is not one (nothing in it is trusted). */
+	public static Progression fromCode(String code) {
+		// Checked by hand: the browser build's regular expressions do not read every pattern the JDK's do.
+		List<String> list = new ArrayList<>();
+		for (int start = 0, dot; code != null && code.length() <= MAX_CODE && start <= code.length(); start = dot + 1) {
+			dot = code.indexOf('.', start);
+			dot = dot < 0 ? code.length() : dot;
+			list.add(code.substring(start, dot));
+		}
+		list.add("");
+		String[] parts = list.toArray(new String[0]);
+		if (parts.length < 4 || parts.length > 5 || !parts[parts.length - 1].isEmpty()
+				|| !only(parts[0], 0, 1, "0123456789ab") || !only(parts[0], 1, 2, "Mm") || parts[0].length() > 10
+				|| !only(parts[0], 2, parts[0].length(), "1234567") || parts[1].length() > 3 || !only(parts[1], 0, parts[1].length(), "0123456789")
+				|| parts[1].length() < 2 || parts[2].length() != 2 || !only(parts[2], 0, 1, "012") || !only(parts[2], 1, 2, "01")
+				|| parts.length == 5 && (parts[3].length() % 4 != 0 || !only(parts[3], 0, parts[3].length(), DIGITS))) {
+			return null;
+		}
+		Progression song = new Progression();
+		song.degrees.clear();
+		song.position = Integer.parseInt(parts[0].substring(0, 1), 12);
+		song.minor = parts[0].charAt(1) == 'm';
+		for (char degree : parts[0].substring(2).toCharArray()) {
+			song.add(degree - '0');
+		}
+		int tempo = Integer.parseInt(parts[1]);
+		if (tempo < MIN_TEMPO || tempo > MAX_TEMPO) {
+			return null;
+		}
+		song.tempo = tempo;
+		song.style = Style.values()[parts[2].charAt(0) - '0'];
+		song.voicing = Voicing.values()[parts[2].charAt(1) - '0'];
+		String notes = parts.length > 4 ? parts[3] : "";
+		for (int i = 0; i < notes.length(); i += 4) {
+			int slot = DIGITS.indexOf(notes.charAt(i)), pitch = DIGITS.indexOf(notes.charAt(i + 1)) * 64 + DIGITS.indexOf(notes.charAt(i + 2));
+			int length = DIGITS.indexOf(notes.charAt(i + 3));
+			if (pitch > 127 || length < 1 || length > LONGEST_NOTE) {
+				return null;
+			}
+			song.melody.add(new int[] { slot, pitch, length });
+		}
+		return song;
+	}
+
+	/** True when {@code text} has characters {@code from} to {@code to} (at least one) and all of them are in {@code allowed}. */
+	private static boolean only(String text, int from, int to, String allowed) {
+		if (to > text.length() || from >= to) {
+			return false;
+		}
+		for (int i = from; i < to; i++) {
+			if (allowed.indexOf(text.charAt(i)) < 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	// ---- saving ----
 
 	/** Reads a saved song; anything missing or unreadable keeps the default (G major, I-IV-V-I). */
@@ -374,6 +513,19 @@ public final class Progression {
 						song.style = Style.valueOf(value);
 					} else if (name.equals("voicing")) {
 						song.voicing = Voicing.valueOf(value);
+					} else if (name.equals("melody")) {
+						for (String note : value.isEmpty() ? new String[0] : value.split(",")) {
+							String[] parts = note.trim().split(":");
+							try {
+								int slot = Integer.parseInt(parts[0]), pitch = Integer.parseInt(parts[1]);
+								int length = Math.max(1, Math.min(LONGEST_NOTE, Integer.parseInt(parts[2])));
+								if (parts.length == 3 && slot >= 0 && slot < MAX_CHORDS * EIGHTHS && pitch >= 0 && pitch <= 127) {
+									song.melody.add(new int[] { slot, pitch, length });
+								}
+							} catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+								// Not a note: skip it and keep the rest.
+							}
+						}
 					}
 				} catch (IllegalArgumentException e) {
 					// Not a value this version knows: keep the default.
@@ -390,9 +542,13 @@ public final class Progression {
 		for (int degree : degrees) {
 			chords.append(chords.length() == 0 ? "" : ",").append(degree);
 		}
+		StringBuilder notes = new StringBuilder();
+		for (int[] note : melody) {
+			notes.append(notes.length() == 0 ? "" : ",").append(note[0] + ":" + note[1] + ":" + note[2]);
+		}
 		try (Writer writer = new FileWriter(file)) {
 			writer.write("key=" + position + "\nminor=" + minor + "\nchords=" + chords + "\ntempo=" + tempo + "\nstyle="
-					+ style.name() + "\nvoicing=" + voicing.name() + "\n");
+					+ style.name() + "\nvoicing=" + voicing.name() + "\nmelody=" + notes + "\n");
 		} catch (IOException e) {
 			// Could not save: the song lasts until the window closes.
 		}

@@ -206,9 +206,12 @@ public class TWindow extends TContainer {
     }
 
     public void setAlwaysOnTop(boolean b) {
+        boolean was = alwaysOnTop;
         alwaysOnTop = b;
         if (displayed && b) {
             TDesktop.activate(this);
+        } else if (displayed && was) {
+            TDesktop.restack(this);   // down among the other windows at once, as in Swing, not at its next click
         }
     }
 

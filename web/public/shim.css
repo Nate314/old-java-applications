@@ -7,6 +7,8 @@
  *            animation when an app starts (see "arcade skin" at the end).
  */
 
+@import url("forced-colors.css") (forced-colors: active);   /* high contrast themes */
+
 :root,
 :root[data-skin="classic"] {
   --desk: #3a6ea5;
@@ -151,6 +153,18 @@
 
 :root[data-embed] #desktop {
   background: none;
+}
+
+/* ?embed&full with one window (centerWindows' fullBox): the app's content fills the frame, without the window's
+   title bar, border, corners or shadow. */
+:root[data-full-one] #desktop > .window {
+  border-radius: 0;
+  box-shadow: none;
+  background: none;   /* the frame's edges round the content would show where the frame is wider or taller */
+}
+
+:root[data-full-one] #desktop > .window > .titlebar {
+  display: none !important;   /* the shim shows it with an inline style */
 }
 
 /* Thumbnail mode (web/shots.ps1 crops the windows out of a flat magenta desktop). */
@@ -389,7 +403,7 @@ canvas.paint.top {
 }
 
 .button:disabled {
-  color: #8e8f91;
+  color: #8e8f91 !important; /* Swing paints disabled text grey even on a button the app gave its own color */
 }
 
 .button .icon.empty {
@@ -398,6 +412,36 @@ canvas.paint.top {
 
 .button .icon canvas {
   display: block;
+}
+
+/* JCheckBox (TJCheckBox): flat, its box drawn before the text, ticked while selected. */
+.button.check {
+  justify-content: flex-start;
+  padding: 0 4px;
+}
+
+.button.check:active:not(:disabled) {
+  background: transparent !important;
+}
+
+.button.check::before {
+  content: "";
+  flex: none;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--button-border);
+  border-radius: 3px;
+  background: var(--button-bg);
+  font: 700 11px/12px system-ui, sans-serif;
+  text-align: center;
+}
+
+.button.check.on::before {
+  content: "\2713";
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 
 .button .text {
@@ -1736,6 +1780,11 @@ canvas.paint.top {
     padding: 12px;
   }
 
+  /* Today's picture gets its room from the start (a Then page's quirks keep their own height), so the card does not jump when it loads. */
+  .shim-title:not(.then) .shim-title-art {
+    height: 30vh;
+  }
+
   .shim-title-art img {
     max-height: calc(30vh - 24px);
   }
@@ -3014,6 +3063,22 @@ button.shim-toast-go {
   font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* Windows' on-screen key is always on top: over the pretend Windows it presses keys on, under the site's panels.
+   The desktop is lifted with it, so it lets the clicks between its windows through to the pretend Windows. */
+body[data-app="Windows"] #desktop {
+  z-index: 1600000000;
+  pointer-events: none;
+}
+
+body[data-app="Windows"] #desktop > * {
+  pointer-events: auto;
+}
+
+/* The Start menu goes over everything, as on Windows (on a narrow page it would be under the key). */
+html:has(.shim-start) body[data-app="Windows"] #desktop {
+  z-index: auto;
+}
+
 .shim-shell > * {
   pointer-events: auto;
 }
@@ -4048,6 +4113,18 @@ html[data-saver] * {
 
 .shim-title-story[hidden] {
   display: none;
+}
+
+/* Its room while news.js loads: one summary line (padding, border, a line of text). */
+.shim-title-story:empty {
+  visibility: hidden;
+  height: calc(1.4em + 14px);
+}
+
+/* Until apps.json answers, the title card waits unseen rather than show its name and hint arriving. */
+.shim-title.unlisted .shim-title-card,
+.shim-title.unlisted .shim-title-press {
+  visibility: hidden;
 }
 
 .shim-title-story summary {
@@ -5425,11 +5502,14 @@ html[data-saver] * {
 
 /* ---- one-row toolbar (boot.js bandMore): controls that do not fit wait under More ----
    The band keeps to one row (two on narrow pages, the name's row and the controls' row). The least needed
-   controls step out of it (.shim-more-out) and More at its end lists them in a menu that drops from the band. */
+   controls step out of it (.shim-more-out) and More at its end lists them in a menu that drops from the band.
+   The home player's More (pages/home/PlayerMore.tsx) drops the same menu from the player bar. */
 
 .shim-toolbar > .shim-more-out,
 .shim-toolbar > .shim-more[hidden],
-.shim-toolbar > .shim-more-menu[hidden] {
+.shim-toolbar > .shim-more-menu[hidden],
+.player-bar > .shim-more-menu[hidden],
+.shim-more-menu > .shim-more-item[hidden] {
   display: none !important;
 }
 
@@ -5442,13 +5522,13 @@ html[data-saver] * {
   background: rgba(255, 255, 255, 0.18);
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 560px) {
   .shim-toolbar .shim-more .shim-more-label {
     display: none;
   }
 }
 
-.shim-toolbar .shim-more-menu {
+:is(.shim-toolbar, .player-bar) .shim-more-menu {
   position: absolute;
   top: calc(100% + 6px);
   z-index: 1;
@@ -5477,12 +5557,12 @@ html[data-saver] * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shim-toolbar .shim-more-menu {
+  :is(.shim-toolbar, .player-bar) .shim-more-menu {
     animation: none;
   }
 }
 
-.shim-toolbar .shim-more-menu .shim-more-item {
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -5498,13 +5578,19 @@ html[data-saver] * {
   cursor: pointer;
 }
 
-.shim-toolbar .shim-more-menu .shim-more-item:hover,
-.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+/* a link entry (the home player's Source) sized and drawn as the buttons are */
+.shim-more-menu a.shim-more-item {
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item:hover,
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item:focus-visible {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   outline: none;
 }
 
-.shim-toolbar .shim-more-menu .shim-more-item:focus-visible {
+:is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item:focus-visible {
   box-shadow: inset 0 0 0 2px var(--focus-ring, var(--accent));
 }
 
@@ -5580,16 +5666,232 @@ html[data-saver] * {
 .shim-more-swatch[data-swatch="arcade"] { background: linear-gradient(135deg, #ff2bd6, #110a22); }
 .shim-more-swatch[data-swatch="own"] { background: conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444); }
 
-:root[data-skin="classic"] .shim-toolbar .shim-more-menu {
+:root[data-skin="classic"] :is(.shim-toolbar, .player-bar) .shim-more-menu {
   border-radius: 0;
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
 }
 
-:root[data-skin="classic"] .shim-toolbar .shim-more-menu .shim-more-item {
+:root[data-skin="classic"] :is(.shim-toolbar, .player-bar) .shim-more-menu .shim-more-item {
   border-radius: 0;
 }
 
-:root[data-skin="arcade"] .shim-toolbar .shim-more-menu {
+:root[data-skin="arcade"] :is(.shim-toolbar, .player-bar) .shim-more-menu {
   border-color: #ff2bd6;
   box-shadow: 0 0 18px rgba(255, 43, 214, 0.45);
+}
+
+/* ---- Keyboard (phone-keys.tsx): on a touch screen, the phone's keyboard types to the app ---- */
+.shim-keys {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The box the phone's keyboard types into: there for the focus, never seen. 16px, or iOS zooms the page to it. */
+.shim-keys-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.shim-toolbar .shim-keys-open[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* A finger needs a bigger target than a mouse: on a touch screen the band's controls are at least 32 px across. */
+@media (pointer: coarse) {
+  .shim-toolbar button,
+  .shim-toolbar select {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
+/* ---- Slow-mo (slow-mo.tsx): the app's clock at half or a quarter speed ---- */
+.shim-toolbar .shim-slowmo[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---- exit recap (exit-recap.tsx): the run that just ended, at the top of the exit screen ---- */
+/* The clip arrives after Run again has the focus: the box stays at its top instead of following the button down. */
+.shim-exit {
+  overflow-anchor: none;
+}
+
+/* On an app page the box fits under the toolbar band, so the recap at its top is not hidden behind it. */
+:root[data-stage] .shim-overlay:has(.shim-exit) {
+  top: var(--bar-h, 0px);
+}
+
+:root[data-stage] .shim-exit {
+  max-height: calc(100vh - var(--bar-h, 0px) - 32px);
+}
+
+.shim-recap {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 0 0 14px;
+  text-align: left;
+}
+
+.shim-recap:not(.clip) {
+  justify-content: center;
+  text-align: center;
+}
+
+.shim-recap-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.shim-exit .shim-recap h2 {
+  margin: 0 0 6px;
+}
+
+.shim-exit .shim-recap p {
+  margin: 0 0 4px;
+  opacity: 0.85;
+}
+
+.shim-recap-record strong {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shim-recap-record.moved {
+  opacity: 1 !important;
+  font-weight: 600;
+}
+
+.shim-exit .shim-recap-clip {
+  position: relative;
+  flex: 0 0 46%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: #000;
+  line-height: 0;
+}
+
+.shim-recap-clip video {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+
+.shim-recap-clip span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 8px 6px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.shim-recap-clip:hover,
+.shim-recap-clip:focus-visible {
+  border-color: var(--accent);
+}
+
+@media (max-width: 520px) {
+  .shim-recap.clip {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .shim-recap-clip video {
+    max-height: 150px;
+  }
+}
+
+/* Title screen attract mode (src/runtime/title-attract.tsx): the app's preview clip plays over its picture. */
+.shim-title-art:has(.shim-title-clip) {
+  position: relative;
+}
+
+.shim-title-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
+.shim-title-clip.on {
+  opacity: 1;
+}
+
+.shim-title-art:has(.shim-title-clip.on) img {
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
+.shim-title-clip-pause {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.62);
+  color: #fff;
+  font: 600 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+.shim-title-clip-pause:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+:root[data-skin="classic"] .shim-title-clip-pause {
+  border-radius: 0;
+  border-color: var(--button-border);
+  background: var(--card-bg);
+  color: inherit;
+}
+
+/* Arcade: the clip is the cabinet's screen, with scanlines and a neon glow. */
+:root[data-skin="arcade"] .shim-title-art:has(.shim-title-clip.on)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 40px rgba(255, 43, 214, 0.35);
+}
+
+:root[data-skin="arcade"] .shim-title-clip-pause {
+  z-index: 1;
+  border-color: #ff2bd6;
+  background: rgba(7, 4, 15, 0.8);
+  color: #5ff;
+  font-family: "Courier New", ui-monospace, monospace;
+  text-transform: uppercase;
 }

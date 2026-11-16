@@ -1,0 +1,51 @@
+/*
+ * High contrast (forced colors: Windows Contrast themes, and any browser setting that forces the page's colors).
+ * shim.css imports this only while colors are forced. The browser then repaints every element in a few system
+ * colors and drops backgrounds, which loses two kinds of meaning:
+ *   - Inside an app's windows, the program's own colors: Minesweeper's lit Classic and No guess buttons, a game's
+ *     chosen level, a tool's highlighted row. The windows are a picture the program draws (most of it on canvases,
+ *     which are never forced), so its DOM widgets keep the program's colors too, and the text stays on the
+ *     backgrounds it was drawn for instead of turning light on a still-light canvas.
+ *   - Around the apps, which toggle is on (Then | Now, the filters, the tabs, Sound, Fit): the site marks it with a
+ *     background color alone. Here an on control is filled with the system's highlight colors.
+ * Keyboard focus is drawn in the system's highlight color everywhere, app windows included.
+ */
+
+.window {
+  forced-color-adjust: none;
+}
+
+/* Many controls draw their focus with a shadow or a background (outline: none), which forced colors drop. */
+:focus-visible {
+  outline: 3px solid Highlight !important;
+  outline-offset: 1px;
+}
+
+/* Not forced, so the browser draws no dark backplate behind the text, which would hide it on the fill. */
+[aria-pressed="true"]:not(.window *),
+[aria-selected="true"]:not(.window *),
+[aria-current]:not([aria-current="false"], .window *),
+[aria-checked="true"]:not(.window *) {
+  forced-color-adjust: none;
+  background: Highlight !important;   /* over the skins' own on colors */
+  color: HighlightText !important;
+  border-color: Highlight !important;
+  box-shadow: none !important;
+}
+
+/* Parts inside an on control (Fit's zoom chip, a tab's badge) read in its text color, on its fill. */
+[aria-pressed="true"]:not(.window *) *,
+[aria-selected="true"]:not(.window *) *,
+[aria-current]:not([aria-current="false"], .window *) *,
+[aria-checked="true"]:not(.window *) * {
+  color: inherit !important;
+  background: transparent !important;
+  border-color: currentColor !important;
+}
+
+/* Replay's recording dot is all a narrow toolbar shows of the button: draw it in the text color. */
+.shim-replay-dot {
+  forced-color-adjust: none;
+  background: CanvasText;
+  box-shadow: none;
+}

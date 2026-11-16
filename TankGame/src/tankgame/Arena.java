@@ -12,15 +12,25 @@ import java.util.List;
  */
 public class Arena
 {
-    /** A layout's walls: center X and Y as fractions of the field, then width and height in pixels. */
+    /**
+     * A layout's walls: center X and Y as fractions of the field, then width and height in pixels (or, for a
+     * battlefield built by the player, as fractions of the field too, so it fills any window the same way).
+     */
     public static final class Layout
     {
         final String     name;
         final double[][] walls;
+        final boolean    fractional;
 
         Layout(String name, double[]... walls)
         {
+            this(name, false, walls);
+        }
+
+        Layout(String name, boolean fractional, double[]... walls)
+        {
             this.name = name;
+            this.fractional = fractional;
             this.walls = walls;
         }
 
@@ -100,6 +110,9 @@ public class Arena
     public static final List<Layout> OPEN  = Collections.singletonList(new Layout("Open Field"));
     public static final Arena        EMPTY = new Arena(OPEN.get(0), Collections.<Wall>emptyList());
 
+    /** The player's own battlefield is laid on a grid of this many cells across and down the field. */
+    public static final int          GRID  = 12;
+
     private final Layout             layout;
     private final List<Wall>         walls;
 
@@ -117,14 +130,110 @@ public class Arena
         {
             double cx = w[0] * width;
             double cy = w[1] * height;
-            Wall wall = new Wall(cx - w[2] / 2, cy - w[3] / 2, cx + w[2] / 2, cy + w[3] / 2);
-            boolean free = true;
-            for (Tank tank : tanks)
-                free &= !wall.overlaps(tank.x() - Tank.SIZE - 4, tank.y() - Tank.SIZE - 4, tank.x() + Tank.SIZE + 4,
-                                tank.y() + Tank.SIZE + 4);
-            if (free) walls.add(wall);
+            double ww = layout.fractional ? w[2] * width : w[2];
+            double wh = layout.fractional ? w[3] * height : w[3];
+            Wall wall = new Wall(cx - ww / 2, cy - wh / 2, cx + ww / 2, cy + wh / 2);
+            if (clearOf(wall, tanks)) walls.add(wall);
         }
         return new Arena(layout, Collections.unmodifiableList(walls));
+    }
+
+    /** Whether a wall leaves room round every tank (where they start, when the arena is placed). */
+    private static boolean clearOf(Wall wall, Tank... tanks)
+    {
+        for (Tank tank : tanks)
+            if (wall.overlaps(tank.x() - Tank.SIZE - 4, tank.y() - Tank.SIZE - 4, tank.x() + Tank.SIZE + 4,
+                            tank.y() + Tank.SIZE + 4)) return false;
+        return true;
+    }
+
+    /**
+     * Whether one tank can drive to the other round the walls: a search over the spots a tank may stand on (inside
+     * the field and off the walls, as {@link Tank} keeps it), 5 px apart, the distance a tank drives in a tick.
+     */
+    public boolean connected(int width, int height, Tank from, Tank to)
+    {
+        int step = Tank.SPEED;
+        int cols = Math.max(1, (width - 2 * Tank.SIZE) / step + 1);
+        int rows = Math.max(1, (height - 2 * Tank.SIZE) / step + 1);
+        boolean[] seen = new boolean[cols * rows];
+        int[] queue = new int[cols * rows];
+        int start = spot(from.x(), from.y(), cols, rows);
+        int head = 0;
+        int tail = 0;
+        queue[tail++] = start;
+        seen[start] = true;
+        while (head < tail)
+        {
+            int at = queue[head++];
+            int c = at % cols;
+            int r = at / cols;
+            double x = Tank.SIZE + c * step;
+            double y = Tank.SIZE + r * step;
+            if (Math.abs(x - to.x()) <= step && Math.abs(y - to.y()) <= step) return true;
+            int[][] moves = { { c - 1, r }, { c + 1, r }, { c, r - 1 }, { c, r + 1 } };
+            for (int[] m : moves)
+            {
+                if (m[0] < 0 || m[1] < 0 || m[0] >= cols || m[1] >= rows || seen[m[1] * cols + m[0]]) continue;
+                if (blocks(Tank.SIZE + m[0] * step, Tank.SIZE + m[1] * step, Tank.SIZE)) continue;
+                seen[m[1] * cols + m[0]] = true;
+                queue[tail++] = m[1] * cols + m[0];
+            }
+        }
+        return false;
+    }
+
+    private static int spot(double x, double y, int cols, int rows)
+    {
+        int c = (int) Math.max(0, Math.min(cols - 1, Math.round((x - Tank.SIZE) / Tank.SPEED)));
+        int r = (int) Math.max(0, Math.min(rows - 1, Math.round((y - Tank.SIZE) / Tank.SPEED)));
+        return r * cols + c;
+    }
+
+    /** Whether a wall may go in this cell of the grid: not on or right beside a tank. */
+    public static boolean cellFree(int col, int row, int width, int height, Tank... tanks)
+    {
+        return clearOf(new Wall(col * (double) width / GRID, row * (double) height / GRID,
+                        (col + 1) * (double) width / GRID, (row + 1) * (double) height / GRID), tanks);
+    }
+
+    /** The player's battlefield: each run of wall cells along a row of the grid is one wall. */
+    public static Layout custom(boolean[][] cells)
+    {
+        List<double[]> walls = new ArrayList<>();
+        for (int row = 0; row < GRID; row++)
+            for (int col = 0; col < GRID; col++)
+            {
+                if (!cells[row][col]) continue;
+                int end = col;
+                while (end + 1 < GRID && cells[row][end + 1]) end++;
+                walls.add(new double[] { (col + end + 1) / 2.0 / GRID, (row + 0.5) / GRID, (end - col + 1.0) / GRID,
+                                1.0 / GRID });
+                col = end;
+            }
+        return new Layout("Your Battlefield", true, walls.toArray(new double[0][]));
+    }
+
+    /** The grid as text for the record file: rows of {@code #} (wall) and {@code .} joined by {@code /}. */
+    public static String text(boolean[][] cells)
+    {
+        StringBuilder text = new StringBuilder();
+        for (int row = 0; row < GRID; row++)
+        {
+            if (row > 0) text.append('/');
+            for (int col = 0; col < GRID; col++) text.append(cells[row][col] ? '#' : '.');
+        }
+        return text.toString();
+    }
+
+    /** Reads {@link #text}; anything damaged or missing reads as no wall. */
+    public static boolean[][] cells(String text)
+    {
+        boolean[][] cells = new boolean[GRID][GRID];
+        String[] rows = text == null ? new String[0] : text.split("/");
+        for (int row = 0; row < Math.min(GRID, rows.length); row++)
+            for (int col = 0; col < Math.min(GRID, rows[row].length()); col++) cells[row][col] = rows[row].charAt(col) == '#';
+        return cells;
     }
 
     public String name()

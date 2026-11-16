@@ -4,6 +4,7 @@ import { WATCH } from './watch';
 import { openShare, shareBox } from './share';
 import { playSound } from './sounds';
 import type { CatalogApp } from './catalog';
+import { lazyScript } from './lazy-script';
 
 declare global {
   interface OldjavaShare {
@@ -12,15 +13,9 @@ declare global {
   }
 }
 
-let embedPromise: Promise<NonNullable<Window['oldjavaEmbed']>> | null;
 let embedOpenNext: boolean;
 
-function embedScript() {
-  if (!embedPromise) embedPromise = new Promise(function (resolve, reject) {
-    import('./lazy/embed').then(function () { resolve(window.oldjavaEmbed!); }, function () { embedPromise = null; reject(new Error('embed.js did not load')); });
-  });
-  return embedPromise;
-}
+const embedScript = lazyScript(() => import('./lazy/embed'), () => window.oldjavaEmbed, 'embed.js');
 
 /** Put it on your site, at the end of the Share panel: closed, and built (by embed.js) the first time it opens. */
 export function EmbedSection({ id, apps }: { id: string | null; apps: CatalogApp[] }) {
@@ -51,7 +46,6 @@ export function init() {
   // ---- embed: put an app on your own site (play.html, built by embed.js) ----
   // The Share panel ends with "Put it on your site", closed: opening it adds embed.js, which builds the
   // <iframe> tag for play.html (the embeddable player) with a live preview. See web/README.md, Embed.
-  embedPromise = null;
   embedOpenNext = false;
   // Opens the Share panel with "Put it on your site" already open (Find uses it).
   window.oldjavaShare.embed = function (id, opener) {

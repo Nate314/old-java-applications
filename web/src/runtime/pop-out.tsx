@@ -6,7 +6,7 @@ import { appId } from './catalog';
 import { playSound } from './sounds';
 
 /** The app while it is popped out. */
-export interface Popped { win: Window; desktop: HTMLElement; card: () => void; watch: MutationObserver }
+export interface Popped { win: Window; desktop: HTMLElement; next: Node | null; card: () => void; watch: MutationObserver }
 
 export let popped: Popped | null;
 
@@ -57,6 +57,7 @@ function popInto(win: Window) {
   var html = document.documentElement;
   var desktop = document.getElementById('desktop');
   if (popped || !desktop) { win.close(); return; }
+  var next = desktop.nextSibling;   // its place in the page, to come back to
   var doc = win.document;
   doc.title = document.title;
   Array.prototype.forEach.call(document.querySelectorAll('link[rel="stylesheet"], style'), function (n) {
@@ -89,7 +90,7 @@ function popInto(win: Window) {
   win.addEventListener('keydown', function () { if (window.__shimKeyed) window.__shimKeyed.on = true; }, true);
   win.addEventListener('pointerdown', function () { if (window.__shimKeyed) window.__shimKeyed.on = false; }, true);
   win.addEventListener('pagehide', bringBack);
-  popped = { win: win, desktop: desktop, card: poppedCard(), watch: watch };
+  popped = { win: win, desktop: desktop, next: next, card: poppedCard(), watch: watch };
   html.setAttribute('data-popped', '');
   listen();
   passport.stamp(appId()!);
@@ -103,7 +104,8 @@ export function bringBack() {
   popped = null;
   window.__shimDoc = null;
   p.watch.disconnect();
-  document.body.insertBefore(p.desktop, document.body.firstChild);
+  // Back in its own place: the stage glow sits just before it, and would cover the windows if they came back first.
+  document.body.insertBefore(p.desktop, p.next && p.next.parentNode === document.body ? p.next : document.body.firstChild);
   p.card();
   document.documentElement.removeAttribute('data-popped');
   if (!p.win.closed) p.win.close();
@@ -133,7 +135,7 @@ function PoppedCard({ name }: { name: string }) {
 }
 
 export function init() {
-  popped = null;   // { win, desktop, card, watch } while the app is popped out
+  popped = null;   // { win, desktop, next, card, watch } while the app is popped out
   // The home page's player bar pops out the app in its iframe with these.
   window.oldjavaPop = {
     can: poppable,

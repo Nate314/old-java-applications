@@ -59,6 +59,7 @@ final class DesktopShortcuts {
          public void mousePressed(MouseEvent e) {
             DesktopShortcuts.this.select(null);
             screen.startMenu.hideMenu();
+            screen.calendar.hideMenu();
             if (e.getButton() == MouseEvent.BUTTON3 || e.isPopupTrigger()) {
                screen.desktopMenu.showAt(e.getX(), e.getY());
             } else {
@@ -200,7 +201,7 @@ final class DesktopShortcuts {
 
       @Override
       void open() {
-         DesktopShortcuts.this.launcher.launch(this.app);
+         DesktopShortcuts.this.launcher.launch(this.app, this);
       }
 
       @Override
@@ -220,7 +221,7 @@ final class DesktopShortcuts {
 
       @Override
       void open() {
-         DesktopShortcuts.this.launcher.openPicture(this.picture);
+         DesktopShortcuts.this.launcher.openPicture(this.picture, this);
       }
 
       @Override
@@ -260,6 +261,7 @@ final class DesktopShortcuts {
                DesktopShortcuts.this.select(Shortcut.this);
                DesktopShortcuts.this.screen.startMenu.hideMenu();
                DesktopShortcuts.this.screen.desktopMenu.hideMenu();
+               DesktopShortcuts.this.screen.calendar.hideMenu();
                Shortcut.this.pressed = e.getButton() == MouseEvent.BUTTON1;
                Shortcut.this.pressX = e.getX();
                Shortcut.this.pressY = e.getY();

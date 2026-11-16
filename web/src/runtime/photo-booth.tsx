@@ -5,7 +5,9 @@ import { drawDesk } from './replay';
 import { appId, catalog } from './catalog';
 import { indexOf } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { playSound } from './sounds';
+import { store, stored } from './stored';
 
 /** A photo of the app's windows: the PNG, the app's id and when it was taken. */
 export type Photo = OldjavaPhotoPrint;
@@ -224,17 +226,12 @@ function openPhoto(photo: Photo, opener: HTMLElement | null) {
   if (photoBox) return;
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
   var urls: { src: string; out: string | null } = { src: URL.createObjectURL(photo.blob), out: null };
-  function shut() {
-    playSound('close');
+  var save: HTMLElement | null = null;
+  openPanel(shut => <PhotoPanel photo={photo} urls={urls} onClose={shut} onPanel={(el, s) => { photoBox = el; save = s; }} />, opener, () => {
     URL.revokeObjectURL(urls.src);
     if (urls.out) URL.revokeObjectURL(urls.out);
-    close();
     photoBox = null;
-    if (opener && opener.isConnected) opener.focus();
-  }
-  var save: HTMLElement | null = null;
-  const close = openLayer(<PhotoPanel photo={photo} urls={urls} onClose={shut} onPanel={(el, s) => { photoBox = el; save = s; }} />);
-  playSound('open');
+  });
   save!.focus();
 }
 
@@ -253,8 +250,7 @@ function PhotoPanel({ photo, urls, onClose, onPanel }: {
   const save = useRef<HTMLAnchorElement>(null);
   const cap = useRef<HTMLInputElement>(null);
   const [frame, setFrame] = useState(() => {
-    var f = 'instant';
-    try { f = localStorage.getItem(PHOTO_FRAME_KEY) || f; } catch (e) { /* the first frame */ }
+    var f = stored(PHOTO_FRAME_KEY) || 'instant';
     return PHOTO_FRAMES.some(function (o) { return o[0] === f; }) ? f : 'instant';
   });
   const [name, setName] = useState(photo.app);   // the app's name, once the catalog says
@@ -302,7 +298,7 @@ function PhotoPanel({ photo, urls, onClose, onPanel }: {
   useLayoutEffect(develop, [frame]);
 
   function pick(f: string) {
-    try { localStorage.setItem(PHOTO_FRAME_KEY, f); } catch (e) { /* not remembered */ }
+    store(PHOTO_FRAME_KEY, f);
     setFrame(f);
   }
   const when = new Date(photo.at);   // the visitor's own clock
@@ -341,6 +337,7 @@ function PhotoPanel({ photo, urls, onClose, onPanel }: {
           </label>
           <div className="shim-share-ways">
             <a className="shim-share-way primary" href={print ? print.url : undefined} download={download} data-sound="none" ref={save}
+              tabIndex={0} /* focusable before the print has an address, so the panel has the keys (Escape) from the start */
               onClick={e => { if (!print) { e.preventDefault(); return; } playSound('saved'); }}>Save picture</a>
             {canCopy && (
               <button type="button" className="shim-share-way" onClick={() => {

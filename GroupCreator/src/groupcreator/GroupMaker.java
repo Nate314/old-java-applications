@@ -64,11 +64,60 @@ public final class GroupMaker {
       return fewestGroups * min <= count;
    }
 
+   /**
+    * An earlier round's groups again, for the names here now: names not here leave their group, groups left empty
+    * go, and each name the round did not have joins the smallest group (a new group when there is none).
+    */
+   static List<List<String>> again(List<List<String>> round, List<String> here) {
+      List<List<String>> groups = new ArrayList<>();
+      List<String> placed = new ArrayList<>();
+      for (List<String> old : round) {
+         List<String> group = new ArrayList<>();
+         for (String name : old) {
+            if (here.contains(name) && !placed.contains(name)) {
+               group.add(name);
+               placed.add(name);
+            }
+         }
+         if (!group.isEmpty()) {
+            groups.add(group);
+         }
+      }
+      for (String name : here) {
+         if (placed.contains(name)) {
+            continue;
+         }
+         if (groups.isEmpty()) {
+            groups.add(new ArrayList<>());
+         }
+         List<String> smallest = groups.get(0);
+         for (List<String> group : groups) {
+            if (group.size() < smallest.size()) {
+               smallest = group;
+            }
+         }
+         smallest.add(name);
+         placed.add(name);
+      }
+      return groups;
+   }
+
    /** One line per group: "Group 1 --- name, name". */
    public static List<String> describe(List<List<String>> groups) {
+      return describe(groups, false);
+   }
+
+   /** The same lines, with each member's role after their name ("Alice (Leader), Bob (Scribe)") when roles is set. */
+   public static List<String> describe(List<List<String>> groups, boolean roles) {
       List<String> lines = new ArrayList<>();
       for (int i = 0; i < groups.size(); i++) {
-         lines.add("Group " + (i + 1) + " --- " + String.join(", ", groups.get(i)));
+         List<String> group = groups.get(i);
+         List<String> names = new ArrayList<>();
+         for (int k = 0; k < group.size(); k++) {
+            int role = roles ? Roles.of(k, group.size()) : -1;
+            names.add(role < 0 ? group.get(k) : group.get(k) + " (" + Roles.NAMES[role] + ")");
+         }
+         lines.add("Group " + (i + 1) + " --- " + String.join(", ", names));
       }
       return lines;
    }

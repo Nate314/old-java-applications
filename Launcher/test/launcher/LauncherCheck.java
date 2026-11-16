@@ -36,7 +36,7 @@ public class LauncherCheck {
       check(find(apps, "TankGame").original && !find(apps, "Minesweeper").original, "origin from \"origin\"");
       check(find(apps, "Windows").warning != null && find(apps, "WindowsE").warning != null
          && find(apps, "BibleDownloader").warning == null && find(apps, "DinoGame").warning == null, "Robot apps warn");
-      check(find(apps, "Windows").hint.startsWith("Presses the Windows key once, then exits"),
+      check(find(apps, "Windows").hint.startsWith("An on-screen Windows key that stays on top of the real desktop"),
          "the Robot apps describe the real desktop, not the browser's pretend Windows: " + find(apps, "Windows").hint);
 
       // Search looks at the name, id, category and hint, ignoring case and spaces around it.
@@ -64,6 +64,31 @@ public class LauncherCheck {
       again.launched("TankGame", now);
       again.launched("TankGame", now);
       check(again.describe("TankGame", now + 4 * day, utc).equals("Played 3 times, last 4 days ago"), "days ago");
+      // The newest change seen at a launch is kept in a file beside it, so the play record keeps its old format.
+      check(again.seen("TankGame") == null, "nothing seen yet");
+      again.launched("TankGame", now, "abc123");
+      again.launched("TankGame", now);   // history not read yet: the one seen before stays
+      Path seenFile = file.resolveSibling(file.getFileName().toString().replace(".txt", "-seen.txt"));
+      check(new PlayLog(file).seen("TankGame").equals("abc123") && new PlayLog(file).count("TankGame") == 5, "seen kept");
+      check(new String(Files.readAllBytes(file), StandardCharsets.UTF_8).contains("TankGame 5 "), "play record format unchanged");
+      // Time played and the cards' order are kept in their own files beside it too.
+      check(again.timeLine("TankGame") == null && again.order().isEmpty(), "no time or order yet");
+      again.played("TankGame", 40 * 60_000L);
+      again.played("TankGame", 32 * 60_000L);
+      again.played("TankGame", 0);   // a start that never ran adds nothing
+      again.order("most");
+      PlayLog timed = new PlayLog(file);
+      check(timed.total("TankGame") == 72 * 60_000L && timed.longest("TankGame") == 40 * 60_000L, "time kept");
+      check("1 h 12 min played in all, longest 40 min".equals(timed.timeLine("TankGame")), timed.timeLine("TankGame"));
+      check(timed.order().equals("most") && timed.count("TankGame") == 5, "order kept, play record untouched");
+      check(PlayLog.duration(59_999).equals("under a minute") && PlayLog.duration(120 * 60_000L).equals("2 h"), "durations");
+      Path timeFile = file.resolveSibling(file.getFileName().toString().replace(".txt", "-time.txt"));
+      Files.write(timeFile, "junk\nClock 5 x\nTankGame 60000 60000\n".getBytes(StandardCharsets.UTF_8));
+      check(new PlayLog(file).total("Clock") == 0 && "1 min played in all".equals(new PlayLog(file).timeLine("TankGame")),
+         "damaged time lines skipped; one play shows no longest");
+      Files.delete(timeFile);
+      Files.delete(file.resolveSibling(file.getFileName().toString().replace(".txt", "-order.txt")));
+      Files.delete(seenFile);
       Files.delete(file);
 
       // README view: headings, lists, code and inline marks, with HTML escaped.
@@ -84,6 +109,18 @@ public class LauncherCheck {
             }
          }
          for (String name : app.getValue()) check(src.indexOf("\"" + name + "\"") >= 0, app.getKey() + " saves " + name);
+      }
+      // And the other way: every home-folder dotfile an app's sources name travels in the bundle.
+      for (Catalog.App a : apps) {
+         try (java.util.stream.Stream<Path> walk = Files.walk(root.resolve(a.id).resolve("src"))) {
+            for (Path j : (Iterable<Path>) walk.filter(f -> f.toString().endsWith(".java"))::iterator) {
+               java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"(\\.[a-z0-9-]+\\.txt)\"")
+                  .matcher(new String(Files.readAllBytes(j), StandardCharsets.UTF_8));
+               while (m.find()) {
+                  check(SaveBundle.FILES.getOrDefault(a.id, List.of()).contains(m.group(1)), a.id + "'s " + m.group(1) + " is in SaveBundle.FILES");
+               }
+            }
+         }
       }
       Path home = Files.createTempDirectory("launcher-saves");
       Path other = Files.createTempDirectory("launcher-saves-to");
@@ -139,7 +176,7 @@ public class LauncherCheck {
          check(mine.changed && mine.thenLines > 0 && mine.nowLines > mine.thenLines && !mine.changes.isEmpty(), "Minesweeper grew");
          check(mine.warning == null, "only apps that call Robot.keyPress warn, not ones with key listeners");
          check(history.of("DinoGame").warning != null && history.of("DinoGame").warning.contains("Space"), "the first DinoGame was a screen bot");
-         check(!history.of("Windows").changed && history.of("Windows").thenLines == history.of("Windows").nowLines, "Windows unchanged");
+         check(history.of("Windows").changed && history.of("Windows").nowLines > history.of("Windows").thenLines, "Windows grew its on-screen key");
          check(LauncherWindow.historyText(find(apps, "Clock"), history.of("Clock"), utc).contains("## Changes since"), "history text");
          // The first restored copy plays with today's original art, not the images taken from other apps.
          Path thenDir = Files.createTempDirectory("launcher-then-art").resolve("then");
@@ -154,8 +191,40 @@ public class LauncherCheck {
       check(History.sentences("One. Two. Three.", 2).equals("One. Two.") && History.sentences("One.", 2).equals("One."), "sentences");
       check(History.firstParagraph("# T\n\nA `b` **c** [d](e)\nmore.\n\nNext").equals("A b c d more."), "first paragraph");
       check(History.lines("rev:Clock/src/a/B.java:12\nrev:Clock/src/C.java:3\nrev:web/x.java:9\n").toString().equals("{Clock=15}"), "lines per app");
-      Map<String, List<History.Change>> parsed = History.parseLog("@@100 Two apps\n\nClock/README.md\nTankGame/src/A.java\nClock/src/B.java\n@@50 One\n\nClock/x\n");
-      check(parsed.get("Clock").size() == 2 && parsed.get("TankGame").size() == 1 && parsed.get("Clock").get(0).millis == 100_000L, "log per app");
+      Map<String, List<History.Change>> parsed = History.parseLog("@@h2 100 Two apps: both\n\nClock/README.md\nTankGame/src/A.java\nClock/src/B.java\n@@h1 50 One\n\nClock/x\n");
+      check(parsed.get("Clock").size() == 2 && parsed.get("TankGame").size() == 1 && parsed.get("Clock").get(0).millis == 100_000L
+         && parsed.get("Clock").get(0).hash.equals("h2") && parsed.get("Clock").get(0).subject.equals("Two apps: both"), "log per app");
+      // What is new since the last launch: the changes above the one seen then, or by time when none was kept.
+      History.Change c3 = parsed.get("Clock").get(0);
+      List<History.Change> three = List.of(new History.Change("h3", 300_000L, "Clock: a third"), c3, parsed.get("Clock").get(1));
+      History.Story clockStory = new History.Story(1, 2, true, three, "# Clock\n\nOld.", null);
+      check(clockStory.newest().equals("h3"), "newest change");
+      check(clockStory.since("h2", 999_999L).size() == 1 && clockStory.since("h3", 0).isEmpty(), "since the seen change");
+      check(clockStory.since(null, 60_000L).size() == 2 && clockStory.since("gone", 400_000L).isEmpty(), "since by time");
+      Catalog.App clockApp = find(apps, "Clock");
+      check(LauncherWindow.tidy(clockApp, "Clock: chimes every quarter").equals("Chimes every quarter")
+         && LauncherWindow.tidy(clockApp, "Clock README: words").equals("Words")
+         && LauncherWindow.tidy(find(apps, "RubiksCube2D"), "Rubik's Cube: x").equals("Rubik's Cube: x")
+         && LauncherWindow.tidy(find(apps, "WindowsE"), "Windows+E: y").equals("Y")
+         && LauncherWindow.tidy(find(apps, "Windows"), "WindowsE: y").equals("WindowsE: y")
+         && LauncherWindow.tidy(clockApp, "Run the site: z").equals("Run the site: z"), "subjects tidied");
+      List<History.Change> four = List.of(new History.Change("h4", 3 * day, "Clock: a fourth"), three.get(0), three.get(1), three.get(2));
+      String fresh = LauncherWindow.whatsNew(clockApp, four, 3 * day + 60_000L, utc);
+      check(fresh.equals("4 things new since you last played:\n\u2022 A fourth (today)\n\u2022 A third (3 days ago)\n"
+         + "2 more in History (Alt+H)."), fresh);
+      check(LauncherWindow.whatsNew(clockApp, List.of(three.get(0)), day, utc).equals("New since you last played:\n\u2022 A third (yesterday)"),
+         "one change, with its day");
+      check(LauncherWindow.whatsNew(clockApp, List.of(), 0, utc) == null, "nothing new, no word");
+      // Housekeeping is not news: the same subjects the site's What's new folds away, by the same rule.
+      check(!three.get(0).quiet && new History.Change("x", 0, "Clock README: words").quiet
+         && new History.Change("x", 0, "Refactor: one helper").quiet && new History.Change("x", 0, "ClockCheck: alarm").quiet
+         && !new History.Change("x", 0, "Clock: a world map").quiet, "quiet subjects");
+      String kind = new String(Files.readAllBytes(root.resolve("web/src/runtime/lazy/news-kind.ts")), StandardCharsets.UTF_8);
+      kind = kind.substring(kind.indexOf("new RegExp(["), kind.indexOf("].join")).replaceAll("//[^\n]*", "");
+      java.util.regex.Matcher lit = java.util.regex.Pattern.compile("'((?:[^'\\\\]|\\\\.)*)'|\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(kind);
+      List<String> parts = new java.util.ArrayList<>();
+      while (lit.find()) parts.add((lit.group(1) != null ? lit.group(1) : lit.group(2)).replace("\\\\", "\\"));
+      check(String.join("|", parts).equals(History.QUIET.pattern()), "the launcher's quiet rule matches news-kind.ts: " + parts);
       check(Runner.homeOption("-Xmx1g", Paths.get("/h o")).endsWith("\"-Duser.home=" + Paths.get("/h o").toAbsolutePath() + "\"")
          && Runner.homeOption(null, Paths.get("/h")).startsWith("\"-D"), "then home option");
       // The unpacker refuses entries that would land outside its folder.
@@ -177,6 +246,35 @@ public class LauncherCheck {
       // The art the Then copy swaps in is the art web/art.ps1 renders, so the two lists cannot drift apart.
       String artScript = new String(Files.readAllBytes(root.resolve("web/art.ps1")), StandardCharsets.UTF_8);
       for (String art : ThenCopy.ART) check(artScript.contains("Out = '" + art + "'"), art + " is rendered by web/art.ps1");
+
+      // Start menu: every app but the two that press real keys gets a shortcut with its own file name, which runs
+      // run.ps1 by its full path; the icon file is one 256 px PNG; Remove deletes the shortcuts, icons and folder.
+      Path menu = Files.createTempDirectory("startmenu");
+      StartMenu start = new StartMenu("powershell", Paths.get("."), menu.resolve(StartMenu.FOLDER), menu.resolve("icons"));
+      java.util.Set<Path> links = new java.util.HashSet<>();
+      for (Catalog.App a : apps) {
+         check(StartMenu.allowed(a) == !a.pressesKeys(), a.id + " Start menu shortcut only without real keys");
+         if (StartMenu.allowed(a)) links.add(start.link(a));
+      }
+      check(links.size() == 18, "18 distinct shortcut names");
+      check(start.link(find(apps, "RubiksCube2D")).getFileName().toString().equals("Rubik's Cube 2D.lnk"), "shortcut named after the app");
+      String startArgs = StartMenu.arguments(root, "Clock");
+      check(startArgs.contains("-File \"" + root.resolve("run.ps1") + "\"") && startArgs.endsWith(" old Clock"), "shortcut runs run.ps1 old: " + startArgs);
+      byte[] ico = StartMenu.ico(StartMenu.icon(new java.awt.image.BufferedImage(427, 456, java.awt.image.BufferedImage.TYPE_INT_ARGB), Ui.ACCENT));
+      java.nio.ByteBuffer icoHead = java.nio.ByteBuffer.wrap(ico).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+      check(icoHead.getShort(2) == 1 && icoHead.getShort(4) == 1 && icoHead.getInt(14) == ico.length - 22 && icoHead.getInt(18) == 22, "ico header");
+      java.awt.image.BufferedImage iconPng = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(ico, 22, ico.length - 22));
+      check(iconPng.getWidth() == 256 && iconPng.getHeight() == 256, "ico holds a 256 px PNG");
+      Catalog.App clock = find(apps, "Clock");
+      Files.createDirectories(start.folder);
+      Files.createDirectories(menu.resolve("icons"));
+      Files.write(start.link(clock), new byte[] {1});
+      Files.write(menu.resolve("icons/Clock.ico"), ico);
+      check(start.has(clock) && !start.has(find(apps, "TankGame")), "has a shortcut");
+      start.remove(List.of(clock));
+      check(!start.has(clock) && !Files.exists(start.folder) && !Files.exists(menu.resolve("icons/Clock.ico")), "remove cleans up");
+      Files.delete(menu.resolve("icons"));
+      Files.delete(menu);
 
       System.out.println("LauncherCheck: all checks passed");
    }

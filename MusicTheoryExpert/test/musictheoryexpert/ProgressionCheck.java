@@ -123,6 +123,31 @@ public class ProgressionCheck {
 		song.setTempo(10);
 		check(song.tempo() == Progression.MIN_TEMPO, "tempo floor");
 
+		// The melody: kept as if in C, so it moves with the key, and stays put for the relative minor.
+		song.setKey(0, false);
+		song.clearMelody();
+		song.addNote(0, 64, 2);
+		song.addNote(0, 64, 4);
+		song.addNote(3, 67, 20);
+		song.addNote(-1, 60, 1);
+		song.addNote(Progression.MAX_CHORDS * Progression.EIGHTHS, 60, 1);
+		check(song.melody().size() == 2, "same slot and pitch replaces, out of range is skipped: " + song.melody().size());
+		check(song.notesAt(0).size() == 1 && song.notesAt(0).get(0)[1] == 64 && song.notesAt(0).get(0)[2] == 4, "the note at 0");
+		check(song.notesAt(3).get(0)[2] == Progression.LONGEST_NOTE && song.notesAt(1).isEmpty(), "length capped at a bar");
+		song.setKey(1, false);
+		check(song.notesAt(0).get(0)[1] == 59, "to G major the melody moves down a fourth: " + song.notesAt(0).get(0)[1]);
+		song.setKey(6, false);
+		check(song.notesAt(0).get(0)[1] == 70, "to F# major it moves up: " + song.notesAt(0).get(0)[1]);
+		song.setKey(6, true);
+		check(song.notesAt(0).get(0)[1] == 70, "the relative minor keeps the notes");
+		for (int p = 0; p < 12; p++) {
+			check(Math.abs(Progression.shift(p)) <= 6 && Math.floorMod(Progression.shift(p), 12) == Progression.tonicAt(p, false),
+					"shift " + p);
+		}
+		song.setKey(1, false);
+		song.addNote(5, 59, 1);
+		check(song.notesAt(5).get(0)[1] == 59, "a note added in G stays where it was played");
+
 		// Saving and loading.
 		File file = File.createTempFile("songwriter", ".txt");
 		file.deleteOnExit();
@@ -138,13 +163,38 @@ public class ProgressionCheck {
 		Progression loaded = Progression.load(file);
 		check(loaded.position() == 10 && loaded.isMinor() && Arrays.equals(loaded.degrees(), new int[] { 1, 6, 7 })
 				&& loaded.tempo() == 120 && loaded.style() == Style.ARPEGGIO && loaded.voicing() == Voicing.ROOT, "saved song loads");
+		check(loaded.melody().size() == 3 && loaded.notesAt(5).get(0)[1] == song.notesAt(5).get(0)[1]
+				&& loaded.notesAt(3).get(0)[2] == Progression.LONGEST_NOTE, "the melody is saved");
 		try (Writer writer = new FileWriter(file)) {
-			writer.write("key=nine\nminor=true\nchords=2,x,9,5,1,1,1,1,1,1,1,1\nstyle=JAZZ\ntempo=72\nnonsense\n");
+			writer.write("key=nine\nminor=true\nchords=2,x,9,5,1,1,1,1,1,1,1,1\nstyle=JAZZ\ntempo=72\nnonsense\n"
+					+ "melody=0:60:2,99:60:1,1:200:1,2:62,x,3:61:1\n");
 		}
 		loaded = Progression.load(file);
 		check(loaded.position() == 1 && loaded.isMinor() && loaded.tempo() == 72 && loaded.style() == Style.BLOCK,
 				"bad values keep the defaults");
+		check(loaded.melody().size() == 2 && loaded.notesAt(0).get(0)[2] == 2, "bad melody notes are skipped");
 		check(Progression.load(new File(file.getPath() + ".missing")).matchingPreset() == Preset.ORIGINAL, "no file: the demo");
+
+		// The song as a link: the code carries all of it, and anything else is refused.
+		check(new Progression().code().equals("1M1451.100.00"), "the demo's code: " + new Progression().code());
+		Progression sent = Progression.fromCode(song.code());
+		check(sent != null && sent.code().equals(song.code()) && sent.position() == 10 && sent.isMinor()
+				&& Arrays.equals(sent.degrees(), new int[] { 1, 6, 7 }) && sent.tempo() == 120 && sent.style() == Style.ARPEGGIO
+				&& sent.voicing() == Voicing.ROOT, "a sent song arrives the same: " + song.code());
+		check(sent.melody().size() == 3 && sent.notesAt(5).get(0)[1] == song.notesAt(5).get(0)[1]
+				&& sent.notesAt(3).get(0)[2] == Progression.LONGEST_NOTE, "with its melody");
+		Progression full = Progression.fromCode("bM12345671.180.21");
+		check(full != null && full.position() == 11 && full.size() == 8 && full.melody().isEmpty(), "eight chords, no melody");
+		for (String bad : new String[] { null, "", "1M1451", "cM1451.100.00", "1M.100.00", "1M123456712.100.00", "1M1851.100.00",
+				"1M1451.59.00", "1M1451.181.00", "1M1451.100.30", "1M1451.100.02", "1M1451.100.00.", "1M1451.100.00.ABC",
+				"1M1451.100.00.ACAA", "1M1451.100.00.ACAJ", "1M1451.100.00.AH__", "1m1451.100.00.ABC<", "1M1451.100.00 ", "1M1451.100.00.ABAB.ABAB", "1M1451..100.00" }) {
+			check(Progression.fromCode(bad) == null, "refused: " + bad);
+		}
+		StringBuilder huge = new StringBuilder("1M1.100.00.");
+		while (huge.length() <= Progression.MAX_CODE) {
+			huge.append("ABAB");
+		}
+		check(Progression.fromCode(huge.toString()) == null, "a code longer than the tab writes is refused");
 		System.out.println("ProgressionCheck passed");
 	}
 

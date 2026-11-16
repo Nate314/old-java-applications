@@ -5,7 +5,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 
-/** Assert-based self-check of the songs, the lesson, the saved records and recorded tunes. Run with {@code java -ea}. */
+/** Assert-based self-check of the songs, the lesson, the saved records, recorded tunes and chord keys. Run with {@code java -ea}. */
 public final class LessonCheck {
    public static void main(String[] args) throws IOException {
       boolean enabled = false;
@@ -14,10 +14,57 @@ public final class LessonCheck {
          throw new IllegalStateException("Run with -ea");
       }
       checkSongs();
+      checkFall();
       checkLesson();
       checkRecords();
       checkTunes();
+      checkChords();
+      checkBacking();
       System.out.println("LessonCheck: all checks passed");
+   }
+
+   private static void checkBacking() {
+      for (Song song : Song.ALL) {
+         int[] chords = Backing.chords(song);
+         assert chords.length == song.length() && chords[0] >= 0 : song.id() + " starts on a chord";
+         for (int note = 0; note < song.length(); note++) {
+            int chord = Backing.at(chords, note);
+            assert chord >= 0 && chord < 12 && chord != 11 : song.id() + " note " + note + " has chord " + chord;
+            assert note == 0 || chords[note] != Backing.at(chords, note - 1) : song.id() + " starts the chord it has already";
+         }
+         assert Backing.at(chords, song.length() - 1) == (song.id().equals("JINGLE") ? 7 : 0) : song.id() + " ends on C (Jingle Bells on G)";
+      }
+      // Mary: C under E D C D, G under D D D, C under E G G, and G under D D E D before the last C.
+      int[] mary = Backing.chords(Song.ALL[0]);
+      assert mary[0] == 0 && mary[7] == 7 && mary[10] == 0 && mary[21] == 7 && mary[25] == 0;
+      assert Backing.at(mary, 23) == 7 : "the E in D D E D keeps the G";
+      // Twinkle: C C G G | F F C | F F C C | G G C, its first line's chords.
+      int[] twinkle = Backing.chords(Song.ALL[1]);
+      String line = "";
+      for (int note = 0; note < 14; note++) {
+         line += twinkle[note] < 0 ? "" : Chord.name(twinkle[note]) + " ";
+      }
+      assert line.equals("C F C F C G C ") : line;
+      // A friend's tune on black keys gets their major chords; Bdim is never picked.
+      Song sharp = Tune.decode("g2k2b2g2", Tune.FRIENDS);
+      assert Backing.chords(sharp)[0] == 6 : "F# A# C# F# is F#, got " + Backing.chords(sharp)[0];
+      int[] notes = Backing.notes(7, 60);
+      assert java.util.Arrays.equals(notes, new int[]{43, 55, 59, 62}) : "G: a low G, then G B D an octave below the keys";
+   }
+
+   private static void checkChords() {
+      String[] names = {"C", "C#", "Dm", "D#", "Em", "F", "F#", "G", "G#", "Am", "A#", "Bdim", "C"};
+      for (int key = 0; key < PianoPanel.KEYS; key++) {
+         assert Chord.name(key).equals(names[key]) : key + " is " + Chord.name(key);
+         int[] keys = Chord.keys(key);
+         assert keys.length == 3 && keys[0] == key : "a chord starts on its own key";
+         for (int tone = 0; tone < 3; tone++) {
+            assert keys[tone] >= 0 && keys[tone] < PianoPanel.KEYS : key + " lights " + keys[tone];
+            assert Math.floorMod(keys[tone] - key, 12) == Chord.intervals(key)[tone] : "key " + key + " tone " + tone + " has the chord's pitch";
+         }
+      }
+      assert java.util.Arrays.equals(Chord.keys(12), new int[]{12, 4, 7}) : "the high C's E and G light below it";
+      assert java.util.Arrays.equals(Chord.keys(9), new int[]{9, 12, 4}) : "Am: A, the high C, and E below";
    }
 
    private static void checkSongs() {
@@ -42,6 +89,43 @@ public final class LessonCheck {
          // as it should be
       }
       assert Song.noteName(12).equals("C") && Song.noteName(6).equals("F#");
+      assert mary.start(0) == 0 && mary.start(7) == 8 && mary.start(mary.length()) == 32 : "Mary's notes start on their beats";
+      assert row.start(1) == 1.5 && row.start(4) == 4.5 : "Row Row: dotted and half beats";
+   }
+
+   /** The falling notes take the top of the piano during a lesson, and the keys stay where they are drawn. */
+   private static void checkFall() {
+      PianoPanel piano = new PianoPanel();
+      piano.setSize(802, 300);
+      assert piano.keyAt(50, 10) == 0 && piano.keyAt(50, 299) == 0 : "no lesson: the keys fill the panel";
+      piano.setSong(Song.ALL[0]);
+      assert piano.keyAt(50, 10) == -1 && piano.keyAt(50, 119) == -1 : "the falling notes are not keys";
+      assert piano.keyAt(50, 120) == 0 && piano.keyAt(50, 299) == 0 && piano.keyAt(100, 130) == 1 : "the keys moved below them";
+      piano.follow(7, 0);
+      assert piano.shownBeat() == 8 : "follow moves the song to the note's beat";
+      piano.play(2, 0);
+      assert piano.shownBeat() == 3 : "Listen moves on to the end of the note it plays";
+      piano.setSong(null);
+      assert piano.keyAt(50, 10) == 0 : "free play gives the keys their room back";
+      // A key's front edge shows below its face, and a press pushes the face down over most of it.
+      int edge = 300 - 2 - PianoPanel.lip(300) / 2;
+      int upFront = brightness(paint(piano), 10, edge);
+      piano.setPressed(0, true);
+      java.awt.image.BufferedImage down = paint(piano);
+      assert brightness(down, 10, edge) > upFront + 40 : "a pressed key's face covers its front edge";
+      assert brightness(down, 10, 2) < brightness(down, 10, 40) : "a pressed key is shaded where it dips under the panel";
+      piano.setPressed(0, false);
+   }
+
+   private static java.awt.image.BufferedImage paint(PianoPanel piano) {
+      java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(piano.getWidth(), piano.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
+      piano.paint(image.getGraphics());
+      return image;
+   }
+
+   private static int brightness(java.awt.image.BufferedImage image, int x, int y) {
+      int rgb = image.getRGB(x, y);
+      return ((rgb >> 16) & 255) + ((rgb >> 8) & 255) + (rgb & 255);
    }
 
    private static void checkLesson() {

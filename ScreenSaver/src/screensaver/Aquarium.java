@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
@@ -39,6 +40,8 @@ class Aquarium implements Saver {
    private double time;
    private final List<Swimmer> swimmers = new ArrayList<>();
    private final List<double[]> flakes = new ArrayList<>();
+   /** Whether the pointer is held down, so one press drops one pinch. */
+   private boolean pinched;
    private final List<double[]> bubbles = new ArrayList<>();
    private double bubbleWait;
    private int[] sandX;
@@ -107,6 +110,7 @@ class Aquarium implements Saver {
       this.sandTop = (int)(height * 0.84);
       this.tagFont = new Font(Font.SANS_SERIF, Font.BOLD, Math.max(11, Math.min(20, this.unit / 40)));
       this.flakes.clear();
+      this.pinched = false;
       this.bubbles.clear();
       this.buildScenery();
       List<Tank.Fish> newcomers = this.tank.arrive(this.today(), random);
@@ -232,10 +236,22 @@ class Aquarium implements Saver {
 
    /** Drops a pinch of flakes near the top at a random spot; every fish goes for the nearest one. */
    void feed() {
-      double x = this.width * (0.2 + 0.6 * this.random.nextDouble());
+      this.feed(this.width * (0.2 + 0.6 * this.random.nextDouble()), this.top() * 0.5);
+   }
+
+   /** Play (T): a press drops the pinch where it is, in the water (below the surface). */
+   @Override
+   public void touch(Point at, boolean down) {
+      if (at != null && down && !this.pinched) {
+         this.feed(Math.max(0, Math.min(this.width, at.x)), Math.max(this.top() * 0.5, at.y));
+      }
+      this.pinched = at != null && down;
+   }
+
+   private void feed(double x, double y) {
       for (int i = 0; i < FLAKES_PER_FEED; i++) {
          this.flakes.add(new double[] {x + (this.random.nextDouble() - 0.5) * this.unit * 0.12,
-            this.top() * 0.5 + this.random.nextDouble() * this.unit * 0.03, this.random.nextDouble() * 6, 0, this.random.nextInt(3)});
+            y + this.random.nextDouble() * this.unit * 0.03, this.random.nextDouble() * 6, 0, this.random.nextInt(3)});
       }
       for (Swimmer s : this.swimmers) {
          s.tagLeft = Math.max(s.tagLeft, 1500);
@@ -317,6 +333,7 @@ class Aquarium implements Saver {
          if (Math.hypot(food[0] - mouthX, food[1] - s.y) < len * 0.3) {
             this.flakes.remove(food);
             s.fish.meals++;
+            Music.ring(Music.TANK, 0.85 + 0.15 * Math.random(), 0.7);
             this.bubbles.add(new double[] {mouthX, s.y - len * 0.1, Math.max(2, len * 0.06), this.random.nextDouble() * 6});
             return true;
          }
@@ -353,6 +370,10 @@ class Aquarium implements Saver {
          b[2] += millis * this.unit * 0.0000015;
          if (b[1] < this.top() * 0.35) {
             it.remove();
+            // Music (M): now and then a bubble pops at the top with a soft note, higher for a smaller bubble.
+            if (Math.random() < 0.35) {
+               Music.ring(Music.TANK, 1 - (b[2] / this.unit - 0.004) / 0.02, 0.25);
+            }
          }
       }
    }

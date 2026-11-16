@@ -5,6 +5,8 @@
 import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from 'react';
 import { APPS, type App } from '../../shared/catalog';
 import { byId } from '../../shared/dom';
+import { linkState, linkedApp } from '../../shared/link-state';
+import { readJson } from '../../shared/stored';
 import { H, draw, indexOfApp } from './model';
 import { TOUR } from './tour';
 
@@ -108,6 +110,8 @@ function endDemo() {
 
 /** The page the player loads for app a, as it plays now (then: as first restored). */
 export function pageOf(a: App) { return a.id + (H.then ? '/then.html' : '/index.html'); }
+// A friend's link to this page (/?challenge=...#NumberGuess): its state goes to its app, the first time that app plays.
+let linked = location.search;
 
 function play(a: App, focus: boolean, asThen?: boolean, watch?: boolean) {
   demo = !!watch;
@@ -132,7 +136,9 @@ function play(a: App, focus: boolean, asThen?: boolean, watch?: boolean) {
   if (api) api.back();
   H.replay = false;   // until the new app's page says it is recording
   H.photo = false;    // until the new app's page says it runs (the runtime's photo booth)
-  H.frame = { ...H.frame, key: H.frame.key + 1, src: pageOf(a) + '?embed' + (watch ? '&watch' : ''), title: a.name, focus };
+  const state = linkState(a.id, linked);
+  if (state) linked = '';
+  H.frame = { ...H.frame, key: H.frame.key + 1, src: pageOf(a) + '?embed' + (watch ? '&watch' : '') + state, title: a.name, focus };
   draw();
   syncPop();
   if (focus) {
@@ -319,7 +325,7 @@ export function hintClick(e: ReactMouseEvent) {
 // (oldjava.tour), so the tour can be continued on a later visit, and #tour in the address starts it.
 const tour = H.tour;
 export function tourSaved(): TourSaved {
-  try { return JSON.parse(localStorage.getItem(TOUR_KEY) as string) || {}; } catch (e) { return {}; }
+  return readJson(TOUR_KEY);
 }
 function tourSave(o: TourSaved) {
   try { localStorage.setItem(TOUR_KEY, JSON.stringify(o)); } catch (e) { /* private mode: not kept */ }
@@ -397,7 +403,7 @@ function tourEnd() {
   if (/^#tour$/.test(location.hash)) history.replaceState(null, '', '#' + playing().id);
 }
 // Where a new start goes: the stop the last tour reached, or the first once it was finished.
-function tourResume() {
+export function tourResume() {
   const saved = tourSaved();
   return saved.done || !(saved.stop !== undefined && saved.stop > 0 && saved.stop < TOUR.length) ? 0 : saved.stop;
 }
@@ -456,7 +462,7 @@ export function initPlayer(): void {
   window.oldjavaTour = { start: tourStartClick, on: () => tour.on };
 
   const hash = /^#([^:]*)(:then)?$/.exec(decodeURIComponent(location.hash)) || [];
-  const start = appById(hash[1]);
+  const start = appById(hash[1] || linkedApp(location.search));   // no #App: the app a friend's link is for
   if (start) play(start, false, !!hash[2]);
   else if (hash[1] === 'tour') {   // #tour: the tour, from where it was left
     tourGo(tourResume(), false);

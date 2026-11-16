@@ -222,7 +222,7 @@
               <target xmlns:if="ant:if">
                 <condition property="share.absolute"><length string="${site.url}" when="greater" length="0" trim="true"/></condition>
                 <replaceregexp if:set="share.absolute" match="(&lt;meta (?:property=&quot;og:(?:url|image)&quot;) content=&quot;)(?:\.\./)?" replace="\1${site.url}/" flags="g" encoding="UTF-8">
-                  <fileset dir="${site.dir}" includes="index.html */index.html"/>
+                  <fileset dir="${site.dir}" includes="index.html story.html play.html */index.html"/>
                 </replaceregexp>
               </target>
             </configuration>

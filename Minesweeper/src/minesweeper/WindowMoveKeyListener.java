@@ -37,6 +37,16 @@ public final class WindowMoveKeyListener implements KeyListener {
          return;
       }
 
+      if (event.getKeyCode() == KeyEvent.VK_O) {
+         this.frame.toggleOdds();
+         return;
+      }
+
+      if (event.getKeyCode() == KeyEvent.VK_Z) {
+         this.frame.toggleZoom();
+         return;
+      }
+
       if (event.getKeyCode() == KeyEvent.VK_G) {
          this.frame.toggleNoGuess();
          return;

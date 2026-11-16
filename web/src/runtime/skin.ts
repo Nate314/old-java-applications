@@ -1,4 +1,5 @@
-import { playSound } from './sounds';
+// No imports: early.ts inlines this module in every page's head, and an import here (sounds.ts used to be one)
+// pulled the whole runtime and React into it, 200 KB per page. vite/pages.ts fails the build if it grows again.
 
 let skin: string;
 let ownStyle: HTMLStyleElement;
@@ -146,7 +147,7 @@ export function setSkin(value: string) {
   if (!isSkin(value)) return;
   showSkin(value);
   try { localStorage.setItem(SKIN_KEY, value); } catch (e) { /* not remembered */ }
-  playSound('skin');   // in the new skin's voice
+  if (window.oldjavaSound) window.oldjavaSound.play('skin');   // in the new skin's voice
 }
 
 /** What the head script (early.ts) decided before first paint, for init. */
@@ -186,6 +187,7 @@ export function paintSkin(): SkinStart {
   if (embed) html.setAttribute('data-embed', '');
   if (embed && /[?&]shot(=|&|$)/.test(location.search)) html.setAttribute('data-shot', '');
   if (embed && /[?&]saver(=|&|$)/.test(location.search)) html.setAttribute('data-saver', '');
+  if (embed && /[?&]full(=|&|$)/.test(location.search)) html.setAttribute('data-full', '');
   return window.__oldjavaSkinStart = { skin: skin, style: style, offer: offer };
 }
 

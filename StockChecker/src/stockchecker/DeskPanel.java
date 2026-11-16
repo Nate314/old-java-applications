@@ -66,6 +66,7 @@ final class DeskPanel extends JPanel {
 
    private final Desk desk;
    private final Bell bell = new Bell();
+   private final ChartEar ear = new ChartEar();
    private final List<Button> buttons = new ArrayList<>();
    private final Timer timer;
    private Color background = new Color(14, 24, 96);
@@ -78,9 +79,20 @@ final class DeskPanel extends JPanel {
    private Color messageColor = TEXT;
    private long messageUntil;
    private boolean startOverArmed;
-   /** Whether the chart card shows the race against the rivals instead of the picked stock. */
-   private boolean race;
+   /** Whether the chart shows, in hindsight, the best single buy and sell of the picked stock so far today (I). */
+   private boolean hindsight;
+   /** The chart card's tabs: the picked stock's day, its days so far as candles, or the race against the rivals. */
+   private static final int CHART = 0;
+   private static final int DAYS = 1;
+   private static final int RACE = 2;
+   private int tab = CHART;
    private final Rectangle[] rows = new Rectangle[Desk.MAX_SYMBOLS * 2];
+   /** The big chart's plot box and price range as last drawn (null when no chart shows), for placing order lines. */
+   private Rectangle plot;
+   /** The trade markers on the big chart as last drawn, which order line tags keep clear of. */
+   private final List<Rectangle> marks = new ArrayList<>();
+   private double plotLow;
+   private double plotSpan;
    DeskPanel(Desk desk) {
       this.desk = desk;
       setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -96,13 +108,23 @@ final class DeskPanel extends JPanel {
          button.lit = () -> desk.speed == speed;
          buttons.add(button);
       }
-      // The chart card's two tabs: the picked stock's chart, or the race against the rivals (R toggles).
-      Button chartTab = new Button("Chart", 'c', null, new Rectangle(588, 60, 56, 22), always, () -> race = false);
-      chartTab.lit = () -> !race;
-      buttons.add(chartTab);
-      Button raceTab = new Button("Race", 'r', null, new Rectangle(648, 60, 56, 22), always, () -> race = true);
-      raceTab.lit = () -> race;
-      buttons.add(raceTab);
+      // The chart card's tabs: Chart (C), Days (W) and Race (R, which toggles).
+      String[] tabs = {"Chart", "Days", "Race"};
+      char[] tabKeys = {'c', 'w', 'r'};
+      for (int i = 0; i < tabs.length; i++) {
+         int which = i;
+         Button button = new Button(tabs[i], tabKeys[i], null, new Rectangle(572 + i * 46, 60, 42, 22), always, () -> tab = which);
+         button.lit = () -> tab == which;
+         buttons.add(button);
+      }
+      // At the chart card's bottom right corner, under the price labels.
+      Button hear = new Button("Hear", 'h', null, new Rectangle(660, 259, 46, 16), () -> open.getAsBoolean() && tab == CHART, this::hear);
+      hear.lit = () -> ear.hearing() != null;
+      buttons.add(hear);
+      // Between the 2 PM and 4 PM labels under the chart.
+      Button look = new Button("Hindsight", 'i', null, new Rectangle(556, 259, 64, 16), () -> open.getAsBoolean() && tab == CHART, this::toggleHindsight);
+      look.lit = () -> hindsight;
+      buttons.add(look);
       String[] labels = {"Buy 1", "Buy 10", "Buy max", "Sell 1", "Sell 10", "Sell all"};
       char[] keys = {'b', 'v', 'm', 's', 'd', 'a'};
       int[] counts = {1, 10, Integer.MAX_VALUE, -1, -10, Integer.MIN_VALUE};
@@ -171,17 +193,174 @@ final class DeskPanel extends JPanel {
 
    private void tick() {
       ticks++;
+      String symbol = symbol();
+      if (ear.hearing() != null && (!ear.hearing().equals(symbol) || tab != CHART || desk.market.closed())) {
+         ear.stop();
+      }
+      ear.tick();
       int every = desk.speed == Desk.FAST ? 2 : desk.speed == Desk.NORMAL ? 10 : 0;
       if (every > 0 && ticks % every == 0) {
          boolean opening = desk.market.minute == 0;
-         if (desk.tick()) {
+         boolean closing = desk.tick();
+         announceFills();
+         if (closing) {
             bell.ring(3);
             startOverArmed = false;
          } else if (opening && !desk.market.closed()) {
             bell.ring(1);
          }
+         if (!closing && symbol != null) {
+            Market.Stock stock = desk.market.stock(symbol);
+            double[] range = range(stock, true);
+            ear.minute(stock.path[desk.market.minute], range[0], range[1]);
+         }
+      }
+      String name = summary();
+      if (!name.equals(getAccessibleContext().getAccessibleName())) {
+         getAccessibleContext().setAccessibleName(name);
       }
       repaint();
+   }
+
+   /** H: plays the picked stock's day so far as notes, or stops the one playing. */
+   private void hear() {
+      String symbol = symbol();
+      if (ear.hearing() != null) {
+         ear.stop();
+      } else if (symbol != null) {
+         Market.Stock stock = desk.market.stock(symbol);
+         double[] range = range(stock, true);
+         ear.hear(stock, desk.market.minute, range[0], range[1], desk.portfolio.trades);
+         say("Hearing " + symbol + ": high notes, high prices; chimes at trades. L: live.", MUTED);
+      }
+   }
+
+   /** I: shows or hides the best trade so far today on the chart, and says what it would have made. */
+   private void toggleHindsight() {
+      hindsight = !hindsight;
+      String symbol = symbol();
+      String[] parts = symbol == null ? null : hindsight(symbol, desk.market.minute);
+      say(!hindsight ? "Hindsight off." : parts == null ? symbol + " has not risen yet today: no trade to catch. I hides it."
+         : parts[2] + " I hides it.", hindsight ? WARN : MUTED);
+   }
+
+   /**
+    * The best single trade in {@code symbol} from the open to {@code upTo}, in three pieces: "CRM's best trade so far:
+    * buy at 10:41 AM for $75.20", "sell at 2:58 PM for $78.10, +3.86%, about +$386 with all your money in it" and the
+    * short "In hindsight, CRM: +3.86%, about +$386 with all your money." Null when it has not risen.
+    */
+   private String[] hindsight(String symbol, int upTo) {
+      Market.Stock stock = desk.market.stock(symbol);
+      int[] best = Market.bestTrade(stock.path, upTo);
+      if (best == null) {
+         return null;
+      }
+      double buy = stock.path[best[0]];
+      double sell = stock.path[best[1]];
+      String gain = Money.percent(buy, sell) + ", about " + Money.change(desk.portfolio.openingWorth() * (sell / buy - 1)) + " with all your money";
+      return new String[] {symbol + "'s best trade " + (upTo >= Market.CLOSE ? "today" : "so far") + ": buy at " + Market.clock(best[0])
+         + " for " + Money.dollars(buy), "sell at " + Market.clock(best[1]) + " for " + Money.dollars(sell) + ", " + gain + " in it",
+         "In hindsight, " + symbol + ": " + gain + "."};
+   }
+
+   /** What a screen reader says for the desk: the time, the picked stock and your money. */
+   private String summary() {
+      Market market = desk.market;
+      StringBuilder out = new StringBuilder("Trading desk, day " + market.day + ", " + Market.clock(market.minute)
+         + (market.closed() ? ", closed. " : desk.speed == Desk.PAUSED ? ", paused. " : ", open. "));
+      String symbol = symbol();
+      if (symbol != null) {
+         Market.Stock stock = market.stock(symbol);
+         double price = stock.path[market.minute];
+         out.append(symbol).append(' ').append(Money.dollars(price)).append(", ").append(Money.percent(stock.open(), price))
+            .append(" today").append(desk.portfolio.shares(symbol) > 0 ? ", you hold " + desk.portfolio.shares(symbol) + ". " : ". ");
+         if (tab == DAYS) {
+            out.append("Days tab: ").append(daysChange(bars(symbol))).append(". ");
+         } else if (tab == CHART && hindsight && !market.closed()) {
+            String[] parts = hindsight(symbol, market.minute);
+            out.append(parts == null ? "In hindsight, no rise to catch yet. " : "In hindsight, " + parts[0] + ", " + parts[1] + ". ");
+         }
+      }
+      out.append("Net worth ").append(Money.dollars(desk.portfolio.worth(market))).append(", ").append(ordinal(desk.rank(false)))
+         .append(" of ").append(desk.rivals.size() + 1).append(". H hears the chart, L listens live.");
+      return out.toString();
+   }
+
+   /** Says what the orders the last tick reached did, and rings the bell twice when one traded. */
+   private void announceFills() {
+      for (Portfolio.Trade fill : desk.fills) {
+         String at = Market.clock(fill.minute) + ": your " + fill.symbol + " line ";
+         if (fill.shares > 0) {
+            say(at + "bought " + fill.shares + " at " + Money.dollars(fill.price) + ".", UP);
+         } else if (fill.shares < 0) {
+            say(at + "sold " + -fill.shares + " at " + Money.dollars(fill.price) + ".", DOWN);
+         } else {
+            say(at + "was reached at " + Money.dollars(fill.price) + ", with nothing to trade.", WARN);
+         }
+      }
+      if (!desk.fills.isEmpty()) {
+         bell.ring(2);
+      }
+   }
+
+   /** The order a click at {@code y} on the chart would cancel (its line within 5 px), or null. */
+   private Desk.Order orderAt(String symbol, int y) {
+      for (Desk.Order order : desk.orders) {
+         if (order.symbol.equals(symbol) && Math.abs(yOfPlot(order.price) - y) <= 5) {
+            return order;
+         }
+      }
+      return null;
+   }
+
+   private int yOfPlot(double price) {
+      return plot.y + plot.height - (int) Math.round((price - plotLow) / plotSpan * plot.height);
+   }
+
+   private double priceOfPlot(int y) {
+      return plotLow + (double) (plot.y + plot.height - y) / plot.height * plotSpan;
+   }
+
+   /** Whether the pointer is over the chart where a click places or cancels an order. */
+   private boolean onPlot(int x, int y) {
+      return plot != null && tab == CHART && !desk.market.closed() && symbol() != null && plot.contains(x, y);
+   }
+
+   /** A click on the chart: cancels the order line under it, or puts one at that price. */
+   private void clickPlot(int y) {
+      String symbol = symbol();
+      Desk.Order order = orderAt(symbol, y);
+      if (order != null) {
+         desk.cancel(order);
+         say("Cancelled the " + symbol + " line at " + Money.dollars(order.price) + ".", MUTED);
+      } else {
+         placed(desk.setOrder(symbol, priceOfPlot(y)));
+      }
+   }
+
+   /** - and =: a line 1% below or above the price, or the line on that side moved 1% further out. */
+   private void nudgeOrder(boolean above) {
+      String symbol = symbol();
+      if (symbol == null || desk.market.closed()) {
+         return;
+      }
+      Desk.Order order = desk.order(symbol, above);
+      double from = order != null ? order.price : desk.market.price(symbol);
+      placed(desk.setOrder(symbol, from * (above ? 1.01 : 0.99)));
+   }
+
+   private void placed(Desk.Order order) {
+      if (order == null) {
+         say("Put the line a little further from the price.", WARN);
+      } else {
+         say(describe(order) + ". Click the line to cancel it.", order.buy ? UP : DOWN);
+      }
+   }
+
+   /** "Buy max if CRM falls to $75.00", "Sell all if CRM rises to $80.00". */
+   private static String describe(Desk.Order order) {
+      return (order.buy ? "Buy max" : "Sell all") + " if " + order.symbol + (order.above ? " rises to " : " falls to ")
+         + Money.dollars(order.price);
    }
 
    private void speed(int speed) {
@@ -257,6 +436,10 @@ final class DeskPanel extends JPanel {
             return;
          }
       }
+      if (onPlot(x, y)) {
+         startOverArmed = false;
+         clickPlot(y);
+      }
    }
 
    private void key(KeyEvent event) {
@@ -280,7 +463,25 @@ final class DeskPanel extends JPanel {
          return;
       }
       if (key == 'r') {
-         race = !race;
+         tab = tab == RACE ? CHART : RACE;
+         return;
+      }
+      if (key == '-' || key == '=' || key == '+') {
+         nudgeOrder(key != '-');
+         return;
+      }
+      if (key == 'l') {
+         ear.live = !ear.live;
+         say(ear.live ? "Listening live: a note each minute for the picked stock, higher when it is higher on the chart. L stops."
+            : "Stopped listening live.", MUTED);
+         return;
+      }
+      if (key == 'o') {
+         String symbol = symbol();
+         if (symbol != null && desk.orders.removeIf(order -> order.symbol.equals(symbol))) {
+            desk.save();
+            say("Cancelled the " + symbol + " lines.", MUTED);
+         }
          return;
       }
       for (Button button : buttons) {
@@ -305,15 +506,20 @@ final class DeskPanel extends JPanel {
       g.fillRect(0, 0, getWidth(), getHeight());
       paintHeader(g);
       paintWatch(g);
+      plot = null;
       if (desk.market.closed()) {
-         if (race) {
+         if (tab == RACE) {
             paintStandings(g);
+         } else if (tab == DAYS) {
+            paintDays(g, new Rectangle(272, 54, 438, 268));
          } else {
             paintClose(g);
          }
       } else {
-         if (race) {
+         if (tab == RACE) {
             paintRace(g);
+         } else if (tab == DAYS) {
+            paintDays(g, new Rectangle(272, 54, 438, 222));
          } else {
             paintChart(g);
          }
@@ -403,33 +609,22 @@ final class DeskPanel extends JPanel {
    /** The stock's day so far inside {@code box}: the line, and for the big chart a fill, grid, labels and trades. */
    private void paintLine(Graphics2D g, Market.Stock stock, Rectangle box, boolean big) {
       int now = desk.market.minute;
-      double low = stock.open();
-      double high = stock.open();
-      for (int m = 0; m <= now; m++) {
-         low = Math.min(low, stock.path[m]);
-         high = Math.max(high, stock.path[m]);
-      }
-      // At least a 1% range, so a quiet morning is not drawn as wild swings.
-      double room = Math.max(high - low, stock.open() * 0.01);
-      double mid = (high + low) / 2;
-      low = mid - room * 0.6;
-      high = mid + room * 0.6;
+      double[] range = range(stock, big);
+      double low = range[0];
       double lowF = low;
-      double span = high - low;
+      double span = range[1];
+      if (big) {
+         plot = box;
+         plotLow = low;
+         plotSpan = span;
+      }
       java.util.function.DoubleToIntFunction yOf = price -> box.y + box.height - (int) Math.round((price - lowF) / span * box.height);
       java.util.function.IntUnaryOperator xOf = m -> box.x + (int) Math.round((double) m * box.width / Market.CLOSE);
       boolean up = stock.path[now] >= stock.open();
       Color line = up ? UP : DOWN;
 
       if (big) {
-         g.setFont(SMALL);
-         for (int k = 0; k <= 4; k++) {
-            double price = low + span * k / 4;
-            int y = yOf.applyAsInt(price);
-            g.setColor(new Color(255, 255, 255, 22));
-            g.drawLine(box.x, y, box.x + box.width, y);
-            text(g, Money.dollars(price), SMALL, MUTED, box.x + box.width + 6, y + 4);
-         }
+         paintScale(g, box, low, span);
          int[] hours = {30, 150, 270, 390};
          String[] names = {"10 AM", "12 PM", "2 PM", "4 PM"};
          for (int k = 0; k < hours.length; k++) {
@@ -451,6 +646,12 @@ final class DeskPanel extends JPanel {
          ys[now + 2] = box.y + box.height;
          g.setColor(withAlpha(line, 40));
          g.fillPolygon(xs, ys, now + 3);
+         // Each headline that moved this stock (its own or the market's): a faint band over the minutes it has pushed so far.
+         for (Market.Headline news : newsOf(stock.symbol)) {
+            int x1 = xOf.applyAsInt(news.minute);
+            g.setColor(withAlpha(news.up ? UP : DOWN, 28));
+            g.fillRect(x1, box.y, Math.max(2, xOf.applyAsInt(Math.min(now, news.minute + news.length)) - x1), box.height);
+         }
       }
 
       // The open, dashed.
@@ -470,6 +671,15 @@ final class DeskPanel extends JPanel {
       g.fillOval(xOf.applyAsInt(now) - dot / 2, yOf.applyAsInt(stock.path[now]) - dot / 2, dot, dot);
 
       if (big) {
+         marks.clear();
+         // A pin at the foot of the chart at each headline's minute, pointing the way it pushed.
+         for (Market.Headline news : newsOf(stock.symbol)) {
+            int x = xOf.applyAsInt(news.minute);
+            int bottom = box.y + box.height - 1;
+            g.setColor(news.up ? UP : DOWN);
+            g.fillPolygon(new int[] {x - 5, x + 5, x}, news.up ? new int[] {bottom, bottom, bottom - 9} : new int[] {bottom - 9, bottom - 9, bottom}, 3);
+            marks.add(new Rectangle(x - 6, bottom - 10, 12, 11));
+         }
          // The rivals' trades in this stock: a dot in their color with their initial, filled for a buy, a ring for a sell.
          for (Rival rival : desk.rivals) {
             for (Portfolio.Trade trade : rival.portfolio.trades) {
@@ -480,6 +690,7 @@ final class DeskPanel extends JPanel {
                   boolean buy = trade.shares > 0;
                   g.setColor(buy ? color : new Color(10, 16, 40, 160));
                   g.fillOval(x - 7, y - 7, 14, 14);
+                  marks.add(new Rectangle(x - 8, y - 8, 16, 16));
                   if (!buy) {
                      g.setColor(color);
                      g.setStroke(new BasicStroke(2f));
@@ -502,9 +713,195 @@ final class DeskPanel extends JPanel {
                g.fillPolygon(tx, ty, 3);
                g.setColor(Color.WHITE);
                g.drawPolygon(tx, ty, 3);
+               marks.add(new Rectangle(x - 7, Math.min(ty[0], ty[2]) - 1, 14, 12));
+            }
+         }
+         if (hindsight) {
+            paintHindsight(g, stock, now, xOf, yOf, box);
+         }
+         paintOrders(g, stock.symbol, box);
+         // While the chart is heard, a playhead at the minute playing, with its time and price.
+         int heard = ear.minute();
+         if (stock.symbol.equals(ear.hearing()) && heard <= now) {
+            cursor(g, box, xOf.applyAsInt(heard), yOf.applyAsInt(stock.path[heard]), Market.clock(heard) + "  " + Money.dollars(stock.path[heard]), withAlpha(accent, 200));
+         } else if (box.contains(mouseX, mouseY)) {
+            // Under the pointer: that minute's time, price and change, or the headline when a pin is near.
+            int pointed = (int) Math.round((double) (mouseX - box.x) * Market.CLOSE / box.width);
+            Market.Headline near = newsNear(stock.symbol, pointed);
+            int m = near != null ? near.minute : pointed;
+            if (m <= now) {
+               String tag = Market.clock(m) + "  " + (near != null ? near.text
+                  : Money.dollars(stock.path[m]) + "  " + Money.percent(stock.open(), stock.path[m]));
+               cursor(g, box, xOf.applyAsInt(m), yOf.applyAsInt(stock.path[m]), tag, near != null ? (near.up ? UP : DOWN) : withAlpha(TEXT, 150));
             }
          }
       }
+   }
+
+   /** The headlines so far today that moved {@code symbol}: its own and the market-wide ones, oldest first. */
+   private List<Market.Headline> newsOf(String symbol) {
+      return desk.market.news(java.util.Collections.singletonList(symbol));
+   }
+
+   /** The headline about {@code symbol} within 4 minutes of {@code minute} (the nearest), so a pin is easy to point at; or null. */
+   private Market.Headline newsNear(String symbol, int minute) {
+      Market.Headline near = null;
+      for (Market.Headline news : newsOf(symbol)) {
+         if (Math.abs(news.minute - minute) <= 4 && (near == null || Math.abs(news.minute - minute) < Math.abs(near.minute - minute))) {
+            near = news;
+         }
+      }
+      return near;
+   }
+
+   /** A vertical line down the chart at {@code x}, a dot on the price at {@code y}, and {@code tag} along the top. */
+   private void cursor(Graphics2D g, Rectangle box, int x, int y, String tag, Color color) {
+      g.setColor(color);
+      g.setStroke(new BasicStroke(2f));
+      g.drawLine(x, box.y, x, box.y + box.height);
+      g.setStroke(new BasicStroke(1f));
+      g.fillOval(x - 6, y - 6, 12, 12);
+      tag = fit(g, tag, SMALL, box.width - 10);
+      int w = width(g, tag, SMALL) + 10;
+      int left = Math.max(box.x, Math.min(x + 6, box.x + box.width - w));
+      g.setColor(new Color(10, 16, 40, 230));
+      g.fillRoundRect(left, box.y + 2, w, 15, 8, 8);
+      g.setColor(color);
+      g.drawRoundRect(left, box.y + 2, w, 15, 8, 8);
+      text(g, tag, SMALL, TEXT, left + 5, box.y + 13);
+   }
+
+   /**
+    * The best single buy and later sell so far today, in gold: a ring at each end, a dashed line between them, the
+    * span between their prices shaded, and a tag with the times, prices and gain.
+    */
+   private void paintHindsight(Graphics2D g, Market.Stock stock, int now, java.util.function.IntUnaryOperator xOf,
+         java.util.function.DoubleToIntFunction yOf, Rectangle box) {
+      int[] best = Market.bestTrade(stock.path, now);
+      String tag;
+      if (best == null) {
+         tag = "Hindsight: no rise to catch yet";
+      } else {
+         double buy = stock.path[best[0]];
+         double sell = stock.path[best[1]];
+         int x1 = xOf.applyAsInt(best[0]);
+         int y1 = yOf.applyAsInt(buy);
+         int x2 = xOf.applyAsInt(best[1]);
+         int y2 = yOf.applyAsInt(sell);
+         g.setColor(withAlpha(WARN, 34));
+         g.fillRect(x1, y2, Math.max(1, x2 - x1), y1 - y2);
+         g.setColor(WARN);
+         g.setStroke(new BasicStroke(2f));
+         // Dashed by hand: the web build's BasicStroke has no dashes.
+         double length = Math.max(1, Math.hypot(x2 - x1, y2 - y1));
+         for (double d = 0; d < length; d += 9) {
+            double e = Math.min(length, d + 5);
+            g.drawLine((int) Math.round(x1 + (x2 - x1) * d / length), (int) Math.round(y1 + (y2 - y1) * d / length),
+               (int) Math.round(x1 + (x2 - x1) * e / length), (int) Math.round(y1 + (y2 - y1) * e / length));
+         }
+         g.drawOval(x1 - 6, y1 - 6, 12, 12);
+         g.drawOval(x2 - 6, y2 - 6, 12, 12);
+         g.setStroke(new BasicStroke(1f));
+         tag = "Hindsight: " + Market.clock(best[0]) + " " + Money.dollars(buy) + " to " + Market.clock(best[1]) + " "
+            + Money.dollars(sell) + ", " + Money.percent(buy, sell);
+      }
+      tag = fit(g, tag, SMALL, box.width - 12);
+      int w = width(g, tag, SMALL) + 10;
+      int top = box.y + box.height - 17;
+      g.setColor(new Color(10, 16, 40, 220));
+      g.fillRoundRect(box.x + 2, top, w, 15, 8, 8);
+      g.setColor(WARN);
+      g.drawRoundRect(box.x + 2, top, w, 15, 8, 8);
+      text(g, tag, SMALL, TEXT, box.x + 7, top + 11);
+   }
+
+   /**
+    * {@code stock}'s price scale so far as {low, span}; with {@code orders}, the big chart's (stretched to keep its
+    * order lines in view), which the ear plays on too.
+    */
+   private double[] range(Market.Stock stock, boolean orders) {
+      double low = stock.open();
+      double high = stock.open();
+      for (int m = 0; m <= desk.market.minute; m++) {
+         low = Math.min(low, stock.path[m]);
+         high = Math.max(high, stock.path[m]);
+      }
+      if (orders) {
+         // Keep every order line on the chart.
+         for (Desk.Order order : desk.orders) {
+            if (order.symbol.equals(stock.symbol)) {
+               low = Math.min(low, order.price);
+               high = Math.max(high, order.price);
+            }
+         }
+      }
+      // At least a 1% range, so a quiet morning is not drawn as wild swings.
+      double room = Math.max(high - low, stock.open() * 0.01);
+      double mid = (high + low) / 2;
+      return new double[] {mid - room * 0.6, room * 1.2};
+   }
+
+   /**
+    * The picked stock's order lines (green to buy, red to sell, with a tag saying what each does), and under the
+    * pointer a preview of the line a click would put, or the hint that the chart takes clicks.
+    */
+   private void paintOrders(Graphics2D g, String symbol, Rectangle box) {
+      for (Desk.Order order : desk.orders) {
+         if (order.symbol.equals(symbol)) {
+            orderLine(g, box, yOfPlot(order.price), order.buy ? UP : DOWN, describe(order), 230, false);
+         }
+      }
+      if (!onPlot(mouseX, mouseY)) {
+         if (desk.order(symbol, true) == null && desk.order(symbol, false) == null) {
+            text(g, "Click the chart to set a buy or sell line (- and = keys)", SMALL, withAlpha(MUTED, 170), box.x + 4, box.y + 12);
+         }
+         return;
+      }
+      Desk.Order under = orderAt(symbol, mouseY);
+      if (under != null) {
+         orderLine(g, box, yOfPlot(under.price), WARN, "Click to cancel: " + describe(under), 255, false);
+         return;
+      }
+      double price = Math.round(priceOfPlot(mouseY) * 100) / 100.0;
+      double now = desk.market.price(symbol);
+      if (Math.abs(price / now - 1) < 0.001) {
+         return;
+      }
+      boolean buy = desk.portfolio.shares(symbol) == 0;
+      Desk.Order preview = new Desk.Order(symbol, buy, price > now, price);
+      orderLine(g, box, mouseY, withAlpha(buy ? UP : DOWN, 150), "Click: " + describe(preview), 150, true);
+   }
+
+   /**
+    * A dashed line across {@code box} at {@code y}, with a tag holding {@code label} at its left end (or its right end, for the preview, so it never covers the tag of a line beside it).
+    */
+   private void orderLine(Graphics2D g, Rectangle box, int y, Color color, String label, int alpha, boolean right) {
+      g.setColor(color);
+      g.setStroke(new BasicStroke(1.5f));
+      for (int x = box.x; x < box.x + box.width; x += 11) {
+         g.drawLine(x, y, Math.min(x + 6, box.x + box.width), y);
+      }
+      g.setStroke(new BasicStroke(1f));
+      String tag = fit(g, label, SMALL, box.width - 12);
+      int w = width(g, tag, SMALL) + 10;
+      int left = right ? box.x + box.width - 2 - w : box.x + 2;
+      int top = y - 17 < box.y ? y + 2 : y - 17;
+      // Slide a left tag along past any trade marker it would cover (a rival's 9:30 dot sits right at the edge).
+      for (boolean moved = !right; moved; ) {
+         moved = false;
+         for (Rectangle mark : marks) {
+            if (mark.x < left + w && left < mark.x + mark.width && mark.y < top + 15 && top < mark.y + mark.height
+               && mark.x + mark.width + 2 + w <= box.x + box.width) {
+               left = mark.x + mark.width + 2;
+               moved = true;
+            }
+         }
+      }
+      g.setColor(new Color(10, 16, 40, alpha));
+      g.fillRoundRect(left, top, w, 15, 8, 8);
+      g.setColor(color);
+      g.drawRoundRect(left, top, w, 15, 8, 8);
+      text(g, tag, SMALL, TEXT, left + 5, top + 11);
    }
 
    private void paintChart(Graphics2D g) {
@@ -525,11 +922,129 @@ final class DeskPanel extends JPanel {
       x += width(g, Money.dollars(price), BIG) + 10;
       boolean up = price >= stock.open();
       String change = Money.change(price - stock.open()) + " (" + Money.percent(stock.open(), price) + ") today";
-      text(g, fit(g, change, PLAIN, 580 - x), PLAIN, up ? UP : DOWN, x, card.y + 24);
+      text(g, fit(g, change, PLAIN, 564 - x), PLAIN, up ? UP : DOWN, x, card.y + 24);
       paintLine(g, stock, new Rectangle(card.x + 14, card.y + 38, card.width - 84, card.height - 62), true);
    }
 
+   /** Five price lines across {@code box}, from {@code low} up by {@code span}, labelled at the right. */
+   private void paintScale(Graphics2D g, Rectangle box, double low, double span) {
+      for (int k = 0; k <= 4; k++) {
+         int y = box.y + box.height - (int) Math.round(box.height * k / 4.0);
+         g.setColor(new Color(255, 255, 255, 22));
+         g.drawLine(box.x, y, box.x + box.width, y);
+         text(g, Money.dollars(low + span * k / 4), SMALL, MUTED, box.x + box.width + 6, y + 4);
+      }
+   }
+
+   /** The stock's finished days kept on the desk and today so far, oldest first, as {day, open, high, low, close}. */
+   private List<double[]> bars(String symbol) {
+      List<double[]> bars = new ArrayList<>(desk.days.getOrDefault(symbol, new ArrayList<>()));
+      bars.add(desk.market.bar(desk.market.stock(symbol)));
+      return bars;
+   }
+
+   /** "+3.20% since day 4", or "+0.40% today" while today is the only day. */
+   private static String daysChange(List<double[]> bars) {
+      double[] last = bars.get(bars.size() - 1);
+      return Money.percent(bars.get(0)[1], last[4]) + (bars.size() == 1 ? " today" : " since day " + (int) bars.get(0)[0]);
+   }
+
+   /**
+    * The Days tab: the picked stock's days on the desk as candles (a body from the open to the close, a wick from the
+    * low to the high), today's outlined and still moving, your average cost as a line while you hold some, and the
+    * prices of the day under the pointer.
+    */
+   private void paintDays(Graphics2D g, Rectangle card) {
+      g.setColor(new Color(255, 255, 255, 14));
+      g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
+      String symbol = symbol();
+      if (symbol == null) {
+         text(g, "No stock picked.", PLAIN, MUTED, card.x + 14, card.y + 24);
+         return;
+      }
+      List<double[]> bars = bars(symbol);
+      double first = bars.get(0)[1];
+      double price = bars.get(bars.size() - 1)[4];
+      int x = card.x + 14;
+      text(g, symbol, BIG, accent, x, card.y + 25);
+      x += width(g, symbol, BIG) + 10;
+      text(g, Money.dollars(price), BIG, TEXT, x, card.y + 25);
+      x += width(g, Money.dollars(price), BIG) + 10;
+      text(g, fit(g, daysChange(bars), PLAIN, 564 - x), PLAIN, price >= first ? UP : DOWN, x, card.y + 24);
+
+      int held = desk.portfolio.shares(symbol);
+      double paid = held > 0 ? desk.portfolio.holdings.get(symbol).cost / held : 0;
+      double low = paid > 0 ? Math.min(first, paid) : first;
+      double high = paid > 0 ? Math.max(first, paid) : first;
+      for (double[] bar : bars) {
+         low = Math.min(low, bar[3]);
+         high = Math.max(high, bar[2]);
+      }
+      // At least a 2% range, so a quiet day is not drawn as a wild one.
+      double room = Math.max(high - low, first * 0.02);
+      double lowF = (high + low) / 2 - room * 0.6;
+      double span = room * 1.2;
+      Rectangle box = new Rectangle(card.x + 14, card.y + 38, card.width - 84, card.height - 62);
+      paintScale(g, box, lowF, span);
+      java.util.function.DoubleToIntFunction yOf = p -> box.y + box.height - (int) Math.round((p - lowF) / span * box.height);
+      int slot = box.width / Math.max(bars.size(), 10);
+      int hover = box.contains(mouseX, mouseY) ? (mouseX - box.x) / slot : -1;
+      // Label every day when the labels fit, or every other one (today always).
+      int every = (24 + slot - 1) / slot;
+      for (int i = 0; i < bars.size(); i++) {
+         double[] bar = bars.get(i);
+         boolean today = i == bars.size() - 1;
+         int cx = box.x + i * slot + slot / 2;
+         if (i == hover) {
+            g.setColor(new Color(255, 255, 255, 26));
+            g.fillRect(box.x + i * slot, box.y, slot, box.height);
+         }
+         Color color = bar[4] >= bar[1] ? UP : DOWN;
+         g.setColor(today ? color : withAlpha(color, 190));
+         g.setStroke(new BasicStroke(1.5f));
+         g.drawLine(cx, yOf.applyAsInt(bar[2]), cx, yOf.applyAsInt(bar[3]));
+         g.setStroke(new BasicStroke(1f));
+         int w = Math.max(3, slot - 6);
+         int top = yOf.applyAsInt(Math.max(bar[1], bar[4]));
+         int tall = Math.max(2, yOf.applyAsInt(Math.min(bar[1], bar[4])) - top);
+         g.fillRect(cx - w / 2, top, w, tall);
+         if (today) {
+            g.setColor(accent);
+            g.drawRect(cx - w / 2 - 2, top - 2, w + 3, tall + 3);
+         }
+         if ((bars.size() - 1 - i) % every == 0) {
+            String label = "D" + (int) bar[0];
+            text(g, label, SMALL, today ? accent : MUTED, cx - width(g, label, SMALL) / 2, box.y + box.height + 14);
+         }
+      }
+      marks.clear();
+      if (paid > 0) {
+         orderLine(g, box, yOf.applyAsInt(paid), accent, "You paid " + Money.dollars(paid) + " a share", 230, false);
+      }
+      if (hover >= 0 && hover < bars.size()) {
+         double[] bar = bars.get(hover);
+         boolean now = hover == bars.size() - 1 && !desk.market.closed();
+         String head = (now ? "Today so far" : "Day " + (int) bar[0]) + ": " + Money.percent(bar[1], bar[4]);
+         String body = "Open " + Money.dollars(bar[1]) + ", high " + Money.dollars(bar[2]) + ", low " + Money.dollars(bar[3])
+            + (now ? ", now " : ", close ") + Money.dollars(bar[4]);
+         int w = Math.max(width(g, head, BOLD), width(g, body, SMALL)) + 12;
+         // On the side away from the pointer, so the candle stays in sight.
+         int left = mouseX < box.x + box.width / 2 ? box.x + box.width - w : box.x;
+         g.setColor(new Color(10, 16, 40, 235));
+         g.fillRoundRect(left, box.y + 2, w, 34, 8, 8);
+         g.setColor(withAlpha(accent, 200));
+         g.drawRoundRect(left, box.y + 2, w, 34, 8, 8);
+         text(g, head, BOLD, bar[4] >= bar[1] ? UP : DOWN, left + 6, box.y + 16);
+         text(g, body, SMALL, TEXT, left + 6, box.y + 31);
+      } else if (bars.size() == 1) {
+         text(g, "Each closing bell adds a day here.", SMALL, withAlpha(MUTED, 170), box.x + slot + 8, box.y + 12);
+      } else {
+         text(g, "Point at a day for its prices", SMALL, withAlpha(MUTED, 170), box.x + box.width - 160, box.y + 12);
+      }
+   }
+
    private static Color colorOf(Desk.Standing standing) {
+
       return standing.rival == null ? TEXT : RIVALS[standing.rival.kind];
    }
 
@@ -753,6 +1268,21 @@ final class DeskPanel extends JPanel {
             + "    Worst " + worst.symbol + " " + Money.percent(worst.open(), worst.close());
          text(g, movers, SMALL, MUTED, x, card.y + 120);
       }
+      // In hindsight, the day's best single trade among the stocks on the desk.
+      String bestSymbol = null;
+      double bestGain = 1;
+      for (Market.Stock stock : market.stocks()) {
+         int[] trade = desk.symbols().contains(stock.symbol) ? Market.bestTrade(stock.path, Market.CLOSE) : null;
+         if (trade != null && stock.path[trade[1]] / stock.path[trade[0]] > bestGain) {
+            bestGain = stock.path[trade[1]] / stock.path[trade[0]];
+            bestSymbol = stock.symbol;
+         }
+      }
+      if (bestSymbol != null) {
+         String[] parts = hindsight(bestSymbol, Market.CLOSE);
+         text(g, fit(g, "In hindsight, " + parts[0] + ",", SMALL, card.width - 36), SMALL, WARN, x, card.y + 138);
+         text(g, fit(g, parts[1] + ".", SMALL, card.width - 36), SMALL, WARN, x, card.y + 152);
+      }
       // How the race against the rivals went today.
       List<Desk.Standing> race = desk.standings(true);
       int place = desk.rank(true);
@@ -766,7 +1296,7 @@ final class DeskPanel extends JPanel {
       List<Double> closes = new ArrayList<>(desk.portfolio.closes);
       closes.add(worth);
       int from = Math.max(0, closes.size() - 14);
-      Rectangle box = new Rectangle(x, card.y + 132, card.width - 36, 124);
+      Rectangle box = new Rectangle(x, card.y + 164, card.width - 36, 92);
       double low = Portfolio.START;
       double high = Portfolio.START;
       for (int i = from; i < closes.size(); i++) {

@@ -52,6 +52,20 @@ public class GameCheck {
 		}
 		check(game.isOver() && !game.isFound() && game.stars() == 0, "out of guesses");
 
+		// Hindsight: middle guesses are halved, off-middle ones lucky or costly by what they left.
+		check(Hindsight.read(1, 100, 50, 7) == Hindsight.Read.HALVED && Hindsight.read(1, 100, 51, 7) == Hindsight.Read.HALVED, "both middles halve");
+		check(Hindsight.read(1, 100, 10, 7) == Hindsight.Read.LUCKY && Hindsight.read(1, 100, 10, 60) == Hindsight.Read.COSTLY, "lucky or costly");
+		check(Hindsight.read(1, 100, 7, 7) == Hindsight.Read.LUCKY && Hindsight.read(5, 5, 5, 5) == Hindsight.Read.HALVED, "hits");
+		check(Hindsight.left(Level.HUNDRED, 40, java.util.Arrays.asList(50, 20, 40)).equals(java.util.Arrays.asList(100L, 49L, 29L, 0L)), "left after each guess");
+		check(Hindsight.reads(Level.HUNDRED, 40, java.util.Arrays.asList(50, 20)).equals(java.util.Arrays.asList(Hindsight.Read.HALVED, Hindsight.Read.COSTLY)), "reads");
+		for (Level level : Level.values()) {
+			for (int number : new int[] { 1, level.max() / 3, level.max() }) {
+				java.util.List<Integer> halving = Hindsight.halving(level, number);
+				check(halving.size() <= level.par() && halving.get(halving.size() - 1) == number, level + " halving path finds " + number);
+				check(!Hindsight.reads(level, number, halving).contains(Hindsight.Read.COSTLY), "halving is never costly");
+			}
+		}
+
 		// You pick: the computer finds every number within par, and catches answers that contradict.
 		for (int number = 1; number <= MindReader.MAX; number++) {
 			MindReader reader = new MindReader();
@@ -82,6 +96,41 @@ public class GameCheck {
 			reader.higher();
 		}
 		check(reader.isCaught() && reader.low() == MindReader.MAX + 1, "higher than 100");
+
+		// Lie once: every number is found within LIAR_PAR, honest or with a lie at any one answer, and the lie is named.
+		int most = 0;
+		for (int number = 1; number <= MindReader.MAX; number++) {
+			for (int lieAt = -1; lieAt < MindReader.LIAR_PAR; lieAt++) {
+				for (int falseWay = -1; falseWay <= 1; falseWay += 2) {
+					reader = new MindReader(1);
+					while (!reader.isOver() && reader.guesses().size() <= MindReader.LIAR_PAR) {
+						int truth = Integer.compare(number, reader.guess());
+						int said = reader.guesses().size() - 1 == lieAt ? (truth == 0 ? falseWay : -truth) : truth;
+						if (said > 0) {
+							reader.higher();
+						} else if (said < 0) {
+							reader.lower();
+						} else {
+							reader.correct();
+						}
+					}
+					boolean lied = lieAt >= 0 && lieAt < reader.answers().size();
+					check(reader.isFound() && reader.guess() == number && reader.guesses().size() <= MindReader.LIAR_PAR, "liar " + number + " lie at " + lieAt);
+					check(reader.lie() == (lied ? lieAt : -1), "names the lie for " + number + " at " + lieAt);
+					most = Math.max(most, reader.guesses().size());
+				}
+			}
+		}
+		check(most == MindReader.LIAR_PAR, "liar par is tight: " + most);
+		reader = new MindReader(1);
+		reader.higher();
+		reader.lower();
+		check(!reader.isCaught() && reader.isPossible(50) == (reader.broken(50) <= 1), "one lie keeps numbers");
+		while (!reader.isOver()) {
+			reader.higher();
+			reader.lower();
+		}
+		check(reader.isCaught() && !reader.isFound(), "two lies caught");
 
 		// Magic: six cards of 32, each card's smallest number is its key, and honest answers add up to the number.
 		Random shuffle = new Random(7);
@@ -192,6 +241,64 @@ public class GameCheck {
 		}
 		back = Records.load(file);
 		check(back.duels(Duel.Result.LOST) == 0 && back.best(Level.TEN) == 3, "a bad duel line is skipped");
+
+		// Challenge: a won game survives its code, in every range, and the code does not show the number.
+		Random seeded = new Random(9);
+		for (Level level : Level.values()) {
+			for (int i = 0; i < 300; i++) {
+				Game game = new Game(level, i < 2 ? (i == 0 ? 1 : level.max()) : seeded.nextInt(level.max()) + 1);
+				while (!game.isOver()) {
+					game.guess(game.low() + seeded.nextInt(game.high() - game.low() + 1));
+				}
+				if (game.isFound()) { // only won games are sent
+					String code = Challenge.encode(game);
+					Challenge back2 = Challenge.decode(code);
+					check(back2 != null && back2.level() == level && back2.guesses().equals(game.guesses()) && back2.number() == game.number(),
+							level + " challenge round trip " + code);
+				}
+			}
+		}
+		Game game = new Game(Level.THOUSAND, 549);
+		game.guess(500);
+		game.guess(750);
+		game.guess(549);
+		String code = Challenge.encode(game);
+		check(!code.contains(Long.toString(549, 36)) && Challenge.decode(code).number() == 549, "challenge hides the number: " + code);
+		check(Challenge.decode(code + "-0") == null, "a guess after the number is found is no challenge");
+		check(Challenge.decode(null) == null && Challenge.decode("") == null && Challenge.decode("9ab") == null && Challenge.decode("2zz!") == null
+				&& Challenge.decode("2") == null && Challenge.decode("2-") == null, "bad codes");
+		check(Challenge.codeIn("https://x.io/apps/NumberGuess.html?challenge=2AB-c&shared=3").equals("2ab-c") && Challenge.codeIn(" 2ab ").equals("2ab"), "code in a link");
+		check("https://x.io/a.html".equals(Challenge.pageOf("https://x.io/a.html?challenge=2a#t")) && Challenge.pageOf("2ab") == null, "page of a link");
+		check(Challenge.message(null, game).equals(code) && Challenge.message("https://x.io/a.html", game).equals("https://x.io/a.html?challenge=" + code), "message");
+
+		checkWarmth();
+	}
+
+	/** Hot and cold: warmer and colder split at the halfway point, the number always still fits, and par is right. */
+	private static void checkWarmth() {
+		Warmth warm = new Warmth(40);
+		check(warm.guess(0) == Warmth.Read.OUT_OF_RANGE && warm.guess(101) == Warmth.Read.OUT_OF_RANGE, "hot and cold out of range");
+		check(warm.guess(10) == Warmth.Read.FIRST && warm.left() == 99 && warm.guess(10) == Warmth.Read.REPEAT, "first guess, then no repeat");
+		check(warm.guess(70) == Warmth.Read.SAME && warm.left() == 1 && warm.isPossible(40), "just as close means halfway");
+		check(warm.guess(40) == Warmth.Read.FOUND && warm.isOver() && warm.guesses().size() == 3, "found");
+		warm = new Warmth(30);
+		warm.guess(10);
+		check(warm.guess(70) == Warmth.Read.COLDER && warm.high() == 39 && warm.left() == 38, "colder keeps the far side of halfway");
+		check(warm.guess(20) == Warmth.Read.WARMER && warm.high() == 39 && warm.left() == 37, "warmer keeps this side, a ruled-out guess allowed");
+		check(warm.guess(31) == Warmth.Read.WARMER && warm.low() == 26 && warm.high() == 39, "warmer above halfway");
+		// Whatever is guessed, the number always fits every answer until it is found or the guesses run out.
+		Random random = new Random(7);
+		for (int number = 1; number <= Warmth.MAX; number++) {
+			for (int round = 0; round < 40; round++) {
+				warm = new Warmth(number);
+				while (!warm.isOver()) {
+					warm.guess(random.nextInt(Warmth.MAX) + 1);
+					check(warm.isPossible(number), "hot and cold keeps " + number + " after " + warm.guesses());
+				}
+				check(warm.isFound() == warm.guesses().contains(number), "found only by guessing it");
+			}
+		}
+		check(Warmth.par(10) == 5 && Warmth.par(Warmth.MAX) == Warmth.PAR, "hot and cold par");
 	}
 
 	private static void check(boolean condition, String what) {

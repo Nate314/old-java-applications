@@ -11,6 +11,12 @@ A strip above the keys lists five songs, each with the best stars won on it: Mar
 - After the last note a short fanfare plays and the strip shows the stars: three with no misses, two with up to one miss per ten notes (at least two), one otherwise. "New best!" shows when the run has fewer misses than the best one so far.
 - **Listen** plays the song to you at tempo, lighting each key. Press any piano key to stop it and play yourself; the lesson carries on where you were.
 
+While a song is picked, falling notes open over the keys (the window grows 120 px for them, so the keys keep their size), showing the song: each note a bar over its own key, as tall as it is long (four and a half beats fit above the keys), with the computer key on it when there is room. The next note is gold and sits on the keys, the ones after it are blue, and a right press moves the song down a note, so the played one sinks into the key in green. A wrong key flashes its lane red. During Listen the notes fall at tempo and each one sinks into its key while it sounds; when Listen stops, the song moves back to where the lesson was. In free play, while recording and in the looper there are no falling notes and the keys take the whole height. Clicks on the falling notes play nothing.
+
+A backing plays under every lesson: the chords of the song, a low root and the chord an octave below the keys, so even Mary Had a Little Lamb sounds like a song and not a row of single notes. Since the lesson waits for you, so does the band: each chord starts with the right note it goes under and holds until the next one, and Listen plays them at tempo. The chord names ride down with the falling notes, each on a faint line where its chord starts, and a pill at the top right of the falling notes names the chord sounding ("Backing G"). **A** (or a click on the pill) turns the backing off or on; turned on mid-song it joins in at once. While the microphone listens the backing rests ("Backing rests (mic)"), so it does not drown out the notes you sing.
+
+The chords are worked out from the notes, so a friend's tune gets a backing too: the song is cut into stretches of two beats, and each stretch takes the chord that holds most of its notes' beats, from the chords of C major (C, F, G, Am, Dm, Em, the first three preferred on a tie) and the major chords on the black keys, keeping the chord before when it holds as many. Mary gets C, G, C, G, C, and Twinkle's first line C, F, C, F, C, G, C. The backing plays on MIDI channel 5 in the piano's sound.
+
 The best result for each song is saved to `.synthesizer-songs.txt` in the user's home folder, one `ID=stars,misses` line per finished song (for example `ODE=3,0`).
 
 ## Send a tune
@@ -50,29 +56,45 @@ Build a little band out of your own playing: the looper records two bars at a ti
 - Up to four layers. The loop, its tempo, click and mutes are saved to `.synthesizer-loop.txt` in the user's home folder (`tempo=96`, `click=1`, then one `layer=program,muted,step.length.note;...` line per layer), so it is still there next time: "Your loop is back: P plays it".
 - The loop runs on a quick Swing timer that reads the clock, so its beat does not drift when a timer runs late. The click is a wood block on the General MIDI drum channel; in the browser it sounds as a short tone, since the web synthesizer has no drums. While the loop's notes sound, the microphone ignores what it hears, as it does for the keys' own notes.
 
+## Chord keys
+
+Turn on chord keys (**Q**, or the Chords button left of Sing along) and each key plays a three-note chord built up from it, so one finger accompanies a song:
+
+- The white keys play the chords of C major: C, Dm, Em, F, G, Am, Bdim and C again on the high C. The black keys play major chords: C#, D#, F#, G#, A#.
+- The keys show their chord's name in place of the note name, a held chord lights its three keys (a note above the high C lights the key of the same name below it), and the button names the chord last played. **Q** again turns them off.
+- Chords that share notes can overlap: holding C and then pressing Am keeps C and E sounding, and a shared note stops only when the last key holding it is let go.
+- In the looper a chord records all three notes, so a layer of chords can back a melody played on top. Lessons and recorded tunes count the key pressed (the chord's lowest note), since a tune keeps one note at a time.
+
+## Keys
+
+The keys are drawn with depth, so a press looks and feels like one. Each white key has a front edge in a darker shade of its face, and each black key a dark rim and a sloped front below its top; a held key's face moves down over most of that edge, takes a deeper shadow where it dips under the panel's top, and its labels move down with it. Held white keys turn a warm grey and held black keys a lighter grey. Black keys cast a soft shadow down and to the right onto the white keys, which shortens while they are held. The lit next key (gold) and the heard note (blue) get the same edges in their own colors. The shading is drawn in bands, as the browser's shim has no gradient paint.
+
 ## Controls / usage
 
-- **Computer keyboard**: hold to sound a note, release to stop. Every key shows its computer key and note name, and turns grey while held.
+- **Computer keyboard**: hold to sound a note, release to stop. Every key shows its computer key and note name, and goes down while held (see Keys).
   - White keys (C to C): `Z X C V B N M ,`
   - Black keys: `S D G H J`
 - **Click a key**: sounds it for as long as the mouse button is held.
 - **T**: next song. **1** to **5**: that song (**6**: the recorded tune, when there is one). **0**: free play (no song). Clicking a song in the strip also starts it.
 - **Space**: start or stop recording a tune. **Enter**: copy the tune's link (or code) again. While recording, the song keys wait; the piano, octave and instrument keys work.
-- **L**: listen to the current song (the first one in free play). **R**: restart the current song.
+- **L**: listen to the current song (the first one in free play). **R**: restart the current song. **A**: the backing on or off (see Songs).
 - **I**: turn the microphone on or off (see Sing along). Clicking the Sing along button does the same.
+- **Q**: chord keys on or off (see Chord keys). Clicking the Chords button does the same.
 - **O**: the looper on or off (see Looper, for its own keys). While it is on, the song keys wait.
 - **Left / Right**: shift the notes down / up one octave (5 down to 4 up). Notes already held keep the pitch they started with and stop when released. Lessons follow the keys, so they work in any octave.
 - **Up / Down**: next / previous MIDI instrument (program 0 to 120).
-- The window is 3/4 of the screen wide and half of it tall (at least 340 px), and 168 px taller while the looper's lanes are open. The title shows the current instrument and octave shift.
+- The window is 3/4 of the screen wide and half of it tall (at least 340 px), 120 px taller while a song is picked (for its falling notes), and 168 px taller while the looper's lanes are open. The title shows the current instrument and octave shift.
 - Arguments, all optional: a tune code or link to open (see Send a tune), and the address of the page the keyboard runs on, which the browser build passes so the links it copies point back at it.
 
 ## Code layout
 
 - `src/synthesizer/Main.java`: entry point; reads a tune code or link and the page address from the arguments, and creates a `KeyboardWindow`.
-- `src/synthesizer/KeyboardWindow.java`: the window; handles key presses, mouse presses on the keys, songs, Listen, recording, copying the tune and the fanfare.
-- `src/synthesizer/PianoPanel.java`: draws the keys with their labels, the held keys and the lit next key, and finds the key under the mouse.
+- `src/synthesizer/KeyboardWindow.java`: the window; handles key presses, mouse presses on the keys, chord keys, songs, Listen, recording, copying the tune and the fanfare.
+- `src/synthesizer/PianoPanel.java`: draws the keys with their labels, the held keys and the lit next key, and the lesson's falling notes above them, and finds the key under the mouse.
 - `src/synthesizer/LessonBar.java`: the strip above the keys (song list with stars, Record and Looper, upcoming notes, the recording, result, the looper's buttons, and notices such as "Link copied").
 - `src/synthesizer/Song.java`: the five songs, written as note names with lengths.
+- `src/synthesizer/Backing.java`: the chords under a lesson, worked out from the song's notes, and the notes that play each one.
+- `src/synthesizer/Chord.java`: the chord each key plays with chord keys on, the keys it lights and its name.
 - `src/synthesizer/Lesson.java`: playing along with one song: next note, misses, stars.
 - `src/synthesizer/SongRecords.java`: reads and writes the best result per song.
 - `src/synthesizer/Tune.java`: the tune code and links, the saved tune, and `Tune.Recorder`, which turns timed key presses into a song.
@@ -92,7 +114,7 @@ From the repo root: `./run.ps1 old SynthesizerKeyboard` (or `./run.ps1 old Synth
 
 ## Self-check
 
-`test/synthesizer/LessonCheck.java` checks that every song parses to keys on the keyboard with positive lengths, that a lesson only moves on for the right key and counts misses, the star rules, that the saved records keep the best run and skip bad lines, and that recorded tunes get their lengths from the timing, stop at 64 notes, survive their code, link and saved file, and that broken codes are refused. `test/synthesizer/MicrophoneCheck.java` needs no microphone: it checks that pitches from a low voice to a whistle (pure and rich in overtones, at 44.1 and 48 kHz) read as the right note within 3 cents, that silence, quiet and noise read as none, that a note counts once however long it is held and again after a pause or a new attack but not for an octave slip, a fading string or a slide through notes, and that a made-up line singing E D C D E E E is heard as those seven notes. `test/synthesizer/LoopCheck.java` checks that a take snaps notes to steps (an early downbeat, a short tap, a note wrapping round from just after the pass, a held note ending with the pass, a take from the second bar ringing on into the first), skips presses outside the take and stops at 64 notes, that the loop keeps at most four layers with mutes, Undo and Clear, the tempo limits, and that the saved file comes back the same and skips bad lines. From `SynthesizerKeyboard/`:
+`test/synthesizer/LessonCheck.java` checks that a held key's face covers its front edge and is shaded at the top, that every song parses to keys on the keyboard with positive lengths and starts each note on the right beat, that the falling notes take the top of the keyboard only during a lesson (where they are not keys) and scroll to the right beat, that a lesson only moves on for the right key and counts misses, the star rules, that the saved records keep the best run and skip bad lines, and that recorded tunes get their lengths from the timing, stop at 64 notes, survive their code, link and saved file, and that broken codes are refused, and that every chord key names its chord and lights three keys of the right pitches on the keyboard, and that every song's backing starts on a chord, never repeats one, never picks Bdim, ends on C (Jingle Bells' chorus on G), gives Mary and Twinkle their usual chords, gives a tune on black keys their major chord, and voices G as a low G under G B D. `test/synthesizer/MicrophoneCheck.java` needs no microphone: it checks that pitches from a low voice to a whistle (pure and rich in overtones, at 44.1 and 48 kHz) read as the right note within 3 cents, that silence, quiet and noise read as none, that a note counts once however long it is held and again after a pause or a new attack but not for an octave slip, a fading string or a slide through notes, and that a made-up line singing E D C D E E E is heard as those seven notes. `test/synthesizer/LoopCheck.java` checks that a take snaps notes to steps (an early downbeat, a short tap, a note wrapping round from just after the pass, a held note ending with the pass, a take from the second bar ringing on into the first), skips presses outside the take and stops at 64 notes, that the loop keeps at most four layers with mutes, Undo and Clear, the tempo limits, and that the saved file comes back the same and skips bad lines. From `SynthesizerKeyboard/`:
 
 ```
 javac -d ../out/check/SynthesizerKeyboard src/synthesizer/*.java test/synthesizer/*.java

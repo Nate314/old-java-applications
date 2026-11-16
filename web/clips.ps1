@@ -9,6 +9,7 @@
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
 #   ./web/clips.ps1
 #   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8101
+#   ./web/clips.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
 # Apps without a recipe (NathaNOS, BibleDownloader, NumberGuess, Windows, WindowsE: nothing moves until the visitor
 # does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its app has
 # "clip": true in web/src/shared/apps.json (its gallery card then has data-clip).
@@ -17,65 +18,54 @@ param(
     [int]$Port = 8101,
     [int]$DebugPort = 9301,
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
-    [int]$Seconds = 6
+    [int]$Seconds = 6,
+    [string]$Out = (Join-Path $PSScriptRoot 'public/clips'),
+    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 
 # Steps are those of web/cdp.ps1, plus 'rec', where the kept clip starts. Query is added to the page address.
 . (Join-Path $PSScriptRoot 'cdp.ps1')
-# Flappy Bird has no computer player, so the clip has a small one: it finds the bird (orange) and the next pipe
-# (green, from the top edge of the game's canvas) every frame and flaps while the bird is below the gap's middle
-# (the gap is twice a pipe's width, as in Pipes.java).
+# Flappy Bird has no computer player, so the clip has a small one: every 16 ms it finds the bird (teal) and the next
+# pipe (copper, from the top edge of the game's canvas; the copper ground is below the band searched) and flaps
+# while the bird is below the gap's middle.
 $FlappyPilot = @'
 js:(function () {
   var c = document.querySelector('#desktop canvas'), g = c.getContext('2d'), last = 0, prev = 0;
   function flap() { ['keydown', 'keyup'].forEach(function (t) { document.dispatchEvent(new KeyboardEvent(t, { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true })); }); }
-  function green(d, i) { return d[i + 1] > d[i] + 40 && d[i + 1] > d[i + 2] + 20 && d[i + 1] > 120; }
+  function pipe(d, i) { return d[i] > d[i + 1] + 40 && d[i + 1] > d[i + 2] + 15 && d[i] > 110; }
   function tick() {
-    requestAnimationFrame(tick);
     var W = c.width, H = c.height, x0 = Math.round(W * 0.2), bw = Math.round(W * 0.14), bh = Math.round(H * 0.87);
     var band = g.getImageData(x0, 0, bw, bh).data, n = 0, sy = 0, sx = 0;
     for (var y = 0; y < bh; y += 2) for (var x = 0; x < bw; x += 2) {
       var i = (y * bw + x) * 4;
-      if (band[i] > 200 && band[i + 1] > 90 && band[i + 1] < 190 && band[i + 2] < 80) { n++; sy += y; sx += x; }
+      if (band[i + 1] > band[i] + 80 && band[i + 2] > band[i] + 60 && band[i + 1] > 120) { n++; sy += y; sx += x; }
     }
     if (n < 3) return;
     var by = sy / n, bx = x0 + sx / n, row = g.getImageData(0, 3, W, 1).data, p0 = -1, p1 = W;
     for (var x = Math.max(0, Math.round(bx - W * 0.035)); x < W; x++) {
-      var on = green(row, x * 4);
+      var on = pipe(row, x * 4);
       if (on && p0 < 0) p0 = x;
       if (!on && p0 >= 0) { p1 = x; break; }
     }
     var target = H * 0.45;
     if (p0 >= 0 && p1 < W) {
-      var col = g.getImageData(p0 + 4, 0, 1, H).data, top = 0;
-      while (top < H && green(col, top * 4)) top++;
-      var bottom = top + Math.round(H * 0.15);
-      while (bottom < bh && !green(col, bottom * 4)) bottom++;
-      target = (top + bottom) / 2 + H * 0.06;
+      // The gap is the longest run without pipe down the pipe's middle (rivets and rims break the copper up).
+      var col = g.getImageData(Math.round((p0 + p1) / 2), 0, 1, bh).data, run = 0, best = 0, end = 0;
+      for (var y = 0; y < bh; y++) if (pipe(col, y * 4)) run = 0; else if (++run > best) { best = run; end = y; }
+      target = end - best / 2 + H * 0.06;
     }
     var t = performance.now();
     var fall = by - prev;
     prev = by;
     if (by + 2 * fall > target && t - last > 180) { flap(); last = t; }
   }
-  tick();
+  setInterval(tick, 16); // not requestAnimationFrame: it can run far slower than the game's own timers
 })()
 '@
-# SynthesizerKeyboard's looper: clear any old loop (Delete twice), record a melody layer after the count-in, then a
-# bass layer an octave down at the next bar. Keys are held (keydown, then keyup after ms) so notes get their lengths.
-function SynthHold([string]$key, [int]$code, [int]$ms) {
-    "js:(function (t) { function f(type) { t.dispatchEvent(new KeyboardEvent(type, { key: '$key', keyCode: $code, which: $code, bubbles: true })); } f('keydown'); setTimeout(function () { f('keyup'); }, $ms); })(document.activeElement || document.body)"
-}
-$SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Delete' 46 20), 'wait:200', 'key:Space', 'wait:2450') +
-    (@(@('z', 90), @('c', 67), @('b', 66), @('c', 67), @('z', 90), @('c', 67), @('b', 66), @(',', 188)) | ForEach-Object { (SynthHold $_[0] $_[1] 450), 'wait:625' }) +
-    @('wait:400', 'key:ArrowLeft', 'key:Space', 'wait:2300') +
-    (@(@('z', 90), @('b', 66), @('v', 86), @('c', 67)) | ForEach-Object { (SynthHold $_[0] $_[1] 1100), 'wait:1250' })
-# SpriteFloatyStars Orbits: two more suns, clicked into the biggest window's field (upper left and lower right).
-$StarsSuns = "js:(function (c) { var r = c.getBoundingClientRect(); [[0.27, 0.3], [0.72, 0.7]].forEach(function (p) { var x = r.left + r.width * p[0], y = r.top + r.height * p[1], t = document.elementFromPoint(x, y); ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: 1, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }); })([].slice.call(document.querySelectorAll('#desktop canvas.paint')).sort(function (a, b) { return b.width * b.height - a.width * a.height; })[0])"
 $Recipes = [ordered]@{
-    Minesweeper         = @{ Query = 'watch'; Steps = @('wait:1500', 'rec') }
-    FlappyBird          = @{ Steps = @('wait:800', 'key:Space', $FlappyPilot, 'wait:1000', 'rec') }
+    Minesweeper         = @{ Steps = @('wait:800', 'key:O', 'key:W', 'wait:1500', 'rec') }
+    FlappyBird          = @{ Steps = @('wait:800', 'key:Space', $FlappyPilot, 'wait:3000', 'rec') }
     DinoGame            = @{ Steps = @('key:E', 'wait:2500', 'rec') }
     UltimateTicTacToe   = @{ Query = 'watch'; Steps = @('wait:2500', 'rec') }
     RubiksCube2D        = @{ Steps = @('wait:800', 'key:G', 'key:2', 'wait:900', 'rec', 'key:2') }
@@ -84,18 +74,17 @@ $Recipes = [ordered]@{
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Pick 'Mode 6'), (Click '^OK$'), 'wait:3000', $StarsSuns, 'wait:7000', 'rec') }
     TankGame            = @{ Query = 'watch'; Steps = @('wait:3000', 'rec') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:500', 'key:Space', 'wait:1200', 'rec') }
-    CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', (Pick 'Heart'), 'wait:2600', (Pick 'Star')) }
+    CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', (Pick 'Heart'), 'wait:1600', (Click '^Spin$')) }
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:2500', 'rec', 'wait:1200', 'key:F') }
-    StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'key:R', 'rec') }
-    GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:P', 'wait:600', 'key:Space') }
+    StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'key:B', 'key:-', 'key:=', 'rec') }
+    GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:W', 'wait:1200', 'key:P', 'wait:600', 'key:Space') }
     SimpleAlgorithms    = @{ Steps = @('wait:800', 'key:5', 'rec') }
 }
 if (-not $Apps) { $Apps = @($Recipes.Keys) }
 
 $site = Join-Path $PSScriptRoot 'target/site'
-$out = Join-Path $PSScriptRoot 'public/clips'
 New-Item -ItemType Directory -Force $out | Out-Null
-$session = Start-Headless $site $Port $DebugPort $Chrome 'clips'
+$session = Start-Headless $site $Port $DebugPort $Chrome 'clips' -ProfileRoot $ProfileRoot
 try {
     foreach ($app in $Apps) {
         $recipe = $Recipes[$app]

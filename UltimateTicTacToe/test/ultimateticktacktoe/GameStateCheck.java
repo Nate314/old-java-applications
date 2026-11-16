@@ -61,6 +61,25 @@ public class GameStateCheck {
       Random random = new Random(1);
       check(Computer.easyMove(game, random) == 2 * 9 + 5, "easy takes the win");
       check(Computer.hardMove(game, random, 50) == 2 * 9 + 5, "hard takes the win");
+      // Hints: the search grown a slice at a time has chances for every legal move only, and picks the win.
+      Computer.Think think = new Computer.Think(game);
+      for (int slice = 0; slice < 5; slice++) {
+         think.grow(random, 10);
+      }
+      double[] chances = think.chances();
+      for (int move = 0; move < 81; move++) {
+         boolean legal = game.canPlay(move / 9, move % 9);
+         check(legal == !Double.isNaN(chances[move]), "a hint for move " + move + " only if it is legal");
+         check(!legal || chances[move] >= 0 && chances[move] <= 1, "hint chances in range for " + move);
+      }
+      check(think.best() == 2 * 9 + 5 && chances[2 * 9 + 5] > 0.95, "the hint's best is the win, near certain");
+      check(new Computer.Think(new GameState()).best() == -1, "no pick before any search");
+      // A short search of an empty board: doubts are positive where there are chances, and shrink with more search.
+      think = new Computer.Think(new GameState());
+      think.grow(random, 5);
+      double before = think.doubts()[40];
+      think.grow(random, 100);
+      check(before > 0 && think.doubts()[40] < before && Double.isNaN(think.doubts()[0]) == Double.isNaN(think.chances()[0]), "doubts shrink as the search grows");
 
       // Full games: every computer move is legal, and Hard (a short search) beats Easy far more often than not.
       int hardWins = 0;
@@ -147,7 +166,78 @@ public class GameStateCheck {
          check("c6".equals(last) == (review.grade(k) == Review.Grade.BEST), "grade of " + last + ": " + review.grade(k));
       }
 
+      checkLesson();
+      checkSounds();
       System.out.println("GameStateCheck passed (hard beat easy " + hardWins + " of " + games + ")");
+   }
+
+   /**
+    * Every How to play step starts as a live game with X to move, as many X's as O's and the last move O's (on the board
+    * cell it sends X to); some legal move does the task, and every step but the "play where you were sent" one also
+    * turns some legal move away.
+    */
+   private static void checkLesson() {
+      for (int i = 0; i < Lesson.STEPS.length; i++) {
+         Lesson.Step step = Lesson.STEPS[i];
+         GameState start = step.start();
+         int x = 0;
+         int o = 0;
+         for (String[] board : start.marks) {
+            for (String mark : board) {
+               x += "X".equals(mark) ? 1 : 0;
+               o += "O".equals(mark) ? 1 : 0;
+            }
+         }
+         check(start.winner == null && start.xTurn && x == o, "lesson step " + i + " position");
+         if (start.lastMove >= 0) {
+            int sentTo = start.lastMove % 9;
+            check("O".equals(start.marks[start.lastMove / 9][sentTo]), "lesson step " + i + " last move is O's");
+            check(start.activeBoard == (start.boardResults[sentTo] == null ? sentTo : -1), "lesson step " + i + " sent to the last move's board");
+         }
+         int right = 0;
+         int wrong = 0;
+         for (int move : start.legalMoves()) {
+            String why = step.wrong(start, move);
+            right += why == null ? 1 : 0;
+            wrong += why == null ? 0 : 1;
+         }
+         check(right > 0, "lesson step " + i + " can be done");
+         check(i == 1 ? wrong == 0 : wrong > 0, "lesson step " + i + " turns a move away");
+      }
+      check(Lesson.STEPS[4].wrong(Lesson.STEPS[4].start(), 5 * 9 + 1) != null, "sending O to its two in a row is turned away");
+      check(Lesson.STEPS[5].wrong(Lesson.STEPS[5].start(), 8 * 9 + 8) == null, "the winning move wins the lesson game");
+   }
+
+   /**
+    * Each cell has its own note, rising in reading order with no repeats, O an octave under X; a won line plays its three
+    * notes in order (the game's an octave up); off is silent; and sound=off is kept in the record file.
+    */
+   private static void checkSounds() {
+      for (int cell = 1; cell < 9; cell++) {
+         check(Sounds.note(cell, true) > Sounds.note(cell - 1, true), "notes rise in reading order");
+         check(Sounds.note(cell, false) == Sounds.note(cell, true) - 12, "O an octave under X");
+      }
+      Sounds sounds = Sounds.silent(true);
+      sounds.mark(4, true);
+      sounds.mark(4, false);
+      sounds.line(new int[]{2, 4, 6}, false, 0, 300, 12);
+      check(sounds.heard.equals(java.util.Arrays.asList("0:69", "1:57", "1:64", "1:69", "1:74")), "notes heard " + sounds.heard);
+      sounds.setOn(false);
+      sounds.mark(0, true);
+      sounds.refused();
+      check(sounds.heard.size() == 5, "off is silent");
+      try {
+         java.io.File file = java.io.File.createTempFile("tictactoe", ".txt");
+         file.deleteOnExit();
+         Record record = Record.load(file);
+         check(record.soundOn(), "sound starts on");
+         record.setSoundOn(false);
+         check(!Record.load(file).soundOn(), "sound=off is kept");
+         record.setSoundOn(true);
+         check(Record.load(file).soundOn(), "sound on again");
+      } catch (java.io.IOException e) {
+         throw new AssertionError(e);
+      }
    }
 
    /** Plays (board, cell) pairs, failing if any is illegal. */

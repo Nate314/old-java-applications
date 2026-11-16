@@ -3,6 +3,7 @@ package screensaver;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.Random;
 
 /** Two four-cornered outlines whose corners bounce off the edges, each leaving a fading trail, in slowly changing colors. */
@@ -26,6 +27,10 @@ class Mystify implements Saver {
    private int width;
    private int height;
    private double sinceTrail;
+   /** Each corner's own speed, which it drifts back to after the pointer let it go. */
+   private final double[][] cruise = new double[SHAPES][CORNERS];
+   /** Play (T): while the pointer is held down, every corner is drawn toward it, or null. */
+   private Point pull;
 
    @Override
    public String name() {
@@ -44,12 +49,50 @@ class Mystify implements Saver {
             this.y[s][c] = random.nextDouble() * height;
             this.dx[s][c] = (0.4 + random.nextDouble()) * speed * (random.nextBoolean() ? 1 : -1);
             this.dy[s][c] = (0.4 + random.nextDouble()) * speed * (random.nextBoolean() ? 1 : -1);
+            this.cruise[s][c] = Math.hypot(this.dx[s][c], this.dy[s][c]);
          }
          for (int t = 0; t < TRAIL; t++) {
             this.record(s, t);
          }
       }
       this.sinceTrail = 0;
+      this.pull = null;
+   }
+
+   @Override
+   public void touch(Point at, boolean down) {
+      this.pull = down ? at : null;
+   }
+
+   /** How fast a corner moves now, in pixels per millisecond. */
+   double speed(int shape, int corner) {
+      return Math.hypot(this.dx[shape][corner], this.dy[shape][corner]);
+   }
+
+   double cruise(int shape, int corner) {
+      return this.cruise[shape][corner];
+   }
+
+   /** Pulls a corner toward the pointer (up to three times its own speed), or eases it back to its own speed. */
+   private void steer(int s, int c, double millis) {
+      double v = this.speed(s, c);
+      double want = this.cruise[s][c];
+      if (this.pull != null) {
+         double tx = this.pull.x - this.x[s][c];
+         double ty = this.pull.y - this.y[s][c];
+         double d = Math.max(1, Math.hypot(tx, ty));
+         double a = want / 250 * millis;
+         this.dx[s][c] += tx / d * a;
+         this.dy[s][c] += ty / d * a;
+         v = this.speed(s, c);
+         want = Math.min(v, want * 3);
+      } else {
+         want = v + (want - v) * Math.min(1, millis / 1500);
+      }
+      if (v > 0) {
+         this.dx[s][c] *= want / v;
+         this.dy[s][c] *= want / v;
+      }
    }
 
    private void record(int shape, int index) {
@@ -82,15 +125,19 @@ class Mystify implements Saver {
    private void move(double millis) {
       for (int s = 0; s < SHAPES; s++) {
          for (int c = 0; c < CORNERS; c++) {
+            this.steer(s, c, millis);
             this.x[s][c] += this.dx[s][c] * millis;
             this.y[s][c] += this.dy[s][c] * millis;
+            // Music (M): a bounce rings a note, higher further up a side wall or further right along the top or bottom.
             if (this.x[s][c] < 0 || this.x[s][c] > this.width) {
                this.dx[s][c] = -this.dx[s][c];
                this.x[s][c] = Math.max(0, Math.min(this.width, this.x[s][c]));
+               Music.ring(Music.MYSTIFY, 1 - this.y[s][c] / this.height, 0.45);
             }
             if (this.y[s][c] < 0 || this.y[s][c] > this.height) {
                this.dy[s][c] = -this.dy[s][c];
                this.y[s][c] = Math.max(0, Math.min(this.height, this.y[s][c]));
+               Music.ring(Music.MYSTIFY, this.x[s][c] / this.width, 0.45);
             }
          }
       }

@@ -6,24 +6,31 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
  * The best stars and fewest moves on each solved level and the level played last, kept in a small text file of
  * {@code name=value} lines: {@code level=4}, then one line such as {@code 3=3,3} (stars, moves) per solved level, and
- * {@code view=net} when the flat net was picked over the 3D cube, and {@code patterns=spots,checkerboard} for the
- * patterns made by hand.
+ * {@code view=net} when the flat net was picked over the 3D cube, {@code mirrors=off} when the 3D cube's mirrors
+ * were turned off, and {@code patterns=spots,checkerboard} for the
+ * patterns made by hand, and {@code times=12340,9870} for the speed timer's latest solves in milliseconds, oldest first.
  */
 public final class LevelRecords {
    public static final int LEVELS = 20;
+   /** The speed timer keeps this many of the latest times. */
+   public static final int TIMES_KEPT = 100;
    private final File file;
    private final int[] stars = new int[LEVELS + 1];
    private final int[] moves = new int[LEVELS + 1];
    private int lastLevel = 1;
    private boolean netView = false;
+   private boolean mirrorsOff = false;
    private final Set<String> patterns = new LinkedHashSet<>();
+   private final List<Long> times = new ArrayList<>();
 
    private LevelRecords(File file) {
       this.file = file;
@@ -54,10 +61,23 @@ public final class LevelRecords {
             this.netView = value.equals("net");
             return;
          }
+         if (name.equals("mirrors")) {
+            this.mirrorsOff = value.equals("off");
+            return;
+         }
          if (name.equals("patterns")) {
             for (String key : value.split(",")) {
                if (Patterns.byKey(key.trim()) != null) {
                   this.patterns.add(key.trim());
+               }
+            }
+            return;
+         }
+         if (name.equals("times")) {
+            for (String time : value.split(",")) {
+               long millis = Long.parseLong(time.trim());
+               if (millis > 0) {
+                  this.times.add(millis);
                }
             }
             return;
@@ -133,6 +153,18 @@ public final class LevelRecords {
       }
    }
 
+   /** True unless the 3D cube's mirrors of its hidden sides were turned off (X). */
+   public boolean mirrors() {
+      return !this.mirrorsOff;
+   }
+
+   public void setMirrors(boolean on) {
+      if (this.mirrorsOff == on) {
+         this.mirrorsOff = !on;
+         this.save();
+      }
+   }
+
    /** The keys of the patterns made by hand (see {@link Patterns}). */
    public Set<String> patternsMade() {
       return Collections.unmodifiableSet(this.patterns);
@@ -141,6 +173,28 @@ public final class LevelRecords {
    /** Records a pattern made by hand and saves, the first time. */
    public void madePattern(String key) {
       if (this.patterns.add(key)) {
+         this.save();
+      }
+   }
+
+   /** The speed timer's times in milliseconds, oldest first. */
+   public List<Long> times() {
+      return Collections.unmodifiableList(this.times);
+   }
+
+   /** Keeps a speed timer time (dropping the oldest past {@link #TIMES_KEPT}) and saves. */
+   public void addTime(long millis) {
+      this.times.add(millis);
+      while (this.times.size() > TIMES_KEPT) {
+         this.times.remove(0);
+      }
+      this.save();
+   }
+
+   /** Deletes the latest time (a start by mistake) and saves. */
+   public void dropLastTime() {
+      if (!this.times.isEmpty()) {
+         this.times.remove(this.times.size() - 1);
          this.save();
       }
    }
@@ -169,8 +223,18 @@ public final class LevelRecords {
          if (this.netView) {
             writer.write("view=net\n");
          }
+         if (this.mirrorsOff) {
+            writer.write("mirrors=off\n");
+         }
          if (!this.patterns.isEmpty()) {
             writer.write("patterns=" + String.join(",", this.patterns) + "\n");
+         }
+         if (!this.times.isEmpty()) {
+            StringBuilder line = new StringBuilder("times=");
+            for (int i = 0; i < this.times.size(); i++) {
+               line.append(i == 0 ? "" : ",").append(this.times.get(i));
+            }
+            writer.write(line + "\n");
          }
          for (int level = 1; level <= LEVELS; level++) {
             if (this.stars[level] > 0) {

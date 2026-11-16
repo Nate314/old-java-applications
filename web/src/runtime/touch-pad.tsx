@@ -5,6 +5,8 @@ import { flushSync } from 'react-dom';
 import { openLayer } from './ui/layer';
 import { redrawBar } from './install';
 import { appId } from './catalog';
+import { store, stored } from './stored';
+import { sendKey } from './phone-keys';
 
 export let pad: OldjavaPad;
 
@@ -30,8 +32,8 @@ const PADS: Record<string, PadGroup[]> = {
     { buttons: [{ k: 'Z', label: 'Rewind' }, { k: 'C', label: 'Course' }, { k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
   ],
   DinoGame: [
-    { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'ArrowDown', label: 'Duck' }] },
-    { buttons: [{ k: 'B', label: 'Bot' }, { k: 'X', label: 'Reset eye' }, { k: 'E', label: 'Evolve' }, { k: 'F', label: 'Speed' }, { k: 'M', label: 'Sound' }] }
+    { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'S', label: 'Duck' }] },
+    { buttons: [{ k: 'T', label: 'Whole run' }, { k: 'B', label: 'Bot' }, { k: 'X', label: 'Reset eye' }, { k: 'G', label: 'Ghost' }, { k: 'P', label: '2 players' }, { k: 'E', label: 'Evolve' }, { k: 'F', label: 'Speed' }, { k: 'M', label: 'Sound' }] }
   ],
   TankGame: [
     { title: 'Red tank', tint: 'red', dpad: ['W', 'A', 'S', 'D'], fire: 'Q' },
@@ -49,7 +51,7 @@ const PADS: Record<string, PadGroup[]> = {
     { title: 'Star Catcher', tint: 'gold', dpad: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'], fire: 'Space', fireLabel: 'Catch' },
     { buttons: [{ k: 'N', label: 'Next' }, { k: 'R', label: 'Again' }, { k: 'M', label: 'Nights' },
                 { k: 'ArrowUp', label: 'Add star' }, { k: 'ArrowDown', label: 'Remove star' }, { k: 'T', label: 'Trails' },
-                { k: 'H', label: 'Help' }] }
+                { k: 'S', label: 'Music' }, { k: 'H', label: 'Help' }] }
   ]
 };
 
@@ -64,13 +66,10 @@ export function keyOf(name: string) {
   return { key: name.toLowerCase(), code: 'Key' + name, which: name.charCodeAt(0), cap: name };
 }
 
-// A key event the shim cannot tell from a real one (keyCode cannot be set through the constructor).
+/** Presses or releases a key named as in PADS. */
 export function fireKey(type: string, name: string) {
   var k = keyOf(name);
-  var e = new KeyboardEvent(type, { key: k.key, code: k.code, bubbles: true, cancelable: true });
-  Object.defineProperty(e, 'keyCode', { get: function () { return k.which; } });
-  Object.defineProperty(e, 'which', { get: function () { return k.which; } });
-  document.body.dispatchEvent(e);
+  sendKey(type, { key: k.key, code: k.code }, k.which);
 }
 
 const PAD_KEY = 'oldjava.pad';
@@ -209,12 +208,11 @@ export function init() {
     has: function (id) { return !!PADS[id]; },
     // Shown or not: the visitor's last choice, else `byDefault`.
     wanted: function (byDefault) {
-      var v = null;
-      try { v = localStorage.getItem(PAD_KEY); } catch (e) { /* not remembered */ }
+      var v = stored(PAD_KEY);
       return v === 'on' || (v !== 'off' && byDefault);
     },
     remember: function (on) {
-      try { localStorage.setItem(PAD_KEY, on ? 'on' : 'off'); } catch (e) { /* not remembered */ }
+      store(PAD_KEY, on ? 'on' : 'off');
     },
     // Builds app `id`'s controller in `el` (in place of what it held). send(type, keyName) delivers each press and
     // release. Returns light(keyCode, down), which shows a real key press on the matching buttons.

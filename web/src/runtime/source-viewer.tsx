@@ -1,15 +1,18 @@
 import { createElement, Fragment, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { embedded } from './skin';
 import { news } from './band-news';
-import { replay, replayNow } from './replay';
+import { replay } from './replay';
+import { ExitRecap } from './exit-recap';
 import { played } from './passport';
 import { appId, catalog, type CatalogApp } from './catalog';
 import { JAR_KEYS, JAR_KEYS_LABEL, NO_QUIRKS, eraPage, indexOf, isThen, picks, quirks, sourceDir } from './then-and-now';
 import { openShare } from './share';
 import { Overlay } from './ui/overlay';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { AppCard, JarLink, PassportLine, Quirk } from './ui/cards';
 import { playSound } from './sounds';
+import { fetchOk } from './fetch-ok';
 
 let JAVA_KEYWORDS: string[];
 // The open source panel: show opens a file (the first when it is not one of the app's) at a line.
@@ -20,10 +23,7 @@ const JAVA_TOKEN = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\
 
 function sourceFiles() {
   if (!sourceList) {
-    sourceList = fetch(sourceDir() + 'files.txt').then(function (r) {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.text();
-    }).then(function (text) {
+    sourceList = fetchOk(sourceDir() + 'files.txt').then(function (r) { return r.text(); }).then(function (text) {
       return text.split(/\r?\n/).filter(Boolean).sort(function (a, b) {
         return (a === 'README.md' ? -1 : b === 'README.md' ? 1 : 0) || (a < b ? -1 : a > b ? 1 : 0);
       });
@@ -162,18 +162,12 @@ export function sourceFromHash() {
 
 function openSource(file: string | null, line: number) {
   if (sourcePanel) { sourcePanel.show(file as string, line); return; }
-  var opener = document.activeElement as HTMLElement | null;
-  function shut() {
-    playSound('close');
-    close();
+  openPanel(shut => <SourcePanel file={file} line={line} onClose={shut} onShow={show => { sourcePanel = { show }; }} />, document.activeElement, () => {
     document.documentElement.removeAttribute('data-source');
     sourcePanel = null;
     history.replaceState(null, '', location.pathname + location.search);
-    if (opener && opener.focus && document.contains(opener)) opener.focus();
-  }
-  const close = openLayer(<SourcePanel file={file} line={line} onClose={shut} onShow={show => { sourcePanel = { show }; }} />);
+  });
   document.documentElement.setAttribute('data-source', '');
-  playSound('open');
 }
 
 /** What the page shows: a README, a Java file, why a file could not load, or nothing yet. */
@@ -207,10 +201,7 @@ function SourcePanel({ file, line, onClose, onShow }: {
 
   function text(f: string) {
     if (!st.texts[f]) {
-      st.texts[f] = fetch(sourceDir() + f).then(function (r) {
-        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-        return r.text();
-      });
+      st.texts[f] = fetchOk(sourceDir() + f).then(function (r) { return r.text(); });
       st.texts[f].catch(function () { delete st.texts[f]; });
     }
     return st.texts[f];
@@ -370,7 +361,13 @@ export function howToPlay() {
   });
 }
 
-// The app called System.exit (for most apps: its window was closed). Offer it again, and three others.
+// The app called System.exit (for most apps: its window was closed). Offer it again, and three others: only on the
+// app's own page and in the home page's player, which swaps a pick in. Any other embed (play.html, ?embed&full on
+// someone's page, Side by side) put this one app there, so its frame does not offer others.
+function inHomePlayer() {
+  try { return window.parent !== window && !!window.parent.document.getElementById('player'); } catch (e) { return false; }   // another site's page
+}
+
 export function exitScreen(msg: string) {
   if (news && news.kind() === 'hint') news.clear();
   openLayer(<ExitScreen msg={msg} replayLive={!!(replay && replay.live())} />);
@@ -380,7 +377,6 @@ export function exitScreen(msg: string) {
 function ExitScreen({ msg, replayLive }: { msg: string; replayLive: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const share = useRef<HTMLButtonElement>(null);
-  const again = useRef<HTMLButtonElement>(null);
   const [found, setFound] = useState<{ apps: CatalogApp[]; next: CatalogApp[] } | null>(null);
   useOwnKeys(box);
   useLayoutEffect(() => { box.current!.querySelector('button')!.focus(); }, []);
@@ -388,17 +384,13 @@ function ExitScreen({ msg, replayLive }: { msg: string; replayLive: boolean }) {
   const app = found ? found.apps[indexOf(found.apps, appId())] : null;
   const next = found ? found.next : [];
   return (
-    <Overlay text={msg} button="Run again" className="shim-exit" boxRef={box} before={app && <h2>{app.name + ' has closed'}</h2>}>
+    <Overlay text={msg} button="Run again" className="shim-exit" boxRef={box} before={<ExitRecap name={app && app.name} replayLive={replayLive} />}>
       {!embedded && <a className="shim-exit-home" href="../index.html">All apps</a>}
       <button type="button" className="shim-exit-share" data-sound="none" ref={share} onClick={() => openShare(appId(), share.current)}>{'↗ Share'}</button>
       {app && app.then && !embedded && (   // the player has its own Then | Now switch
         <a className="shim-exit-era" href={eraPage(!isThen())}>{isThen() ? 'Play today’s version' : 'Play it as first restored'}</a>
       )}
-      {replayLive && (   // the last moments before it closed
-        <button type="button" className="shim-exit-share" data-sound="none" title="Watch, save or share the last moments of play"
-          ref={again} onClick={() => replayNow(again.current)}>{'⟲ Replay'}</button>
-      )}
-      {next.length > 0 && (
+      {next.length > 0 && (!embedded || inHomePlayer()) && (
         <>
           <h3>{played[next[0].id] ? 'Play something else' : 'Play something new'}</h3>
           <div className="shim-picks">{next.map(a => <AppCard key={a.id} app={a} showNew />)}</div>

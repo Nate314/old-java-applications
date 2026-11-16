@@ -15,7 +15,7 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
- * The Algorithm Lab: a sheet of graph paper with a tab per page across the top (keys 1 to 6) and the page's
+ * The Algorithm Lab: a sheet of graph paper with a tab per page across the top (keys 1 to 8) and the page's
  * buttons along the bottom. It routes clicks, keys and a 30 ms tick to the page that shows.
  */
 @SuppressWarnings("serial")
@@ -114,7 +114,12 @@ public class LabPanel extends JPanel {
 
 	private void press(int x, int y) {
 		if (y < TABS) {
-			show(x * pages.length / getWidth());
+			for (int i = pages.length - 1; i >= 0; i--) {
+				if (x >= tabX(i, getWidth())) {
+					show(i);
+					return;
+				}
+			}
 			return;
 		}
 		if (y >= getHeight() - BAR) {
@@ -179,8 +184,8 @@ public class LabPanel extends JPanel {
 		g.setColor(Page.INK);
 		g.fillRect(0, 0, w, TABS);
 		for (int i = 0; i < pages.length; i++) {
-			int x = i * w / pages.length;
-			int tabWidth = (i + 1) * w / pages.length - x;
+			int x = tabX(i, w);
+			int tabWidth = tabX(i + 1, w) - x;
 			boolean on = i == current;
 			if (on) {
 				g.setColor(Page.PAPER);
@@ -189,6 +194,20 @@ public class LabPanel extends JPanel {
 			String label = (i + 1) + "  " + pages[i].title;
 			Page.centered(g, label, Page.BOLD, on ? Page.INK : new Color(200, 212, 232), x + tabWidth / 2, 28);
 		}
+	}
+
+	/** Left edge of tab i: each tab is as wide as its label (by letters) plus a margin, so eight fit in 720 px. */
+	private int tabX(int i, int w) {
+		int before = 0;
+		int total = 0;
+		for (int j = 0; j < pages.length; j++) {
+			int share = pages[j].title.length() + 9;
+			total += share;
+			if (j < i) {
+				before += share;
+			}
+		}
+		return before * w / total;
 	}
 
 	private void paintBar(Graphics2D g, int w, int h) {

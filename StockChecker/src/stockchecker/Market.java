@@ -23,12 +23,15 @@ final class Market {
       final boolean up;
       /** The stock it is about, or null for the whole market. */
       final String symbol;
+      /** How many minutes it pushes the price, from its own minute. */
+      final int length;
 
-      Headline(int minute, String text, boolean up, String symbol) {
+      Headline(int minute, String text, boolean up, String symbol, int length) {
          this.minute = minute;
          this.text = text;
          this.up = up;
          this.symbol = symbol;
+         this.length = length;
       }
    }
 
@@ -79,7 +82,7 @@ final class Market {
          for (int m = start; m < start + length && m <= CLOSE; m++) {
             marketDrift[m] = (up ? size : -size) / length;
          }
-         addHeadline(new Headline(start, up ? "Stocks rally across the board" : "Stocks slide across the board", up, null));
+         addHeadline(new Headline(start, up ? "Stocks rally across the board" : "Stocks slide across the board", up, null, length));
       }
       for (String symbol : symbols) {
          add(symbol, bases, firstPrices);
@@ -121,7 +124,7 @@ final class Market {
             double size = 0.006 + (a * 2 % 1) * 0.016;   // a picked the direction; its other bits pick the size
             drift = (up ? size : -size) / driftLeft;
             String[] lines = up ? UP : DOWN;
-            addHeadline(new Headline(m, lines[(int) (b * lines.length) % lines.length].replace("%", symbol), up, symbol));
+            addHeadline(new Headline(m, lines[(int) (b * lines.length) % lines.length].replace("%", symbol), up, symbol, driftLeft));
          }
          double move = perMinute * (0.55 * market[m] + 0.835 * own) + marketDrift[m] + (driftLeft > 0 ? drift : 0);
          if (driftLeft > 0) {
@@ -149,6 +152,36 @@ final class Market {
    double price(String symbol) {
       Stock stock = stock(symbol);
       return stock == null ? 0 : stock.path[minute];
+   }
+
+   /** The stock's day so far as one candle: {day, open, high, low, price now}. */
+   double[] bar(Stock stock) {
+      double high = stock.open();
+      double low = stock.open();
+      for (int m = 0; m <= minute; m++) {
+         high = Math.max(high, stock.path[m]);
+         low = Math.min(low, stock.path[m]);
+      }
+      return new double[] {day, stock.open(), high, low, stock.path[minute]};
+   }
+
+   /**
+    * In hindsight, the best single buy and later sell of {@code path} from the open to {@code upTo}, as {buy minute,
+    * sell minute}, or null when the price never rose above an earlier one.
+    */
+   static int[] bestTrade(double[] path, int upTo) {
+      int low = 0;
+      int[] best = null;
+      double gain = 1;
+      for (int m = 1; m <= upTo; m++) {
+         if (path[m] < path[low]) {
+            low = m;
+         } else if (path[m] / path[low] > gain) {
+            gain = path[m] / path[low];
+            best = new int[] {low, m};
+         }
+      }
+      return best;
    }
 
    boolean closed() {

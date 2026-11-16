@@ -61,9 +61,30 @@ public final class CatchPanel extends JPanel {
       }
    }
 
+   /** Seconds a caught star takes to fly up into its place in the catch count, and its place then pops for. */
+   static final double FLY = 0.45;
+   static final double POP = 0.3;
+   /** Seconds the lost part of the clock bar takes to drain away after a black hole. */
+   static final double DRAIN = 0.7;
+
+   /** A caught gold star flying from where it was caught to its place in the catch count. */
+   private static final class Flyer {
+      final double x;
+      final double y;
+      final int slot;
+      double age;
+
+      Flyer(double x, double y, int slot) {
+         this.x = x;
+         this.y = y;
+         this.slot = slot;
+      }
+   }
+
    private final NightRecords records;
-   private final Random random = new Random();
+   final Random random = new Random(); // not private: CatchFeelCheck seeds it so its stars land the same every run
    private final List<Effect> effects = new ArrayList<>();
+   private final List<Flyer> flyers = new ArrayList<>();
    private final Rectangle[] nightCards = new Rectangle[Night.values().length];
    private final Rectangle againButton = new Rectangle();
    private final Rectangle nextButton = new Rectangle();
@@ -72,7 +93,10 @@ public final class CatchPanel extends JPanel {
    private final Timer timer;
    private Screen screen = Screen.MENU;
    private Night selected;
-   private CatchGame game;
+   CatchGame game;
+   /** The clock just before the last black hole, and the seconds since it. */
+   private double penaltyFrom;
+   private double penaltyAge = Double.MAX_VALUE;
    private StarField sky;
    private double screenSeconds;
    private double spin;
@@ -187,11 +211,13 @@ public final class CatchPanel extends JPanel {
       return night;
    }
 
-   private void start(Night night) {
+   void start(Night night) {
       this.selected = night;
       this.game = new CatchGame(night, WIDTH, HEIGHT - HUD, this.random);
       this.sky = new StarField(night.mode(), new Dimension(WIDTH, HEIGHT - HUD), 90, 5, false);
       this.effects.clear();
+      this.flyers.clear();
+      this.penaltyAge = Double.MAX_VALUE;
       this.newBest = false;
       this.screen = Screen.INTRO;
       this.screenSeconds = 0;
@@ -218,17 +244,21 @@ public final class CatchPanel extends JPanel {
       this.repaint();
    }
 
-   private void catchAt(double x, double y) {
+   void catchAt(double x, double y) {
       if (y < HUD) {
          return;
       }
       int comboBefore = this.game.combo();
+      double clockBefore = this.game.secondsLeft();
       CatchGame.Hit hit = this.game.click(x, y - HUD);
       if (hit == CatchGame.Hit.GOLD) {
          int combo = this.game.combo();
          String text = combo >= 3 ? "Combo x" + combo + "  +" + CatchGame.COMBO_BONUS + " s" : "+1";
          this.effects.add(new Effect(x, y, text, GOLD));
+         this.flyers.add(new Flyer(x, y, this.game.caught() - 1));
       } else if (hit == CatchGame.Hit.HOLE) {
+         this.penaltyFrom = clockBefore;
+         this.penaltyAge = 0;
          this.effects.add(new Effect(x, y, "-" + (int)CatchGame.HOLE_PENALTY + " s", BAD));
       } else if (hit == CatchGame.Hit.MISS && comboBefore >= 3) {
          this.effects.add(new Effect(x, y, "Combo over", DIM));
@@ -248,7 +278,14 @@ public final class CatchPanel extends JPanel {
       long now = System.nanoTime();
       double seconds = Math.min(0.05, (now - this.lastTick) / 1.0E9);
       this.lastTick = now;
+      this.advance(seconds);
+      this.repaint();
+   }
+
+   /** Moves everything on by a number of seconds. */
+   void advance(double seconds) {
       this.spin += seconds;
+      this.penaltyAge += seconds;
       this.screenSeconds += seconds;
       this.sky.advance(seconds * 0.5, WIDTH, HEIGHT - HUD);
       if (this.screen == Screen.INTRO && this.screenSeconds >= INTRO_SECONDS) {
@@ -271,7 +308,13 @@ public final class CatchPanel extends JPanel {
             it.remove();
          }
       }
-      this.repaint();
+      for (Iterator<Flyer> it = this.flyers.iterator(); it.hasNext();) {
+         Flyer flyer = it.next();
+         flyer.age += seconds;
+         if (flyer.age > FLY + POP) {
+            it.remove();
+         }
+      }
    }
 
    @Override
@@ -286,6 +329,11 @@ public final class CatchPanel extends JPanel {
       g.fillRect(0, 0, WIDTH, HEIGHT - HUD);
       if (this.screen != Screen.MENU) {
          this.drawBodies(g);
+         if (this.penaltyAge < 0.3) {
+            // A black hole's bite: the field blushes red for a moment.
+            g.setColor(new Color(255, 40, 60, (int)(70 * (1.0 - this.penaltyAge / 0.3))));
+            g.fillRect(0, 0, WIDTH, HEIGHT - HUD);
+         }
       }
       g.translate(0, -HUD);
       this.drawEffects(g);
@@ -297,6 +345,7 @@ public final class CatchPanel extends JPanel {
          this.drawNet(g);
       }
       this.drawHud(g);
+      this.drawFlyers(g);
       if (this.screen == Screen.INTRO) {
          this.drawIntro(g);
       } else if (this.screen == Screen.RESULT) {
@@ -395,13 +444,22 @@ public final class CatchPanel extends JPanel {
       g.setColor(DIM);
       g.drawString("Esc: nights   R: restart", 12, 37);
 
-      // Catch count: one small star per gold star to catch, lit once caught.
+      // Catch count: one small star per gold star to catch, lit once its caught star has flown in, popping as it lands.
       int goal = night.goal();
       int step = Math.min(16, 200 / goal);
       int left = 200;
       for (int i = 0; i < goal; i++) {
-         boolean lit = i < this.game.caught();
-         this.drawStar(g, left + i * step + 7, 23, 7, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
+         Flyer flyer = this.flyerFor(i);
+         boolean lit = i < this.game.caught() && (flyer == null || flyer.age >= FLY);
+         int r = 7;
+         if (lit && flyer != null) {
+            double pop = 1.0 - (flyer.age - FLY) / POP;
+            r += (int)Math.round(5 * pop);
+            g.setColor(new Color(255, 240, 170, (int)(200 * pop)));
+            int ring = 9 + (int)(10 * (1.0 - pop));
+            g.drawOval(this.slotX(i) - ring, 23 - ring, 2 * ring, 2 * ring);
+         }
+         this.drawStar(g, this.slotX(i), 23, r, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
       }
       g.setFont(new Font("SansSerif", Font.BOLD, 13));
       g.setColor(TEXT);
@@ -414,7 +472,17 @@ public final class CatchPanel extends JPanel {
       g.setColor(new Color(40, 46, 96));
       g.fillRoundRect(barX, 14, barW, 18, 9, 9);
       g.setColor(left10 <= Night.TWO_STARS ? BAD : left10 <= Night.THREE_STARS ? new Color(255, 170, 60) : new Color(90, 200, 255));
-      g.fillRoundRect(barX, 14, (int)(barW * left10 / Night.SECONDS), 18, 9, 9);
+      int fill = (int)(barW * left10 / Night.SECONDS);
+      if (this.penaltyAge < DRAIN) {
+         // The seconds a black hole took stay on the bar in red, then drain down to the clock.
+         double t = this.penaltyAge / DRAIN;
+         int lost = (int)(barW * Math.min(Night.SECONDS, this.penaltyFrom) / Night.SECONDS) - fill;
+         Color barColor = g.getColor();
+         g.setColor(new Color(255, 70, 80, (int)(230 * (1.0 - t * 0.5))));
+         g.fillRoundRect(barX, 14, fill + (int)(lost * (1.0 - t * t)), 18, 9, 9);
+         g.setColor(barColor);
+      }
+      g.fillRoundRect(barX, 14, fill, 18, 9, 9);
       g.setColor(new Color(255, 255, 255, 120));
       for (double mark : new double[]{Night.THREE_STARS, Night.TWO_STARS}) {
          int mx = barX + (int)(barW * mark / Night.SECONDS);
@@ -428,6 +496,44 @@ public final class CatchPanel extends JPanel {
       if (this.game.combo() >= 3 && this.screen == Screen.PLAYING) {
          g.setColor(GOLD);
          g.drawString("Combo x" + this.game.combo(), left + goal * step + 58, 28);
+      }
+   }
+
+   /** The middle of a place in the catch count. */
+   int slotX(int slot) {
+      return 200 + slot * Math.min(16, 200 / this.game.night().goal()) + 7;
+   }
+
+   private Flyer flyerFor(int slot) {
+      for (Flyer flyer : this.flyers) {
+         if (flyer.slot == slot) {
+            return flyer;
+         }
+      }
+      return null;
+   }
+
+   /** Where a caught star is a fraction t of the way along its flight: up from where it was caught, then across into its place. */
+   double[] flightPoint(double x, double y, int slot, double t) {
+      double e = t * t * (3 - 2 * t);
+      double tx = this.slotX(slot);
+      double u = 1 - e;
+      return new double[]{u * u * x + 2 * u * e * x + e * e * tx, u * u * y + 2 * u * e * 23 + e * e * 23};
+   }
+
+   private void drawFlyers(Graphics2D g) {
+      for (Flyer flyer : this.flyers) {
+         if (flyer.age >= FLY) {
+            continue;
+         }
+         // A short tail of fainter stars behind the one in flight.
+         for (int k = 3; k >= 0; k--) {
+            double t = Math.max(0, flyer.age / FLY - k * 0.06);
+            double[] p = this.flightPoint(flyer.x, flyer.y, flyer.slot, t);
+            int alpha = 255 - k * 60;
+            int r = (int)Math.round(CatchGame.GOLD_RADIUS + 2 - (CatchGame.GOLD_RADIUS - 5) * t) - k * 2;
+            this.drawStar(g, (int)p[0], (int)p[1], Math.max(3, r), this.spin * 6.0, new Color(255, 205, 40, alpha), new Color(170, 110, 0, alpha));
+         }
       }
    }
 

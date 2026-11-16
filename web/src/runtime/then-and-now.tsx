@@ -2,9 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { embedded } from './skin';
 import { played } from './passport';
 import { appId, catalog, root, type CatalogApp } from './catalog';
-import { playSound } from './sounds';
-import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { CloseButton, useOwnKeys } from './ui/layer';
+import { openPanel } from './ui/panel';
 import { AppCard, PassportLine } from './ui/cards';
+import { fetchOk } from './fetch-ok';
 
 let drawer: HTMLElement | null;
 
@@ -45,10 +46,7 @@ const quirkLists: Record<string, Promise<string[][]>> = {};
 export function quirks(id?: string | null) {
   id = id || appId()!;
   if (!quirkLists[id]) {
-    quirkLists[id] = fetch(root() + id + '/then-source/README.md').then(function (r) {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.text();
-    }).then(function (text) {
+    quirkLists[id] = fetchOk(root() + id + '/then-source/README.md').then(function (r) { return r.text(); }).then(function (text) {
       var section = /^## Known quirks[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n?/g, '\n'));
       if (!section) return [];
       return section[1].split(/^- /m).slice(1).map(function (item) {
@@ -114,14 +112,7 @@ export function picks<T extends OldjavaCatalogApp>(apps: T[], id: string | null,
 
 export function openDrawer(opener: HTMLElement) {
   if (drawer) return;
-  function shut() {
-    playSound('close');
-    close();
-    drawer = null;
-    opener.focus();
-  }
-  const close = openLayer(<SwitchDrawer onClose={shut} onPanel={el => { drawer = el; }} />);
-  playSound('open');
+  openPanel(shut => <SwitchDrawer onClose={shut} onPanel={el => { drawer = el; }} />, opener, () => { drawer = null; });
 }
 
 /** Switch app: every app in gallery order, in a panel on the right, under the passport line. */
@@ -142,7 +133,7 @@ function SwitchDrawer({ onClose, onPanel }: { onClose: () => void; onPanel: (el:
   return (
     <>
       <div className="shim-scrim" onClick={onClose} />
-      <aside className="shim-drawer" aria-label="Switch app" ref={panel}>
+      <aside className="shim-drawer" role="dialog" aria-modal="true" aria-label="Switch app" ref={panel}>
         <div className="shim-drawer-head">
           <strong>Switch app</strong>
           <CloseButton onClick={onClose} />

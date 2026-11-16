@@ -21,6 +21,7 @@
     any sources are unpacked, and the file has not changed since that commit.
   -->
   <properties>
+    <!-- Same commit as web/then; change both, and THEN_AT in web/src/pages/compare/Compare.tsx, together. -->
     <then.commit>5a28e4608fc254e9cc075768a598a965b7fe2d24</then.commit>
     <then.src>${project.build.directory}/then-src</then.src>
   </properties>

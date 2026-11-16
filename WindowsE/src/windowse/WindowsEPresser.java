@@ -1,40 +1,39 @@
 package windowse;
 
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.IntConsumer;
 import javax.swing.Timer;
 
 /**
- * Presses a shortcut the given number of times, 100 ms apart, on a Swing timer: holds the Windows key and taps the
- * shortcut's key (Win+E ten times holds Windows once and taps E ten times, as the original did), or taps the Windows
- * key alone. {@link #stop()} ends it early and lets go of the Windows key.
+ * Presses a list of steps in order, one press every 100 ms, on a Swing timer. Each press holds the Windows key only
+ * around its own key (Windows down, E down, E up, Windows up), so between presses the Windows key is up and keys
+ * typed on the keyboard stay ordinary keys; the Windows key alone is tapped. {@link #stop()} ends it early.
  */
 final class WindowsEPresser {
    private final Keys keys;
-   private final Shortcut shortcut;
-   private final int count;
+   private final List<Shortcut> taps = new ArrayList<>();
    private final IntConsumer onTap;
    private final Runnable onDone;
    private final Timer timer;
    private int done;
-   private boolean holding;
    private boolean finished;
 
    /** onTap gets how many presses are done so far; onDone runs once, after the last press or when stopped. */
-   WindowsEPresser(Keys keys, Shortcut shortcut, int count, IntConsumer onTap, Runnable onDone) {
+   WindowsEPresser(Keys keys, List<Step> steps, IntConsumer onTap, Runnable onDone) {
       this.keys = keys;
-      this.shortcut = shortcut;
-      this.count = count;
+      for (Step step : steps) {
+         for (int i = 0; i < step.times; i++) {
+            this.taps.add(step.shortcut);
+         }
+      }
       this.onTap = onTap;
       this.onDone = onDone;
       this.timer = new Timer(100, event -> this.tap());
    }
 
    void start() {
-      if (this.shortcut.keyCode != 0) {
-         this.keys.press(KeyEvent.VK_WINDOWS);
-         this.holding = true;
-      }
       this.tap();
       if (!this.finished) {
          this.timer.start();
@@ -49,13 +48,17 @@ final class WindowsEPresser {
       if (this.finished) {
          return;
       }
-      if (this.done >= this.count) {
+      if (this.done >= this.taps.size()) {
          this.finish();
          return;
       }
-      int key = this.shortcut.keyCode == 0 ? KeyEvent.VK_WINDOWS : this.shortcut.keyCode;
-      this.keys.press(key);
-      this.keys.release(key);
+      int key = this.taps.get(this.done).keyCode;
+      this.keys.press(KeyEvent.VK_WINDOWS);
+      if (key != 0) {
+         this.keys.press(key);
+         this.keys.release(key);
+      }
+      this.keys.release(KeyEvent.VK_WINDOWS);
       this.done++;
       this.onTap.accept(this.done);
    }
@@ -66,10 +69,6 @@ final class WindowsEPresser {
       }
       this.finished = true;
       this.timer.stop();
-      if (this.holding) {
-         this.keys.release(KeyEvent.VK_WINDOWS);
-         this.holding = false;
-      }
       this.onDone.run();
    }
 }

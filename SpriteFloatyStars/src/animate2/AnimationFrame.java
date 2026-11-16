@@ -19,18 +19,34 @@ public final class AnimationFrame extends JFrame implements KeyListener {
 
    @Override
    public final void keyTyped(KeyEvent e) {
+      if (this.writing()) {
+         this.starField.skyWriting().type(e.getKeyChar());
+      }
+   }
+
+   /** Sky writing with the keyboard writing the message: every key types, and Enter or Esc keeps it. */
+   private boolean writing() {
+      return this.starField.mode() == StarField.SKY_WRITING && this.starField.skyWriting().writing();
    }
 
    @Override
    public final void keyPressed(KeyEvent e) {
       int key = e.getKeyCode();
-      if (key == KeyEvent.VK_UP) {
+      if (this.writing()) {
+         if (key == KeyEvent.VK_ENTER || key == KeyEvent.VK_ESCAPE) {
+            this.starField.skyWriting().stopWriting();
+         }
+         return;
+      }
+      if (key == KeyEvent.VK_ENTER && this.starField.mode() == StarField.SKY_WRITING) {
+         this.starField.skyWriting().startWriting();
+      } else if (key == KeyEvent.VK_UP) {
          this.starField.addStar();
       } else if (key == KeyEvent.VK_DOWN) {
          this.starField.removeStar();
-      } else if (key >= KeyEvent.VK_1 && key <= KeyEvent.VK_6) {
+      } else if (key >= KeyEvent.VK_1 && key <= KeyEvent.VK_7) {
          this.starField.setMode(key - KeyEvent.VK_1);
-      } else if (key >= KeyEvent.VK_NUMPAD1 && key <= KeyEvent.VK_NUMPAD6) {
+      } else if (key >= KeyEvent.VK_NUMPAD1 && key <= KeyEvent.VK_NUMPAD7) {
          this.starField.setMode(key - KeyEvent.VK_NUMPAD1);
       } else if (key == KeyEvent.VK_N) {
          this.starField.setMode(this.starField.mode() + 1);
@@ -40,6 +56,8 @@ public final class AnimationFrame extends JFrame implements KeyListener {
          this.starField.toggleHint();
       } else if (key == KeyEvent.VK_T) {
          this.starField.toggleTrails();
+      } else if (key == KeyEvent.VK_S) {
+         this.starField.toggleMusic();
       }
    }
 

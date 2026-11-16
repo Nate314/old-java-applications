@@ -3,13 +3,16 @@ import { flushSync } from 'react-dom';
 import { played } from './passport';
 import { WATCH } from './watch';
 import { saverMinutes, saverOn, setSaverOn } from './saver';
-import { appId, catalog, type CatalogApp } from './catalog';
+import { appId, catalog, root, type CatalogApp } from './catalog';
+import { embedded } from './skin';
 import { JAR_JAVA, JAR_KEYS, NO_QUIRKS, eraPage, indexOf, isThen, programFile, quirks, saveStore } from './then-and-now';
 import { INVITE, SHARED } from './share';
 import { sourcePanel } from './source-viewer';
 import { CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
+import { fetchOk } from './fetch-ok';
+import { Attract } from './title-attract';
 
 /** A line of the boot log: [label, value, class]. */
 export type LogLine = [string, string, string];
@@ -45,7 +48,7 @@ export function titleScreen(files: string[]) {
     if (!started || leaving) return;
     if (e && e.type === 'keydown') {
       if ((e as KeyboardEvent).key === 'Tab' || (e as KeyboardEvent).key === 'Shift' || (e as KeyboardEvent).key === 'Control' || (e as KeyboardEvent).key === 'Alt' || (e as KeyboardEvent).key === 'Meta') return;
-      if ((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-find')) return;   // keys for those panels
+      if ((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-title-clip-pause, .shim-find')) return;   // keys for those panels
       e.preventDefault();
       e.stopPropagation();
       // Its release must not reach the app either: it never saw the press.
@@ -62,6 +65,8 @@ export function titleScreen(files: string[]) {
     html.removeAttribute('data-title');
     var start = started;
     started = null;
+    // Let go of Play, so the app's first button or field can take the keyboard (the shim's TDesktop.show).
+    if (screen!.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     start();
     setTimeout(function () { close(); titleLog = null; }, 400);
   }
@@ -99,6 +104,7 @@ function TitleScreen({ total, onGo, onMount }: {
   const [ready, setReady] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [found, setFound] = useState<{ app: CatalogApp; apps: CatalogApp[] } | null>(null);
+  const [listed, setListed] = useState(false);   // apps.json has answered: the card shows, filled in, not half empty
   const [quirkList, setQuirkList] = useState<string[][] | null>(null);
   const [shown, setShown] = useState(false);   // the thumbnail, once it has loaded
   const [record] = useState(() => savedRecord(saveStore()));
@@ -118,6 +124,7 @@ function TitleScreen({ total, onGo, onMount }: {
   useLayoutEffect(() => { log.current!.scrollTop = log.current!.scrollHeight; }, [lines]);
   useEffect(() => {
     catalog().then(function (apps) {
+      setListed(true);
       var app = apps[indexOf(apps, id)];
       if (!app) return;
       setFound({ app, apps });
@@ -140,11 +147,12 @@ function TitleScreen({ total, onGo, onMount }: {
     if (!(e.target as Element).closest('a, .shim-title-forget, .shim-title-story')) onGo(e.nativeEvent);
   }
   return (
-    <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (leaving ? ' leaving' : '')}
+    <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (listed ? '' : ' unlisted') + (leaving ? ' leaving' : '')}
       role="dialog" data-sound="none" aria-label={document.title} ref={screen} onClick={onClick}>
       <div className="shim-title-card">
         <div className="shim-title-art">
-          <img alt="" hidden={!shown} src={app && !then ? app.shot : undefined} onLoad={() => setShown(true)} />
+          <img alt="" hidden={!shown} src={app && !then ? app.shot.replace(/[.]png$/, '.webp') : undefined} onLoad={() => setShown(true)} />
+          {app && app.clip && !then && <Attract id={id} go={ready && shown} />}
           {app && then && (
             // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.
             <>
@@ -163,6 +171,9 @@ function TitleScreen({ total, onGo, onMount }: {
           )}
           <span className="shim-title-cat">{app ? (then ? 'As first restored' : CATS[app.cat] || '') : ''}</span>
           <h1>{app ? app.name : document.title}</h1>
+          {/* Play right under the name, ahead of the hint and the record lines, so a phone shows it without scrolling. */}
+          <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : 'Loading…'}</button>
+          <span className="shim-title-press">or press any key</span>
           <p className="shim-title-hint">
             {app ? (then
               ? (app.origin === 'original' ? 'The author’s own source as it was found' : 'The code as it came out of the old jar') +
@@ -183,8 +194,6 @@ function TitleScreen({ total, onGo, onMount }: {
             {saver ? 'Also this site’s screen saver, after ' + saverMinutes() + ' minutes away. ' : 'This site’s screen saver is off. '}
             <button type="button" className="shim-title-forget" onClick={() => { setSaverOn(!saverOn()); setSaver(saverOn()); }}>{saver ? 'Turn off' : 'Turn on'}</button>
           </p>
-          <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : 'Loading…'}</button>
-          <span className="shim-title-press">or press any key</span>
           <a className="shim-title-source" href="#source" data-sound="none">{then ? 'Read the source as first restored' : 'Read the source'}</a>
           {/* The games that play themselves: a look before playing (see watch). */}
           <a className="shim-title-watch" href="?watch" hidden={!WATCH[id] || then}>Watch the computer play it first</a>
@@ -192,16 +201,22 @@ function TitleScreen({ total, onGo, onMount }: {
           <a className="shim-title-era" href={eraPage(!then)} hidden={!(app && app.then)}>
             {then ? 'Play today’s version' : 'Play it as first restored, before the reworks'}
           </a>
+          {/* Both versions at once, with what changed in between (src/pages/compare); not inside another page's frame. */}
+          <a className="shim-title-era" href={root() + 'compare.html?app=' + id} hidden={!(app && app.then) || embedded}>
+            Compare then and now side by side
+          </a>
           {/* The app for the desktop, today's version only (the jars are built from today's sources). */}
           <p className="shim-title-jar" hidden={then}>
             <JarLink id={id} className="shim-title-jar-link">{'Download ' + id + '.jar'}</JarLink>
             {' for the desktop, ' + JAR_JAVA + '.'}
             {JAR_KEYS[id] && <strong className="shim-title-jar-keys">{' ' + JAR_KEYS[id]}</strong>}
           </p>
-          {Story ? <Story id={id} /> : <details className="shim-title-story" hidden />}
+          {/* Until news.js answers, its line's room is kept (today's page only), so the meter and log below stay put. */}
+          {Story ? <Story id={id} /> : <details className="shim-title-story" hidden={then} aria-hidden="true" />}
         </div>
         <span className="shim-meter shim-title-meter" style={{ '--p': String(done / total) } as CSSProperties} />
-        <pre className="shim-title-log" aria-hidden="true" ref={log}>
+        {/* tabIndex -1: Chrome puts a scroller in the tab order, and this one is hidden from screen readers. */}
+        <pre className="shim-title-log" aria-hidden="true" tabIndex={-1} ref={log}>
           {lines.map(([label, value, cls], i) => (
             <span key={i} className={'row' + (cls ? ' ' + cls : '')}><span>{label}</span><span>{value}</span></span>
           ))}
@@ -216,10 +231,7 @@ const IMAGE = /\.(png|jpe?g|gif|bmp|webp)$/i;
 export function preload(name: string) {
   window.__shimFiles = window.__shimFiles || {};
   window.__shimImages = window.__shimImages || {};
-  var bytes = fetch(name).then(function (r) {
-    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-    return r.arrayBuffer();
-  }).then(function (buf) {
+  var bytes = fetchOk(name).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
     window.__shimFiles[name] = new Uint8Array(buf);
   });
   var image = !IMAGE.test(name) ? Promise.resolve() : new Promise<void>(function (resolve, reject) {

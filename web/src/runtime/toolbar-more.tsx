@@ -2,6 +2,8 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { embedded } from './skin';
 import { playSound } from './sounds';
 import { redrawBar } from './install';
+import { isThen } from './then-and-now';
+import { menuKeys } from '../shared/menu-keys';
 
 // ---- one-row toolbar: what does not fit waits under More ----
 // An app page's band holds many controls, and which ones show depends on the width, the skin (Yours adds Edit),
@@ -14,7 +16,7 @@ import { redrawBar } from './install';
 // Which controls fit is measured in the page, so it is worked out here and the band (More, which the toolbar draws
 // at its end) is drawn again from what was found, at once, before the next measure.
 const BAND_ORDER = [   // kept the longest first
-  '.shim-find-open', 'a[href="../index.html"]', '.shim-switch-open', '.shim-controls-open', '.shim-era',
+  '.shim-find-open', 'a[href="../index.html"]', '.shim-switch-open', '.shim-controls-open', '.shim-slowmo', '.shim-era',
   '.shim-next', '.shim-share-open', '.shim-source-open', '.shim-sound', '.shim-zoom', 'label',
   '.shim-dock-open', '.shim-own-edit', '.shim-replay', '.shim-pop', '.shim-photo-open'
 ];
@@ -58,10 +60,26 @@ function setHidden(h: boolean) {
   state.hidden = h;
   redrawBar();
 }
+// A calm band: even where everything would fit, the band shows only what gets a visitor playing and moving on
+// (How to play, Find, All apps, Switch app, Next, Controls, Keyboard, Sound); the rest waits under More from the
+// start. A control that is on (Slow-mo slowed, Side by side open, popped out) stays in the band so it can be
+// turned off where it shows, and so does Then | Now on the Then page, which says which version is playing.
+const CALM = ['.shim-era', '.shim-slowmo', '.shim-share-open', '.shim-source-open', '.shim-zoom', 'label',
+  '.shim-dock-open', '.shim-own-edit', '.shim-replay', '.shim-pop', '.shim-photo-open'];
+function calm() {
+  CALM.forEach(function (sel) {
+    var c = bar!.querySelector(':scope > ' + sel);
+    if (!c || !c.getBoundingClientRect().width || (sel !== '.shim-zoom' && c.getAttribute('aria-pressed') === 'true') || (sel === '.shim-era' && isThen())) return;
+    out.add(sel);
+  });
+}
 function fit() {
   var list = items(), allowed = narrow.matches ? 2 : 1;
   out.clear();
   state.hidden = true;
+  redrawBar();
+  calm();   // measured with every control back in the band, so one not showing (Replay before the app runs) stays out of the menu
+  state.hidden = !out.size;
   redrawBar();
   if (rows() > allowed) {
     setHidden(false);
@@ -170,6 +188,8 @@ function start(band: Element) {
   new MutationObserver(refit).observe(document.documentElement,
     { attributes: true, attributeFilter: ['data-skin', 'data-replay', 'data-photo', 'data-title', 'data-source', 'data-dock'] });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
+  // A control turned on from the menu (Slow-mo, Pop out) comes back into the band; hidden, it reports no resize.
+  new MutationObserver(refit).observe(bar, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
 }
 
 function buttonClick(e: ReactMouseEvent) {
@@ -182,23 +202,7 @@ function buttonKey(e: ReactKeyboardEvent) {
     if (e.key === 'ArrowUp') { var l = entries(); if (l.length) l[l.length - 1].focus(); }
   }
 }
-function menuKey(e: ReactKeyboardEvent) {
-  var l = entries(), i = l.indexOf(document.activeElement as HTMLElement);
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    e.preventDefault();
-    var n = l.length;
-    if (n) l[((i < 0 ? (e.key === 'ArrowDown' ? -1 : 0) : i) + (e.key === 'ArrowDown' ? 1 : -1) + n) % n].focus();
-  } else if (e.key === 'Home' || e.key === 'End') {
-    e.preventDefault();
-    if (l.length) l[e.key === 'Home' ? 0 : l.length - 1].focus();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    close(true);
-  } else if (e.key === 'Tab') {
-    close(false);
-  }
-}
+function menuKey(e: ReactKeyboardEvent) { menuKeys(e, entries(), close); }
 
 /** The More button and its menu, at the end of an app page's band. */
 export function More() {

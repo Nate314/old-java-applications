@@ -1,7 +1,6 @@
 package audiobibledownloader;
 
 import java.awt.BasicStroke;
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
@@ -18,10 +17,14 @@ import javax.swing.Timer;
 import static audiobibledownloader.ReaderPanel.GOLD;
 import static audiobibledownloader.ReaderPanel.HEAD;
 import static audiobibledownloader.ReaderPanel.HOVER;
+import static audiobibledownloader.ReaderPanel.CHIP;
 import static audiobibledownloader.ReaderPanel.INK;
 import static audiobibledownloader.ReaderPanel.MUTED;
+import static audiobibledownloader.ReaderPanel.ON_RUBRIC;
 import static audiobibledownloader.ReaderPanel.PAPER_EDGE;
+import static audiobibledownloader.ReaderPanel.PICKED;
 import static audiobibledownloader.ReaderPanel.RUBRIC;
+import static audiobibledownloader.ReaderPanel.SLIP;
 import static audiobibledownloader.ReaderPanel.UI;
 
 /**
@@ -31,7 +34,6 @@ import static audiobibledownloader.ReaderPanel.UI;
  * from memory schedules its next review ({@link Memory#grade}).
  */
 final class LearnView {
-   private static final Color SLIP = new Color(0xc0392b);
 
    private final ReaderPanel panel;
    private final Shelf shelf;
@@ -334,7 +336,7 @@ final class LearnView {
          String label = (due == 1 ? "Practice the verse due" : "Practice the " + due + " due") + " ›";
          g.setFont(UI);
          Rectangle b = new Rectangle(area.x, y, g.getFontMetrics().stringWidth(label) + 28, 28);
-         this.panel.pill(g, b, label, RUBRIC, Color.WHITE);
+         this.panel.pill(g, b, label, RUBRIC, ON_RUBRIC);
          this.panel.hit(b, () -> this.begin(memory.nextDue(null, Plan.today())));
          y += 36;
       }
@@ -394,7 +396,7 @@ final class LearnView {
          g.setFont(UI);
          int bw = g.getFontMetrics().stringWidth(label) + 20;
          Rectangle b = new Rectangle(area.x + area.width - bw, y, bw, 24);
-         this.panel.pill(g, b, label, busy ? MUTED : PAPER_EDGE, busy ? Color.WHITE : INK);
+         this.panel.pill(g, b, label, busy ? MUTED : PAPER_EDGE, busy ? ON_RUBRIC : INK);
          if (!busy) {
             this.panel.hit(b, () -> this.add(m[0], m[1], m[2]));
          }
@@ -406,7 +408,7 @@ final class LearnView {
    private void cardRow(Graphics2D g, Memory.Card c, Rectangle r, int today) {
       boolean picked = c == this.card;
       if (picked || this.panel.over(r)) {
-         g.setColor(picked ? new Color(0xf3e3b8) : HOVER);
+         g.setColor(picked ? PICKED : HOVER);
          g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
       }
       g.setFont(new Font("Serif", Font.BOLD, 15));
@@ -475,11 +477,11 @@ final class LearnView {
          int cw = fm.stringWidth(label) + 18;
          Rectangle chip = new Rectangle(chipX, cy, cw, 22);
          boolean on = s == d.stage;
-         g.setColor(on ? RUBRIC : this.panel.over(chip) ? HOVER : new Color(0xf1e8d2));
+         g.setColor(on ? RUBRIC : this.panel.over(chip) ? HOVER : CHIP);
          g.fillRoundRect(chip.x, chip.y, chip.width, chip.height, 22, 22);
          g.setColor(on ? RUBRIC : PAPER_EDGE);
          g.drawRoundRect(chip.x, chip.y, chip.width, chip.height, 22, 22);
-         g.setColor(on ? Color.WHITE : INK);
+         g.setColor(on ? ON_RUBRIC : INK);
          g.drawString(label, chip.x + 9, chip.y + 15);
          int stage = s;
          this.panel.hit(chip, () -> this.stage(stage));
@@ -526,7 +528,7 @@ final class LearnView {
          g.setFont(UI);
          String show = "Show word";
          Rectangle sb = new Rectangle(bx + 8, by + 6, g.getFontMetrics().stringWidth(show) + 22, 28);
-         this.panel.pill(g, sb, show, new Color(0xf1e8d2), MUTED);
+         this.panel.pill(g, sb, show, CHIP, MUTED);
          this.panel.hit(sb, this::give);
          g.setFont(new Font("Serif", Font.ITALIC, 13));
          g.setColor(d.slips() > d.allowed() ? SLIP : MUTED);
@@ -541,7 +543,7 @@ final class LearnView {
          g.setFont(UI);
          String label = this.primaryLabel();
          Rectangle b = new Rectangle(area.x, by + 6, g.getFontMetrics().stringWidth(label) + 28, 32);
-         this.panel.pill(g, b, label, RUBRIC, Color.WHITE);
+         this.panel.pill(g, b, label, RUBRIC, ON_RUBRIC);
          this.panel.hit(b, this::primary);
          if (d.stage != Memory.Drill.READ) {
             String again = "Again";

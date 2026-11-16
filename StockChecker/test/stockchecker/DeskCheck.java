@@ -22,6 +22,8 @@ public class DeskCheck {
       check(a.stock("ZZZ").open() == Math.round(Market.madeUpPrice("ZZZ") * 100) / 100.0, "unknown symbol opens at its made-up price");
       check(Arrays.equals(a.stock("CRM").path, b.stock("CRM").path), "a stock's day does not depend on the other symbols");
       check(!Arrays.equals(a.stock("CRM").path, new Market(2, symbols, none, first).stock("CRM").path), "each day differs");
+      double pushed = 0;
+      int pushes = 0;
       for (int day = 1; day <= 200; day++) {
          Market market = new Market(day, symbols, none, first);
          for (Market.Stock stock : market.stocks()) {
@@ -38,8 +40,17 @@ public class DeskCheck {
          for (Market.Headline headline : market.news(symbols)) {
             check(headline.minute >= last, "headlines in time order");
             last = headline.minute;
+            // The chart shades each headline's push over its length: 15 to 45 minutes for a stock, 30 to 60 for the market.
+            check(headline.symbol == null ? headline.length >= 30 && headline.length <= 60 : headline.length >= 15 && headline.length <= 45,
+               "a headline's push length: " + headline.length);
+            if (headline.symbol != null) {
+               double[] path = market.stock(headline.symbol).path;
+               pushed += Math.log(path[Math.min(Market.CLOSE, headline.minute + headline.length)] / path[headline.minute - 1]) * (headline.up ? 1 : -1);
+               pushes++;
+            }
          }
       }
+      check(pushes > 100 && pushed / pushes > 0.004, "news moves its stock its way over the shaded minutes, on average: " + pushed / pushes);
       Market quiet = new Market(3, symbols, none, first);
       quiet.minute = Market.CLOSE;
       for (Market.Headline headline : quiet.news(Arrays.asList("CRM"))) {
@@ -94,14 +105,31 @@ public class DeskCheck {
       check(again.portfolio.trades.isEmpty(), "trades are per day");
       Desk third = Desk.load(file, Arrays.asList("NFLX"), first);
       check(third.market.day == 2 && third.market.stock("CRM").open() == again.market.stock("CRM").open(), "day 2 reloads the same");
+      // The Days chart: each close keeps a candle per stock, across a reload.
+      double[] candle = third.days.get("CRM").get(0);
+      check(third.days.get("CRM").size() == 1 && candle[0] == 1 && candle[4] == close, "day 1's CRM candle kept: " + Arrays.toString(candle));
+      check(candle[2] >= Math.max(candle[1], candle[4]) && candle[3] <= Math.min(candle[1], candle[4]), "a candle's wick spans its body");
+      double[] live = third.market.bar(third.market.stock("CRM"));
+      check(live[0] == 2 && live[1] == live[4] && live[2] == live[1], "today's candle at the open is one price");
       third.startOver();
       check(third.market.day == 1 && third.portfolio.cash == Portfolio.START && third.portfolio.holdings.isEmpty(), "start over");
+      check(third.days.isEmpty(), "start over clears the days");
       check(worth > 0, "worth");
       for (Rival rival : third.rivals) {
          check(rival.portfolio.cash == Portfolio.START && rival.portfolio.holdings.isEmpty() && rival.portfolio.closes.isEmpty(),
             "start over resets " + rival.name);
       }
+      for (int day = 1; day <= Desk.HISTORY + 3; day++) {
+         while (!third.tick()) {
+            // run to the closing bell
+         }
+         third.nextDay();
+      }
+      List<double[]> kept = Desk.load(file, Arrays.asList("NFLX"), first).days.get("NFLX");
+      check(kept.size() == Desk.HISTORY && kept.get(0)[0] == 4 && kept.get(kept.size() - 1)[0] == Desk.HISTORY + 3,
+         "the last " + Desk.HISTORY + " days are kept: " + kept.size());
       file.delete();
+
 
       // The rivals: same trades for everybody, carried across a reload, no credit, day traders out by the close.
       List<String> five = Arrays.asList("crm", "lmt", "tsn", "nflx", "swk");
@@ -177,11 +205,82 @@ public class DeskCheck {
       }
       saved.delete();
 
+      // Orders: a line below the price buys the dip, a stop sells all, the other line on the stock is cancelled.
+      File ordered = File.createTempFile("stockchecker-orders", ".txt");
+      ordered.delete();
+      Desk lines = Desk.load(ordered, Arrays.asList("CRM"), first);
+      lines.tick();
+      double now = lines.market.price("CRM");
+      check(lines.setOrder("CRM", now * 1.0005) == null, "no order right at the price");
+      Desk.Order dip = lines.setOrder("CRM", now * 0.999);
+      Desk.Order breakout = lines.setOrder("CRM", now * 1.5);
+      check(dip.buy && !dip.above && breakout.buy && breakout.above && lines.orders.size() == 2, "a buy line each side");
+      check(lines.setOrder("CRM", now * 1.4).above && lines.orders.size() == 2, "a new line replaces the one on its side");
+      Desk.Order dipCopy = Desk.load(ordered, Arrays.asList("CRM"), first).order("CRM", false);
+      check(dipCopy != null && dipCopy.buy && dipCopy.price == dip.price, "orders reload");
+      Portfolio.Trade bought = null;
+      while (bought == null && !lines.tick()) {
+         if (!lines.fills.isEmpty()) {
+            bought = lines.fills.get(0);
+         }
+      }
+      check(bought != null && bought.shares > 0 && bought.price <= dip.price, "the dip line buys at or under it");
+      check(lines.portfolio.shares("CRM") == bought.shares && lines.portfolio.cash < bought.price, "it buys max");
+      check(lines.orders.isEmpty(), "a fill cancels the stock's other line");
+      check(!lines.market.closed(), "the dip comes before the close");
+      double held = lines.market.price("CRM");
+      Desk.Order stop = lines.setOrder("CRM", held * 0.5);
+      check(stop != null && !stop.buy && !stop.above, "holding, a line below is a stop");
+      lines.sell("CRM", Integer.MAX_VALUE);
+      check(lines.orders.isEmpty(), "selling everything drops the sell lines");
+      lines.setOrder("CRM", held * 0.99);
+      lines.setWatch(Arrays.asList("NFLX"));
+      check(lines.orders.isEmpty(), "a stock that leaves the desk takes its lines");
+      lines.setOrder("NFLX", lines.market.price("NFLX") * 0.5);
+      check(lines.orders.size() == 1, "a line on NFLX");
+      while (!lines.tick()) {
+         // to the close
+      }
+      lines.nextDay();
+      check(lines.orders.isEmpty(), "orders last the day");
+      ordered.delete();
+
       // Money text.
       check(Money.dollars(10234.5).equals("$10,234.50"), Money.dollars(10234.5));
       check(Money.dollars(-0.004).equals("$0.00") && Money.change(-12).equals("-$12.00") && Money.change(5).equals("+$5.00"), "change");
       check(Money.percent(100, 98.75).equals("-1.25%") && Money.percent(100, 100).equals("+0.00%"), Money.percent(100, 98.75));
       check(Money.dollars(1234567.891).equals("$1,234,567.89"), Money.dollars(1234567.891));
+
+      // Hearing the chart: the chart's bottom is the low note, its top the high one, and a hearing runs open to now.
+      check(ChartEar.note(90, 90, 10) == ChartEar.LOW_NOTE && ChartEar.note(100, 90, 10) == ChartEar.HIGH_NOTE, "chart edges");
+      check(ChartEar.note(95, 90, 10) == (ChartEar.LOW_NOTE + ChartEar.HIGH_NOTE) / 2, "middle of the chart");
+      check(ChartEar.note(50, 90, 10) == ChartEar.LOW_NOTE && ChartEar.note(500, 90, 10) == ChartEar.HIGH_NOTE, "off the chart clamps");
+      check(ChartEar.note(95, 95, 0) == (ChartEar.LOW_NOTE + ChartEar.HIGH_NOTE) / 2, "no span plays the middle");
+      check(ChartEar.minuteAt(0, 200) == 0 && ChartEar.minuteAt(ChartEar.STEPS - 1, 200) == 200, "a hearing runs from the open to now");
+      for (int step = 1; step < ChartEar.STEPS; step++) {
+         check(ChartEar.minuteAt(step, 390) >= ChartEar.minuteAt(step - 1, 390), "the playhead only moves forward");
+      }
+      check(ChartEar.minuteAt(ChartEar.STEPS / 2, 0) == 0, "a hearing at the open stays on the open");
+
+      // Hindsight: the best buy before a later sell, only up to the minute asked, and none on a day that only fell.
+      double[] path = {10, 12, 9, 11, 14, 8, 12};
+      check(Arrays.equals(Market.bestTrade(path, 6), new int[] {2, 4}), "best trade buys the low before the high");
+      check(Arrays.equals(Market.bestTrade(path, 1), new int[] {0, 1}), "best trade so far looks only up to now");
+      check(Market.bestTrade(new double[] {5, 4, 3, 3}, 3) == null, "no best trade when it never rose");
+      check(Market.bestTrade(path, 0) == null, "no best trade at the open");
+      for (int day = 1; day <= 50; day++) {
+         for (Market.Stock stock : new Market(day, symbols, none, first).stocks()) {
+            int[] best = Market.bestTrade(stock.path, Market.CLOSE);
+            double most = 1;
+            for (int i = 0; i <= Market.CLOSE; i++) {
+               for (int j = i + 1; j <= Market.CLOSE; j++) {
+                  most = Math.max(most, stock.path[j] / stock.path[i]);
+               }
+            }
+            check(best == null ? most == 1 : best[0] < best[1] && stock.path[best[1]] / stock.path[best[0]] == most,
+               "best trade matches every buy and sell pair on day " + day);
+         }
+      }
 
       System.out.println("DeskCheck passed");
    }

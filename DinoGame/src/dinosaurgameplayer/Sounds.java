@@ -14,6 +14,10 @@ final class Sounds {
    private static final int XYLOPHONE = 13;
    private static final int GLOCKENSPIEL = 9;
    private static final int SAW_LEAD = 81;
+   private static final int MARIMBA = 12;
+   /** Play by ear's pitches: low for a jump, high for a duck. */
+   private static final int JUMP_NOTE = 55;
+   private static final int DUCK_NOTE = 79;
 
    private volatile MidiChannel[] channels;
    private boolean on;
@@ -33,6 +37,7 @@ final class Sounds {
             all[0].programChange(XYLOPHONE);
             all[1].programChange(GLOCKENSPIEL);
             all[2].programChange(SAW_LEAD);
+            all[3].programChange(MARIMBA);
             s.channels = all;
          } catch (Exception e) {
             System.err.println("No sound: " + e.getMessage());
@@ -76,10 +81,25 @@ final class Sounds {
       this.note(2, 35, 100, 110, 220);
    }
 
+   /**
+    * A Play by ear beat (Ears): a soft warning, or with holdMillis over 0 the loud beat to act on, sounding as long as
+    * the key should be held. Beats play even with the beeps off (M), since they are the game's eyes.
+    */
+   void beat(int need, int holdMillis) {
+      int note = need == Ears.DUCK ? DUCK_NOTE : JUMP_NOTE;
+      this.play(3, note, holdMillis > 0 ? 120 : 55, 0, holdMillis > 0 ? Math.max(60, holdMillis) : 50);
+   }
+
    /** Plays a note on a channel after delayMillis, for lengthMillis. */
    private void note(int channel, int note, int velocity, int delayMillis, int lengthMillis) {
+      if (this.on) {
+         this.play(channel, note, velocity, delayMillis, lengthMillis);
+      }
+   }
+
+   private void play(int channel, int note, int velocity, int delayMillis, int lengthMillis) {
       MidiChannel[] all = this.channels;
-      if (all == null || !this.on) {
+      if (all == null) {
          return;
       }
       MidiChannel ch = all[channel];

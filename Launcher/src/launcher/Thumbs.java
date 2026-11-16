@@ -20,7 +20,8 @@ final class Thumbs {
    private final Map<String, BufferedImage> originals = new HashMap<>();
    private final Map<String, Image> scaled = new HashMap<>();
 
-   private BufferedImage original(Catalog.App app) {
+   /** The full-size picture: the screenshot, or the drawn card. */
+   BufferedImage original(Catalog.App app) {
       return originals.computeIfAbsent(app.id, id -> {
          if (app.thumbnail != null) {
             try {

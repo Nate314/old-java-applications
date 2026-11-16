@@ -55,6 +55,27 @@ public class SortCheck {
 		}
 		check(race.place(race.first()) == 1 && race.place(race.last()) > 1, "places: the cheapest first");
 		check(race.first().total <= race.last().total, "first and last");
+
+		// Each print starts on the numbers and ends sorted, and seeking to a row's time, even backwards after the
+		// end, gives the values that row shows.
+		check(race.span == race.last().total && race.reached >= race.span, "the race's length and how far it got");
+		for (SortRace.Lane lane : race.lanes) {
+			check(Arrays.equals(lane.print[0], shuffled), Sorts.NAMES[lane.algorithm] + "'s print starts on the numbers");
+			check(Arrays.equals(lane.print[SortRace.ROWS - 1], sorted), Sorts.NAMES[lane.algorithm] + "'s print ends sorted");
+		}
+		for (int row : new int[] { SortRace.ROWS - 1, 0, 37, 5, 80 }) {
+			race.seek(race.timeOf(row));
+			check(race.rowAt(race.clock) == row, "seek lands on row " + row);
+			for (SortRace.Lane lane : race.lanes) {
+				check(Arrays.equals(lane.values, lane.print[row]), Sorts.NAMES[lane.algorithm] + " at row " + row);
+				check(lane.compares + lane.writes == lane.spent, Sorts.NAMES[lane.algorithm] + " counts after a seek");
+				check(lane.finished() == lane.swept(), Sorts.NAMES[lane.algorithm] + " is checked once done after a seek");
+			}
+		}
+		race.seek(-5);
+		check(race.clock == 0 && race.lanes[0].next == 0, "seek stops at the start");
+		race.seek(race.span + 99);
+		check(race.clock == race.span && race.finished(), "seek stops at the end");
 		System.out.println("SortCheck passed");
 	}
 
