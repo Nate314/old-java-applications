@@ -263,6 +263,14 @@ class Maze implements Saver {
    public void paint(Graphics2D g) {
       int w = this.width;
       int h = this.height;
+      // Calm (less motion asked for): a corridor rushing past is the hardest thing to watch, so look down on the walk instead.
+      if (Main.calm()) {
+         this.paintAbove(g, w, h);
+         if (this.mapLeft > 0) {
+            this.paintMap(g, w, h);
+         }
+         return;
+      }
       double horizon = h / 2.0 + Math.sin(this.travelled * Math.PI * 2) * h * 0.006;
       // Projection: the larger side spans about 70 degrees, so a phone held upright still sees a corridor.
       double proj = Math.max(w, h) * 0.5 / Math.tan(Math.toRadians(35));
@@ -388,13 +396,46 @@ class Maze implements Saver {
       }
    }
 
+   /** The side of one block on the map from above. */
+   private static int mapCell(int w, int h) {
+      return Math.max(2, (int)(Math.min(w, h) * 0.78 / SIZE));
+   }
+
+   /**
+    * Calm: the walk seen from above, still. Rooms light up dim amber as the walker passes, the rest stay dark (the way
+    * through is kept for the map at the end), the orb glows in its corner and the walker is a lantern gliding room to room.
+    */
+   void paintAbove(Graphics2D g, int w, int h) {
+      int cell = mapCell(w, h);
+      int left = (w - cell * SIZE) / 2;
+      int top = (h - cell * SIZE) / 2;
+      for (int y = 0; y < SIZE; y++) {
+         for (int x = 0; x < SIZE; x++) {
+            g.setColor(!this.open[y][x] ? new Color(118, 50, 34) : this.walked[y][x] ? new Color(92, 70, 34) : new Color(28, 24, 22));
+            g.fillRect(left + x * cell, top + y * cell, cell, cell);
+         }
+      }
+      int ox = left + (SIZE - 2) * cell + cell / 2;
+      int oy = top + (SIZE - 2) * cell + cell / 2;
+      g.setColor(new Color(255, 210, 90, 60));
+      g.fillOval(ox - cell, oy - cell, cell * 2, cell * 2);
+      g.setColor(new Color(255, 196, 60));
+      g.fillOval(ox - cell / 3, oy - cell / 3, cell * 2 / 3, cell * 2 / 3);
+      int wx = left + (int)(this.px * cell);
+      int wy = top + (int)(this.py * cell);
+      g.setColor(new Color(255, 236, 170, 70));
+      g.fillOval(wx - cell * 3 / 4, wy - cell * 3 / 4, cell * 3 / 2, cell * 3 / 2);
+      g.setColor(new Color(255, 248, 220));
+      g.fillOval(wx - cell / 4, wy - cell / 4, cell / 2, cell / 2);
+   }
+
    /** The maze from above, with the way the walker went, fading in over the last view. */
    private void paintMap(Graphics2D g, int w, int h) {
       double shown = MAP_MILLIS - this.mapLeft;
       double alpha = Math.min(1, Math.min(shown, this.mapLeft) / 400);
       g.setColor(new Color(0, 0, 0, (int)(170 * alpha)));
       g.fillRect(0, 0, w, h);
-      int cell = Math.max(2, (int)(Math.min(w, h) * 0.78 / SIZE));
+      int cell = mapCell(w, h);
       int left = (w - cell * SIZE) / 2;
       int top = (h - cell * SIZE) / 2;
       for (int y = 0; y < SIZE; y++) {
