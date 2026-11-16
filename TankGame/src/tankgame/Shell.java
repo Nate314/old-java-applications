@@ -26,6 +26,9 @@ public class Shell
     private double           dy;
     private int              bounces;
     private boolean          bounced;
+    /** Where the last bounce touched the edge or the wall. */
+    private double           bounceX;
+    private double           bounceY;
     private boolean          burst;
     private final Tank       owner;
     /** The shells of one Triple shot share a volley, which can hit a tank only once; null for a single shell. */
@@ -95,6 +98,8 @@ public class Shell
                 burst = true;
                 return false;
             }
+            bounceX = x;
+            bounceY = y;
             if (hit[1] == 0) dx = -dx;
             else dy = -dy;
             bounces++;
@@ -104,6 +109,8 @@ public class Shell
         {
             if (x < 0 || x > width)
             {
+                bounceX = x < 0 ? 0 : width;
+                bounceY = y - dy * (x - bounceX) / dx;
                 x = x < 0 ? -x : 2 * width - x;
                 dx = -dx;
                 bounces++;
@@ -111,6 +118,8 @@ public class Shell
             }
             else if (y < 0 || y > height)
             {
+                bounceY = y < 0 ? 0 : height;
+                bounceX = x - dx * (y - bounceY) / dy;
                 y = y < 0 ? -y : 2 * height - y;
                 dy = -dy;
                 bounces++;
@@ -132,6 +141,12 @@ public class Shell
     public boolean bounced()
     {
         return bounced;
+    }
+
+    /** Where the last bounce touched the edge of the field or a wall. */
+    public double[] bouncePoint()
+    {
+        return new double[] { bounceX, bounceY };
     }
 
     /** Whether the shell ended on a wall (rather than flying out). */

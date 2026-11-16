@@ -52,6 +52,7 @@ public final class BattleCheck
         buildYourOwnBattlefield();
         computerFightsOnABuiltBattlefield();
         narrowWindowSetsABlockingFieldAside();
+        sightShowsWhereTheShellGoes();
         System.out.println("BattleCheck: all checks passed");
     }
 
@@ -703,5 +704,41 @@ public final class BattleCheck
         small.tick(narrow, H);
         assert small.fieldBlocked() && small.arena().name().equals("Stepping Stones") : small.arena().name();
         assert small.hasField() : "the battlefield should be kept for a wider window";
+    }
+
+    /** The aiming line follows the shell the battle would fire: straight, off the edge, round a wall, and it tells the truth. */
+    private static void sightShowsWhereTheShellGoes()
+    {
+        Tank green = tank(new Script(), 380, 250, 270);
+        Tank.Sight straight = tank(new Script(), 100, 250, 90).sight(W, H, Arena.EMPTY, green, null);
+        assert straight.target == green && straight.points.size() == 2 : "a straight shot is a line to the target";
+        Tank up = tank(new Script(), 100, 250, 0);
+        Tank.Sight off = up.sight(W, H, Arena.EMPTY, green, null);
+        assert off.target == null && off.points.size() == 3 : "one bounce off the top, then out";
+        assert Math.abs(off.points.get(1)[0] - 100) < 1e-9 && Math.abs(off.points.get(1)[1]) < 1e-9 : "the bounce is on the edge";
+        up.give(Supply.Power.RICOCHET);
+        assert up.sight(W, H, Arena.EMPTY, green, null).points.size() == 5 : "ricochet shells bounce three times";
+        // Round The Bunker: for every heading, the line's verdict is what a real shell does, and some bank shot hits.
+        int banks = 0;
+        for (int rotation = 0; rotation < 360; rotation += 5)
+        {
+            Tank red = tank(new Script(), 100, 230, rotation);
+            Tank target = tank(new Script(), 380, 230, 270);
+            Arena bunker = Arena.build(Arena.LAYOUTS.get(1), W, H, red, target);
+            Tank.Sight sight = red.sight(W, H, bunker, target, null);
+            List<Shell> shells = new ArrayList<>();
+            red.fireTank(shells);
+            Shell shell = shells.get(0);
+            boolean hit = false;
+            while (shell.move(W, H, bunker))
+                if (shell.hits(target))
+                {
+                    hit = true;
+                    break;
+                }
+            assert hit == (sight.target == target) : "the line was wrong at " + rotation + " degrees";
+            if (hit && sight.points.size() > 2) banks++;
+        }
+        assert banks > 0 : "no bank shot round The Bunker";
     }
 }
