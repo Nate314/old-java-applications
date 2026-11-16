@@ -133,13 +133,14 @@ public final class Js {
             + " || !!(_t.closest && _t.closest('.window'));")
     public static native boolean targetIsAppOrPage(JSObject e);
 
-    @JSBody(params = { "el", "id" }, script = "el.__cid = id;")
-    public static native void setComponentId(JSObject el, int id);
+    /** The element remembers its component itself, so a disposed window's components go when its elements do. */
+    @JSBody(params = { "el", "c" }, script = "el.__c = c;")
+    public static native void setComponent(JSObject el, Object c);
 
     /** Walks up from a DOM node to the nearest element that belongs to a Java component. */
     @JSBody(params = "node", script =
-            "for (var _e = node; _e; _e = _e.parentNode) { if (_e.__cid !== undefined) return _e.__cid; } return -1;")
-    public static native int componentIdOf(JSObject node);
+            "for (var _e = node; _e; _e = _e.parentNode) { if (_e.__c) return _e.__c; } return null;")
+    public static native Object componentOf(JSObject node);
 
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb);")
     public static native void listen(JSObject el, String type, EventCallback cb);
