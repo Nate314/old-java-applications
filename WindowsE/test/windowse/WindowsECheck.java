@@ -62,11 +62,15 @@ public class WindowsECheck {
    /** Both keyboards place every shortcut's key once, inside the board and clear of the others; the pocket pad fits a phone. */
    static void boardChecks() {
       for (boolean pocket : new boolean[] {false, true}) {
-         ShortcutBoard board = new ShortcutBoard(s -> { }, s -> { }, pocket);
+         javax.swing.JTextField field = new javax.swing.JTextField();
+         ShortcutBoard board = new ShortcutBoard(s -> { }, s -> { }, pocket, field);
          java.awt.Dimension size = board.getPreferredSize();
          java.util.Set<Shortcut> seen = java.util.EnumSet.noneOf(Shortcut.class);
          List<java.awt.Rectangle> placed = new ArrayList<>();
          for (java.awt.Component c : board.getComponents()) {
+            if (c == field) {
+               continue;
+            }
             KeyCap cap = (KeyCap) c;
             java.awt.Rectangle r = cap.getBounds();
             check(seen.add(cap.shortcut), cap.shortcut + " has one key (pocket " + pocket + ")");
@@ -77,6 +81,12 @@ public class WindowsECheck {
             placed.add(r);
          }
          check(seen.size() == Shortcut.values().length, "every shortcut has a key (pocket " + pocket + ")");
+         for (Shortcut s : Shortcut.values()) {   // the count field sits after the picked key's chips, above the keyboard
+            board.pick(s);
+            java.awt.Rectangle r = field.getBounds();
+            check(r.x >= 60 && r.y >= 0 && r.x + r.width <= size.width - 150 && placed.stream().noneMatch(r::intersects),
+               "the count field is in the head for " + s + " (pocket " + pocket + "): " + r);
+         }
          check(pocket ? size.width <= 400 : size.width > 800, "board width " + size.width + " (pocket " + pocket + ")");
       }
    }
