@@ -71,9 +71,17 @@ public final class GameFrame extends JFrame {
    final long[] placedAt = new long[81];
    final long[] boardWonAt = new long[9];
    long gameWonAt;
+   /** The last move's trail to the board it sends the next player to: when it sets off (0 for none), from which cell, to which board. */
+   long trailAt;
+   int trailFrom = -1;
+   int trailTo = -1;
+   /** When the outlines of the boards the next move may use last thickened for a moment (a trail landing, a refused click); 0 for never. */
+   long pulseAt;
    /** Repaints the cells every frame until the last drawing-in is done. */
    private final Timer animation = new Timer(16, event -> this.animate());
    private long animateUntil;
+   /** When the last move's drawing that matters to the next move (its mark, a won board, the trail's landing) is done. */
+   private long settleAt;
    /** The move under the mouse or the keyboard cursor (board * 9 + cell), or -1; and the boards it would send the opponent to. */
    private int previewMove = -1;
    private boolean[] previewTargets;
@@ -423,6 +431,8 @@ public final class GameFrame extends JFrame {
       Arrays.fill(this.placedAt, 0);
       Arrays.fill(this.boardWonAt, 0);
       this.gameWonAt = 0;
+      this.trailAt = 0;
+      this.pulseAt = 0;
    }
 
    /**
@@ -448,6 +458,14 @@ public final class GameFrame extends JFrame {
       this.placedAt[board * 9 + cell] = now;
       this.sounds.mark(cell, x);
       long end = now + CellButton.MARK_MS;
+      // The rule seen: a trail flies from the cell just played to the board it sends the next player to, and that board's outline pulses as it lands.
+      this.trailAt = 0;
+      if (this.state.winner == null && this.state.activeBoard >= 0 && !still()) {
+         this.trailAt = now + CellButton.MARK_MS / 2;
+         this.trailFrom = board * 9 + cell;
+         this.trailTo = this.state.activeBoard;
+         this.pulseAt = this.trailAt + CellButton.TRAIL_MS;
+      }
       if (before == null && this.state.boardResults[board] != null) {
          this.boardWonAt[board] = end;
          this.sounded(GameState.winningLine(this.state.marks[board]), x, (int) (end - now), CellButton.LINE_MS, 0);
@@ -458,9 +476,16 @@ public final class GameFrame extends JFrame {
          this.sounded(GameState.winningLine(this.state.boardResults), x, (int) (end - now), CellButton.GAME_OVER_MS, 12);
          end += CellButton.GAME_OVER_MS;
       }
-      this.animateUntil = Math.max(this.animateUntil, end);
+      // The computer (and the hints' search, which hold up the page) waits for the trail to land, not for its pulse.
+      this.settleAt = Math.max(end, this.trailAt == 0 ? 0 : this.pulseAt);
+      this.animateUntil = Math.max(this.animateUntil, Math.max(end, this.trailAt == 0 ? 0 : this.pulseAt + CellButton.PULSE_MS));
       this.animation.start();
       return true;
+   }
+
+   /** The visitor's system asks for less motion (the browser build's shim answers; the desktop JDK says null). */
+   private static boolean still() {
+      return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
    }
 
    /** A board or the game just finished: its winning line's notes in time with the drawing, or a draw's two notes. */
@@ -604,6 +629,7 @@ public final class GameFrame extends JFrame {
       }
       if (!this.play(board, cell)) {
          this.sounds.refused();
+         this.refusedClick(board);
          return;
       }
       if (this.mode == Mode.FRIEND) {
@@ -615,6 +641,17 @@ public final class GameFrame extends JFrame {
          }
       }
       this.moved();
+   }
+
+   /** A click where the move may not go: the status line says where it may, and those boards' outlines pulse. */
+   private void refusedClick(int board) {
+      this.notice = this.playable(board) ? "That square is taken."
+         : this.state.activeBoard >= 0 ? "Not there: play on the " + CellButton.PLACES[this.state.activeBoard] + " board."
+         : "That board is finished: pick an outlined one.";
+      this.pulseAt = System.currentTimeMillis();
+      this.animateUntil = Math.max(this.animateUntil, this.pulseAt + CellButton.PULSE_MS);
+      this.animation.start();
+      this.refresh();
    }
 
    private void computerMove() {
@@ -644,7 +681,7 @@ public final class GameFrame extends JFrame {
    private void moveSoon() {
       if (this.computerToMove()) {
          // The computer waits for the move to draw in (a won board takes longer), since a Hard search holds up the page.
-         this.computerTimer.setInitialDelay((int) Math.max(MOVE_DELAY_MILLIS, this.animateUntil - System.currentTimeMillis()));
+         this.computerTimer.setInitialDelay((int) Math.max(MOVE_DELAY_MILLIS, this.settleAt - System.currentTimeMillis()));
          this.computerTimer.restart();
       }
    }
@@ -838,7 +875,7 @@ public final class GameFrame extends JFrame {
       }
       this.takeHints();
       if (this.thinkSpent < HINT_THINK_MILLIS && !this.hintTimer.isRunning()) {
-         this.hintTimer.setInitialDelay((int) Math.max(HINT_TICK_MILLIS, this.animateUntil - System.currentTimeMillis()));
+         this.hintTimer.setInitialDelay((int) Math.max(HINT_TICK_MILLIS, this.settleAt - System.currentTimeMillis()));
          this.hintTimer.restart();
       }
    }
@@ -1133,13 +1170,20 @@ public final class GameFrame extends JFrame {
             : (GameState.DRAW.equals(winner) ? "A draw." : winner + " wins.") + " Next game...";
       }
       if (!this.mode.vsComputer()) {
-         return winner == null ? (this.state.xTurn ? "X" : "O") + " to move, on an outlined board."
+         return winner == null ? (this.state.xTurn ? "X" : "O") + " to move, " + this.whereToPlay()
             : (GameState.DRAW.equals(winner) ? "A draw." : winner + " wins!") + " Click any cell to play again.";
       }
       if (winner != null) {
          return ("X".equals(winner) ? "You win!" : "O".equals(winner) ? "The computer wins." : "A draw.") + " Click any cell to play again.";
       }
-      return this.state.xTurn ? "Your move (X)." : "The computer (O) is thinking...";
+      return this.state.xTurn ? "Your move (X), " + this.whereToPlay() : "The computer (O) is thinking...";
+   }
+
+   /** Where the side to move may play, kept short to fit over a phone-sized board: "on the top right board." */
+   private String whereToPlay() {
+      return this.moves.isEmpty() ? "anywhere to start."
+         : this.state.activeBoard >= 0 ? "on the " + CellButton.PLACES[this.state.activeBoard] + " board."
+         : "on any outlined board.";
    }
 
    /** Kept short, to fit over a phone-sized board: the line does not wrap. */
