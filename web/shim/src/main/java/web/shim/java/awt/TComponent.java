@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.web.TCanvasGraphics;
-import web.shim.java.awt.web.TDesktop;
 import web.rt.Files;
 import web.rt.Js;
 import web.shim.java.awt.web.TRepaint;
@@ -64,7 +63,7 @@ public class TComponent implements TImageObserver {
     public final JSObject element() {
         if (element == null) {
             element = createElement();
-            Js.setComponentId(element, TDesktop.register(this));
+            Js.setComponent(element, this);
             Js.setBounds(element, domX(x), domY(y), width, height);
             if (!visible) {
                 Js.style(element, "display", "none");

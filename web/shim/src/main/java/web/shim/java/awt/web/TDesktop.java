@@ -20,11 +20,10 @@ import web.shim.javax.swing.TJDesktopPane;
 import web.shim.javax.swing.TJInternalFrame;
 
 /**
- * The page "screen": a full-viewport div holding one box per top-level window. Owns the component registry,
+ * The page "screen": a full-viewport div holding one box per top-level window. Finds the component under a DOM node,
  * window z-order, keyboard focus, title-bar dragging and translation of DOM input into AWT events.
  */
 public final class TDesktop {
-    private static final List<TComponent> registry = new ArrayList<>();
     private static final List<TWindow> windows = new ArrayList<>();
     private static JSObject element;
     private static TWindow active;
@@ -74,14 +73,8 @@ public final class TDesktop {
     private TDesktop() {
     }
 
-    public static int register(TComponent c) {
-        registry.add(c);
-        return registry.size() - 1;
-    }
-
     private static TComponent lookup(JSObject node) {
-        int id = Js.componentIdOf(node);
-        return id >= 0 && id < registry.size() ? registry.get(id) : null;
+        return (TComponent) Js.componentOf(node);
     }
 
     public static JSObject element() {
