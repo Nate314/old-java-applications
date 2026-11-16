@@ -3,6 +3,7 @@ package tankgame;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Tank
@@ -142,16 +143,57 @@ public class Tank
         Object volley = angles.length > 1 ? new Object() : null;
         for (int angle : angles)
         {
-            double dx = Math.sin(Math.toRadians(tankRotation + angle));
-            double dy = -Math.cos(Math.toRadians(tankRotation + angle));
-            int barrelEnd = SIZE * 3 / 2;
-            Shell shell = new Shell(this, tankX + dx * barrelEnd, tankY + dy * barrelEnd, dx, dy);
-            shell.startFrom(tankX, tankY);
+            Shell shell = shell(angle);
             shell.setVolley(volley);
-            if (ricochetTicks > 0) shell.setMaxBounces(Shell.RICOCHET_BOUNCES);
             shells.add(shell);
         }
         reload = RELOAD_TICKS;
+    }
+
+    /** A shell leaving the end of the barrel, {@code angle} degrees off it, bouncing as this tank's shells do now. */
+    private Shell shell(int angle)
+    {
+        double dx = Math.sin(Math.toRadians(tankRotation + angle));
+        double dy = -Math.cos(Math.toRadians(tankRotation + angle));
+        int barrelEnd = SIZE * 3 / 2;
+        Shell shell = new Shell(this, tankX + dx * barrelEnd, tankY + dy * barrelEnd, dx, dy);
+        shell.startFrom(tankX, tankY);
+        if (ricochetTicks > 0) shell.setMaxBounces(Shell.RICOCHET_BOUNCES);
+        return shell;
+    }
+
+    /** Where a shell fired now would go: its path's corners (barrel end, each bounce, the end) and whether it hits. */
+    public static final class Sight
+    {
+        public final List<double[]> points = new ArrayList<>();
+        /** The tank the shell would hit, or null if it flies out, bursts on a wall or blows up a crate. */
+        public Tank target;
+    }
+
+    /**
+     * The aiming line: flies a shell from the barrel the way the battle does (bouncing off the edge and walls, bursting
+     * on a wall, stopping at the other tank or a landed crate), without firing it.
+     */
+    public Sight sight(int width, int height, Arena arena, Tank other, Supply supply)
+    {
+        Sight sight = new Sight();
+        Shell shell = shell(0);
+        sight.points.add(new double[] { shell.x(), shell.y() });
+        // 160 ticks is 1600 px, more than three bounces across the field.
+        for (int tick = 0; tick < 160; tick++)
+        {
+            boolean flying = shell.move(width, height, arena);
+            boolean hit = shell.hits(other);
+            boolean crate = supply != null && supply.hitBy(shell);
+            if (shell.bounced()) sight.points.add(shell.bouncePoint());
+            if (hit || crate || !flying)
+            {
+                sight.points.add(new double[] { shell.x(), shell.y() });
+                if (hit) sight.target = other;
+                break;
+            }
+        }
+        return sight;
     }
 
     /** One game tick on a field with no walls. */

@@ -235,6 +235,78 @@ public class GamePanel extends JPanel
         g.setStroke(new BasicStroke(1f));
     }
 
+    /** A player's aiming line while they fight; none for a tank the computer drives. */
+    private Tank.Sight sight(Tank tank, Tank other)
+    {
+        if (battle.phase() != Battle.Phase.FIGHT || !tank.isAlive() || !other.isAlive()
+                        || tank.controls() instanceof ComputerControls) return null;
+        return tank.sight(getWidth(), getHeight(), battle.arena(), other, battle.supply());
+    }
+
+    /** Dots along the shell's path that fade with distance, a ring at each bounce; fainter while reloading. */
+    private void sightLine(Graphics2D g, Tank tank, Tank.Sight sight)
+    {
+        if (sight == null) return;
+        Color c = light(tank);
+        double strength = tank.reload() > 0 ? 0.45 : 1;
+        double travelled = 0;
+        double next = 0;
+        for (int i = 1; i < sight.points.size(); i++)
+        {
+            double[] a = sight.points.get(i - 1);
+            double[] b = sight.points.get(i);
+            double length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            for (; next <= travelled + length; next += 13)
+            {
+                double t = length == 0 ? 0 : (next - travelled) / length;
+                int x = (int) Math.round(a[0] + (b[0] - a[0]) * t);
+                int y = (int) Math.round(a[1] + (b[1] - a[1]) * t);
+                int alpha = (int) (strength * Math.max(70, 235 - next * 0.12));
+                g.setColor(new Color(0, 0, 0, alpha / 2));
+                g.fillOval(x - 3, y - 2, 7, 7);
+                g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha));
+                g.fillOval(x - 3, y - 3, 6, 6);
+            }
+            travelled += length;
+            if (i < sight.points.size() - 1)
+            {
+                // A bounce: a small ring where the shell glances off.
+                int alpha = (int) (strength * Math.max(90, 235 - travelled * 0.12));
+                g.setStroke(new BasicStroke(2f));
+                g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha));
+                g.drawOval((int) Math.round(b[0]) - 6, (int) Math.round(b[1]) - 6, 12, 12);
+                g.setStroke(new BasicStroke(1f));
+            }
+        }
+    }
+
+    /** Corner brackets round the tank a shell fired now would hit, pulsing once the gun is loaded. */
+    private void onTarget(Graphics2D g, Tank tank, Tank.Sight sight)
+    {
+        if (sight == null || sight.target == null) return;
+        boolean loaded = tank.reload() == 0;
+        int r = Tank.SIZE + 10 + (loaded ? (ticks / 4) % 4 : 0);
+        int x = (int) Math.round(sight.target.x());
+        int y = (int) Math.round(sight.target.y());
+        Color c = light(tank);
+        g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        for (int pass = 0; pass < 2; pass++)
+        {
+            g.setColor(pass == 0 ? new Color(0, 0, 0, 110)
+                            : new Color(c.getRed(), c.getGreen(), c.getBlue(), loaded ? 230 : 120));
+            int o = pass == 0 ? 1 : 0;
+            for (int sx = -1; sx <= 1; sx += 2)
+                for (int sy = -1; sy <= 1; sy += 2)
+                {
+                    int cx = x + sx * r + o;
+                    int cy = y + sy * r + o;
+                    g.drawLine(cx, cy, cx - sx * 14, cy);
+                    g.drawLine(cx, cy, cx, cy - sy * 14);
+                }
+        }
+        g.setStroke(new BasicStroke(1f));
+    }
+
     public void start()
     {
         timer.start();
@@ -410,11 +482,17 @@ public class GamePanel extends JPanel
         Supply supply = battle.supply();
         if (supply != null && supply.landed()) supply.paint(g, ticks);
         pointerMark(g);
+        Tank.Sight redSight = sight(battle.red(), battle.green());
+        Tank.Sight greenSight = sight(battle.green(), battle.red());
+        sightLine(g, battle.red(), redSight);
+        sightLine(g, battle.green(), greenSight);
         if (battle.phase() != Battle.Phase.TITLE)
         {
             battle.red().paint(g);
             battle.green().paint(g);
         }
+        onTarget(g, battle.red(), redSight);
+        onTarget(g, battle.green(), greenSight);
         if (supply != null && !supply.landed()) supply.paint(g, ticks);
         for (Shell shell : battle.shells()) shell.paint(g);
         for (Spark spark : battle.sparks()) spark.paint(g);
