@@ -90,6 +90,7 @@ Every component owns an absolutely positioned DOM element; Java keeps the real s
 
 - `JFrame` and `JInternalFrame` are boxes with a title bar (drag to move, close button runs the default close operation). Insets are 28 px on top and 4 px elsewhere, close to Swing's decorations, since apps size their content from the window size.
 - `JButton`, `JTextField`, `JComboBox` and `JLabel` are real `<button>`, `<input>`, `<select>` and `<div>` elements. A button with `setBorderPainted(false)` loses the skin's border even when that is called before it is shown. A label whose text starts with `<html>` is rendered as HTML, as in Swing, and measured in a hidden element.
+- `JCheckBox` (`TJCheckBox`) is a flat `<button role="checkbox">` with its box drawn before the text (`shim.css`, `.button.check`): a click flips `isSelected()` before the action listeners run, as in Swing, and `aria-checked` follows it. CircleSpawner's On top uses it.
 - `JTabbedPane` draws its tabs as DOM buttons and hides the components of the other tabs, as Swing does. `UIManager.setLookAndFeel` does nothing; the page skin is the look and feel.
 - `Graphics2D.draw(Shape)` and `fill(Shape)` accept only `Rectangle`, the one shape an app uses.
 - Custom painting (`paint`, `paintComponent`) goes to a `<canvas>` inside the component, created the first time `paint` draws, through a `Graphics2D` over `CanvasRenderingContext2D`. The backing store is scaled by `devicePixelRatio`. A `JFrame.paint` override draws over the window's content, as in Swing.

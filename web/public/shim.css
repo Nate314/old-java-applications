@@ -402,6 +402,36 @@ canvas.paint.top {
   display: block;
 }
 
+/* JCheckBox (TJCheckBox): flat, its box drawn before the text, ticked while selected. */
+.button.check {
+  justify-content: flex-start;
+  padding: 0 4px;
+}
+
+.button.check:active:not(:disabled) {
+  background: transparent !important;
+}
+
+.button.check::before {
+  content: "";
+  flex: none;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--button-border);
+  border-radius: 3px;
+  background: var(--button-bg);
+  font: 700 11px/12px system-ui, sans-serif;
+  text-align: center;
+}
+
+.button.check.on::before {
+  content: "\2713";
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
 .button .text {
   overflow: hidden;
 }

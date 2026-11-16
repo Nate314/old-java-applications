@@ -155,10 +155,15 @@ public final class TDesktop {
 
     public static void activate(TWindow w) {
         active = w;
-        Js.style(w.element(), "z-index", String.valueOf(w.isAlwaysOnTop() ? 1000000 + ++zCounter : ++zCounter));
+        restack(w);
         for (TWindow other : windows) {
             Js.toggleClass(other.element(), "active", other == w);
         }
+    }
+
+    /** Puts w at the front of its band: the always-on-top windows, or the others below them. */
+    public static void restack(TWindow w) {
+        Js.style(w.element(), "z-index", String.valueOf(w.isAlwaysOnTop() ? 1000000 + ++zCounter : ++zCounter));
     }
 
     public static TWindow activeWindow() {

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -62,6 +63,8 @@ public final class CircleCreatorWindow extends JFrame {
    private final JButton createButton = new JButton("Build it");
    private final JButton spinButton = new JButton("Spin");
    private final JButton sendButton = new JButton("Send");
+   /** Keeps every window of the shape in front of all other windows. */
+   private final JCheckBox onTopBox = new JCheckBox("On top");
    /** Puts a link (or, on the desktop, a code) on the clipboard; the address of this page in the browser, else null. */
    private final Consumer<String> copy;
    private final String page;
@@ -149,6 +152,7 @@ public final class CircleCreatorWindow extends JFrame {
          this.pad.setText(drawing);
       }
       this.pad.setMirror(!"0".equals(this.saved.get("mirror", "1")));
+      this.onTopBox.setSelected("1".equals(this.saved.get("ontop", "0")));
 
       JPanel panel = new JPanel();
       panel.add(this.shapeBox);
@@ -160,6 +164,7 @@ public final class CircleCreatorWindow extends JFrame {
       panel.add(this.createButton);
       panel.add(this.spinButton);
       panel.add(this.sendButton);
+      panel.add(this.onTopBox);
       panel.add(this.status);
 
       JButton clearButton = new JButton("Clear");
@@ -224,6 +229,13 @@ public final class CircleCreatorWindow extends JFrame {
       });
       this.sendButton.setToolTipText("Copy a link that builds this shape on a friend's screen");
       this.sendButton.addActionListener(event -> this.send());
+      this.onTopBox.setToolTipText("Keep the shape in front of every other window");
+      this.onTopBox.addActionListener(event -> {
+         for (int i = 0; i < this.slices.size(); i++) {
+            this.slices.get(i).setAlwaysOnTop(this.onTop(i));
+         }
+         this.remember();
+      });
       clearButton.addActionListener(event -> this.pad.clear());
       previousButton.addActionListener(event -> this.turnTo(this.pad.frame() - 1));
       nextButton.addActionListener(event -> this.turnTo(this.pad.frame() + 1));
@@ -431,6 +443,7 @@ public final class CircleCreatorWindow extends JFrame {
       this.saved.put("word", this.wordField.getText());
       this.saved.put("drawing", this.pad.text());
       this.saved.put("mirror", this.pad.mirror() ? "1" : "0");
+      this.saved.put("ontop", this.onTopBox.isSelected() ? "1" : "0");
       this.saved.store();
    }
 
@@ -469,7 +482,7 @@ public final class CircleCreatorWindow extends JFrame {
       this.pending.clear();
       this.pendingColors.clear();
       this.morph = new Morph(this.slices, pieces, this.colors(pieces, this.builtShape), frames, this.ticking,
-         (bounds, color) -> new CircleSliceWindow(bounds, color, "", false, this.hand));
+         (bounds, color) -> new CircleSliceWindow(bounds, color, "", this.onTopBox.isSelected(), this.hand));
       if (frames > DRAW_FRAMES && !this.ticking) {
          this.status.setText("Changing into " + this.shapeName() + "...");
       }
@@ -495,9 +508,12 @@ public final class CircleCreatorWindow extends JFrame {
       this.showBuilt();
    }
 
-   /** The original kept every 10th slice of its circle always on top; the other shapes do not overlap. */
+   /**
+    * With On top checked, every window of the shape stays in front of all others. Otherwise, as in the original,
+    * only every 10th slice of the circle does; the other shapes do not overlap.
+    */
    private boolean onTop(int index) {
-      return Shapes.CIRCLE.equals(this.builtShape) && (index + 1) % 10 == 0;
+      return this.onTopBox.isSelected() || Shapes.CIRCLE.equals(this.builtShape) && (index + 1) % 10 == 0;
    }
 
    private void showBuilt() {
