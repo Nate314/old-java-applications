@@ -105,11 +105,13 @@ function Invoke-Steps([string[]]$steps, [scriptblock]$Other) {
 }
 
 # Starts the site's server and headless Chrome, and connects to Chrome's page. Returns what Stop-Headless needs.
-function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chrome, [string]$name, [int]$Width = 960, [int]$Height = 600) {
+# Chrome's profile is a new folder under ProfileRoot (default %TEMP%) that Stop-Headless deletes.
+function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chrome, [string]$name, [int]$Width = 960, [int]$Height = 600,
+    [string]$ProfileRoot = [IO.Path]::GetTempPath()) {
     if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
     if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
     $server = Start-Process python -ArgumentList '-m', 'http.server', $Port, '--bind', '127.0.0.1', '--directory', $site -PassThru -WindowStyle Hidden
-    $profileDir = Join-Path ([IO.Path]::GetTempPath()) "oldjava-$name-$Port"
+    $profileDir = Join-Path $ProfileRoot ("oldjava-$name-$Port-" + [IO.Path]::GetRandomFileName().Substring(0, 8))
     $browser = Start-Process $Chrome -PassThru -ArgumentList '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio',
         '--autoplay-policy=no-user-gesture-required', "--remote-debugging-port=$DebugPort", "--user-data-dir=$profileDir",
         "--window-size=$Width,$Height", 'about:blank'
@@ -132,10 +134,15 @@ function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chr
 
 function Stop-Headless($session) {
     if ($script:ws) { $script:ws.Dispose(); $script:ws = $null }
-    Stop-Process -Id $session.Browser.Id -ErrorAction SilentlyContinue
+    # The whole tree: Chrome's helper processes (crashpad, GPU, renderers) can outlive the browser and lock the profile.
+    & taskkill.exe /PID $session.Browser.Id /T /F 2>&1 | Out-Null
     Stop-Process -Id $session.Server.Id -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
-    Remove-Item -Recurse -Force $session.Profile -ErrorAction SilentlyContinue
+    $session.Browser.WaitForExit(5000) | Out-Null
+    for ($i = 0; $i -lt 10 -and (Test-Path $session.Profile); $i++) {
+        Start-Sleep -Milliseconds 300
+        Remove-Item -Recurse -Force $session.Profile -ErrorAction SilentlyContinue
+    }
+    if (Test-Path $session.Profile) { Write-Warning "Could not remove Chrome's profile $($session.Profile)" }
 }
 
 # Loads an app page and waits (up to 20 s) until `ready`, a page expression, is true. Returns whether it was.
