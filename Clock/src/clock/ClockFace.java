@@ -92,12 +92,22 @@ final class ClockFace implements Tab {
          }
          g2.setColor(Ui.INK);
          g2.drawOval(left, top, diameter, diameter);
+         paintDial(g2, centerX, centerY, radius, margin);
          this.paintAlarm(g2, alarm, centerX, centerY, radius, margin, now);
          g2.setColor(Ui.INK);
-         drawHand(g2, centerX, centerY, radius / 2, (Math.PI / 2) - hours * (Math.PI / 6));
-         drawHand(g2, centerX, centerY, (radius << 1) / 3, (Math.PI / 2) - minutes * (Math.PI / 30));
+         drawHand(g2, centerX, centerY, (Math.PI / 2) - hours * (Math.PI / 6), radius * 0.5, radius * 0.06, Math.max(4, margin * 2.2));
+         drawHand(g2, centerX, centerY, (Math.PI / 2) - minutes * (Math.PI / 30), radius * 0.8, radius * 0.06, Math.max(3, margin * 1.5));
+         int cap = Math.max(3, margin * 3 / 2);
+         g2.fillOval(centerX - cap, centerY - cap, cap * 2, cap * 2);
+         // The second hand: thin, with a short tail behind the middle and a red cap over the others.
          g2.setColor(Ui.HAND);
-         drawHand(g2, centerX, centerY, radius * 9 / 10, (Math.PI / 2) - seconds * (Math.PI / 30));
+         double angle = (Math.PI / 2) - seconds * (Math.PI / 30);
+         g2.setStroke(new BasicStroke(Math.max(1.5f, margin * 0.45f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+         g2.drawLine((int)Math.round(centerX - radius * 0.2 * Math.cos(angle)), (int)Math.round(centerY + radius * 0.2 * Math.sin(angle)),
+               (int)Math.round(centerX + radius * 0.9 * Math.cos(angle)), (int)Math.round(centerY - radius * 0.9 * Math.sin(angle)));
+         g2.setStroke(new BasicStroke((float)margin));
+         cap = Math.max(2, margin * 4 / 5);
+         g2.fillOval(centerX - cap, centerY - cap, cap * 2, cap * 2);
       } else if (this.clock.state.flip) {
          this.flip.paint(g2, new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight), this.clock,
                alarm.isOn() ? this.alarmWhen(alarm, now) : null, now);
@@ -145,7 +155,10 @@ final class ClockFace implements Tab {
       g2.setStroke(new BasicStroke((float)margin));
       if (alarm.isOn()) {
          g2.setColor(BRASS);
-         Ui.line(g2, this.alarmWhen(alarm, now), Ui.LABELS, new Rectangle(centerX - radius / 2, centerY + radius * 45 / 100, radius, Math.max(10, radius / 10)));
+         // Under the middle, or over it while the knob is in the lower half, so the knob never covers it.
+         int height = Math.max(10, radius / 10);
+         int y = this.knobY > centerY ? centerY - radius * 45 / 100 - height : centerY + radius * 45 / 100;
+         Ui.line(g2, this.alarmWhen(alarm, now), Ui.LABELS, new Rectangle(centerX - radius / 2, y, radius, height));
       }
    }
 
@@ -162,8 +175,47 @@ final class ClockFace implements Tab {
       return Math.round(255 + (brass - 255) * amount);
    }
 
-   private static void drawHand(Graphics2D g2, int centerX, int centerY, int length, double angle) {
-      g2.drawLine(centerX, centerY, (int)(centerX + length * Math.cos(angle)), (int)(centerY - length * Math.sin(angle)));
+   /**
+    * The dial a clock face is read by: a tick for every minute, a longer, bolder one for every hour, and the hours'
+    * numbers inside them, clear of the alarm knob's circle (62% out).
+    */
+   static void paintDial(Graphics2D g2, int centerX, int centerY, int radius, int margin) {
+      g2.setColor(Ui.INK);
+      BasicStroke minuteTick = new BasicStroke(Math.max(1f, margin * 0.3f));
+      BasicStroke hourTick = new BasicStroke(Math.max(2f, margin * 0.9f));
+      for (int minute = 0; minute < 60; minute++) {
+         boolean hour = minute % 5 == 0;
+         double angle = (Math.PI / 2) - minute * (Math.PI / 30);
+         double inner = radius * (hour ? 0.84 : 0.89);
+         double outer = radius * 0.94;
+         g2.setStroke(hour ? hourTick : minuteTick);
+         g2.drawLine((int)Math.round(centerX + inner * Math.cos(angle)), (int)Math.round(centerY - inner * Math.sin(angle)),
+               (int)Math.round(centerX + outer * Math.cos(angle)), (int)Math.round(centerY - outer * Math.sin(angle)));
+      }
+      g2.setStroke(new BasicStroke((float)margin));
+      int size = Math.max(8, radius * 12 / 100);
+      Font font = new Font(Ui.DIGITS, Font.BOLD, size);
+      for (int hour = 1; hour <= 12; hour++) {
+         double angle = (Math.PI / 2) - hour * (Math.PI / 6);
+         int x = (int)Math.round(centerX + radius * 0.76 * Math.cos(angle));
+         int y = (int)Math.round(centerY - radius * 0.76 * Math.sin(angle));
+         Ui.center(g2, String.valueOf(hour), font, new Rectangle(x - size, y - size / 2, size * 2, size));
+      }
+   }
+
+   /** A hand as a filled baton, {@code width} wide at the middle and narrowing towards its tip, with a short tail. */
+   private static void drawHand(Graphics2D g2, int centerX, int centerY, double angle, double length, double tail, double width) {
+      double dx = Math.cos(angle);
+      double dy = -Math.sin(angle);
+      double[] along = {-tail, -tail, length, length};
+      double[] across = {width / 2, -width / 2, -width / 5, width / 5};
+      int[] xs = new int[4];
+      int[] ys = new int[4];
+      for (int i = 0; i < 4; i++) {
+         xs[i] = (int)Math.round(centerX + along[i] * dx - across[i] * dy);
+         ys[i] = (int)Math.round(centerY + along[i] * dy + across[i] * dx);
+      }
+      g2.fillPolygon(xs, ys, 4);
    }
 
    private static int widestLine(Graphics2D g2, String[] lines) {
