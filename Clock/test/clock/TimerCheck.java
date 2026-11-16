@@ -147,6 +147,26 @@ public class TimerCheck {
             "a flap starts standing and ends lying down");
       check(FlipFace.fold(250, 500) > 0 && FlipFace.fold(400, 500) < 0, "a flap falls faster as it goes (edge on after half its time)");
 
+      // The analog dial: an hour tick at 12, bare face between the minute ticks, the hours' numbers, the knob's circle clear.
+      java.awt.image.BufferedImage dial = new java.awt.image.BufferedImage(400, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D dialInk = dial.createGraphics();
+      dialInk.setColor(Ui.FACE);
+      dialInk.fillRect(0, 0, 400, 400);
+      ClockFace.paintDial(dialInk, 200, 200, 190, 8);
+      dialInk.dispose();
+      check(dial.getRGB(200, 200 - 172) != Ui.FACE.getRGB(), "an hour tick stands at 12");
+      check(dial.getRGB(200 + (int)(176 * Math.sin(Math.PI / 60)), 200 - (int)(176 * Math.cos(Math.PI / 60))) == Ui.FACE.getRGB(),
+            "the face is bare between two minute ticks");
+      check(inked(dial, 200 + 141, 200 - 12, 200 + 141 + 24, 200 + 12) && inked(dial, 200 - 12, 200 + 132, 200 + 12, 200 + 156),
+            "the numbers 3 and 6 are printed on the dial");
+      check(!inked(dial, 200 - 30, 200 - 30, 200 + 30, 200 + 30), "the middle of the dial stays clear for the hands");
+      for (int hour = 0; hour < 12; hour++) {
+         double knob = hour * Math.PI / 6;
+         int knobX = 200 + (int)Math.round(190 * 0.62 * Math.sin(knob));
+         int knobY = 200 - (int)Math.round(190 * 0.62 * Math.cos(knob));
+         check(!inked(dial, knobX - 13, knobY - 13, knobX + 13, knobY + 13), "the alarm knob at " + hour + " o'clock is clear of the numbers");
+      }
+
       // The Westminster quarters: one change at quarter past, two at half past, three at quarter to, four and the hour.
       int[] quarterPast = Westminster.steps(9, 1);
       check(Arrays.equals(quarterPast, new int[]{68, 66, 64, 59, Westminster.REST, Westminster.HUSH}), "quarter past rings the first change");
@@ -209,6 +229,18 @@ public class TimerCheck {
       check(ClockState.load(file).alarm.minute() == 7 * 60 && !damaged.alarm.isOn(), "a bad alarm time keeps 7 am, off by default");
 
       System.out.println("TimerCheck passed");
+   }
+
+   /** Whether any pixel in the box is not the white face. */
+   private static boolean inked(java.awt.image.BufferedImage image, int left, int top, int right, int bottom) {
+      for (int x = left; x <= right; x++) {
+         for (int y = top; y <= bottom; y++) {
+            if (image.getRGB(x, y) != Ui.FACE.getRGB()) {
+               return true;
+            }
+         }
+      }
+      return false;
    }
 
    private static void check(boolean ok, String what) {
