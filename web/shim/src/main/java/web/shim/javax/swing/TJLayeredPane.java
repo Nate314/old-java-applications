@@ -38,6 +38,13 @@ public class TJLayeredPane extends TJComponent {
         super.addImpl(comp, null, at);
     }
 
+    /** remove(comp) and removeAll() come here too, so a removed component's layer entry no longer keeps it alive. */
+    @Override
+    public void remove(int index) {
+        layers.remove(getComponent(index));
+        super.remove(index);
+    }
+
     private int layerOf(TComponent c) {
         Integer l = layers.get(c);
         return l == null ? 0 : l;

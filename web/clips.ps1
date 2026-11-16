@@ -9,6 +9,7 @@
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
 #   ./web/clips.ps1
 #   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8101
+#   ./web/clips.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
 # Apps without a recipe (NathaNOS, BibleDownloader, NumberGuess, Windows, WindowsE: nothing moves until the visitor
 # does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its app has
 # "clip": true in web/src/shared/apps.json (its gallery card then has data-clip).
@@ -17,7 +18,9 @@ param(
     [int]$Port = 8101,
     [int]$DebugPort = 9301,
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
-    [int]$Seconds = 6
+    [int]$Seconds = 6,
+    [string]$Out = (Join-Path $PSScriptRoot 'public/clips'),
+    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 
@@ -80,9 +83,8 @@ $Recipes = [ordered]@{
 if (-not $Apps) { $Apps = @($Recipes.Keys) }
 
 $site = Join-Path $PSScriptRoot 'target/site'
-$out = Join-Path $PSScriptRoot 'public/clips'
 New-Item -ItemType Directory -Force $out | Out-Null
-$session = Start-Headless $site $Port $DebugPort $Chrome 'clips'
+$session = Start-Headless $site $Port $DebugPort $Chrome 'clips' -ProfileRoot $ProfileRoot
 try {
     foreach ($app in $Apps) {
         $recipe = $Recipes[$app]

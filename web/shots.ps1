@@ -18,7 +18,8 @@ param(
     [int]$Height = 600,
     [int]$MaxWidth = 480,
     [string]$Out = (Join-Path $PSScriptRoot 'public/shots'),
-    [switch]$WebpOnly
+    [switch]$WebpOnly,
+    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'cdp.ps1')
@@ -113,7 +114,7 @@ function Save-Webp([string]$png) {
 $site = Join-Path $PSScriptRoot 'target/site'
 $out = $Out
 New-Item -ItemType Directory -Force $out | Out-Null
-$session = Start-Headless $site $Port $DebugPort $Chrome 'shots' $Width $Height
+$session = Start-Headless $site $Port $DebugPort $Chrome 'shots' $Width $Height -ProfileRoot $ProfileRoot
 try {
     Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = $Width; height = $Height; deviceScaleFactor = 1; mobile = $false } | Out-Null
     foreach ($app in $Apps) {
