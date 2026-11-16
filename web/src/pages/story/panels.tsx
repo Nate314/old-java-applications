@@ -27,7 +27,7 @@ function whenSeen(node: Element, fn: () => void, margin?: string) {
   return () => io.disconnect();
 }
 
-const CHAPTERS = [['#originals', 'The originals'], ['#recovery', 'The recovery'], ['#restoration', 'The first restoration'], ['#chain', 'The chain'], ['#numbers', 'In numbers']];
+const CHAPTERS = [['#originals', 'The originals'], ['#recovery', 'The recovery'], ['#restoration', 'The first restoration'], ['#chain', 'The chain'], ['#numbers', 'In numbers'], ['#continued', 'Continued']];
 
 /** The bar at the top: the chapters, the one you're in marked, and how far down the page you are. */
 export function StoryTop() {
