@@ -3,17 +3,12 @@
 // no match it offers the app the visitor played last (oldjava.lastPlayed), or the gallery's first app.
 import './spotlight.css';
 import { useEffect, useState } from 'react';
-import { webp } from '../../shared/catalog';
+import { clipMoves as moves, webp } from '../../shared/catalog';
+import { readJson } from '../../shared/stored';
 import { LOST_APPS, type LostApp } from './match';
 
-// Same test as play/Shot.tsx and runtime/title-attract.tsx (separate bundles): no clip for reduced motion,
-// Save-Data or links slower than 4G.
-const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData &&
-  (navigator.connection?.effectiveType || '4g') === '4g' && !!document.createElement('video').canPlayType('video/mp4');
-
 export function lastPlayed(): { app: LostApp; at: number } | null {
-  let times: Record<string, number> = {};
-  try { times = JSON.parse(localStorage.getItem('oldjava.lastPlayed') || '{}') || {}; } catch (e) { /* storage blocked */ }
+  const times = readJson('oldjava.lastPlayed');
   let best: { app: LostApp; at: number } | null = null;
   LOST_APPS.forEach(app => {
     const at = Number(times[app.id]) || 0;

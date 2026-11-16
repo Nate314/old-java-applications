@@ -4,10 +4,7 @@
 // Save-Data, links the browser rates slower than 4G, the Then poster and the apps without a clip, and if the clip
 // does not load.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { webp, type App } from '../../shared/catalog';
-
-const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData &&
-  (navigator.connection?.effectiveType || '4g') === '4g' && !!document.createElement('video').canPlayType('video/mp4');
+import { clipMoves as moves, webp, type App } from '../../shared/catalog';
 
 export function Shot({ app, still, shown, onPlay }: { app: App | null; still: boolean; shown: boolean; onPlay: () => void }) {
   const img = useRef<HTMLImageElement>(null);

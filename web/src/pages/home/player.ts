@@ -6,6 +6,7 @@ import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from 'react';
 import { APPS, type App } from '../../shared/catalog';
 import { byId } from '../../shared/dom';
 import { linkState, linkedApp } from '../../shared/link-state';
+import { readJson } from '../../shared/stored';
 import { H, draw, indexOfApp } from './model';
 import { TOUR } from './tour';
 
@@ -324,7 +325,7 @@ export function hintClick(e: ReactMouseEvent) {
 // (oldjava.tour), so the tour can be continued on a later visit, and #tour in the address starts it.
 const tour = H.tour;
 export function tourSaved(): TourSaved {
-  try { return JSON.parse(localStorage.getItem(TOUR_KEY) as string) || {}; } catch (e) { return {}; }
+  return readJson(TOUR_KEY);
 }
 function tourSave(o: TourSaved) {
   try { localStorage.setItem(TOUR_KEY, JSON.stringify(o)); } catch (e) { /* private mode: not kept */ }
