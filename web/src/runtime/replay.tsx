@@ -270,8 +270,13 @@ export function startReplay(desktop: Element): Replay | null {
     while (recs.length > 1) recs.shift()!.rec.stop();
     begin();
   }
+  var on: Window = window;   // the window the next frame was asked of
   function frame() {
-    (popped && !popped.win.closed ? popped.win : window).requestAnimationFrame(frame);
+    var w = popped && !popped.win.closed ? popped.win : window;
+    // A closed pop out window never answers, so the drawing would stop for good once the app is brought back.
+    if (w !== on && w !== window) w.addEventListener('pagehide', function () { if (on === w) { on = window; requestAnimationFrame(frame); } });
+    on = w;
+    w.requestAnimationFrame(frame);
     var t = real.now();   // not the frame's time, which a popped out window counts from its own start
     if (away()) return;
     if (drew()) changed = true;
