@@ -1,15 +1,21 @@
 // One page of the arcade passport: each app played gets a rubber stamp in its category's ink (round for games and
 // music, a box for tools and toys), worn like real ink, tilted its own way, dated the day it was first played.
 // The app's picture sits inside the ink, in its own colors.
-// Apps not played yet show a dashed outline of their stamp around a faded picture. Styles: passport.css.
+// Apps not played yet show a dashed outline of their stamp around a faded picture. The Passport tab of Your arcade
+// (count ring, buttons, the page of stamps) is here too. Styles: passport.css.
 import { type CSSProperties } from 'react';
 import { APPS, webp, type App } from '../../shared/catalog';
+import { H } from './model';
+import * as P from './player';
+import { stampCount } from './tabs';
 import './passport.css';
+
+export const played = (a: App) => window.oldjavaPassport.has(a.id);
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 /** A stamp's date as passports print it: 3 NOV 2026. */
-export function stampDate(t: number) {
+function stampDate(t: number) {
   const d = new Date(t);
   return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
 }
@@ -48,7 +54,7 @@ function Edge({ cat, inner }: { cat: App['cat']; inner: boolean }) {
   );
 }
 
-export function Stamp({ a, when }: { a: App; when: number }) {
+function Stamp({ a, when }: { a: App; when: number }) {
   const h = hash(a.id), id = 'stamp-' + a.id, round = a.cat === 'game' || a.cat === 'music';
   const style = { '--tilt': ((h % 25) - 12) + 'deg', '--dx': ((h % 7) - 3) + 'px', '--dy': ((h % 5) - 2) + 'px' } as CSSProperties;
   const name = a.name.toUpperCase(), date = when ? stampDate(when) : 'PLAYED';
@@ -89,7 +95,7 @@ export function Stamp({ a, when }: { a: App; when: number }) {
 }
 
 /** The passport's machine-readable lines, as at the foot of a real passport's photo page: holder, count, dates. */
-export function Mrz({ count }: { count: number }) {
+function Mrz({ count }: { count: number }) {
   const times = APPS.map(a => window.oldjavaPassport.when(a.id)).filter(Boolean);
   const ymd = (t: number) => { const d = new Date(t); return [d.getFullYear() % 100, d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, '0')).join(''); };
   const pad = (s: string) => (s + '<'.repeat(44)).slice(0, 44);
@@ -99,5 +105,53 @@ export function Mrz({ count }: { count: number }) {
       <span>{pad('P<JAVA<<ARCADE<<VISITOR')}</span>
       <span>{pad(String(count).padStart(2, '0') + 'OF' + APPS.length + '<<' + first + '<<' + last)}</span>
     </p>
+  );
+}
+
+/** The arcade passport: a stamp per app played (the runtime keeps them). */
+function Stamps() {
+  return (
+    <ol className="stamps" id="stamps">
+      {APPS.map(a => (
+        <li key={a.id}>
+          <button type="button" className={[played(a) && 'played', a.id === H.fresh && 'fresh'].filter(Boolean).join(' ') || undefined}
+            title={a.name + (!played(a) ? ': not played yet' : window.oldjavaPassport.when(a.id) ? ': first played ' + stampDate(window.oldjavaPassport.when(a.id)) : ': played')}
+            onClick={() => P.choose(a)}>
+            <span className="seal"><Stamp a={a} when={window.oldjavaPassport.when(a.id)} /></span>
+            <span className="label">{a.name}</span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function Passport({ off }: { off: string }) {
+  const count = stampCount(), left = APPS.length - count;
+  return (
+    <section className={'passport' + off} id="passport" role="tabpanel" aria-labelledby="tab-passport">
+      <div className="passport-head">
+        <div className="ring" id="passport-ring" style={{ '--p': String(count / APPS.length) } as CSSProperties}><span id="passport-count">{count + '/' + APPS.length}</span></div>
+        <div className="text">
+          <h2 id="passport-title">Arcade passport</h2>
+          <p id="passport-text" aria-live="polite">
+            {count === 0 ? 'Play an app to collect its stamp. ' + APPS.length + ' to collect.'
+              : left === 0 ? 'Every app played. Arcade complete!' : count + ' of ' + APPS.length + ' apps played. ' + left + ' to go.'}
+          </p>
+        </div>
+        <div className="actions">
+          <button className="btn primary" type="button" id="passport-new" hidden={left === 0} onClick={P.passportNew}>Play one you haven't</button>
+          {' '}
+          <button className="btn" type="button" id="passport-share" data-sound="none" title="Share the arcade, with your stamp count"
+            onClick={e => window.oldjavaShare.open(null, e.currentTarget)}>
+            ↗ Share
+          </button>
+          {' '}
+          <button className="btn" type="button" id="passport-reset" onClick={P.resetClick}>{H.resetAsk ? 'Clear all stamps?' : 'Reset'}</button>
+        </div>
+      </div>
+      <Stamps />
+      <Mrz count={count} />
+    </section>
   );
 }
