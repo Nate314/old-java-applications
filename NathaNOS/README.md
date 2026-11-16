@@ -77,9 +77,12 @@ java -ea -cp ../out/check/NathaNOS main.PictureCheck
 java -ea -cp ../out/check/NathaNOS main.ZoomCheck
 java -ea -cp ../out/check/NathaNOS main.PowerCheck
 java -ea -cp ../out/check/NathaNOS main.CalendarCheck
+java -ea -cp ../out/check/NathaNOS main.TaskListCheck
 ```
 
 `test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land. `test/main/PowerCheck.java` checks the Restart and Shut Down timeline: the fade to black, the logo shown only on Restart and only on black, the fade back to the desktop, and the steps shown at once with reduced motion. `test/main/CalendarCheck.java` checks the calendar's date sums: day numbers read back to their dates over about 4,400 years, known weekdays, leap years (2000 and 2024 but not 2100), months rolling into the next year, the grid starting on the Sunday before the 1st, and the lines a picked day and today give.
+
+`test/main/TaskListCheck.java` checks that a closed window leaves the taskbar and the list Restart and Shut Down close, and that nothing in NathaNOS keeps it in memory after that (it is freed by the garbage collector), while the windows still open stay listed and are still closed by Restart.
 
 ## Running
 
