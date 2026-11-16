@@ -140,20 +140,8 @@ ul.apps .actions { display: flex; gap: 8px; }
   ul.apps li:not(.text):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); }
 }
 
-/* ---- arcade passport: a stamp for every app played (boot.js keeps the stamps) ---- */
-.passport { margin-top: 28px; padding: 16px 18px 18px; border: 1px solid var(--card-border); border-radius: 14px;
-            background: var(--card-bg); }
-.passport-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
-.ring { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
-        background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--card-border) 0); }
-.ring span { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: var(--card-bg);
-             font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
-.passport-head .text { flex: 1 1 240px; min-width: 0; }
-.passport-head h2 { margin: 0; }
-.passport-head p { margin: 2px 0 0; font-size: 14px; opacity: 0.8; }
-.passport-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.passport-head .btn[hidden], .player-bar .btn[hidden] { display: none; }
-/* The stamps themselves (passport page, rubber stamps): passport.css. */
+.player-bar .btn[hidden] { display: none; }
+/* The arcade passport (count ring, buttons, page of stamps): passport.css. */
 .rail li button.played .pic::after { content: "¹3"; position: absolute;
                 width: 20px; height: 20px; border-radius: 50%; background: #16a34a; color: #fff;
                 font: 700 12px/20px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }

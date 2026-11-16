@@ -1,7 +1,7 @@
 // The home page: the player, Your arcade and the gallery, drawn from H (model.ts); the controllers in
 // src/pages/home/*.ts change H and say what the controls do. The lists here (gallery, rail, stamps, tour stops)
 // come from apps.json.
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import './home.css';
 import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
@@ -10,7 +10,7 @@ import { TourBox, TourStart } from './TourBox';
 import { MoreButton, MoreMenu, useMore } from './PlayerMore';
 import { Records } from './Records';
 import { HeroWall } from './HeroWall';
-import { Mrz, Stamp, stampDate } from './Stamp';
+import { Passport, played } from './Stamp';
 import * as P from './player';
 import { badge, stampCount, tabClick, tabKey, tabShown } from './tabs';
 import { WhatsNew } from './WhatsNew';
@@ -26,8 +26,6 @@ const THEN_HINT = 'As first restored in 2026: the recovered code with light bug 
 const FIND_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
   && !document.documentElement.hasAttribute('data-shot') && !document.documentElement.hasAttribute('data-saver') ? '⌘K' : 'Ctrl K';
 
-const played = (a: App) => window.oldjavaPassport.has(a.id);
-
 /** The rail repeats the gallery as small buttons, so switching apps never needs a scroll down to the cards. */
 function Rail() {
   return (
@@ -38,24 +36,6 @@ function Rail() {
             aria-current={H.current ? String(H.current === a) as 'true' | 'false' : undefined} onClick={() => P.choose(a)}>
             <span className="pic"><img src={webp(a.shot, true)} alt="" loading="lazy" /></span>
             <span className="name">{a.name}</span>
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-/** The arcade passport: a stamp per app played (the runtime keeps them). */
-function Stamps() {
-  return (
-    <ol className="stamps" id="stamps">
-      {APPS.map(a => (
-        <li key={a.id}>
-          <button type="button" className={[played(a) && 'played', a.id === H.fresh && 'fresh'].filter(Boolean).join(' ') || undefined}
-            title={a.name + (!played(a) ? ': not played yet' : window.oldjavaPassport.when(a.id) ? ': first played ' + stampDate(window.oldjavaPassport.when(a.id)) : ': played')}
-            onClick={() => P.choose(a)}>
-            <span className="seal"><Stamp a={a} when={window.oldjavaPassport.when(a.id)} /></span>
-            <span className="label">{a.name}</span>
           </button>
         </li>
       ))}
@@ -202,36 +182,6 @@ function Tab({ id, label }: { id: string; label: string }) {
 
 const off = (id: string) => (H.tab !== null && H.tab !== id ? ' off' : '');
 
-function Passport() {
-  const count = stampCount(), left = APPS.length - count;
-  return (
-    <section className={'passport' + off('passport')} id="passport" role="tabpanel" aria-labelledby="tab-passport">
-      <div className="passport-head">
-        <div className="ring" id="passport-ring" style={{ '--p': String(count / APPS.length) } as CSSProperties}><span id="passport-count">{count + '/' + APPS.length}</span></div>
-        <div className="text">
-          <h2 id="passport-title">Arcade passport</h2>
-          <p id="passport-text" aria-live="polite">
-            {count === 0 ? 'Play an app to collect its stamp. ' + APPS.length + ' to collect.'
-              : left === 0 ? 'Every app played. Arcade complete!' : count + ' of ' + APPS.length + ' apps played. ' + left + ' to go.'}
-          </p>
-        </div>
-        <div className="actions">
-          <button className="btn primary" type="button" id="passport-new" hidden={left === 0} onClick={P.passportNew}>Play one you haven't</button>
-          {' '}
-          <button className="btn" type="button" id="passport-share" data-sound="none" title="Share the arcade, with your stamp count"
-            onClick={e => window.oldjavaShare.open(null, e.currentTarget)}>
-            ↗ Share
-          </button>
-          {' '}
-          <button className="btn" type="button" id="passport-reset" onClick={P.resetClick}>{H.resetAsk ? 'Clear all stamps?' : 'Reset'}</button>
-        </div>
-      </div>
-      <Stamps />
-      <Mrz count={count} />
-    </section>
-  );
-}
-
 /**
  * The gallery: one card per app, with its passport badge (New / Played), its Offline chip once the cache has been
  * checked, and a preview clip while it is wanted (clips.ts).
@@ -311,7 +261,7 @@ export function Home() {
           <Tab id="takeaway" label="Take it with you" />
         </div>
         <WhatsNew off={off('news')} />
-        <Passport />
+        <Passport off={off('passport')} />
         <section className={'records' + off('records')} id="records" role="tabpanel" aria-labelledby="tab-records">
           <Records onCount={n => { if (H.recordsCount !== n) { H.recordsCount = n; draw(false); } }} />
         </section>
