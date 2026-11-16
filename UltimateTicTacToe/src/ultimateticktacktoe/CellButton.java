@@ -39,6 +39,9 @@ public final class CellButton extends JButton implements ActionListener {
    static final int BIG_MARK_MS = 380;
    /** The gold outlines and fading of a finished game. */
    static final int GAME_OVER_MS = 500;
+   /** The flight of a move's trail to the board it sends the next player to, and the pulse of that board's outline as it lands. */
+   static final int TRAIL_MS = 300;
+   static final int PULSE_MS = 450;
 
    /** Where a board sits in the big grid, or a square in its board, read out by screen readers. */
    static final String[] PLACES = {"top left", "top", "top right", "left", "middle", "right", "bottom left", "bottom", "bottom right"};
@@ -217,9 +220,11 @@ public final class CellButton extends JButton implements ActionListener {
       g.translate(-bx, -by);
       float boardStroke = Math.max(2f, bw / 40f);
       boolean[] targets = this.game.previewTargets();
-      if (playable) {
-         // The boards the next move may go on, outlined in the color of the side to move.
-         this.outline(g, bw, bh, withAlpha(state.xTurn ? X_COLOR : O_COLOR, 220), boardStroke);
+      long pulseAt = this.game.pulseAt;
+      if (playable && now >= pulseAt) {
+         // The boards the next move may go on, outlined in the color of the side to move once the trail delivers them; thicker for a moment as it lands or a click is refused.
+         double pulse = pulseAt == 0 ? 0 : 1 - progress(now, pulseAt, PULSE_MS);
+         this.outline(g, bw, bh, withAlpha(state.xTurn ? X_COLOR : O_COLOR, (int) (220 + 35 * pulse)), boardStroke * (float) (1 + 1.5 * pulse));
       }
       if (targets != null && targets[this.boardIndex]) {
          // Where the previewed move would send the opponent: outlined in their color, inside the first outline.
@@ -251,6 +256,7 @@ public final class CellButton extends JButton implements ActionListener {
          }
       }
       g.translate(bx, by);
+      this.paintTrail(g, now, w, h);
 
       if (this.game.cursorMove() == this.move()) {
          // The keyboard cursor (the browser also rings the focused cell).
@@ -258,6 +264,39 @@ public final class CellButton extends JButton implements ActionListener {
          g.setStroke(new BasicStroke(2f));
          g.drawRoundRect(pad / 2 + 1, pad / 2 + 1, w - pad - 2, h - pad - 2, arc, arc);
       }
+   }
+
+   /**
+    * This cell's slice of the last move's trail, in the grid's coordinates: a comet in the next player's color from the
+    * cell just played to the middle of the board it sends them to, its tail catching up with its head as it lands.
+    */
+   private void paintTrail(Graphics2D g, long now, int w, int h) {
+      long at = this.game.trailAt;
+      if (at == 0 || now < at || now > at + TRAIL_MS) {
+         return;
+      }
+      double t = progress(now, at, TRAIL_MS);
+      SmallBoard[] boards = this.game.boards;
+      CellButton from = boards[this.game.trailFrom / 9].cells[this.game.trailFrom % 9];
+      CellButton to = boards[this.game.trailTo].cells[4];
+      double x1 = from.getParent().getX() + from.getX() + from.getWidth() / 2.0;
+      double y1 = from.getParent().getY() + from.getY() + from.getHeight() / 2.0;
+      double x2 = to.getParent().getX() + to.getX() + to.getWidth() / 2.0;
+      double y2 = to.getParent().getY() + to.getY() + to.getHeight() / 2.0;
+      double head = ease(t);
+      double tail = ease(Math.max(0, t * 1.6 - 0.6));
+      int gx = this.getParent().getX() + this.getX();
+      int gy = this.getParent().getY() + this.getY();
+      Color color = this.game.state.xTurn ? X_COLOR : O_COLOR;
+      float stroke = Math.max(3f, Math.min(w, h) / 7f);
+      g.translate(-gx, -gy);
+      g.setColor(withAlpha(color, 150));
+      g.setStroke(new BasicStroke(stroke, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+      line(g, x1 + (x2 - x1) * tail, y1 + (y2 - y1) * tail, x1 + (x2 - x1) * head, y1 + (y2 - y1) * head);
+      int r = (int) Math.round(stroke * 0.9);
+      g.setColor(color);
+      g.fillOval((int) Math.round(x1 + (x2 - x1) * head) - r, (int) Math.round(y1 + (y2 - y1) * head) - r, 2 * r, 2 * r);
+      g.translate(gx, gy);
    }
 
    /** Draws X or O centered on (cx, cy), {@code t} of the way drawn in: X stroke by stroke, O round from the top. */
