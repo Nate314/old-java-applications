@@ -170,6 +170,8 @@ final class TaskList {
    /** The windows showing now or minimized, in the order they opened. Closed ones are forgotten. */
    List<Task> showing() {
       this.tasks.removeIf(task -> !task.window.isDisplayable());
+      // Closed windows go from the Restart list too, or every closed Paint window would stay in memory.
+      this.windows.removeIf(window -> !window.isDisplayable());
       List<Task> showing = new ArrayList<>();
       for (Task task : this.tasks) {
          if (task.window.isVisible()) {
