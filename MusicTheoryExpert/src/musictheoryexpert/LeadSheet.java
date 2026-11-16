@@ -21,6 +21,8 @@ final class LeadSheet {
 	static final int[] VALUES = { 8, 6, 4, 3, 2, 1 };
 	/** Marks for {@link #accidentals}: no sign, or the sign to write (-1 flat, 0 natural, 1 sharp). */
 	static final int NONE = 2;
+	/** A stem not on a beam. */
+	private static final int NO_BEAM = Integer.MIN_VALUE;
 	/** A line of music's height before scaling: the chord names, the staff, and room for ledger lines and stems. */
 	private static final int LINE_HEIGHT = 110;
 	private static final String LETTERS = "CDEFGAB";
@@ -96,6 +98,29 @@ final class LeadSheet {
 			marks.add(new Mark(from, value, pitches, pitches.length > 0 && from + value < to));
 			from += value;
 		}
+	}
+
+	/**
+	 * The eighth notes beamed together, as {first, last} mark indexes: each run of two or more eighth notes (not
+	 * rests) in the same half bar, as 4/4 is beamed so the beats 1-2 and 3-4 can be read at a glance.
+	 */
+	static List<int[]> beams(List<Mark> marks) {
+		List<int[]> beams = new ArrayList<>();
+		for (int first = 0; first < marks.size(); first++) {
+			int last = first;
+			while (isEighth(marks, first) && isEighth(marks, last + 1) && marks.get(last + 1).slot / 4 == marks.get(first).slot / 4) {
+				last++;
+			}
+			if (last > first) {
+				beams.add(new int[] { first, last });
+				first = last;
+			}
+		}
+		return beams;
+	}
+
+	private static boolean isEighth(List<Mark> marks, int i) {
+		return i < marks.size() && marks.get(i).length == 1 && !marks.get(i).isRest();
 	}
 
 	/** {staff step, accidental} for a pitch spelled in the key at {@code position}: C4 is step 28, F5 step 38. */
@@ -194,6 +219,42 @@ final class LeadSheet {
 		int barWidth = (right - firstBar) / perLine;
 		List<int[]> signsOf = accidentals(marks, song.position());
 		int now = playing < 0 ? -1 : playing * Progression.EIGHTHS + beat * 2;
+		// Stems: each mark's direction and, for beamed eighths, where its stem meets the beam (y from the staff's
+		// top line; NO_BEAM for a stem of its own length, with a flag on an eighth).
+		boolean[] upOf = new boolean[marks.size()];
+		int[] stemTo = new int[marks.size()];
+		for (int m = 0; m < marks.size(); m++) {
+			int[] range = range(marks.get(m), song.position());
+			upOf[m] = range[0] + range[1] < 68;
+			stemTo[m] = NO_BEAM;
+		}
+		List<int[]> beamLines = new ArrayList<>(); // {first mark, x0, y0, x1, y1, up}
+		for (int[] beam : beams(marks)) {
+			int sum = 0;
+			for (int m = beam[0]; m <= beam[1]; m++) {
+				int[] range = range(marks.get(m), song.position());
+				sum += range[0] + range[1];
+			}
+			boolean up = sum < 68 * (beam[1] - beam[0] + 1); // the way the group's notes lean from the middle line
+			int x0 = slotX(marks.get(beam[0]).slot, firstBar, perLine, barWidth), x1 = slotX(marks.get(beam[1]).slot, firstBar, perLine, barWidth);
+			int y0 = stemEnd(range(marks.get(beam[0]), song.position()), up, gap), y1 = stemEnd(range(marks.get(beam[1]), song.position()), up, gap);
+			y1 = Math.max(y0 - gap, Math.min(y0 + gap, y1)); // a beam rises or falls at most a staff space
+			int shift = 0;
+			for (int m = beam[0]; m <= beam[1]; m++) {
+				int[] range = range(marks.get(m), song.position());
+				int at = y0 + (y1 - y0) * (slotX(marks.get(m).slot, firstBar, perLine, barWidth) - x0) / (x1 - x0);
+				// Every stem at least two and a half staff spaces long.
+				int limit = up ? stepY(0, gap, range[1]) - 5 * gap / 2 : stepY(0, gap, range[0]) + 5 * gap / 2;
+				shift = up ? Math.max(shift, at - limit) : Math.min(shift, at - limit);
+			}
+			y0 -= shift;
+			y1 -= shift;
+			for (int m = beam[0]; m <= beam[1]; m++) {
+				upOf[m] = up;
+				stemTo[m] = y0 + (y1 - y0) * (slotX(marks.get(m).slot, firstBar, perLine, barWidth) - x0) / (x1 - x0);
+			}
+			beamLines.add(new int[] { beam[0], x0, y0, x1, y1, up ? 1 : 0 });
+		}
 		for (int line = 0; line < lines; line++) {
 			int top = line * LINE_HEIGHT + 42;
 			int lastBar = Math.min(bars, (line + 1) * perLine) - line * perLine;
@@ -255,8 +316,7 @@ final class LeadSheet {
 				if (index / perLine != line) {
 					continue;
 				}
-				int column = mark.slot % Progression.EIGHTHS;
-				int x = firstBar + (index % perLine) * barWidth + 12 + column * (barWidth - 20) / Progression.EIGHTHS;
+				int x = slotX(mark.slot, firstBar, perLine, barWidth);
 				boolean sounding = now >= mark.slot && now < mark.slot + mark.length;
 				g.setColor(sounding ? NOW_INK : INK);
 				if (mark.isRest()) {
@@ -266,12 +326,21 @@ final class LeadSheet {
 					paintRest(g, x, top, gap, mark.length);
 				} else {
 					Mark next = m + 1 < marks.size() ? marks.get(m + 1) : null;
-					int nextX = next == null ? x + 20
-							: firstBar + (next.slot / Progression.EIGHTHS % perLine) * barWidth + 12 + next.slot % Progression.EIGHTHS * (barWidth - 20) / Progression.EIGHTHS;
+					int nextX = next == null ? x + 20 : slotX(next.slot, firstBar, perLine, barWidth);
 					if (next != null && next.slot / Progression.EIGHTHS / perLine != line) {
 						nextX = end + 6; // tied over to the next line: the tie runs off this line's end
 					}
-					paintNote(g, mark, signsOf.get(m), x, nextX, top, gap, song.position());
+					paintNote(g, mark, signsOf.get(m), x, nextX, top, gap, song.position(), upOf[m],
+							stemTo[m] == NO_BEAM ? NO_BEAM : top + stemTo[m]);
+				}
+			}
+			g.setColor(INK);
+			for (int[] beam : beamLines) {
+				if (marks.get(beam[0]).slot / Progression.EIGHTHS / perLine == line) {
+					// A beam half a staff space thick, on the stems' ends, its thickness toward the heads.
+					int sx = beam[5] == 1 ? 9 : 0, thick = (beam[5] == 1 ? 1 : -1) * gap / 2;
+					g.fillPolygon(new int[] { beam[1] + sx, beam[3] + sx + 1, beam[3] + sx + 1, beam[1] + sx },
+							new int[] { top + beam[2], top + beam[4], top + beam[4] + thick, top + beam[2] + thick }, 4);
 				}
 			}
 		}
@@ -282,14 +351,36 @@ final class LeadSheet {
 		return top + (38 - step) * gap / 2;
 	}
 
-	/** A note or chord: ledger lines, signs, heads, its stem (and flag), its dot and its tie to {@code nextX}. */
-	private static void paintNote(Graphics2D g, Mark mark, int[] signs, int x, int nextX, int top, int gap, int position) {
+	/** A mark's x: its eighth's column in its bar on its line. */
+	private static int slotX(int slot, int firstBar, int perLine, int barWidth) {
+		return firstBar + (slot / Progression.EIGHTHS % perLine) * barWidth + 12 + slot % Progression.EIGHTHS * (barWidth - 20) / Progression.EIGHTHS;
+	}
+
+	/** A note or chord's lowest and highest staff steps. */
+	private static int[] range(Mark mark, int position) {
 		int low = Integer.MAX_VALUE, high = Integer.MIN_VALUE;
+		for (int pitch : mark.pitches) {
+			int step = spell(pitch, position)[0];
+			low = Math.min(low, step);
+			high = Math.max(high, step);
+		}
+		return new int[] { low, high };
+	}
+
+	/** Where a stem of its own length (three and a half staff spaces past the far head) ends, from the staff's top line. */
+	private static int stemEnd(int[] range, boolean up, int gap) {
+		return up ? stepY(0, gap, range[1]) - 7 * gap / 2 : stepY(0, gap, range[0]) + 7 * gap / 2;
+	}
+
+	/**
+	 * A note or chord: ledger lines, signs, heads, its stem (up or down; to {@code stemTo} on a beam, or its own
+	 * length and a flag on an eighth when that is {@link #NO_BEAM}), its dot and its tie to {@code nextX}.
+	 */
+	private static void paintNote(Graphics2D g, Mark mark, int[] signs, int x, int nextX, int top, int gap, int position, boolean up, int stemTo) {
+		int[] range = range(mark, position);
 		Color ink = g.getColor();
 		for (int i = 0; i < mark.pitches.length; i++) {
 			int step = spell(mark.pitches[i], position)[0];
-			low = Math.min(low, step);
-			high = Math.max(high, step);
 			int y = stepY(top, gap, step);
 			g.setColor(INK);
 			for (int s = 28; s >= step; s -= 2) {
@@ -319,12 +410,11 @@ final class LeadSheet {
 		if (mark.length == 8) {
 			return;
 		}
-		boolean up = (low + high) / 2 < 34;
 		g.setStroke(new BasicStroke(1.4f));
 		int stemX = up ? x + 9 : x;
-		int from = stepY(top, gap, up ? low : high), to = stepY(top, gap, up ? high : low) + (up ? -7 * gap / 2 : 7 * gap / 2);
+		int from = stepY(top, gap, up ? range[0] : range[1]), to = stemTo == NO_BEAM ? top + stemEnd(range, up, gap) : stemTo;
 		g.drawLine(stemX, from, stemX, to);
-		if (mark.length == 1) {
+		if (mark.length == 1 && stemTo == NO_BEAM) {
 			g.drawLine(stemX, to, stemX + 6, to + (up ? gap + 3 : -gap - 3));
 			g.drawLine(stemX + 6, to + (up ? gap + 3 : -gap - 3), stemX + 5, to + (up ? 2 * gap : -2 * gap));
 		}

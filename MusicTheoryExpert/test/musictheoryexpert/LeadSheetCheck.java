@@ -43,6 +43,14 @@ public class LeadSheetCheck {
 			check(at == bars * 8, "every bar filled");
 		}
 
+		// Beams: runs of eighth notes in one half bar; a lone eighth, a rest or the middle of the bar breaks them.
+		check(beamed(notes(0, 60, 1, 1, 62, 1, 2, 64, 1, 3, 65, 1, 4, 67, 1, 5, 69, 1)).equals("0-3 4-5"),
+				"eight eighths beam by half bar");
+		check(beamed(notes(0, 60, 1, 2, 62, 1, 3, 64, 1)).equals("2-3"), "a rest after an eighth leaves it a flag");
+		check(beamed(notes(3, 60, 1, 4, 62, 1)).equals(""), "no beam over the middle of the bar");
+		check(beamed(notes(0, 60, 2, 2, 62, 1, 3, 64, 1, 4, 65, 1)).equals("1-2"), "quarters are not beamed");
+		check(beamed(notes(7, 60, 1, 8, 62, 1)).equals(""), "no beam over a bar line");
+
 		// Spelling: steps from C4 (28), sharps or flats by the key.
 		check(Arrays.equals(LeadSheet.spell(60, 0), new int[] { 28, 0 }), "C4");
 		check(Arrays.equals(LeadSheet.spell(77, 0), new int[] { 38, 0 }), "F5 is the top line");
@@ -85,6 +93,15 @@ public class LeadSheetCheck {
 			}
 			text.append(text.length() == 0 ? "" : " ").append(mark.isRest() ? "r" : pitches + ":").append(mark.length)
 					.append(mark.tied ? "~" : "");
+		}
+		return text.toString();
+	}
+
+	/** Each beam as "first-last" mark indexes, over two bars. */
+	private static String beamed(List<int[]> melody) {
+		StringBuilder text = new StringBuilder();
+		for (int[] beam : LeadSheet.beams(LeadSheet.marks(melody, 2))) {
+			text.append(text.length() == 0 ? "" : " ").append(beam[0]).append('-').append(beam[1]);
 		}
 		return text.toString();
 	}
