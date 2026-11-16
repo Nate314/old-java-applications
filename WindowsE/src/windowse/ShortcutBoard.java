@@ -12,6 +12,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
@@ -32,6 +33,10 @@ final class ShortcutBoard extends JPanel {
    private static final Color KEY_TEXT = new Color(128, 133, 145);
    private static final Color INK = new Color(28, 32, 40);
    private static final Color MUTED = new Color(92, 98, 110);
+   private static final int HEAD_Y = 14;
+   /** The count's slot after the keys: the "x" and the field (or, while a run goes, the step's count). */
+   private static final int COUNT_W = 58;
+   private static final int TIMES_W = 20;
 
    /** One key of a row: its label (null for a gap), its width in tenths of a key, and its shortcut if it has one. */
    private static final class Slot {
@@ -89,17 +94,23 @@ final class ShortcutBoard extends JPanel {
    private List<Step> shown = new ArrayList<>();
    private List<Step> run = new ArrayList<>();
    private Shortcut current;
+   private final JComponent count;
    private int done;
-   private int count;
+   private int total;
    private boolean running;
    private boolean dry;
    /** The screen after the plan, and while a run goes (and after it, until the plan changes) the screen it made. */
    private Screen after = new Screen();
    private Screen live;
 
-   /** onPick runs when a key is clicked; onPress when one is double-clicked (pick it and press it). */
-   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress, boolean pocket) {
+   /**
+    * onPick runs when a key is clicked; onPress when one is double-clicked (pick it and press it). count: the field
+    * for how many times, placed after the picked shortcut's keys so the head reads "Win + E x 10".
+    */
+   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress, boolean pocket, JComponent count) {
       this.pocket = pocket;
+      this.count = count;
+      this.add(count);   // first, so it has the keyboard when the window opens
       this.layout = pocket ? POCKET : LAYOUT;
       this.unit = pocket ? 56 : 48;
       this.head = pocket ? 122 : 92;   // pocket: what it does gets its own lines under the chips
@@ -137,6 +148,7 @@ final class ShortcutBoard extends JPanel {
 
    void pick(Shortcut shortcut) {
       this.picked = shortcut;
+      this.count.setBounds(chipsEnd(shortcut) + TIMES_W, HEAD_Y, COUNT_W, 30);
       for (KeyCap cap : this.caps.values()) {
          cap.setPicked(cap.shortcut == shortcut);
       }
@@ -168,10 +180,11 @@ final class ShortcutBoard extends JPanel {
       this.live = new Screen();
       this.run = run;
       this.done = 0;
-      this.count = 0;
+      this.total = 0;
       for (Step step : run) {
-         this.count += step.times;
+         this.total += step.times;
       }
+      this.count.setVisible(false);   // the head shows the step being pressed, and its count, in its place
       this.repaint();
    }
 
@@ -199,6 +212,7 @@ final class ShortcutBoard extends JPanel {
    void stopped() {
       this.running = false;
       this.current = null;
+      this.count.setVisible(true);
       this.release.stop();
       for (KeyCap cap : this.caps.values()) {
          cap.setPushed(false);
@@ -246,23 +260,34 @@ final class ShortcutBoard extends JPanel {
 
    /** The picked shortcut as keys ("[logo] + [E]"), its name and what it does; on the right, the count while running. */
    private void paintHead(Graphics2D g) {
-      Shortcut head = this.current != null ? this.current : this.picked;
+      Step step = this.running ? this.run.get(this.stepAt(Math.max(0, this.done - 1))) : null;
+      Shortcut head = step != null ? step.shortcut : this.picked;
       if (head == null) {
          return;
       }
-      int x = MARGIN + 2;
-      int y = 14;
-      x = chip(g, x, y, null) + 6;
+      int y = HEAD_Y;
+      int x = chip(g, MARGIN + 2, y, null) + 6;
+      g.setFont(new Font("SansSerif", Font.BOLD, 16));
       if (head != Shortcut.START) {
          g.setColor(MUTED);
-         g.setFont(new Font("SansSerif", Font.BOLD, 16));
          g.drawString("+", x, y + 21);
-         x += 18;
-         x = chip(g, x, y, head);
+         chip(g, x + 18, y, head);
       }
-      x += 14;
+      x = chipsEnd(head);
+      g.setColor(MUTED);
+      g.setFont(new Font("SansSerif", Font.BOLD, 20));
+      g.drawString("\u00d7", x + 4, y + 22);
+      if (step != null) {
+         g.setColor(KeyCap.ACCENT);
+         g.drawString(String.valueOf(step.times), x + TIMES_W + 6, y + 21);
+      }
+      x += TIMES_W + COUNT_W + 14;
       g.setColor(INK);
-      g.setFont(new Font("SansSerif", Font.BOLD, 17));
+      Font title = new Font("SansSerif", Font.BOLD, 17);
+      g.setFont(title);
+      if (g.getFontMetrics().stringWidth(head.title) > this.getWidth() - MARGIN - x) {   // pocket: "Restore or minimize"
+         g.setFont(title.deriveFont(14f));
+      }
       g.drawString(head.title, x, y + 13);
       g.setColor(MUTED);
       g.setFont(new Font("SansSerif", Font.PLAIN, 12));
@@ -276,7 +301,7 @@ final class ShortcutBoard extends JPanel {
          g.drawString(does, x, y + 31);
       }
 
-      String right = this.running ? (this.dry ? "Preview " : "Pressing ") + this.done + " of " + this.count : "Double-click a key to press it";
+      String right = this.running ? (this.dry ? "Preview " : "Pressing ") + this.done + " of " + this.total : "Double-click a key to press it";
       g.setFont(new Font("SansSerif", this.running ? Font.BOLD : Font.PLAIN, this.running ? 14 : 11));
       g.setColor(this.running ? KeyCap.ACCENT : MUTED);
       FontMetrics fm = g.getFontMetrics();
@@ -379,9 +404,19 @@ final class ShortcutBoard extends JPanel {
       return lines;
    }
 
+   /** Where the head's keys for shortcut end: the Windows logo, then "+" and its own key. */
+   private static int chipsEnd(Shortcut shortcut) {
+      int logo = MARGIN + 2 + chipWidth(null);
+      return shortcut == Shortcut.START ? logo : logo + 6 + 18 + chipWidth(shortcut);
+   }
+
+   private static int chipWidth(Shortcut shortcut) {
+      return shortcut == null || shortcut.legend.isEmpty() ? 32 : Math.max(32, 16 + shortcut.legend.length() * 10);
+   }
+
    /** A small key: the Windows logo (shortcut null) or the shortcut's key. Returns where it ends. */
    private static int chip(Graphics2D g, int x, int y, Shortcut shortcut) {
-      int w = shortcut == null || shortcut.legend.isEmpty() ? 32 : Math.max(32, 16 + shortcut.legend.length() * 10);
+      int w = chipWidth(shortcut);
       g.setColor(new Color(205, 210, 220));
       g.fillRoundRect(x, y + 2, w, 32, 8, 8);
       g.setColor(Color.WHITE);

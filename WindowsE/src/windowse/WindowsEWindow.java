@@ -3,6 +3,7 @@ package windowse;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -13,7 +14,6 @@ import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JFrame;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
@@ -68,11 +68,13 @@ public final class WindowsEWindow extends JFrame {
       this.keys = keys;
       this.copy = copy;
       this.page = page;
-      this.board = new ShortcutBoard(this::pick, this::pickAndPress, pocket);
+      this.board = new ShortcutBoard(this::pick, this::pickAndPress, pocket, this.countField);
       this.setTitle(TITLE);
       this.setDefaultCloseOperation(3);
       this.setResizable(false);
       this.countField.setColumns(5);
+      this.countField.setFont(new Font("SansSerif", Font.BOLD, 16));
+      this.countField.setToolTipText("How many times DO IT!!! presses the picked key, or Add step puts it on the list");
       this.countField.getAccessibleContext().setAccessibleName("How many times");
       this.countField.addActionListener(event -> this.doIt(false));
       this.countField.addKeyListener(new KeyAdapter() {
@@ -94,31 +96,26 @@ public final class WindowsEWindow extends JFrame {
       this.previewButton.setToolTipText("Plays it on the little screen first, without pressing any key");
       this.previewButton.addActionListener(event -> this.doIt(true));
       this.doItButton.addActionListener(event -> this.doIt(false));
+      // The one button that presses keys stands out in the keys' blue; the rest are about the list.
+      this.doItButton.setBackground(KeyCap.ACCENT);
+      this.doItButton.setForeground(Color.WHITE);
+      this.doItButton.setFont(new Font("SansSerif", Font.BOLD, 15));
 
-      JPanel row = buttonRow();
-      row.add(this.sideBySideButton);
-      row.add(new JLabel("Press it"));
-      row.add(this.countField);
-      row.add(new JLabel("times"));
-      JPanel more = pocket ? buttonRow() : row;   // pocket: the buttons go on a second row
-      if (pocket) {
-         row.add(this.sendButton);   // the first row has room for it, the second does not
-      }
-      more.add(this.addButton);
-      more.add(this.clearButton);
-      if (!pocket) {
-         more.add(this.sendButton);
-      }
-      more.add(this.previewButton);
-      more.add(this.doItButton);
-      if (pocket) {
-         JPanel rows = new JPanel(new BorderLayout());
-         rows.add(row, BorderLayout.NORTH);
-         rows.add(more, BorderLayout.SOUTH);
-         row = rows;
-      }
-      this.add(row, BorderLayout.SOUTH);   // added first, so the field has the keyboard when the window opens
+      // The list's buttons on the left, Preview and DO IT!!! on the right (pocket: on a row of their own, under them).
+      JPanel list = buttonRow(FlowLayout.LEFT);
+      list.add(this.addButton);
+      list.add(this.clearButton);
+      list.add(this.sideBySideButton);
+      JPanel go = buttonRow(FlowLayout.RIGHT);
+      (pocket ? go : list).add(this.sendButton);
+      go.add(this.previewButton);
+      go.add(this.doItButton);
+      JPanel row = new JPanel(new BorderLayout());
+      row.add(list, pocket ? BorderLayout.NORTH : BorderLayout.WEST);
+      row.add(go, pocket ? BorderLayout.SOUTH : BorderLayout.EAST);
+      row.setBackground(list.getBackground());
       this.add(this.board, BorderLayout.CENTER);
+      this.add(row, BorderLayout.SOUTH);
       this.pick(Shortcut.EXPLORER);
       this.setSteps(friend != null ? friend : Collections.emptyList());
       if (friend != null) {
@@ -127,8 +124,8 @@ public final class WindowsEWindow extends JFrame {
       this.pack();
    }
 
-   private static JPanel buttonRow() {
-      JPanel row = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+   private static JPanel buttonRow(int align) {
+      JPanel row = new JPanel(new FlowLayout(align, 8, 6));
       row.setBackground(new Color(243, 245, 249));
       return row;
    }
@@ -261,6 +258,8 @@ public final class WindowsEWindow extends JFrame {
       this.clearButton.setEnabled(!this.steps.isEmpty());
       this.doItButton.getAccessibleContext().setAccessibleName((this.steps.isEmpty() ? "DO IT!!!"
          : "DO IT!!! presses the " + this.steps.size() + " steps: " + labels(this.steps)) + ". After: " + this.board.afterSummary());
+      List<Step> plan = this.plan();
+      this.doItButton.setToolTipText(plan.isEmpty() ? null : "Presses " + labels(plan) + (this.page == null ? " on the real keyboard" : ""));
    }
 
    static String labels(List<Step> steps) {
