@@ -361,7 +361,13 @@ export function howToPlay() {
   });
 }
 
-// The app called System.exit (for most apps: its window was closed). Offer it again, and three others.
+// The app called System.exit (for most apps: its window was closed). Offer it again, and three others: only on the
+// app's own page and in the home page's player, which swaps a pick in. Any other embed (play.html, ?embed&full on
+// someone's page, Side by side) put this one app there, so its frame does not offer others.
+function inHomePlayer() {
+  try { return window.parent !== window && !!window.parent.document.getElementById('player'); } catch (e) { return false; }   // another site's page
+}
+
 export function exitScreen(msg: string) {
   if (news && news.kind() === 'hint') news.clear();
   openLayer(<ExitScreen msg={msg} replayLive={!!(replay && replay.live())} />);
@@ -384,7 +390,7 @@ function ExitScreen({ msg, replayLive }: { msg: string; replayLive: boolean }) {
       {app && app.then && !embedded && (   // the player has its own Then | Now switch
         <a className="shim-exit-era" href={eraPage(!isThen())}>{isThen() ? 'Play today’s version' : 'Play it as first restored'}</a>
       )}
-      {next.length > 0 && (
+      {next.length > 0 && (!embedded || inHomePlayer()) && (
         <>
           <h3>{played[next[0].id] ? 'Play something else' : 'Play something new'}</h3>
           <div className="shim-picks">{next.map(a => <AppCard key={a.id} app={a} showNew />)}</div>
