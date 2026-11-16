@@ -6,7 +6,7 @@ import web.rt.Classes;
  * Entry point of the web NathaNOS. NathaNOS finds each app by the Main-Class named in a jar's manifest, but TeaVM
  * only compiles classes the program refers to, and its Class.forName cannot find most apps' Main (a class with only
  * a static main is never instantiated). Registering them here does both. Keep this list in step with the jars in
- * web/nathanos/pom.xml (the old assets/Clock.jar provides clock.Main).
+ * web/nathanos/pom.xml.
  */
 public final class Boot {
     private Boot() {

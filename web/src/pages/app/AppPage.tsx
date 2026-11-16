@@ -23,7 +23,7 @@ const BODY: Record<string, Record<string, string>> = {
   CircleSpawner: { 'data-own-layout': '', 'data-args-page': '' },
   Clock: { 'data-tab-title': '' },
   FlappyBird: { 'data-files': 'bg.jpg bird.png bottomPipe.png ground.jpg topPipe.png', 'data-args': '120' },
-  // NathaNOS: its own pictures, a jar of each app on its desktop (Clock.jar is the older one it shipped with), the
+  // NathaNOS: its own pictures, a jar of each app on its desktop (each naming today's app, Clock included), the
   // apps' icons, and the files those apps read from their own folder. Keep in step with web/nathanos/pom.xml.
   NathaNOS: {
     'data-files': [

@@ -49,7 +49,7 @@ Each project has its sources in `src/` (decompiled ones with their original `MET
 - StockChecker no longer downloads quotes (the Yahoo Finance CSV API is retired). Its desk opens day 1 at the prices in the committed `stockCheck.csv`, saves ticker list edits back to `myStocks.txt`, and keeps the practice desk in `~/.stockchecker-desk.txt`.
 - FlappyBird and NathaNOS load images by relative path, so run them from the folder holding the images:
   - FlappyBird: run from `FlappyBird/src` with a numeric argument, e.g. `java flappyBird.Main 120` (the original `run.bat` used 120).
-  - NathaNOS: run from a folder holding its `assets/`. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset. `./run.ps1 old NathaNOS` stages a copy in `out/NathaNOS/desktop/` with every other app except Windows and WindowsE on its desktop.
+  - NathaNOS: run from a folder holding its `assets/`. `assets/Clock.jar` is an older Clock build that shipped in the zip, kept as a binary asset for the Then version. `./run.ps1 old NathaNOS` stages a copy in `out/NathaNOS/desktop/` with today's build of every other app except Windows and WindowsE on its desktop, Clock included in place of the old jar.
 
 ## Build and run
 

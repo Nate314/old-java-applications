@@ -12,9 +12,9 @@
   <name>NathaNOS compiled to JavaScript</name>
 
   <!--
-    A separate module because NathaNOS launches the classes inside NathaNOS/assets/Clock.jar (an older Clock build,
-    whose clock.Main clashes with the Clock app's sources). TeaVM compiles that jar's bytecode along with NathaNOS
-    and every other browser app, since nothing can be loaded at run time.
+    NathaNOS's page is one program: TeaVM compiles NathaNOS with today's sources of every app it opens (Clock
+    included), since nothing can be loaded at run time. NathaNOS/assets/Clock.jar, the older Clock build NathaNOS
+    shipped with, is only for the Then version (web/then-nathanos).
 
     Adding an app to the web NathaNOS: its sources (app-sources) and a jar naming its Main-Class (app-jars) below,
     its Main-Class in src/main/java/web/nathanos/Boot.java, and its jar plus any files it reads in NathaNOS's
@@ -33,13 +33,6 @@
       <groupId>org.teavm</groupId>
       <artifactId>teavm-jso-apis</artifactId>
     </dependency>
-    <dependency>
-      <groupId>io.github.nate314.oldjava</groupId>
-      <artifactId>nathanos-clock-jar</artifactId>
-      <version>2016</version>
-      <scope>system</scope>
-      <systemPath>${repo.dir}/NathaNOS/assets/Clock.jar</systemPath>
-    </dependency>
   </dependencies>
 
   <build>
@@ -55,6 +48,7 @@
               <sources>
                 <source>${repo.dir}/NathaNOS/src</source>
                 <source>${repo.dir}/BibleDownloader/src</source>
+                <source>${repo.dir}/Clock/src</source>
                 <source>${repo.dir}/CircleSpawner/src</source>
                 <source>${repo.dir}/DinoGame/src</source>
                 <source>${repo.dir}/FlappyBird/src</source>
@@ -85,7 +79,8 @@
             <goals><goal>copy-resources</goal></goals>
             <configuration>
               <outputDirectory>${site.dir}/NathaNOS/assets</outputDirectory>
-              <resources><resource><directory>${repo.dir}/NathaNOS/assets</directory></resource></resources>
+              <!-- Not the old Clock.jar: app-jars below writes a Clock.jar for today's Clock. -->
+              <resources><resource><directory>${repo.dir}/NathaNOS/assets</directory><excludes><exclude>Clock.jar</exclude></excludes></resource></resources>
             </configuration>
           </execution>
           <!-- Files the apps read from their working folder, which inside NathaNOS is NathaNOS's own. -->
@@ -135,6 +130,7 @@
                 </macrodef>
                 <appjar app="BibleDownloader" main="audiobibledownloader.Main"/>
                 <appjar app="CircleSpawner" main="circlewindow.Main"/>
+                <appjar app="Clock" main="clock.Main"/>
                 <appjar app="DinoGame" main="dinosaurgameplayer.Main"/>
                 <appjar app="FlappyBird" main="flappyBird.Main"/>
                 <appjar app="Minesweeper" main="minesweeper.Main"/>
