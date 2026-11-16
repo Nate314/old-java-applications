@@ -107,6 +107,25 @@ public final class LessonCheck {
       assert piano.shownBeat() == 3 : "Listen moves on to the end of the note it plays";
       piano.setSong(null);
       assert piano.keyAt(50, 10) == 0 : "free play gives the keys their room back";
+      // A key's front edge shows below its face, and a press pushes the face down over most of it.
+      int edge = 300 - 2 - PianoPanel.lip(300) / 2;
+      int upFront = brightness(paint(piano), 10, edge);
+      piano.setPressed(0, true);
+      java.awt.image.BufferedImage down = paint(piano);
+      assert brightness(down, 10, edge) > upFront + 40 : "a pressed key's face covers its front edge";
+      assert brightness(down, 10, 2) < brightness(down, 10, 40) : "a pressed key is shaded where it dips under the panel";
+      piano.setPressed(0, false);
+   }
+
+   private static java.awt.image.BufferedImage paint(PianoPanel piano) {
+      java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(piano.getWidth(), piano.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
+      piano.paint(image.getGraphics());
+      return image;
+   }
+
+   private static int brightness(java.awt.image.BufferedImage image, int x, int y) {
+      int rgb = image.getRGB(x, y);
+      return ((rgb >> 16) & 255) + ((rgb >> 8) & 255) + (rgb & 255);
    }
 
    private static void checkLesson() {

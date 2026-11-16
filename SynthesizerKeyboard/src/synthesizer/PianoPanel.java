@@ -29,9 +29,11 @@ public final class PianoPanel extends JPanel {
    private static final int[] BLACK_AFTER = {0, 1, 3, 4, 5};
    private static final Color BACKGROUND = new Color(24, 26, 34);
    private static final Color WHITE = new Color(250, 250, 246);
-   private static final Color WHITE_PRESSED = new Color(175, 175, 175);
+   private static final Color WHITE_PRESSED = new Color(214, 210, 198);
    private static final Color BLACK = new Color(16, 16, 20);
-   private static final Color BLACK_PRESSED = new Color(80, 80, 88);
+   private static final Color BLACK_FACE = new Color(44, 44, 54);
+   private static final Color BLACK_PRESSED = new Color(60, 60, 74);
+   private static final Color SHADOW = new Color(0, 0, 0, 60);
    private static final Color HINT = new Color(255, 196, 60);
    private static final Color HINT_BLACK = new Color(226, 152, 24);
    private static final Color HEARD = new Color(160, 200, 255);
@@ -286,26 +288,68 @@ public final class PianoPanel extends JPanel {
       }
       g.translate(0, top);
 
+      // Keys have depth: a front edge (lip) under the face that a press pushes down, and a shadow at the top where they meet the panel.
+      int lip = lip(height);
       for (int white = 0; white < WHITE_KEYS.length; white++) {
          int key = WHITE_KEYS[white];
          int x = 2 + white * whiteWidth;
-         g.setColor(this.pressed[key] ? WHITE_PRESSED : this.heardAt(key) ? HEARD : key == this.hint ? HINT : WHITE);
-         // Rounded at the bottom only: the top is square where the key meets the panel's edge (or the falling notes).
+         boolean down = this.pressed[key];
+         Color face = down ? WHITE_PRESSED : this.heardAt(key) ? HEARD : key == this.hint ? HINT : WHITE;
+         int front = down ? lip / 3 : lip;
+         g.setColor(shade(face, 0.72));
          g.fillRoundRect(x + 1, 0, whiteWidth - 2, height - 2, 10, 10);
          g.fillRect(x + 1, 0, whiteWidth - 2, 10);
-         this.drawLabels(g, key, x, whiteWidth, height - 10, letterFont, noteFont, LABEL, LABEL_SOFT);
+         g.setColor(face);
+         g.fillRoundRect(x + 1, 0, whiteWidth - 2, height - 2 - front, 8, 8);
+         g.fillRect(x + 1, 0, whiteWidth - 2, 10);
+         this.paintTopShadow(g, x + 1, whiteWidth - 2, down ? 14 : 5);
+         this.drawLabels(g, key, x, whiteWidth, height - 8 - front, letterFont, noteFont, LABEL, LABEL_SOFT);
       }
 
       int blackWidth = whiteWidth * 3 / 5;
       int blackHeight = this.blackHeight();
+      int blackLip = Math.max(3, blackHeight / 10);
+      for (int black = 0; black < BLACK_KEYS.length; black++) {
+         // Each black key casts a soft shadow down and right onto the white keys, shorter while pressed.
+         int x = this.blackX(black);
+         int reach = this.pressed[BLACK_KEYS[black]] ? 2 : 5;
+         g.setColor(SHADOW);
+         g.fillRoundRect(x + 1, 0, blackWidth + reach, blackHeight + reach, 10, 10);
+      }
       for (int black = 0; black < BLACK_KEYS.length; black++) {
          int key = BLACK_KEYS[black];
          int x = this.blackX(black);
-         g.setColor(this.pressed[key] ? BLACK_PRESSED : this.heardAt(key) ? HEARD_BLACK : key == this.hint ? HINT_BLACK : BLACK);
+         boolean down = this.pressed[key];
+         Color face = down ? BLACK_PRESSED : this.heardAt(key) ? HEARD_BLACK : key == this.hint ? HINT_BLACK : BLACK_FACE;
+         // The body shows as a darker rim and, below the face, the sloped front; a press shrinks the front.
+         int front = down ? blackLip / 3 : blackLip;
+         g.setColor(shade(face, 0.45));
          g.fillRoundRect(x, 0, blackWidth, blackHeight, 8, 8);
          g.fillRect(x, 0, blackWidth, 8);
-         Color text = key == this.hint && !this.heardAt(key) && !this.pressed[key] ? BLACK : WHITE;
-         this.drawLabels(g, key, x, blackWidth, blackHeight - 8, letterFont, noteFont, text, text);
+         g.setColor(face);
+         g.fillRoundRect(x + 2, 0, blackWidth - 4, blackHeight - front - 2, 6, 6);
+         g.fillRect(x + 2, 0, blackWidth - 4, 6);
+         this.paintTopShadow(g, x + 2, blackWidth - 4, down ? 10 : 4);
+         Color text = key == this.hint && !this.heardAt(key) && !down ? BLACK : WHITE;
+         this.drawLabels(g, key, x, blackWidth, blackHeight - front - 8, letterFont, noteFont, text, text);
+      }
+   }
+
+   /** The front edge of a white key {@code height} pixels tall: what a press pushes down. */
+   static int lip(int height) {
+      return Math.max(4, height / 18);
+   }
+
+   /** {@code color} with its red, green and blue scaled by {@code factor}. */
+   static Color shade(Color color, double factor) {
+      return new Color((int)(color.getRed() * factor), (int)(color.getGreen() * factor), (int)(color.getBlue() * factor));
+   }
+
+   /** A shadow fading down {@code depth} pixels from the top of a key, deeper while it is pressed (in bands: the shim has no gradient paint). */
+   private void paintTopShadow(Graphics2D g, int x, int width, int depth) {
+      for (int band = 0; band < depth; band++) {
+         g.setColor(new Color(0, 0, 0, 70 * (depth - band) / depth));
+         g.fillRect(x, band, width, 1);
       }
    }
 
