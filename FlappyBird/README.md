@@ -18,7 +18,7 @@ There are two courses, chosen on the title screen:
 
 Most first runs end at the first pipe or two, before the flap has a feel. So until your best reaches 5 pipes, the game flies the next second ahead for you, with the bird's own physics, and draws it in front of the bird: yellow dots for where it goes if you flap now, white dots for where it goes if you do not, and a red ring where either path would hit a pipe or the ground. Flap when the white path ends in a ring; wait when the yellow one does. A line under the score says which dots are which until the first pipe is passed.
 
-Once your best reaches 5, the next title screen says "The flight guide steps aside (G brings it back)", and runs are flown without it. **G** on the title screen turns the guide on or off; a run flown with the guide brought back after that is practice, like a rewind: the score shows "Practice: the flight guide" and the run keeps no best score, no "New best!" and no ghost. While a rewound run waits, frozen, for the flap that flies on, the guide shows what that flap will do.
+Once your best reaches 5, the next title screen says "The flight guide steps aside (G brings it back)", and runs are flown without it. **G** turns the guide on or off, on the title screen or in flight (a note says which); a run flown with the guide brought back after that, even for part of the way, is practice, like a rewind: the score shows "Practice: the flight guide" and the run keeps no best score, no "New best!" and no ghost. While a rewound run waits, frozen, for the flap that flies on, the guide shows what that flap will do.
 
 The paths come from `Guide.java`: it keeps the bird's state, flies a copy of it ahead step by step (moving it right as fast as the pipes scroll left, so the pipes can stay where they are), checks its round body against each pipe's shaft and flange and the ground as a real crash does, and puts the bird back.
 
@@ -55,7 +55,7 @@ The game over screen is a scoreboard in the game's own colors: "Game Over" in th
 - **Z** or **Backspace**: after a crash, rewind the last 2.5 seconds and fly on from there (practice). The game over screen's Rewind button does the same.
 - **M**: sound off / on.
 - **C**: on the title screen, switch between endless pipes and today's course.
-- **G**: on the title screen, turn the flight guide on or off (it is on by itself until your best reaches 5; after that, a guided run is practice).
+- **G**: turn the flight guide on or off, on the title screen or in flight (it is on by itself until your best reaches 5; after that, a run guided even part of the way is practice).
 - **P**: pause / resume.
 - **R**: reset the game to the title screen.
 - **D**: toggle debug mode. Draws hitboxes (the bird's round body, each pipe's shaft and flange), shows a debug text panel, and on collision shows "COLISION" instead of ending the game.

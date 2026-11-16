@@ -452,7 +452,7 @@ public final class GamePanel extends JPanel implements KeyListener {
          this.drawScore(g2);
          if (this.practiceNote() != null) {
             this.drawCaption(g2, "Practice: " + this.practiceNote(), Main.FRAME_HEIGHT * 5 / 24, new Color(200, 230, 255));
-         } else if (this.guide && this.state == PLAYING && this.score() == 0) {
+         } else if (this.guide && this.state == PLAYING && this.score() == 0 && this.noticeSteps == 0) {   // not under a notice
             this.drawCaption(g2, "Yellow dots: a flap now. White: no flap. Red ring: a crash", Main.FRAME_HEIGHT * 5 / 24, new Color(255, 255, 255));
          }
       }
@@ -1121,9 +1121,16 @@ public final class GamePanel extends JPanel implements KeyListener {
             }
             return;
          case KeyEvent.VK_G:
-            if (this.state == READY) {
-               this.guide = !this.guide;
-               this.guideChosen = true;
+            if (this.state == GAME_OVER || this.state == DYING) {
+               return;
+            }
+            this.guide = !this.guide;
+            this.guideChosen = true;
+            if (this.state != READY) {
+               // Brought back in flight once the best has passed Guide.UNTIL, it makes this run practice, as at the start.
+               this.guidedPractice |= this.guide && this.highScore >= Guide.UNTIL;
+               this.notice = this.guide ? "Flight guide on" : "Flight guide off";
+               this.noticeSteps = (int)this.stepsPerSecond;
             }
             return;
          case KeyEvent.VK_D:
