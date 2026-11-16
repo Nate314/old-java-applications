@@ -42,6 +42,10 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    static final double MAX_SPEED = 250;
    /** The moving savers stop speeding up here; past it they are only a blur. */
    static final double MAX_MOTION_SPEED = 8;
+   /** Calm (the system asks for less motion): the moving savers go no faster than this... */
+   static final double CALM_MOTION_SPEED = 0.35;
+   /** ...and the tiles no faster than this, so a fast setting never makes the grid flicker. */
+   static final double CALM_TILE_SPEED = 4;
 
    public int SCREEN_WIDTH = Toolkit.getDefaultToolkit().getScreenSize().width;
    public int SCREEN_HEIGHT = Toolkit.getDefaultToolkit().getScreenSize().height;
@@ -153,7 +157,20 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    }
 
    private double speedFor(Saver s) {
-      return s instanceof Tiles ? this.settings.speed : Math.min(MAX_MOTION_SPEED, this.settings.speed);
+      return speedFor(s, this.settings.speed, calm());
+   }
+
+   /** The speed saver s runs at when speed is set; calm slows the moving savers right down and keeps tiles from flickering. */
+   static double speedFor(Saver s, double speed, boolean calm) {
+      if (s instanceof Tiles) {
+         return calm ? Math.min(CALM_TILE_SPEED, speed) : speed;
+      }
+      return Math.min(calm ? CALM_MOTION_SPEED : MAX_MOTION_SPEED, speed);
+   }
+
+   /** The visitor's system asks for less motion (in the browser; the desktop JDK answers null, so never there). */
+   static boolean calm() {
+      return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
    }
 
    /** G: every saver at once. The ones not on screen start over at full size, to be painted small. */
@@ -172,7 +189,8 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    /** Leaves the gallery on saver index, growing it from its cell; picking one (stay) stops the cycling, as 1-9 do. */
    private void pick(int index, boolean stay) {
       this.zoomFrom = this.gallery.cell(index);
-      this.zoomLeft = this.zoomFrom == null ? 0 : Gallery.ZOOM_MILLIS;
+      // Calm: the picked saver is simply there, without growing out of its cell.
+      this.zoomLeft = this.zoomFrom == null || calm() ? 0 : Gallery.ZOOM_MILLIS;
       this.gallery = null;
       this.saver = this.savers.get(index);
       this.settings.saver = index;
@@ -223,7 +241,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    /** The caption lines: the saver's name and number, then the keys. */
    String[] caption() {
-      String speed = Math.round(this.settings.speed * 10) / 10.0 + "x";
+      String speed = speedText(this.settings.speed, this.speedFor(this.saver), calm());
       String cycle = this.settings.cycle ? "C: stop cycling (next in " + (int)Math.ceil((CYCLE_MILLIS - this.shownFor) / 1000) + " s)"
          : "C: cycle every 30 s";
       String head = this.saver.name() + "   " + (this.index() + 1) + " of " + this.savers.size();
@@ -238,6 +256,12 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
          "Left / Right: speed " + speed + (this.saver instanceof Tiles ? "   Up / Down: tile size" : "") + "   " + this.musicKey() + "   H: these keys",
          this.closeLine(),
       };
+   }
+
+   /** The speed set, and when calm holds this saver slower, the speed it really runs at. */
+   static String speedText(double set, double runs, boolean calm) {
+      String text = Math.round(set * 10) / 10.0 + "x";
+      return calm && runs < set ? text + " (calm, for less motion: " + Math.round(runs * 100) / 100.0 + "x)" : text;
    }
 
    private String musicKey() {

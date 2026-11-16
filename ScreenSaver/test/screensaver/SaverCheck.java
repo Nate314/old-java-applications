@@ -120,8 +120,43 @@ public class SaverCheck {
       checkGallery();
       checkPlay();
       checkMusic();
+      checkCalm();
 
       System.out.println("SaverCheck passed");
+   }
+
+   /** Calm (less motion asked for): moving savers slowed right down, tiles kept from flickering, slow settings kept. */
+   private static void checkCalm() {
+      Saver stars = new Starfield();
+      Saver circles = new Tiles(Tiles.GREEN_CIRCLES);
+      check(Main.speedFor(stars, 1, true) == Main.CALM_MOTION_SPEED, "calm: the stars slowed at 1x");
+      check(Main.speedFor(stars, 0.2, true) == 0.2, "calm: a slower setting stays");
+      check(Main.speedFor(stars, 20, false) == Main.MAX_MOTION_SPEED, "not calm: the moving savers still stop at 8x");
+      check(Main.speedFor(circles, 250, true) == Main.CALM_TILE_SPEED, "calm: tiles no faster than 4x");
+      check(Main.speedFor(circles, 250, false) == 250, "not calm: tiles up to 250x");
+      check(Main.speedText(1, 0.35, true).equals("1.0x (calm, for less motion: 0.35x)"), "calm: the caption says so");
+      check(Main.speedText(20, 8, false).equals("20.0x"), "not calm: the 8x stop is not called calm");
+      check(!Main.calm(), "the desktop JDK never asks for calm");
+      // Calm Maze: the walk from above, with the lantern and the orb on it and the rooms walked lit.
+      Maze maze = new Maze();
+      maze.reset(900, 600, new Random(8));
+      maze.tick(20_000);
+      BufferedImage image = new BufferedImage(900, 600, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = image.createGraphics();
+      maze.paintAbove(g, 900, 600);
+      g.dispose();
+      int lantern = 0;
+      int orb = 0;
+      int walked = 0;
+      for (int y = 0; y < 600; y++) {
+         for (int x = 0; x < 900; x++) {
+            int rgb = image.getRGB(x, y) & 0xffffff;
+            lantern += rgb == 0xfff8dc ? 1 : 0;
+            orb += rgb == 0xffc43c ? 1 : 0;
+            walked += rgb == 0x5c4622 ? 1 : 0;
+         }
+      }
+      check(lantern > 0 && orb > 0 && walked > 0, "calm maze from above: lantern " + lantern + ", orb " + orb + ", walked " + walked);
    }
 
    /** The gallery (G): ten same-sized screens inside the window, under the header, never overlapping; keys move. */
