@@ -252,6 +252,12 @@ export function Story() {
           </div>
           <div className="show">
             <div className="panel">
+              <div className="panel-head"><strong>Who worked when</strong><a href="continued-timeline.svg">Full size</a></div>
+              <a className="timeline" href="continued-timeline.svg">
+                <img src="continued-timeline.svg" width="1200" height="640" loading="lazy" alt="Timeline from November 15 to 16, 2026: 38 rounds of four builders (two in the last) and an integrator, with the output tokens of each pull request, all on Claude Opus 5.5" />
+              </a>
+            </div>
+            <div className="panel" style={{ marginTop: "14px" }}>
               <div className="panel-head"><strong>Tokens</strong><span>from the session's transcripts</span></div>
               <ul className="usage">
                 <li><span>Agents (150 builders, 38 integrators)</span><b>6,578,546 output</b></li>

@@ -87,6 +87,8 @@ Roughly, the work fell into four groups:
 
 A final pull request on top of #134 adds this section and the story page's chapter for it.
 
+![Timeline of the continued run: 38 rounds of four builders (two in the last) and an integrator, with the output tokens of each pull request](web/public/continued-timeline.svg)
+
 - **Model**: every agent, and the orchestrator session that started them and read their reports, ran on Claude Opus 5.5 (model id `claude-opus-5-5`) in Claude Code.
 - **Agents**: 188 finished agents: 150 builders (attempts 101 to 250) and 38 round integrators (rounds 12 to 49). The agent making this final pull request is not counted.
 - **Tokens of the 188 agents**, summed once per model response in their transcripts: 6,578,546 output tokens; 24,966 input tokens not served from the prompt cache; 37,969,154 tokens written to the prompt cache; 1,291,612,928 tokens read from the prompt cache. That is 1,336,185,594 in all.

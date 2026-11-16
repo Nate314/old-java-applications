@@ -181,6 +181,7 @@ Adding an app takes its sources and a jar entry in `nathanos/pom.xml`, a line in
 - `cards.ps1` and `card.html`: render the link preview pictures in `public/cards/` (see Share).
 - `art.ps1`: renders the apps' own pictures (FlappyBird's images, BibleDownloader's icon, NathaNOS's icons and cursor) from their SVG sources in each app's `art/` folder with headless Chrome, to the PNG and JPEG files the Java code loads. The SVGs are original art for this repo; they replaced pictures taken from the apps these imitate (see [HISTORY.md](../HISTORY.md#original-art)).
 - `public/agents-timeline.svg`: the timeline of the agents that made the 100 attempts, shown on the story page and in HISTORY.md.
+- `public/continued-timeline.svg`: the same for the continued run's 150 attempts (#97 to #134), drawn from the session's transcripts.
 
 ## Home page
 
