@@ -155,6 +155,18 @@
   background: none;
 }
 
+/* ?embed&full with one window (centerWindows' fullBox): the app's content fills the frame, without the window's
+   title bar, border, corners or shadow. */
+:root[data-full-one] #desktop > .window {
+  border-radius: 0;
+  box-shadow: none;
+  background: none;   /* the frame's edges round the content would show where the frame is wider or taller */
+}
+
+:root[data-full-one] #desktop > .window > .titlebar {
+  display: none !important;   /* the shim shows it with an inline style */
+}
+
 /* Thumbnail mode (web/shots.ps1 crops the windows out of a flat magenta desktop). */
 :root[data-skin][data-shot] {
   --desk: #ff00ff;

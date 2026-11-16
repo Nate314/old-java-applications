@@ -187,6 +187,7 @@ export function paintSkin(): SkinStart {
   if (embed) html.setAttribute('data-embed', '');
   if (embed && /[?&]shot(=|&|$)/.test(location.search)) html.setAttribute('data-shot', '');
   if (embed && /[?&]saver(=|&|$)/.test(location.search)) html.setAttribute('data-saver', '');
+  if (embed && /[?&]full(=|&|$)/.test(location.search)) html.setAttribute('data-full', '');
   return window.__oldjavaSkinStart = { skin: skin, style: style, offer: offer };
 }
 
