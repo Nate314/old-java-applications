@@ -5,6 +5,8 @@
 //     "played": { "<App>": first play, epoch ms } }
 // as a file (Download / Load, also read and written by the desktop launcher, Launcher/SaveBundle.java) or as a
 // link (?saves=..., deflate-raw then base64url) shown as a QR code to scan with a phone.
+import { readJson } from '../../shared/stored';
+export { readJson };
 
 export const PREFIX = 'oldjava.saves.';
 export const PLAYED = 'oldjava.played';
@@ -12,10 +14,6 @@ const STORE = /^[A-Za-z0-9]+(\.then)?$/;
 
 export type Files = Record<string, string>;
 export interface Bundle { at: string; saves: Record<string, Files>; played: Record<string, number> }
-
-export function readJson(key: string): Record<string, any> {
-  try { const v = JSON.parse(localStorage.getItem(key) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
-}
 
 /** Calls back when saves here may have changed: another page's write (a storage event), or every 5 s while this
  *  page is on view, since the player's app saves on this page and no storage event comes for that. Returns the stop. */

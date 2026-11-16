@@ -6,7 +6,7 @@ import { root } from './catalog';
 // app's own files and its picture are in (go), so it never slows the start. The still picture stays for reduced
 // motion, Save-Data, links the browser rates slower than 4G, apps without a clip, and when the clip does not load
 // (offline, say). Moving content needs a way to stop it: the Pause chip in the corner (a click there does not start
-// the app). play.html keeps its own copy of moves (Shot.tsx): a shared one would split a chunk off boot.js.
+// the app). The pages share their copy of moves (shared/catalog.ts clipMoves): importing it here would split a chunk off boot.js.
 const moves = () => !matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData &&
   (navigator.connection?.effectiveType || '4g') === '4g' && !!document.createElement('video').canPlayType('video/mp4');
 
