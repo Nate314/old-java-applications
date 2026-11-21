@@ -94,6 +94,17 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private int turnsSeen = 0;
    /** The pointer's travel for a quarter turn, in cube units (a sticker's width is about 0.8). */
    private static final double QUARTER_TRAVEL = 1.6;
+   /**
+    * Show me how (level 1 until it is first solved): a fingertip drags the square of the move back part way, the
+    * layer following it, and lets it spring back, over and over until the player presses the cube. -1 for none.
+    */
+   private int demoSticker = -1;
+   private CubeGeometry.Turn demoTurn = null;
+   private long demoStart = 0L;
+   private double demoFraction = 0.0;
+   private static final int DEMO_MILLIS = 2600;
+   private static final Color FINGER = new Color(255, 255, 255, 210);
+   private static final Color FINGER_EDGE = new Color(20, 20, 20, 150);
 
    CubeView3D(Cube cube, BiConsumer<String, Integer> onSelect, Consumer<String> onTurn) {
       this.cube = cube;
@@ -178,6 +189,35 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.lookAt(CubeGeometry.NORMAL[this.hinted]);
       }
       this.repaint();
+   }
+
+   /**
+    * Starts the Show me how drag of that move's layer turn, or stops it for a null face. It drags whichever square
+    * makes the same turn and faces the viewer most squarely (a bottom layer by its row on the front, not the bottom
+    * face seen edge on), and turns the cube to show it only when none faces the viewer.
+    */
+   void demo(String faceColor, int cubie, String key) {
+      CubeGeometry.Turn turn = faceColor == null || key == null ? null : CubeGeometry.turnOf(faceColor, key, cubie);
+      this.demoSticker = -1;
+      this.demoTurn = turn;
+      for (int s = 0; turn != null && s < 54; s++) {
+         for (String k : CubeGeometry.KEYS) {
+            CubeGeometry.Turn same = CubeGeometry.turnOf(CubeGeometry.FACE_COLORS[s / 9], k, s % 9 + 1);
+            if (same != null && same.id() == turn.id() && (this.demoSticker < 0 || this.facingOf(s) > this.facingOf(this.demoSticker))) {
+               this.demoSticker = s;
+            }
+         }
+      }
+      this.demoFraction = 0.0;
+      this.demoStart = System.currentTimeMillis();
+      if (this.demoSticker >= 0 && this.facingOf(this.demoSticker) < 0.3) {
+         this.lookAt(CubeGeometry.NORMAL[this.demoSticker]);
+      }
+      this.wake();
+   }
+
+   boolean demoing() {
+      return this.demoSticker >= 0;
    }
 
    /** Turns the whole cube once round, slowly, so every side of it shows (a pattern just made). */
@@ -288,6 +328,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          }
          busy = true;
       }
+      if (this.demoSticker >= 0) {
+         // A rest, a slow pull to 40% of a quarter turn, a hold, then a spring back (the drag let go short).
+         double t = (System.currentTimeMillis() - this.demoStart) % DEMO_MILLIS / (double) DEMO_MILLIS;
+         double pull = t < 0.2 ? 0 : t < 0.55 ? (t - 0.2) / 0.35 : t < 0.7 ? 1 : t < 0.82 ? 1 - (t - 0.7) / 0.12 : 0;
+         this.demoFraction = 0.4 * pull * pull * (3 - 2 * pull);
+         busy = true;
+      }
       if (this.spinStart != 0L) {
          double t = Math.min(1.0, (System.currentTimeMillis() - this.spinStart) / 3600.0);
          double eased = t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
@@ -315,6 +362,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    private void pressed(int x, int y, long when) {
       this.spinStart = 0L;
+      this.demo(null, 0, null);
       this.liveTurn = null;
       this.pressMillis = when;
       this.pressX = x;
@@ -527,9 +575,11 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       if (this.mirrors) {
          this.drawMirrors(g);
       }
-      CubeGeometry.Turn turn = this.pending.isEmpty() ? this.liveTurn : this.pending.get(0);
+      boolean demo = this.pending.isEmpty() && this.liveTurn == null && this.demoTurn != null;
+      CubeGeometry.Turn turn = demo ? this.demoTurn : this.pending.isEmpty() ? this.liveTurn : this.pending.get(0);
       int axis = turn == null ? 0 : turn.axis;
-      double angle = turn == null ? 0 : turn.dir * (this.pending.isEmpty() ? this.liveFraction * Math.PI / 2 : this.turnAngle);
+      double fraction = demo ? this.demoFraction : this.liveFraction;
+      double angle = turn == null ? 0 : turn.dir * (this.pending.isEmpty() ? fraction * Math.PI / 2 : this.turnAngle);
       // The camera in world coordinates, to draw the slabs along the turning axis from far to near.
       double[] camera = this.world(new double[]{0, 0, CAMERA});
       Integer[] slabs = {-1, 0, 1};
@@ -557,6 +607,35 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          }
       }
       this.drawHint(g);
+      if (demo) {
+         this.drawFinger(g);
+      }
+   }
+
+   /** The Show me how fingertip: on the square, carried with it while it pulls the layer. */
+   private void drawFinger(Graphics2D g) {
+      if (this.facing(CubeGeometry.NORMAL[this.demoSticker]) <= 0.05) {
+         return;
+      }
+      // Glued to the square as its layer turns, so the finger never slides off the cube.
+      double[] point = new double[3];
+      for (int k = 0; k < 3; k++) {
+         point[k] = CubeGeometry.POS[this.demoSticker][k] + CubeGeometry.NORMAL[this.demoSticker][k] * 0.5;
+      }
+      double[] at = this.screen(this.view(turn(point, this.demoTurn.axis, this.demoTurn.dir * this.demoFraction * Math.PI / 2)));
+      double r = this.scale() * 0.24;
+      // Pressed in (smaller, firmer) while pulling, lifted (larger, lighter) at rest.
+      double press = Math.min(1, this.demoFraction / 0.1);
+      double radius = r * (1.15 - 0.2 * press);
+      int x = (int) Math.round(at[0] - radius);
+      int y = (int) Math.round(at[1] - radius);
+      int d = (int) Math.round(2 * radius);
+      g.setColor(withAlpha(FINGER, (int) (150 + 60 * press)));
+      g.fillOval(x, y, d, d);
+      g.setColor(FINGER_EDGE);
+      g.setStroke(new BasicStroke(2f));
+      g.drawOval(x, y, d, d);
+      g.setStroke(new BasicStroke(1f));
    }
 
    private double[] world(double[] v) {

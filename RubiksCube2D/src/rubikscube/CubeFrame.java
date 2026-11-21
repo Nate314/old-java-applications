@@ -3,6 +3,7 @@ package rubikscube;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.KeyboardFocusManager;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -247,6 +248,9 @@ public final class CubeFrame extends JFrame implements ActionListener {
          face.panel.setVisible(net);
       }
       this.view.setVisible(!net);
+      if (net) {
+         this.view.demo(null, 0, null);
+      }
       this.view.setBounds(0, 0, this.frameWidth, 7 * h + 2);
       this.view.reset();
       this.viewButton.setText(net ? "3D cube" : "Flat net");
@@ -444,6 +448,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.message("Your turn:<br>turn it back.");
          this.updateStatus();
          this.coachAgain();
+         this.showMeHow();
       });
       this.playback.start();
       this.updateStatus();
@@ -485,6 +490,25 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.playback.start();
       this.updateStatus();
       this.coachAgain();
+   }
+
+   /**
+    * Level 1, until it has been solved once: a fingertip on the 3D cube shows the drag that turns it back (the layer
+    * follows it part way and springs back) until the player presses the cube. It is not a hint: stars are not capped.
+    * With reduced motion the hint arrow stands still on the square instead.
+    */
+   private void showMeHow() {
+      String[] move = this.history.hint();
+      if (this.level != 1 || this.records.stars(1) > 0 || !this.view.isVisible() || this.coaching || this.patterning || move == null) {
+         return;
+      }
+      int cubie = Integer.parseInt(move[2]);
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         this.view.hint(move[0], cubie, move[1]);
+      } else {
+         this.view.demo(move[0], cubie, move[1]);
+      }
+      this.message("Your turn: drag the<br>square the way the<br>finger shows.");
    }
 
    /** Hint (H): selects the square of the next move back and lights its key. */
@@ -540,10 +564,12 @@ public final class CubeFrame extends JFrame implements ActionListener {
    }
 
    private void clearHint() {
+      this.view.demo(null, 0, null);
+      // Also the still arrow Show me how leaves under reduced motion, which is not a hint.
+      this.view.hint(null, 0, null);
       if (this.hinted != null) {
          this.keyButton(this.hinted[1]).setBackground(this.keyColor);
          this.hinted = null;
-         this.view.hint(null, 0, null);
       }
    }
 
@@ -828,6 +854,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** G: the Patterns card in place of the message and help (closing Teach me), or back. */
    final void togglePatterns() {
+      this.view.demo(null, 0, null);
       this.stopPaint(true);
       this.closeTimer();
       if (this.coaching && !this.patterning) {
@@ -1068,6 +1095,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** C: paint the cube to match a real one (or Cancel). */
    final void togglePaint() {
+      this.view.demo(null, 0, null);
       if (this.painting) {
          this.stopPaint(true);
          this.updateStatus();
@@ -1201,6 +1229,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** K: the Timer card for timing solves of a real cube (closing the other cards), or back. */
    final void toggleTimer() {
+      this.view.demo(null, 0, null);
       if (this.timing) {
          this.closeTimer();
          return;
