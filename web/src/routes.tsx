@@ -6,6 +6,7 @@ import { SKIN_SCRIPT } from './shared/skin';
 import { EarlyScript, RuntimeScript } from './shared/EarlyScript';
 import { SITE, ShareTags } from './shared/ShareTags';
 import apps from './shared/apps.json';
+import { Lead } from './pages/home/Lead';
 
 export interface Route {
   /** The file the build writes, at the site root. */
@@ -14,7 +15,7 @@ export interface Route {
   entry: string;
   /** What goes in <head>, before the page's own stylesheet, which the build adds. */
   head: ReactNode;
-  /** Shown in #root until the page's module replaces it. */
+  /** Shown in #root until the page's module replaces it (the home page's module renders inside its own instead). */
   placeholder?: ReactNode;
   /** Served at any depth (the lost page): the build inlines its styles and loads its module from the site root. */
   anyDepth?: boolean;
@@ -52,6 +53,9 @@ export const ROUTES: Route[] = [
         <RuntimeScript src="/src/runtime/main.ts" />
       </>
     ),
+    // The title and lead are in the page itself, so a phone paints them while the scripts load (vite/pages.ts,
+    // Painted early); the page's module renders the rest after them, into #home-root, and never replaces them.
+    placeholder: <main><Lead /><div id="home-root" style={{ display: 'contents' }} /></main>,
   },
   // The embeddable player: play.html?app=<App> goes in an iframe on any other site (the Share panel's "Put it on
   // your site" writes the tag, see embed.js and web/README.md, Embed). It shows a poster first (the app's

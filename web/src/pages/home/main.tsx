@@ -7,7 +7,7 @@ import { initArcadeTabs } from './tabs';
 import { initNews } from './news';
 
 // In the order the page's scripts ran when it was static HTML; What's new follows (it was a deferred news.js).
-mount(<Home />);
+mount(<Home />, 'home-root');   // in the page's <main>, after its title and lead (src/routes.tsx)
 initPlayer();
 initTakeaway();
 initClips();

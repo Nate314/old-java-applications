@@ -10,10 +10,10 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 /**
- * Renders the page into #root at once, not on a later frame: the page's own code and the runtime after it
- * (boot.js on DOMContentLoaded) find the markup in place, as they did when it was static HTML.
+ * Renders the page into #root (or the element with the id given) at once, not on a later frame: the page's own code
+ * and the runtime after it (boot.js on DOMContentLoaded) find the markup in place, as they did when it was static HTML.
  */
-export function mount(page: ReactNode): void {
-  const root = createRoot(byId('root'));
+export function mount(page: ReactNode, id = 'root'): void {
+  const root = createRoot(byId(id));
   flushSync(() => root.render(page));
 }

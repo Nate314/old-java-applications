@@ -77,6 +77,17 @@ function cssOf(bundle: OutputBundle, chunk: OutputChunk, seen = new Set<string>(
   return out;
 }
 
+/**
+ * A module preload for every chunk a chunk imports, theirs too, so they load beside it instead of after it has
+ * arrived and been read (vite.config.ts turns Vite's own off): one round trip less before first paint on a slow phone.
+ */
+function preloadTags(bundle: OutputBundle, chunk: OutputChunk, up: string, seen = new Set<string>()): string {
+  return chunk.imports.filter(name => !seen.has(name) && seen.add(name)).map(name => {
+    const dep = bundle[name];
+    return '<link rel="modulepreload" href="' + up + name + '">' + (dep && dep.type === 'chunk' ? preloadTags(bundle, dep, up, seen) : '');
+  }).join('');
+}
+
 export function pages(): Plugin {
   const byId = new Map(ROUTES.filter(r => !r.anyDepth).map(r => [htmlId(r), r]));
   return {
@@ -110,8 +121,17 @@ export function pages(): Plugin {
       handler(html, ctx) {
         html = withSkins(html);
         const r = byId.get(resolve(ctx.filename));
+        const entry = /<script type="module" crossorigin src="([^"]+)"><\/script>/;
+        if (ctx.bundle && ctx.chunk) html = html.replace(entry, tag => tag + preloadTags(ctx.bundle!, ctx.chunk!, './'));
         if (!r || !renderToStaticMarkup(r.head).includes('src="/src/runtime/main.ts"')) return html;
-        return html.replace(/<script type="module" crossorigin src="([^"]+)"><\/script>/, '<script type="module" crossorigin src="$1" blocking="render"></script>');
+        const blocking = (src: string) => '<script type="module" crossorigin src="' + src + '" blocking="render"></script>';
+        if (!r.placeholder) return html.replace(entry, (_, src) => blocking(src));
+        // Painted early: a page whose placeholder already shows its largest text (the home page) paints it while its
+        // scripts load. Only a trip from another page of the site (one-machine.ts's 'oldjava.trip', left by the page
+        // before) still holds the first frame for them, so its pagereveal listener sees the player it animates into.
+        // Written by the parser, the blocking copy runs like the tag it was; the module itself runs once.
+        return html.replace(entry, (tag, src) => '<script>try{sessionStorage.getItem("oldjava.trip")&&document.write(' +
+          JSON.stringify(blocking(src)).replace(/<\//g, '<\\/') + ')}catch(e){}</script>' + tag);
       },
     },
     async generateBundle(_options, bundle) {
@@ -123,6 +143,8 @@ export function pages(): Plugin {
         if (!c) throw new Error('No chunk ' + name);
         return c.fileName;
       };
+      // No module preloads here (measured): React would share the phone's bandwidth with classes.js, which the title
+      // screen waits for, and the first paint came about 0.1 s later.
       const named = (html: string) => withSkins(html).replace('"../assets/boot.js"', () => '"../' + chunk('boot') + '"')
         .replace('"../assets/news.js"', () => '"../' + chunk('news') + '"');
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });

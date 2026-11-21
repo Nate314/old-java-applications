@@ -255,17 +255,10 @@ export function Home() {
       <TakeItWithYou off={off('takeaway')} />
     </section>
   );
+  // The page's <main> and its title and lead are in the HTML (src/routes.tsx), painted before this runs.
   return (
-    <main>
+    <>
       <HeroWall />
-      <h1>Old Java Applications</h1>
-      <p className="lead">
-        <strong>{APPS.length} games, music toys and tools</strong> from old Java jars, running in your browser.
-        {' '}One is already playing below: click it to take over.
-        <span className="tech">
-          {' '}They are Swing and AWT programs compiled to JavaScript with TeaVM, on a small AWT/Swing layer that draws the original windows and widgets.
-        </span>
-      </p>
       {/* What to do first, in one row: the tour, and the story for those who want to know how. */}
       <div className="start">
         <TourStart />
@@ -288,6 +281,6 @@ export function Home() {
       </button>
       <Gallery />
       {newcomer && arcade}
-    </main>
+    </>
   );
 }
