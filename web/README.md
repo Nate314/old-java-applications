@@ -357,6 +357,10 @@ With Windows' Contrast themes (or any browser setting that forces the page's col
 
 Checked in headless Chrome with forced colors emulated (DevTools protocol, `Emulation.setEmulatedMedia`), not with a real Windows Contrast theme turned on.
 
+### Text on the accent color
+
+Filled buttons and tags (Play on the title screen, the home page's Play and Take the tour, the pressed toggles, the story's Play bar) draw their text in `--accent-ink`, which each skin sets beside `--accent` in `public/shim.css`: white on Classic's and light Modern's dark blues, and a near-black on dark Modern's light blue and Arcade's magenta, where white read at only 2.5:1 and 3.2:1. The Yours skin picks white or near-black from its accent (`ownCss` in `src/runtime/skin.ts`), and the play and lost pages set it in their own colors. An axe-core 4.10 audit (home, story, play.html, the lost page and three app pages, in each skin, dark and light Modern) went from 93 serious color contrast failures to 3.
+
 ## Then and now
 
 Every app here was reworked many times after it was first restored, so the site also keeps each app as it was on master before those reworks, to play beside today's version. That is commit `5a28e4608fc254e9cc075768a598a965b7fe2d24` ("Generic example names, Modern as the default skin, and every app in NathaNOS (#9)"): the recovered code with the light bug fixes of "Modernize all 20 apps" (#6), as the TeaVM build (#7) first ran it, before the chain of changes from #10 on (see [HISTORY.md](../HISTORY.md)). The site calls it "as first restored".

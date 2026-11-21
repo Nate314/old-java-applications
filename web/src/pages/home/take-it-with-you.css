@@ -10,7 +10,7 @@
 .takeaway p { margin: 2px 0 0; font-size: 14px; opacity: 0.9; }
 .takeaway .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .takeaway .btn { border-color: #7df9ff; color: #7df9ff; }
-.takeaway .btn.primary { background: #ff2bd6; border-color: #ff2bd6; color: #fff; }
+.takeaway .btn.primary { background: #ff2bd6; border-color: #ff2bd6; color: #07040f; }
 .takeaway .btn[hidden] { display: none; }
 .takeaway .btn:disabled { opacity: 0.6; cursor: progress; }
 .takeaway .meter { height: 6px; margin-top: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
