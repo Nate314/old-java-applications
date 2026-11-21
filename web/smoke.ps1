@@ -107,7 +107,8 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
 $pages = @(
     @{ name = 'home page'; path = 'index.html'; ready = '#player-frame' }
     @{ name = 'story'; path = 'story.html'; ready = 'main' }
-    @{ name = 'play.html (no app)'; path = 'play.html'; ready = '#oops:not([hidden])' }
+    # No ?app=: the tile picker of every app; its last tile plays that app right there.
+    @{ name = 'play.html (no app, picker)'; path = 'play.html'; App = $true; Click = '#oops:not([hidden]) .pick li:last-child button'; Frame = '#frame' }
     @{ name = "play.html?app=$($Apps[0])"; path = "play.html?app=$($Apps[0])"; App = $true; Click = '#poster-play'; Frame = '#frame' }
     @{ name = 'lost page (missing path)'; path = 'no-such-page'; ready = '#lost'; Missing = $true }
     @{ name = 'compare.html'; path = 'compare.html'; ready = 'main.compare' }
