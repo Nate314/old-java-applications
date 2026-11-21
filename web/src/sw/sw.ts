@@ -101,22 +101,39 @@ function offlinePage(): Response {
     { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
+/** Keeps a good answer: a page waits in unsettled until everything it needs is kept, anything else goes in at once. */
+function keep(k: string, response: Response, page: boolean): Promise<unknown> {
+  if (response.status !== 200 || response.type !== 'basic') return Promise.resolve();
+  return caches.open(CACHE).then(cache => (page
+    ? response.clone().text().then(html => { unsettled.set(k, { response, needs: needs(response.url || k, html) }); })
+    : cache.put(k, response)).then(() => settle(cache)));
+}
+const kept = (url: URL) => url.origin === self.location.origin && !/\/downloads\/[^/]+\.jar$/.test(url.pathname);   // the desktop jars are not kept
+
+// A page that loaded before this worker controlled it (an app page registers it only once its program loaded, so a
+// first visit from a shared link) sends what it loaded once the worker takes over (install.tsx keepOffline). The
+// copies come from the HTTP cache, so the page then plays offline from its first visit, not its second.
+sw.addEventListener('message', e => {
+  const urls: unknown = e.data && e.data.oldjavaKeep;
+  if (!Array.isArray(urls)) return;
+  e.waitUntil(Promise.all(urls.filter((u): u is string => typeof u === 'string').map(u => {
+    const url = new URL(u, sw.registration.scope);
+    if (!kept(url) || /\.(mp4|webm)$/.test(url.pathname)) return undefined;   // preview clips stream in ranges: not kept
+    const k = key(new Request(url.href)), page = isPage(url.href);
+    return caches.match(k).then(hit => hit || fetch(url.href, page ? { cache: 'no-cache' } : undefined).then(r => keep(k, r, page))).catch(() => undefined);
+  })));
+});
+
 sw.addEventListener('fetch', e => {
   const request = e.request;
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
-  if (/\/downloads\/[^/]+\.jar$/.test(url.pathname)) return;   // the desktop jars are not kept
+  if (request.method !== 'GET' || !kept(url)) return;
   const k = key(request);
   // A page is always checked with the server: one the HTTP cache kept (GitHub Pages lets it keep any file 10 minutes)
   // could name the hashed files of an older build, which this cache no longer has.
   const page = request.mode === 'navigate' || /(\.html|\/)$/.test(url.pathname);
   e.respondWith((fixedName(new URL(k)) ? caches.match(k) : Promise.resolve(undefined)).then(hit => hit || fetch(request, page ? { cache: 'no-cache' } : undefined).then(response => {
-    if (response.status === 200 && response.type === 'basic') {
-      const copy = response.clone();
-      e.waitUntil(caches.open(CACHE).then(cache => (page
-        ? copy.clone().text().then(html => { unsettled.set(k, { response: copy, needs: needs(response.url || k, html) }); })
-        : cache.put(k, copy)).then(() => settle(cache))));
-    }
+    e.waitUntil(keep(k, response.clone(), page));
     return response;
   }).catch(error => caches.match(k).then(hit => {
     if (hit) return hit;

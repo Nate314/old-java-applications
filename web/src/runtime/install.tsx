@@ -198,7 +198,15 @@ export function keepOffline() {
     navigator.serviceWorker.register(siteRoot + 'sw.js').catch(function (e) {
       console.warn('Offline play is not available: ' + e.message);
     });
+    if (!controlledAtLoad) navigator.serviceWorker.ready.then(sendLoaded);
   }
+}
+let controlledAtLoad = true;
+/** This page loaded before the worker saw it, so once the worker controls it, it is told what to keep (sw.ts message). */
+function sendLoaded() {
+  const sw = navigator.serviceWorker;
+  if (!sw.controller) { sw.addEventListener('controllerchange', sendLoaded, { once: true }); return; }
+  sw.controller.postMessage({ oldjavaKeep: [location.href].concat(performance.getEntriesByType('resource').map(e => e.name)) });
 }
 
 export function init() {
@@ -212,6 +220,7 @@ export function init() {
   theme.name = 'theme-color';
   theme.content = '#170a2e';
   document.head.appendChild(theme);
+  controlledAtLoad = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
   if (!document.body.hasAttribute('data-app')) keepOffline();   // an app page waits for its program (start.ts)
   // The home page shows its own Install button, so it keeps the browser's install prompt for that button.
   window.addEventListener('beforeinstallprompt', function (e) {
