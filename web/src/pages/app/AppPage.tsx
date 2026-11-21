@@ -5,7 +5,7 @@
 // Keep this file free of CSS imports: the build reads it in Node.
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
-import type { App } from '../../shared/catalog';
+import { webp, type App } from '../../shared/catalog';
 import { EarlyScript, RuntimeScript } from '../../shared/EarlyScript';
 import { SITE, ShareTags } from '../../shared/ShareTags';
 
@@ -57,6 +57,17 @@ function Preloads({ story }: { story: boolean }) {
   );
 }
 
+/**
+ * The title screen's picture, asked for with the page (and first among its files), so it is in by the time the
+ * runtime opens the title screen. Not in frames (?embed: the home page's player, play.html) or with ?watch, which
+ * open on the app itself. A script, ahead of the stylesheet so it need not wait for it, as a preload tag cannot say "unless".
+ */
+function TitlePicture({ app }: { app: App }) {
+  const href = JSON.stringify('../' + webp(app.shot));
+  return <script dangerouslySetInnerHTML={{ __html: 'if(!/[?&](embed|watch)(=|&|$)/.test(location.search)){var l=document.createElement("link");' +
+    'l.rel="preload";l.as="image";l.fetchPriority="high";l.href=' + href + ';document.head.appendChild(l)}' }} />;
+}
+
 /** The page's head: its name, the link preview tags (with the app's card from web/cards.ps1), skins and programs. */
 function AppHead({ app }: { app: App }) {
   const from = app.origin === 'original' ? 'Built from the original Java source' : 'Recovered from an old Java jar';
@@ -66,6 +77,7 @@ function AppHead({ app }: { app: App }) {
       <meta charSet="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{app.name}</title>
+      <TitlePicture app={app} />
       <meta name="description" content={description} />
       <ShareTags title={app.name + ' | ' + SITE} description={description} url={'../' + app.id + '/index.html'}
         image={'../cards/' + app.id + '.jpg'} alt={app.name + ', running in the browser'} />

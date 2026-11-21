@@ -1,14 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { played } from './passport';
-import { WATCH } from './watch';
+import { WATCH, watchWanted } from './watch';
 import { saverMinutes, saverOn, setSaverOn } from './saver';
 import { appId, catalog, root, type CatalogApp } from './catalog';
 import { embedded } from './skin';
 import { JAR_JAVA, JAR_KEYS, NO_QUIRKS, eraPage, indexOf, isThen, programFile, quirks, saveStore } from './then-and-now';
 import { INVITE, SHARED } from './share';
 import { sourcePanel } from './source-viewer';
-import { CATS, newsScript, savedRecord, size } from './records';
+import { AGAIN_KEY, CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
 import { fetchOk } from './fetch-ok';
@@ -21,7 +21,41 @@ export type LogLine = [string, string, string];
 export let titleLog: ((row: LogLine) => void) | null = null;
 
 /** What the page's start-up (start.ts) tells the title screen; set once it is in the page. */
-interface TitleControl { line(row: LogLine): void; done(n: number): void; ready(): void; leave(): void }
+interface TitleControl { line(row: LogLine): void; done(p: number): void; ready(): void; leave(): void }
+
+interface Opened { ui: TitleControl; screen: HTMLElement; close: () => void }
+var early: Opened | null = null, waiting = false;
+var onGo: ((e?: Event) => void) | null = null;
+
+/** Puts the title screen in the page; apps, when given, is the catalog it shows from its first frame. */
+function open(apps?: CatalogApp[]): Opened {
+  document.documentElement.setAttribute('data-title', '');
+  var ui: TitleControl | null = null, screen: HTMLElement | null = null;
+  const close = openLayer(<TitleScreen apps={apps} onGo={e => { if (onGo) onGo(e); }} onMount={(c, el) => { ui = c; screen = el; }} />);
+  titleLog = ui!.line;
+  return { ui: ui!, screen: screen!, close };
+}
+
+// The title screen opens as soon as the runtime has run and apps.json has answered, not at DOMContentLoaded:
+// that waits for the app's program (classes.js, the page's biggest file) to arrive and run, and a slow phone
+// showed nothing for seconds. The page's head has already asked for the picture (src/pages/app/AppPage.tsx).
+// start.ts then takes it over in titleScreen, or, where the page has no title screen after all, it goes again.
+export function init() {
+  var again = null;
+  try { again = sessionStorage.getItem(AGAIN_KEY); } catch (e) { /* no Run again shortcut */ }
+  if (!appId() || embedded || watchWanted() || again === appId()) return;   // start.ts's own reasons to skip it
+  waiting = true;
+  catalog().then(function (apps) { if (waiting) early = open(apps); });
+  // After start.ts's listener (its init runs first): by now it has taken the screen over, if the page has one.
+  document.addEventListener('DOMContentLoaded', function () {
+    waiting = false;
+    if (!early) return;
+    early.close();
+    early = null;
+    titleLog = null;
+    document.documentElement.removeAttribute('data-title');
+  });
+}
 
 // An app page opens on a title screen while its files load: the app's thumbnail, name, category, hint and
 // passport stamp, a boot log of the files as they arrive (real names and sizes) and a Play button. The app
@@ -29,12 +63,11 @@ interface TitleControl { line(row: LogLine): void; done(n: number): void; ready(
 // start sound) are allowed to play. Run again skips it (see overlay). Returns { loaded(file), ready(start), skip() }.
 export function titleScreen(files: string[]) {
   var html = document.documentElement;
-  html.setAttribute('data-title', '');
-  var control: TitleControl | null = null;
-  var screen: HTMLElement | null = null;
-  const close = openLayer(<TitleScreen total={files.length + 1} onGo={go} onMount={(c, el) => { control = c; screen = el; }} />);
-  const ui = control as unknown as TitleControl;
-  titleLog = ui.line;
+  const { ui, screen, close } = early || open();
+  early = null;
+  waiting = false;
+  onGo = go;
+  var total = files.length + 1;
 
   // classes.js (then.js) has loaded by now (a deferred script, run before the page's DOMContentLoaded): the app,
   // compiled by TeaVM.
@@ -43,6 +76,7 @@ export function titleScreen(files: string[]) {
     (performance.getEntriesByName(program ? program.src : new URL(programFile(), location.href).href)[0] as PerformanceResourceTiming | undefined);
   ui.line([programFile(), entry && entry.decodedBodySize ? size(entry.decodedBodySize) : 'ok', '']);
   var done = 1;
+  ui.done(done / total);
 
   var started: (() => void) | null = null, skipping = false, leaving = false;
   function go(e?: Event) {
@@ -67,7 +101,7 @@ export function titleScreen(files: string[]) {
     var start = started;
     started = null;
     // Let go of Play, so the app's first button or field can take the keyboard (the shim's TDesktop.show).
-    if (screen!.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    if (screen.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     start();
     setTimeout(function () { close(); titleLog = null; }, 400);
   }
@@ -75,14 +109,14 @@ export function titleScreen(files: string[]) {
   return {
     loaded: function (file: string) {
       var bytes = window.__shimFiles && (window.__shimFiles[file] as Uint8Array | undefined);
-      ui.done(++done);
+      ui.done(++done / total);
       ui.line([file, bytes ? size(bytes.byteLength) : 'missing', bytes ? '' : 'bad']);
     },
     ready: function (start: () => void) {
       started = start;
       ui.line(['Ready.', '', 'ready']);
       ui.ready();
-      if (!sourcePanel) screen!.querySelector<HTMLElement>('.shim-title-play')!.focus({ preventScroll: true });   // keep the keyboard in an open source panel
+      if (!sourcePanel) screen.querySelector<HTMLElement>('.shim-title-play')!.focus({ preventScroll: true });   // keep the keyboard in an open source panel
       document.addEventListener('keydown', go, true);
       if (skipping) go();
     },
@@ -92,8 +126,8 @@ export function titleScreen(files: string[]) {
 }
 
 /** The title screen itself; titleScreen above runs it. */
-function TitleScreen({ total, onGo, onMount }: {
-  total: number; onGo: (e: Event) => void; onMount: (control: TitleControl, el: HTMLElement) => void;
+function TitleScreen({ apps, onGo, onMount }: {
+  apps?: CatalogApp[]; onGo: (e: Event) => void; onMount: (control: TitleControl, el: HTMLElement) => void;
 }) {
   const id = appId()!;
   const then = isThen();
@@ -101,13 +135,14 @@ function TitleScreen({ total, onGo, onMount }: {
   const log = useRef<HTMLPreElement>(null);
   const [Story, setStory] = useState<NonNullable<Window['oldjavaNews']>['Story'] | null>(null);
   const [lines, setLines] = useState<LogLine[]>([]);
-  const [done, setDone] = useState(1);
+  const [done, setDone] = useState(0);   // the share of the files in
   const [ready, setReady] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [found, setFound] = useState<{ app: CatalogApp; apps: CatalogApp[] } | null>(null);
-  const [listed, setListed] = useState(false);   // apps.json has answered: the card shows, filled in, not half empty
+  const first = apps && apps[indexOf(apps, id)];
+  const [found, setFound] = useState<{ app: CatalogApp; apps: CatalogApp[] } | null>(first ? { app: first, apps: apps! } : null);
+  const [listed, setListed] = useState(!!apps);   // apps.json has answered: the card shows, filled in, not half empty
   const [quirkList, setQuirkList] = useState<string[][] | null>(null);
-  const [shown, setShown] = useState(false);   // the thumbnail, once it has loaded
+  const [shown, setShown] = useState(false);   // the thumbnail has loaded (the clip waits for it)
   const [record] = useState(() => savedRecord(saveStore()));
   const [forgotten, setForgotten] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -117,7 +152,7 @@ function TitleScreen({ total, onGo, onMount }: {
     onMount({
       // Each is drawn at once, as the old DOM version was, so the log and the Play button are in place for the caller.
       line: row => flushSync(() => setLines(l => l.concat([row]))),
-      done: n => flushSync(() => setDone(n)),
+      done: p => flushSync(() => setDone(p)),
       ready: () => flushSync(() => setReady(true)),
       leave: () => flushSync(() => setLeaving(true)),
     }, screen.current!);
@@ -152,7 +187,8 @@ function TitleScreen({ total, onGo, onMount }: {
       role="dialog" data-sound="none" aria-label={document.title} ref={screen} onClick={onClick}>
       <div className="shim-title-card">
         <div className="shim-title-art">
-          <img alt="" hidden={!shown} src={app && !then ? app.shot.replace(/[.]png$/, '.webp') : undefined} onLoad={() => setShown(true)} />
+          {/* Shown as it arrives: today's picture has its room from the start on a phone (shim.css), so nothing moves. */}
+          <img alt="" fetchPriority="high" src={app && !then ? app.shot.replace(/[.]png$/, '.webp') : undefined} onLoad={() => setShown(true)} />
           {app && app.clip && !then && <Attract id={id} go={ready && shown} />}
           {app && then && (
             // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.
@@ -215,7 +251,7 @@ function TitleScreen({ total, onGo, onMount }: {
           {/* Until news.js answers, its line's room is kept (today's page only), so the meter and log below stay put. */}
           {Story ? <Story id={id} /> : <details className="shim-title-story" hidden={then} aria-hidden="true" />}
         </div>
-        <span className="shim-meter shim-title-meter" style={{ '--p': String(done / total) } as CSSProperties} />
+        <span className="shim-meter shim-title-meter" style={{ '--p': String(done) } as CSSProperties} />
         {/* tabIndex -1: Chrome puts a scroller in the tab order, and this one is hidden from screen readers. */}
         <pre className="shim-title-log" aria-hidden="true" tabIndex={-1} ref={log}>
           {lines.map(([label, value, cls], i) => (
