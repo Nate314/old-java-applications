@@ -21,11 +21,21 @@ public class SortCheck {
 						check(step.a >= 0 && step.a < n && (step.kind == Sorts.WRITE || step.b >= 0 && step.b < n),
 								Sorts.NAMES[algorithm] + ": step inside the numbers");
 						step.apply(values);
+						String said = step.describe(values);
+						check(!said.isEmpty() && said.indexOf('%') < 0, Sorts.NAMES[algorithm] + ": every step says why");
 					}
 					check(Arrays.equals(values, sorted), Sorts.NAMES[algorithm] + " sorts " + n + " " + Sorts.ORDERS[order]);
 				}
 			}
 		}
+
+		// The notes name the right values and places.
+		check(said(0, new int[] { 2, 1 }, 0).equals("2 is bigger than its right neighbor 1, so they swap."), "bubble compare note");
+		check(said(0, new int[] { 2, 1 }, 1).equals("They swap: 2 moves right, toward the end."), "bubble swap note");
+		check(said(4, new int[] { 3, 1, 2 }, 0).equals("3 is not smaller than the pivot 2, so it stays on the big side."), "quicksort compare note");
+		check(said(4, new int[] { 3, 1, 2 }, 1).equals("1 is smaller than the pivot 2, so it joins the small side."), "quicksort small side note");
+		check(said(3, new int[] { 2, 1 }, 0).equals("1 from the right half is smaller than 2 from the left, so 1 goes to place 1."), "merge compare note");
+		check(said(3, new int[] { 2, 1 }, 2).equals("One half is used up, so 2, next from the other, goes to place 2."), "merge used-up note");
 
 		// The lessons the race shows hold for these numbers.
 		int[] nearly = Sorts.numbers(1, 64, new Random(1));
@@ -77,6 +87,16 @@ public class SortCheck {
 		race.seek(race.span + 99);
 		check(race.clock == race.span && race.finished(), "seek stops at the end");
 		System.out.println("SortCheck passed");
+	}
+
+	/** What step i of a sort says, with the values after it. */
+	private static String said(int algorithm, int[] numbers, int i) {
+		int[] values = numbers.clone();
+		List<Sorts.Step> steps = Sorts.trace(algorithm, numbers);
+		for (int s = 0; s <= i; s++) {
+			steps.get(s).apply(values);
+		}
+		return steps.get(i).describe(values);
 	}
 
 	private static int cost(int algorithm, int[] numbers) {
