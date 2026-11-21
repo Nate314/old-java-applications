@@ -170,6 +170,12 @@ public final class CellButton extends JButton implements ActionListener {
       if (hint != null) {
          tile = mix(tile, ReviewGraph.color(hint), 0.28);   // Hints: the tile leans to the color a review would grade the move
       }
+      double[] looked = mark.isEmpty() ? this.game.thinking() : null;
+      double focus = looked == null ? 0 : looked[this.move()];
+      Color mover = state.xTurn ? X_COLOR : O_COLOR;
+      if (focus > 0) {
+         tile = mix(tile, mover, 0.5 * focus);   // the computer thinking: a tile glows as much as its search looks there
+      }
       g.setColor(last ? CELL_LAST : tile);
       g.fillRoundRect(pad / 2, pad / 2, w - pad, h - pad, arc, arc);
 
@@ -180,6 +186,9 @@ public final class CellButton extends JButton implements ActionListener {
             progress(now, this.game.placedAt[this.move()], MARK_MS), alpha);
       } else if (this.game.previewMove() == this.move()) {
          this.paintMark(g, state.xTurn ? "X" : "O", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 90);
+      } else if (focus == 1) {
+         // Its favorite so far, as a faint mark; it may change its mind before the move lands.
+         this.paintMark(g, state.xTurn ? "X" : "O", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 110);
       } else if (this.game.reviewBetter() == this.move()) {
          // Review: where the search would have played instead, a faint mark of the side that moved in a gold ring.
          this.paintMark(g, state.xTurn ? "O" : "X", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 110);

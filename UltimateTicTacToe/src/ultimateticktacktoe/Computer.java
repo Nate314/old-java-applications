@@ -150,6 +150,19 @@ public final class Computer {
          return doubts;
       }
 
+      /** How much of the search each move has had so far, the most searched at 1; 0 for moves not yet tried. */
+      double[] attention() {
+         double[] share = new double[81];
+         int most = 1;
+         for (Node child : this.root.children) {
+            most = Math.max(most, child.visits);
+         }
+         for (Node child : this.root.children) {
+            share[child.move] = child.visits / (double) most;
+         }
+         return share;
+      }
+
       /** The move Hard would play: the one searched most; -1 before any search. */
       int best() {
          Node best = null;
