@@ -58,6 +58,8 @@ public final class WindowsEWindow extends JFrame {
    private final String page;
    private Shortcut shortcut;
    private WindowsEPresser presser;
+   /** The count is the one the picked key offered, untouched: the next digit typed replaces it. */
+   private boolean freshCount;
 
    /** page: see {@link #page}; friend: the list a friend's link or code brought, or null. */
    WindowsEWindow(Keys keys, Consumer<String> copy, String page, List<Step> friend) {
@@ -77,14 +79,22 @@ public final class WindowsEWindow extends JFrame {
       this.countField.setToolTipText("How many times DO IT!!! presses the picked key, or Add step puts it on the list");
       this.countField.getAccessibleContext().setAccessibleName("How many times");
       this.countField.addActionListener(event -> this.doIt(false));
-      this.countField.addKeyListener(new KeyAdapter() {
+      // The real keyboard plays the drawn one: E, D or R picks that key, a number is the count, Enter presses it.
+      KeyAdapter typing = new KeyAdapter() {
          @Override
-         public void keyReleased(KeyEvent event) {
+         public void keyPressed(KeyEvent event) {
             if (WindowsEWindow.this.presser == null) {
-               WindowsEWindow.this.planChanged();
+               WindowsEWindow.this.board.echo(event.getKeyCode());
             }
          }
-      });
+
+         @Override
+         public void keyReleased(KeyEvent event) {
+            WindowsEWindow.this.typed(event);
+         }
+      };
+      this.countField.addKeyListener(typing);
+      this.board.listen(typing);
       this.sideBySideButton.setToolTipText("Lists Win+E, Win+Left, Win+E, Win+Right: two File Explorer windows, one on each half");
       this.sideBySideButton.addActionListener(event -> this.setSteps(SIDE_BY_SIDE));
       this.addButton.setToolTipText("Puts the picked key on the list; DO IT!!! then presses the list in order");
@@ -135,9 +145,51 @@ public final class WindowsEWindow extends JFrame {
          return;
       }
       this.shortcut = shortcut;
+      this.freshCount = true;
       this.countField.setText(String.valueOf(shortcut.times));
       this.board.pick(shortcut);
       this.planChanged();
+   }
+
+   /**
+    * A key let go on the real keyboard, in the count field or on a drawn key: the drawn key with that letter goes down,
+    * E, D or R picks its shortcut, and the field keeps only digits. The first digit after a pick replaces the count it
+    * offered, so E 5 Enter presses Win+E five times.
+    */
+   private void typed(KeyEvent event) {
+      if (this.presser != null) {
+         return;
+      }
+      int code = event.getKeyCode();
+      this.board.letGo();
+      Shortcut letter = Shortcut.forLetter(code);
+      if (letter != null) {
+         this.pick(letter);
+         this.freshCount = true;
+      } else if (code == KeyEvent.VK_BACK_SPACE || code == KeyEvent.VK_DELETE || code == KeyEvent.VK_LEFT
+         || code == KeyEvent.VK_RIGHT || code == KeyEvent.VK_HOME || code == KeyEvent.VK_END) {
+         this.freshCount = false;   // editing the count by hand: digits go where the caret is
+      }
+      int digit = code >= KeyEvent.VK_0 && code <= KeyEvent.VK_9 ? code - KeyEvent.VK_0
+         : code >= KeyEvent.VK_NUMPAD0 && code <= KeyEvent.VK_NUMPAD9 ? code - KeyEvent.VK_NUMPAD0 : -1;
+      String text = this.countField.getText();
+      String next = countAfter(text, this.freshCount ? digit : -1);
+      if (digit >= 0) {
+         this.freshCount = false;
+         if (event.getSource() != this.countField) {   // typed on a drawn key: the count goes on in the field
+            next = String.valueOf(digit);
+            this.countField.requestFocusInWindow();
+         }
+      }
+      if (!next.equals(text)) {
+         this.countField.setText(next);
+      }
+      this.planChanged();
+   }
+
+   /** The field's text after a key: only its digits, or just the digit typed when it replaces a picked key's count (-1: none). */
+   static String countAfter(String text, int replacingDigit) {
+      return replacingDigit >= 0 ? String.valueOf(replacingDigit) : text.replaceAll("[^0-9]", "");
    }
 
    /** A double-clicked key: picked, then pressed as many times as the field says. */

@@ -52,6 +52,7 @@ public class WindowsECheck {
          check(s.times >= 1 && !s.title.isEmpty() && !s.does.isEmpty() && s.combo().startsWith("Win"), s + " is described");
       }
       check(Shortcut.EXPLORER.times == 10, "Win+E still offers 10, as the original did");
+      typingChecks();
       screenChecks();
       boardChecks();
       sendChecks();
@@ -89,6 +90,60 @@ public class WindowsECheck {
          }
          check(pocket ? size.width <= 400 : size.width > 800, "board width " + size.width + " (pocket " + pocket + ")");
       }
+   }
+
+   /** The real keyboard: E, D and R pick their key, other keys none; the count keeps digits; E then 5 is Win+E x5. */
+   static void typingChecks() throws Exception {
+      check(Shortcut.forLetter(KeyEvent.VK_E) == Shortcut.EXPLORER && Shortcut.forLetter(KeyEvent.VK_D) == Shortcut.DESKTOP
+         && Shortcut.forLetter(KeyEvent.VK_R) == Shortcut.RUN, "E, D and R pick their keys");
+      for (int code : new int[] {KeyEvent.VK_Q, KeyEvent.VK_TAB, KeyEvent.VK_LEFT, KeyEvent.VK_UP, 0}) {
+         check(Shortcut.forLetter(code) == null, "key " + code + " picks nothing");
+      }
+      check(WindowsEWindow.countAfter("10e", -1).equals("10") && WindowsEWindow.countAfter("105", 5).equals("5")
+         && WindowsEWindow.countAfter("1x2", -1).equals("12"), "the count keeps its digits, or the digit replacing it");
+      if (java.awt.GraphicsEnvironment.isHeadless()) {
+         return;
+      }
+      Recorder keys = new Recorder();
+      String[] got = new String[3];
+      SwingUtilities.invokeAndWait(() -> {
+         WindowsEWindow w = new WindowsEWindow(keys, t -> { }, null, null, false);
+         javax.swing.JTextField field = field(w);
+         type(field, KeyEvent.VK_D, field.getText() + "d");   // as the field would have it after the letter
+         got[0] = field.getText();
+         type(field, KeyEvent.VK_5, field.getText() + "5");
+         type(field, KeyEvent.VK_2, field.getText() + "2");
+         got[1] = field.getText();
+         type(field, KeyEvent.VK_E, field.getText() + "e");
+         type(field, KeyEvent.VK_BACK_SPACE, "1");
+         type(field, KeyEvent.VK_3, "13");
+         got[2] = field.getText();
+         w.dispose();
+      });
+      check("1".equals(got[0]), "D picks Win+D and its count, the letter left out: " + got[0]);
+      check("52".equals(got[1]), "5 then 2 replace the offered count: " + got[1]);
+      check("13".equals(got[2]), "after Backspace, digits go on the count: " + got[2]);
+      check(keys.log.isEmpty(), "typing presses nothing");
+   }
+
+   /** A key let go in the field, once the field's text is text. */
+   private static void type(javax.swing.JTextField field, int code, String text) {
+      field.setText(text);
+      KeyEvent e = new KeyEvent(field, KeyEvent.KEY_RELEASED, 0, 0, code, KeyEvent.CHAR_UNDEFINED);
+      for (java.awt.event.KeyListener l : field.getKeyListeners()) {   // straight to the listeners: the window is not shown
+         l.keyReleased(e);
+      }
+   }
+
+   private static javax.swing.JTextField field(java.awt.Container in) {
+      for (java.awt.Component c : in.getComponents()) {
+         javax.swing.JTextField f = c instanceof javax.swing.JTextField ? (javax.swing.JTextField) c
+            : c instanceof java.awt.Container ? field((java.awt.Container) c) : null;
+         if (f != null) {
+            return f;
+         }
+      }
+      return null;
    }
 
    /** Send's codes read back as the same list, a bad code is no list, and a friend's list is loaded without a press. */

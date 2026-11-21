@@ -7,6 +7,8 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -30,6 +32,7 @@ final class ShortcutBoard extends JPanel {
    private static final Color DECK = new Color(28, 30, 36);
    private static final Color KEY = new Color(48, 51, 60);
    private static final Color KEY_SIDE = new Color(22, 23, 28);
+   private static final Color KEY_DOWN = new Color(78, 84, 98);
    private static final Color KEY_TEXT = new Color(128, 133, 145);
    private static final Color INK = new Color(28, 32, 40);
    private static final Color MUTED = new Color(92, 98, 110);
@@ -102,6 +105,8 @@ final class ShortcutBoard extends JPanel {
    /** The screen after the plan, and while a run goes (and after it, until the plan changes) the screen it made. */
    private Screen after = new Screen();
    private Screen live;
+   /** The drawn key (its label) last typed on the real keyboard, down for a moment; null when none. */
+   private String echoed;
 
    /**
     * onPick runs when a key is clicked; onPress when one is double-clicked (pick it and press it). count: the field
@@ -220,8 +225,30 @@ final class ShortcutBoard extends JPanel {
       this.repaint();
    }
 
-   /** The press is over: the keys come back up. */
-   private void letGo() {
+   /** Every shortcut's key hears the real keyboard too (a key that has the focus gets the typing). */
+   void listen(KeyListener listener) {
+      for (KeyCap cap : this.caps.values()) {
+         cap.addKeyListener(listener);
+      }
+   }
+
+   /** A key held down on the real keyboard: its drawn key, if the board has one with that letter, goes down until {@link #letGo}. */
+   void echo(int keyCode) {
+      Shortcut s = Shortcut.forLetter(keyCode);
+      if (s != null && this.caps.containsKey(s)) {
+         this.caps.get(s).setPushed(true);
+      } else if (keyCode >= KeyEvent.VK_A && keyCode <= KeyEvent.VK_Z) {
+         this.echoed = String.valueOf((char) keyCode);
+      }
+      this.repaint();
+   }
+
+   /** The press is over (or the real key let go): the keys come back up. */
+   void letGo() {
+      if (this.echoed != null) {
+         this.echoed = null;
+         this.repaint();
+      }
       for (KeyCap cap : this.caps.values()) {
          cap.setPushed(false);
       }
@@ -246,12 +273,13 @@ final class ShortcutBoard extends JPanel {
          for (Slot slot : this.layout[row]) {
             if (slot.shortcut == null && slot.label != null) {
                int[] r = this.bounds(row, tenths, slot.tenths);
+               boolean down = slot.label.equals(this.echoed);
                g.setColor(KEY_SIDE);
                g.fillRoundRect(r[0], r[1] + 3, r[2], r[3] - 3, 9, 9);
-               g.setColor(KEY);
-               g.fillRoundRect(r[0], r[1], r[2], r[3] - 4, 9, 9);
-               g.setColor(KEY_TEXT);
-               g.drawString(slot.label, r[0] + 8, r[1] + 17);
+               g.setColor(down ? KEY_DOWN : KEY);
+               g.fillRoundRect(r[0], r[1] + (down ? 3 : 0), r[2], r[3] - 4, 9, 9);
+               g.setColor(down ? Color.WHITE : KEY_TEXT);
+               g.drawString(slot.label, r[0] + 8, r[1] + 17 + (down ? 3 : 0));
             }
             tenths += slot.tenths;
          }
@@ -301,7 +329,7 @@ final class ShortcutBoard extends JPanel {
          g.drawString(does, x, y + 31);
       }
 
-      String right = this.running ? (this.dry ? "Preview " : "Pressing ") + this.done + " of " + this.total : "Double-click a key to press it";
+      String right = this.running ? (this.dry ? "Preview " : "Pressing ") + this.done + " of " + this.total : "Double-click a key, or type E 5 Enter";
       g.setFont(new Font("SansSerif", this.running ? Font.BOLD : Font.PLAIN, this.running ? 14 : 11));
       g.setColor(this.running ? KeyCap.ACCENT : MUTED);
       FontMetrics fm = g.getFontMetrics();
