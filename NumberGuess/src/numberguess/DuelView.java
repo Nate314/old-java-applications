@@ -111,10 +111,10 @@ final class DuelView {
 		g.drawString("?", cardX + 22 - g.getFontMetrics().stringWidth("?") / 2, cardY + 38);
 		g.setColor(Board.TEXT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 14));
-		g.drawString("The computer has hidden its number.", cardX + 60, cardY + 20);
+		Board.drawFitted(g, "The computer has hidden its number.", cardX + 60, cardY + 20, area.width - 60);
 		g.setColor(Board.SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-		g.drawString("Each round you both guess. Fewer guesses wins; the same is a draw.", cardX + 60, cardY + 40);
+		Board.drawFitted(g, "Each round you both guess. Fewer guesses wins; the same is a draw.", cardX + 60, cardY + 40, area.width - 60);
 		if (hover > 0) {
 			Board.paintBubble(g, hover, xOf(line, hover - 0.5, 1, Duel.MAX), line);
 		}
@@ -167,7 +167,7 @@ final class DuelView {
 		paintMarks(g, bar, game.guesses(), game.number(), true, flash ? game.getGuesses() - 1 : -1);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 		g.setColor(Board.SOFT);
-		g.drawString(thought(duel), area.x, ITS_BAR_Y + ITS_BAR_HEIGHT + 32);
+		Board.drawFitted(g, thought(duel), area.x, ITS_BAR_Y + ITS_BAR_HEIGHT + 32, area.width);
 	}
 
 	/** What the computer is up to, in its own words. */
