@@ -1,6 +1,8 @@
 package tankgame;
 
 import java.awt.Color;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -49,6 +51,7 @@ public final class BattleCheck
         soundSetting();
         computerAgainstComputerWithSupplies();
         pointerDrivesAndFires();
+        titleButtons();
         buildYourOwnBattlefield();
         computerFightsOnABuiltBattlefield();
         narrowWindowSetsABlockingFieldAside();
@@ -586,6 +589,36 @@ public final class BattleCheck
         pointer.tapToStart();
         battle.tick(W, H);
         assert battle.phase() == Battle.Phase.ROUND_START && battle.vsComputer();
+    }
+
+    /**
+     * The title card's buttons, at full and phone width: a press on "2 players" starts a two-player match, and the
+     * Crates setting (bottom left: a row of four when wide, two by two when narrow) turns crates off like X.
+     */
+    private static void titleButtons()
+    {
+        for (int width : new int[] { W, 360 })
+        {
+            Tank red = new Tank("Red", Color.RED, new Script(), 100, 250, 90);
+            Tank green = new Tank("Green", Color.GREEN, new Script(), width - 120, 250, 270);
+            Battle battle = new Battle(red, green, new ComputerControls(new Random(4)), null);
+            battle.setSupplies(true);
+            GamePanel panel = new GamePanel(battle);
+            panel.setSize(width, H);
+            battle.tick(width, H);
+            panel.paint(new BufferedImage(width, H, BufferedImage.TYPE_INT_RGB).getGraphics());
+            press(panel, 40, H - (width >= 440 ? 25 : 61));
+            assert !battle.supplies() : "the Crates button turns crates off at " + width;
+            // 2 players: the right half of the row of buttons under the title card's lines.
+            press(panel, width * 3 / 4, 150);
+            assert battle.phase() == Battle.Phase.ROUND_START && !battle.vsComputer() : battle.phase() + " at " + width;
+        }
+    }
+
+    private static void press(GamePanel panel, int x, int y)
+    {
+        panel.paint(new BufferedImage(panel.getWidth(), panel.getHeight(), BufferedImage.TYPE_INT_RGB).getGraphics());
+        panel.dispatchEvent(new MouseEvent(panel, MouseEvent.MOUSE_PRESSED, 0, 0, x, y, 1, false, MouseEvent.BUTTON1));
     }
 
     /**
