@@ -130,13 +130,31 @@ public final class TDesktop {
         });
     }
 
+    /**
+     * As on the desktop, closing or hiding the active window activates the one used before it (windows is kept in
+     * order of use), which lights up and takes the keyboard back: its focus owner, or the window itself.
+     */
     public static void hide(TWindow w) {
-        if (active == w) {
-            active = null;
-            for (TWindow other : windows) {
-                if (other != w && other.isVisible()) {
-                    active = other;
-                }
+        if (active != w) {
+            return;
+        }
+        active = null;
+        for (int i = windows.size() - 1; i >= 0; i--) {
+            TWindow next = windows.get(i);
+            if (next != w && next.isVisible() && next.getFocusableWindowState()) {
+                activate(next);
+                Edt.post(() -> {
+                    if (active != next || !next.isVisible() || !Js.pageFocusFree(next.element())) {
+                        return; // another window came up meanwhile, or the visitor's focus is elsewhere on the page
+                    }
+                    TComponent owner = next.focusOwner();
+                    if (owner != null && owner.isShowing()) {
+                        next.setFocusOwner(owner);
+                    } else {
+                        Js.focusWindow(next.element());
+                    }
+                });
+                return;
             }
         }
     }
@@ -154,7 +172,15 @@ public final class TDesktop {
     }
 
     public static void activate(TWindow w) {
+        if (!w.getFocusableWindowState() && active != null && active != w && active.isVisible()
+                && active.getFocusableWindowState()) {
+            restack(w); // as in Swing, a window that cannot take focus comes up without taking the keyboard
+            return;
+        }
         active = w;
+        if (windows.remove(w)) {
+            windows.add(w); // the most recently used last, for hide
+        }
         restack(w);
         for (TWindow other : windows) {
             Js.toggleClass(other.element(), "active", other == w);
