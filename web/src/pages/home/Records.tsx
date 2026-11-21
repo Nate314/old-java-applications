@@ -55,8 +55,8 @@ export function Records({ onCount }: { onCount?: (n: number) => void }) {
     const rest = params.toString();
     history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
     decode(payload).then(bundle => {
+      bringIn(bundle, 'a link');   // shows the Records panel first: a hidden panel cannot be scrolled to
       byId('records').scrollIntoView({ block: 'start' });
-      bringIn(bundle, 'a link');
     }).catch(() => say('Could not read the saves in that link: it may have been cut short when it was copied.'));
   }, []);
 
