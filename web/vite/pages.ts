@@ -143,9 +143,12 @@ export function pages(): Plugin {
         if (!c) throw new Error('No chunk ' + name);
         return c.fileName;
       };
-      // No module preloads here (measured): React would share the phone's bandwidth with classes.js, which the title
-      // screen waits for, and the first paint came about 0.1 s later.
-      const named = (html: string) => withSkins(html).replace('"../assets/boot.js"', () => '"../' + chunk('boot') + '"')
+      // boot.js's own imports (React first) are preloaded beside it: boot.js holds the first frame (blocking="render")
+      // and the title screen no longer waits for classes.js, so asking for React only once boot.js had arrived put a
+      // whole download in front of the first frame (about 0.3 s on a throttled phone, measured in round 55).
+      const boot = bundle[chunk('boot')] as OutputChunk;
+      const named = (html: string) => withSkins(html).replace(/"\.\.\/assets\/boot\.js"[^>]*><\/script>/, tag =>
+        tag.replace('assets/boot.js', chunk('boot')) + preloadTags(bundle, boot, '../'))
         .replace('"../assets/news.js"', () => '"../' + chunk('news') + '"');
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
       for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: await withEarly(named(appPage(app))) });

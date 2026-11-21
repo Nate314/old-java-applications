@@ -25,19 +25,23 @@ export interface Floor {
 export function screenFloor(desktop: HTMLElement): Floor {
   var html = document.documentElement;
   var on = desktop.ownerDocument === document && html.hasAttribute('data-full') && !document.body.hasAttribute('data-shell');
+  if (!on) return unfloored(desktop);   // before reading the frame's size, which lays the page out
   var fw = innerWidth, fh = innerHeight;
-  var big = on && fw > 0 && fh > 0 ? Math.max(1, FLOOR_LONG / Math.max(fw, fh), FLOOR_SHORT / Math.min(fw, fh)) : 1;
+  var big = fw > 0 && fh > 0 ? Math.max(1, FLOOR_LONG / Math.max(fw, fh), FLOOR_SHORT / Math.min(fw, fh)) : 1;
   var s = desktop.style;
-  if (big === 1) {
-    s.width = s.height = s.right = s.bottom = '';
-    return { k: 1, fit: '' };
-  }
+  if (big === 1) return unfloored(desktop);
   var w = Math.round(fw * big), h = Math.round(fh * big), k = Math.min(fw / w, fh / h);
   s.right = s.bottom = 'auto';
   s.width = w + 'px';
   s.height = h + 'px';
   // About #desktop's center, the transform origin centerWindows also uses: its center lands on the frame's.
   return { k: k, fit: 'translate(' + (fw - w) / 2 + 'px, ' + (fh - h) / 2 + 'px) scale(' + k + ')' };
+}
+
+function unfloored(desktop: HTMLElement): Floor {
+  var s = desktop.style;
+  s.width = s.height = s.right = s.bottom = '';
+  return { k: 1, fit: '' };
 }
 
 /** For apps that place their own windows (no centerWindows): keep the pretend screen fitted to the frame. */
