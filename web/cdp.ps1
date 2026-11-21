@@ -111,7 +111,8 @@ function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chr
     if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
     if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
     # http.server with a longer listen queue: its default of 5 refused some of a page's bursts of requests on Windows.
-    $py = 'import sys, functools, http.server as h; h.ThreadingHTTPServer.request_queue_size = 128; h.test(functools.partial(h.SimpleHTTPRequestHandler, directory=sys.argv[2]), h.ThreadingHTTPServer, port=int(sys.argv[1]), bind=''127.0.0.1'')'
+    # A miss answers the site's 404.html with status 404, as GitHub Pages and nginx.conf do (the smoke test's lost page).
+    $py = 'import sys, functools, http.server as h; h.ThreadingHTTPServer.request_queue_size = 128; R = h.SimpleHTTPRequestHandler; o = R.send_error; R.send_error = lambda s, c, *a, **k: o(s, c, *a, **k) if c != 404 else (lambda b: (s.send_response(404), s.send_header(''Content-Type'', ''text/html; charset=utf-8''), s.send_header(''Content-Length'', str(len(b))), s.end_headers(), s.command != ''HEAD'' and s.wfile.write(b)))(open(sys.argv[2] + ''/404.html'', ''rb'').read()); h.test(functools.partial(h.SimpleHTTPRequestHandler, directory=sys.argv[2]), h.ThreadingHTTPServer, port=int(sys.argv[1]), bind=''127.0.0.1'')'
     $server = Start-Process python -ArgumentList "-c `"$py`" $Port `"$site`"" -PassThru -WindowStyle Hidden
     $profileDir = Join-Path $ProfileRoot ("oldjava-$name-$Port-" + [IO.Path]::GetRandomFileName().Substring(0, 8))
     $browser = Start-Process $Chrome -PassThru -ArgumentList '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio',
