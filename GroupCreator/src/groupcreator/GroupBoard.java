@@ -151,6 +151,16 @@ public class GroupBoard extends JPanel {
    /** How much the board is enlarged while presenting (mouse positions are divided by it). */
    private double scale = 1;
    private final Rectangle presentButton = new Rectangle();
+   /** A board narrower than this (a phone held upright) wraps the header's line, the button bar, and stacks Pick someone and Roll call. */
+   private static final int NARROW = 560;
+   private boolean narrow;
+   /** The header's and the button bar's heights in the last paint: taller on a narrow board. */
+   private int headerHeight = HEADER;
+   private int barHeight = BAR;
+   /** The bar's buttons were wrapped onto rows (and drawn without their key letters); its padding. */
+   private boolean barWrapped;
+   private boolean barKeys = true;
+   private int barPad = 12;
 
    // Roll call: the name tiles, the keep-apart list beside them, and the keyboard's place among the tiles.
    private boolean keepApart;
@@ -410,6 +420,15 @@ public class GroupBoard extends JPanel {
       return picking ? pickButtons : rollCall ? rollButtons : shownRound > 0 ? backButtons : groupButtons;
    }
 
+   /** Where the bar's buttons were laid out in the last paint (for NarrowCheck). */
+   Rectangle[] barBounds() {
+      List<Rectangle> bounds = new ArrayList<>();
+      for (Button button : buttons()) {
+         bounds.add(button.bounds);
+      }
+      return bounds.toArray(new Rectangle[0]);
+   }
+
    /** Picks someone who has not had a turn yet, and spins the wheel to them. */
    private void spin() {
       if (wheel.spinning()) {
@@ -434,7 +453,7 @@ public class GroupBoard extends JPanel {
          present(!presenting);
          return;
       }
-      if (!presenting && y >= getHeight() - BAR) {
+      if (!presenting && y >= getHeight() - barHeight) {
          for (Button button : buttons()) {
             if (button.enabled && button.bounds.contains(x, y)) {
                if (button != clear) {
@@ -620,7 +639,6 @@ public class GroupBoard extends JPanel {
          w = (int) (w / scale);
          h = (int) (h / scale);
       }
-      int bottom = presenting ? h : h - BAR;
       reshuffle.enabled = !history.isEmpty();
       clear.enabled = !history.isEmpty();
       earlier.enabled = shownRound > 1;
@@ -635,6 +653,11 @@ public class GroupBoard extends JPanel {
       long now = System.currentTimeMillis();
       workButton.on = work.running();
       workButton.label = work.up(now) ? "Time's up" : work.running() ? "Stop timer" : "Work " + work.minutes + " min";
+      // Laid out once every label above is set.
+      narrow = w < NARROW;
+      headerHeight = narrow ? HEADER + 24 : HEADER;
+      barHeight = presenting ? 0 : layoutBar(g, w, h);
+      int bottom = h - barHeight;
       String[] header;
       if (picking) {
          header = paintPick(g, w, bottom);
@@ -675,7 +698,26 @@ public class GroupBoard extends JPanel {
       int room = right - 16;
       text(g, fit(g, header[0], TITLE, room), TITLE, INK, 16, 22);
       Color color = header[2].equals("fresh") ? FRESH : header[2].equals("again") ? AGAIN : header[2].equals("error") ? ERROR : MUTED;
-      text(g, fit(g, header[1], TEXT, room), TEXT, color, 16, 41);
+      if (!narrow) {
+         text(g, fit(g, header[1], TEXT, room), TEXT, color, 16, 41);
+         return;
+      }
+      // Narrow: the line runs under the buttons, across the board, on two lines.
+      String line = header[1];
+      int full = w - 32;
+      if (width(g, line, TEXT) > full) {
+         int cut = line.length();
+         while (cut > 0 && (line.charAt(cut - 1) != ' ' || width(g, line.substring(0, cut - 1), TEXT) > full)) {
+            cut--;
+         }
+         if (cut > 0) {
+            text(g, line.substring(0, cut - 1), TEXT, color, 16, 52);
+            line = line.substring(cut);
+            text(g, fit(g, line, TEXT, full), TEXT, color, 16, 69);
+            return;
+         }
+      }
+      text(g, fit(g, line, TEXT, full), TEXT, color, 16, 52);
    }
 
    /** The Present (or, while presenting, Back) button, ending at x = right. Returns its left edge. */
@@ -741,7 +783,7 @@ public class GroupBoard extends JPanel {
       }
       pile.clear();
       boolean timeline = history.size() >= 2 && !presenting;
-      Rectangle[] cards = layoutCards(w, HEADER + 6, bottom - HEADER - 12 - (timeline ? TIMELINE : 0));
+      Rectangle[] cards = layoutCards(w, headerHeight + 6, bottom - headerHeight - 12 - (timeline ? TIMELINE : 0));
       if (timeline) {
          paintTimeline(g, w, bottom - TIMELINE / 2 - 4);
       } else {
@@ -802,7 +844,7 @@ public class GroupBoard extends JPanel {
          double ease = 1 - (1 - t) * (1 - t) * (1 - t);
          Rectangle slot = chips[c][k];
          double fromX = from == null ? w / 2.0 - slot.width / 2.0 : from.x;
-         double fromY = from == null ? HEADER - 20 : from.y;
+         double fromY = from == null ? headerHeight - 20 : from.y;
          int x = (int) Math.round(fromX + (slot.x - fromX) * ease);
          int y = (int) Math.round(fromY + (slot.y - fromY) * ease);
          boolean landed = t >= 1;
@@ -843,17 +885,24 @@ public class GroupBoard extends JPanel {
          }
       }
       int everyone = toGo.size() + done.size();
-      int top = HEADER + 4;
+      int top = headerHeight + 4;
       int height = bottom - top - 6;
       int size = Math.min(height, w * 56 / 100);
-      wheel.paint(g, pool, GAP, top, size, height);
-
       int left = GAP + size + 20;
+      int cardTop = top + 14;
+      if (narrow) {
+         // The wheel on top, the card under it.
+         size = Math.max(120, Math.min(w - 2 * GAP, height - 170));
+         wheel.paint(g, pool, (w - size) / 2, top, size, size);
+         left = 16;
+         cardTop = top + size + 4;
+      } else {
+         wheel.paint(g, pool, GAP, top, size, height);
+      }
       int width = w - left - 16;
       String landed = wheel.landedOn();
       String under = wheel.underPointer();
       // The result card.
-      int cardTop = top + 14;
       int cardHeight = 112;
       g.setColor(new Color(0, 0, 0, 30));
       g.fillRoundRect(left + 2, cardTop + 3, width, cardHeight, 14, 14);
@@ -1160,7 +1209,7 @@ public class GroupBoard extends JPanel {
          ok = false;
       }
       // The pile: as many columns of chips as fit, rows squeezed to fit the board.
-      int top = HEADER + 14;
+      int top = headerHeight + 14;
       int buttonTop = bottom - 56;
       int chipWidth = Math.min(130, Math.max(70, (w - 48) / Math.max(1, Math.min(6, here.size())) - 8));
       int columns = Math.max(1, Math.min(here.size(), (w - 48) / (chipWidth + 8)));
@@ -1169,7 +1218,7 @@ public class GroupBoard extends JPanel {
       int chipHeight = Math.min(26, rowHeight - 6);
       int left = (w - columns * (chipWidth + 8) + 8) / 2;
       // The pile and the button, as one block in the middle of the board.
-      int y0 = Math.max(top, (HEADER + bottom - rows * rowHeight - 52) / 2);
+      int y0 = Math.max(top, (headerHeight + bottom - rows * rowHeight - 52) / 2);
       buttonTop = y0 + rows * rowHeight + 12;
       boolean hover = groups.isEmpty() && ok && (dealButton.contains(mouseX, mouseY) || pileContains(mouseX, mouseY));
       for (int i = 0; i < here.size(); i++) {
@@ -1213,7 +1262,7 @@ public class GroupBoard extends JPanel {
    /** A small stack of blank cards, before the first round. */
    private void paintEmptyDeck(Graphics2D g, int w, int bottom) {
       int cx = w / 2;
-      int cy = (HEADER + bottom) / 2;
+      int cy = (headerHeight + bottom) / 2;
       for (int i = 3; i >= 0; i--) {
          int x = cx - 80 + i * 10;
          int y = cy - 55 - i * 6;
@@ -1289,7 +1338,7 @@ public class GroupBoard extends JPanel {
       }
       int n = people.size();
       if (n < 2 || history.isEmpty()) {
-         centered(g, "The chart fills in as you make rounds.", BOLD, MUTED, w / 2, (HEADER + bottom) / 2);
+         centered(g, "The chart fills in as you make rounds.", BOLD, MUTED, w / 2, (headerHeight + bottom) / 2);
          return new String[] {"Partner chart", "Who has been in a group with whom, over every round so far.", ""};
       }
       int labelWidth = 0;
@@ -1298,7 +1347,7 @@ public class GroupBoard extends JPanel {
       }
       labelWidth = Math.min(labelWidth, 130) + 26;
       int metWidth = 70;
-      int top = HEADER + 22;
+      int top = headerHeight + 22;
       int cell = Math.max(6, Math.min(26, Math.min((w - 32 - labelWidth - metWidth) / n, (bottom - top - 8) / n)));
       int left = (w - labelWidth - n * cell - metWidth) / 2 + labelWidth;
 
@@ -1390,10 +1439,8 @@ public class GroupBoard extends JPanel {
          Math.round(from.getBlue() + (to.getBlue() - from.getBlue()) * amount));
    }
 
-   private void paintBar(Graphics2D g, int w, int h) {
-      int top = h - BAR;
-      g.setColor(new Color(222, 214, 198));
-      g.fillRect(0, top, w, BAR);
+   /** Places the bar's buttons along the bottom of a w x h board, and returns the bar's height. */
+   private int layoutBar(Graphics2D g, int w, int h) {
       int gap = 8;
       List<Button> buttons = buttons();
       // Narrower padding, then gaps, then no key letters, when the buttons would not fit (the Groups bar's eight).
@@ -1412,25 +1459,76 @@ public class GroupBoard extends JPanel {
          keys = false;
          total = barWidth(g, buttons, pad, gap, keys);
       }
-      int x = (w - total) / 2;
+      barPad = pad;
+      barKeys = keys;
+      barWrapped = total > w - 16;
+      if (!barWrapped) {
+         int x = (w - total) / 2;
+         for (Button button : buttons) {
+            int bw = buttonWidth(g, button, pad, keys);
+            button.bounds.setBounds(x, h - BAR + 10, bw, 30);
+            x += bw + gap;
+         }
+         return BAR;
+      }
+      // Still too wide (a phone): rows of buttons, each row stretched across the board.
+      gap = 6;
+      List<List<Button>> rows = new ArrayList<>();
+      List<Button> row = new ArrayList<>();
+      int used = 0;
       for (Button button : buttons) {
-         int bw = buttonWidth(g, button, pad, keys);
-         button.bounds.setBounds(x, top + 10, bw, 30);
+         int bw = buttonWidth(g, button, pad, false);
+         if (!row.isEmpty() && used + gap + bw > w - 16) {
+            rows.add(row);
+            row = new ArrayList<>();
+            used = 0;
+         }
+         used += (row.isEmpty() ? 0 : gap) + bw;
+         row.add(button);
+      }
+      rows.add(row);
+      int height = 10 + rows.size() * 36 + 4;
+      int y = h - height + 10;
+      for (List<Button> line : rows) {
+         int natural = barWidth(g, line, pad, gap, false);
+         int extra = (w - 16 - natural) / line.size();
+         int x = 8;
+         for (Button button : line) {
+            int bw = buttonWidth(g, button, pad, false) + extra;
+            button.bounds.setBounds(x, y, bw, 30);
+            x += bw + gap;
+         }
+         y += 36;
+      }
+      return height;
+   }
+
+   private void paintBar(Graphics2D g, int w, int h) {
+      int top = h - barHeight;
+      g.setColor(new Color(222, 214, 198));
+      g.fillRect(0, top, w, barHeight);
+      for (Button button : buttons()) {
+         Rectangle b = button.bounds;
+         int x = b.x;
+         int bw = b.width;
          boolean hover = button.enabled && button.bounds.contains(mouseX, mouseY);
          boolean armed = button == clear && clearArmed;
          g.setColor(armed ? ERROR : button.on ? PICKED : hover ? new Color(255, 250, 238) : Color.WHITE);
-         g.fillRoundRect(x, top + 10, bw, 30, 14, 14);
+         g.fillRoundRect(x, b.y, bw, 30, 14, 14);
          g.setColor(button.enabled ? INK : new Color(180, 176, 168));
          g.setStroke(new BasicStroke(hover ? 2f : 1.2f));
-         g.drawRoundRect(x, top + 10, bw, 30, 14, 14);
+         g.drawRoundRect(x, b.y, bw, 30, 14, 14);
          g.setStroke(new BasicStroke(1f));
          Color ink = armed ? Color.WHITE : button.enabled ? INK : new Color(170, 166, 158);
-         text(g, button.label, BOLD, ink, x + pad, top + 30);
-         if (keys) {
-            String key = keyName(button);
-            text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - pad - width(g, key, SMALL), top + 30);
+         if (barWrapped) {
+            centered(g, button.label, BOLD, ink, x + bw / 2, b.y + 20);
+         } else {
+            text(g, button.label, BOLD, ink, x + barPad, b.y + 20);
          }
-         x += bw + gap;
+         if (barKeys) {
+            String key = keyName(button);
+            text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - barPad - width(g, key, SMALL), b.y + 20);
+         }
       }
    }
 
@@ -1584,9 +1682,15 @@ public class GroupBoard extends JPanel {
          linkFrom = null;
       }
       int side = 232;
-      int top = HEADER + 8;
+      int top = headerHeight + 8;
       int areaWidth = w - side - 3 * GAP;
       int areaHeight = bottom - top - 8;
+      // Narrow: the keep-apart card under the tiles, across the board.
+      int rulesHeight = Math.min(150, areaHeight * 2 / 5);
+      if (narrow) {
+         areaWidth = w - 2 * GAP;
+         areaHeight -= rulesHeight + GAP;
+      }
       tiles = new Rectangle[n];
       String hovered = null;
       if (n == 0) {
@@ -1625,7 +1729,11 @@ public class GroupBoard extends JPanel {
             }
          }
       }
-      paintRules(g, people, w - side - GAP, top, side, bottom - top - 8);
+      if (narrow) {
+         paintRules(g, people, GAP, bottom - 8 - rulesHeight, w - 2 * GAP, rulesHeight);
+      } else {
+         paintRules(g, people, w - side - GAP, top, side, bottom - top - 8);
+      }
 
       int away = rules.awayCount(people);
       int pairs = rules.rules(people).size();
@@ -1727,7 +1835,10 @@ public class GroupBoard extends JPanel {
       ruleRows = new Rectangle[ruleList.size()];
       int rowY = y + 34;
       if (ruleList.isEmpty()) {
-         String[] lines = {"Names that should never", "share a group: turn on", "Keep apart (K), then click", "two names. The mix keeps", "them apart whenever the", "group sizes allow."};
+         String[] lines = width >= 300
+            // The wide card under the tiles on a phone.
+            ? new String[] {"Names that should never share a group:", "turn on Keep apart (K), then click two", "names. The mix keeps them apart", "whenever the group sizes allow."}
+            : new String[] {"Names that should never", "share a group: turn on", "Keep apart (K), then click", "two names. The mix keeps", "them apart whenever the", "group sizes allow."};
          for (String line : lines) {
             text(g, line, TEXT, MUTED, x + 12, rowY + 12);
             rowY += 18;

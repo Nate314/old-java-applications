@@ -2,6 +2,7 @@ package groupcreator;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.io.BufferedWriter;
@@ -35,6 +36,8 @@ public class Main extends JFrame implements GroupBoard.Actions {
    private final GroupBoard board;
    private final Random random = new Random();
    private final JPanel inputs = new JPanel(new BorderLayout());
+   /** Screens narrower than this get the phone layout: the window as wide as the screen, the board laid out to fit. */
+   static final int NARROW = 600;
    /** Where the window was before Present filled the screen. */
    private Rectangle windowed;
 
@@ -48,11 +51,29 @@ public class Main extends JFrame implements GroupBoard.Actions {
       board.roles = roster.roles;
       board.work = roster.work;
 
+      Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+      // A phone held upright (in the browser): the window takes the screen's width instead of being scaled down.
+      boolean narrow = screen.width < NARROW;
       JPanel names = new JPanel();
-      names.add(new JLabel("Names, separated by commas:"));
+      JLabel namesLabel = new JLabel("Names, separated by commas:");
       textField.setColumns(44);
       textField.setText(roster.names);
-      names.add(textField);
+      if (narrow) {
+         // The label over the field, and the field as wide as the screen leaves.
+         names.setLayout(new BorderLayout());
+         JPanel label = new JPanel(new FlowLayout(FlowLayout.LEFT));
+         label.add(namesLabel);
+         names.add(label, BorderLayout.NORTH);
+         while (textField.getColumns() > 10 && textField.getPreferredSize().width > screen.width - 24) {
+            textField.setColumns(textField.getColumns() - 1);
+         }
+         JPanel field = new JPanel();
+         field.add(textField);
+         names.add(field, BorderLayout.CENTER);
+      } else {
+         names.add(namesLabel);
+         names.add(textField);
+      }
       JPanel sizes = new JPanel();
       minTextField.setColumns(3);
       minTextField.setText(roster.min);
@@ -96,7 +117,12 @@ public class Main extends JFrame implements GroupBoard.Actions {
       board.showRound(GroupMaker.parseNames(roster.names), false);
       board.dealtAgain(roster.again);
       this.pack();
-      this.setLocationRelativeTo(null);
+      if (narrow) {
+         // At least 340 x 560: a smaller screen scales the window down as before.
+         setBounds(0, 0, Math.max(340, screen.width), Math.max(560, screen.height));
+      } else {
+         this.setLocationRelativeTo(null);
+      }
       this.setVisible(visibility);
    }
 

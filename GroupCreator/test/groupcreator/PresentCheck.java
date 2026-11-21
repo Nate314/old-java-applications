@@ -53,6 +53,33 @@ public class PresentCheck {
       check(calls.size() == 6 && !calls.get(5), "the partner chart leaves Present");
       key(board, 'f', KeyEvent.VK_F);
       check(calls.size() == 6, "no Present from the partner chart");
+      key(board, KeyEvent.CHAR_UNDEFINED, KeyEvent.VK_ESCAPE);
+
+      // A phone held upright: the bar's eight buttons wrap onto rows inside the board, none overlapping, and they work.
+      board.setSize(376, 520);
+      paint(board);
+      java.awt.Rectangle[] bar = board.barBounds();
+      check(bar.length == 8, "the Groups bar has eight buttons");
+      for (int i = 0; i < bar.length; i++) {
+         check(bar[i].x >= 0 && bar[i].x + bar[i].width <= 376 && bar[i].y + bar[i].height <= 520, "button " + i + " is on the board: " + bar[i]);
+         for (int j = 0; j < i; j++) {
+            check(!bar[i].intersects(bar[j]), "buttons " + j + " and " + i + " overlap");
+         }
+      }
+      check(bar[0].y < bar[bar.length - 1].y, "the buttons wrap onto more than one row");
+      int calls0 = calls.size();
+      // The chart is still shown from above, so F does not present; the fourth button (Groups) goes back, and then F does.
+      key(board, 'f', KeyEvent.VK_F);
+      check(calls.size() == calls0, "still on the partner chart");
+      click(board, bar[3].x + bar[3].width / 2, bar[3].y + bar[3].height / 2);
+      key(board, 'f', KeyEvent.VK_F);
+      check(calls.size() == calls0 + 1, "a click on a wrapped button runs it (Groups)");
+      key(board, KeyEvent.CHAR_UNDEFINED, KeyEvent.VK_ESCAPE);
+      paint(board);
+      key(board, 'p', KeyEvent.VK_P);
+      paint(board);
+      key(board, 'a', KeyEvent.VK_A);
+      paint(board);
       System.out.println("PresentCheck: all checks passed");
    }
 
