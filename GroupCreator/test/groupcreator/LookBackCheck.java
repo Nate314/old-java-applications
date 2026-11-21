@@ -144,5 +144,9 @@ public class LookBackCheck {
 
       public void workChanged() {
       }
+
+      public int[] sizes() {
+         return new int[] {2, 3};
+      }
    }
 }

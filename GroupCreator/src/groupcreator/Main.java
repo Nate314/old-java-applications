@@ -4,6 +4,8 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -62,6 +64,17 @@ public class Main extends JFrame implements GroupBoard.Actions {
       textField.addActionListener(event -> newRound());
       minTextField.addActionListener(event -> newRound());
       maxTextField.addActionListener(event -> newRound());
+      // The board previews round 1 from the fields, so it follows each key typed in them.
+      // shortcut: a paste with the mouse alone shows on the next repaint, add a DocumentListener once the web shim has one.
+      KeyAdapter typed = new KeyAdapter() {
+         @Override
+         public void keyReleased(KeyEvent event) {
+            board.repaint();
+         }
+      };
+      textField.addKeyListener(typed);
+      minTextField.addKeyListener(typed);
+      maxTextField.addKeyListener(typed);
       sizes.add(new JLabel("per group, min: "));
       sizes.add(minTextField);
       sizes.add(new JLabel("max: "));
@@ -171,6 +184,15 @@ public class Main extends JFrame implements GroupBoard.Actions {
       roster.again = 0;
       save(null);
       board.showRound(GroupMaker.parseNames(roster.names), false);
+   }
+
+   @Override
+   public int[] sizes() {
+      try {
+         return new int[] {Integer.parseInt(minTextField.getText().trim()), Integer.parseInt(maxTextField.getText().trim())};
+      } catch (NumberFormatException ex) {
+         return null;
+      }
    }
 
    @Override
