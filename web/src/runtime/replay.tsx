@@ -214,7 +214,7 @@ export function startReplay(desktop: Element): Replay | null {
   if (!type) return null;
   var canvas = document.createElement('canvas');
   var g = canvas.getContext('2d')!;
-  var track: MediaStreamTrack | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
+  var track: MediaStreamTrack | null = null, stream: MediaStream | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
   var drew = paintWatch();
   function look() { changed = true; }
   if (window.MutationObserver) {
@@ -235,8 +235,11 @@ export function startReplay(desktop: Element): Replay | null {
     if (!clipMode && audio && !tap && audio.createMediaStreamDestination) {   // the app's voices, not the site's sounds
       tap = audio.createMediaStreamDestination();
       appOut(audio).connect(tap);
+      stream = null;   // a recording's tracks cannot change under it, so the voices start a stream of their own
     }
-    var stream = new MediaStream([track!].concat(tap ? tap.stream.getAudioTracks() : []));
+    // One stream for every recording of this track: a MediaStream lives as long as its tracks run, so a new one
+    // per recording (six a minute) was never freed.
+    if (!stream) stream = new MediaStream([track!].concat(tap ? tap.stream.getAudioTracks() : []));
     var r = { chunks: [], t0: Date.now() } as unknown as Recording;
     try {
       r.rec = new MediaRecorder(stream, { mimeType: type!, videoBitsPerSecond: clipMode ? CLIP_BPS : 5000000 });
@@ -305,6 +308,7 @@ export function startReplay(desktop: Element): Replay | null {
     drawDesk(g, canvas, desktop);
     var first = !track;
     track = canvas.captureStream(REPLAY_FPS).getVideoTracks()[0];
+    stream = null;
     begin();
     if (!first) return;
     real.setInterval(rotate, REPLAY_SEG / 2);   // real time: a slowed app's clip still covers 10 to 20 s
