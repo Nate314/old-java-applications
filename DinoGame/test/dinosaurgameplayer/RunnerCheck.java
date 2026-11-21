@@ -483,6 +483,7 @@ public final class RunnerCheck {
       file.delete();
 
       coachChecks();
+      guideChecks();
       System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore()
          + ", ear player average " + earTotal / 40 + ", " + lateTotal / 40 + " when up to 2 steps late)");
       System.exit(0);
@@ -591,6 +592,66 @@ public final class RunnerCheck {
       long ms = (System.nanoTime() - t0) / 1000000;
       System.out.println("coach: late " + late + ", early " + early + ", ducks " + ducks + "; after a "
          + y.runner().steps() + "-step run in " + ms + " ms");
+   }
+
+   /**
+    * The mark that says when to jump or duck: a player who only follows it (tapping when it lights with TAP, holding
+    * while it says HOLD, ducking while it says DUCK) gets well past the first cacti; it is drawn filled when lit; it goes once your best reaches 700,
+    * and never shows for the bot.
+    */
+   private static void guideChecks() throws Exception {
+      int reached = 0;
+      int total = 0;
+      for (long seed = 1; seed <= 10; seed++) {
+         RunnerPanel p = panel(seed, null);
+         Runner r = p.runner();
+         assert p.guiding() && p.guide()[1] == 0 : "the ready screen shows the mark, unlit";
+         r.press();
+         r.release();
+         boolean lit = false;
+         boolean wasLit = false;
+         long pressed = 0;
+         BufferedImage shot = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+         p.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+         while (r.state() == Runner.State.RUNNING && r.score() < RunnerPanel.GUIDE_UNTIL) {
+            // As the screen says: tap when it lights with TAP, hold while it says HOLD, duck while it says DUCK.
+            int[] g = p.guide();
+            boolean jump = g[1] == 1 && g[0] == Ears.JUMP;
+            if (jump && !r.isJumping() && !wasLit) {
+               r.press();
+               pressed = r.steps();
+            } else if (!jump || g[2] == 0 && r.steps() - pressed >= 2) {
+               r.release();   // a quick tap
+            }
+            wasLit = g[1] == 1;
+            r.duck(g[1] == 1 && g[0] == Ears.DUCK);
+            if (g[1] == 1 && !lit) {
+               Graphics2D sg = shot.createGraphics();
+               p.paint(sg);
+               sg.dispose();
+               assert shot.getRGB(RunnerPanel.guideX(r, g[0]), Runner.GROUND + 9) == RunnerPanel.INK.getRGB() : "the lit mark is filled";
+               lit = true;
+            }
+            p.step();
+         }
+         total += r.score();
+         reached += r.score() >= RunnerPanel.GUIDE_UNTIL ? 1 : 0;
+         assert lit && r.score() > 150 : "seed " + seed + ": following the mark scored " + r.score();
+      }
+      assert reached >= 8 : "following the mark reached " + RunnerPanel.GUIDE_UNTIL + " on " + reached + " of 10";
+      RunnerPanel fresh = panel(1, null);
+      fresh.setBot(true);
+      assert !fresh.guiding() : "never for the bot";
+      fresh.setBot(false);
+      assert fresh.guiding();
+      File file = File.createTempFile("dinogame", ".txt");
+      file.delete();
+      file.deleteOnExit();
+      Records past = Records.load(file);
+      past.best = RunnerPanel.GUIDE_UNTIL;
+      assert !new RunnerPanel(past, 1).guiding() : "gone once your best reaches the first night";
+      System.out.println("guide: following the mark reached " + RunnerPanel.GUIDE_UNTIL + " on " + reached + " of 10 courses, average "
+         + total / 10);
    }
 
    private static void stepToCrash(Runner r) {

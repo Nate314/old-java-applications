@@ -39,8 +39,13 @@ final class Ears {
 
    /** Steps from now to the beat to act on for o. */
    static double stepsToAct(Runner r, Runner.Obstacle o) {
+      return (o.x - markX(r, need(o))) / r.speed();
+   }
+
+   /** Where an obstacle needing a JUMP or DUCK is when it is time to act: the mark the first runs show under the ground. */
+   static double markX(Runner r, int need) {
       // The body's front edge (x + 30) meets the obstacle's hit box (x + 3); a bird meets the head (x + 39).
-      return need(o) == DUCK ? (o.x - (r.dinoX() + 36)) / r.speed() - DUCK_LEAD : (o.x - (r.dinoX() + 27)) / r.speed() - JUMP_LEAD;
+      return need == DUCK ? r.dinoX() + 36 + DUCK_LEAD * r.speed() : r.dinoX() + 27 + JUMP_LEAD * r.speed();
    }
 
    /** How many steps to hold the key from the beat to act on: the beat sounds that long. */

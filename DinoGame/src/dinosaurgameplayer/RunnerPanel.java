@@ -33,6 +33,12 @@ final class RunnerPanel extends JPanel {
    static final int STRIP = 196;
    /** Steps after a crash before Space starts a new run, so a held key does not restart at once. */
    private static final int RESTART_LOCK = 24;
+   /** Until your best reaches this (the first night), runs show the mark that says when to jump or duck. */
+   static final int GUIDE_UNTIL = Sky.NIGHT_EVERY;
+   /** The mark stays lit at least this many steps (a fifth of a second), so a tap's moment can be seen. */
+   private static final int GUIDE_LIT = 12;
+   /** Jumps held up to this many steps are shown as TAP (a short hop clears them best), longer ones as HOLD. */
+   static final int GUIDE_TAP = 7;
 
    static final Color INK = new Color(0x535353);
    static final Color PAPER = new Color(0xF7F7F7);
@@ -678,6 +684,9 @@ final class RunnerPanel extends JPanel {
          if (this.coach != null && this.runner.state() == Runner.State.CRASHED && !this.bot.isOn()) {
             this.paintCoach(g, dark);
          }
+         if (this.guiding()) {
+            this.paintGuide(g, dark);
+         }
          paintDino(g, this.runner, Sky.tint(INK, dark), Sky.tint(PAPER, dark));
          this.paintScore(g, dark);
          if (this.bot.isOn()) {
@@ -902,6 +911,56 @@ final class RunnerPanel extends JPanel {
       }
    }
 
+   /** Whether the mark shows: your own runs (not the bot's, not blindfolded) until your best reaches GUIDE_UNTIL. */
+   boolean guiding() {
+      return this.records.best < GUIDE_UNTIL && !this.bot.isOn() && this.ears != Ears.Mode.BLINDFOLD
+         && this.runner.state() != Runner.State.CRASHED;
+   }
+
+   /**
+    * What the mark says now: { Ears.JUMP or Ears.DUCK for the next cactus or bird to get past, 1 while lit else 0,
+    * 1 when the key should be held rather than tapped }. It lights when the obstacle reaches the mark (Play by ear's beat
+    * to act on) and stays lit as long as the key should be held, but at least GUIDE_LIT steps so a tap's moment is seen.
+    */
+   int[] guide() {
+      Runner r = this.runner;
+      for (Runner.Obstacle o : r.obstacles()) {
+         double t = Ears.stepsToAct(r, o);
+         int hold = Ears.holdSteps(r, o);
+         if (Ears.need(o) != 0 && t > -Math.max(GUIDE_LIT, hold)) {
+            return new int[] { Ears.need(o), t <= 0 ? 1 : 0, Ears.need(o) == Ears.DUCK || hold > GUIDE_TAP ? 1 : 0 };
+         }
+      }
+      return new int[] { Ears.JUMP, 0, 0 };
+   }
+
+   /** The mark under the ground: hollow where the next obstacle should be when you act, filled with TAP, HOLD or DUCK while you should. */
+   private void paintGuide(Graphics2D g, double dark) {
+      int[] guide = this.guide();
+      boolean now = guide[1] == 1;
+      int x = guideX(this.runner, guide[0]);
+      int y = Runner.GROUND + 3;
+      int[] xs = { x - 5, x, x + 5 };
+      int[] ys = { y + 8, y, y + 8 };
+      g.setColor(Sky.tint(PAPER, dark));
+      g.fillRect(x - 7, y - 1, 15, 10);   // clear of the pebbles
+      g.setFont(TINY);
+      String label = guide[0] == Ears.DUCK ? "duck" : "jump";
+      if (now) {
+         g.setColor(Sky.tint(INK, dark));
+         g.fillPolygon(xs, ys, 3);
+         label = guide[0] == Ears.DUCK ? "DUCK" : guide[2] == 1 ? "HOLD" : "TAP";
+      } else {
+         g.setColor(Sky.tint(MUTED, dark));
+         g.drawPolygon(xs, ys, 3);
+      }
+      g.drawString(label, x - g.getFontMetrics().stringWidth(label) / 2, y + 19);
+   }
+
+   static int guideX(Runner r, int need) {
+      return (int) Math.round(Ears.markX(r, need));
+   }
+
    /** How far the ghost has run past you (less than 0 once it has crashed and you run on). */
    private double ghostOffset() {
       return this.ghost.runner().distance() - this.runner.distance();
@@ -1005,6 +1064,9 @@ final class RunnerPanel extends JPanel {
          : state == Runner.State.READY && this.racing
          ? new String[] { "Your ghost's course: the run where you scored " + this.records.ghost.score + ".",
             "It runs beside you, jump for jump. Get further and you are the ghost." }
+         : state == Runner.State.READY && this.guiding()
+         ? new String[] { "Jump when a cactus reaches the mark under the ground: a quick tap, or hold on HOLD.",
+            "Or press B and the original bot plays, watching one pixel." }
          : state == Runner.State.READY
          ? new String[] { "Jump the cacti, duck the birds. Night falls every " + Sky.NIGHT_EVERY + ".",
             "Or press B and the original bot plays, watching one pixel." }
