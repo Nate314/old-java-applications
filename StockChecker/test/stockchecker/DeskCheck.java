@@ -79,7 +79,13 @@ public class DeskCheck {
       for (int i = 0; i < 100; i++) {
          desk.tick();
       }
+      // The trade buttons' notes ask the desk what a trade would do; it must match what the trade then does.
+      check(desk.canSell("CRM", 1) == 0 && desk.sell("CRM", 1) == 0, "can sell none before holding any");
+      int covers = desk.portfolio.affordable(desk.market.price("CRM"));
+      check(desk.canBuy("CRM", Integer.MAX_VALUE) == covers && desk.canBuy("CRM", 10) == 10, "can buy what the cash covers");
       check(desk.buy("CRM", 10) == 10, "desk buy");
+      check(desk.canSell("CRM", Integer.MAX_VALUE) == 10 && desk.canSell("CRM", 4) == 4, "can sell what is held");
+      check(desk.canBuy("CRM", Integer.MAX_VALUE) == desk.portfolio.affordable(desk.market.price("CRM")), "can buy shrinks with the cash");
       double paid = desk.market.price("CRM");
       desk.setWatch(Arrays.asList("NFLX"));
       check(desk.symbols().equals(Arrays.asList("NFLX", "CRM")), "a held stock stays on the desk: " + desk.symbols());
@@ -96,6 +102,7 @@ public class DeskCheck {
          // run to the closing bell
       }
       check(again.market.closed() && again.buy("CRM", 1) == 0, "no trading after the close");
+      check(again.canBuy("CRM", 1) == 0 && again.canSell("CRM", 1) == 0, "nothing to trade after the close");
       double close = again.market.price("CRM");
       double closingWorth = again.portfolio.worth(again.market);
       again.nextDay();

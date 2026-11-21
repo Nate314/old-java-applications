@@ -53,6 +53,8 @@ final class DeskPanel extends JPanel {
       final Rectangle bounds;
       /** Whether a button with no fill of its own shows as on (the current speed, the open tab). */
       BooleanSupplier lit = () -> false;
+      /** A trade button's shares (+ to buy, - to sell, MAX_VALUE and MIN_VALUE for all), or 0 for any other button. */
+      int count;
 
       Button(String label, char key, Color fill, Rectangle bounds, BooleanSupplier shown, Runnable action) {
          this.label = label;
@@ -131,7 +133,9 @@ final class DeskPanel extends JPanel {
       for (int i = 0; i < labels.length; i++) {
          int count = counts[i];
          Color fill = count > 0 ? new Color(30, 140, 80) : new Color(170, 50, 60);
-         buttons.add(new Button(labels[i], keys[i], fill, new Rectangle(272 + i * 74, 340, 68, 30), open, () -> trade(count)));
+         Button button = new Button(labels[i], keys[i], fill, new Rectangle(272 + i * 74, 336, 68, 36), open, () -> trade(count));
+         button.count = count;
+         buttons.add(button);
       }
       buttons.add(new Button("Next day", '\n', new Color(30, 140, 80), new Rectangle(290, 330, 150, 32), closed, this::nextDay));
       buttons.add(new Button("Start over", 'x', null, new Rectangle(450, 330, 150, 32), closed, this::startOver));
@@ -372,6 +376,52 @@ final class DeskPanel extends JPanel {
       return symbols.isEmpty() ? null : symbols.get(Math.max(0, Math.min(selected, symbols.size() - 1)));
    }
 
+   /** How many shares a trade button would want: Buy max and Sell all as many as there are. */
+   private static int want(int count) {
+      return count == Integer.MIN_VALUE ? Integer.MAX_VALUE : Math.abs(count);
+   }
+
+   /** How many shares the trade button for {@code count} would trade in the picked stock now (0 for none). */
+   private int wouldTrade(int count) {
+      String symbol = symbol();
+      return symbol == null ? 0 : count > 0 ? desk.canBuy(symbol, want(count)) : desk.canSell(symbol, want(count));
+   }
+
+   /** Why a trade button would trade nothing. */
+   private String cannot(int count, String symbol) {
+      return count > 0 ? "Not enough cash for a share of " + symbol + " at " + Money.dollars(desk.market.price(symbol)) + "."
+         : "You hold no " + symbol + " to sell.";
+   }
+
+   /** The second line on a trade button: what it would cost or bring now ("$761.40", "131 shares", "only 3", "no cash"). */
+   private String buttonNote(int count) {
+      int n = wouldTrade(count);
+      if (n == 0) {
+         return count > 0 ? "no cash" : "none held";
+      }
+      if (want(count) == Integer.MAX_VALUE) {
+         return n + (n == 1 ? " share" : " shares");
+      }
+      return n < want(count) ? "only " + n : Money.dollars(n * desk.market.price(symbol()));
+   }
+
+   /** Pointing at a trade button: "Buys 10 CRM for $761.40, leaving $9,238.60 cash." or the sale's gain on what was paid. */
+   private String tradePreview(int count) {
+      String symbol = symbol();
+      int n = wouldTrade(count);
+      if (n == 0) {
+         return cannot(count, symbol);
+      }
+      double total = n * desk.market.price(symbol);
+      if (count > 0) {
+         return "Buys " + n + " " + symbol + " for " + Money.dollars(total) + ", leaving " + Money.dollars(desk.portfolio.cash - total) + " cash.";
+      }
+      Portfolio.Holding holding = desk.portfolio.holdings.get(symbol);
+      double cost = holding.cost * n / holding.shares;
+      return "Sells " + n + " " + symbol + " for " + Money.dollars(total) + ": " + Money.change(total - cost) + " ("
+         + Money.percent(cost, total) + ") on what you paid.";
+   }
+
    private void trade(int count) {
       String symbol = symbol();
       if (symbol == null) {
@@ -379,20 +429,12 @@ final class DeskPanel extends JPanel {
          return;
       }
       double price = desk.market.price(symbol);
-      if (count > 0) {
-         int done = desk.buy(symbol, count);
-         if (done == 0) {
-            say("Not enough cash for a share of " + symbol + " at " + Money.dollars(price) + ".", WARN);
-         } else {
-            say("Bought " + done + " " + symbol + " at " + Money.dollars(price) + ".", UP);
-         }
+      int done = count > 0 ? desk.buy(symbol, want(count)) : desk.sell(symbol, want(count));
+      if (done == 0) {
+         say(cannot(count, symbol), WARN);
       } else {
-         int done = desk.sell(symbol, count == Integer.MIN_VALUE ? Integer.MAX_VALUE : -count);
-         if (done == 0) {
-            say("You hold no " + symbol + " to sell.", WARN);
-         } else {
-            say("Sold " + done + " " + symbol + " at " + Money.dollars(price) + ".", DOWN);
-         }
+         say((count > 0 ? "Bought " : "Sold ") + done + " " + symbol + " at " + Money.dollars(price) + ", "
+            + Money.dollars(done * price) + (count > 0 ? " in all." : " back."), count > 0 ? UP : DOWN);
       }
       // A stock sold off the watch list leaves the desk, so keep the pick in range.
       selected = Math.max(0, Math.min(selected, desk.symbols().size() - 1));
@@ -1229,6 +1271,14 @@ final class DeskPanel extends JPanel {
       if (message != null && System.currentTimeMillis() < messageUntil) {
          second = message;
          color = messageColor;
+      } else {
+         for (Button button : buttons) {
+            if (button.count != 0 && button.bounds.contains(mouseX, mouseY)) {
+               boolean can = wouldTrade(button.count) > 0;
+               second = tradePreview(button.count);
+               color = !can ? WARN : button.count > 0 ? UP : DOWN;
+            }
+         }
       }
       text(g, fit(g, first, PLAIN, 438), PLAIN, TEXT, 274, 298);
       text(g, fit(g, second, PLAIN, 438), PLAIN, color, 274, 318);
@@ -1337,14 +1387,26 @@ final class DeskPanel extends JPanel {
          Rectangle r = button.bounds;
          boolean hover = r.contains(mouseX, mouseY);
          boolean on = button.fill == null && button.lit.getAsBoolean();
+         // A trade button that would trade nothing now is faded (a press still says why).
+         boolean faded = button.count != 0 && wouldTrade(button.count) == 0;
          Color fill = button.fill != null ? button.fill : on ? withAlpha(accent, 150) : new Color(255, 255, 255, 30);
+         if (faded) {
+            fill = withAlpha(fill, 70);
+         }
          g.setColor(hover ? fill.brighter() : fill);
          g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
          g.setColor(new Color(255, 255, 255, hover ? 160 : 70));
          g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
          String label = button.label.equals("Start over") && startOverArmed ? "Sure? Click again" : button.label;
          Font font = r.height >= 30 ? BOLD : SMALL;
-         text(g, label, font, on ? new Color(10, 16, 40) : TEXT, r.x + (r.width - width(g, label, font)) / 2, r.y + r.height / 2 + 5);
+         Color ink = on ? new Color(10, 16, 40) : faded ? MUTED : TEXT;
+         if (button.count != 0) {
+            String note = fit(g, buttonNote(button.count), SMALL, r.width - 6);
+            text(g, label, font, ink, r.x + (r.width - width(g, label, font)) / 2, r.y + 16);
+            text(g, note, SMALL, faded ? MUTED : withAlpha(TEXT, 210), r.x + (r.width - width(g, note, SMALL)) / 2, r.y + 30);
+         } else {
+            text(g, label, font, ink, r.x + (r.width - width(g, label, font)) / 2, r.y + r.height / 2 + 5);
+         }
       }
    }
 
