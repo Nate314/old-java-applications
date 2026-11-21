@@ -100,7 +100,15 @@ public class StarMusicCheck {
       field.burst(400, 300, StarField.BURST);
       check(ear.ons() == 3 && ear.notes.get(0)[0] < StarMusic.LOW, "a burst strikes a low chord");
       run(field, 1.0);
-      check(field.music().sounding() == 0, "the chord is let go");
+      // The lone star may wrap and ring a note of its own meanwhile, so look for each chord note's own off.
+      for (int i = 0; i < 3; i++) {
+         int note = ear.notes.get(i)[0];
+         boolean letGo = false;
+         for (int j = 3; j < ear.notes.size(); j++) {
+            letGo |= ear.notes.get(j)[0] == note && ear.notes.get(j)[1] == 0;
+         }
+         check(letGo, "the chord's note " + note + " is let go");
+      }
 
       // Star Catcher's sky has no key to turn it on, and stays silent.
       check(!new StarField(1, new Dimension(W, H), 50, 10, false).music().on(), "Star Catcher's sky is silent");

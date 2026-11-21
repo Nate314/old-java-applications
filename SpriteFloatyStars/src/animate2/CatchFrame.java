@@ -7,9 +7,9 @@ import javax.swing.JFrame;
 @SuppressWarnings("serial")
 public final class CatchFrame extends JFrame {
    private final CatchPanel panel;
-   private final JFrame settings;
+   private final SettingsFrame settings;
 
-   public CatchFrame(JFrame settings) {
+   public CatchFrame(SettingsFrame settings) {
       this.settings = settings;
       this.setTitle("Star Catcher");
       this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -29,6 +29,6 @@ public final class CatchFrame extends JFrame {
    public void dispose() {
       this.panel.stop();
       super.dispose();
-      this.settings.setVisible(true);
+      this.settings.catcherClosed();
    }
 }

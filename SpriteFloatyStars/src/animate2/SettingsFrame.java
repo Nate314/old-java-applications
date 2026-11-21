@@ -11,6 +11,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 
 public final class SettingsFrame extends JFrame implements ActionListener {
    private JPanel panel = new JPanel();
@@ -20,6 +21,8 @@ public final class SettingsFrame extends JFrame implements ActionListener {
    private JTextField[] textFields = new JTextField[]{new JTextField("0"), new JTextField("800"), new JTextField("800"), new JTextField("1000"), new JTextField("20")};
    private JButton okButton = new JButton("OK");
    private JButton catchButton = new JButton("Play Star Catcher");
+   /** The last stars' window opened, if any. */
+   private AnimationFrame stars;
 
    public SettingsFrame() {
       this.setTitle("Sprite Floaty Stars");
@@ -57,6 +60,21 @@ public final class SettingsFrame extends JFrame implements ActionListener {
       }
    }
 
+   /**
+    * Star Catcher has closed: the settings window comes back. If a stars' window is open, it comes to the front and
+    * keeps the keyboard, so Space bursts the stars instead of pressing Play Star Catcher again.
+    */
+   void catcherClosed() {
+      if (this.stars == null || !this.stars.isVisible()) {
+         this.setVisible(true);
+         return;
+      }
+      this.setFocusableWindowState(false);
+      this.setVisible(true);
+      this.stars.toFront();
+      SwingUtilities.invokeLater(() -> this.setFocusableWindowState(true));
+   }
+
    /** Opens an animation window in the chosen mode, or says in the title why the fields will not do. */
    private void open() {
       this.textFields[0].setText("" + this.modeComboBox.getSelectedIndex());
@@ -70,7 +88,8 @@ public final class SettingsFrame extends JFrame implements ActionListener {
             throw new NumberFormatException();
          }
          this.setTitle("Sprite Floaty Stars");
-         new AnimationFrame(mode, new Dimension(width, height), starCount, starSize).setVisible(true);
+         this.stars = new AnimationFrame(mode, new Dimension(width, height), starCount, starSize);
+         this.stars.setVisible(true);
       } catch (NumberFormatException exception) {
          this.setTitle("Use positive whole numbers");
       }
