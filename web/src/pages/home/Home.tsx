@@ -97,7 +97,7 @@ function Player() {
     <section className={'player' + (H.then ? ' then' : '') + (H.big ? ' big' : '')} id="player" aria-label="Now playing">
       <div className="player-bar">
         <span className="live">Live</span>
-        <h3 id="player-name">{a ? a.name : FIRST.name}</h3>
+        <h2 id="player-name">{a ? a.name : FIRST.name}</h2>
         <div className="era" id="player-era" role="group" aria-label="Version" hidden={a ? !a.then : false}
           title="Then: the app as first restored in 2026, the recovered code with light bug fixes, before the later reworks. Now: today's version.">
           <button type="button" id="player-then" aria-pressed={H.then} onClick={P.thenClick}>Then</button>

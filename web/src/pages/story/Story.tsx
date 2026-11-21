@@ -291,8 +291,8 @@ export function Story() {
             <ShareStory className="btn" label="Share the story" />
           </div>
         </section>
+        <StoryPlay />
       </main>
-      <StoryPlay />
     </>
   );
 }
