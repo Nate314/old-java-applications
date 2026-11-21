@@ -1,4 +1,4 @@
-# Shared by web/shots.ps1 and web/clips.ps1 (dot-sourced): serves the built site with Python, starts headless Chrome
+# Shared by web/shots.ps1, clips.ps1, cards.ps1 and smoke.ps1 (dot-sourced): serves the built site with Python, starts headless Chrome
 # with its DevTools port open, and drives one page over the DevTools protocol: load an app page, wait for its app to
 # start, then follow a recipe of steps.
 #
