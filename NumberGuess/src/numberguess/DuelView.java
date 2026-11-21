@@ -29,6 +29,8 @@ final class DuelView {
 	private long movedAt;
 	/** Where the pointer is, or -1. */
 	private int hoverX = -1, hoverY = -1;
+	/** The number in the text field, or 0. */
+	private int typed;
 	/** Where the clickable line was last drawn. */
 	private Rectangle clickable = new Rectangle();
 	private int clickLow = 1, clickHigh = Duel.MAX;
@@ -70,6 +72,29 @@ final class DuelView {
 		return numberAt(duel, hoverX, hoverY);
 	}
 
+	/** Follows the text field. */
+	void type(int number) {
+		typed = number;
+	}
+
+	/** The number the clickable line marks: the one under the pointer, else the typed one if Enter would use it. */
+	private int shown(Duel duel) {
+		int hover = hoverNumber(duel);
+		boolean usable = duel.isHiding() || duel.isYourTurn();
+		return hover > 0 || !usable || typed < clickLow || typed > clickHigh ? hover : typed;
+	}
+
+	/** The line's middle label: what Enter would do with the typed number, or {@code idle}. */
+	private String note(Duel duel, String verb, String idle) {
+		String note = hoverNumber(duel) > 0 ? null : Board.typedNote(typed, verb, clickLow, clickHigh, Duel.MAX);
+		return note != null ? note : idle;
+	}
+
+	/** Warning orange for a typed number Enter would not count, else the usual soft grey. */
+	private Color noteColor(Duel duel) {
+		return typed > 0 && shown(duel) == 0 && (duel.isHiding() || duel.isYourTurn()) ? Board.WARN : Board.SOFT;
+	}
+
 	/** The number a click at ({@code x}, {@code y}) would hide or guess, or 0. */
 	int numberAt(Duel duel, int x, int y) {
 		if (duel == null || !(duel.isHiding() || duel.isYourTurn()) || !clickable.contains(x, y)) {
@@ -98,9 +123,9 @@ final class DuelView {
 		clickLow = 1;
 		clickHigh = Duel.MAX;
 		label(g, "YOUR HIDDEN NUMBER", area.x, HIDE_Y - 12, Board.SOFT);
-		int hover = hoverNumber(duel);
+		int hover = shown(duel);
 		paintCells(g, line, 1, Duel.MAX, number -> number == hover ? Board.GOLD : Board.POSSIBLE_DARK);
-		ends(g, line, "1", Integer.toString(Duel.MAX), "Click to hide a number here, or type it");
+		ends(g, line, "1", Integer.toString(Duel.MAX), note(duel, "hides", "Click to hide a number here, or type it"), noteColor(duel));
 		// The computer's number, face down.
 		int cardX = area.x, cardY = HIDE_Y + HIDE_HEIGHT + 30;
 		g.setColor(THEM_DARK);
@@ -137,7 +162,7 @@ final class DuelView {
 		g.setColor(Board.POSSIBLE_DARK);
 		g.drawLine(xOf(bar, game.low() - 1, 0, Duel.MAX), bar.y + bar.height + 1, zoom.x, zoom.y - 2);
 		g.drawLine(xOf(bar, game.high(), 0, Duel.MAX), bar.y + bar.height + 1, zoom.x + zoom.width, zoom.y - 2);
-		int hover = hoverNumber(duel);
+		int hover = shown(duel);
 		if (over && !game.isFound()) {
 			g.setColor(Board.CARD);
 			g.fillRoundRect(zoom.x, zoom.y, zoom.width, zoom.height, 8, 8);
@@ -146,9 +171,9 @@ final class DuelView {
 			paintCells(g, zoom, game.low(), game.high(),
 					number -> game.isFound() ? Board.RIGHT : number == hover ? Board.GOLD : Board.POSSIBLE_DARK);
 		}
-		String middle = duel.isYourTurn() ? "Click to guess" : duel.isComputersTurn() ? "Its turn" : "";
+		String middle = duel.isYourTurn() ? note(duel, "guesses", "Click to guess") : duel.isComputersTurn() ? "Its turn" : "";
 		ends(g, zoom, game.low() == game.high() ? "" : Integer.toString(game.low()),
-				game.low() == game.high() ? "" : Integer.toString(game.high()), middle);
+				game.low() == game.high() ? "" : Integer.toString(game.high()), middle, noteColor(duel));
 		if (hover > 0) {
 			Board.paintBubble(g, hover, xOf(zoom, hover - game.low() + 0.5, 0, game.high() - game.low() + 1), zoom);
 		}
@@ -293,12 +318,13 @@ final class DuelView {
 		}
 	}
 
-	private static void ends(Graphics2D g, Rectangle line, String low, String high, String middle) {
+	private static void ends(Graphics2D g, Rectangle line, String low, String high, String middle, Color middleColor) {
 		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 		g.setColor(Board.SOFT);
 		int y = line.y + line.height + 14;
 		g.drawString(low, line.x, y);
 		g.drawString(high, line.x + line.width - g.getFontMetrics().stringWidth(high), y);
+		g.setColor(middleColor);
 		g.drawString(middle, line.x + (line.width - g.getFontMetrics().stringWidth(middle)) / 2, y);
 	}
 

@@ -14,6 +14,8 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /**
  * The window: the {@link Board} above, and below it the original text field and SUBMIT button for typing a guess,
@@ -76,6 +78,23 @@ public class Main extends JFrame implements ActionListener {
 		how.addActionListener(event -> answer(board::explain));
 		again.addActionListener(event -> answer(board::again));
 		send.addActionListener(event -> sendChallenge());
+		// The board marks the typed number as it changes (keys, a paste or a cut), before Enter guesses it.
+		textField.getDocument().addDocumentListener(new DocumentListener() {
+			@Override
+			public void insertUpdate(DocumentEvent event) {
+				board.preview(textField.getText());
+			}
+
+			@Override
+			public void removeUpdate(DocumentEvent event) {
+				board.preview(textField.getText());
+			}
+
+			@Override
+			public void changedUpdate(DocumentEvent event) {
+				board.preview(textField.getText());
+			}
+		});
 		KeyAdapter keys = new KeyAdapter() {
 			@Override
 			public void keyPressed(KeyEvent event) {

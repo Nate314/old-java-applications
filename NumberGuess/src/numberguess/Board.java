@@ -97,6 +97,8 @@ public final class Board extends JPanel {
 	private int hoverTab = -1;
 	/** Where the pointer is over the zoomed line, or -1. */
 	private int hoverX = -1;
+	/** The whole number in the text field, or 0: the lines show where it would land before Enter is pressed. */
+	private int typed;
 
 	/** {@code modeChanged} runs when the board needs other buttons (a switch of tab, or a step of the card trick). */
 	public Board(Records records, Runnable modeChanged) {
@@ -810,6 +812,24 @@ public final class Board extends JPanel {
 		return hoverX >= 0 && game != null && !isOver() ? numberAt(hoverX) : 0;
 	}
 
+	/** The number the zoomed line marks: the one under the pointer, else the typed one while it is still possible. */
+	private int shown() {
+		int hover = hoverNumber();
+		return hover > 0 || game == null || isOver() || isPicking() || isMagic() || typed < low() || typed > high() ? hover : typed;
+	}
+
+	/** Follows the text field: marks the typed number on the line, in every game you type into. */
+	public void preview(String text) {
+		try {
+			typed = Math.max(0, Integer.parseInt(text.trim().replace(",", "")));
+		} catch (NumberFormatException e) {
+			typed = 0;
+		}
+		duelView.type(typed);
+		warmView.type(typed);
+		repaint();
+	}
+
 	/** The still possible number under {@code x} on the zoomed line. */
 	private int numberAt(int x) {
 		long count = (long) high() - low() + 1;
@@ -1185,7 +1205,7 @@ public final class Board extends JPanel {
 				g.fillRoundRect(x0 + 1, line.y + 3, x1 - x0 - 2, line.height - 6, 6, 6);
 				if (labels) {
 					String label = Level.commas(number);
-					g.setColor(number == hoverNumber() || isOver() ? BACKGROUND : TEXT);
+					g.setColor(number == shown() || isOver() ? BACKGROUND : TEXT);
 					g.drawString(label, (x0 + x1 - metrics.stringWidth(label)) / 2, line.y + 23);
 				}
 			}
@@ -1198,8 +1218,8 @@ public final class Board extends JPanel {
 				int x = line.x + line.width * i / 10;
 				g.fillRect(x, line.y + (i == 5 ? 6 : 12), 1, line.height - (i == 5 ? 12 : 24));
 			}
-			if (hoverNumber() > 0) {
-				int x0 = xOn(line, hoverNumber() - low, 0, count), x1 = xOn(line, hoverNumber() - low + 1, 0, count);
+			if (shown() > 0) {
+				int x0 = xOn(line, shown() - low, 0, count), x1 = xOn(line, shown() - low + 1, 0, count);
 				g.setColor(GOLD);
 				g.fillRect(x0, line.y + 3, Math.max(2, x1 - x0), line.height - 6);
 			}
@@ -1211,8 +1231,8 @@ public final class Board extends JPanel {
 			g.fillPolygon(new int[] { x - 6, x + 6, x }, new int[] { line.y - 9, line.y - 9, line.y }, 3);
 		}
 		paintZoomEnds(g, low == high ? "" : Level.commas(low), low == high ? "" : Level.commas(high));
-		if (hoverNumber() > 0) {
-			paintBubble(g, hoverNumber(), xOn(line, hoverNumber() - low + 0.5, 0, count), zoom);
+		if (shown() > 0) {
+			paintBubble(g, shown(), xOn(line, shown() - low + 0.5, 0, count), zoom);
 		}
 	}
 
@@ -1220,7 +1240,7 @@ public final class Board extends JPanel {
 		if (isOver()) {
 			return RIGHT;
 		}
-		if (number == hoverNumber()) {
+		if (number == shown()) {
 			return GOLD;
 		}
 		if (isPicking() && number == reader.guess()) {
@@ -1238,8 +1258,26 @@ public final class Board extends JPanel {
 		int y = zoom.y + zoom.height + 14;
 		g.drawString(low, zoom.x, y);
 		g.drawString(high, zoom.x + zoom.width - g.getFontMetrics().stringWidth(high), y);
-		String middle = isOver() ? "" : isPicking() ? "What is still possible" : "Click to guess";
+		String middle = isOver() ? "" : isPicking() ? "What is still possible" : typedNote();
+		g.setColor(!isPicking() && typed > 0 && shown() == 0 ? WARN : SOFT); // a typed number Enter would not count
 		g.drawString(middle, zoom.x + (zoom.width - g.getFontMetrics().stringWidth(middle)) / 2, y);
+	}
+
+	/** Under the lower line: what Enter would do with the typed number, so a wasted guess shows before it is made. */
+	private String typedNote() {
+		String note = hoverNumber() > 0 ? null : typedNote(typed, "guesses", low(), high(), level.max());
+		return note != null ? note : "Click to guess";
+	}
+
+	/** What Enter would do with {@code typed} on a line of {@code low} to {@code high} in a range up to {@code max}; null when nothing is typed. */
+	static String typedNote(int typed, String verb, int low, int high, int max) {
+		if (typed == 0) {
+			return null;
+		}
+		if (typed > max) {
+			return Level.commas(typed) + " is out of range";
+		}
+		return typed < low || typed > high ? Level.commas(typed) + " is already ruled out" : "Enter " + verb + " " + Level.commas(typed);
 	}
 
 	/** The number under the pointer, in a bubble above {@code zoom}, the line it is on. */
