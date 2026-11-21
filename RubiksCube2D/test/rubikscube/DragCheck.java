@@ -73,6 +73,19 @@ public final class DragCheck {
       refuse = false;
 
       taken.clear();
+      view.demo(CubeGeometry.FACE_COLORS[best], 1, "d");
+      Thread.sleep(1300);
+      ticks(1);
+      assert view.demoing() && (double) get("demoFraction") > 0.2 : "Show me how pulls the layer part way";
+      assert taken.isEmpty() && live() == null : "and makes no move";
+      Thread.sleep(1000);
+      ticks(1);
+      assert (double) get("demoFraction") < 0.01 : "then lets it spring back";
+      press(at, 0);
+      assert !view.demoing() : "a press on the cube stops it";
+      release(at, along, 0, 0);
+
+      taken.clear();
       view.canTurn = () -> false;
       press(at, 0);
       move(at, along, 0.3, 500);
