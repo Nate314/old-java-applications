@@ -32,6 +32,7 @@ The fewest guesses for each range is saved to `.numberguess-record.txt` in the u
 ## Controls / usage
 
 - **Text field** and **SUBMIT** or **Enter**: guess a whole number (commas are allowed, as in `250,000`). After the number is found or given away, Enter starts a new one (in the next range, if that win just opened it). In Duel the first number hides yours, the rest are guesses, and after the duel Enter starts a rematch.
+- **While you type**: the line you would click marks the typed number in gold with its bubble, as if the pointer were on it, and the label under the line says what Enter will do ("Enter guesses 37", in Duel "Enter hides 42"), or in orange why it would not count ("120 is out of range", "9 is already ruled out"). It follows every change to the field (keys, paste, cut); the pointer on the line takes over while it is there.
 - **Mouse**: click a tab to switch range; click the lower number line to guess the number under the pointer, or after the game to start a new one. In Duel, click the line to hide your number, then your lane's lower line to guess; after the duel, a click on the board starts a rematch.
 - **Page Up / Page Down**: previous / next tab (passing over locked ranges).
 - **Hot & cold**: type a guess or click any cell on the line; a guess the same as the one before is not counted.
