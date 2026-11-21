@@ -11,7 +11,7 @@ Level n starts from a solved cube and mixes it with n moves while you watch (eac
 ## Controls / usage
 
 - **3D cube / Flat net** (top right, or V): switch between the two views. Both show the same cube, and every control below works in both. The choice is saved (see below).
-- **Drag a square** (3D cube): turns the row, column or ring through that square the way the drag goes, as if the square were pushed with a finger. The move is counted like a key press.
+- **Drag a square** (3D cube): turns the row, column or ring through that square the way the drag goes, as if the square were pushed with a finger. The layer follows the pointer while you hold it, so you see which layer you have before it counts: let go past half a quarter turn (or flick it) and the turn finishes and is counted like a key press; let go short of that and it springs back, with no move made. Drag back past the start to turn it the other way. While a mix or Solve is playing, or a turn is still showing, the drag makes its move at once as before.
 - **Drag around the cube** (3D cube), or the **arrow keys**: turns the whole cube to look at another side. Moves never depend on how the cube is turned.
 - **Mirrors** (3D cube): the sides turned away from you are shown again at the left and right edges of the view, so the whole cube can be read without turning it (see Mirrors below). **Click a mirror** to turn that side round to you. **X** turns the mirrors off or on; the choice is saved.
 - **Click a square**: select that face and square. The selected square shrinks inside a black ring (in 3D, inside a white ring).
@@ -84,7 +84,7 @@ The moves are now the quarter turns of a real cube (`CubeGeometry`): the net is 
 
 - `src/rubikscube/Main.java`: entry point; shows the `CubeFrame`.
 - `src/rubikscube/CubeFrame.java`: the window; lays out the 3D cube or the six faces of the net, the w/a/s/d buttons, the Mix controls and the level panel for the view shown; applies and counts moves; plays a level's mix and Solve on a Swing timer; Hint and Undo.
-- `src/rubikscube/CubeView3D.java`: the 3D cube. Teach me can stand it with another side up (a whole-cube turn applied before the view's own). Draws the 26 cubies in perspective with simple lighting, slab by slab along the turning axis from far to near, so a turning layer is drawn correctly in front of or behind the rest; animates each turn (240 ms, quicker when more are waiting, and skipped to the latest position when a Mix runs far ahead); turns the view on a drag or arrow key; maps a click to a square and a drag to the key whose move carries that square most nearly along the drag on screen; draws the selection ring and the hint arrow; draws the mirrors of the hidden sides and turns a clicked one to the front.
+- `src/rubikscube/CubeView3D.java`: the 3D cube. Teach me can stand it with another side up (a whole-cube turn applied before the view's own). Draws the 26 cubies in perspective with simple lighting, slab by slab along the turning axis from far to near, so a turning layer is drawn correctly in front of or behind the rest; animates each turn (240 ms, quicker when more are waiting, and skipped to the latest position when a Mix runs far ahead); turns the view on a drag or arrow key; maps a click to a square and a drag to the key whose move carries that square most nearly along the drag on screen, then turns that layer with the pointer until it is let go (made a move past half way, sprung back short of it); draws the selection ring and the hint arrow; draws the mirrors of the hidden sides and turns a clicked one to the front.
 - `src/rubikscube/CubeGeometry.java`: where each sticker of the net sits on the cube (cubie position and the direction its face points), the layer turn of every W/A/S/D move, and applying a turn to the stickers.
 - `src/rubikscube/Cube.java`: holds the six `Face` objects, refreshes them, resets them to solved, takes a snapshot of all 54 stickers and checks whether the cube is solved; tells the 3D view about every turn and reset.
 - `src/rubikscube/Face.java`: one face's nine sticker buttons and colors; reports which square was clicked and rings the selected one.
@@ -144,6 +144,13 @@ java -ea -cp ../out/check/RubiksCube2D rubikscube.RealCubeCheck
 ```
 javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
 java -ea -cp ../out/check/RubiksCube2D rubikscube.TimerCheck
+```
+
+`test/rubikscube/DragCheck.java` checks that a drag on the 3D cube takes the layer by hand: it follows the pointer, a slow drag let go short of half way makes no move and springs back, past half way it makes the move and the turn goes on from where the drag left it, dragged back past half way it turns the other way, a quick flick counts, a move the window does not take springs back, and while the window takes no moves the drag asks for the move at once. From `RubiksCube2D/`:
+
+```
+javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
+java -ea -Djava.awt.headless=true -cp ../out/check/RubiksCube2D rubikscube.DragCheck
 ```
 
 `test/rubikscube/MirrorCheck.java` checks the mirrors: from 48 points of view (eight turns round, six heights) every hidden side has a mirror, each inside the view and under the row of buttons, clear of the cube's middle and of the other mirrors; a click on the mirror of the side underneath turns that side to the front; X's setting hides them; and `mirrors=off` is saved, read back beside the level records and dropped when they are turned on again. From `RubiksCube2D/`:

@@ -143,6 +143,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.helpNet = this.helpLabel.getText();
       this.view = new CubeView3D(this.cube, this::select, this::applyUserMove);
       this.cube.watcher = this.view;
+      this.view.canTurn = () -> !this.busy();
       this.setTitle("Rubik's Cube");
       this.setLocationRelativeTo(null);
       this.setDefaultCloseOperation(3);
