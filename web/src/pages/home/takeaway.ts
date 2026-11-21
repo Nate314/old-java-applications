@@ -24,7 +24,7 @@ export function installClick() {
   prompt.userChoice.then(() => { window.oldjavaInstall = null; showInstall(); });
 }
 
-// ---- which files each app needs: its page, classes.js and the files its page preloads (data-files) ----
+// ---- which files each app needs: its page, classes.js and the files its page preloads (data-files), and the same for its Then page ----
 const abs = (path: string) => new URL(path, location.href).href;
 // The pages' own scripts and stylesheets (shim.css's hashed copy too) are listed by the build (assets/files.json, see vite/pages.ts).
 function shell(bundle: string[]) {
@@ -37,16 +37,23 @@ function shell(bundle: string[]) {
   return files.map(abs);
 }
 const lists: Record<string, Promise<string[]>> = {};
+function pageFiles(id: string, page: string, program: string, own: string[] = []) {
+  return fetch(id + '/' + page).then(r => {
+    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+    return r.text();
+  }).then(html => {
+    const body = new DOMParser().parseFromString(html, 'text/html').body;
+    const extra = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
+    return [page, program].concat(extra, own).map(f => id + '/' + f);
+  });
+}
+// An app with a Then page (its first restored version, one tap away on its page) is saved with it, and with the
+// README that page reads its known quirks from (then-and-now.tsx).
 function filesOf(id: string) {
   if (!lists[id]) {
-    lists[id] = fetch(id + '/index.html').then(r => {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.text();
-    }).then(html => {
-      const body = new DOMParser().parseFromString(html, 'text/html').body;
-      const extra = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
-      return [id + '/index.html', id + '/classes.js'].concat(extra.map(f => id + '/' + f)).map(abs);
-    });
+    const pages = [pageFiles(id, 'index.html', 'classes.js')];
+    if (APPS.find(a => a.id === id)?.then) pages.push(pageFiles(id, 'then.html', 'then.js', ['then-source/README.md']));
+    lists[id] = Promise.all(pages).then(both => [...new Set(both.flat())].map(abs));
     lists[id].catch(() => { delete lists[id]; });
   }
   return lists[id];
