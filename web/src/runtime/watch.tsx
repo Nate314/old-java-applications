@@ -1,5 +1,5 @@
 import { embedded } from './skin';
-import { windowsBox } from './band-news';
+import { windowsBox } from './stage';
 import { passport } from './passport';
 import { fireKey, keyOf } from './touch-pad';
 import { appId } from './catalog';
