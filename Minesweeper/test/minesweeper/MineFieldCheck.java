@@ -80,6 +80,7 @@ public class MineFieldCheck {
       }
 
       checkBestTimes();
+      checkCoach();
       checkZoom();
       checkLuck();
       checkSolver();
@@ -193,6 +194,41 @@ public class MineFieldCheck {
     * Opening around a number: nothing until its flags add up, then exactly its hidden unflagged neighbors (a mine too,
     * when a flag is wrong); never for a hidden cell or a blank.
     */
+   /**
+    * A first game's lessons: the flag lesson points at the smallest number whose hidden tiles are all mines, the open
+    * lesson only at a number whose flags are right, and both fall back to the rule in words.
+    */
+   private static void checkCoach() {
+      String[][] grid = {
+         {"b", "2", "1"},
+         {"2", "b", "1"},
+         {"1", "1", "1"}};
+      int h = Solver.HIDDEN;
+      // (0, 2) is a 1 next to one hidden tile, (1, 1); the 2 at (0, 1) has three hidden tiles.
+      Coach flag = Coach.flag(new int[][]{{h, 2, 1}, {h, h, 1}, {h, h, h}});
+      check(flag.mines && flag.number == 2 && flag.cells.size() == 1 && flag.cells.get(0) == 4, "flag lesson on the 1: " + flag.number + " " + flag.cells);
+      check(flag.action.equals("The gold 1 touches 1 mine and 1 hidden tile."), flag.action);
+      Coach none = Coach.flag(new int[][]{{h, h, h}, {h, h, h}, {h, h, 1}});
+      check(none.number < 0 && none.cells.isEmpty(), "no example: the rule in words");
+      boolean[][] revealed = new boolean[3][3];
+      boolean[][] flagged = new boolean[3][3];
+      revealed[2][2] = true;
+      int[][] view = {{h, h, h}, {h, h, h}, {h, h, 1}};
+      check(Coach.chord(grid, revealed, flagged, view).number < 0, "open lesson with no flag");
+      flagged[1][2] = true; // wrong: the 1 at (2, 2) adds up but would open the mine at (1, 1)
+      check(Coach.chord(grid, revealed, flagged, view).number < 0, "open lesson over a wrong flag");
+      flagged[1][2] = false;
+      flagged[1][1] = true;
+      Coach open = Coach.chord(grid, revealed, flagged, view);
+      check(!open.mines && open.number == 8 && open.cells.size() == 2, "open lesson on the 1: " + open.number + " " + open.cells);
+      check(open.action.equals("The gold 1 has its mine flagged."), open.action);
+      // No number ready to open yet: the next mine to flag, skipping one already flagged.
+      int f = Solver.FLAG;
+      Coach next = Coach.chord(grid, new boolean[3][3], new boolean[3][3], new int[][]{{h, 2, 1}, {1, f, 1}, {1, h, h}});
+      check(next.mines && next.number == 1 && next.cells.size() == 1 && next.cells.get(0) == 0, "next flag on the way: " + next.number + " " + next.cells);
+      check(Coach.flag(new int[][]{{h, 2, 1}, {1, f, 1}, {1, h, h}}).number == 1, "a flag counts toward a number but is not pointed at again");
+   }
+
    private static void checkChord() {
       String[][] grid = {
          {"b", "2", "1"},
@@ -503,6 +539,19 @@ public class MineFieldCheck {
          check(reloaded.noGuess(), "no guess is on by default");
          reloaded.setNoGuess(false);
          check(!BestTimes.load(file).noGuess() && BestTimes.load(file).best(Level.EXPERT) == 61234, "no guess off reloaded");
+         try (java.io.Writer old = new java.io.FileWriter(file)) { // a file from before the lessons
+            old.write("level=CLASSIC" + System.lineSeparator() + "EXPERT=61234" + System.lineSeparator());
+         }
+         check(BestTimes.load(file).lessons() == Coach.DONE, "an older file with wins needs no lessons");
+         file.delete();
+         BestTimes fresh = BestTimes.load(file);
+         check(fresh.lessons() == Coach.FLAG, "a first game starts on the flag lesson");
+         fresh.learned(Coach.FLAG);
+         check(BestTimes.load(file).lessons() == Coach.CHORD, "flag lesson saved");
+         fresh.learned(Coach.FLAG);
+         check(fresh.lessons() == Coach.CHORD, "a flag lesson again does not skip the next one");
+         fresh.learned(Coach.CHORD);
+         check(BestTimes.load(file).lessons() == Coach.DONE, "lessons done saved");
          check(BestTimes.format(61234).equals("1:01.2") && BestTimes.format(9900).equals("0:09.9"), "format");
          file.delete();
       } catch (java.io.IOException e) {

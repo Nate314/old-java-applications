@@ -254,6 +254,7 @@ public final class GameFrame extends JFrame {
       }
       this.reveal(row, column, row, column);
       this.refreshOdds();
+      this.coach();
    }
 
    /**
@@ -270,6 +271,9 @@ public final class GameFrame extends JFrame {
          return;
       }
       this.noteRisk(targets);
+      if (!this.watching) {
+         this.bestTimes.learned(Coach.CHORD);
+      }
       for (int[] cell : targets) {
          if (this.gameOver) {
             return;
@@ -277,6 +281,7 @@ public final class GameFrame extends JFrame {
          this.reveal(cell[0], cell[1], row, column);
       }
       this.refreshOdds();
+      this.coach();
    }
 
    /**
@@ -442,6 +447,10 @@ public final class GameFrame extends JFrame {
       this.gameOver = true;
       this.finishMillis = System.currentTimeMillis();
       this.clock.stop();
+      this.unmark();
+      if (!this.computerPlayed && MineFieldGenerator.isWon(this.grid, this.revealed)) {
+         this.bestTimes.learned(Coach.CHORD); // a player who can win needs no lessons
+      }
       for (int i = 0; i < this.luck.guesses(); i++) {
          int cell = this.luck.cells.get(i);
          this.tiles[cell / this.columns][cell % this.columns].setGamble(this.luck.risks.get(i));
@@ -457,6 +466,9 @@ public final class GameFrame extends JFrame {
          this.flagged[row][column] = flag;
          this.flagCount += flag ? 1 : -1;
          this.moves++;
+         if (flag && !this.watching) {
+            this.bestTimes.learned(Coach.FLAG);
+         }
          this.clearHint();
          this.updateStatus();
       }
@@ -727,7 +739,7 @@ public final class GameFrame extends JFrame {
 
    /** Marks a deduction on the board (its numbers ringed, its tiles glowing or red) with a line saying what and why. */
    private void showDeduction(Logic.Deduction step, String action) {
-      this.clearHint();
+      this.unmark();
       for (int cell : step.numbers) {
          this.markHint(cell, MineTile.HINT_CLUE);
       }
@@ -745,22 +757,52 @@ public final class GameFrame extends JFrame {
 
    /** Takes a hint's marks off the board and puts the tip back. */
    private void clearHint() {
+      this.unmark();
+      this.showTip();
+   }
+
+   private void unmark() {
       for (MineTile tile : this.hinted) {
          tile.setHint(MineTile.HINT_NONE);
       }
       this.hinted.clear();
-      this.showTip();
    }
 
-   /** Between hints: what kind of board this is and where the help is (with Odds on, what the odds say). */
+   /**
+    * Between hints: how to start, a first game's lesson, or what kind of board this is and where the help is (with
+    * Odds on, what the odds say).
+    */
    private void showTip() {
+      String board = this.bestTimes.noGuess() ? "No guess: logic alone clears every board." : "Random boards: some need a lucky guess.";
       if (this.showOdds) {
          this.refreshOdds();
-      } else if (this.bestTimes.noGuess()) {
-         this.setHintLines("No guess: logic alone clears every board.", "Stuck? Hint (H) shows the next step and why.");
-      } else {
-         this.setHintLines("Random boards: some need a lucky guess.", "No guess (G) deals boards logic can clear.");
+      } else if (this.grid == null && !this.watching) {
+         this.setHintLines("Click any tile to start: the first is always safe.", board);
+      } else if (!this.coach()) {
+         this.setHintLines(board, this.bestTimes.noGuess() ? "Stuck? Hint (H) shows the next step and why." : "No guess (G) deals boards logic can clear.");
       }
+   }
+
+   /**
+    * A first game, until the player has flagged a mine and opened around a number: the lesson they are on, shown on
+    * the board (a gold number and the tiles it settles) with what to do. True when it set the lines.
+    */
+   private boolean coach() {
+      int lesson = this.bestTimes.lessons();
+      if (lesson == Coach.DONE || this.grid == null || this.gameOver || this.watching || this.showOdds) {
+         return false;
+      }
+      Coach step = lesson == Coach.FLAG ? Coach.flag(this.view()) : Coach.chord(this.grid, this.revealed, this.flagged, this.view());
+      this.unmark();
+      if (step.number >= 0) {
+         this.markHint(step.number, MineTile.HINT_CLUE);
+         this.scrollTo(this.tiles[step.number / this.columns][step.number % this.columns]); // zoomed, the example may be off the view
+      }
+      for (int cell : step.cells) {
+         this.markHint(cell, step.mines ? MineTile.HINT_MINE : MineTile.HINT_SAFE);
+      }
+      this.setHintLines(step.action, step.reason);
+      return true;
    }
 
    private void setHintLines(String action, String reason) {
