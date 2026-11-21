@@ -6,7 +6,8 @@ import java.util.List;
 
 /**
  * Sets a chapter as printed pages: a title on a book's first chapter, a large chapter numeral beside the first two
- * lines, small raised verse numbers, and words wrapped to the page width. Pages hold a fixed number of lines.
+ * lines, small raised verse numbers, and words wrapped to the page width and justified, as in a printed Bible (a
+ * paragraph's last line stays ragged). Pages hold a fixed number of lines.
  */
 public final class Layout {
    public static final int WORD = 0;
@@ -26,6 +27,7 @@ public final class Layout {
       public final String text;
       public final int x;
       public final int line;
+      /** The text's width, plus any space justification adds after it (so highlights run on to the next word). */
       public final int width;
       /** The verse the run belongs to (0 for headings). */
       public final int verse;
@@ -74,6 +76,7 @@ public final class Layout {
       int indent = numeralWidth + body.stringWidth("  ");
       int space = body.stringWidth(" ");
       int x = indent;
+      int lineStart = page.runs.size();
       page.firstVerse = chapter.verseNumbers[0];
 
       for (int v = 0; v < chapter.verses.length; v++) {
@@ -92,6 +95,7 @@ public final class Layout {
             // A verse number stays with the first word of its verse.
             int need = kind == VERSE_NUMBER && words.length > 0 ? textWidth + body.stringWidth(words[0]) : textWidth;
             if (x > left && x + need > width) {
+               justify(page.runs, lineStart, width);
                line++;
                x = line < indentUntil ? indent : 0;
                if (line >= lines) {
@@ -102,6 +106,7 @@ public final class Layout {
                   indentUntil = 0;
                   x = 0;
                }
+               lineStart = page.runs.size();
             }
             page.runs.add(new Run(kind, text, x, line, textWidth, verse));
             page.lastVerse = verse;
@@ -229,6 +234,7 @@ public final class Layout {
          return runs;
       }
       int row = 0;
+      int rowStart = 0;
       int x = start < indentUntil ? indent : 0;
       int space = body.stringWidth(" ");
       for (int w = -1; w < words.length; w++) {
@@ -241,6 +247,8 @@ public final class Layout {
          int left = start + row < indentUntil ? indent : 0;
          int need = number ? tw + body.stringWidth(words[0]) : tw;
          if (x > left && x + need > width) {
+            justify(runs, rowStart, width);
+            rowStart = runs.size();
             row++;
             x = start + row < indentUntil ? indent : 0;
          }
@@ -248,6 +256,33 @@ public final class Layout {
          x += tw + (number ? 1 : space);
       }
       return runs;
+   }
+
+   /**
+    * Spreads a full line's runs (from {@code from} to the end of the list) so its last word ends at the width. The space
+    * goes between words, never between a verse number and its first word, and is added to the width of the run before
+    * it. A loose line is spread all the same, as in a printed book: one left ragged mid-verse reads as a break.
+    */
+   static void justify(List<Run> runs, int from, int width) {
+      int gaps = 0;
+      for (int i = from; i < runs.size() - 1; i++) {
+         gaps += runs.get(i).kind == VERSE_NUMBER ? 0 : 1;
+      }
+      Run last = runs.isEmpty() ? null : runs.get(runs.size() - 1);
+      int slack = last == null ? 0 : width - last.x - last.width;
+      if (gaps == 0 || slack <= 0) {
+         return;
+      }
+      int gap = 0;
+      int shift = 0;
+      for (int i = from; i < runs.size(); i++) {
+         Run r = runs.get(i);
+         boolean between = i < runs.size() - 1 && r.kind != VERSE_NUMBER;
+         int extra = between ? slack * (gap + 1) / gaps - slack * gap / gaps : 0;
+         gap += between ? 1 : 0;
+         runs.set(i, new Run(r.kind, r.text, r.x + shift, r.line, r.width + extra, r.verse));
+         shift += extra;
+      }
    }
 
    /** The first page that shows this verse (the last page for a verse past the end). */

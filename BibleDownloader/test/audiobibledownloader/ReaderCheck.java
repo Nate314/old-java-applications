@@ -79,6 +79,14 @@ public class ReaderCheck {
          }
       }
       check(words == 400 + 2 + 2, "every word placed once: " + words);
+      // Justified: every line but the chapter's last ends at the page's edge; the last stays ragged.
+      for (int p = 0; p < pages.size(); p++) {
+         int lastLine = p == pages.size() - 1 ? pages.get(p).runs.get(pages.get(p).runs.size() - 1).line : 99;
+         for (int ln = 0; ln < 14; ln++) {
+            int edge = rightEdge(pages.get(p), ln);
+            check(edge < 0 || (ln == lastLine ? edge < 320 : edge == 320), "page " + p + " line " + ln + " justified: " + edge);
+         }
+      }
       check(pages.size() > 2, "a long chapter takes several pages");
       check(pages.get(0).runs.get(0).kind == Layout.TITLE, "chapter 1 opens with the book title");
       check(pages.get(0).firstVerse == 1 && pages.get(pages.size() - 1).lastVerse == 3, "first and last verse");
@@ -115,6 +123,8 @@ public class ReaderCheck {
          }
       }
       check(placed[0] == 404 && placed[1] == 5 + 800 + 2, "every word of both placed once: " + placed[0] + " / " + placed[1]);
+      check(rightEdge(pairs.get(1), firstLine(pairs.get(1), 1)) < 320, "a short verse's only line stays ragged side by side");
+      check(rightEdge(pairs.get(0), firstLine(pairs.get(0), 1)) == 320, "a verse's full lines are justified side by side");
       check(pairs.get(0).runs.get(0).kind == Layout.TITLE && pairs.get(1).runs.get(0).kind == Layout.TITLE, "both open with the title");
       check(pairs.get(Layout.pageOf(pairs, 4)).lastVerse >= 4 && firstLine(pairs.get(pairs.size() - 1), 4) >= 0, "a verse in one translation only");
       List<Layout.Page> stacked = Layout.parallel(big, beside, body, small, numeral, 320, 14, metrics(new Font("Serif", Font.ITALIC, 17)));
@@ -406,6 +416,17 @@ public class ReaderCheck {
    }
 
    /** The line a verse's first word or number is on, or -1 when the page does not show it. */
+   /** Where a line's last word ends, or -1 for an empty line. */
+   private static int rightEdge(Layout.Page page, int line) {
+      int edge = -1;
+      for (Layout.Run run : page.runs) {
+         if (run.line == line && (run.kind == Layout.WORD || run.kind == Layout.VERSE_NUMBER || run.kind == Layout.ALT_WORD)) {
+            edge = Math.max(edge, run.x + run.width);
+         }
+      }
+      return edge;
+   }
+
    private static int firstLine(Layout.Page page, int verse) {
       for (Layout.Run run : page.runs) {
          if (run.verse == verse && (run.kind == Layout.WORD || run.kind == Layout.VERSE_NUMBER)) {
