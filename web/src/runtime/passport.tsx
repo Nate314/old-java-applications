@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { news, reducedMotion } from './band-news';
-import { appId, catalog, type CatalogApp } from './catalog';
+import { appId, catalog, homeDoc, type CatalogApp } from './catalog';
 import { indexOf, isThen, pageOf, picks } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { openShare } from './share';
@@ -37,14 +37,14 @@ export function stampToast(id: string) {
     var next = passport.unplayed(apps, id)[0];
     var done = count >= apps.length;
     playSound(done ? 'complete' : 'stamp');
-    if (done) confetti();
+    if (done) { confetti(); homeDoc(); }   // its Share it shows the arcade's description
     if (news) { stampNews(app, count, apps.length, next); return; }
     floatToast(app.shot, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
       done ? 'You have played all ' + apps.length + ' apps.' : count + ' of ' + apps.length + ' apps played.',
       <Meter p={count / apps.length} />, function (close) {
         return (
           <>
-            {done && <button type="button" className="shim-toast-go" data-sound="none" onClick={() => { close(); openShare(null); }}>{'Share it ›'}</button>}
+            {done && <button type="button" className="shim-toast-go" data-sound="none" onClick={() => { close(); homeDoc().then(() => openShare(null)); }}>{'Share it ›'}</button>}
             {next && toastLink(close, next, 'Try ' + next.name + ' ›')}
           </>
         );
@@ -129,7 +129,7 @@ function stampNews(app: OldjavaCatalogApp, count: number, total: number, next: O
     <>
       {done && (
         <button type="button" className="shim-news-go" data-sound="none" ref={b => { brag = b; }}
-          onClick={() => { news!.clear(); openShare(null, brag); }}>{'Share it ›'}</button>
+          onClick={() => { news!.clear(); homeDoc().then(() => openShare(null, brag)); }}>{'Share it ›'}</button>
       )}
       {next && <a className="shim-news-go" href={pageOf(next)}>{'Try ' + next.name + ' ›'}</a>}
     </>

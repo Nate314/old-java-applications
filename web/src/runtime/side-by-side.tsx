@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import { flushSync } from 'react-dom';
 import { embedded } from './skin';
 import { openClip } from './replay';
-import { appId, catalog, root } from './catalog';
+import { appId, catalog, homeDoc, root } from './catalog';
 import type { CatalogApp } from './catalog';
 import { indexOf } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
@@ -283,7 +283,7 @@ export function init() {
     if (!dock || e.origin !== location.origin || e.source !== dock.frame.contentWindow || !e.data) return;
     var d = e.data;
     if (typeof d.oldjavaPlay === 'string') dockOpen(d.oldjavaPlay, true);
-    else if (typeof d.oldjavaShare === 'string') openShare(d.oldjavaShare || null, dock.frame);
+    else if (typeof d.oldjavaShare === 'string') { const id = d.oldjavaShare || null, frame = dock.frame; (id ? Promise.resolve() : homeDoc()).then(() => openShare(id, frame)); }
     else if (d.oldjavaClip) openClip(d.oldjavaClip, dock.frame);
     else if (d.oldjavaFind) openFind(dock.frame);
     else if (d.oldjavaSkinMaker) openMaker(dock.frame);

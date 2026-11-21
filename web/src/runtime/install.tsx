@@ -189,6 +189,18 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
   );
 }
 
+/**
+ * Registers the service worker. Installing it fetches the whole build (about 210 KB gzipped, sw.ts), so an app page
+ * calls this only once its program has loaded: on a slow phone that download held Play back.
+ */
+export function keepOffline() {
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register(siteRoot + 'sw.js').catch(function (e) {
+      console.warn('Offline play is not available: ' + e.message);
+    });
+  }
+}
+
 export function init() {
   // ---- installable and offline: the web app manifest, icons and the service worker (sw.js) ----
   // Every page links them, so the arcade can be installed from any page and every page can be kept offline.
@@ -200,11 +212,7 @@ export function init() {
   theme.name = 'theme-color';
   theme.content = '#170a2e';
   document.head.appendChild(theme);
-  if ('serviceWorker' in navigator && window.isSecureContext) {
-    navigator.serviceWorker.register(siteRoot + 'sw.js').catch(function (e) {
-      console.warn('Offline play is not available: ' + e.message);
-    });
-  }
+  if (!document.body.hasAttribute('data-app')) keepOffline();   // an app page waits for its program (start.ts)
   // The home page shows its own Install button, so it keeps the browser's install prompt for that button.
   window.addEventListener('beforeinstallprompt', function (e) {
     if (document.body && document.body.hasAttribute('data-app')) return;
