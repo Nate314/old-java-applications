@@ -3,6 +3,7 @@ import { store, stored } from './stored';
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
+import { screenFloor } from './screen-floor';
 
 export interface BandNews {
   /** kind: 'hint', 'stamp', ...; lead: kept at the start; text: may scroll; actions: links or buttons kept in view after it. */
@@ -206,9 +207,11 @@ export function centerWindows(desktop: HTMLElement) {
   var key = '', size = '', box: number[] | null = null, fit = zoomFit();
   var full = document.documentElement.hasAttribute('data-full'), one = false;
   zoomListeners.push(function (on: boolean) { fit = on; size = ''; });
+  screenFloor(desktop);   // now, so the app's first look at the screen sees it
   setInterval(function () {
+    var floor = screenFloor(desktop);   // ?embed&full's pretend screen in a small frame (screen-floor.ts), before anything is measured
     var now = full ? fullBox(desktop) : windowsBox(desktop), k = now.key;
-    var z = desktop.clientWidth + 'x' + desktop.clientHeight + ',' + (window.devicePixelRatio || 1);
+    var z = desktop.clientWidth + 'x' + desktop.clientHeight + ',' + (window.devicePixelRatio || 1) + ',' + floor.fit;
     if (k === key && z === size) return;
     if (k !== key) { box = now.box; one = full && (now as { one?: boolean }).one === true; }
     key = k;
@@ -222,13 +225,13 @@ export function centerWindows(desktop: HTMLElement) {
     // About the desktop's center (the default transform origin, which the Arcade power-on's scale shares).
     var dx = s * (w - x0 - x1) / 2;
     var dy = s * (h - y0 - y1) / 2;
-    window.__shimScale = s;
+    window.__shimScale = s * floor.k;
     // Whole pixels keep unscaled and zoomed windows crisp; a group scaled down keeps the exact fit instead.
-    desktop.style.transform = s < 1 ? 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')'
-      : 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)' + (s > 1 ? ' scale(' + s + ')' : '');
+    desktop.style.transform = (floor.fit ? floor.fit + ' ' : '') + (s < 1 ? 'translate(' + dx + 'px, ' + dy + 'px) scale(' + s + ')'
+      : 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)' + (s > 1 ? ' scale(' + s + ')' : ''));
     redrawBar();
     var dpr = window.devicePixelRatio || 1;
-    var render = Math.max(dpr, Math.min(dpr * s, ZOOM_MAX));   // capped: a canvas 9 times bigger paints slowly
+    var render = Math.max(dpr, Math.min(dpr * s * floor.k, ZOOM_MAX));   // capped: a canvas 9 times bigger paints slowly
     if (render !== (window.__shimRender || dpr)) {
       window.__shimRender = render;
       document.dispatchEvent(new Event('shimrender'));

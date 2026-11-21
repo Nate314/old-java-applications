@@ -1,6 +1,7 @@
 import { clipMode, embedded } from './skin';
 import { toolbar } from './install';
 import { centerWindows, stageEdge } from './band-news';
+import { keepScreenFloor } from './screen-floor';
 import { bringBack } from './pop-out';
 import { replay, setReplay, startReplay } from './replay';
 import { setPhotoDesk } from './photo-booth';
@@ -43,6 +44,7 @@ export function init() {
     // <body data-own-layout> (CircleSpawner): the app places its windows on the screen itself, and recentering
     // them as a group while a shape grows in, one window at a time, would slide the whole group about.
     if (!document.documentElement.hasAttribute('data-shot') && !body.hasAttribute('data-own-layout')) centerWindows(desktop);
+    else if (embedded) keepScreenFloor(desktop);
     if (body.hasAttribute('data-tab-title') && !embedded) followTitle(desktop);
     var saverMode = document.documentElement.hasAttribute('data-saver');
     if (embedded && window.parent !== window && !saverMode) padInPlayer();
