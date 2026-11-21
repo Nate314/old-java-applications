@@ -77,6 +77,8 @@ public final class StarField extends Component {
    private final Orbits orbits = new Orbits(this);
    private final SkyWriting skyWriting;
    private final StarMusic music = new StarMusic();
+   /** Moves the stars while the window is open; null for Star Catcher's sky. */
+   private Timer timer;
    /** What the badge in the top left corner says: the mode's name after a change, or whether the music is on. */
    private String badge;
 
@@ -113,7 +115,8 @@ public final class StarField extends Component {
          this.hintShown = true;
          this.showBadge(this.modeBadge());
          new StarHand(this);
-         new Timer(15, event -> this.tick()).start();
+         this.timer = new Timer(15, event -> this.tick());
+         this.timer.start();
       }
    }
 
@@ -188,6 +191,16 @@ public final class StarField extends Component {
    private void showBadge(String text) {
       this.badge = text;
       this.badgeAt = this.clock;
+   }
+
+   /** The window has closed: the stars stop moving and any notes still ringing are let go. */
+   final void stop() {
+      if (this.timer != null) {
+         this.timer.stop();
+      }
+      if (this.music.on()) {
+         this.music.toggle();
+      }
    }
 
    /** S: star music on or off (see {@link StarMusic}). */

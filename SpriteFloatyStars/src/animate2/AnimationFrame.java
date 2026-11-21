@@ -9,12 +9,24 @@ public final class AnimationFrame extends JFrame implements KeyListener {
    private StarField starField;
 
    public AnimationFrame(int mode, Dimension size, int starCount, int starSize) {
-      this.setTitle("Animation Test");
       this.setSize(size);
-      this.setDefaultCloseOperation(3);
+      // Closing a stars' window goes back to the settings window, to pick another sky.
+      this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
       this.add(this.starField = new StarField(mode, size, starCount, starSize));
+      this.nameTitle();
       this.starField.setFocusable(false);
       this.addKeyListener(this);
+   }
+
+   /** The title names the mode playing, as the settings window's tiles do. */
+   private void nameTitle() {
+      this.setTitle("Sprite Floaty Stars: " + StarField.MODE_NAMES[this.starField.mode()]);
+   }
+
+   @Override
+   public void dispose() {
+      this.starField.stop();
+      super.dispose();
    }
 
    @Override
@@ -59,6 +71,7 @@ public final class AnimationFrame extends JFrame implements KeyListener {
       } else if (key == KeyEvent.VK_S) {
          this.starField.toggleMusic();
       }
+      this.nameTitle();
    }
 
    @Override
