@@ -139,6 +139,26 @@ ul.apps .actions { display: flex; gap: 8px; }
 @media (hover: hover) {
   ul.apps li:not(.text):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); }
 }
+/* ---- pocket gallery: on a phone the cards sit two to a row as tiles (about a quarter of the scrolling of one
+   column), each with a two-line hint and one big Play. The player's own Full page button takes over the
+   card's, and the picture still plays the app too. */
+@media (max-width: 640px) {
+  ul.apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  ul.apps li { border-radius: 10px; }
+  ul.apps a.thumb img { max-width: calc(100% - 12px); max-height: calc(100% - 12px); }
+  ul.apps .badge, ul.apps .saved, ul.apps li.updated a.thumb::after { top: 5px; padding: 0 6px; font-size: 10.5px; }
+  ul.apps .badge { left: 5px; }
+  ul.apps .saved, ul.apps li.updated a.thumb::after { right: 5px; }
+  ul.apps li[data-clip] a.thumb .clip-cue { left: 5px; bottom: 5px; font-size: 11px; }
+  ul.apps .body { gap: 4px; padding: 8px 9px 9px; }
+  ul.apps strong { font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; }
+  ul.apps .body > span { font-size: 12.5px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical;
+                         -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  ul.apps p.record { padding: 3px 6px; font-size: 12px; }
+  ul.apps .actions .btn:not(.play) { display: none; }
+  ul.apps .actions .play { flex: 1; min-height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+  .player-bar .era button { min-height: 32px; }
+}
 
 .player-bar .btn[hidden] { display: none; }
 /* The arcade passport (count ring, buttons, page of stamps): passport.css. */
