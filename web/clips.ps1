@@ -29,10 +29,11 @@ $ErrorActionPreference = 'Stop'
 # Flappy Bird has no computer player, so the clip has a small one: every 16 ms it finds the bird (teal) and the next
 # pipe (copper, from the top edge of the game's canvas; the copper ground is below the band searched) and flaps
 # while the bird is below the gap's middle.
-$FlappyPilot = @'
+$FlappyPilot = @"
 js:(function () {
   var c = document.querySelector('#desktop canvas'), g = c.getContext('2d'), last = 0, prev = 0;
-  function flap() { ['keydown', 'keyup'].forEach(function (t) { document.dispatchEvent(new KeyboardEvent(t, { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true })); }); }
+  $Press
+  function flap() { press(' ', 32, document, 'Space'); }
   function pipe(d, i) { return d[i] > d[i + 1] + 40 && d[i + 1] > d[i + 2] + 15 && d[i] > 110; }
   function tick() {
     var W = c.width, H = c.height, x0 = Math.round(W * 0.2), bw = Math.round(W * 0.14), bh = Math.round(H * 0.87);
@@ -62,7 +63,7 @@ js:(function () {
   }
   setInterval(tick, 16); // not requestAnimationFrame: it can run far slower than the game's own timers
 })()
-'@
+"@
 $Recipes = [ordered]@{
     Minesweeper         = @{ Steps = @('wait:800', 'key:O', 'key:W', 'wait:1500', 'rec') }
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', $FlappyPilot, 'wait:3000', 'rec') }

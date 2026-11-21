@@ -37,7 +37,7 @@ $NathaNOSPicture = "js:(function () { var W = 200, H = 125, p = [], x, y, c, s =
 # A double click there.
 $NathaNOSOpen = "js:(function () { $Tap tap(348, 318, 2); })()"
 # NumberGuess: Page Down opens the Duel tab (from 1-10, where a fresh visitor starts; the locked ranges are passed over).
-$NumberGuessDuel = "js:(function (t) { ['keydown', 'keyup'].forEach(function (type) { t.dispatchEvent(new KeyboardEvent(type, { key: 'PageDown', keyCode: 34, which: 34, bubbles: true })); }); })(document.activeElement || document.body)"
+$NumberGuessDuel = "js:(function (t) { $Press press('PageDown', 34, t); })(document.activeElement || document.body)"
 # Then a click on the middle of the lower line of its lane, which guesses the middle of what is left.
 $NumberGuessMiddle = "js:(function (c) { $Tap var r = c.getBoundingClientRect(); tap(r.left + r.width / 2, r.top + r.height * 180 / 350); })(document.querySelector('#desktop canvas.paint'))"
 $Recipes = [ordered]@{
