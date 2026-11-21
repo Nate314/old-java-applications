@@ -4,19 +4,22 @@
 # at these cards, are written by the build (web/src/routes.tsx, web/src/pages/app/AppPage.tsx).
 # Build first (npm run build in web/, for the thumbnails and the icon), then run from the repo root:
 #   ./web/cards.ps1
-#   ./web/cards.ps1 -Apps Minesweeper,Clock -Port 8102
+#   ./web/cards.ps1 -Apps Minesweeper,Clock -Port 8102 -DebugPort 9303
 #   ./web/cards.ps1 -Apps story -Port 8102       # only the story page's card (story.jpg)
+#   ./web/cards.ps1 -Out somewhere/else          (to compare before replacing the committed ones)
+# The server and headless Chrome are started as in shots.ps1 and clips.ps1 (web/cdp.ps1's Start-Headless).
 param(
     [string[]]$Apps = @(),
     [int]$Port = 8102,
+    [int]$DebugPort = 9303,
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
-    [int]$WaitMs = 1500
+    [string]$Out = (Join-Path $PSScriptRoot 'public/cards'),
+    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'cdp.ps1')
 $site = Join-Path $PSScriptRoot 'target/site'
-$out = Join-Path $PSScriptRoot 'public/cards'
-if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: npm run build (in web/)" }
-if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
+$out = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)   # .NET's Save needs a full path
 New-Item -ItemType Directory -Force $out | Out-Null
 
 # The apps, from the one list the home page's gallery is rendered from.
@@ -34,25 +37,25 @@ if (-not $entries) { throw "No apps found in $catalogFile" }
 
 $selected = if ($Apps.Count) { $entries | Where-Object { $Apps -contains $_.Id } } else { $entries }
 $template = Join-Path $site '_card.html'
-Copy-Item (Join-Path $PSScriptRoot 'card.html') $template
-$server = Start-Process python -ArgumentList '-m', 'http.server', $Port, '--bind', '127.0.0.1', '--directory', $site -PassThru -WindowStyle Hidden
-$profileDir = Join-Path ([IO.Path]::GetTempPath()) "oldjava-cards-$Port"
-# Chrome saves a PNG; the card is kept as a JPEG, a fifth of the size.
+# Chrome's screenshot is a PNG; the card is kept as a JPEG, a fifth of the size.
 Add-Type -AssemblyName System.Drawing
 $jpeg = [Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
 $quality = New-Object Drawing.Imaging.EncoderParameters(1)
 $quality.Param[0] = New-Object Drawing.Imaging.EncoderParameter([Drawing.Imaging.Encoder]::Quality, [long]88)
 function Shoot([string]$query, [string]$jpg) {
-    $png = Join-Path ([IO.Path]::GetTempPath()) "oldjava-card-$Port.png"
-    & $Chrome --headless=new --disable-gpu --hide-scrollbars --mute-audio "--user-data-dir=$profileDir" `
-        '--window-size=1200,630' "--virtual-time-budget=$WaitMs" "--screenshot=$png" `
-        "http://127.0.0.1:$Port/_card.html$query" 2>$null | Out-Null
-    $img = [Drawing.Image]::FromFile($png)
-    try { $img.Save($jpg, $jpeg, $quality) } finally { $img.Dispose(); Remove-Item -Force $png }
+    $url = "http://127.0.0.1:$Port/_card.html$query"
+    # Ready once this card (not the one before it), its pictures and its fonts have loaded; the card does nothing after that.
+    $loaded = "location.href === '$url' && document.readyState === 'complete' && [].every.call(document.images, function (i) { return i.complete; }) && document.fonts.status === 'loaded'"
+    if (-not (Open-App $url $loaded)) { throw "The card $url did not load." }
+    $png = [Convert]::FromBase64String((Invoke-Cdp 'Page.captureScreenshot' @{ format = 'png' }).data)
+    $img = [Drawing.Image]::FromStream((New-Object IO.MemoryStream(, $png)))
+    try { $img.Save($jpg, $jpeg, $quality) } finally { $img.Dispose() }
     Write-Host "card -> $jpg"
 }
+$session = Start-Headless $site $Port $DebugPort $Chrome 'cards' 1200 630 -ProfileRoot $ProfileRoot
 try {
-    Start-Sleep -Seconds 1
+    Copy-Item (Join-Path $PSScriptRoot 'card.html') $template
+    Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = 1200; height = 630; deviceScaleFactor = 1; mobile = $false } | Out-Null
     if (-not $Apps.Count) { Shoot '' (Join-Path $out 'index.jpg') }
     if (-not $Apps.Count -or $Apps -contains 'story') { Shoot '?story' (Join-Path $out 'story.jpg') }
     foreach ($e in $selected) {
@@ -61,7 +64,6 @@ try {
         Shoot $q (Join-Path $out "$($e.Id).jpg")
     }
 } finally {
-    Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
+    Stop-Headless $session
     Remove-Item -Force $template -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force $profileDir -ErrorAction SilentlyContinue
 }
