@@ -98,6 +98,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    /** Below this width the book shows one page at a time. */
    private static final int TWO_PAGE_WIDTH = 700;
    private static final int GLOW_MS = 2400;
+   /** How far a dragged page must be turned to go over when let go. */
+   static final double TURN_OVER = 0.2;
 
    private enum View { READ, BOOKS, CHAPTERS, SAVE, PLAN, LEARN }
 
@@ -169,6 +171,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private long foundAt;
    private final Timer glowTimer;
    private final PageTurn pageTurn = new PageTurn(this);
+   /** Where a press on the open book began (it clicks on release unless it drags), or null. */
+   private java.awt.Point pressedAt;
+   /** The page being dragged over: forward or back, and how far (0 to 1); NaN when none is. */
+   private boolean dragForward;
+   private double dragged = Double.NaN;
+   /** While a dragged page is not yet let go over, the place it turned to is not saved or counted as read. */
+   private boolean trying;
 
    public ReaderPanel(Shelf shelf) {
       this.shelf = shelf;
@@ -194,7 +203,20 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          @Override
          public void mousePressed(MouseEvent e) {
             ReaderPanel.this.requestFocusInWindow();
-            ReaderPanel.this.click(e.getX(), e.getY());
+            ReaderPanel.this.press(e.getX(), e.getY());
+         }
+
+         @Override
+         public void mouseDragged(MouseEvent e) {
+            ReaderPanel.this.drag(e.getX(), e.getY());
+            if (Double.isNaN(ReaderPanel.this.dragged)) {
+               ReaderPanel.this.hover(e.getX(), e.getY());
+            }
+         }
+
+         @Override
+         public void mouseReleased(MouseEvent e) {
+            ReaderPanel.this.release();
          }
 
          @Override
@@ -317,12 +339,22 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    /** Moves through the book, and turns the page over when both the old and the new pages are set. */
    private void turn(boolean forward, Runnable move) {
+      this.turn(forward, move, false);
+   }
+
+   /** As {@link #turn(boolean, Runnable)}; held, the page waits for the finger dragging it instead of turning by itself. */
+   private void turn(boolean forward, Runnable move, boolean held) {
+      this.pageTurn.settle();
       boolean motion = !Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
       String from = this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread;
       BufferedImage before = motion && this.view == View.READ && this.goTo == null && this.chapterShown() && this.getWidth() > 0 ? this.snapshot() : null;
       move.run();
       if (before != null && this.view == View.READ && this.chapterShown() && !from.equals(this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread)) {
-         this.pageTurn.start(forward, before, this.snapshot(), this.sheets());
+         if (held) {
+            this.pageTurn.grab(forward, before, this.snapshot(), this.sheets());
+         } else {
+            this.pageTurn.start(forward, before, this.snapshot(), this.sheets());
+         }
       }
    }
 
@@ -392,7 +424,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    /** Saves the place; a chapter whose last page is open counts as read. */
    private void placeChanged() {
-      if (this.pages == null) {
+      if (this.pages == null || this.trying) {
          return;
       }
       this.shelf.verse = this.pages.get(this.spread).firstVerse;
@@ -508,6 +540,75 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             this.next();
          }
       }
+   }
+
+   /** A press on the open book waits to see whether it drags a page; anywhere else it clicks at once. */
+   private void press(int x, int y) {
+      this.pageTurn.settle();
+      if (this.view == View.READ && this.goTo == null && y < this.getHeight() - BAR) {
+         this.pressedAt = new java.awt.Point(x, y);
+      } else {
+         this.click(x, y);
+      }
+   }
+
+   /** Dragging sideways over the book takes hold of a page, which follows the finger until it is let go. */
+   private void drag(int x, int y) {
+      if (this.pressedAt == null) {
+         return;
+      }
+      int dx = x - this.pressedAt.x;
+      if (Double.isNaN(this.dragged)) {
+         if (Math.abs(dx) < 12 || Math.abs(dx) <= Math.abs(y - this.pressedAt.y)) {
+            return;
+         }
+         this.dragForward = dx < 0;
+         this.trying = true;
+         // The verse under the finger is not tinted on the page lifted, or on the one beneath.
+         this.hoverVerse = 0;
+         this.turn(this.dragForward, this.dragForward ? this::forward : this::backward, true);
+         if (!this.pageTurn.held()) {
+            // Nothing to hold (reduced motion, or a chapter still to fetch): the page has simply turned.
+            this.trying = false;
+            this.placeChanged();
+            this.pressedAt = null;
+            return;
+         }
+         this.dragged = 0;
+      }
+      // Across the whole book is a whole turn, on one page or two.
+      this.dragged = Math.max(0, Math.min(1, (this.dragForward ? -dx : dx) / (double) this.bookArea().width));
+      this.pageTurn.hold(this.dragged);
+      this.repaint();
+   }
+
+   /** A press that did not drag clicks; a dragged page let go a fifth of the way or more turns over, else falls back. */
+   private void release() {
+      java.awt.Point at = this.pressedAt;
+      this.pressedAt = null;
+      if (at == null) {
+         return;
+      }
+      if (Double.isNaN(this.dragged)) {
+         this.click(at.x, at.y);
+         return;
+      }
+      boolean over = this.dragged >= TURN_OVER;
+      this.dragged = Double.NaN;
+      this.trying = false;
+      if (over) {
+         this.placeChanged();
+      }
+      boolean forward = this.dragForward;
+      this.pageTurn.let(over, () -> {
+         // Back where the press began: the opposite move, without a turn.
+         if (forward) {
+            this.backward();
+         } else {
+            this.forward();
+         }
+         this.repaint();
+      });
    }
 
    private void hover(int x, int y) {

@@ -339,6 +339,49 @@ public class ReaderCheck {
       check(turnAt(one, true, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 180) == blue
          && (turnAt(one, true, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 40) & 0xff) == 0, "one page folds away to the left");
       check(turnAt(one, false, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 180) == red, "one page back unfolds from the left");
+
+      // A dragged page stays where the finger holds it, and let go short of over it falls back to where it was.
+      PageTurn held = new PageTurn(new javax.swing.JPanel());
+      BufferedImage wholeBefore = halves(red, green);
+      BufferedImage wholeAfter = halves(blue, yellow);
+      held.grab(true, wholeBefore, wholeAfter, two);
+      held.hold(0.25);
+      check(held.held() && held.running() && heldAt(held, two, after, 125) == turnAt(two, true, before, after, 0.25, 125), "held page at a quarter");
+      held.hold(7);
+      check(heldAt(held, two, after, 50) == blue && heldAt(held, two, after, 150) == yellow, "held page clamps at over");
+      held.hold(0.15);
+      int[] fell = {0};
+      held.let(false, () -> fell[0]++);
+      check(!held.held() && held.running() && fell[0] == 0, "let-go page falls back over time");
+      held.settle();
+      check(fell[0] == 1 && !held.running(), "a page falling back settles at once for the next turn");
+      held.grab(true, wholeBefore, wholeAfter, two);
+      held.hold(0.5);
+      held.let(true, () -> fell[0]++);
+      held.settle();
+      check(fell[0] == 1 && held.running(), "a page let go over finishes its turn");
+   }
+
+   /** A whole panel picture: the left half one colour and the right half another. */
+   private static BufferedImage halves(int left, int right) {
+      BufferedImage image = solid(left);
+      Graphics2D g = image.createGraphics();
+      g.setColor(new Color(right));
+      g.fillRect(image.getWidth() / 2, 0, image.getWidth() / 2, image.getHeight());
+      g.dispose();
+      return image;
+   }
+
+   /** The colour at (x, 25) of a held turn drawn over the new pages. */
+   private static int heldAt(PageTurn turn, Rectangle[] sheets, BufferedImage[] after, int x) {
+      BufferedImage frame = new BufferedImage(200, 50, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = frame.createGraphics();
+      for (int i = 0; i < sheets.length; i++) {
+         g.drawImage(after[i], sheets[i].x, sheets[i].y, sheets[i].width, sheets[i].height, null);
+      }
+      turn.paint(g, sheets);
+      g.dispose();
+      return frame.getRGB(x, 25) & 0xffffff;
    }
 
    /** The colour at (x, 25) of a turn frame drawn over the new pages. */
