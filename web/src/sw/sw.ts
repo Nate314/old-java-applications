@@ -5,17 +5,28 @@
 // therefore kept, and the home page's "Save all for offline" fills the cache with every app in one go.
 // Cache keys leave out the query string, so App/index.html?embed (the home page's player) and the app's own
 // page share one entry.
+// The built scripts and stylesheets (assets/<name>-<hash>.js and .css) never change under their name, so this build's
+// (BUILT, filled in by the build) answer from the cache first, and on activating, older builds' ones leave the cache.
 // Built by vite/pages.ts into the site root as sw.js (a service worker's scope is its own folder and below).
 export {};   // a module, so this file's self can be typed as the service worker's
 declare const self: ServiceWorkerGlobalScope;
+declare const BUILT: string[];   // this build's assets/ files, relative to the site root
 const sw = self;
 
 const CACHE = 'oldjava-v1';   // the home page's offline panel (index.html) writes to the same cache
 
+const assets = () => new URL('assets/', sw.registration.scope).href;
+const built = () => BUILT.map(f => new URL(f, sw.registration.scope).href);
+
 sw.addEventListener('install', () => { sw.skipWaiting(); });
 sw.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(names => Promise.all(names.filter(n => n.indexOf('oldjava-') === 0 && n !== CACHE)
-    .map(n => caches.delete(n)))).then(() => sw.clients.claim()));
+    .map(n => caches.delete(n))))
+    .then(() => caches.open(CACHE)).then(cache => cache.keys().then(requests => {
+      const keep = built().concat(assets() + 'files.json');   // files.json keeps its name (Save all for offline reads it)
+      return Promise.all(requests.filter(r => r.url.indexOf(assets()) === 0 && keep.indexOf(r.url) < 0).map(r => cache.delete(r)));
+    }))
+    .then(() => sw.clients.claim()));
 });
 
 function key(request: Request): string {
@@ -41,7 +52,11 @@ sw.addEventListener('fetch', e => {
   const request = e.request;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
   if (/\/downloads\/[^/]+\.jar$/.test(new URL(request.url).pathname)) return;   // the desktop jars are not kept
-  e.respondWith(fetch(request).then(response => {
+  const fixed = built().indexOf(key(request)) >= 0;
+  // A page is always checked with the server: one the HTTP cache kept (GitHub Pages lets it keep any file 10 minutes)
+  // could name the hashed files of an older build, which this cache no longer has.
+  const page = request.mode === 'navigate' || /(\.html|\/)$/.test(new URL(request.url).pathname);
+  e.respondWith((fixed ? caches.match(key(request)) : Promise.resolve(undefined)).then(hit => hit || fetch(request, page ? { cache: 'no-cache' } : undefined).then(response => {
     if (response.status === 200 && response.type === 'basic') {
       const copy = response.clone();
       e.waitUntil(caches.open(CACHE).then(cache => cache.put(key(request), copy)));
@@ -51,5 +66,5 @@ sw.addEventListener('fetch', e => {
       if (hit) return hit;
     if (request.mode === 'navigate') return offlinePage();
     throw error;
-  })));
+  }))));
 });

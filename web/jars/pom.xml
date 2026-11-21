@@ -124,6 +124,21 @@
               </target>
             </configuration>
           </execution>
+          <!-- Here because this module builds last, after every app's classes.js and then.js: each app page loads
+               its program as ?v=<content hash> (web/vite/stamp-programs.mjs), so a cache never mixes builds. -->
+          <execution>
+            <id>program-stamps</id>
+            <phase>package</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <exec executable="node" failonerror="true">
+                  <arg file="${project.basedir}/../vite/stamp-programs.mjs"/>
+                  <arg file="${site.dir}"/>
+                </exec>
+              </target>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>
