@@ -219,8 +219,8 @@ export function init() {
     open: null,
     catalog: function () { return catalog(); },
     // Apps not played yet, others of the same category as `id` first (see picks).
-    unplayed: function (apps: CatalogApp[], id: string | null) {
-      return picks(apps, id, apps.length).filter(function (a: CatalogApp) { return !played[a.id]; });
+    unplayed: function <T extends { id: string; cat: string }>(apps: T[], id: string | null) {
+      return picks(apps, id, apps.length).filter(function (a) { return !played[a.id]; });
     }
   };
 }

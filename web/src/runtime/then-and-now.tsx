@@ -90,22 +90,16 @@ export function indexOf(apps: { id: string }[], id: string | null) {
 export function pageOf(app: { id: string }) { return root() + app.id + '/index.html' + (embedded ? '?embed' : ''); }
 
 // Apps to try after this one (three unless `count` says otherwise): apps not played yet first, then the
-// played ones; within each, others of the same category first, each group shuffled.
-export function picks<T extends OldjavaCatalogApp>(apps: T[], id: string | null, count?: number) {
+// played ones; within each, others of the same category first, in gallery order. Every "what next" on the site
+// (the stamp toast, the exit screen, the band's Next, the home page's Welcome back and passport) asks this, so a
+// visitor is offered the same next app wherever they look.
+export function picks<T extends { id: string; cat: string }>(apps: T[], id: string | null, count?: number) {
   var self = apps[indexOf(apps, id)];
-  function shuffled<T>(list: T[]) {
-    for (var i = list.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var t = list[i]; list[i] = list[j]; list[j] = t;
-    }
-    return list;
-  }
   var result: T[] = [];
   [false, true].forEach(function (wasPlayed) {
     var others = apps.filter(function (a) { return a.id !== id && !!played[a.id] === wasPlayed; });
-    var same = others.filter(function (a) { return self && a.cat === self.cat; });
-    var rest = others.filter(function (a) { return !self || a.cat !== self.cat; });
-    result = result.concat(shuffled(same), shuffled(rest));
+    result = result.concat(others.filter(function (a) { return self && a.cat === self.cat; }),
+      others.filter(function (a) { return !self || a.cat !== self.cat; }));
   });
   return result.slice(0, count || 3);
 }

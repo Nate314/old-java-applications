@@ -40,9 +40,8 @@ export function ComeBack() {
   const [seen] = useState(() => {
     const last = stampCount() ? lastPlayed() : null;
     if (!last) return null;
-    // The next new one: of the same kind as the last first (as the exit screen's picks), else in gallery order.
-    const fresh = APPS.filter(a => !window.oldjavaPassport.has(a.id));
-    return { last, next: fresh.find(a => a.cat === last.app.cat) || fresh[0], count: stampCount() };
+    // The next new one, from the runtime's shared order (the stamp toast, exit screen and band's Next agree).
+    return { last, next: window.oldjavaPassport.unplayed(APPS, last.app.id)[0], count: stampCount() };
   });
   const lines = useRecordLines();
   if (!seen) return null;
