@@ -112,8 +112,11 @@ function gamepadDriver() {
   var eaten: Record<string, boolean>[] = [];      // per controller: inputs that pressed Play on the title screen, ignored until released
   var holders: Record<string, number> = {};    // key name -> how many inputs hold it down
   var lastT = 0;
-  var cursor: { hidden: boolean; draw(): void } | null = null, cx = innerWidth / 2, cy = innerHeight / 2, hideTimer: ReturnType<typeof setTimeout> | null = null;
+  var cursor: { hidden: boolean; draw(): void } | null = null, cx = NaN, cy = NaN, hideTimer: ReturnType<typeof setTimeout> | null = null;
   var downEl: Element | null = null, downButton = -1;
+  // The pointer starts at the screen's center, worked out when first needed: reading the size at start-up laid the
+  // whole page out in the middle of a slow phone's start, for a pointer only a controller ever shows.
+  function center() { if (isNaN(cx)) { cx = innerWidth / 2; cy = innerHeight / 2; } }
 
   function lit(name: string, down: boolean) {
     var which = keyOf(name).which;
@@ -132,7 +135,7 @@ function gamepadDriver() {
   function showCursor() {
     if (!cursor) {
       var c = cursor = { hidden: false, draw: function () { /* until it is drawn */ } };
-      openLayer(<GamepadCursor at={() => [cx, cy, c.hidden]} onMount={draw => { c.draw = draw; }} />);
+      openLayer(<GamepadCursor at={() => { center(); return [cx, cy, c.hidden]; }} onMount={draw => { c.draw = draw; }} />);
     }
     cursor.hidden = false;
     cursor.draw();
@@ -154,7 +157,7 @@ function gamepadDriver() {
       clientX: cx, clientY: cy, screenX: cx, screenY: cy, button: button, buttons: buttons
     }));
   }
-  function under() { return document.elementFromPoint(cx, cy); }
+  function under() { center(); return document.elementFromPoint(cx, cy); }
   // The same events, in the same order, as a mouse button: down, moves while held, up, then click (or contextmenu).
   function mouseButton(button: number, down: boolean) {
     showCursor();
@@ -180,6 +183,7 @@ function gamepadDriver() {
   }
   function moveCursor(dx: number, dy: number) {
     if (!dx && !dy) return;
+    center();
     cx = Math.max(0, Math.min(innerWidth - 1, cx + dx));
     cy = Math.max(0, Math.min(innerHeight - 1, cy + dy));
     showCursor();

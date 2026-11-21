@@ -10,7 +10,7 @@ import { watchApp, watchWanted } from './watch';
 import { saverHost } from './saver';
 import { padInPlayer } from './touch-pad';
 import { gamepads } from './gamepads';
-import { appId } from './catalog';
+import { appId, catalog } from './catalog';
 import { programFile } from './then-and-now';
 import { exitScreen, howToPlay, sourceFromHash } from './source-viewer';
 import { pretendWindows } from './pretend-windows';
@@ -20,16 +20,31 @@ import { preload, titleScreen } from './title-screen';
 import { overlay, runAgain } from './ui/overlay';
 import { showConsole } from './system-out';
 import { playSound } from './sounds';
-import { whenShown } from './toolbar-more';
+import { fitBand, whenShown } from './toolbar-more';
 
 
+
+// The stage and its band. On an app page they go up in a task of their own just after the frame that shows the
+// early title screen (it opens once apps.json has answered, title-screen.tsx), not at DOMContentLoaded: that waits
+// for the app's program (classes.js) to arrive and run, so a slow phone showed the title screen without its band,
+// then froze for the band's render and layout on top of the program's own start-up before its next frame. If the
+// program comes first, DOMContentLoaded does it.
+var staged = false;
+function stage(isApp: boolean) {
+  if (staged) return;
+  staged = true;
+  if (isApp && !embedded) document.documentElement.setAttribute('data-stage', '');
+  if (!embedded) toolbar(isApp);
+}
 
 export function init() {
+  if (document.body && document.body.hasAttribute('data-app')) catalog().then(function () {
+    requestAnimationFrame(function () { setTimeout(function () { stage(true); fitBand(); }); });   // fitted at once, as at load
+  }, function () { /* DOMContentLoaded does it */ });
   document.addEventListener('DOMContentLoaded', function () {
     var body = document.body;
     var isApp = body.hasAttribute('data-app');
-    if (isApp && !embedded) document.documentElement.setAttribute('data-stage', '');
-    if (!embedded) toolbar(isApp);
+    stage(isApp);
     // The player's iframe leaves the toast to the home page around it, which hears the stamp too. An app page
     // shows only its own stamp; the home page shows any.
     if (!embedded) passport.onChange(function (id: string | null) { if (id && (!isApp || id === appId())) stampToast(id); });

@@ -137,9 +137,11 @@ export function reducedMotion() {
 // windows centered on it. stageEdge keeps a CSS variable at an element's height.
 export function stageEdge(el: HTMLElement, name: string) {
   function set() { document.documentElement.style.setProperty(name, (el.isConnected && !el.hidden ? el.offsetHeight : 0) + 'px'); }
-  set();
-  if (window.ResizeObserver) new ResizeObserver(set).observe(el);
-  else addEventListener('resize', set);
+  if (!window.ResizeObserver) { set(); addEventListener('resize', set); return; }
+  // The observer's first call comes before the next paint, so the height is not read now: that would lay the whole
+  // page out mid start-up, and again after the next change. An element of no size gets no first call: 0 now.
+  document.documentElement.style.setProperty(name, '0px');
+  new ResizeObserver(set).observe(el);
 }
 
 // Embedded pages and app pages: keep the windows, as a group, centered on the desktop, scaled down to fit it
