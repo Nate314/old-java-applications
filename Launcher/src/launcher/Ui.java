@@ -28,6 +28,7 @@ final class Ui {
    static final Color LINE = new Color(0x2e3341);
    static final Color TEXT = new Color(0xe9ebf1);
    static final Color MUTED = new Color(0x9aa1b2);
+   static final Color SOFT = new Color(0xc4c9d6);        // a card's pitch: quieter than its name, clearer than its record
    static final Color ACCENT = new Color(0x4f8cff);
    static final Color GO = new Color(0x34c47c);
    static final Color WARN = new Color(0xffb547);

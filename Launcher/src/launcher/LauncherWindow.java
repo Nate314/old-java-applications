@@ -55,7 +55,7 @@ import javax.swing.event.DocumentListener;
  */
 public final class LauncherWindow extends JFrame {
    private static final int TILE_MIN_W = 170;
-   private static final int TILE_H = 206;
+   private static final int TILE_H = 228;   // room for the pitch line and the record line
    private static final int GAP = 14;
    private static final int PAD = 22;
    private static final String[][] FILTERS = {
@@ -722,13 +722,20 @@ public final class LauncherWindow extends JFrame {
          if (app.pressesKeys()) Ui.chip(g2, x + 6, ph + 40, "Real keys", Ui.WARN);
          g2.setFont(Ui.font(Font.PLAIN, 12f));
          History.Story story = then ? history.of(app.id) : null;
-         g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
          String line = isRunning(app.id) ? "Running now"
             : story != null ? growth(story)
             : !fresh.isEmpty() ? "New: " + tidy(app, fresh.get(0).subject)
             : order.equals("most") && log.total(app.id) > 0 ? PlayLog.duration(log.total(app.id)) + " played"
-            : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
-         g2.drawString(fit(g2, line, w - 24), 12, h - 12);
+            : log.count(app.id) > 0 ? log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault())
+            : null;   // not launched yet: the NEW badge says so, and the pitch gets both lines
+         // What the app is, from its hint, so a first look at the cards says what each one does.
+         g2.setColor(Ui.SOFT);
+         List<String> pitch = lines(g2.getFontMetrics(), app.hint, w - 24, line == null ? 2 : 1);
+         for (int i = 0; i < pitch.size(); i++) g2.drawString(pitch.get(i), 12, h - 28 + i * 16);
+         if (line != null) {
+            g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
+            g2.drawString(fit(g2, line, w - 24), 12, h - 12);
+         }
          if (sel) {
             g2.setColor(Ui.ACCENT);
             g2.setStroke(new BasicStroke(2.5f));
@@ -754,10 +761,32 @@ public final class LauncherWindow extends JFrame {
    }
 
    private static String fit(Graphics2D g, String s, int w) {
-      FontMetrics fm = g.getFontMetrics();
+      return fit(g.getFontMetrics(), s, w);
+   }
+
+   private static String fit(FontMetrics fm, String s, int w) {
       if (fm.stringWidth(s) <= w) return s;
       while (s.length() > 1 && fm.stringWidth(s + "...") > w) s = s.substring(0, s.length() - 1);
       return s.trim() + "...";
+   }
+
+   /** Up to {@code max} lines of {@code s} wrapped at words to width {@code w}, the last cut with "..." if more is left. */
+   static List<String> lines(FontMetrics fm, String s, int w, int max) {
+      List<String> out = new ArrayList<>();
+      String rest = s.trim();
+      while (!rest.isEmpty() && out.size() < max - 1) {
+         int end = rest.length();
+         while (fm.stringWidth(rest.substring(0, end)) > w) {
+            int space = rest.lastIndexOf(' ', end - 1);
+            if (space <= 0) break;   // one word wider than the line: the last line's "..." cuts it
+            end = space;
+         }
+         if (end == rest.length() || fm.stringWidth(rest.substring(0, end)) > w) break;
+         out.add(rest.substring(0, end));
+         rest = rest.substring(end).trim();
+      }
+      if (!rest.isEmpty()) out.add(fit(fm, rest, w));
+      return out;
    }
 
    // ---- the detail pane -----------------------------------------------------------------------------------

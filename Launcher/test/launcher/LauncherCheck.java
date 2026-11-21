@@ -247,6 +247,17 @@ public class LauncherCheck {
       String artScript = new String(Files.readAllBytes(root.resolve("web/art.ps1")), StandardCharsets.UTF_8);
       for (String art : ThenCopy.ART) check(artScript.contains("Out = '" + art + "'"), art + " is rendered by web/art.ps1");
 
+      // Card pitch: the hint wrapped at words into at most two lines that fit, the last cut with "..." when more is left.
+      java.awt.FontMetrics fm = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB)
+         .createGraphics().getFontMetrics(Ui.font(java.awt.Font.PLAIN, 12f));
+      for (Catalog.App a : apps) {
+         List<String> two = LauncherWindow.lines(fm, a.hint, 160, 2);
+         check(two.size() == 2 && two.stream().allMatch(l -> fm.stringWidth(l) <= 160) && two.get(1).endsWith("...")
+            && a.hint.startsWith(two.get(0)), a.id + " card pitch is two lines that fit, from the start of its hint");
+      }
+      check(LauncherWindow.lines(fm, "Short hint.", 160, 2).equals(List.of("Short hint.")), "a short pitch is one line, uncut");
+      check(LauncherWindow.lines(fm, "Unbreakablewordthatiswayfartoolongforacard rest", 60, 2).size() <= 2, "a long word is cut, not looped on");
+
       // Start menu: every app but the two that press real keys gets a shortcut with its own file name, which runs
       // run.ps1 by its full path; the icon file is one 256 px PNG; Remove deletes the shortcuts, icons and folder.
       Path menu = Files.createTempDirectory("startmenu");
