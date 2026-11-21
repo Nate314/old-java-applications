@@ -5,6 +5,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
@@ -49,6 +50,8 @@ public final class GameFrame extends JFrame {
    private final JLabel status = new JLabel(" ", SwingConstants.CENTER);
    /** The record against the computer on this level; blank in two-player games. */
    private final JLabel tally = new JLabel(" ", SwingConstants.CENTER);
+   /** The board's width, which the record line (with the button beside it) must fit in. */
+   private int boardWidth;
    private final Random random = new Random();
    private final Timer computerTimer = new Timer(MOVE_DELAY_MILLIS, event -> this.computerMove());
    /** Hard and Watch: the computer's search, grown a slice per tick so the board shows where it is looking (and the page never waits long); null when it is not thinking. */
@@ -162,6 +165,7 @@ public final class GameFrame extends JFrame {
       int boardArea = Math.min(screen.width - 24, screen.height * 3 / 4 - BARS_HEIGHT);
       int boardSize = boardArea / 3;
       int gap = Math.max(4, boardSize / 28);
+      this.boardWidth = boardSize * 3;
       JPanel grid = new JPanel();
       grid.setLayout(null);
       grid.setPreferredSize(new Dimension(boardSize * 3, boardSize * 3));
@@ -768,15 +772,16 @@ public final class GameFrame extends JFrame {
       boolean reviewable = winner != null && !this.watching;
       boolean fresh = winner == null && this.moves.isEmpty() && !this.watching;
       String level = this.mode == Mode.HARD ? "Hard" : "Easy";
-      this.tally.setText(this.watching ? "Games the computer plays X in do not count."
-         : this.hinted && winner == null ? "With hints, this game won't count."
-         : this.mode.vsComputer() ? level + ": " + this.record.describe(this.mode)
-         : " ");
       boolean friend = this.mode == Mode.FRIEND;
       // One button beside the record: Review game at the end, How to play before the first move (unless hints are on), else Hints.
       this.reviewButton.setVisible(reviewable);
       this.learnButton.setVisible(fresh && !this.hints);
       this.hintsButton.setVisible(winner == null && !(fresh && !this.hints));
+      String[] tallies = this.watching ? new String[]{"Games the computer plays X in do not count.", "Computer's games don't count."}
+         : this.hinted && winner == null ? new String[]{"With hints, this game won't count.", "Hints on: won't count."}
+         : this.mode.vsComputer() ? new String[]{level + ": " + this.record.describe(this.mode), level + ": " + this.record.describeShort(this.mode), this.record.describeShort(this.mode)}
+         : new String[]{" "};
+      this.fitTally(tallies, !friend && !this.watching);
       this.hintsButton.setBackground(this.hints ? CellButton.X_COLOR : BUTTON);
       this.hintsButton.setForeground(this.hints ? Color.BLACK : TEXT);
       this.showSlots(false, !friend, friend, !friend && !this.watching);
@@ -785,6 +790,21 @@ public final class GameFrame extends JFrame {
       this.friendField.setText(FriendLink.message(this.friendPage, this.moves));
       this.copyButton.setEnabled(!this.moves.isEmpty());
       this.takeBackButton.setEnabled(this.friendWaiting);
+   }
+
+   /** Shows the first of the lines (longest first) that fits beside the button on the record line, the full one as its tooltip. */
+   private void fitTally(String[] lines, boolean withButton) {
+      int room = this.boardWidth - (withButton ? this.reviewButtonHolder.getPreferredSize().width : 0) - GAP * 2;
+      FontMetrics metrics = this.tally.getFontMetrics(this.tally.getFont());
+      String fit = lines[lines.length - 1];
+      for (String line : lines) {
+         if (metrics.stringWidth(line) <= room) {
+            fit = line;
+            break;
+         }
+      }
+      this.tally.setText(fit);
+      this.tally.setToolTipText(fit.equals(lines[0]) ? null : lines[0]);
    }
 
    /** Shows the review's chart and row, or the mode buttons with the record line, the friend row and Review game. */
