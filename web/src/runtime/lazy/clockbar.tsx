@@ -18,7 +18,7 @@
  * - On the Clock page there is no chip (Clock shows its own time) and no bell, only the game for the break.
  */
 import type { ReactNode } from 'react';
-import { storedJson } from '../stored';
+import { store, stored, storedJson } from '../stored';
 // Clock's saved state: the fields of ~/.clock.txt (ClockState.java) as numbers.
 interface ClockState {
   plan: number; phase: number; done: number; focusEnd: number;
@@ -128,14 +128,9 @@ type Moment =
   // Rings once across every open page, and not while Clock runs somewhere (it rings for itself).
   function ring(m: Moment) {
     if (onClock) return;
-    var last = 0, open = 0;
-    try {
-      last = Number(localStorage.getItem(BELL)) || 0;
-      open = Number(localStorage.getItem(OPEN)) || 0;
-    } catch (e) { /* ring here */ }
-    if (m.at <= last) return;
-    try { localStorage.setItem(BELL, String(m.at)); } catch (e) { /* other pages may ring too */ }
-    if (Date.now() - open < OPEN_FOR) return;
+    if (m.at <= (Number(stored(BELL)) || 0)) return;   // storage blocked: ring here, other pages may ring too
+    store(BELL, String(m.at));
+    if (Date.now() - (Number(stored(OPEN)) || 0) < OPEN_FOR) return;
     window.oldjavaSound.play(m.kind === 'break' ? 'breakTime' : m.kind === 'back' ? 'backToWork' : 'ring');
   }
 

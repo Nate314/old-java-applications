@@ -4,6 +4,7 @@ import { floatToast, toastLink } from './passport';
 import { appId, root } from './catalog';
 import { isThen, pageOf } from './then-and-now';
 import { AGAIN_KEY } from './records';
+import { store, stored } from './stored';
 
 // ---- Clock follows you (clockbar.js) ----
 // While Clock's timer, stopwatch or a focus session runs (its saved ~/.clock.txt says so), every other page gets
@@ -18,9 +19,7 @@ const CLOCK_RUNNING = /(?:focusEnd|timerEnd|watchStart)=[1-9]/;
 export function clockFollows() {
   var added = false;
   function check() {
-    var saved = '';
-    try { saved = localStorage.getItem(CLOCK_SAVES) || ''; } catch (e) { return; }
-    if (added || !CLOCK_RUNNING.test(saved)) return;
+    if (added || !CLOCK_RUNNING.test(stored(CLOCK_SAVES) || '')) return;   // storage blocked: nothing runs
     added = true;
     import('./lazy/clockbar').catch(function () { console.warn('clockbar.js did not load'); });
   }
@@ -33,7 +32,7 @@ export function clockPage() { return appId() === 'Clock' && !isThen(); }   // th
 
 // Clock running on this page (or in the home page's player) rings for itself, so the other pages stay quiet.
 export function clockOpen() {
-  function beat() { try { localStorage.setItem(CLOCK_OPEN, String(Date.now())); } catch (e) { /* they ring too */ } }
+  function beat() { store(CLOCK_OPEN, String(Date.now())); }   // storage blocked: they ring too
   beat();
   setInterval(beat, 5000);
   window.addEventListener('pagehide', function () { try { localStorage.removeItem(CLOCK_OPEN); } catch (e) { /* stale soon */ } });
