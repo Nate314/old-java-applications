@@ -3,6 +3,7 @@ import './story.css';
 import { APPS } from '../../shared/catalog';
 import { ChainShow, EraPanel, PickLink, RenamePanel, StoryTop, Tape } from './panels';
 import { ShareStory } from './ShareStory';
+import { StoryPlay } from './StoryPlay';
 
 // Where each app came from (HISTORY.md, The recovery).
 const FROM: Record<string, string> = {
@@ -291,6 +292,7 @@ export function Story() {
           </div>
         </section>
       </main>
+      <StoryPlay />
     </>
   );
 }
