@@ -26,7 +26,7 @@ function Invoke-Cdp([string]$method, [hashtable]$params = @{}) {
     $script:ws.SendAsync([ArraySegment[byte]]::new($bytes), [Net.WebSockets.WebSocketMessageType]::Text, $true, $none).GetAwaiter().GetResult() | Out-Null
     while ($true) {
         $reply = Receive-Message | ConvertFrom-Json
-        if ($reply.id -ne $id) { continue }   # an event
+        if ($reply.id -ne $id) { if ($script:OnEvent) { & $script:OnEvent $reply }; continue }   # an event (smoke.ps1 reads them)
         if ($reply.error) { throw "$method failed: $($reply.error.message)" }
         return $reply.result
     }
@@ -110,7 +110,9 @@ function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chr
     [string]$ProfileRoot = [IO.Path]::GetTempPath()) {
     if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
     if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
-    $server = Start-Process python -ArgumentList '-m', 'http.server', $Port, '--bind', '127.0.0.1', '--directory', $site -PassThru -WindowStyle Hidden
+    # http.server with a longer listen queue: its default of 5 refused some of a page's bursts of requests on Windows.
+    $py = 'import sys, functools, http.server as h; h.ThreadingHTTPServer.request_queue_size = 128; h.test(functools.partial(h.SimpleHTTPRequestHandler, directory=sys.argv[2]), h.ThreadingHTTPServer, port=int(sys.argv[1]), bind=''127.0.0.1'')'
+    $server = Start-Process python -ArgumentList "-c `"$py`" $Port `"$site`"" -PassThru -WindowStyle Hidden
     $profileDir = Join-Path $ProfileRoot ("oldjava-$name-$Port-" + [IO.Path]::GetRandomFileName().Substring(0, 8))
     $browser = Start-Process $Chrome -PassThru -ArgumentList '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio',
         '--autoplay-policy=no-user-gesture-required', "--remote-debugging-port=$DebugPort", "--user-data-dir=$profileDir",
