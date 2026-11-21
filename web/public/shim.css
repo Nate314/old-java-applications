@@ -1688,7 +1688,7 @@ canvas.paint.top {
 .shim-title-log {
   grid-area: log;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;   /* newest row first in the page (title-screen.tsx), so the box starts scrolled to it */
   height: 7.5em;
   margin: 0;
   padding: 8px 12px;
@@ -1703,6 +1703,12 @@ canvas.paint.top {
 .shim-title-log .row {
   display: flex;
   gap: 12px;
+}
+
+/* Shown last: fills the space under a short log, so its rows start at the top. */
+.shim-title-log::before {
+  content: "";
+  flex: 1;
 }
 
 .shim-title-log .row > :first-child {

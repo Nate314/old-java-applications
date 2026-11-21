@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type SyntheticEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { played } from './passport';
 import { WATCH, watchWanted } from './watch';
@@ -26,10 +26,12 @@ interface TitleControl { line(row: LogLine): void; done(p: number): void; ready(
 interface Opened { ui: TitleControl; screen: HTMLElement; close: () => void }
 var early: Opened | null = null, waiting = false;
 var onGo: ((e?: Event) => void) | null = null;
+var auto = false;   // it starts by itself once ready (chosen, below), until the visitor stays to read it
 
 /** Puts the title screen in the page; apps, when given, is the catalog it shows from its first frame. */
 function open(apps?: CatalogApp[]): Opened {
   document.documentElement.setAttribute('data-title', '');
+  auto = chosen();
   var ui: TitleControl | null = null, screen: HTMLElement | null = null;
   const close = openLayer(<TitleScreen apps={apps} onGo={e => { if (onGo) onGo(e); }} onMount={(c, el) => { ui = c; screen = el; }} />);
   titleLog = ui!.line;
@@ -61,6 +63,17 @@ export function init() {
 // passport stamp, a boot log of the files as they arrive (real names and sizes) and a Play button. The app
 // starts on the visitor's click or key press, so its first sounds (MusicTheoryExpert's demo, the site's
 // start sound) are allowed to play. Run again skips it (see overlay). Returns { loaded(file), ready(start), skip() }.
+// Arrived by a link on this site (the story's Play bar, Next, Switch app, Find, a gallery's Full page): the visitor has
+// already chosen this app, so it starts the moment its files are in instead of asking for Play a second time. A
+// shared link, a search, a reload or Back keep the screen waiting for Play.
+function chosen() {
+  try {
+    var nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    var from = new URL(document.referrer);
+    return (!nav || nav.type === 'navigate') && from.origin === location.origin && from.pathname !== location.pathname;
+  } catch (e) { return false; }   // no referrer
+}
+
 export function titleScreen(files: string[]) {
   var html = document.documentElement;
   const { ui, screen, close } = early || open();
@@ -119,6 +132,11 @@ export function titleScreen(files: string[]) {
       if (!sourcePanel) screen.querySelector<HTMLElement>('.shim-title-play')!.focus({ preventScroll: true });   // keep the keyboard in an open source panel
       document.addEventListener('keydown', go, true);
       if (skipping) go();
+      // Not while prerendered (instant open): the app waits until the visitor actually arrives.
+      else if (auto && !sourcePanel) {
+        if (document.prerendering) document.addEventListener('prerenderingchange', function () { if (auto) go(); }, { once: true });
+        else go();
+      }
     },
     // Straight on, as if Play were pressed (now, or once the files are in).
     skip: function () { if (started) go(); else skipping = true; }
@@ -132,12 +150,12 @@ function TitleScreen({ apps, onGo, onMount }: {
   const id = appId()!;
   const then = isThen();
   const screen = useRef<HTMLDivElement>(null);
-  const log = useRef<HTMLPreElement>(null);
   const [Story, setStory] = useState<NonNullable<Window['oldjavaNews']>['Story'] | null>(null);
   const [lines, setLines] = useState<LogLine[]>([]);
   const [done, setDone] = useState(0);   // the share of the files in
   const [ready, setReady] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [starting, setStarting] = useState(auto);
   const first = apps && apps[indexOf(apps, id)];
   const [found, setFound] = useState<{ app: CatalogApp; apps: CatalogApp[] } | null>(first ? { app: first, apps: apps! } : null);
   const [listed, setListed] = useState(!!apps);   // apps.json has answered: the card shows, filled in, not half empty
@@ -157,7 +175,6 @@ function TitleScreen({ apps, onGo, onMount }: {
       leave: () => flushSync(() => setLeaving(true)),
     }, screen.current!);
   }, []);
-  useLayoutEffect(() => { log.current!.scrollTop = log.current!.scrollHeight; }, [lines]);
   useEffect(() => {
     catalog().then(function (apps) {
       setListed(true);
@@ -179,12 +196,19 @@ function TitleScreen({ apps, onGo, onMount }: {
     try { localStorage.removeItem('oldjava.saves.' + saveStore()); } catch (e) { /* nothing was kept */ }
     setForgotten(true);
   }
+  // Scrolling, a wheel, or a tap or focus on anything but Play: the visitor is reading it, so it waits for Play after all.
+  function stay(e: SyntheticEvent) {
+    if (!auto || (e.target as Element).closest('.shim-title-play')) return;
+    auto = false;
+    setStarting(false);
+  }
   function onClick(e: MouseEvent) {
     if (!(e.target as Element).closest('a, .shim-title-forget, .shim-title-story')) onGo(e.nativeEvent);
   }
   return (
     <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (listed ? '' : ' unlisted') + (leaving ? ' leaving' : '')}
-      role="dialog" data-sound="none" aria-label={document.title} ref={screen} onClick={onClick}>
+      role="dialog" data-sound="none" aria-label={document.title} ref={screen} onClick={onClick}
+      onScroll={stay} onWheel={stay} onPointerDown={stay} onFocus={stay}>
       <div className="shim-title-card">
         <div className="shim-title-art">
           {/* Shown as it arrives: today's picture has its room from the start on a phone (shim.css), so nothing moves. */}
@@ -209,7 +233,7 @@ function TitleScreen({ apps, onGo, onMount }: {
           <span className="shim-title-cat">{app ? (then ? 'As first restored' : CATS[app.cat] || '') : ''}</span>
           <h1>{app ? app.name : document.title}</h1>
           {/* Play right under the name, ahead of the hint and the record lines, so a phone shows it without scrolling. */}
-          <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : 'Loading…'}</button>
+          <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : starting ? 'Starting…' : 'Loading…'}</button>
           <span className="shim-title-press">or press any key</span>
           <p className="shim-title-hint">
             {app ? (then
@@ -252,11 +276,12 @@ function TitleScreen({ apps, onGo, onMount }: {
           {Story ? <Story id={id} /> : <details className="shim-title-story" hidden={then} aria-hidden="true" />}
         </div>
         <span className="shim-meter shim-title-meter" style={{ '--p': String(done) } as CSSProperties} />
-        {/* tabIndex -1: Chrome puts a scroller in the tab order, and this one is hidden from screen readers. */}
-        <pre className="shim-title-log" aria-hidden="true" tabIndex={-1} ref={log}>
+        {/* tabIndex -1: Chrome puts a scroller in the tab order, and this one is hidden from screen readers. Newest first in
+            the page, shown last (column-reverse, shim.css): the box stays scrolled to the newest line without reading its layout. */}
+        <pre className="shim-title-log" aria-hidden="true" tabIndex={-1}>
           {lines.map(([label, value, cls], i) => (
             <span key={i} className={'row' + (cls ? ' ' + cls : '')}><span>{label}</span><span>{value}</span></span>
-          ))}
+          )).reverse()}
         </pre>
       </div>
     </div>
