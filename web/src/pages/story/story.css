@@ -137,3 +137,27 @@ select { font: inherit; font-size: 13px; padding: 2px 6px; border-radius: 6px; b
                          background: var(--accent); color: #fff; font-size: 13px; max-width: calc(100vw - 32px); overflow-wrap: anywhere; }
 .finale .share-said { flex-basis: 100%; font-size: 14px; }
 @media (max-width: 760px) { .story-top .share { margin-left: auto; } }
+
+/* the play bar (StoryPlay.tsx): a pill at the foot of the screen, full width on phones, naming the app last read about */
+.story-play { position: fixed; z-index: 6; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 10px;
+              max-width: min(380px, calc(100vw - 32px)); padding: 6px 6px 6px 8px; border: 1px solid var(--card-border);
+              border-radius: 999px; background: var(--card-bg); color: inherit; text-decoration: none;
+              box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35); transition: translate 0.25s ease, opacity 0.25s ease;
+              animation: story-play-in 0.3s ease-out; }
+.story-play:hover, .story-play:focus-visible { border-color: var(--accent); }
+.story-play:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.story-play.away { translate: 0 calc(100% + 24px); opacity: 0; pointer-events: none; }
+.story-play img { flex: none; width: 52px; height: 36px; border-radius: 8px; object-fit: cover; background: var(--desk, #0f172a); }
+.story-play .what { display: flex; flex-direction: column; min-width: 0; padding-left: 4px; line-height: 1.2; }
+.story-play small { font-size: 11px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story-play b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story-play .go { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-left: auto; border-radius: 50%;
+                  background: var(--accent); color: #fff; font-size: 16px; }
+@keyframes story-play-in { from { opacity: 0; scale: 0.96; } }
+@media (max-width: 760px) {
+  .story-play { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+  main { padding-bottom: 96px; }
+}
+@media (prefers-reduced-motion: reduce) { .story-play { transition: none; animation: none; } }
+:root[data-skin="classic"] .story-play, :root[data-skin="classic"] .story-play img, :root[data-skin="classic"] .story-play .go { border-radius: 0; box-shadow: none; }
+:root[data-skin="arcade"] .story-play { box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.35), 0 0 24px rgba(255, 43, 214, 0.25); }
