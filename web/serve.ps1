@@ -64,7 +64,9 @@ try {
                 if ($file) {
                     $type = $types[[IO.Path]::GetExtension($file).ToLowerInvariant()]
                     $response.ContentType = if ($type) { $type } else { 'application/octet-stream' }
-                    $response.Headers['Cache-Control'] = 'no-cache'
+                    # Hashed names (web/vite.config.ts) and stamped programs (classes.js?v=) never change: kept a year.
+                    $fixed = $path -match '^/assets/.+-[A-Za-z0-9_-]{8}\.(js|css)$' -or ($path -match '/(classes|then)\.js$' -and $request.Url.Query -match '^\?v=')
+                    $response.Headers['Cache-Control'] = if ($fixed) { 'public, max-age=31536000, immutable' } else { 'no-cache' }
                     $bytes = [IO.File]::ReadAllBytes($file)
                     $response.ContentLength64 = $bytes.Length
                     if ($request.HttpMethod -ne 'HEAD') { $response.OutputStream.Write($bytes, 0, $bytes.Length) }

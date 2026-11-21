@@ -26,9 +26,9 @@ export function installClick() {
 
 // ---- which files each app needs: its page, classes.js and the files its page preloads (data-files) ----
 const abs = (path: string) => new URL(path, location.href).href;
-// The pages' own scripts and stylesheets are listed by the build (assets/files.json, see vite/pages.ts).
+// The pages' own scripts and stylesheets (shim.css's hashed copy too) are listed by the build (assets/files.json, see vite/pages.ts).
 function shell(bundle: string[]) {
-  const files = ['./', 'index.html', 'history.txt', 'shim.css', 'forced-colors.css', 'manifest.webmanifest', 'icons/icon.svg',
+  const files = ['./', 'index.html', 'history.txt', 'manifest.webmanifest', 'icons/icon.svg',
                  'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'apps.json', 'assets/files.json'];
   files.push(...bundle);
   files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg', 'continued-timeline.svg');   // the story page and what it shows

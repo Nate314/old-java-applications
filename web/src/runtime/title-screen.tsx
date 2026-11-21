@@ -38,8 +38,9 @@ export function titleScreen(files: string[]) {
 
   // classes.js (then.js) has loaded by now (a deferred script, run before the page's DOMContentLoaded): the app,
   // compiled by TeaVM.
+  var program = document.querySelector<HTMLScriptElement>('script[src^="' + programFile() + '"]');   // with its ?v= stamp
   var entry = window.performance && performance.getEntriesByName &&
-    (performance.getEntriesByName(new URL(programFile(), location.href).href)[0] as PerformanceResourceTiming | undefined);
+    (performance.getEntriesByName(program ? program.src : new URL(programFile(), location.href).href)[0] as PerformanceResourceTiming | undefined);
   ui.line([programFile(), entry && entry.decodedBodySize ? size(entry.decodedBodySize) : 'ok', '']);
   var done = 1;
 
