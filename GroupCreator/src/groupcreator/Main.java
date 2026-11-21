@@ -4,8 +4,6 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -20,6 +18,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /**
  * The window: the original names, min and max fields and button across the top, and the {@link GroupBoard} under
@@ -64,17 +64,26 @@ public class Main extends JFrame implements GroupBoard.Actions {
       textField.addActionListener(event -> newRound());
       minTextField.addActionListener(event -> newRound());
       maxTextField.addActionListener(event -> newRound());
-      // The board previews round 1 from the fields, so it follows each key typed in them.
-      // shortcut: a paste with the mouse alone shows on the next repaint, add a DocumentListener once the web shim has one.
-      KeyAdapter typed = new KeyAdapter() {
+      // The board previews round 1 from the fields, so it follows every edit in them: keys, a paste or cut with the mouse.
+      DocumentListener edited = new DocumentListener() {
          @Override
-         public void keyReleased(KeyEvent event) {
+         public void insertUpdate(DocumentEvent event) {
+            board.repaint();
+         }
+
+         @Override
+         public void removeUpdate(DocumentEvent event) {
+            board.repaint();
+         }
+
+         @Override
+         public void changedUpdate(DocumentEvent event) {
             board.repaint();
          }
       };
-      textField.addKeyListener(typed);
-      minTextField.addKeyListener(typed);
-      maxTextField.addKeyListener(typed);
+      textField.getDocument().addDocumentListener(edited);
+      minTextField.getDocument().addDocumentListener(edited);
+      maxTextField.getDocument().addDocumentListener(edited);
       sizes.add(new JLabel("per group, min: "));
       sizes.add(minTextField);
       sizes.add(new JLabel("max: "));
