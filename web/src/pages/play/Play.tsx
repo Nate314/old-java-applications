@@ -25,7 +25,7 @@ const then = params.has('then');
 function first(): Shown {
   const id = params.get('app');
   const app = APPS.find(a => a.id === id);
-  if (!app) return { mode: 'oops', text: id ? 'There is no app named "' + id + '" here.' : 'Which app? Add ?app= and its name to the address.' };
+  if (!app) return { mode: 'oops', text: (id ? 'There is no app named "' + id + '" here. ' : '') + 'Pick one to play:' };
   if (params.has('watch') && WATCHABLE.indexOf(app.id) >= 0 && !(then && app.then)) return { mode: 'stage', app, watch: true };
   return { mode: 'poster', app };
 }
@@ -119,9 +119,23 @@ export function Play() {
               transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined,
             } : undefined} />
         </div>
+        {/* No app named (or a wrong name): every app as a tile, one tap from playing it right here. */}
         <div className="oops" id="oops" hidden={shown.mode !== 'oops'}>
           <p id="oops-text">{shown.mode === 'oops' ? shown.text : null}</p>
-          <p><a href="index.html" target="_blank" rel="noopener">See all 20 apps</a></p>
+          <ul className="pick">
+            {APPS.map(a => (
+              <li key={a.id}>
+                <button type="button" onClick={() => {
+                  params.set('app', a.id);
+                  history.replaceState(null, '', '?' + params);   // a reload or a copied address keeps the app
+                  run(a, false);
+                }}>
+                  <img alt="" src={webp(a.shot, true)} loading="lazy" />
+                  <span>{a.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
       <nav className="bar" aria-label="Old Java Applications">
