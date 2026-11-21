@@ -23,7 +23,7 @@ class SortPage extends Page {
 	private static final Color BAR = new Color(120, 146, 190);
 	private static final Color COMPARE = new Color(232, 146, 40);
 	private static final Color[] MEDALS = { new Color(214, 170, 30), new Color(150, 160, 175), new Color(190, 120, 70) };
-	private static final int TOP = 66;
+	private static final int TOP = 82;
 	private static final int MARGIN = 16;
 	private static final int GAP = 8;
 	/** The Bars | Prints switch beside the title: one half per view. */
@@ -273,6 +273,7 @@ class SortPage extends Page {
 		String status = race.numbers.length + " numbers, " + Sorts.ORDERS[order].toLowerCase() + "  \u00b7  step " + race.clock;
 		text(g, status, BOLD, INK, w - 20 - width(g, status, BOLD), 32);
 		paintSummary(g);
+		paintFollowed(g);
 		for (int i = 0; i < race.lanes.length; i++) {
 			paintLane(g, race.lanes[i], laneBox(i, h));
 		}
@@ -303,7 +304,7 @@ class SortPage extends Page {
 		}
 		if (!race.finished()) {
 			text(g, "Every sort gets the same steps each tick: a compare or a write is one, a swap two."
-					+ " Click a sort to hear it.", TEXT, PENCIL, 20, 54);
+					+ " Click a sort to follow it.", TEXT, PENCIL, 20, 54);
 			return;
 		}
 		SortRace.Lane first = race.first();
@@ -317,12 +318,27 @@ class SortPage extends Page {
 		text(g, slow + (x + width(g, slow + tip, TEXT) < LabPanel.WIDTH - 16 ? tip : ""), TEXT, INK, x, 54);
 	}
 
+	/**
+	 * The line about the sort being followed (the one clicked last): while it runs, how it works; paused, what its
+	 * last step did and why, so stepping (S, Left) reads as the sort's own reasoning.
+	 */
+	private void paintFollowed(Graphics2D g) {
+		SortRace.Lane lane = race.lanes[listen];
+		String name = Sorts.NAMES[lane.algorithm] + ": ";
+		String says = !playing && lane.last != null ? lane.last.describe(lane.values) : Sorts.METHODS[lane.algorithm];
+		text(g, name, BOLD, INK, 20, 72);
+		int x = 20 + width(g, name, BOLD);
+		String tip = playing && !race.finished() ? "  Pause and step (S) to see why." : "";
+		text(g, says + (x + width(g, says + tip, TEXT) < LabPanel.WIDTH - 16 ? tip : ""), TEXT, INK, x, 72);
+	}
+
 	private void paintLane(Graphics2D g, SortRace.Lane lane, Rectangle box) {
-		boolean heard = lane.algorithm == listen && sound.isOn();
+		boolean followed = lane.algorithm == listen;
+		boolean heard = followed && sound.isOn();
 		g.setColor(lane.algorithm == hovered ? new Color(255, 252, 236) : Color.WHITE);
 		g.fillRoundRect(box.x, box.y, box.width, box.height, 12, 12);
-		g.setColor(heard ? INK : GRID);
-		g.setStroke(new BasicStroke(heard ? 2f : 1f));
+		g.setColor(followed ? INK : GRID);
+		g.setStroke(new BasicStroke(followed ? 2f : 1f));
 		g.drawRoundRect(box.x, box.y, box.width, box.height, 12, 12);
 		g.setStroke(new BasicStroke(1f));
 
@@ -345,7 +361,7 @@ class SortPage extends Page {
 		if (heard) {
 			paintSpeaker(g, right - 16, box.y + 9);
 		} else if (lane.algorithm == hovered) {
-			text(g, "Click to hear", SMALL, PENCIL, right - width(g, "Click to hear", SMALL), box.y + 20);
+			text(g, "Click to follow", SMALL, PENCIL, right - width(g, "Click to follow", SMALL), box.y + 20);
 		}
 		if (prints) {
 			paintPrint(g, lane, area(box));
@@ -447,6 +463,50 @@ class SortPage extends Page {
 			g.setColor(color);
 			g.fillRect(x0, area.y + area.height - barHeight, Math.max(1, x1 - x0 - (n <= 64 ? 1 : 0)), barHeight);
 		}
+		if (last != null && !playing && lane.algorithm == listen) {
+			paintTags(g, lane, area, last.a, last.kind == Sorts.WRITE ? last.a : last.b);
+		}
+	}
+
+	/**
+	 * Paused on the followed sort, the bars its line names carry their numbers on white tags, side by side on one
+	 * line just above the taller bar (inside the lane), pushed apart when the bars are close.
+	 */
+	private void paintTags(Graphics2D g, SortRace.Lane lane, Rectangle area, int a, int b) {
+		int left = Math.min(a, b);
+		int right = Math.max(a, b);
+		int n = lane.values.length;
+		int tallest = Math.max(lane.values[left], lane.values[right]);
+		int y = Math.max(area.y + 12, area.y + area.height - Math.max(1, tallest * area.height / race.max) - 4);
+		String leftText = String.valueOf(lane.values[left]);
+		String rightText = String.valueOf(lane.values[right]);
+		int leftW = width(g, leftText, BOLD) + 6;
+		int rightW = width(g, rightText, BOLD) + 6;
+		int leftX = barCenter(area, n, left) - leftW / 2;
+		int rightX = barCenter(area, n, right) - rightW / 2;
+		if (left != right && leftX + leftW + 2 > rightX) {
+			int middle = (barCenter(area, n, left) + barCenter(area, n, right)) / 2;
+			leftX = middle - 1 - leftW;
+			rightX = middle + 1;
+		}
+		// Keep both inside the lane, moving them together.
+		int shift = Math.max(0, area.x - leftX) - Math.max(0, rightX + rightW - area.x - area.width);
+		tag(g, leftText, leftX + shift, leftW, y);
+		if (left != right) {
+			tag(g, rightText, rightX + shift, rightW, y);
+		}
+	}
+
+	private static int barCenter(Rectangle area, int n, int i) {
+		return area.x + (2 * i + 1) * area.width / (2 * n);
+	}
+
+	private static void tag(Graphics2D g, String number, int x, int w, int y) {
+		g.setColor(Color.WHITE);
+		g.fillRoundRect(x, y - 11, w, 14, 6, 6);
+		g.setColor(GRID);
+		g.drawRoundRect(x, y - 11, w, 14, 6, 6);
+		text(g, number, BOLD, INK, x + 3, y);
 	}
 
 	/** A small speaker with two sound waves, for the sort being listened to. */
