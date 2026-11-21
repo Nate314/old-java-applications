@@ -42,9 +42,11 @@ function pageFiles(id: string, page: string, program: string, own: string[] = []
     if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
     return r.text();
   }).then(html => {
-    const body = new DOMParser().parseFromString(html, 'text/html').body;
-    const extra = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
-    return [page, program].concat(extra, own).map(f => id + '/' + f);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const extra = (doc.body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
+    // the program as the page names it (classes.js?v=<its build's stamp>), the key sw.js keeps it under
+    const named = doc.querySelector('script[src^="' + program + '"]')?.getAttribute('src') || program;
+    return [named].concat(extra, own, page).map(f => id + '/' + f);   // the page last, once what it needs is in
   });
 }
 // An app with a Then page (its first restored version, one tap away on its page) is saved with it, and with the
