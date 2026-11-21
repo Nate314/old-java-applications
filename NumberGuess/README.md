@@ -38,6 +38,7 @@ The fewest guesses for each range is saved to `.numberguess-record.txt` in the u
 - **You pick**: **Up** or **H** for higher, **Down** or **L** for lower, **Enter**, **Space**, **C** or **Y** for "that's it". After the round, any of these starts again. **F** (or the **Let me lie once** / **No lies** button) switches lying on or off and starts a new round.
 - **Magic**: **Y** or **Up** for yes, **N** or **Down** for no. After the reveal, **S** shows or hides How it works and **Enter** or **Space** deals again (or the **How it works** and **Again** buttons).
 - The window is about 656x425 px (sized to fit the board). Title "Number Guess". The window opens on the first open range without three stars.
+- On a screen narrower than that (a phone held upright, in the browser), the board takes the screen's width instead of being scaled down, so the numbers stay full size: the five ranges and the other four games get a row of tabs each, a line under the verdict too long for one line breaks onto a second, headlines and hindsight lines too long for the width are set smaller, and Magic's six cards sit in a row under the card being asked. The board is never narrower than 340 px.
 - Arguments, both optional: a challenge code or link to play first (see Challenge a friend), and the address of the page the game runs on, which the browser build passes so the links it copies point back at it.
 
 ## Code layout

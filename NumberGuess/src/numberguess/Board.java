@@ -10,6 +10,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -30,6 +31,8 @@ import javax.swing.Timer;
 @SuppressWarnings("serial")
 public final class Board extends JPanel {
 	public static final int WIDTH = 640, HEIGHT = 350;
+	/** On a narrow screen: the second row of tabs and the subline's second line push the rest down, and Magic's cards stack. */
+	private static final int NARROW_SHIFT = 44 + 6 + 16, NARROW_HEIGHT = HEIGHT + NARROW_SHIFT + 90;
 
 	static final Color BACKGROUND = new Color(22, 25, 36);
 	static final Color CARD = new Color(36, 40, 56);
@@ -61,6 +64,8 @@ public final class Board extends JPanel {
 	private final Records records;
 	private final Random random = new Random();
 	private final Runnable modeChanged;
+	/** A screen narrower than the board (a phone held upright, in the browser): two rows of tabs, everything below them lower. */
+	private final boolean narrow;
 	private Level level;
 	private Game game;
 	private MindReader reader;
@@ -98,7 +103,9 @@ public final class Board extends JPanel {
 		this.records = records;
 		this.modeChanged = modeChanged;
 		setBackground(BACKGROUND);
-		setPreferredSize(new Dimension(WIDTH, HEIGHT));
+		int width = Math.max(340, Math.min(WIDTH, Toolkit.getDefaultToolkit().getScreenSize().width - 24));
+		narrow = width < WIDTH;
+		setPreferredSize(new Dimension(width, narrow ? NARROW_HEIGHT : HEIGHT));
 		setFocusable(true);
 		MouseAdapter mouse = new MouseAdapter() {
 			@Override
@@ -741,6 +748,7 @@ public final class Board extends JPanel {
 				return;
 			}
 		}
+		y -= shift();
 		if (isWarm()) {
 			int number = warmView.numberAt(x, y);
 			if (number > 0 || warm.isOver() && y > TABS_Y + TAB_HEIGHT) {
@@ -769,6 +777,7 @@ public final class Board extends JPanel {
 				tab = i;
 			}
 		}
+		y -= shift();
 		if (isWarm()) {
 			boolean changed = warmView.hover(warm, x, y);
 			if (tab != hoverTab || changed) {
@@ -824,14 +833,57 @@ public final class Board extends JPanel {
 
 	private void layOut() {
 		int width = getWidth();
-		int count = WARM_TAB + 1;
-		int gap = 6;
-		int tabWidth = (width - 2 * MARGIN - gap * (count - 1)) / count;
 		tabs.clear();
-		for (int i = 0; i < count; i++) {
-			tabs.add(new Rectangle(MARGIN + i * (tabWidth + gap), TABS_Y, tabWidth, TAB_HEIGHT));
+		if (narrow) {
+			// The five ranges on one row, the four other games on the next.
+			addTabs(0, DUEL_TAB, TABS_Y);
+			addTabs(DUEL_TAB, WARM_TAB + 1 - DUEL_TAB, TABS_Y + TAB_HEIGHT + 6);
+		} else {
+			addTabs(0, WARM_TAB + 1, TABS_Y);
 		}
 		zoom = new Rectangle(MARGIN, ZOOM_Y, width - 2 * MARGIN, ZOOM_HEIGHT);
+	}
+
+	private void addTabs(int first, int count, int y) {
+		int gap = 6;
+		int tabWidth = (getWidth() - 2 * MARGIN - gap * (count - 1)) / count;
+		for (int i = 0; i < count; i++) {
+			tabs.add(new Rectangle(MARGIN + i * (tabWidth + gap), y, tabWidth, TAB_HEIGHT));
+		}
+	}
+
+	/** How far below its wide-screen place everything under the tabs and the subline is drawn. */
+	private int shift() {
+		return narrow ? NARROW_SHIFT : 0;
+	}
+
+	/** Draws {@code text} in the current font, made smaller (down to 9 pt) until it fits {@code width}. */
+	static void drawFitted(Graphics2D g, String text, int x, int y, int width) {
+		Font font = g.getFont();
+		for (int size = font.getSize(); size > 9 && g.getFontMetrics().stringWidth(text) > width; size--) {
+			g.setFont(new Font(font.getName(), font.getStyle(), size - 1));
+		}
+		g.drawString(text, x, y);
+		g.setFont(font);
+	}
+
+	/** The subline: on a narrow screen, broken at a space onto a second line when it is too wide for one. */
+	private void paintSubline(Graphics2D g, String text, int y) {
+		int width = getWidth() - 2 * MARGIN;
+		FontMetrics metrics = g.getFontMetrics();
+		if (!narrow || metrics.stringWidth(text) <= width) {
+			drawFitted(g, text, MARGIN, y, width);
+			return;
+		}
+		int cut = text.length();
+		while (cut > 0 && (text.charAt(cut - 1) != ' ' || metrics.stringWidth(text.substring(0, cut - 1)) > width)) {
+			cut--;
+		}
+		if (cut == 0) {
+			cut = text.length() / 2;
+		}
+		g.drawString(text.substring(0, cut).trim(), MARGIN, y);
+		drawFitted(g, text.substring(cut).trim(), MARGIN, y + 16, width);
 	}
 
 	@Override
@@ -844,24 +896,28 @@ public final class Board extends JPanel {
 		g.setColor(BACKGROUND);
 		g.fillRect(0, 0, getWidth(), getHeight());
 		paintTabs(g);
+		int rows = narrow ? TAB_HEIGHT + 6 : 0;
 		// The trick keeps its secret while the last card turns over.
 		boolean flipping = isMagic() && magicView.isFlipping();
 		g.setColor(flipping ? GOLD : headlineColor);
 		g.setFont(new Font("SansSerif", Font.BOLD, 22));
-		g.drawString(flipping ? "Let me see..." : headline, MARGIN, 86);
+		drawFitted(g, flipping ? "Let me see..." : headline, MARGIN, 86 + rows, getWidth() - 2 * MARGIN);
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 13));
-		g.drawString(flipping ? "" : subline, MARGIN, 108);
+		paintSubline(g, flipping ? "" : subline, 108 + rows);
+		// Everything below is laid out for the wide board; on a narrow one it moves down as a whole.
+		g.translate(0, shift());
+		int bottom = getHeight() - shift();
 		if (isMagic()) {
-			magicView.paint(g, magic, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
+			magicView.paint(g, magic, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, bottom - 122 - 12));
 			return;
 		}
 		if (isWarm()) {
-			warmView.paint(g, warm, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
+			warmView.paint(g, warm, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, bottom - 122 - 12));
 			return;
 		}
 		if (isDuel()) {
-			duelView.paint(g, duel, records, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, getHeight() - 122 - 12));
+			duelView.paint(g, duel, records, new Rectangle(MARGIN, 122, getWidth() - 2 * MARGIN, bottom - 122 - 12));
 			return;
 		}
 		paintGuessMeter(g);
@@ -897,7 +953,7 @@ public final class Board extends JPanel {
 				g.setFont(new Font("SansSerif", Font.BOLD, 11));
 			}
 			FontMetrics metrics = g.getFontMetrics();
-			g.drawString(label, tab.x + (tab.width - metrics.stringWidth(label)) / 2, tab.y + 19);
+			drawFitted(g, label, tab.x + Math.max(3, (tab.width - metrics.stringWidth(label)) / 2), tab.y + 19, tab.width - 6);
 			int centerX = tab.x + tab.width / 2;
 			if (tabLevel == null) {
 				g.setFont(new Font("SansSerif", Font.PLAIN, 11));
@@ -1017,15 +1073,15 @@ public final class Board extends JPanel {
 		int steps = Math.max(Math.max(yours.size(), theirs.size()), friend != null ? friend.size() : 0) - 1;
 		g.setFont(new Font("SansSerif", Font.BOLD, 13));
 		g.setColor(TEXT);
-		g.drawString(hindsightSummary(halving.size()), box.x + 12, box.y + 20);
+		drawFitted(g, hindsightSummary(halving.size()), box.x + 12, box.y + 20, box.width - (narrow ? 24 : 170));
 		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 		g.setColor(SOFT);
 		int[] counts = new int[3];
 		for (Hindsight.Read read : reads) {
 			counts[read.ordinal()]++;
 		}
-		g.drawString(counts[0] + " halved, " + counts[1] + " lucky, " + counts[2] + " costly. Steep drops are lucky, shallow ones cost guesses.",
-				box.x + 12, box.y + 36);
+		drawFitted(g, counts[0] + " halved, " + counts[1] + " lucky, " + counts[2] + " costly. Steep drops are lucky, shallow ones cost guesses.",
+				box.x + 12, box.y + 36, box.width - 24);
 		g.drawString(Level.commas(level.max()), plot.x - 8 - g.getFontMetrics().stringWidth(Level.commas(level.max())), plot.y + 4);
 		g.drawString("found", plot.x - 8 - g.getFontMetrics().stringWidth("found"), plot.y + plot.height + 4);
 		g.setColor(RULED_OUT);
@@ -1055,7 +1111,8 @@ public final class Board extends JPanel {
 			}
 		}
 		// The key, top right.
-		int keyX = box.x + box.width - 150, keyY = box.y + 16;
+		// On a narrow board the lines above take the box's width, so the key moves into the plot's bottom left, which the paths never cross.
+		int keyX = narrow ? plot.x + 10 : box.x + box.width - 150, keyY = narrow ? plot.y + plot.height - (friend != null ? 22 : 6) : box.y + 16;
 		g.setColor(POSSIBLE);
 		g.fillRoundRect(keyX, keyY - 4, 18, 4, 3, 3);
 		g.setColor(SOFT);
@@ -1236,7 +1293,7 @@ public final class Board extends JPanel {
 			if (x + width > right - 90) {
 				x = MARGIN;
 				y += height + 6;
-				if (y + height > getHeight()) {
+				if (y + height > getHeight() - shift()) {
 					break;
 				}
 			}
