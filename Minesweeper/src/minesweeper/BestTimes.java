@@ -17,6 +17,8 @@ public final class BestTimes {
    private final long[] best = new long[Level.values().length];
    private Level lastLevel = Level.CLASSIC;
    private boolean noGuess = true;
+   /** How far a first game's lessons have got ({@link Coach}); -1 until read, then a file with wins counts as done. */
+   private int lessons = -1;
 
    private BestTimes(File file) {
       this.file = file;
@@ -35,6 +37,13 @@ public final class BestTimes {
       } catch (IOException e) {
          // No file yet: nothing won so far.
       }
+      if (times.lessons < 0) { // a file from before the lessons: a player who has won needs none
+         boolean won = false;
+         for (long millis : times.best) {
+            won |= millis > 0;
+         }
+         times.lessons = won ? Coach.DONE : Coach.FLAG;
+      }
       return times;
    }
 
@@ -44,6 +53,8 @@ public final class BestTimes {
             this.lastLevel = Level.valueOf(value);
          } else if (name.equals("noguess")) {
             this.noGuess = !value.equals("off");
+         } else if (name.equals("lessons")) {
+            this.lessons = Math.max(Coach.FLAG, Math.min(Coach.DONE, Integer.parseInt(value)));
          } else {
             long millis = Long.parseLong(value);
             if (millis > 0) {
@@ -83,6 +94,19 @@ public final class BestTimes {
       }
    }
 
+   /** The first game's lesson still to show: {@link Coach#FLAG}, {@link Coach#CHORD} or {@link Coach#DONE}. */
+   public int lessons() {
+      return this.lessons;
+   }
+
+   /** A lesson was done (the player flagged a tile, or opened around a number): moves on past it and saves. */
+   public void learned(int lesson) {
+      if (this.lessons <= lesson) {
+         this.lessons = lesson + 1;
+         this.save();
+      }
+   }
+
    /** Records a win; returns true (and saves) when it beats the best time on that level. */
    public boolean record(Level level, long millis) {
       long before = this.best(level);
@@ -98,6 +122,7 @@ public final class BestTimes {
       try (Writer writer = new FileWriter(this.file)) {
          writer.write("level=" + this.lastLevel.name() + "\n");
          writer.write("noguess=" + (this.noGuess ? "on" : "off") + "\n");
+         writer.write("lessons=" + this.lessons + "\n");
          for (Level level : Level.values()) {
             if (this.best(level) > 0) {
                writer.write(level.name() + "=" + this.best(level) + "\n");
