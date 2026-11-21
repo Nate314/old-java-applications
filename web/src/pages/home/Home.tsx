@@ -232,6 +232,29 @@ export function Home() {
   useHomeDraw();
   const t = H.take;
   if (H.filter === 'yours' && !stampCount()) H.filter = 'all';   // the passport was reset, here or on another page
+  // A first visit (no stamps when the page loaded) shows the 20 apps before Your arcade, whose passport and records
+  // are still empty: on a phone that put the apps about two screens further down. Kept for the visit, so a first
+  // stamp does not move the panel above the gallery while the visitor scrolls.
+  const [newcomer] = useState(() => !stampCount());
+  const arcade = (
+    <section className="arcade" id="arcade" aria-label="Your arcade">
+      <div className="arcade-tabs" role="tablist" aria-label="Your arcade">
+        <Tab id="news" label="What’s new" />
+        {' '}
+        <Tab id="passport" label="Passport" />
+        {' '}
+        <Tab id="records" label="Records" />
+        {' '}
+        <Tab id="takeaway" label="Take it with you" />
+      </div>
+      <WhatsNew off={off('news')} />
+      <Passport off={off('passport')} />
+      <section className={'records' + off('records')} id="records" role="tabpanel" aria-labelledby="tab-records">
+        <Records onCount={n => { if (H.recordsCount !== n) { H.recordsCount = n; draw(false); } }} />
+      </section>
+      <TakeItWithYou off={off('takeaway')} />
+    </section>
+  );
   return (
     <main>
       <HeroWall />
@@ -250,23 +273,7 @@ export function Home() {
       </div>
       <p className="offline-banner" id="offline-banner" role="status" hidden={!(t.checked && t.offline)}>{t.checked ? bannerText() : null}</p>
       <Player />
-      <section className="arcade" id="arcade" aria-label="Your arcade">
-        <div className="arcade-tabs" role="tablist" aria-label="Your arcade">
-          <Tab id="news" label="What’s new" />
-          {' '}
-          <Tab id="passport" label="Passport" />
-          {' '}
-          <Tab id="records" label="Records" />
-          {' '}
-          <Tab id="takeaway" label="Take it with you" />
-        </div>
-        <WhatsNew off={off('news')} />
-        <Passport off={off('passport')} />
-        <section className={'records' + off('records')} id="records" role="tabpanel" aria-labelledby="tab-records">
-          <Records onCount={n => { if (H.recordsCount !== n) { H.recordsCount = n; draw(false); } }} />
-        </section>
-        <TakeItWithYou off={off('takeaway')} />
-      </section>
+      {!newcomer && arcade}
       <h2>Play in the browser</h2>
       <div className="filters" role="group" aria-label="Filter apps">
         {[['all', 'All'], ['game', 'Games'], ['music', 'Music'], ['toy', 'Toys'], ['tool', 'Tools'], ...(stampCount() ? [['yours', 'Yours']] : [])].map(([f, label], i) => [
@@ -280,6 +287,7 @@ export function Home() {
         <kbd>{FIND_KEY}</kbd>
       </button>
       <Gallery />
+      {newcomer && arcade}
     </main>
   );
 }
