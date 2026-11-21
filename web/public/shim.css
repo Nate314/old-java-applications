@@ -171,6 +171,19 @@
   display: none !important;   /* the shim shows it with an inline style */
 }
 
+/* Embedded in another page (?embed, the home page's player): a finger swiping up or down on the app scrolls that
+   page, as on any web page, so a phone visitor scrolling past it is not caught. Taps, long presses and sideways
+   swipes still work the app, and the parts that follow the mouse as it moves (TComponent's .drags: Clock's
+   dial, the Rubik's cube, the boards) and the title bars keep the whole finger for the app. */
+:root[data-embed] .window {
+  touch-action: pan-y;
+}
+
+:root[data-embed] .window .drags,
+:root[data-embed] .window .titlebar {
+  touch-action: none;
+}
+
 /* Thumbnail mode (web/shots.ps1 crops the windows out of a flat magenta desktop). */
 :root[data-skin][data-shot] {
   --desk: #ff00ff;
