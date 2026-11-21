@@ -49,9 +49,10 @@ public final class LoopView extends JPanel {
       this.setPreferredSize(new Dimension(0, 0));
    }
 
-   /** The family name and number of a General MIDI program, such as "Strings 48". */
+   /** A General MIDI program by its family: "Strings" for the family's first, "Strings 2" to "Strings 8" for the rest. */
    public static String sound(int program) {
-      return FAMILIES[Math.max(0, Math.min(127, program)) / 8] + " " + program;
+      int clamped = Math.max(0, Math.min(127, program));
+      return FAMILIES[clamped / 8] + (clamped % 8 == 0 ? "" : " " + (clamped % 8 + 1));
    }
 
    /** Shows the looper's lanes, or takes no room for null. */

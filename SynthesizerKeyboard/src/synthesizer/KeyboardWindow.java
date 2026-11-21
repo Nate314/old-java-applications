@@ -30,6 +30,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    /** How long the falling notes take to move down to the next note after a right one. */
    private static final int FOLLOW_MILLIS = 160;
    private static final int[] FANFARE = {0, 4, 7, 12};
+   /** What a new sound plays when picked on the sound button: C E G. */
+   private static final int[] PREVIEW = {0, 4, 7};
+   /** The highest sound Up and the sound button reach (the first of the Effects family). */
+   private static final int MAX_INSTRUMENT = 120;
    /** The microphone ignores what it hears until the keyboard's own notes have been silent this long. */
    private static final int ECHO_MILLIS = 500;
    /** The backing's channel, clear of the keys (0), the looper's layers (1 to 4) and the click (9). */
@@ -161,7 +165,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          public void mousePressed(MouseEvent event) {
             KeyboardWindow window = KeyboardWindow.this;
             int chip = window.bar.chipAt(event.getX(), event.getY());
-            if (window.bar.micAt(event.getX(), event.getY())) {
+            int step = window.bar.soundAt(event.getX(), event.getY());
+            if (step != 0) {
+               window.stepFamily(step);
+            } else if (window.bar.micAt(event.getX(), event.getY())) {
                window.toggleMic();
             } else if (window.bar.chordsAt(event.getX(), event.getY())) {
                window.toggleChords();
@@ -254,7 +261,6 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.startSong(-1);
       this.clearArmed = false;
       this.bar.setLooper(this.looper);
-      this.loopView.setInstrument(this.instrument);
       if (!this.looping) {
          // The lanes get room of their own, so the keys keep their size.
          this.setSize(this.getWidth(), this.getHeight() + LoopView.HEIGHT);
@@ -373,8 +379,26 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       return 60 + key + 12 * this.octaveShift;
    }
 
+   /** The sound button: the first sound of the next or previous family (round from Effects to Piano), heard at once. */
+   private void stepFamily(int step) {
+      int families = MAX_INSTRUMENT / 8 + 1;
+      this.setInstrument(Math.floorMod(this.instrument / 8 + step, families) * 8);
+      for (int tone = 0; tone < PREVIEW.length; tone++) {
+         int note = this.midiNote(PREVIEW[tone]);
+         later(tone * 110, () -> this.midiPlayer.playNote(note, 260));
+      }
+      this.updateTitle();
+   }
+
+   private void setInstrument(int program) {
+      this.instrument = program;
+      this.midiPlayer.setInstrument(program);
+      this.bar.setSound(program);
+      this.loopView.setInstrument(program);
+   }
+
    private void updateTitle() {
-      this.setTitle("Synthesizer: instrument " + this.instrument + ", octave " + (this.octaveShift >= 0 ? "+" : "") + this.octaveShift
+      this.setTitle("Synthesizer: " + LoopView.sound(this.instrument) + ", octave " + (this.octaveShift >= 0 ? "+" : "") + this.octaveShift
          + (this.chords ? ", chord keys" : ""));
    }
 
@@ -725,17 +749,9 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       } else if (keyCode == KeyEvent.VK_RIGHT && this.octaveShift < 4) {
          this.octaveShift++;
       } else if (keyCode == KeyEvent.VK_UP) {
-         if (this.instrument < 120) {
-            this.instrument++;
-         }
-
-         this.midiPlayer.setInstrument(this.instrument);
+         this.setInstrument(Math.min(MAX_INSTRUMENT, this.instrument + 1));
       } else if (keyCode == KeyEvent.VK_DOWN) {
-         if (this.instrument > 0) {
-            this.instrument--;
-         }
-
-         this.midiPlayer.setInstrument(this.instrument);
+         this.setInstrument(Math.max(0, this.instrument - 1));
       } else if (recording || this.looping) {
          // Song keys wait until the recording is stopped or the looper is off; the piano keys below still play.
       } else if (keyCode == KeyEvent.VK_O) {
@@ -752,7 +768,6 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.listen();
       }
       this.updateTitle();
-      this.loopView.setInstrument(this.instrument);
 
       int index = this.keyIndex(keyCode);
       if (index >= 0) {

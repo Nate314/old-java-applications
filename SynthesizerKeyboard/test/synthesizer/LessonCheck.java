@@ -20,6 +20,7 @@ public final class LessonCheck {
       checkTunes();
       checkChords();
       checkBacking();
+      checkSoundButton();
       System.out.println("LessonCheck: all checks passed");
    }
 
@@ -50,6 +51,28 @@ public final class LessonCheck {
       assert Backing.chords(sharp)[0] == 6 : "F# A# C# F# is F#, got " + Backing.chords(sharp)[0];
       int[] notes = Backing.notes(7, 60);
       assert java.util.Arrays.equals(notes, new int[]{43, 55, 59, 62}) : "G: a low G, then G B D an octave below the keys";
+   }
+
+   private static void checkSoundButton() {
+      assert LoopView.sound(0).equals("Piano") && LoopView.sound(33).equals("Bass 2") && LoopView.sound(120).equals("Effects")
+         : "sounds read as their family, numbered after the first";
+      LessonBar bar = new LessonBar(SongRecords.load(new File("no-such-records.txt")));
+      bar.setSize(900, LessonBar.HEIGHT);
+      // Wide: the sound button sits left of Chords (100) and Sing along (132), 124 wide, its left arrow on its first 26 px.
+      int left = 900 - 10 - 132 - 6 - 100 - 6 - 124;
+      assert bar.soundAt(left + 5, 20) == -1 && bar.soundAt(left + 60, 20) == 1 && bar.soundAt(left + 120, 20) == 1;
+      assert bar.soundAt(left - 2, 20) == 0 && bar.soundAt(left + 126, 20) == 0 && bar.soundAt(left + 60, 40) == 0 : "off the button";
+      assert !bar.chordsAt(left + 120, 20) && bar.chordsAt(left + 130, 20) : "the sound button ends where Chords begins";
+      // Narrow: a 34 px note that steps forward.
+      bar.setSize(400, LessonBar.HEIGHT);
+      int narrow = 400 - 10 - 34 - 6 - 34 - 6 - 34;
+      assert bar.soundAt(narrow + 2, 20) == 1 && bar.soundAt(narrow + 33, 20) == 1 && bar.soundAt(narrow + 35, 20) == 0;
+      // A headline too long for the room left of the buttons is cut short to fit.
+      java.awt.FontMetrics metrics = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB)
+         .getGraphics().getFontMetrics(new java.awt.Font("SansSerif", java.awt.Font.BOLD, 16));
+      String cut = LessonBar.fit(metrics, "Listening: Twinkle Twinkle Little Star", 150);
+      assert cut.endsWith("..") && metrics.stringWidth(cut) <= 150 : cut;
+      assert LessonBar.fit(metrics, "Free play", 150).equals("Free play");
    }
 
    private static void checkChords() {
