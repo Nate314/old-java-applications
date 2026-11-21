@@ -105,6 +105,15 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private static final int DEMO_MILLIS = 2600;
    private static final Color FINGER = new Color(255, 255, 255, 210);
    private static final Color FINGER_EDGE = new Color(20, 20, 20, 150);
+   /** A solve's moment: the stars won (of 3; -1 for none, in free play) popping in over the cube, with a caption. */
+   private long cheerStart = 0L;
+   private int cheerStars = -1;
+   private String cheerText = "";
+   private boolean cheerStill = false;
+   static final int CHEER_MILLIS = 4200;
+   private static final Color GOLD = new Color(255, 196, 40);
+   private static final Color GOLD_EDGE = new Color(150, 96, 0);
+   private static final Color STAR_EMPTY = new Color(40, 50, 80, 60);
 
    CubeView3D(Cube cube, BiConsumer<String, Integer> onSelect, Consumer<String> onTurn) {
       this.cube = cube;
@@ -137,6 +146,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    @Override
    public void turned(CubeGeometry.Turn turn) {
       this.turnsSeen++;
+      this.cheerStart = 0L;
       this.pending.add(turn);
       this.pendingAfter.add(this.cubeColors());
       if (this.pending.size() > 6) {
@@ -161,6 +171,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       System.arraycopy(this.cubeColors(), 0, this.shown, 0, 54);
       this.turnStart = 0L;
       this.turnAngle = 0.0;
+      this.cheerStart = 0L;
       this.repaint();
    }
 
@@ -225,6 +236,25 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.spinStart = System.currentTimeMillis();
       this.spinFrom = this.targetYaw;
       this.wake();
+   }
+
+   /**
+    * The cube was solved: a lap of the whole cube while the stars won pop in above it one by one and fade, so the
+    * moment reads at a glance. {@code still} (reduced motion) shows them at once and keeps the cube where it is.
+    */
+   void cheer(int stars, String text, boolean still) {
+      this.cheerStart = System.currentTimeMillis();
+      this.cheerStars = stars;
+      this.cheerText = text;
+      this.cheerStill = still;
+      if (!still) {
+         this.spin();
+      }
+      this.wake();
+   }
+
+   boolean cheering() {
+      return this.cheerStart != 0L;
    }
 
    /** Shows or hides the mirrors of the hidden sides. */
@@ -342,6 +372,10 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.spinStart = t >= 1.0 ? 0L : this.spinStart;
          busy = true;
       }
+      if (this.cheerStart != 0L) {
+         this.cheerStart = System.currentTimeMillis() - this.cheerStart >= CHEER_MILLIS ? 0L : this.cheerStart;
+         busy = true;
+      }
       double dy = this.targetYaw - this.yaw;
       double dp = this.targetPitch - this.pitch;
       if (Math.abs(dy) > 0.002 || Math.abs(dp) > 0.002) {
@@ -362,6 +396,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    private void pressed(int x, int y, long when) {
       this.spinStart = 0L;
+      this.cheerStart = 0L;
       this.demo(null, 0, null);
       this.liveTurn = null;
       this.pressMillis = when;
@@ -610,6 +645,59 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       if (demo) {
          this.drawFinger(g);
       }
+      if (this.cheerStart != 0L) {
+         this.drawCheer(g);
+      }
+   }
+
+   /** The solve's stars and caption on a plate over the cube: each star pops in a beat after the last, then all fade. */
+   private void drawCheer(Graphics2D g) {
+      long t = System.currentTimeMillis() - this.cheerStart;
+      double fade = Math.max(0, Math.min(1, (CHEER_MILLIS - t) / 700.0)) * (this.cheerStill ? 1 : Math.min(1, t / 200.0));
+      double r = this.scale() * 0.42;
+      g.setFont(new java.awt.Font("Dialog", java.awt.Font.BOLD, Math.max(14, (int) (r * 0.75))));
+      java.awt.FontMetrics metrics = g.getFontMetrics();
+      boolean stars = this.cheerStars >= 0;
+      int plateW = (int) Math.max(stars ? r * 7.4 : 0, metrics.stringWidth(this.cheerText) + r);
+      int plateH = (int) ((stars ? r * 2.6 : 0) + metrics.getHeight() + r * 0.6);
+      int cx = this.getWidth() / 2;
+      int top = this.getHeight() / 2 - plateH / 2;
+      g.setColor(withAlpha(Color.WHITE, (int) (215 * fade)));
+      g.fillRoundRect(cx - plateW / 2, top, plateW, plateH, (int) r, (int) r);
+      g.setColor(withAlpha(new Color(40, 50, 80), (int) (70 * fade)));
+      g.drawRoundRect(cx - plateW / 2, top, plateW, plateH, (int) r, (int) r);
+      int cy = (int) (top + r * 0.3 + r * 1.1);
+      for (int i = 0; stars && i < 3; i++) {
+         // Pops in 350 ms apart: grows past full size and settles (none of that when still).
+         double u = this.cheerStill ? 1 : Math.max(0, Math.min(1, (t - 250 - 350 * i) / 300.0));
+         double pop = u < 0.7 ? u / 0.7 * 1.25 : 1.25 - 0.25 * (u - 0.7) / 0.3;
+         if (pop <= 0) {
+            continue;
+         }
+         boolean won = i < this.cheerStars;
+         int[][] star = starAt(cx + (i - 1) * r * 2.3, cy - (i == 1 ? r * 0.2 : 0), r * (won ? pop : Math.min(pop, 1)));
+         g.setColor(withAlpha(won ? GOLD : STAR_EMPTY, (int) ((won ? 255 : 60) * fade)));
+         g.fillPolygon(star[0], star[1], 10);
+         g.setColor(withAlpha(won ? GOLD_EDGE : ARROW_EDGE, (int) ((won ? 255 : 90) * fade)));
+         g.setStroke(new BasicStroke(2f));
+         g.drawPolygon(star[0], star[1], 10);
+      }
+      g.setStroke(new BasicStroke(1f));
+      int ty = (int) (top + plateH - r * 0.3 - metrics.getDescent());
+      g.setColor(withAlpha(new Color(30, 40, 70), (int) (255 * fade)));
+      g.drawString(this.cheerText, cx - metrics.stringWidth(this.cheerText) / 2, ty);
+   }
+
+   /** A five-pointed star of outer radius r, point up: its corners' x and y (the web shim has no Polygon). */
+   private static int[][] starAt(double cx, double cy, double r) {
+      int[][] star = new int[2][10];
+      for (int k = 0; k < 10; k++) {
+         double a = -Math.PI / 2 + k * Math.PI / 5;
+         double d = k % 2 == 0 ? r : r * 0.45;
+         star[0][k] = (int) Math.round(cx + d * Math.cos(a));
+         star[1][k] = (int) Math.round(cy + d * Math.sin(a));
+      }
+      return star;
    }
 
    /** The Show me how fingertip: on the square, carried with it while it pulls the layer. */

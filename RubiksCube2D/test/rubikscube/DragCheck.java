@@ -91,6 +91,32 @@ public final class DragCheck {
       move(at, along, 0.3, 500);
       assert taken.size() == 1 && live() == null : "while the frame takes no moves, the drag asks at once as before";
       release(at, along, 0.3, 500);
+      ticks(40);
+
+      // A solve's cheer: two gold stars pop in over the cube a beat apart, then go; a press ends it early.
+      int before = gold();
+      view.cheer(2, "Level 2 solved!", true);
+      ticks(1);
+      int two = gold();
+      assert two > before + 200 : "the stars won show in gold: " + before + " -> " + two;
+      view.cheer(1, "Level 1 solved!", true);
+      ticks(1);
+      assert gold() < two && gold() > before + 100 : "one star won shows less gold than two";
+      Thread.sleep(CubeView3D.CHEER_MILLIS + 100);
+      ticks(1);
+      assert !view.cheering() && gold() <= before : "the cheer goes by itself";
+      view.cheer(3, "Level 3 solved!", false);
+      Thread.sleep(150);
+      ticks(1);
+      assert gold() <= before + 20 : "moving, the stars pop in a beat after the solve";
+      Thread.sleep(1200);
+      ticks(1);
+      assert gold() > two : "then all three show";
+      press(new int[]{2, 350}, 0);
+      release(new int[]{2, 350}, along, 0, 0);
+      assert !view.cheering() : "a press on the view ends it";
+      // Let the mirrors glide home so the view's timer stops and the JVM can exit.
+      ticks(60);
       System.out.println("DragCheck passed");
    }
 
@@ -158,7 +184,26 @@ public final class DragCheck {
       }
    }
 
+   private static BufferedImage image;
+
    private static void paint() {
-      view.paint(new BufferedImage(550, 352, BufferedImage.TYPE_INT_RGB).createGraphics());
+      image = new BufferedImage(550, 352, BufferedImage.TYPE_INT_RGB);
+      view.paint(image.createGraphics());
+   }
+
+   /** Pixels of the stars' gold (strong orange-yellow, unlike the cube's yellow squares near the stars' band). */
+   private static int gold() {
+      paint();
+      int n = 0;
+      for (int y = 90; y < 262; y++) {
+         for (int x = 0; x < 550; x++) {
+            int rgb = image.getRGB(x, y);
+            int r = rgb >> 16 & 255;
+            int g = rgb >> 8 & 255;
+            int b = rgb & 255;
+            n += r > 230 && g > 185 && g < 210 && b > 25 && b < 60 ? 1 : 0;
+         }
+      }
+      return n;
    }
 }

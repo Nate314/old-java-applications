@@ -393,11 +393,14 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.history.restart();
       this.painted = false;
       int moves = this.userMoves.size();
+      boolean still = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
       if (this.freePlay) {
          this.message("Solved in " + moves + (moves == 1 ? " move!" : " moves!"));
+         this.view.cheer(-1, "Solved!", still);
          return;
       }
       int stars = LevelRecords.starsFor(this.par, moves, this.usedHint);
+      this.view.cheer(stars, "Level " + this.level + " solved!", still);
       int before = this.records.stars(this.level);
       this.records.record(this.level, stars, moves);
       String text = "Level " + this.level + " solved! " + stars(stars);
