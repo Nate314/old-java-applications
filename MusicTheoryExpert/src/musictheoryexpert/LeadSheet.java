@@ -199,7 +199,7 @@ final class LeadSheet {
 		}
 		int bars = song.size();
 		List<Mark> marks = song.melody().isEmpty() ? new ArrayList<>() : marks(song.melody(), bars);
-		int perLine = !marks.isEmpty() && bars <= 4 ? 2 : 4;
+		int perLine = box.width < Look.NARROW || !marks.isEmpty() && bars <= 4 ? 2 : 4;
 		int lines = (bars + perLine - 1) / perLine;
 		int gap = 8;
 		int p = Math.floorMod(song.position(), 12);

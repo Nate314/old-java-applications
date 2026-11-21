@@ -26,6 +26,9 @@ final class Look {
 	/** The keyboard runs from C3 to C7, which holds every note either tab plays. */
 	static final int LOW_NOTE = 48, HIGH_NOTE = 96;
 
+	/** Tabs narrower than this (a phone held upright, in the browser) stack their parts in one column. */
+	static final int NARROW = 600;
+
 	private Look() {
 	}
 
