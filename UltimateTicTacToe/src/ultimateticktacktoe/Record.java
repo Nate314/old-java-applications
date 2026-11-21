@@ -116,6 +116,12 @@ public final class Record {
       return plural(row[0], "win", "wins") + ", " + plural(row[1], "loss", "losses") + ", " + plural(row[2], "draw", "draws");
    }
 
+   /** The record on a narrow board: "3W 1L 0D". */
+   public String describeShort(Mode mode) {
+      int[] row = this.results[mode.ordinal()];
+      return row[0] + "W " + row[1] + "L " + row[2] + "D";
+   }
+
    private static String plural(int count, String one, String many) {
       return count + " " + (count == 1 ? one : many);
    }
