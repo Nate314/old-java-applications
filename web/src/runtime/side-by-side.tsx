@@ -10,6 +10,7 @@ import { openPanel } from './ui/panel';
 import { AppCard } from './ui/cards';
 import { openShare } from './share';
 import { AGAIN_KEY } from './records';
+import { storedJson } from './stored';
 import { playSound } from './sounds';
 import { redrawBar } from './install';
 import { findOff, openFind } from './find';
@@ -53,10 +54,8 @@ const DOCK_WHY: Record<string, string> = {
 };
 
 function dockSaved(): DockSaved | null {
-  try {
-    var d = JSON.parse(localStorage.getItem(DOCK_KEY) || 'null');
-    return d && typeof d.app === 'string' && /^[A-Za-z0-9]+$/.test(d.app) ? d : null;
-  } catch (e) { return null; }
+  var d = storedJson(DOCK_KEY);
+  return typeof d.app === 'string' && /^[A-Za-z0-9]+$/.test(d.app) ? d as DockSaved : null;
 }
 
 function dockSave(d: DockSaved | null) {

@@ -8,14 +8,14 @@ import './whats-new.css';
 import { webp } from '../../shared/catalog';
 import { H, type NewsItem } from './model';
 import { MANY, allClick, day, openApp } from './news';
+import { store, stored } from '../../shared/stored';
 
 const GAP = 10 * 60 * 1000;   // changes further apart than this are separate updates
 const SHOWN = 6;              // headline changes before Show all
 const SEEN_KEY = 'oldjava.newsSeen';   // the newest change the visitor has had on screen
 const SITE_ICON = new URL('icons/icon.svg', location.href).href;
 
-function seenAt() { try { return Number(localStorage.getItem(SEEN_KEY)) || 0; } catch (e) { return 0; } }
-const seen = seenAt();        // as it was when the page opened, so New tags stay while the visitor reads them
+const seen = Number(stored(SEEN_KEY)) || 0;        // as it was when the page opened, so New tags stay while the visitor reads them
 
 interface Update { n: number; t: number; front: NewsItem[]; back: NewsItem[] }
 
@@ -120,7 +120,7 @@ export function WhatsNew({ off }: { off: string }) {
     const io = new IntersectionObserver(es => {
       clearTimeout(timer);
       if (es[es.length - 1].isIntersecting) timer = window.setTimeout(() => {
-        try { localStorage.setItem(SEEN_KEY, String(newest)); } catch (e) { /* not kept */ }
+        store(SEEN_KEY, String(newest));
         io.disconnect();
       }, 1000);
     }, { threshold: 0.25 });

@@ -6,7 +6,7 @@ import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from 'react';
 import { APPS, type App } from '../../shared/catalog';
 import { byId } from '../../shared/dom';
 import { linkState, linkedApp } from '../../shared/link-state';
-import { readJson } from '../../shared/stored';
+import { readJson, store } from '../../shared/stored';
 import { H, draw, indexOfApp } from './model';
 import { TOUR } from './tour';
 
@@ -328,7 +328,7 @@ export function tourSaved(): TourSaved {
   return readJson(TOUR_KEY);
 }
 function tourSave(o: TourSaved) {
-  try { localStorage.setItem(TOUR_KEY, JSON.stringify(o)); } catch (e) { /* private mode: not kept */ }
+  store(TOUR_KEY, JSON.stringify(o));   // private mode: not kept
 }
 const tourApp = (i: number) => appById(TOUR[i][0]) as App;
 function tourShown() {
