@@ -160,6 +160,12 @@ select { font: inherit; font-size: 13px; padding: 2px 6px; border-radius: 6px; b
   .story-play { left: 12px; right: 12px; bottom: 12px; max-width: none; }
   main { padding-bottom: 96px; }
 }
+/* Over a caption or tile on a wide screen it tucks down to its round Play, still one click from the app (StoryPlay.tsx). */
+@media (min-width: 761px) {
+  .story-play.tuck { gap: 0; padding: 6px; }
+  .story-play.tuck img { display: none; }
+  .story-play.tuck .what { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+}
 @media (prefers-reduced-motion: reduce) { .story-play { transition: none; animation: none; } }
 :root[data-skin="classic"] .story-play, :root[data-skin="classic"] .story-play img, :root[data-skin="classic"] .story-play .go { border-radius: 0; box-shadow: none; }
 :root[data-skin="arcade"] .story-play { box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.35), 0 0 24px rgba(255, 43, 214, 0.25); }

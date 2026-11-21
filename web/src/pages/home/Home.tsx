@@ -7,6 +7,7 @@ import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
 import { FIRST, H, draw, useHomeDraw } from './model';
 import { TourBox, TourStart } from './TourBox';
+import { ComeBack } from './ComeBack';
 import { MoreButton, MoreMenu, useMore } from './PlayerMore';
 import { Records } from './Records';
 import { HeroWall } from './HeroWall';
@@ -259,6 +260,7 @@ export function Home() {
   return (
     <>
       <HeroWall />
+      <ComeBack />
       {/* What to do first, in one row: the tour, and the story for those who want to know how. */}
       <div className="start">
         <TourStart />

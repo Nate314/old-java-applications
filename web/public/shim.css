@@ -903,6 +903,13 @@ canvas.paint.top {
     width: 96px;
     height: 60px;
   }
+  /* Three lines of each hint, so all three picks fit a phone's exit screen. */
+  .shim-picks .shim-app-text span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
 }
 
 /* Leave out the output panel when the app has windows to show. */

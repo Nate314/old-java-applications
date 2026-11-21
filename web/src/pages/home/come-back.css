@@ -1,0 +1,14 @@
+/* ---- Welcome back (ComeBack.tsx): the last app and the next new one, above the player ---- */
+.come-back { margin: 4px 0 16px; }
+.come-back h2 { margin: 0 0 8px; font-size: 15px; }
+.come-back-picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+.come-back-pick { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 8px; text-align: left;
+                  border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-bg); color: inherit;
+                  font: inherit; cursor: pointer; }
+.come-back-pick:hover, .come-back-pick:focus-visible { border-color: var(--accent); }
+.come-back-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.come-back-pick img { flex: none; width: 96px; height: 60px; object-fit: cover; border-radius: 6px; background: var(--desk); }
+.come-back-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.come-back-text strong { color: var(--accent); font-size: 15px; }
+.come-back-text span { opacity: 0.8; }
+.come-back-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
