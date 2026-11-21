@@ -73,7 +73,14 @@ public class GameStateCheck {
          check(!legal || chances[move] >= 0 && chances[move] <= 1, "hint chances in range for " + move);
       }
       check(think.best() == 2 * 9 + 5 && chances[2 * 9 + 5] > 0.95, "the hint's best is the win, near certain");
+      // Hard thinking on the board: each legal move's share of the search, the pick at 1, nothing for other cells.
+      double[] attention = think.attention();
+      for (int move = 0; move < 81; move++) {
+         check(attention[move] >= 0 && attention[move] <= 1 && (attention[move] == 0 || game.canPlay(move / 9, move % 9)), "attention in range, legal moves only, for " + move);
+      }
+      check(attention[think.best()] == 1, "the most searched move has full attention");
       check(new Computer.Think(new GameState()).best() == -1, "no pick before any search");
+      check(new Computer.Think(new GameState()).attention()[40] == 0, "no attention before any search");
       // A short search of an empty board: doubts are positive where there are chances, and shrink with more search.
       think = new Computer.Think(new GameState());
       think.grow(random, 5);

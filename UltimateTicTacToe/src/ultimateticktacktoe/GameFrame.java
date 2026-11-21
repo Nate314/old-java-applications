@@ -51,6 +51,11 @@ public final class GameFrame extends JFrame {
    private final JLabel tally = new JLabel(" ", SwingConstants.CENTER);
    private final Random random = new Random();
    private final Timer computerTimer = new Timer(MOVE_DELAY_MILLIS, event -> this.computerMove());
+   /** Hard and Watch: the computer's search, grown a slice per tick so the board shows where it is looking (and the page never waits long); null when it is not thinking. */
+   private Computer.Think computerThink;
+   private String computerThinkFor;
+   private int computerSpent;
+   private final Timer thinkTimer = new Timer(HINT_TICK_MILLIS, event -> this.computerThinkStep());
    /** Friend by link: the link (or code) to send, or a friend's to open, with Copy, Open and Take back. Shown in place of the record line. */
    private final JPanel friendRow = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
    private final JTextField friendField = new JTextField();
@@ -322,6 +327,7 @@ public final class GameFrame extends JFrame {
       this.stopReview();
       this.lessonStep = -1;
       this.computerTimer.stop();
+      this.stopThinking();
       this.nextGameTimer.stop();
       this.computerPlayedX = this.watching;
       this.hinted = false;
@@ -658,11 +664,48 @@ public final class GameFrame extends JFrame {
       if (!this.computerToMove()) {
          return;
       }
-      int move = this.watching ? Computer.hardMove(this.state, this.random, WATCH_THINK_MILLIS)
-         : this.mode == Mode.HARD ? Computer.hardMove(this.state, this.random, HARD_THINK_MILLIS)
-         : Computer.easyMove(this.state, this.random);
+      int win = Computer.winningMove(this.state, this.state.legalMoves());
+      if (win >= 0 || !this.watching && this.mode != Mode.HARD) {
+         this.computerPlays(win >= 0 ? win : Computer.easyMove(this.state, this.random));
+         return;
+      }
+      this.computerThink = new Computer.Think(this.state);
+      this.computerThinkFor = this.moves;
+      this.computerSpent = 0;
+      this.thinkTimer.restart();
+   }
+
+   /** One slice of the computer's search, the board showing where it looks; once its time is up it plays the move it searched most. */
+   private void computerThinkStep() {
+      if (this.computerThink == null || !this.computerToMove() || !this.moves.equals(this.computerThinkFor)) {
+         this.stopThinking();   // the game moved on (a new game, a lesson, a take-over)
+         this.repaintCells();
+         return;
+      }
+      this.computerThink.grow(this.random, HINT_TICK_MILLIS);
+      this.computerSpent += HINT_TICK_MILLIS;
+      if (this.computerSpent < (this.watching ? WATCH_THINK_MILLIS : HARD_THINK_MILLIS)) {
+         this.repaintCells();
+         return;
+      }
+      int move = this.computerThink.best();
+      this.stopThinking();
+      this.computerPlays(move);
+   }
+
+   private void stopThinking() {
+      this.thinkTimer.stop();
+      this.computerThink = null;
+   }
+
+   private void computerPlays(int move) {
       this.play(move / 9, move % 9);
       this.moved();
+   }
+
+   /** While the computer thinks: how much of its search each move has had, the most searched at 1; null otherwise. */
+   final double[] thinking() {
+      return this.computerThink == null ? null : this.computerThink.attention();
    }
 
    /** After any move: count a finished game against the computer, redraw, and hand the turn to the computer if it is O's. */
