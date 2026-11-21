@@ -86,7 +86,7 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
     </button>
   );
   return (
-    <div className="shim-toolbar" ref={bar}>
+    <div className="shim-toolbar" role="region" aria-label="Site controls" ref={bar}>
       {!isApp && find}
       {isApp && (
         <>

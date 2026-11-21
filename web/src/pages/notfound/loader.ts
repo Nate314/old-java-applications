@@ -16,6 +16,9 @@ export function loaderScript(entry: string): string {
     var root = '/';
     for (var i = 0; i < dirs.length; i++) if (found[i]) { root = dirs[i]; break; }
     window.oldjavaLostRoot = root;
+    var icon = document.createElement('link');   // the tab icon, once the root is known
+    icon.rel = 'icon'; icon.type = 'image/svg+xml'; icon.href = root + 'icons/icon.svg';
+    document.head.appendChild(icon);
     return import(root + ${JSON.stringify(entry)});
   }).catch(function (e) { console.warn('The lost page could not load: ' + e.message); });
 })();`;

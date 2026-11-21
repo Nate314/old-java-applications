@@ -599,12 +599,6 @@ canvas.paint.top {
   color: #fff;
   font: 12px system-ui, -apple-system, "Segoe UI", sans-serif;
   backdrop-filter: blur(6px);
-  opacity: 0.6; /* it floats over the app windows */
-}
-
-.shim-toolbar:hover,
-.shim-toolbar:focus-within {
-  opacity: 1;
 }
 
 .shim-toolbar a {

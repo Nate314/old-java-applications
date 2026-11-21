@@ -39,7 +39,7 @@ export function Play() {
   const [size, setSize] = useState<{ w: number; h: number; scale: number } | null>(null);
   const [lit, setLit] = useState(0);   // how many times the Full page link has been pointed at
   const [full, setFull] = useState(false);   // the page fills the screen
-  const main = useRef<HTMLDivElement>(null);
+  const main = useRef<HTMLElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const fullLink = useRef<HTMLAnchorElement>(null);
   const app = shown.mode === 'oops' ? null : shown.app;
@@ -96,7 +96,7 @@ export function Play() {
   const fsTitle = full ? 'Leave full screen' : 'Fill the screen';
   return (
     <>
-      <div className="main" ref={main}>
+      <main className="main" ref={main}>
         <div className={'poster' + (thenPoster ? ' then' : '')} id="poster" hidden={shown.mode !== 'poster'}>
           <img className="bg" id="poster-bg" alt="" src={poster ? webp(poster.shot) : undefined} />
           {' '}
@@ -137,7 +137,7 @@ export function Play() {
             ))}
           </ul>
         </div>
-      </div>
+      </main>
       <nav className="bar" aria-label="Old Java Applications">
         <a className="brand" href="index.html" target="_blank" rel="noopener" title="Old Java Applications: 20 recovered Java apps you can play in the browser">
           <img src="icons/icon.svg" alt="" />
