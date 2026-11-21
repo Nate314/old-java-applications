@@ -399,6 +399,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
       view.status = n ? n + (n === 1 ? ' result' : ' results') : 'Nothing matches “' + parts.input.value.trim() + '”. Try a game, a skin, or a class name.';
       draw();
       if (!srcItems.length) sourceItems(apps).then(function (s) {
+        if (!s.length) return;   // none could be read (offline): searching again would ask again, forever, never yielding
         srcItems = s;
         if (box && parts.input.value.trim()) search();
       });
