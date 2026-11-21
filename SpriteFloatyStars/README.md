@@ -112,7 +112,7 @@ Star Catcher window:
 - **1** to **6**: play that night, if it is open. **Enter**, **Space** or **N** on the menu plays the chosen night; after a night they play the next one (or the same one again if the next is still locked).
 - **R**: play the night again. **Esc** or **M**: back to the menu.
 
-Closing the settings window or an animation window exits the program; closing the Star Catcher window brings the settings window back. No command-line arguments.
+Closing the settings window or an animation window exits the program; closing the Star Catcher window brings the settings window back. If a stars' window is open then, it comes to the front and keeps the keyboard, so the first key (Space, a number) reaches the stars rather than pressing Play Star Catcher again. No command-line arguments.
 
 ## Code layout
 
