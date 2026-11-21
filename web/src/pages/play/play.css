@@ -1,5 +1,5 @@
 @import '../../shared/styles/border-box.css';
-:root { --accent: #3b82f6; --ink: #e5e7eb; --muted: #9ca3af; --bar: #0b1120; --edge: rgba(148, 163, 184, 0.22);
+:root { --accent: #3b82f6; --accent-ink: #0b1120; --ink: #e5e7eb; --muted: #9ca3af; --bar: #0b1120; --edge: rgba(148, 163, 184, 0.22);
         --desk: linear-gradient(135deg, #1e293b, #0f172a); color-scheme: dark; }
 html, body { height: 100%; margin: 0; }
 body { display: flex; flex-direction: column; overflow: hidden; background: #0f172a; color: var(--ink);
@@ -38,7 +38,7 @@ h1 { margin: 0; font-size: clamp(20px, 5vw, 30px); line-height: 1.1; letter-spac
 .hint { margin: 0; color: #cbd5e1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
         overflow: hidden; }
 .play { display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 22px 10px 16px;
-        border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 700; line-height: 1.2;
+        border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink, #fff); font-size: 17px; font-weight: 700; line-height: 1.2;
         font-family: inherit; cursor: pointer; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.45);
         transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .play::before { content: ""; width: 0; height: 0; border-style: solid; border-width: 8px 0 8px 13px;
@@ -78,7 +78,7 @@ h1 { margin: 0; font-size: clamp(20px, 5vw, 30px); line-height: 1.1; letter-spac
                                color: inherit; font-size: 12px; font-weight: 600; line-height: 1.4; font-family: inherit; text-decoration: none;
                                cursor: pointer; }
 .bar .go a:hover, .bar .go button:hover { border-color: var(--accent); }
-.bar .go .more { border-color: var(--accent); background: var(--accent); color: #fff; }
+.bar .go .more { border-color: var(--accent); background: var(--accent); color: var(--accent-ink, #fff); }
 .bar a:focus-visible, .bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .bar .go a.lit { animation: lit 0.6s ease-in-out 3; }
 @keyframes lit { 50% { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45); } }

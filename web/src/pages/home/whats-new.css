@@ -15,7 +15,7 @@
 .release.unseen .release-sum { opacity: 1; font-weight: 700; color: var(--accent); }
 .release .news-list { margin-top: 8px; }
 .news-list li.unseen { border-color: var(--accent); }
-.news-list .tag.fresh-tag { background: var(--accent); color: #fff; }
+.news-list .tag.fresh-tag { background: var(--accent); color: var(--accent-ink, #fff); }
 .backstage { margin-top: 8px; font-size: 12px; }
 .backstage summary { cursor: pointer; width: fit-content; opacity: 0.75; }
 .backstage summary:hover, .backstage[open] summary { opacity: 1; }
@@ -27,7 +27,7 @@
 :root[data-skin="arcade"] .release.unseen::after { box-shadow: 0 0 10px var(--accent); }
 /* home.css paints every Arcade tag yellow; the site and New tags keep text that reads on them */
 :root[data-skin="arcade"] .news-list .tag.site { background: rgba(127, 127, 127, 0.25); }
-:root[data-skin="arcade"] .news-list .tag.fresh-tag { background: var(--accent); color: #fff; }
+:root[data-skin="arcade"] .news-list .tag.fresh-tag { background: var(--accent); color: var(--accent-ink, #fff); }
 @media (forced-colors: active) {
   .release::before { background: CanvasText; }
   .release::after { border-color: CanvasText; }

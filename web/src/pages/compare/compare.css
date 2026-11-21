@@ -19,7 +19,7 @@ body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-ser
 .picks a { padding: 3px 12px; border: 1px solid var(--card-border); border-radius: 999px; background: var(--card-bg);
            color: inherit; text-decoration: none; font-size: 13px; }
 .picks a:hover { border-color: var(--accent); }
-.picks a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.picks a[aria-current] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); font-weight: 600; }
 :root[data-skin="classic"] .picks a { border-radius: 0; }
 
 /* The two players, side by side from 760 px, one over the other below. */
@@ -29,7 +29,7 @@ body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-ser
         overflow: hidden; background: var(--card-bg); }
 :root[data-skin="classic"] .pane { border-radius: 0; }
 .pane figcaption { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 8px 12px; font-size: 13px; }
-.pane figcaption strong { padding: 1px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px;
+.pane figcaption strong { padding: 1px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink, #fff); font-size: 12px;
                           letter-spacing: 0.06em; text-transform: uppercase; }
 /* Then wears the sepia of an old photograph, as its poster in play.html does. */
 .pane.then figcaption strong { background: #8a6a3c; }

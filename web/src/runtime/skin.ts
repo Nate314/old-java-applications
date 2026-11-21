@@ -98,6 +98,7 @@ export function ownCss(s: OwnSkin) {
     '--field-bg': s.dark ? mix('#0b0d12', a, 0.05) : white, '--field-text': text, '--field-border': line,
     '--field-focus': a, '--focus-ring': a, '--desktop-pane': s.dark ? mix('#1b1e27', a, 0.25) : mix(white, a, 0.16),
     '--close-bg': 'transparent', '--close-border': 'transparent', '--accent': a,
+    '--accent-ink': contrast(a, white) >= 4.5 ? white : '#111111',
     'color-scheme': s.dark ? 'dark' : 'light'
   };
   if (s.chrome === 'gloss') {
