@@ -96,6 +96,7 @@ public class TComponent implements TImageObserver {
         syncEnabled();
         syncFocusable();
         syncAccessible();
+        syncDrags();
     }
 
     /** Default colors are left to the CSS skin; colors the app sets are applied inline. */
@@ -698,11 +699,20 @@ public class TComponent implements TImageObserver {
     public void addMouseMotionListener(TMouseMotionListener l) {
         if (l != null) {
             mouseMotionListeners.add(l);
+            syncDrags();
         }
     }
 
     public void removeMouseMotionListener(TMouseMotionListener l) {
         mouseMotionListeners.remove(l);
+        syncDrags();
+    }
+
+    /** Marks a component that follows the mouse as it moves: in an embedded app a finger there works the app, elsewhere it may scroll the page (shim.css). */
+    private void syncDrags() {
+        if (element != null) {
+            Js.toggleClass(element, "drags", hasMouseMotionListeners());
+        }
     }
 
     public void addKeyListener(TKeyListener l) {
