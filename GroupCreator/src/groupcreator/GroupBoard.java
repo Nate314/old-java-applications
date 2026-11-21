@@ -14,7 +14,9 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import javax.swing.JPanel;
@@ -79,6 +81,9 @@ public class GroupBoard extends JPanel {
 
       /** The names typed in the names field now (the wheel follows the field, not only the saved rounds). */
       List<String> classNames();
+
+      /** The min and max typed now, or null when they are not whole numbers (the board previews round 1 with them). */
+      int[] sizes();
 
       /** The wheel picked someone, or a pick was put back or forgotten: save the class. */
       void picksChanged();
@@ -159,6 +164,11 @@ public class GroupBoard extends JPanel {
    private boolean keyboard;
 
    private List<List<String>> groups = Collections.emptyList();
+   /** Before round 1: where each name of the class sits on the board, and the Deal round 1 button. */
+   private final Map<String, Rectangle> pile = new HashMap<>();
+   private final Rectangle dealButton = new Rectangle();
+   /** Where round 1's names fly from: their places in the class before the deal (null for later rounds). */
+   private Map<String, Rectangle> dealFrom;
    /** Looking back: the number of the earlier round shown, or 0 while the newest is shown. */
    private int shownRound;
    /** The round the newest round's groups were taken from by Use again, or 0. */
@@ -345,6 +355,7 @@ public class GroupBoard extends JPanel {
          // A big class is dealt faster, so the whole deal takes about two seconds at most.
          dealStep = Math.max(8, Math.min(45, 1700 / Math.max(1, count)));
          dealStart = System.currentTimeMillis();
+         dealFrom = history.size() == 1 && !pile.isEmpty() ? new HashMap<>(pile) : null;
          chart = false;
          dealTimer.start();
       } else {
@@ -461,6 +472,10 @@ public class GroupBoard extends JPanel {
             lookAt(dotRounds[i]);
             return;
          }
+      }
+      if (groups.isEmpty() && (dealButton.contains(x, y) || pileContains(x, y))) {
+         actions.newRound();
+         return;
       }
       if (shownRound > 0) {
          return;   // an earlier round is only looked at; Use again deals it as a new round
@@ -722,9 +737,9 @@ public class GroupBoard extends JPanel {
       if (groups.isEmpty()) {
          chips = new Rectangle[0][];
          dots = new Rectangle[0];
-         paintEmptyDeck(g, w, bottom);
-         return new String[] {"Group Creator", "Type the class above, then Make groups (or N) deals round 1. Later rounds mix in new partners and new roles.", ""};
+         return paintClass(g, w, bottom);
       }
+      pile.clear();
       boolean timeline = history.size() >= 2 && !presenting;
       Rectangle[] cards = layoutCards(w, HEADER + 6, bottom - HEADER - 12 - (timeline ? TIMELINE : 0));
       if (timeline) {
@@ -776,13 +791,20 @@ public class GroupBoard extends JPanel {
          int c = order.get(i)[0];
          int k = order.get(i)[1];
          double t = Math.min(1, (elapsed - (double) i * dealStep) / FLY_MS);
+         Rectangle from = dealFrom == null ? null : dealFrom.get(groups.get(c).get(k));
          if (t <= 0) {
+            if (from != null) {
+               // Round 1's names wait in the pile until their turn to fly.
+               paintChip(g, groups.get(c).get(k), -1, false, null, from.x, from.y, from.width, from.height, false, false, false);
+            }
             continue;
          }
          double ease = 1 - (1 - t) * (1 - t) * (1 - t);
          Rectangle slot = chips[c][k];
-         int x = (int) Math.round(w / 2.0 - slot.width / 2.0 + (slot.x - (w / 2.0 - slot.width / 2.0)) * ease);
-         int y = (int) Math.round(HEADER - 20 + (slot.y - (HEADER - 20)) * ease);
+         double fromX = from == null ? w / 2.0 - slot.width / 2.0 : from.x;
+         double fromY = from == null ? HEADER - 20 : from.y;
+         int x = (int) Math.round(fromX + (slot.x - fromX) * ease);
+         int y = (int) Math.round(fromY + (slot.y - fromY) * ease);
          boolean landed = t >= 1;
          if (landed && slot.contains(mouseX, mouseY) && !dealing()) {
             hoverGroup = c;
@@ -1106,6 +1128,86 @@ public class GroupBoard extends JPanel {
          return parts.get(0);
       }
       return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
+   }
+
+   /**
+    * Before round 1: the class waits on the board, one chip per name here (each a little off the grid, like a pile of
+    * name cards), with what Make groups will deal and a Deal round 1 button under it. The names then fly from here
+    * into their groups. With no names typed, an empty stack of cards.
+    */
+   private String[] paintClass(Graphics2D g, int w, int bottom) {
+      chips = new Rectangle[0][];
+      dots = new Rectangle[0];
+      pile.clear();
+      List<String> here = distinct(rules.present(actions.classNames()));
+      int away = distinct(actions.classNames()).size() - here.size();
+      if (here.isEmpty()) {
+         dealButton.setBounds(0, 0, 0, 0);
+         paintEmptyDeck(g, w, bottom);
+         return new String[] {"Group Creator", away > 0 ? "Everyone is marked away. Mark who is here in Roll call (A)."
+            : "Type the class above, names separated by commas, then Make groups (N) deals round 1.", away > 0 ? "error" : ""};
+      }
+      String plan;
+      boolean ok = true;
+      int[] sizes = actions.sizes();
+      try {
+         if (sizes == null) {
+            throw new IllegalArgumentException("min and max must be whole numbers.");
+         }
+         plan = "Make groups deals " + GroupMaker.plan(here.size(), sizes[0], sizes[1]) + ".";
+      } catch (IllegalArgumentException ex) {
+         plan = ex.getMessage() + " Change min or max above.";
+         ok = false;
+      }
+      // The pile: as many columns of chips as fit, rows squeezed to fit the board.
+      int top = HEADER + 14;
+      int buttonTop = bottom - 56;
+      int chipWidth = Math.min(130, Math.max(70, (w - 48) / Math.max(1, Math.min(6, here.size())) - 8));
+      int columns = Math.max(1, Math.min(here.size(), (w - 48) / (chipWidth + 8)));
+      int rows = (here.size() + columns - 1) / columns;
+      int rowHeight = Math.max(14, Math.min(34, (buttonTop - 12 - top) / rows));
+      int chipHeight = Math.min(26, rowHeight - 6);
+      int left = (w - columns * (chipWidth + 8) + 8) / 2;
+      // The pile and the button, as one block in the middle of the board.
+      int y0 = Math.max(top, (HEADER + bottom - rows * rowHeight - 52) / 2);
+      buttonTop = y0 + rows * rowHeight + 12;
+      boolean hover = groups.isEmpty() && ok && (dealButton.contains(mouseX, mouseY) || pileContains(mouseX, mouseY));
+      for (int i = 0; i < here.size(); i++) {
+         String name = here.get(i);
+         // A steady nudge per name, so the pile looks laid down by hand but does not jiggle between paints.
+         int jitter = name.hashCode();
+         int x = left + (i % columns) * (chipWidth + 8) + Math.floorMod(jitter, 7) - 3;
+         int y = y0 + (i / columns) * rowHeight + Math.floorMod(jitter >> 4, 5) - 2;
+         Rectangle chip = new Rectangle(x, y, chipWidth, chipHeight);
+         pile.put(name, chip);
+         g.setColor(new Color(0, 0, 0, 22));
+         g.fillRoundRect(x + 1, y + 2, chipWidth, chipHeight, 8, 8);
+         paintChip(g, name, -1, false, null, x, y, chipWidth, chipHeight, false, false, hover);
+      }
+      // The Deal round 1 button, in the first card's color.
+      String label = "Deal round 1";
+      int bw = width(g, label, TITLE) + 70;
+      dealButton.setBounds((w - bw) / 2, buttonTop, bw, 40);
+      g.setColor(new Color(0, 0, 0, 40));
+      g.fillRoundRect(dealButton.x + 2, dealButton.y + 3, bw, 40, 20, 20);
+      g.setColor(!ok ? new Color(180, 176, 168) : hover ? CARD_COLORS[0].darker() : CARD_COLORS[0]);
+      g.fillRoundRect(dealButton.x, dealButton.y, bw, 40, 20, 20);
+      centered(g, label, TITLE, Color.WHITE, dealButton.x + bw / 2 - 10, dealButton.y + 26);
+      text(g, "N", SMALL, new Color(255, 255, 255, 190), dealButton.x + bw - 26, dealButton.y + 25);
+      if (!ok) {
+         dealButton.setBounds(0, 0, 0, 0);
+      }
+      String title = "Your class: " + here.size() + (here.size() == 1 ? " name" : " names") + (away > 0 ? " here, " + away + " away" : "");
+      return new String[] {title, plan + (ok ? " Later rounds mix in new partners and new roles." : ""), ok ? "" : "error"};
+   }
+
+   private boolean pileContains(int x, int y) {
+      for (Rectangle chip : pile.values()) {
+         if (chip.contains(x, y)) {
+            return true;
+         }
+      }
+      return false;
    }
 
    /** A small stack of blank cards, before the first round. */

@@ -18,15 +18,7 @@ public final class GroupMaker {
    /** The same, for names already split; the list is not changed. */
    public static List<List<String>> makeGroups(List<String> roster, int min, int max, Random random) {
       List<String> names = new ArrayList<>(roster);
-      if (names.isEmpty()) {
-         throw new IllegalArgumentException("Enter at least one name.");
-      }
-      if (min < 1 || max < min) {
-         throw new IllegalArgumentException("min must be at least 1 and max at least min.");
-      }
-      if (!canSplit(names.size(), min, max)) {
-         throw new IllegalArgumentException("Can't split " + names.size() + " names into groups of " + min + " to " + max + ".");
-      }
+      check(names.size(), min, max);
 
       Collections.shuffle(names, random);
       List<List<String>> groups = new ArrayList<>();
@@ -45,6 +37,42 @@ public final class GroupMaker {
          start += size;
       }
       return groups;
+   }
+
+   /** Throws, with what to fix, when count names cannot be dealt into groups of min to max. */
+   static void check(int count, int min, int max) {
+      if (count == 0) {
+         throw new IllegalArgumentException("Enter at least one name.");
+      }
+      if (min < 1 || max < min) {
+         throw new IllegalArgumentException("min must be at least 1 and max at least min.");
+      }
+      if (!canSplit(count, min, max)) {
+         throw new IllegalArgumentException("Can't split " + count + " names into groups of " + min + " to " + max + ".");
+      }
+   }
+
+   /**
+    * What Make groups will deal for count names, before it is pressed: "4 to 6 groups of 2 or 3". Throws, as
+    * {@link #check} does, when it cannot.
+    */
+   static String plan(int count, int min, int max) {
+      check(count, min, max);
+      // Every number of groups from the fewest to the most works: k groups hold k * min to k * max names.
+      int fewest = (count + max - 1) / max;
+      int most = count / min;
+      // A group can have s names when the other count - s names still split.
+      int small = max;
+      int big = min;
+      for (int s = min; s <= Math.min(max, count); s++) {
+         if (canSplit(count - s, min, max)) {
+            small = Math.min(small, s);
+            big = Math.max(big, s);
+         }
+      }
+      String groups = fewest == most ? fewest + (fewest == 1 ? " group" : " groups") : fewest + " to " + most + " groups";
+      String sizes = small == big ? String.valueOf(small) : big == small + 1 ? small + " or " + big : small + " to " + big;
+      return groups + " of " + sizes;
    }
 
    /** The trimmed, non-empty names of a comma-separated list, in order. */

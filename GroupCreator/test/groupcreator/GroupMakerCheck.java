@@ -48,6 +48,27 @@ public class GroupMakerCheck {
       expectRefused("a,b", 0, 3);
       expectRefused("a,b", 3, 2);
 
+      // The preview before round 1 says what Make groups deals, and refuses what it refuses.
+      check(GroupMaker.plan(12, 2, 3).equals("4 to 6 groups of 2 or 3"), GroupMaker.plan(12, 2, 3));
+      check(GroupMaker.plan(12, 3, 3).equals("4 groups of 3"), GroupMaker.plan(12, 3, 3));
+      check(GroupMaker.plan(5, 2, 4).equals("2 groups of 2 or 3"), GroupMaker.plan(5, 2, 4));
+      check(GroupMaker.plan(1, 1, 3).equals("1 group of 1"), GroupMaker.plan(1, 1, 3));
+      check(GroupMaker.plan(10, 2, 5).equals("2 to 5 groups of 2 to 5"), GroupMaker.plan(10, 2, 5));
+      for (int count = 0; count <= 20; count++) {
+         for (int min = 0; min <= 5; min++) {
+            for (int max = 0; max <= 6; max++) {
+               boolean planned = true;
+               try {
+                  GroupMaker.plan(count, min, max);
+               } catch (IllegalArgumentException e) {
+                  planned = false;
+               }
+               check(planned == (count > 0 && min >= 1 && max >= min && GroupMaker.canSplit(count, min, max)),
+                  "plan and Make groups disagree on " + count + " " + min + "-" + max);
+            }
+         }
+      }
+
       // Every order of three names should come up about equally often.
       Map<String, Integer> orders = new HashMap<>();
       for (int i = 0; i < 60000; i++) {
