@@ -10,14 +10,15 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
  * The cube in 3D: 26 cubies drawn in perspective, whose layers turn on screen as each move is made. Dragging a
- * square turns its row, column or ring the way the drag goes; dragging the background (or the arrow keys) turns the
- * whole cube to look at another side; a click selects a square for W/A/S/D. Moves that come faster than a turn takes
+ * square turns its row, column or ring the way the drag goes, the layer following the pointer until it is let go;
+ * dragging the background (or the arrow keys) turns the whole cube to look at another side; a click selects a square for W/A/S/D. Moves that come faster than a turn takes
  * to show (a long Mix) are skipped to the latest position.
  */
 final class CubeView3D extends JPanel implements Cube.Watcher {
@@ -76,6 +77,23 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private int pressY;
    private int pressSticker = -1;
    private boolean dragged = false;
+   private long pressMillis;
+   /** Whether a drag may turn a layer now (the frame takes no moves while a mix plays or a cube is painted). */
+   BooleanSupplier canTurn = () -> true;
+   /**
+    * The layer a drag is turning by hand: it follows the pointer (liveFraction of a quarter turn, below 0 the other
+    * way) and becomes a move when let go past half way or flicked; otherwise it springs back. Null for none.
+    */
+   private CubeGeometry.Turn liveTurn = null;
+   private String liveKey = null;
+   private double liveFraction = 0.0;
+   /** The pointer's travel on screen for a quarter turn of the live layer. */
+   private double[] liveAlong = null;
+   /** How much of a quarter turn a let-go drag had shown, so the move's own turn goes on from there. */
+   private double resumeFrom = 0.0;
+   private int turnsSeen = 0;
+   /** The pointer's travel for a quarter turn, in cube units (a sticker's width is about 0.8). */
+   private static final double QUARTER_TRAVEL = 1.6;
 
    CubeView3D(Cube cube, BiConsumer<String, Integer> onSelect, Consumer<String> onTurn) {
       this.cube = cube;
@@ -86,7 +104,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       MouseAdapter mouse = new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent event) {
-            CubeView3D.this.pressed(event.getX(), event.getY());
+            CubeView3D.this.pressed(event.getX(), event.getY(), event.getWhen());
          }
 
          @Override
@@ -96,7 +114,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
          @Override
          public void mouseReleased(MouseEvent event) {
-            CubeView3D.this.released();
+            CubeView3D.this.released(event.getWhen());
          }
       };
       this.addMouseListener(mouse);
@@ -107,6 +125,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    @Override
    public void turned(CubeGeometry.Turn turn) {
+      this.turnsSeen++;
       this.pending.add(turn);
       this.pendingAfter.add(this.cubeColors());
       if (this.pending.size() > 6) {
@@ -243,11 +262,14 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       boolean busy = false;
       if (!this.pending.isEmpty()) {
          long now = System.currentTimeMillis();
-         if (this.turnStart == 0L) {
-            this.turnStart = now;
-         }
          // Turns queued behind this one make it quicker.
          double length = TURN_MILLIS / (1.0 + 0.6 * (this.pending.size() - 1));
+         if (this.turnStart == 0L) {
+            // A turn a drag already took part way starts where the drag left it (the inverse of the easing below).
+            double from = this.resumeFrom < 0.5 ? Math.sqrt(this.resumeFrom / 2) : 1 - Math.sqrt((1 - this.resumeFrom) / 2);
+            this.turnStart = now - (long) (from * length);
+            this.resumeFrom = 0.0;
+         }
          double t = Math.min(1.0, (now - this.turnStart) / length);
          this.turnAngle = Math.PI / 2 * (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
          if (t >= 1.0) {
@@ -255,6 +277,14 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
             this.pending.remove(0);
             this.turnAngle = 0.0;
             this.turnStart = 0L;
+         }
+         busy = true;
+      }
+      if (this.liveTurn != null && this.pressSticker < 0) {
+         // A drag let go short of half way: the layer springs back.
+         this.liveFraction *= 0.6;
+         if (Math.abs(this.liveFraction) < 0.01) {
+            this.liveTurn = null;
          }
          busy = true;
       }
@@ -283,8 +313,10 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    // ---- the pointer ----
 
-   private void pressed(int x, int y) {
+   private void pressed(int x, int y, long when) {
       this.spinStart = 0L;
+      this.liveTurn = null;
+      this.pressMillis = when;
       this.pressX = x;
       this.pressY = y;
       this.dragged = false;
@@ -302,16 +334,44 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.pressY = y;
          this.dragged = true;
          this.repaint();
+      } else if (this.liveTurn != null) {
+         this.liveFraction = Math.max(-1, Math.min(1, (dx * this.liveAlong[0] + dy * this.liveAlong[1])
+               / (this.liveAlong[0] * this.liveAlong[0] + this.liveAlong[1] * this.liveAlong[1])));
+         this.repaint();
       } else if (!this.dragged && dx * dx + dy * dy >= 14 * 14) {
          this.dragged = true;
          String key = this.keyAlong(this.pressSticker, dx, dy);
          this.onSelect.accept(CubeGeometry.FACE_COLORS[this.pressSticker / 9], this.pressSticker % 9 + 1);
-         this.onTurn.accept(key);
+         if (this.pending.isEmpty() && this.canTurn.getAsBoolean()) {
+            this.liveKey = key;
+            this.liveTurn = CubeGeometry.turnOf(CubeGeometry.FACE_COLORS[this.pressSticker / 9], key, this.pressSticker % 9 + 1);
+            this.liveAlong = this.screenAlong(this.pressSticker, key, QUARTER_TRAVEL);
+            this.draggedTo(x, y);
+         } else {
+            // A turn still showing, or no moves taken now: the drag asks for its move at once, as before.
+            this.onTurn.accept(key);
+         }
       }
    }
 
-   private void released() {
-      if (this.pressSticker >= 0 && !this.dragged) {
+   private void released(long when) {
+      if (this.liveTurn != null && this.pressSticker >= 0) {
+         double f = this.liveFraction;
+         boolean flick = when - this.pressMillis < 300 && Math.abs(f) > 0.15;
+         if (Math.abs(f) >= 0.5 || flick) {
+            CubeGeometry.Turn taken = this.liveTurn;
+            this.liveTurn = null;
+            this.resumeFrom = Math.abs(f);
+            int seen = this.turnsSeen;
+            this.onTurn.accept(f > 0 ? this.liveKey : MoveHistory.inverse(this.liveKey));
+            if (this.turnsSeen == seen) {
+               // The move was not taken after all: spring back.
+               this.resumeFrom = 0.0;
+               this.liveTurn = taken;
+            }
+         }
+         this.wake();
+      } else if (this.pressSticker >= 0 && !this.dragged) {
          this.onSelect.accept(CubeGeometry.FACE_COLORS[this.pressSticker / 9], this.pressSticker % 9 + 1);
       } else if (!this.dragged) {
          // A click on a mirror turns its side round to the front.
@@ -326,15 +386,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    /** The key whose move carries the sticker most nearly along the screen direction (dx, dy). */
    String keyAlong(int sticker, int dx, int dy) {
-      double[] from = this.screen(this.surface(sticker, 0, null));
       String best = "w";
       double bestCos = -2;
       double length = Math.hypot(dx, dy);
       for (String key : CubeGeometry.KEYS) {
-         int[] along = CubeGeometry.keyDirection(sticker / 9, key);
-         double[] to = this.screen(this.surface(sticker, 0.4, along));
-         double ex = to[0] - from[0];
-         double ey = to[1] - from[1];
+         double[] e = this.screenAlong(sticker, key, 0.4);
+         double ex = e[0];
+         double ey = e[1];
          double cos = (ex * dx + ey * dy) / (Math.hypot(ex, ey) * length + 1e-9);
          if (cos > bestCos) {
             bestCos = cos;
@@ -342,6 +400,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          }
       }
       return best;
+   }
+
+   /** Where on screen sticker s moves when carried {@code by} cube units the way {@code key} turns it. */
+   double[] screenAlong(int sticker, String key, double by) {
+      double[] from = this.screen(this.surface(sticker, 0, null));
+      double[] to = this.screen(this.surface(sticker, by, CubeGeometry.keyDirection(sticker / 9, key)));
+      return new double[]{to[0] - from[0], to[1] - from[1]};
    }
 
    /** The topmost sticker drawn under (x, y), or -1. */
@@ -462,9 +527,9 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       if (this.mirrors) {
          this.drawMirrors(g);
       }
-      CubeGeometry.Turn turn = this.pending.isEmpty() ? null : this.pending.get(0);
+      CubeGeometry.Turn turn = this.pending.isEmpty() ? this.liveTurn : this.pending.get(0);
       int axis = turn == null ? 0 : turn.axis;
-      double angle = turn == null ? 0 : turn.dir * this.turnAngle;
+      double angle = turn == null ? 0 : turn.dir * (this.pending.isEmpty() ? this.liveFraction * Math.PI / 2 : this.turnAngle);
       // The camera in world coordinates, to draw the slabs along the turning axis from far to near.
       double[] camera = this.world(new double[]{0, 0, CAMERA});
       Integer[] slabs = {-1, 0, 1};
@@ -677,7 +742,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    /** An arrow across the hinted square, the way its move carries it. */
    private void drawHint(Graphics2D g) {
-      if (this.hinted < 0 || this.hintKey == null || !this.pending.isEmpty()) {
+      if (this.hinted < 0 || this.hintKey == null || !this.pending.isEmpty() || this.liveTurn != null) {
          return;
       }
       int[] along = CubeGeometry.keyDirection(this.hinted / 9, this.hintKey);
