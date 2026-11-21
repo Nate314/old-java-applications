@@ -24,6 +24,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /**
  * The creator window, top center of the screen. It builds the chosen shape below itself out of borderless
@@ -52,6 +54,8 @@ public final class CircleCreatorWindow extends JFrame {
    private static final int DRAW_FRAMES = 10;
    /** Frames for the Clock to turn into the next second, so it settles well before the one after. */
    private static final int TICK_FRAMES = 24;
+   /** Frames for a word on screen to follow a letter typed or deleted: quick, so it keeps up with typing. */
+   private static final int TYPE_FRAMES = 16;
    private static final int FRAME_MILLIS = 16;
    /** How often the Clock looks at the time. */
    private static final int TICK_MILLIS = 100;
@@ -231,8 +235,24 @@ public final class CircleCreatorWindow extends JFrame {
 
       this.colorBox.addActionListener(event -> this.show(MORPH_FRAMES));
       this.sizeField.addActionListener(event -> this.show(MORPH_FRAMES));
-      // Enter in the word field builds the word, whatever shape was showing.
+      // Enter in the word field builds the word, whatever shape was showing, and the word follows every edit.
       this.wordField.addActionListener(event -> this.pick(Shapes.WORD));
+      this.wordField.setToolTipText("Type, and the windows spell it as you go");
+      this.wordField.getDocument().addDocumentListener(new DocumentListener() {
+         @Override
+         public void insertUpdate(DocumentEvent event) {
+            CircleCreatorWindow.this.typed();
+         }
+
+         @Override
+         public void removeUpdate(DocumentEvent event) {
+            CircleCreatorWindow.this.typed();
+         }
+
+         @Override
+         public void changedUpdate(DocumentEvent event) {
+         }
+      });
       this.createButton.addActionListener(event -> {
          this.movedX = 0;
          this.movedY = 0;
@@ -337,6 +357,25 @@ public final class CircleCreatorWindow extends JFrame {
       } finally {
          this.ticking = false;
       }
+   }
+
+   /**
+    * The word was edited: a word on screen glides into the new one, its windows pairing by where they are on
+    * screen (as in a Clock tick) so the letters that stay only slide over; any other shape turns into the word.
+    */
+   private void typed() {
+      if (!Shapes.WORD.equals(this.chosenShape) || !Shapes.WORD.equals(this.builtShape) || this.slices.isEmpty()
+            || this.scatterTimer.isRunning()) {
+         this.pick(Shapes.WORD);
+         return;
+      }
+      this.ticking = true;
+      try {
+         this.show(TYPE_FRAMES);
+      } finally {
+         this.ticking = false;
+      }
+      this.remember();
    }
 
    /** Shows another frame of the drawing on the pad and on screen. */
