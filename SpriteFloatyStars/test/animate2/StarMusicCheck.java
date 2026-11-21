@@ -110,6 +110,19 @@ public class StarMusicCheck {
          check(letGo, "the chord's note " + note + " is let go");
       }
 
+      // Closing a stars' window lets its notes go and keeps it silent; closing one with the music off changes nothing.
+      field = field(2, 300);
+      ear = new Ear(field);
+      field.toggleMusic();
+      run(field, 3.0);
+      field.stop();
+      check(!field.music().on() && field.music().sounding() == 0, "closing the window lets every note go");
+      int closed = ear.ons();
+      run(field, 2.0);
+      check(ear.ons() == closed, "silent once closed");
+      field.stop();
+      check(!field.music().on(), "closing twice leaves the music off");
+
       // Star Catcher's sky has no key to turn it on, and stays silent.
       check(!new StarField(1, new Dimension(W, H), 50, 10, false).music().on(), "Star Catcher's sky is silent");
 
