@@ -65,8 +65,11 @@ function Click([string]$text) { "js:[].slice.call(document.querySelectorAll('#de
 function Pick([string]$option) {
     "js:(function (s) { s.value = '$option'; s.dispatchEvent(new Event('change')); })([].slice.call(document.querySelectorAll('#desktop select')).filter(function (s) { return [].some.call(s.options, function (o) { return o.value === '$option'; }); })[0])"
 }
+# Key events from the page, for keys Send-Key does not name and for held keys: key(type, k, keyCode, t, code) sends one
+# keydown or keyup, press(k, keyCode, t, code) both. t defaults to the focused element at each event, code to ''.
+$Press = "function key(type, k, c, t, code) { (t || document.activeElement || document.body).dispatchEvent(new KeyboardEvent(type, { key: k, code: code, keyCode: c, which: c, bubbles: true })); } function press(k, c, t, code) { key('keydown', k, c, t, code); key('keyup', k, c, t, code); }"
 # Rubik's Cube: makes the turn Teach me asks for next (presses the W/A/S/D key it lit).
-$CoachTurn = "js:(function () { var e = [].slice.call(document.querySelectorAll('#desktop span.text')).filter(function (e) { return /^[wasd]$/.test(e.textContent.trim()) && getComputedStyle(e.parentElement).backgroundColor === 'rgb(80, 220, 80)'; })[0]; if (!e) return; var k = e.textContent.trim(), c = k.toUpperCase().charCodeAt(0); ['keydown', 'keyup'].forEach(function (t) { (document.activeElement || document.body).dispatchEvent(new KeyboardEvent(t, { key: k, code: 'Key' + k.toUpperCase(), keyCode: c, which: c, bubbles: true })); }); })()"
+$CoachTurn = "js:(function () { $Press var e = [].slice.call(document.querySelectorAll('#desktop span.text')).filter(function (e) { return /^[wasd]$/.test(e.textContent.trim()) && getComputedStyle(e.parentElement).backgroundColor === 'rgb(80, 220, 80)'; })[0]; if (!e) return; var k = e.textContent.trim(); press(k, k.toUpperCase().charCodeAt(0), null, 'Key' + k.toUpperCase()); })()"
 # A click at x, y of the page as pointer and mouse events to what is there, for a place only the page can measure.
 # Clicks n times (detail 1 to n, as the shim reads a click's count from its detail; Send-Click's clicks are single).
 $Tap = "function tap(x, y, n) { var t = document.elementFromPoint(x, y), i; for (i = 1; i <= (n || 1); i++) ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: i, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }"
@@ -83,7 +86,7 @@ function Repeat([int]$n, [string[]]$steps) { $out = @(); for ($i = 0; $i -lt $n;
 # SynthesizerKeyboard's looper: clear any old loop (Delete twice), record a melody layer after the count-in, then a
 # bass layer an octave down at the next bar. Keys are held (keydown, then keyup after ms) so notes get their lengths.
 function SynthHold([string]$key, [int]$code, [int]$ms) {
-    "js:(function (t) { function f(type) { t.dispatchEvent(new KeyboardEvent(type, { key: '$key', keyCode: $code, which: $code, bubbles: true })); } f('keydown'); setTimeout(function () { f('keyup'); }, $ms); })(document.activeElement || document.body)"
+    "js:(function (t) { $Press key('keydown', '$key', $code, t); setTimeout(function () { key('keyup', '$key', $code, t); }, $ms); })(document.activeElement || document.body)"
 }
 $SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Delete' 46 20), 'wait:200', 'key:Space', 'wait:2450') +
     (@(@('z', 90), @('c', 67), @('b', 66), @('c', 67), @('z', 90), @('c', 67), @('b', 66), @(',', 188)) | ForEach-Object { (SynthHold $_[0] $_[1] 450), 'wait:625' }) +
