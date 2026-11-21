@@ -84,6 +84,7 @@ import { init as stageGlow } from './stage-glow';
 import { init as slowMo } from './slow-mo';
 import { init as keptKeys } from './kept-keys';
 import { init as exitRecap } from './exit-recap';
+import { init as titleScreen } from './title-screen';
 
 // In the order boot.js ran them.
 skin();
@@ -119,3 +120,4 @@ stageGlow();
 slowMo();
 keptKeys();
 exitRecap();
+titleScreen();   // last: the title screen it may open at once reads what the others set up (the passport, share)
