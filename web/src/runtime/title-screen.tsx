@@ -11,7 +11,6 @@ import { sourcePanel } from './source-viewer';
 import { AGAIN_KEY, CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
-import { fetchOk } from './fetch-ok';
 import { Attract } from './title-attract';
 
 /** A line of the boot log: [label, value, class]. */
@@ -286,24 +285,5 @@ function TitleScreen({ apps, onGo, onMount }: {
       </div>
     </div>
   );
-}
-
-const IMAGE = /\.(png|jpe?g|gif|bmp|webp)$/i;
-
-export function preload(name: string) {
-  window.__shimFiles = window.__shimFiles || {};
-  window.__shimImages = window.__shimImages || {};
-  var bytes = fetchOk(name).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
-    window.__shimFiles[name] = new Uint8Array(buf);
-  });
-  var image = !IMAGE.test(name) ? Promise.resolve() : new Promise<void>(function (resolve, reject) {
-    var img = new Image();
-    img.onload = function () { window.__shimImages[name] = img; resolve(); };
-    img.onerror = function () { reject(new Error('cannot decode')); };
-    img.src = name;
-  });
-  return Promise.all([bytes, image]).catch(function (e) {
-    console.warn('Could not preload ' + name + ': ' + e.message);
-  });
 }
 
