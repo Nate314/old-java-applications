@@ -1,5 +1,5 @@
 import { clipMode, embedded } from './skin';
-import { toolbar } from './install';
+import { keepOffline, toolbar } from './install';
 import { centerWindows, stageEdge } from './band-news';
 import { keepScreenFloor } from './screen-floor';
 import { bringBack } from './pop-out';
@@ -16,7 +16,8 @@ import { exitScreen, howToPlay, sourceFromHash } from './source-viewer';
 import { pretendWindows } from './pretend-windows';
 import { AGAIN_KEY, followTitle } from './records';
 import { clockFollows, clockOpen, clockPage } from './clock-follows';
-import { preload, titleScreen } from './title-screen';
+import { titleScreen } from './title-screen';
+import { preload } from './preload';
 import { overlay, runAgain } from './ui/overlay';
 import { showConsole } from './system-out';
 import { playSound } from './sounds';
@@ -134,6 +135,7 @@ export function init() {
         return;
       }
       if (title) title.ready(start); else whenShown(start);   // no app runs unseen in a prerendered page
+      keepOffline();   // only now: installing the worker downloads the whole build
     });
   });
 }
