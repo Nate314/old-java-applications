@@ -54,6 +54,7 @@
 import { init as skin } from './skin';
 import { init as install } from './install';
 import { init as bandNews } from './band-news';
+import { init as stage } from './stage';
 import { init as popOut } from './pop-out';
 import { init as replay } from './replay';
 import { init as photoBooth } from './photo-booth';
@@ -90,6 +91,7 @@ import { init as titleScreen } from './title-screen';
 skin();
 install();
 bandNews();
+stage();
 popOut();
 replay();
 photoBooth();

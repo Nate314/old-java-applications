@@ -1,6 +1,6 @@
 import { clipMode, embedded } from './skin';
 import { toolbar } from './install';
-import { centerWindows, stageEdge } from './band-news';
+import { centerWindows, stageEdge } from './stage';
 import { keepScreenFloor } from './screen-floor';
 import { bringBack } from './pop-out';
 import { replay, setReplay, startReplay } from './replay';

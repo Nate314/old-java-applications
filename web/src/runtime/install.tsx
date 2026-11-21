@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { SKINS, setSkin } from './skin';
-import { bandNews, news, setNews, setZoomFit, stageEdge, zoomFit } from './band-news';
+import { bandNews, news, setNews } from './band-news';
+import { setZoomFit, stageEdge, zoomFit } from './stage';
 import { popOut, poppable, popped } from './pop-out';
 import { replayNow } from './replay';
 import { snapPhoto, takePhoto } from './photo-booth';
