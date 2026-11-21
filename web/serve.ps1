@@ -68,6 +68,18 @@ try {
                     $fixed = $path -match '^/assets/.+-[A-Za-z0-9_-]{8}\.(js|css)$' -or ($path -match '/(classes|then)\.js$' -and $request.Url.Query -match '^\?v=')
                     $response.Headers['Cache-Control'] = if ($fixed) { 'public, max-age=31536000, immutable' } else { 'no-cache' }
                     $bytes = [IO.File]::ReadAllBytes($file)
+                    # Text goes gzipped (about a third of its size), as GitHub Pages sends it: on a slow phone the
+                    # render-blocking scripts and skins arrive in a third of the time. Pictures, clips and jars are already packed.
+                    if ($type -and $type -notmatch '^(image/(?!svg)|video/|audio/|application/java-archive)') {
+                        $response.Headers['Vary'] = 'Accept-Encoding'
+                        if ($request.Headers['Accept-Encoding'] -match '\bgzip\b') {
+                            $packed = [IO.MemoryStream]::new()
+                            $gzip = [IO.Compression.GZipStream]::new($packed, [IO.Compression.CompressionLevel]::Optimal)
+                            $gzip.Write($bytes, 0, $bytes.Length); $gzip.Close()
+                            $bytes = $packed.ToArray()
+                            $response.Headers['Content-Encoding'] = 'gzip'
+                        }
+                    }
                     $response.ContentLength64 = $bytes.Length
                     if ($request.HttpMethod -ne 'HEAD') { $response.OutputStream.Write($bytes, 0, $bytes.Length) }
                 }
