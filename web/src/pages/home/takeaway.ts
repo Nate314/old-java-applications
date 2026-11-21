@@ -78,7 +78,10 @@ function saveLabel() {
 function check() {
   return caches.open(CACHE).then(cache => Promise.all(APPS.map(a => {
     const id = a.id;
-    return filesOf(id).then(files => Promise.all(files.map(f => cache.match(f))))
+    // an app whose pages are not kept is not saved: no need to fetch them for their file lists (which fails offline)
+    const pages = [id + '/index.html'].concat(a.then ? [id + '/then.html'] : []).map(abs);
+    return Promise.all(pages.map(p => cache.match(p))).then(hits => hits.every(Boolean)
+      ? filesOf(id).then(files => Promise.all(files.map(f => cache.match(f)))) : [undefined])
       .then(hits => { take.saved[id] = hits.every(Boolean); }, () => { take.saved[id] = false; });
   }))).then(() => {
     take.offline = !navigator.onLine;
