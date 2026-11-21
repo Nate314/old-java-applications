@@ -482,6 +482,7 @@ public final class RunnerCheck {
       assert broken.sound && broken.best == 0 && broken.botBest == 7 && broken.markerX == PixelBot.DEFAULT_X;
       file.delete();
 
+      coachChecks();
       System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore()
          + ", ear player average " + earTotal / 40 + ", " + lateTotal / 40 + " when up to 2 steps late)");
       System.exit(0);
@@ -491,6 +492,153 @@ public final class RunnerCheck {
     * A run played by ear alone, from seed: on each beat to act on, jump 1 to late + 1 steps after it and hold as long as
     * the beat rings, or duck at once for as long. Stops at 3,000.
     */
+   /** The coach after a crash: its fix is checked by playing it with the keys, and its lines and marks. */
+   private static void coachChecks() throws Exception {
+      assert Coach.seconds(6).equals("0.10 s") && Coach.seconds(1).equals("0.05 s") && Coach.seconds(60).equals("1.00 s");
+      int late = 0;
+      int early = 0;
+      int ducks = 0;
+      for (long seed = 1; seed <= 30; seed++) {
+         // No key after the start: the first cactus ends it, and the coach says when to jump.
+         Runner r = new Runner(seed);
+         r.press();
+         r.release();
+         stepToCrash(r);
+         int crash = (int) r.steps();
+         Coach c = Coach.of(r);
+         assert c != null && c.fix == Coach.Fix.JUMP && c.line.startsWith("Jump when it reaches the mark") && c.pressX == -1
+            : "seed " + seed + ": " + (c == null ? null : c.line);
+         assert c.markX > r.crashedInto().x && c.markX < Runner.WIDTH && c.step < crash;
+         assert passes(seed, c) : "seed " + seed + ": the coach's jump clears it";
+         // Pressed a moment too late or too soon: it says which, and how much.
+         for (int at : new int[] { crash - 2, crash - 38 }) {
+            Runner p = new Runner(seed);
+            p.press();
+            p.release();
+            while (p.state() == Runner.State.RUNNING) {
+               if (p.steps() == at) {
+                  p.press();
+               } else if (p.steps() == at + 1) {
+                  p.release();
+               }
+               p.step();
+            }
+            Coach pc = Coach.of(p);
+            if (pc != null && pc.line.contains(" late: ")) {
+               late++;
+               assert pc.step < at && pc.pressX >= 0 : pc.line;
+            } else if (pc != null && pc.line.contains(" early: ")) {
+               early++;
+               assert pc.step > at : pc.line;
+            }
+         }
+      }
+      for (long seed = 1; seed <= 80; seed++) {
+         // Never ducking or jumping a bird: a middle bird's coach says duck, and the duck clears it.
+         Runner b = new Runner(seed);
+         b.press();
+         b.release();
+         int held = 0;
+         while (b.state() == Runner.State.RUNNING) {
+            Runner.Obstacle o = b.at(Runner.DINO_X);
+            double ahead = o == null ? 999 : o.x - Runner.DINO_X - Runner.DINO_W;
+            if (o != null && o.kind != Runner.Kind.BIRD && !b.isJumping() && ahead < b.speed() * 5 && ahead > 0) {
+               b.press();
+               held = 14;
+            } else if (held > 0 && --held == 0) {
+               b.release();
+            }
+            b.step();
+         }
+         if (b.crashedInto() != null && b.crashedInto().lift == Runner.BIRD_HEIGHTS[1]) {
+            Coach bc = Coach.of(b);
+            assert bc != null && bc.fix == Coach.Fix.DUCK && bc.line.startsWith("Duck under that bird") : bc == null ? null : bc.line;
+            assert passes(seed, b, bc);
+            ducks++;
+         }
+      }
+      assert late >= 10 && early >= 5 && ducks >= 3 : "late " + late + ", early " + early + ", ducks " + ducks;
+
+      // In the window: the line joins the score, the mark is drawn under the ground, and the bot's crashes get none.
+      RunnerPanel p = panel(11, null);
+      p.runner().press();
+      p.runner().release();
+      run(p);
+      Coach c = p.coach();
+      assert c != null && p.crashLines()[0].endsWith(" " + p.runner().score() + ". " + c.line) : p.crashLines()[0];
+      BufferedImage shot = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D sg = shot.createGraphics();
+      p.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+      for (int i = 0; i < 20; i++) {
+         p.step();   // past the crash shake
+      }
+      p.paint(sg);
+      sg.dispose();
+      assert shot.getRGB(c.markX, Runner.GROUND + 9) == RunnerPanel.INK.getRGB() : "the mark under the ground";
+      p.setBot(true);
+      for (int i = 0; i < 600 && p.runner().state() != Runner.State.RUNNING; i++) {
+         p.step();
+      }
+      run(p);
+      assert p.coach() == null : "no coach for the bot";
+
+      // Fast enough to run at a crash: a long run of good play, coached.
+      RunnerPanel y = panel(3, null);
+      y.runner().press();
+      runYou(y);
+      long t0 = System.nanoTime();
+      Coach.of(y.runner());
+      long ms = (System.nanoTime() - t0) / 1000000;
+      System.out.println("coach: late " + late + ", early " + early + ", ducks " + ducks + "; after a "
+         + y.runner().steps() + "-step run in " + ms + " ms");
+   }
+
+   private static void stepToCrash(Runner r) {
+      while (r.state() == Runner.State.RUNNING) {
+         r.step();
+      }
+   }
+
+   /** Plays the start-only run of seed with the coach's jump: it gets past the cactus that ended it. */
+   private static boolean passes(long seed, Coach c) {
+      Runner r = new Runner(seed);
+      r.press();
+      r.release();
+      Runner first = new Runner(seed);
+      first.press();
+      first.release();
+      stepToCrash(first);
+      double clear = first.distance() + first.crashedInto().x + first.crashedInto().w - Runner.DINO_X;
+      while (r.state() == Runner.State.RUNNING && r.distance() < clear) {
+         if (r.steps() == c.step) {
+            r.press();
+         } else if (r.steps() == c.step + c.hold) {
+            r.release();
+         }
+         r.step();
+      }
+      return r.state() == Runner.State.RUNNING;
+   }
+
+   /** Plays crashed's keys up to the coach's duck, then ducks: it gets past the bird. */
+   private static boolean passes(long seed, Runner crashed, Coach c) {
+      double clear = crashed.distance() + crashed.crashedInto().x + crashed.crashedInto().w - Runner.DINO_X;
+      List<Integer> keys = new ArrayList<>();
+      for (int in : crashed.inputs()) {
+         if (in / 4 < c.step) {
+            keys.add(in);
+         }
+      }
+      keys.add(c.step * 4 + Runner.RELEASE);
+      keys.add(c.step * 4 + Runner.DUCK);
+      Ghost g = new Ghost(crashed.course(), 0, keys.stream().mapToInt(Integer::intValue).toArray());
+      g.start();
+      while (g.runner().state() == Runner.State.RUNNING && g.runner().distance() < clear) {
+         g.step();
+      }
+      return g.runner().state() == Runner.State.RUNNING;
+   }
+
    private static int earRun(long seed, int late) {
       Runner r = new Runner(seed);
       r.press();

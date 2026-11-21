@@ -73,6 +73,8 @@ final class RunnerPanel extends JPanel {
    private boolean botEver;
    private boolean humanHelped;
    private String[] crashLines = new String[0];
+   /** After a run of your own crashes: what would have cleared it, or null. */
+   private Coach coach;
    private boolean dragging;
    /** Non-null while bots are evolving instead of the game being played. */
    private Evolution evolution;
@@ -578,6 +580,7 @@ final class RunnerPanel extends JPanel {
 
    private void crashed() {
       int score = this.runner.score();
+      this.coach = null;
       if (this.botWholeRun && !this.humanHelped) {
          boolean best = score > this.records.botBest;
          if (best) {
@@ -608,7 +611,9 @@ final class RunnerPanel extends JPanel {
             : this.records.botBest == 0 ? "Press B to see how far the original bot gets."
             : score > this.records.botBest ? "You beat the bot's best of " + this.records.botBest + "."
             : "The bot's best is " + this.records.botBest + ". Beat it?";
-         this.crashLines = new String[] { (best && score > 0 ? "New best: " : "You scored ") + score + ".", bot };
+         this.coach = Coach.of(this.runner);
+         String you = (best && score > 0 ? "New best: " : "You scored ") + score + ".";
+         this.crashLines = new String[] { this.coach == null ? you : you + " " + this.coach.line, bot };
       }
    }
 
@@ -669,6 +674,9 @@ final class RunnerPanel extends JPanel {
          }
          if (this.ghost != null && !this.bot.isOn()) {
             this.paintGhost(g, dark);
+         }
+         if (this.coach != null && this.runner.state() == Runner.State.CRASHED && !this.bot.isOn()) {
+            this.paintCoach(g, dark);
          }
          paintDino(g, this.runner, Sky.tint(INK, dark), Sky.tint(PAPER, dark));
          this.paintScore(g, dark);
@@ -790,15 +798,19 @@ final class RunnerPanel extends JPanel {
       }
 
       for (Runner.Obstacle o : obstacles ? runner.obstacles() : new ArrayList<Runner.Obstacle>()) {
-         int x = (int) Math.round(o.x);
          g.setColor(ink);
-         if (o.kind == Runner.Kind.BIRD) {
-            Sprites.draw(g, runner.birdWings(), x, o.top(), 2);
-         } else {
-            int unit = o.w / o.size;
-            for (int j = 0; j < o.size; j++) {
-               Sprites.cactus(g, x + j * unit, o.top(), o.kind == Runner.Kind.LARGE_CACTUS);
-            }
+         paintObstacle(g, runner, o, (int) Math.round(o.x));
+      }
+   }
+
+   /** Obstacle o with its left edge at x, in the color set. */
+   private static void paintObstacle(Graphics2D g, Runner runner, Runner.Obstacle o, int x) {
+      if (o.kind == Runner.Kind.BIRD) {
+         Sprites.draw(g, runner.birdWings(), x, o.top(), 2);
+      } else {
+         int unit = o.w / o.size;
+         for (int j = 0; j < o.size; j++) {
+            Sprites.cactus(g, x + j * unit, o.top(), o.kind == Runner.Kind.LARGE_CACTUS);
          }
       }
    }
@@ -857,6 +869,36 @@ final class RunnerPanel extends JPanel {
          g.fillRect(x + 23, top + 1, 6, 6);
          g.setColor(color);
          g.fillRect(x + 25, top + 3, 2, 2);
+      }
+   }
+
+   /**
+    * After a crash: the obstacle see-through and a filled mark under the ground where it was when the press that clears
+    * it should have come, and a hollow mark where it was when you pressed.
+    */
+   private void paintCoach(Graphics2D g, double dark) {
+      Coach c = this.coach;
+      g.setFont(TINY);
+      FontMetrics fm = g.getFontMetrics();
+      int y = Runner.GROUND + 3;
+      if (c.pressX >= 0 && c.pressX < Runner.WIDTH) {
+         g.setColor(Sky.tint(MUTED, dark));
+         g.drawPolygon(new int[] { c.pressX - 5, c.pressX, c.pressX + 5 }, new int[] { y + 8, y, y + 8 }, 3);
+         String you = c.fix == Coach.Fix.STAY ? "you jumped" : "you";
+         g.drawString(you, c.pressX - fm.stringWidth(you) / 2, y + 19);
+      }
+      if (c.fix != Coach.Fix.STAY) {
+         Color ink = Sky.tint(INK, dark);
+         // The obstacle you hit, see-through, where it was when the press should have come.
+         g.setColor(new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 70));
+         paintObstacle(g, this.runner, this.runner.crashedInto(), c.markX);
+         g.setColor(ink);
+         g.fillPolygon(new int[] { c.markX - 5, c.markX, c.markX + 5 }, new int[] { y + 8, y, y + 8 }, 3);
+         String here = c.fix == Coach.Fix.DUCK ? "duck here" : "jump here";
+         // Beside your mark when they are close, so the two labels do not overlap.
+         int lx = Math.abs(c.markX - c.pressX) < 40 && c.pressX >= 0
+            ? c.markX < c.pressX ? c.markX - 4 - fm.stringWidth(here) : c.markX + 8 : c.markX - fm.stringWidth(here) / 2;
+         g.drawString(here, lx, Math.abs(c.markX - c.pressX) < 40 && c.pressX >= 0 ? y + 8 : y + 19);
       }
    }
 
@@ -1015,6 +1057,10 @@ final class RunnerPanel extends JPanel {
       if (on != this.bot.isOn()) {
          this.toggleBot();
       }
+   }
+
+   Coach coach() {
+      return this.coach;
    }
 
    String[] crashLines() {
