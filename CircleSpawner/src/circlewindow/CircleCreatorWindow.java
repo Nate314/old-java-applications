@@ -3,16 +3,19 @@ package circlewindow;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -36,11 +39,11 @@ public final class CircleCreatorWindow extends JFrame {
    private static final String SUNSET = "Sunset";
    static final String[] COLOR_NAMES = {RAINBOW, BLUE, SUNSET};
    private static final int WIDTH = 380;
-   private static final int HEIGHT = 130;
+   private static final int HEIGHT = 165;
    /** The window with the drawing pad beside its controls, or (on a narrow screen) under them. */
    private static final int DRAW_WIDTH = 620;
    private static final int DRAW_HEIGHT = 290;
-   private static final int DRAW_BELOW_HEIGHT = 388;
+   private static final int DRAW_BELOW_HEIGHT = 423;
    /** About how many frames building a shape takes, whatever its window count. */
    private static final int BUILD_FRAMES = 45;
    private static final int SCATTER_FRAMES = 50;
@@ -56,7 +59,12 @@ public final class CircleCreatorWindow extends JFrame {
    private static final int PLAY_MILLIS = 300;
    private static final int PLAY_FRAMES = 9;
 
-   private final JComboBox<String> shapeBox = new JComboBox<>(Shapes.ALL);
+   /** The shape the shape buttons chose: one of Shapes.ALL. */
+   private String chosenShape = Shapes.CIRCLE;
+   private final JButton[] shapeButtons = new JButton[Shapes.ALL.length];
+   /** The size of the picture on each shape button. */
+   private static final int ICON_WIDTH = 30;
+   private static final int ICON_HEIGHT = 24;
    private final JTextField sizeField = new JTextField("200", 4);
    private final JComboBox<String> colorBox = new JComboBox<>(COLOR_NAMES);
    private final JTextField wordField = new JTextField("HELLO", 8);
@@ -141,7 +149,10 @@ public final class CircleCreatorWindow extends JFrame {
       this.fromFriend = sent != null;
       this.setTitle("Circle Creator");
       this.setDefaultCloseOperation(3);
-      this.shapeBox.setSelectedItem(sent != null ? sent.shape : this.saved.get("shape", Shapes.CIRCLE));
+      String opening = sent != null ? sent.shape : this.saved.get("shape", Shapes.CIRCLE);
+      if (Arrays.asList(Shapes.ALL).contains(opening)) {
+         this.chosenShape = opening;
+      }
       this.colorBox.setSelectedItem(sent != null ? sent.colors : this.saved.get("colors", RAINBOW));
       this.sizeField.setText(this.saved.get("size", "200"));
       this.wordField.setText(sent != null && sent.word != null ? sent.word : this.saved.get("word", "HELLO"));
@@ -154,18 +165,37 @@ public final class CircleCreatorWindow extends JFrame {
       this.pad.setMirror(!"0".equals(this.saved.get("mirror", "1")));
       this.onTopBox.setSelected("1".equals(this.saved.get("ontop", "0")));
 
-      JPanel panel = new JPanel();
-      panel.add(this.shapeBox);
-      panel.add(new JLabel("Size"));
-      panel.add(this.sizeField);
-      panel.add(this.colorBox);
-      panel.add(new JLabel("Word"));
-      panel.add(this.wordField);
-      panel.add(this.createButton);
-      panel.add(this.spinButton);
-      panel.add(this.sendButton);
-      panel.add(this.onTopBox);
-      panel.add(this.status);
+      // Every shape is a button showing a little picture of itself, so a first look shows all seven.
+      JPanel shapeRow = new JPanel();
+      for (int i = 0; i < Shapes.ALL.length; i++) {
+         String shape = Shapes.ALL[i];
+         JButton button = new JButton();
+         button.setPreferredSize(new Dimension(ICON_WIDTH + 10, ICON_HEIGHT + 8));
+         button.addActionListener(event -> this.pick(shape));
+         this.shapeButtons[i] = button;
+         shapeRow.add(button);
+      }
+      JPanel optionRow = new JPanel();
+      optionRow.add(this.colorBox);
+      optionRow.add(new JLabel("Size"));
+      optionRow.add(this.sizeField);
+      optionRow.add(new JLabel("Word"));
+      optionRow.add(this.wordField);
+      JPanel actionRow = new JPanel();
+      actionRow.add(this.createButton);
+      actionRow.add(this.spinButton);
+      actionRow.add(this.sendButton);
+      actionRow.add(this.onTopBox);
+      JPanel statusRow = new JPanel();
+      statusRow.add(this.status);
+      JPanel lower = new JPanel(new BorderLayout());
+      lower.add(optionRow, BorderLayout.NORTH);
+      lower.add(actionRow, BorderLayout.CENTER);
+      lower.add(statusRow, BorderLayout.SOUTH);
+      JPanel panel = new JPanel(new BorderLayout());
+      panel.add(shapeRow, BorderLayout.NORTH);
+      panel.add(lower, BorderLayout.CENTER);
+      this.showShapes();
 
       JButton clearButton = new JButton("Clear");
       JButton deleteButton = new JButton("Delete");
@@ -193,26 +223,16 @@ public final class CircleCreatorWindow extends JFrame {
       padHolder.add(this.pad);
       this.padPanel.add(padHolder, BorderLayout.CENTER);
       this.padPanel.add(padButtons, BorderLayout.SOUTH);
-      this.add(panel, BorderLayout.CENTER);
+      JPanel controls = new JPanel(new BorderLayout());
+      controls.add(panel, BorderLayout.NORTH);   // a taller window (beside the pad) leaves its room below the status line
+      this.add(controls, BorderLayout.CENTER);
       this.showMirror();
       this.showFrame();
 
-      this.shapeBox.addActionListener(event -> {
-         if (!this.settingUp) {
-            this.fitWindow();
-            this.show(MORPH_FRAMES);
-         }
-      });
       this.colorBox.addActionListener(event -> this.show(MORPH_FRAMES));
       this.sizeField.addActionListener(event -> this.show(MORPH_FRAMES));
-      this.wordField.addActionListener(event -> {
-         // Enter in the word field builds the word, whatever shape was showing.
-         this.settingUp = true;
-         this.shapeBox.setSelectedItem(Shapes.WORD);
-         this.settingUp = false;
-         this.fitWindow();
-         this.show(MORPH_FRAMES);
-      });
+      // Enter in the word field builds the word, whatever shape was showing.
+      this.wordField.addActionListener(event -> this.pick(Shapes.WORD));
       this.createButton.addActionListener(event -> {
          this.movedX = 0;
          this.movedY = 0;
@@ -284,7 +304,7 @@ public final class CircleCreatorWindow extends JFrame {
 
    /** The shape chosen, as a link to this page (or a code on the desktop) on the clipboard. */
    private void send() {
-      String shape = String.valueOf(this.shapeBox.getSelectedItem());
+      String shape = this.chosenShape;
       if (Shapes.WORD.equals(shape) && Shapes.cleanWord(this.wordField.getText()).isEmpty()) {
          this.status.setText("Type a word to send");
          return;
@@ -305,7 +325,7 @@ public final class CircleCreatorWindow extends JFrame {
     * done (so a slow screen skips a second rather than never settling).
     */
    private void tick() {
-      if (!Shapes.CLOCK.equals(this.builtShape) || !Shapes.CLOCK.equals(this.shapeBox.getSelectedItem())
+      if (!Shapes.CLOCK.equals(this.builtShape) || !Shapes.CLOCK.equals(this.chosenShape)
             || this.slices.isEmpty() || this.buildTimer.isRunning() || this.scatterTimer.isRunning()
             || this.morphTimer.isRunning() || this.jellyTimer.isRunning() || this.spin != null
             || Shapes.clockText(new Date()).equals(this.shownTime)) {
@@ -363,7 +383,46 @@ public final class CircleCreatorWindow extends JFrame {
    }
 
    private boolean drawing() {
-      return Shapes.DRAW.equals(this.shapeBox.getSelectedItem());
+      return Shapes.DRAW.equals(this.chosenShape);
+   }
+
+   /** Chooses a shape: the window fits it (with the pad for Draw) and the shape on screen turns into it. */
+   private void pick(String shape) {
+      this.chosenShape = shape;
+      this.fitWindow();
+      this.show(MORPH_FRAMES);
+   }
+
+   /**
+    * Draws each shape button's picture in the chosen colors: the chosen shape bright with a bar under it, the
+    * others greyed. The Draw button shows the frame on the pad.
+    */
+   private void showShapes() {
+      for (int i = 0; i < Shapes.ALL.length; i++) {
+         String shape = Shapes.ALL[i];
+         boolean on = shape.equals(this.chosenShape);
+         List<Rectangle> pieces = Shapes.build(shape, 120, Shapes.CLOCK.equals(shape) ? "9:30" : "AB",
+            this.pad.cells(), 0, 0, Integer.MAX_VALUE);
+         List<Color> colors = this.colors(pieces, shape);
+         List<Rectangle> fitted = Shapes.fit(pieces, ICON_WIDTH, ICON_HEIGHT - 4);
+         BufferedImage image = new BufferedImage(ICON_WIDTH, ICON_HEIGHT, BufferedImage.TYPE_INT_ARGB);
+         Graphics g = image.getGraphics();
+         for (int j = 0; j < fitted.size(); j++) {
+            Color c = colors.get(j);
+            // Faint by greying, not by transparency: the circle's slices overlap and would add up to full color.
+            g.setColor(on ? c : new Color((2 * c.getRed() + 3 * 128) / 5, (2 * c.getGreen() + 3 * 128) / 5,
+               (2 * c.getBlue() + 3 * 128) / 5));
+            Rectangle r = fitted.get(j);
+            g.fillRect(r.x, r.y, r.width, r.height);
+         }
+         if (on) {
+            g.setColor(colors.isEmpty() ? Color.GRAY : colors.get(colors.size() / 2));
+            g.fillRect(ICON_WIDTH / 4, ICON_HEIGHT - 2, ICON_WIDTH / 2, 2);
+         }
+         g.dispose();
+         this.shapeButtons[i].setIcon(new ImageIcon(image));
+         this.shapeButtons[i].setToolTipText(on ? shape + " (showing)" : shape);
+      }
    }
 
    private void showMirror() {
@@ -391,6 +450,7 @@ public final class CircleCreatorWindow extends JFrame {
     * (and a message) when the size or word will not do. An empty drawing gives no windows.
     */
    private List<Rectangle> target() {
+      this.showShapes();   // the pictures follow the colors and the drawing
       Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
       int top = this.getY() + this.getHeight();
       int maxSize = Math.max(2, Math.min(screen.width, screen.height - top));
@@ -409,7 +469,7 @@ public final class CircleCreatorWindow extends JFrame {
          this.status.setText("Size: use 2 to " + maxSize);
          return null;
       }
-      String shape = String.valueOf(this.shapeBox.getSelectedItem());
+      String shape = this.chosenShape;
       if (Shapes.WORD.equals(shape) && Shapes.cleanWord(this.wordField.getText()).isEmpty()) {
          this.status.setText("Type a word to build");
          return null;
@@ -437,7 +497,7 @@ public final class CircleCreatorWindow extends JFrame {
       if (this.fromFriend) {
          return;
       }
-      this.saved.put("shape", String.valueOf(this.shapeBox.getSelectedItem()));
+      this.saved.put("shape", this.chosenShape);
       this.saved.put("colors", String.valueOf(this.colorBox.getSelectedItem()));
       this.saved.put("size", this.sizeField.getText().trim());
       this.saved.put("word", this.wordField.getText());
