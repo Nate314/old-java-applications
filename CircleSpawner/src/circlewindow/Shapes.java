@@ -77,6 +77,32 @@ final class Shapes {
       return (n < 10 ? "0" : "") + n;
    }
 
+   /**
+    * The pieces scaled down (or up) together, keeping their proportions, and centered in a width x height box:
+    * a shape as a little picture for its button. Each piece is at least one pixel each way.
+    */
+   static List<Rectangle> fit(List<Rectangle> pieces, int width, int height) {
+      List<Rectangle> fitted = new ArrayList<>();
+      if (pieces.isEmpty()) {
+         return fitted;
+      }
+      Rectangle area = new Rectangle(pieces.get(0));
+      for (Rectangle r : pieces) {
+         area.add(r);
+      }
+      double scale = Math.min(width / (double)area.width, height / (double)area.height);
+      double left = (width - area.width * scale) / 2.0;
+      double top = (height - area.height * scale) / 2.0;
+      for (Rectangle r : pieces) {
+         int x0 = (int)Math.round(left + (r.x - area.x) * scale);
+         int y0 = (int)Math.round(top + (r.y - area.y) * scale);
+         int x1 = (int)Math.round(left + (r.x + r.width - area.x) * scale);
+         int y1 = (int)Math.round(top + (r.y + r.height - area.y) * scale);
+         fitted.add(new Rectangle(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0)));
+      }
+      return fitted;
+   }
+
    /** The word in capitals with the characters the font cannot draw left out, at most MAX_WORD_LENGTH long. */
    static String cleanWord(String word) {
       StringBuilder clean = new StringBuilder();

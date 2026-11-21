@@ -31,6 +31,19 @@ public class MorphCheck {
       check(Morph.match(have, Arrays.asList(), false).length == 3 && Morph.match(have, Arrays.asList(), false)[0] == -1, "nothing to match gives -1");
       check(Morph.match(Arrays.asList(), have, false).length == 0, "nothing wanted gives nothing");
 
+      // Button pictures: every shape fits its 30 x 20 box, touching two opposite sides, and an empty one is empty.
+      for (String shape : Shapes.ALL) {
+         List<Rectangle> fitted = Shapes.fit(Shapes.build(shape, 120, "9:30", smileCells(), 0, 0, Integer.MAX_VALUE), 30, 20);
+         Rectangle box = new Rectangle(0, 0, 30, 20);
+         Rectangle area = new Rectangle(fitted.get(0));
+         for (Rectangle r : fitted) {
+            check(box.contains(r), shape + " picture stays in its box: " + r);
+            area.add(r);
+         }
+         check(area.width == 30 || area.height == 20, shape + " picture fills its box one way: " + area);
+      }
+      check(Shapes.fit(Arrays.asList(), 30, 20).isEmpty(), "an empty drawing has an empty picture");
+
       // Drawing: the smile builds a few dozen windows inside the size asked for; an empty pad builds none.
       DrawPad pad = new DrawPad(() -> { });
       pad.smile();
@@ -103,6 +116,12 @@ public class MorphCheck {
       }
       check(same > 20 && stayed == same, "a tick keeps " + stayed + " of the " + same + " windows that did not change");
       System.out.println("MorphCheck: all checks passed");
+   }
+
+   private static boolean[][] smileCells() {
+      DrawPad pad = new DrawPad(() -> { });
+      pad.smile();
+      return pad.cells();
    }
 
    private static void check(boolean ok, String what) {
