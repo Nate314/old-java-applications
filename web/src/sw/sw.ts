@@ -6,7 +6,8 @@
 // Cache keys leave out the query string, so App/index.html?embed (the home page's player) and the app's own
 // page share one entry.
 // The built scripts and stylesheets (assets/<name>-<hash>.js and .css) never change under their name, so this build's
-// (BUILT, filled in by the build) answer from the cache first, and on activating, older builds' ones leave the cache.
+// (BUILT, filled in by the build) are put in the cache on installing and answer from it first, and on activating,
+// older builds' ones leave the cache.
 // Built by vite/pages.ts into the site root as sw.js (a service worker's scope is its own folder and below).
 export {};   // a module, so this file's self can be typed as the service worker's
 declare const self: ServiceWorkerGlobalScope;
@@ -18,7 +19,13 @@ const CACHE = 'oldjava-v1';   // the home page's offline panel (index.html) writ
 const assets = () => new URL('assets/', sw.registration.scope).href;
 const built = () => BUILT.map(f => new URL(f, sw.registration.scope).href);
 
-sw.addEventListener('install', () => { sw.skipWaiting(); });
+// This build's scripts and stylesheets (about 210 KB gzipped) go in before it takes over, so every page and panel
+// of it (Find, What's new, the skin maker) opens offline, and a new build never leaves saved pages without them.
+// If one fails to load, this build waits and the one already installed keeps answering.
+sw.addEventListener('install', e => {
+  sw.skipWaiting();
+  e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(built())));
+});
 sw.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(names => Promise.all(names.filter(n => n.indexOf('oldjava-') === 0 && n !== CACHE)
     .map(n => caches.delete(n))))
