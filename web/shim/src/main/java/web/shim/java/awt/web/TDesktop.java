@@ -36,6 +36,8 @@ public final class TDesktop {
     private static boolean pageFocused = true;
 
     private static TComponent pressTarget;
+    private static int pressButton;
+    private static JSObject lastPointer; // the latest press or move, where a release the browser never sent is placed
     private static TComponent hoverTarget;
     private static TComponent dragWindow;
     private static int dragStartX;
@@ -246,6 +248,9 @@ public final class TDesktop {
         });
         Js.listen(doc, "mousemove", e -> {
             if (!afterTouch()) {
+                if (Js.buttons(e) == 0 && touchId == NO_TOUCH && (pressTarget != null || dragWindow != null)) {
+                    letGo(e); // the button came up where the page never heard it (outside the window, over a frame)
+                }
                 onMove(e, Js.target(e));
             }
         });
@@ -278,6 +283,7 @@ public final class TDesktop {
     }
 
     private static void onPress(JSObject e, JSObject node) {
+        lastPointer = e;
         TComponent c = lookup(node);
         if (c == null || Js.targetIsWindowControl(e)) {
             return;
@@ -311,6 +317,7 @@ public final class TDesktop {
             Js.takeKeys(e); // but a press here still brings the keys back from a frame beside (Side by side)
         }
         pressTarget = mouseTarget(c, false);
+        pressButton = Math.max(Js.button(e), 0) + 1;
         post(pressTarget, TMouseEvent.MOUSE_PRESSED, e);
     }
 
@@ -332,6 +339,7 @@ public final class TDesktop {
     }
 
     private static void onMove(JSObject e, JSObject node) {
+        lastPointer = e;
         if (dragWindow != null) {
             double scale = Js.desktopScale();
             dragWindow.setLocation(dragStartX + (int) ((Js.clientX(e) - dragMouseX) / scale),
@@ -446,6 +454,21 @@ public final class TDesktop {
         post(target, TMouseEvent.MOUSE_PRESSED, touchDown, 3);
         post(target, TMouseEvent.MOUSE_RELEASED, touchDown, 3);
         post(target, TMouseEvent.MOUSE_CLICKED, touchDown, 3);
+    }
+
+    /**
+     * Lets go of whatever the mouse or a finger holds (a press, a title-bar drag, a long press on its way) without a
+     * click, at e's place: the browser sent, or will send, the real release somewhere the page cannot hear it.
+     */
+    private static void letGo(JSObject e) {
+        dragWindow = null;
+        endLongPress();
+        touchId = NO_TOUCH;
+        TComponent target = pressTarget;
+        pressTarget = null;
+        if (target != null && e != null) {
+            post(target, TMouseEvent.MOUSE_RELEASED, e, pressButton);
+        }
     }
 
     private static void setHover(TComponent target, JSObject e) {
@@ -564,7 +587,8 @@ public final class TDesktop {
      * The browser window (the tab, the app's frame on another page, Pop out's window) lost or got back the keyboard.
      * As when Swing's window is deactivated, the focus owner loses the focus for a while (hasFocus() is false, its
      * focus box goes, focus listeners hear a temporary FOCUS_LOST), and every key still held is let go: the browser
-     * sends its keyup elsewhere, so a held arrow, note or Space would otherwise stay down.
+     * sends its keyup elsewhere, so a held arrow, note or Space would otherwise stay down. A held mouse button or
+     * finger is let go the same way (a held piano key, a Dino jump, a window dragged by its title bar).
      */
     private static void pageFocus(boolean on) {
         if (pageFocused == on) {
@@ -572,6 +596,7 @@ public final class TDesktop {
         }
         pageFocused = on;
         if (!on) {
+            letGo(lastPointer);
             Edt.post(() -> { // after the presses already posted
                 long when = System.currentTimeMillis();
                 List<TKeyEvent> keys = new ArrayList<>(held.values());
