@@ -22,7 +22,7 @@ import javax.swing.Timer;
 public final class GameFrame extends JFrame {
    private static final File BEST_TIMES_FILE = new File(System.getProperty("user.home", "."), ".minesweeper-best.txt");
    /** Room for the level buttons, the status line and the two hint lines, taken from the board so the window keeps its old size. */
-   private static final int BARS_HEIGHT = 104;
+   private static final int BARS_HEIGHT = 118;
    /** How long dealing a no-guess board may take before a random one is played instead (it takes a few ms). */
    private static final int DEAL_BUDGET_MS = 1500;
    private static final Color SELECTED_LEVEL = MineTile.GRASS_LIGHT;
@@ -72,7 +72,9 @@ public final class GameFrame extends JFrame {
    private int pressOffsetX;
    private int pressOffsetY;
    private boolean dragged;
-   private final JLabel status = new JLabel(" ", SwingConstants.CENTER);
+   /** Mines left, time and best while playing; what happened once a game ends, with what to do next beside it. */
+   private final Scoreboard score = new Scoreboard();
+   private final JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
    private final Timer clock = new Timer(1000, event -> this.updateStatus());
    /** Tiles with an animation running, repainted every frame until they are done. */
    private final List<MineTile> animating = new ArrayList<>();
@@ -150,11 +152,13 @@ public final class GameFrame extends JFrame {
       this.setDefaultCloseOperation(3);
       this.addKeyListener(new WindowMoveKeyListener(this));
       this.add(this.levelBar(), BorderLayout.NORTH);
-      this.status.setFont(new Font("Dialog", Font.BOLD, 14));
+      JPanel scoreRow = new JPanel(new BorderLayout());
+      scoreRow.add(this.score, BorderLayout.CENTER);
+      scoreRow.add(this.actions, BorderLayout.EAST);
       JPanel lines = new JPanel(new BorderLayout());
       this.hintAction.setFont(new Font("Dialog", Font.BOLD, 13));
       this.hintReason.setFont(new Font("Dialog", Font.PLAIN, 13));
-      lines.add(this.status, BorderLayout.NORTH);
+      lines.add(scoreRow, BorderLayout.NORTH);
       lines.add(this.hintAction, BorderLayout.CENTER);
       lines.add(this.hintReason, BorderLayout.SOUTH);
       this.add(lines, BorderLayout.SOUTH);
@@ -350,12 +354,12 @@ public final class GameFrame extends JFrame {
          this.finish();
          if (this.watching) {
             this.setTitle("Minesweeper: the computer hit a mine.");
-            this.status.setText("Boom! The computer had to guess. Next game...");
+            this.score.say("Boom! The computer had to guess. Next game...", Scoreboard.LOST);
          } else {
             this.hit = new int[]{row, column};
             this.lossHint = instead;
             this.setTitle("Minesweeper: you hit a mine. Click the red mine to undo it, or another tile to play again.");
-            this.status.setText("Boom! Click the red mine to undo it (U).");
+            this.ended("Boom! You hit a mine.", Scoreboard.LOST);
             if (instead != null) {
                this.showDeduction(instead, "No need to guess: the glowing tiles were safe.");
             } else if (this.moveRisk > 1e-9) {
@@ -406,19 +410,23 @@ public final class GameFrame extends JFrame {
             // Not a best time: the computer played some or all of it.
             String who = this.watching ? "The computer" : "You and the computer";
             this.setTitle("Minesweeper: " + who.toLowerCase() + " cleared it in " + BestTimes.format(time) + ".");
-            this.status.setText(who + " cleared it in " + BestTimes.format(time) + (this.watching ? ". Next game..." : ". Click to play again."));
+            if (this.watching) {
+               this.score.say(who + " cleared it in " + BestTimes.format(time) + ". Next game...", Scoreboard.WON);
+            } else {
+               this.ended(who + " cleared it in " + BestTimes.format(time) + ".", Scoreboard.WON);
+            }
             return;
          }
          if (this.hints > 0 || this.undone > 0) {
             this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
-            this.status.setText("You win in " + BestTimes.format(time) + (this.hints > 0 ? " with hints" : " with a mine undone") + ". Click to play again.");
+            this.ended("You win in " + BestTimes.format(time) + (this.hints > 0 ? " with hints." : " with a mine undone."), Scoreboard.WON);
             return;
          }
          long before = this.bestTimes.best(this.level);
          boolean record = this.bestTimes.record(this.level, time);
          this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
-         this.status.setText("You win in " + BestTimes.format(time) + "! "
-            + (!record ? "Best: " + BestTimes.format(before) : before == 0 ? "First " + this.level.label + " win." : "New best!"));
+         this.ended("You win in " + BestTimes.format(time) + "! "
+            + (!record ? "Best: " + BestTimes.format(before) : before == 0 ? "First " + this.level.label + " win." : "New best!"), Scoreboard.WON);
       }
    }
 
@@ -497,6 +505,9 @@ public final class GameFrame extends JFrame {
       }
       this.hit = null;
       this.lossHint = null;
+      this.actions.removeAll();
+      this.actions.revalidate();
+      this.actions.repaint();
       return true;
    }
 
@@ -656,6 +667,9 @@ public final class GameFrame extends JFrame {
       } else {
          this.watchTimer.stop();
          this.moveCursor(null);
+         if (this.gameOver && this.actions.getComponentCount() == 0) { // it would have dealt the next game itself
+            this.ended("Your turn: deal the next board.", Scoreboard.PLAIN);
+         }
       }
       this.updateStatus();
    }
@@ -882,11 +896,38 @@ public final class GameFrame extends JFrame {
       long best = this.bestTimes.best(this.level);
       if (this.watching) {
          this.setTitle("Minesweeper: the computer is playing");
-         this.status.setText("Computer playing: click to take over");
+         this.score.say("Computer playing: click to take over", Scoreboard.PLAIN);
          return;
       }
       this.setTitle("Minesweeper: " + minesLeft + " mines left");
-      this.status.setText(minesLeft + " mines left    Time " + elapsed / 1000 / 60 + ":" + (elapsed / 1000 % 60 < 10 ? "0" : "")
-         + elapsed / 1000 % 60 + "    Best " + (best == 0 ? "none yet" : BestTimes.format(best)));
+      this.score.counters(minesLeft, elapsed, best);
+   }
+
+   /**
+    * A game the player was in has ended: says what happened and puts what to do next beside it, as buttons a finger
+    * can find (a click on the board still does the same: the red mine undoes, any other tile starts again).
+    */
+   private void ended(String text, int mood) {
+      this.score.say(text, mood);
+      if (this.hit != null) {
+         this.actions.add(this.action("Undo", "Take back the mine and play this board on (U)", this::undoMine));
+         this.actions.add(this.action("New game", "Deal a new board (F2)", this::restart));
+      } else {
+         this.actions.add(this.action("Again", "Deal a new board (F2)", this::restart));
+         if (this.level.ordinal() + 1 < Level.values().length) {
+            Level next = Level.values()[this.level.ordinal() + 1];
+            this.actions.add(this.action("Next: " + next.label, "A bigger board (" + (next.ordinal() + 1) + ")", () -> this.play(next)));
+         }
+      }
+      this.actions.revalidate();
+      this.actions.repaint();
+   }
+
+   private JButton action(String label, String tip, Runnable run) {
+      JButton button = new JButton(label);
+      button.setFocusable(false);
+      button.setToolTipText(tip);
+      button.addActionListener(event -> run.run());
+      return button;
    }
 }
