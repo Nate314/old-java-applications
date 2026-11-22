@@ -97,7 +97,7 @@ public abstract class TJComponent extends TContainer {
      */
     @Override
     protected String fallbackName() {
-        if (!takesNearbyLabel() || getToolTipText() != null) { // the tooltip, its title, names it
+        if (!(takesNearbyLabel() || paintedTabStop()) || getToolTipText() != null) { // the tooltip, its title, names it
             return null;
         }
         for (TComponent c = getParent(); c != null; c = c.getParent()) {
@@ -114,7 +114,7 @@ public abstract class TJComponent extends TContainer {
     @Override
     public void validate() {
         super.validate();
-        if (takesNearbyLabel()) {
+        if (takesNearbyLabel() || paintedTabStop()) {
             syncAccessible(); // laid out: the labels around it have their places now
         }
     }

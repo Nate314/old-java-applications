@@ -419,6 +419,12 @@ canvas.paint.top {
   box-shadow: inset 0 0 0 4px #fff;
 }
 
+/* A painted panel the app made focusable (Tab reaches it): the same ring, drawn inside so the window never clips it. */
+.c[role="application"]:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+
 .button:disabled {
   color: #8e8f91 !important; /* Swing paints disabled text grey even on a button the app gave its own color */
 }
