@@ -22,6 +22,7 @@ export const TOUR_MS = 30000;
 const TOUR_KEY = 'oldjava.tour';
 // A controller's chart stays in the hint this long (the runtime's gamepads), then the app's hint comes back.
 const CHART_MS = 15000;
+const POSTER_MS = 2000;   // how long a loaded page that never says it runs keeps the picture over it
 
 interface TourSaved { stop?: number; done?: boolean }
 
@@ -138,6 +139,7 @@ function play(a: App, focus: boolean, asThen?: boolean, watch?: boolean) {
   if (api) api.back();
   H.replay = false;   // until the new app's page says it is recording
   H.photo = false;    // until the new app's page says it runs (the runtime's photo booth)
+  H.poster = !H.then;   // its picture, not a blank screen, while it loads (a Then page looks unlike it)
   const state = linkState(a.id, linked);
   if (state) linked = '';
   H.frame = { ...H.frame, key: H.frame.key + 1, src: pageOf(a) + '?embed' + (watch ? '&watch' : '') + state, title: a.name, focus };
@@ -158,6 +160,9 @@ export function stopPlayer() {
 /** The player's iframe has loaded a page. */
 export function frameLoaded() {
   syncPop();
+  // Pages that never say they run (pretend Windows, a failed download) still lose the picture soon after loading.
+  const key = H.frame.key;
+  if (H.poster && H.frame.src !== 'about:blank') setTimeout(() => { if (H.frame.key === key && H.poster) { H.poster = false; draw(); } }, POSTER_MS);
   if (H.frame.focus) frame().focus();
 }
 
@@ -453,7 +458,7 @@ export function initPlayer(): void {
     if (lit) { if (padLight) padLight(lit.which, !!lit.down); return; }
     if (typeof e.data.oldjavaShare === 'string') { window.oldjavaShare.open(e.data.oldjavaShare || null, frame()); return; }
     if (e.data.oldjavaReplay) { H.replay = true; draw(); return; }
-    if (e.data.oldjavaPhoto === true) { H.photo = true; draw(); return; }
+    if (e.data.oldjavaPhoto === true) { H.photo = true; H.poster = false; draw(); return; }
     if (e.data.oldjavaClip) { window.oldjavaReplay.open(e.data.oldjavaClip, frame()); return; }
     if (e.data.oldjavaWatch === 'taken') { endDemo(); return; }
     const a = appById(e.data.oldjavaPlay);
@@ -495,6 +500,8 @@ export function initPlayer(): void {
 // first work and taps. Picking an app first (play) makes a new frame, and the demo never loads.
 function calmStart() {
   const scr = screen();
+  H.poster = true;   // the demo's still while its frame waits
+  draw();
   let go = false;
   const start = () => {
     if (go) return;
