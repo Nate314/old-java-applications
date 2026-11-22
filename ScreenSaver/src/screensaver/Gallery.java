@@ -22,6 +22,11 @@ class Gallery {
    int selected;
    /** Opened by the mouse waking the saver rather than by G: the header says so. */
    boolean woke;
+   /** Whether the music is on, for its button's label. */
+   boolean music;
+   /** The buttons along the bottom, so a mouse or a finger can do what the keys do. */
+   static final int TURNS = 0, MUSIC = 1, CLOSE = 2;
+   private Rectangle[] buttons = new Rectangle[0];
    private Rectangle[] cells = new Rectangle[0];
    private BufferedImage[] images;
    private int laidWidth = -1;
@@ -47,7 +52,7 @@ class Gallery {
       int header = size * 3 + margin;
       int label = size * 2;
       int areaWidth = width - margin * 2;
-      int areaHeight = height - header - margin;
+      int areaHeight = height - header - margin - footer(size, margin);
       int bestCols = 1;
       double best = 0;
       for (int cols = 1; cols <= count; cols++) {
@@ -74,6 +79,51 @@ class Gallery {
          cells[i] = new Rectangle(left + (i % cols) * (cellWidth + margin), top + row * (cellHeight + label + margin), cellWidth, cellHeight);
       }
       return cells;
+   }
+
+   /** The height kept for the row of buttons along the bottom. */
+   static int footer(int size, int margin) {
+      return size * 2 + margin;
+   }
+
+   /** The buttons (TURNS, MUSIC, CLOSE): one centered row along the bottom of a width x height window. */
+   static Rectangle[] buttons(int width, int height) {
+      int size = textSize(width, height);
+      int margin = Math.max(8, Math.min(width, height) / 40);
+      int w = Math.min((width - margin * 4) / 3, size * 9);
+      int left = (width - w * 3 - margin * 2) / 2;
+      Rectangle[] r = new Rectangle[3];
+      for (int i = 0; i < 3; i++) {
+         r[i] = new Rectangle(left + i * (w + margin), height - margin - size * 2, w, size * 2);
+      }
+      return r;
+   }
+
+   /** The Play badge in the bottom right corner of a screen: a press on it plays with that saver (T) instead of watching. */
+   static Rectangle badge(Rectangle c, int size) {
+      int h = Math.max(size * 3 / 2, Math.min(c.height / 3, size * 2));
+      int w = Math.min(c.width / 2, h * 5 / 2);
+      return new Rectangle(c.x + c.width - w - 3, c.y + c.height - h - 3, w, h);
+   }
+
+   /** The button at (x, y) (TURNS, MUSIC or CLOSE), or -1. */
+   int button(int x, int y) {
+      for (int i = 0; i < this.buttons.length; i++) {
+         if (this.buttons[i].contains(x, y)) {
+            return i;
+         }
+      }
+      return -1;
+   }
+
+   /** The saver whose Play badge is at (x, y), or -1. */
+   int playAt(int x, int y) {
+      for (int i = 0; i < this.cells.length; i++) {
+         if (badge(this.cells[i], this.textSize).contains(x, y)) {
+            return i;
+         }
+      }
+      return -1;
    }
 
    /** The columns in this layout: how many cells share the first row. */
@@ -120,6 +170,7 @@ class Gallery {
          this.textSize = textSize(width, height);
          this.cells = layout(width, height, this.savers.size(), screenWidth / (double)screenHeight);
          this.images = new BufferedImage[this.cells.length];
+         this.buttons = buttons(width, height);
       }
       int size = this.textSize;
       int margin = Math.max(8, Math.min(width, height) / 40);
@@ -134,9 +185,12 @@ class Gallery {
       g.drawString(title, margin, margin + size);
       g.setFont(plain);
       g.setColor(new Color(200, 200, 200));
-      String keys = "Arrows and Enter, a number or a click: pick one   G: back   Esc: close";
+      String keys = "Click one to watch it, or its Play to play with it   Arrows, Enter, T: the same by keys   G: back   Esc: close";
       if (g.getFontMetrics().stringWidth(keys) > width - margin * 2) {
-         keys = "Arrows + Enter or a tap: pick   G: back";
+         keys = "Click one to watch it, or its Play to play with it";
+      }
+      if (g.getFontMetrics().stringWidth(keys) > width - margin * 2) {
+         keys = "Tap one to watch, its Play to play";
       }
       g.drawString(keys, margin, margin + size * 2 + size / 3);
       for (int i = 0; i < this.cells.length; i++) {
@@ -164,7 +218,29 @@ class Gallery {
             name = name.substring(0, name.length() - 2) + ".";
          }
          g.drawString(name, c.x + (c.width - metrics.stringWidth(name)) / 2, c.y + c.height + size * 3 / 2);
+         paintButton(g, badge(c, size), "Play", on, plain);
+      }
+      String[] labels = {"Each in turn", this.music ? "Music: on" : "Music: off", "Close"};
+      for (int i = 0; i < this.buttons.length; i++) {
+         paintButton(g, this.buttons[i], labels[i], i == MUSIC && this.music, bold);
       }
       g.setStroke(new BasicStroke(1));
+   }
+
+   /** A rounded button: lit (green, dark text) or plain (a dark glass with a grey edge), its label centered and fitted. */
+   static void paintButton(Graphics2D g, Rectangle r, String label, boolean lit, Font font) {
+      g.setColor(lit ? GREEN : new Color(20, 24, 20, 215));
+      g.fillRoundRect(r.x, r.y, r.width, r.height, r.height / 2, r.height / 2);
+      g.setStroke(new BasicStroke(1));
+      g.setColor(lit ? GREEN : new Color(140, 160, 140));
+      g.drawRoundRect(r.x, r.y, r.width - 1, r.height - 1, r.height / 2, r.height / 2);
+      int size = font.getSize();
+      g.setFont(font);
+      while (size > 8 && g.getFontMetrics().stringWidth(label) > r.width - 6) {
+         g.setFont(font = font.deriveFont((float)--size));
+      }
+      FontMetrics m = g.getFontMetrics();
+      g.setColor(lit ? Color.BLACK : new Color(225, 235, 225));
+      g.drawString(label, r.x + (r.width - m.stringWidth(label)) / 2, r.y + (r.height - m.getHeight()) / 2 + m.getAscent());
    }
 }

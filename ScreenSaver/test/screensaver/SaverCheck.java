@@ -173,6 +173,20 @@ public class SaverCheck {
                check(!c.intersects(cells[j]), "screens " + j + " and " + i + " apart" + at);
             }
          }
+         java.awt.Rectangle[] buttons = Gallery.buttons(size[0], size[1]);
+         for (int k = 0; k < buttons.length; k++) {
+            java.awt.Rectangle r = buttons[k];
+            check(r.x >= 0 && r.x + r.width <= size[0] && r.y + r.height <= size[1] && r.height >= 22 && r.width >= 80,
+               "button " + k + " inside the window and big enough to tap" + at + ": " + r);
+            check(k == 0 || !r.intersects(buttons[k - 1]), "buttons apart" + at);
+            for (java.awt.Rectangle c : cells) {
+               check(r.y >= c.y + c.height + Gallery.textSize(size[0], size[1]) * 2, "button " + k + " under every screen and name" + at);
+            }
+         }
+         for (java.awt.Rectangle c : cells) {
+            java.awt.Rectangle b = Gallery.badge(c, Gallery.textSize(size[0], size[1]));
+            check(c.contains(b) && b.height >= 16 && b.width >= 36, "the Play badge inside its screen and tappable" + at + ": " + b);
+         }
          System.out.println("Gallery" + at + ": " + Gallery.columns(cells) + " across, " + cells[0].width + "x" + cells[0].height);
       }
       check(Gallery.columns(Gallery.layout(1920, 1080, 10, 16 / 9.0)) == 4, "four across on 1920x1080 (larger than five)");
@@ -192,13 +206,28 @@ public class SaverCheck {
          check(litPixels(image.getSubimage(c.x, c.y, c.width, c.height)) > 0, list.get(i).name() + " shows on its little screen");
       }
       check(gallery.at(0, 0) == -1, "a click on the header picks nothing");
+      for (int i = 0; i < 10; i++) {
+         java.awt.Rectangle c = gallery.cell(i);
+         java.awt.Rectangle b = Gallery.badge(c, Gallery.textSize(960, 540));
+         check(gallery.playAt(b.x + b.width / 2, b.y + b.height / 2) == i, "a click on screen " + i + "'s Play badge plays with it");
+         check(gallery.playAt(c.x + c.width / 4, c.y + c.height / 4) == -1, "the rest of screen " + i + " is for watching");
+      }
+      java.awt.Rectangle[] buttons = Gallery.buttons(960, 540);
+      for (int k = 0; k < buttons.length; k++) {
+         java.awt.Rectangle r = buttons[k];
+         check(gallery.button(r.x + r.width / 2, r.y + r.height / 2) == k && gallery.at(r.x + r.width / 2, r.y + r.height / 2) == -1
+            && gallery.playAt(r.x + r.width / 2, r.y + r.height / 2) == -1, "a click on button " + k + " presses only it");
+         check(litPixels(image.getSubimage(r.x, r.y, r.width, r.height)) > 0, "button " + k + " is drawn");
+      }
+      check(gallery.button(0, 0) == -1, "a click on the header presses no button");
       gallery.move(-1, 0);
       check(gallery.selected == 9, "Left from the first wraps to the last");
       gallery.move(0, -1);
-      check(gallery.selected == 5, "Up goes a row up (four across): " + gallery.selected);
+      int across = Gallery.columns(Gallery.layout(960, 540, 10, 16 / 9.0));
+      check(gallery.selected == 9 - across, "Up goes a row up (" + across + " across): " + gallery.selected);
       gallery.move(0, -1);
       gallery.move(0, -1);
-      check(gallery.selected == 1, "Up on the top row stays: " + gallery.selected);
+      check(gallery.selected == 9 % across, "Up on the top row stays: " + gallery.selected);
    }
 
    /** Play (T): what the pointer does to each saver, and that letting go or a reset puts it back. */
