@@ -3,7 +3,9 @@
 # for every app in the build's apps.json, its page, its ?embed and ?embed&full forms and its Then page where it has
 # one. On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, or an app whose
-# biggest canvas is one flat color. Exits 1 when any page fails.
+# biggest canvas is one flat color. On each app's own page it then closes the app's windows (frontmost first) until the
+# exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
+# back without its title screen. Exits 1 when any page fails.
 # Sound is off (--mute-audio, __shimSynth.noteOn stubbed, new AudioContexts suspended), the clipboard and
 # alert/confirm/prompt are stubbed, Chrome's profile is a throwaway folder under -ProfileRoot, and the server and
 # Chrome are stopped by PID. Build first (mvn -f web/pom.xml package), then run from the repo root:
@@ -64,10 +66,17 @@ $Up = "!!document.querySelector('#desktop > *, .shim-shell > *, .shim-console:no
 # What the app painted: its biggest canvas's distinct colors (sampled), or -1 when it has no canvas.
 $Paint = "(function (c) { if (!c) return -1; var d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, seen = {}, n = 0, i; for (i = 0; i < d.length && n < 2; i += 4 * 7) { var k = d[i] + ',' + d[i + 1] + ',' + d[i + 2] + ',' + d[i + 3]; if (!seen[k]) { seen[k] = 1; n++; } } return n; })($Biggest)"
 
+# The frontmost shown window's own close box, pressed: 'exit' once the exit screen is up, 'none' when no window can be
+# closed. Windows with a title bar go first; a borderless window's box is hidden but still closes it as the desktop's
+# window manager would (NathaNOS, ScreenSaver, the Windows key; CircleSpawner's circles only after its Circle Creator).
+# With no window left it closes the Start menu, since pretend Windows holds the exit while it is open.
+$Close = "(function () { if (document.querySelector('.shim-exit')) return 'exit'; var rank = function (w) { return (w.querySelector(':scope > .titlebar').getClientRects().length ? 1e9 : 0) + (+getComputedStyle(w).zIndex || 0); }; var w = [].slice.call(document.querySelectorAll('#desktop > *')).filter(function (w) { return w.getClientRects().length && w.querySelector(':scope > .titlebar:not(.no-close) .close'); }).sort(function (x, y) { return rank(x) - rank(y); }).pop(); if (!w) { w = document.querySelector('.shim-start-power'); if (!w) return 'none'; w.click(); return 'closed'; } w.querySelector(':scope > .titlebar .close').click(); return 'closed'; })()"
+
 # One page: loads it, waits until `ready` (a selector) is on it, or for an app (-App) presses Play when there is
 # one and checks the window and its paint. -Click presses that button first and -Frame is the iframe the app is in
-# (play.html's player); -Missing expects the address itself to answer 404 (the lost page).
-function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing) {
+# (play.html's player); -Exit closes the app and runs it again (see the top); -Missing expects the address itself to
+# answer 404 (the lost page).
+function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit) {
     $t = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Cdp 'Page.navigate' @{ url = 'about:blank' } | Out-Null
     Invoke-Js '1' | Out-Null   # reads the last page's late events, then forgets them
@@ -91,6 +100,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
             # Up to 5 s more for an app that starts on a flat screen and draws a little at a time (ScreenSaver's Then
             # adds one circle to the black every 250 ms).
             if (-not (& $wait "$(& $in $Paint) !== 1" 5000)) { $why = 'blank canvas (one flat color)' }
+            elseif ($Exit) { $why = Test-Exit $wait }
         }
     }
     Invoke-Js '1' | Out-Null   # reads the events that came during the waits
@@ -114,10 +124,24 @@ $pages = @(
     @{ name = 'compare.html'; path = 'compare.html'; ready = 'main.compare' }
 )
 foreach ($app in $Apps) {
-    $pages += @{ name = $app; path = "$app/index.html"; App = $true }
+    $pages += @{ name = $app; path = "$app/index.html"; App = $true; Exit = $true }
     $pages += @{ name = "$app ?embed"; path = "$app/index.html?embed"; App = $true }
     $pages += @{ name = "$app ?embed&full"; path = "$app/index.html?embed&full"; App = $true }
     if (Test-Path (Join-Path $Site "$app/then.html")) { $pages += @{ name = "$app Then"; path = "$app/then.html"; App = $true } }
+}
+
+# The app's exit and Run again, on its page with the app running; returns why it failed, or nothing.
+function Test-Exit($wait) {
+    for ($i = 0; $i -lt 8; $i++) {   # an app may close in steps (a game window, then its menu)
+        $r = Invoke-Js $Close
+        if ($r -ne 'closed') { break }
+        if (& $wait "!!document.querySelector('.shim-exit')" 1500) { $r = 'exit'; break }
+    }
+    if ($r -ne 'exit') { return "exit: no exit screen after closing the app's windows ($r)" }
+    if (-not (& $wait "document.querySelectorAll('.shim-exit .shim-picks a').length > 0" 5000)) { return 'exit: no other apps offered' }
+    if (-not (Invoke-Js "document.activeElement === document.querySelector('.shim-exit > button')")) { return 'exit: Run again is not focused' }
+    Invoke-Js "document.querySelector('.shim-exit > button').click()" | Out-Null
+    if (-not (& $wait "!document.querySelector('.shim-exit, .shim-title-play') && $Up" 30000)) { return 'exit: Run again did not bring the app back without its title screen' }
 }
 
 $total = [Diagnostics.Stopwatch]::StartNew()
