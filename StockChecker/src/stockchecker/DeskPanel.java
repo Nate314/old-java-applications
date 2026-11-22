@@ -745,7 +745,8 @@ final class DeskPanel extends JPanel {
          text(g, "then press Enter.", PLAIN, MUTED, watchBox.x + 10, watchBox.y + 44);
          return;
       }
-      int rowHeight = Math.min(narrow ? 36 : 40, watchBox.height / symbols.size());
+      // Wide, a short list's rows grow to fill the column (up to 60 px), with longer sparklines.
+      int rowHeight = Math.min(narrow ? 36 : 60, watchBox.height / symbols.size());
       for (int i = 0; i < symbols.size() && i < rows.length; i++) {
          String symbol = symbols.get(i);
          Market.Stock stock = desk.market.stock(symbol);
@@ -763,7 +764,9 @@ final class DeskPanel extends JPanel {
          }
          double price = stock.path[desk.market.minute];
          boolean up = price >= stock.open();
-         int top = row.y + Math.min(17, row.height / 2 + 4);
+         // The text sits in the middle of a tall row.
+         int dy = Math.max(0, (row.height - 36) / 2);
+         int top = row.y + dy + Math.min(17, row.height / 2 + 4);
          text(g, symbol, TITLE, TEXT, row.x + 12, top);
          String price1 = Money.dollars(price);
          int priceW = width(g, price1, BOLD);
@@ -790,9 +793,9 @@ final class DeskPanel extends JPanel {
             if (held > 0 && !desk.watch().contains(symbol)) {
                note += ", off list";
             }
-            text(g, note, SMALL, accent, row.x + 12, row.y + 31);
+            text(g, note, SMALL, accent, row.x + 12, row.y + dy + 31);
             String change = Money.percent(stock.open(), price);
-            text(g, change, SMALL, up ? UP : DOWN, row.x + 160 - width(g, change, SMALL), row.y + 31);
+            text(g, change, SMALL, up ? UP : DOWN, row.x + 160 - width(g, change, SMALL), row.y + dy + 31);
          }
          paintLine(g, stock, new Rectangle(row.x + 170, row.y + 5, row.width - 178, row.height - 10), false);
       }
@@ -811,19 +814,30 @@ final class DeskPanel extends JPanel {
          plotSpan = span;
       }
       java.util.function.DoubleToIntFunction yOf = price -> box.y + box.height - (int) Math.round((price - lowF) / span * box.height);
-      java.util.function.IntUnaryOperator xOf = m -> box.x + (int) Math.round((double) m * box.width / Market.CLOSE);
+      int end = chartEnd(now);
+      java.util.function.IntUnaryOperator xOf = m -> box.x + (int) Math.round((double) m * box.width / end);
       boolean up = stock.path[now] >= stock.open();
       Color line = up ? UP : DOWN;
 
       if (big) {
          paintScale(g, box, low, span);
-         int[] hours = {30, 150, 270, 390};
-         String[] names = {"10 AM", "12 PM", "2 PM", "4 PM"};
-         for (int k = 0; k < hours.length; k++) {
-            int x = xOf.applyAsInt(hours[k]);
+         // Time lines on the clock's quarter, half or whole hours, or every two hours, at least 48 px apart.
+         int step = 15;
+         while (step < 120 && step * box.width < 48 * end) {
+            step *= 2;
+         }
+         int first = (step - OPEN_CLOCK % step) % step;
+         for (int m = first == 0 ? step : first; m <= end; m += step) {
+            int x = xOf.applyAsInt(m);
             g.setColor(new Color(255, 255, 255, 22));
             g.drawLine(x, box.y, x, box.y + box.height);
-            text(g, names[k], SMALL, MUTED, x - width(g, names[k], SMALL) / 2, box.y + box.height + 14);
+            String name = timeLabel(m);
+            int w = width(g, name, SMALL);
+            // A label that would run under Hindsight or Hear is left out (its line still shows).
+            Rectangle room = new Rectangle(x - w / 2 - 2, box.y + box.height + 3, w + 4, 14);
+            if (buttons.stream().noneMatch(b -> b.shown.getAsBoolean() && b.bounds.intersects(room))) {
+               text(g, name, SMALL, MUTED, x - w / 2, box.y + box.height + 14);
+            }
          }
          // The fill under the line.
          int[] xs = new int[now + 3];
@@ -925,7 +939,7 @@ final class DeskPanel extends JPanel {
             cursor(g, box, xOf.applyAsInt(heard), yOf.applyAsInt(stock.path[heard]), Market.clock(heard) + "  " + Money.dollars(stock.path[heard]), withAlpha(accent, 200));
          } else if (box.contains(mouseX, mouseY)) {
             // Under the pointer: that minute's time, price and change, or the headline when a pin is near.
-            int pointed = (int) Math.round((double) (mouseX - box.x) * Market.CLOSE / box.width);
+            int pointed = (int) Math.round((double) (mouseX - box.x) * end / box.width);
             Market.Headline near = newsNear(stock.symbol, pointed);
             int m = near != null ? near.minute : pointed;
             if (m <= now) {
@@ -1279,7 +1293,8 @@ final class DeskPanel extends JPanel {
       }
       double top = reach * 1.15;
       java.util.function.DoubleToIntFunction yOf = change -> box.y + box.height / 2 - (int) Math.round(change / top * box.height / 2);
-      java.util.function.IntUnaryOperator xOf = m -> box.x + (int) Math.round((double) m * box.width / Market.CLOSE);
+      int end = chartEnd(now);
+      java.util.function.IntUnaryOperator xOf = m -> box.x + (int) Math.round((double) m * box.width / end);
       g.setColor(new Color(0, 0, 0, 50));
       g.fillRect(box.x, box.y, box.width, box.height);
       int zero = yOf.applyAsInt(0);
@@ -1292,7 +1307,8 @@ final class DeskPanel extends JPanel {
       text(g, "0%", SMALL, MUTED, box.x + box.width + 4, zero + 4);
       text(g, "-" + percentText(top), SMALL, MUTED, box.x + box.width + 4, box.y + box.height);
       text(g, "9:30", SMALL, MUTED, box.x, box.y + box.height + 13);
-      text(g, "4:00", SMALL, MUTED, box.x + box.width - width(g, "4:00", SMALL), box.y + box.height + 13);
+      String endLabel = Market.clock(end).replace(" AM", "").replace(" PM", "");
+      text(g, endLabel, SMALL, MUTED, box.x + box.width - width(g, endLabel, SMALL), box.y + box.height + 13);
       // Rivals first, you on top, thicker.
       for (int pass = 0; pass < 2; pass++) {
          for (int i = 0; i < standings.size(); i++) {
@@ -1397,6 +1413,23 @@ final class DeskPanel extends JPanel {
          String all = Money.percent(Portfolio.START, standing.worth) + " in all";
          text(g, all, SMALL, standing.worth >= Portfolio.START ? UP : DOWN, worthRight - width(g, all, SMALL), y + 31);
       }
+   }
+
+   /** Minutes from midnight to the open, 9:30 AM. */
+   private static final int OPEN_CLOCK = 9 * 60 + 30;
+
+   /**
+    * The last minute the day's charts reach at minute {@code now}: the day so far and a fifth more (at least the first
+    * hour), up to the close. So the line fills the chart from the opening bell instead of a sliver at its left edge.
+    */
+   static int chartEnd(int now) {
+      return Math.min(Market.CLOSE, Math.max(60, now + now / 5 + 12));
+   }
+
+   /** A time line's label: "10 AM" on the hour, else "10:30". */
+   static String timeLabel(int minute) {
+      String clock = Market.clock(minute);
+      return clock.contains(":00") ? clock.replace(":00", "") : clock.substring(0, clock.length() - 3);
    }
 
    private static String ordinal(int n) {
