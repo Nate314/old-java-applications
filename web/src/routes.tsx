@@ -7,6 +7,7 @@ import { EarlyScript, RuntimeScript } from './shared/EarlyScript';
 import { SITE, ShareTags } from './shared/ShareTags';
 import apps from './shared/apps.json';
 import { Lead } from './pages/home/Lead';
+import { Hero, TopBar } from './pages/story/Hero';
 
 export interface Route {
   /** The file the build writes, at the site root. */
@@ -104,6 +105,14 @@ export const ROUTES: Route[] = [
         {ICON}
         <link rel="stylesheet" href="shim.css" />
         {skin}
+      </>
+    ),
+    // The top bar and the hero (the page's largest text) are in the page itself, so a phone paints them while React and
+    // the story's module load and render; the module takes the bar over (hydrates it) and adds the chapters after the hero.
+    placeholder: (
+      <>
+        <div id="story-top" style={{ display: 'contents' }}><TopBar at={null} /></div>
+        <main><Hero /><div id="story-rest" style={{ display: 'contents' }} /></main>
       </>
     ),
   },

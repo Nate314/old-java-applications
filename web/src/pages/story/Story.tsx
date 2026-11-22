@@ -1,7 +1,7 @@
 // The story (story.html): HISTORY.md told with the real code and the apps; its live panels are in panels.tsx.
 import './story.css';
 import { APPS, webp } from '../../shared/catalog';
-import { ChainShow, EraPanel, PickLink, RenamePanel, StoryTop, Tape } from './panels';
+import { ChainShow, EraPanel, PickLink, RenamePanel, Tape } from './panels';
 import { ShareStory } from './ShareStory';
 import { StoryPlay } from './StoryPlay';
 import { PlayHere } from '../../shared/PlayHere';
@@ -42,31 +42,10 @@ function Apps20() {
   );
 }
 
+/** The chapters and the rest of the page, after the top bar and the hero that story.html comes with (Hero.tsx). */
 export function Story() {
   return (
     <>
-      <StoryTop />
-      <main>
-        <header className="hero">
-          <p className="kicker">The story</p>
-          <h1>Twenty old programs, brought back to play</h1>
-          <p>
-            These Java desktop programs were written more than ten years ago, and for most of them the source code was gone. This is how they were recovered from what was left, fixed up, and put in your browser, with the real code and the apps themselves along the way.
-          </p>
-          <p className="inspired">
-            {"The source of inspiration for this project is the YouTube video "}
-            <a href="https://www.youtube.com/watch?v=DByAR5Su1Yw">I Told Claude to “Make it better” 100 Times (It Went Too Far)</a>
-            {" by Nate Herk | AI Automation."}
-          </p>
-          <ol className="chapters">
-            <li><a href="#originals">The originals (2016 and earlier)</a></li>
-            <li><a href="#recovery">The recovery (October 2026)</a></li>
-            <li><a href="#restoration">The first restoration</a></li>
-            <li><a href="#chain">The Claude Code chain</a></li>
-            <li><a href="#numbers">The run in numbers</a></li>
-            <li><a href="#continued">The continued run</a></li>
-          </ol>
-        </header>
         <section className="chapter" id="originals" aria-labelledby="h-originals">
           <div className="words">
             <p className="kicker">Chapter 1</p>
@@ -296,7 +275,6 @@ export function Story() {
         </section>
         <StoryPlay />
         <PlayHere back="Back to the story" />
-      </main>
     </>
   );
 }

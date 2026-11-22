@@ -4,7 +4,7 @@ import { APPS } from '../../shared/catalog';
 // Flappy Bird's Bird class: as decompiled in the repo's first commit (4fea701, b.java) and as #1 renamed it (b331e84, Bird.java).
 import decompiled from './b-decompiled.java.txt?raw';
 import renamedSource from './Bird-renamed.java.txt?raw';
-import { ShareStory } from './ShareStory';
+import { CHAPTERS, TopBar } from './Hero';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 // Rename-only means the two files have the same tokens apart from the names, so splitting both on identifiers
@@ -27,8 +27,6 @@ function whenSeen(node: Element, fn: () => void, margin?: string) {
   return () => io.disconnect();
 }
 
-const CHAPTERS = [['#originals', 'The originals'], ['#recovery', 'The recovery'], ['#restoration', 'The first restoration'], ['#chain', 'The chain'], ['#numbers', 'In numbers'], ['#continued', 'Continued']];
-
 /** The bar at the top: the chapters, the one you're in marked, and how far down the page you are. */
 export function StoryTop() {
   const [at, setAt] = useState<{ chapter: number; read: number } | null>(null);
@@ -47,18 +45,7 @@ export function StoryTop() {
     onScroll();
     return () => { removeEventListener('scroll', onScroll); removeEventListener('resize', onScroll); };
   }, []);
-  return (
-    <header className="story-top">
-      <a className="home" href="index.html">← Old Java Applications</a>
-      <nav aria-label="Chapters">
-        {CHAPTERS.map((c, i) => <a key={c[0]} href={c[0]} aria-current={at ? (i === at.chapter ? 'true' : 'false') : undefined}>{c[1]}</a>)}
-      </nav>
-      {at && at.chapter >= 0
-        ? <ShareStory className="btn share" label="Share this chapter" hash={CHAPTERS[at.chapter][0]} name={CHAPTERS[at.chapter][1]} />
-        : <ShareStory className="btn share" label="Share" />}
-      <span className="bar" id="bar" aria-hidden="true" style={at ? { transform: 'scaleX(' + at.read + ')' } : undefined} />
-    </header>
-  );
+  return <TopBar at={at} />;
 }
 
 // ---- 1. the 2016 quotes ----
