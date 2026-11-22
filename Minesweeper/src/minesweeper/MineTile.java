@@ -7,6 +7,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
@@ -54,6 +55,12 @@ public final class MineTile extends JButton implements MouseListener {
    private static final int PLANT_MS = 140;
    private static final int BURST_MS = 260;
    private static final int PULSE_MS = 320;
+   private static final int BLOOM_MS = 420;
+   /** A won field grows back as flat meadow (unlike the raised grass of a hidden tile), some tiles with a flower. */
+   private static final Color MEADOW_LIGHT = new Color(170, 214, 112);
+   private static final Color MEADOW_DARK = new Color(158, 204, 100);
+   private static final Color[] PETALS = {
+      Color.WHITE, new Color(255, 214, 64), new Color(244, 143, 177), new Color(179, 157, 219)};
 
    private GameFrame game;
    /** The tile's x index: it sits at {@code row * tileWidth}, so this is the column a player sees. */
@@ -86,6 +93,8 @@ public final class MineTile extends JButton implements MouseListener {
    private long animStart;
    private int animMs;
    private long pulseStart;
+   /** When a won field's meadow starts growing on this tile (0: never). */
+   private long bloomStart;
 
    public MineTile(GameFrame game, int row, int column) {
       this.game = game;
@@ -248,6 +257,24 @@ public final class MineTile extends JButton implements MouseListener {
       return this.mark == FLAG;
    }
 
+   /**
+    * The board is won: this opened tile grows back as meadow after {@code delayMs} (and after its own grass has
+    * popped off), maybe with a flower. With reduced motion it is there at once.
+    */
+   void bloom(int delayMs) {
+      if (this.shown != SHOW_VALUE) {
+         return;
+      }
+      long now = System.currentTimeMillis();
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         this.bloomStart = now - BLOOM_MS;
+         this.repaint();
+         return;
+      }
+      this.bloomStart = Math.max(now + delayMs, this.animStart + this.animMs);
+      this.game.animating(this);
+   }
+
    /** A short glow on a hidden tile: the tiles a number would open, when its flags do not add up yet. */
    void pulse() {
       if (this.shown == SHOW_HIDDEN && this.mark != FLAG) {
@@ -264,7 +291,8 @@ public final class MineTile extends JButton implements MouseListener {
 
    /** True while an animation still has frames to draw. */
    boolean isAnimating(long now) {
-      return this.animStart != 0 && now < this.animStart + this.animMs || this.pulseStart != 0 && now < this.pulseStart + PULSE_MS;
+      return this.animStart != 0 && now < this.animStart + this.animMs || this.pulseStart != 0 && now < this.pulseStart + PULSE_MS
+         || this.bloomStart != 0 && now < this.bloomStart + BLOOM_MS;
    }
 
    // ---- drawing ----
@@ -311,6 +339,9 @@ public final class MineTile extends JButton implements MouseListener {
          }
          if (t < 1 && this.shown == SHOW_VALUE) { // the grass pops off: shrinks and fades toward the middle
             this.paintGrass(g, s, dark, 1 - ease(t));
+         }
+         if (this.bloomStart != 0 && now >= this.bloomStart) {
+            this.paintMeadow(g, s, dark, Math.min(1, (now - this.bloomStart) / (double) BLOOM_MS));
          }
       }
       this.paintHint(g, s);
@@ -434,6 +465,51 @@ public final class MineTile extends JButton implements MouseListener {
       g.fillRoundRect(x, y, tw, th, th, th);
       g.setColor(Color.WHITE);
       g.drawString(text, x + 3, y + fm.getAscent());
+   }
+
+   /**
+    * A won tile: flat meadow spreading from the middle as {@code b} goes from 0 to 1, then (on about half the tiles,
+    * picked by place so a board always blooms the same) a flower or a tuft of grass pops up.
+    */
+   private void paintMeadow(Graphics2D g, int s, boolean dark, double b) {
+      int w = this.getWidth();
+      int h = this.getHeight();
+      // A round patch that grows into the square: its corners fill in last.
+      double f = ease(Math.min(1, b * 1.6));
+      int pw = (int) Math.ceil(w * f);
+      int ph = (int) Math.ceil(h * f);
+      int arc = (int) Math.round(s * (1 - f));
+      g.setColor(dark ? MEADOW_DARK : MEADOW_LIGHT);
+      g.fillRoundRect((w - pw) / 2, (h - ph) / 2, pw, ph, arc, arc);
+      double grow = overshoot(Math.max(0, b - 0.4) / 0.6);
+      if (b <= 0.4) {
+         return;
+      }
+      int mix = this.row * 73856093 ^ this.column * 19349663;
+      int kind = Math.floorMod(mix ^ mix >>> 13, 8);
+      // Not dead center, so a field of them looks sown rather than tiled.
+      int cx = w / 2 + (kind % 3 - 1) * s / 8;
+      int cy = h / 2 + (kind % 2 == 0 ? -1 : 1) * s / 10;
+      if (kind < PETALS.length) {
+         double pr = s * 0.13 * grow;
+         int pd = (int) Math.round(pr * 1.5);
+         g.setColor(PETALS[kind]);
+         for (int i = 0; i < 5; i++) {
+            double a = Math.PI * 2 * i / 5 - Math.PI / 2;
+            g.fillOval((int) Math.round(cx + Math.cos(a) * pr - pd / 2.0), (int) Math.round(cy + Math.sin(a) * pr - pd / 2.0), pd, pd);
+         }
+         int c = Math.max(2, (int) Math.round(pr * 0.9));
+         g.setColor(kind == 1 ? new Color(230, 120, 20) : new Color(250, 200, 40));
+         g.fillOval(cx - c / 2, cy - c / 2, c, c);
+      } else if (kind < 6) {
+         g.setColor(GRASS_EDGE);
+         g.setStroke(new BasicStroke(Math.max(1.2f, s / 22f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+         int base = cy + (int) (s * 0.14);
+         int tall = (int) (s * 0.24 * grow);
+         for (int i = -1; i <= 1; i++) {
+            g.drawLine(cx + i * s / 14, base, cx + i * s / 7, base - tall + Math.abs(i) * tall / 3);
+         }
+      }
    }
 
    /** Revealed ground: a flat sand square, with a faint line where it meets the next one. */
