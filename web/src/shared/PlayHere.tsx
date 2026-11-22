@@ -30,13 +30,20 @@ export function PlayHere({ root = '', back }: { root?: string; back: string }) {
     function open(a: App) {
       const url = location.pathname + location.search + '#play=' + a.id;
       if (playing()) history.replaceState({ ...history.state, [KEY]: a.id }, '', url);
-      else history.pushState({ [KEY]: a.id }, '', url);
+      else {
+        // The page's own entry keeps its scroll on the way back: the page can grow under the sheet (scroll anchoring
+        // keeps it still), so the scroll saved at the push would move it. The sheet's entry restores as usual.
+        history.scrollRestoration = 'manual';
+        history.pushState({ [KEY]: a.id }, '', url);
+        history.scrollRestoration = 'auto';
+      }
       setApp(a);
     }
     function onPop() {
       const a = byId(playing());
-      if (a) setApp(a);
-      else if (dialog.current!.open) dialog.current!.close();
+      if (a) return setApp(a);
+      if (dialog.current!.open) dialog.current!.close();
+      history.scrollRestoration = 'auto';   // Chrome has already chosen this traversal's mode by the time popstate runs
     }
     function onClick(e: MouseEvent) {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
