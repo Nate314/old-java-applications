@@ -29,15 +29,23 @@ public final class StepPlayer {
 	}
 
 	public void play(int[][] steps, int stepMillis) {
-		stop();
-		playStep(steps, 0, stepMillis);
+		play(steps, stepMillis, null);
 	}
 
-	private void playStep(int[][] steps, int step, int stepMillis) {
+	/** Plays {@code steps}, then runs {@code done} (if not null) once they have all sounded, unless stopped first. */
+	public void play(int[][] steps, int stepMillis, Runnable done) {
+		stop();
+		playStep(steps, 0, stepMillis, done);
+	}
+
+	private void playStep(int[][] steps, int step, int stepMillis, Runnable done) {
 		release();
 		if (step == steps.length) {
 			timer = null;
 			listener.sounding(null);
+			if (done != null) {
+				done.run();
+			}
 			return;
 		}
 		sounding = steps[step];
@@ -46,7 +54,7 @@ public final class StepPlayer {
 		}
 		listener.sounding(sounding);
 		timer = new Timer(step == steps.length - 1 ? Drill.LAST_STEP_MILLIS : stepMillis,
-				event -> playStep(steps, step + 1, stepMillis));
+				event -> playStep(steps, step + 1, stepMillis, done));
 		timer.setRepeats(false);
 		timer.start();
 	}
