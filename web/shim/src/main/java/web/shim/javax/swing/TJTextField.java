@@ -65,6 +65,11 @@ public class TJTextField extends TJComponent {
     }
 
     @Override
+    protected boolean takesNearbyLabel() {
+        return true;
+    }
+
+    @Override
     protected JSObject createElement() {
         JSObject el = Js.create("input");
         Js.setClass(el, "c textfield");

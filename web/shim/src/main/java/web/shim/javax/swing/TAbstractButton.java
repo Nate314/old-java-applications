@@ -6,6 +6,7 @@ import org.teavm.jso.JSObject;
 import web.rt.Edt;
 import web.rt.Js;
 import web.shim.java.awt.TColor;
+import web.shim.java.awt.TComponent;
 import web.shim.java.awt.TDimension;
 import web.shim.java.awt.TFont;
 import web.shim.java.awt.TFontMetrics;
@@ -126,6 +127,7 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
         if (textEl != null) {
             Js.setText(textEl, this.text);
         }
+        syncAccessible();
         invalidate();
     }
 
@@ -141,7 +143,56 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
     public void setIcon(TIcon icon) {
         this.icon = icon;
         syncIcon();
+        syncAccessible();
         invalidate();
+    }
+
+    /**
+     * Without text or a tooltip (its title), a button is named by its icon's description, as Swing's ImageIcon
+     * describes itself, or, as a tile in a grid of same-size buttons (Minesweeper's first field), by its row and column.
+     */
+    @Override
+    protected String fallbackName() {
+        if (!text.trim().isEmpty() || getToolTipText() != null) { // Minesweeper's first field shows an opened 0 as " "
+            return null;
+        }
+        if (icon instanceof TImageIcon && ((TImageIcon) icon).getDescription() != null) {
+            return ((TImageIcon) icon).getDescription();
+        }
+        int gap = Math.min(tileGap(sibling(-1)), tileGap(sibling(1)));
+        // shortcut: counts rows and columns from the container's corner, so a grid offset by a tile or more is misnumbered.
+        return gap == Integer.MAX_VALUE ? null
+                : "Row " + (getY() / (getHeight() + gap) + 1) + ", column " + (getX() / (getWidth() + gap) + 1);
+    }
+
+    /**
+     * The gap to c when it is a same-size button next to this one in a row or a column, at most a quarter tile away
+     * (RubiksCube2D's first stickers), else MAX_VALUE.
+     */
+    private int tileGap(TComponent c) {
+        int w = getWidth();
+        int h = getHeight();
+        if (!(c instanceof TAbstractButton) || w <= 0 || h <= 0 || c.getWidth() != w || c.getHeight() != h) {
+            return Integer.MAX_VALUE;
+        }
+        int gap = c.getY() == getY() ? Math.abs(c.getX() - getX()) - w : c.getX() == getX() ? Math.abs(c.getY() - getY()) - h : -1;
+        return gap >= 0 && gap * 4 <= Math.min(w, h) ? gap : Integer.MAX_VALUE;
+    }
+
+    @Override
+    public void setBounds(int x, int y, int width, int height) {
+        boolean moved = x != getX() || y != getY() || width != getWidth() || height != getHeight();
+        super.setBounds(x, y, width, height);
+        if (moved) {
+            // A tile's name depends on its neighbours' places, and theirs on its.
+            syncAccessible();
+            for (int offset = -1; offset <= 1; offset += 2) {
+                TComponent c = sibling(offset);
+                if (c instanceof TAbstractButton) {
+                    c.syncAccessible();
+                }
+            }
+        }
     }
 
     public void addActionListener(TActionListener l) {
