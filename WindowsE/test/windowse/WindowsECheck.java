@@ -56,6 +56,7 @@ public class WindowsECheck {
       screenChecks();
       boardChecks();
       sendChecks();
+      pillChecks();
       System.out.println("WindowsECheck: all checks passed");
       System.exit(0);
    }
@@ -64,7 +65,7 @@ public class WindowsECheck {
    static void boardChecks() {
       for (boolean pocket : new boolean[] {false, true}) {
          javax.swing.JTextField field = new javax.swing.JTextField();
-         ShortcutBoard board = new ShortcutBoard(s -> { }, s -> { }, pocket, field);
+         ShortcutBoard board = new ShortcutBoard(s -> { }, s -> { }, i -> { }, pocket, field);
          java.awt.Dimension size = board.getPreferredSize();
          java.util.Set<Shortcut> seen = java.util.EnumSet.noneOf(Shortcut.class);
          List<java.awt.Rectangle> placed = new ArrayList<>();
@@ -186,6 +187,62 @@ public class WindowsECheck {
             System.out.println("WindowsECheck: window " + got[2] + " px wide" + where);
          }
       }
+   }
+
+   /** Each step is a pill: a click on its x (or Delete) takes that step off, a click elsewhere on it only shows it. */
+   static void pillChecks() throws Exception {
+      if (java.awt.GraphicsEnvironment.isHeadless()) {
+         System.out.println("WindowsECheck: headless, the step pill checks skipped");
+         return;
+      }
+      for (boolean pocket : new boolean[] {false, true}) {
+         Recorder keys = new Recorder();
+         List<String> copied = new ArrayList<>();
+         String[] got = new String[4];
+         SwingUtilities.invokeAndWait(() -> {
+            WindowsEWindow w = new WindowsEWindow(keys, copied::add, null, Step.parse("Ex3-Left-E-Right"), pocket);
+            List<StepPill> pills = pills(w);
+            got[0] = String.valueOf(pills.size());
+            click(pills.get(0), 4);   // on its label: shown, not taken off
+            button(w, "Send").doClick();
+            StepPill second = pills.get(1);
+            click(second, second.getWidth() - 6);   // on its x
+            button(w, "Send").doClick();
+            StepPill last = pills(w).get(2);
+            for (java.awt.event.KeyListener l : last.getKeyListeners()) {
+               l.keyPressed(new KeyEvent(last, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_DELETE, KeyEvent.CHAR_UNDEFINED));
+            }
+            button(w, "Send").doClick();
+            got[1] = String.valueOf(pills(w).size());
+            w.dispose();
+         });
+         String where = " (pocket " + pocket + ")";
+         check("4".equals(got[0]), "four steps, four pills" + where + ": " + got[0]);
+         check(copied.equals(Arrays.asList("Ex3-Left-E-Right", "Ex3-E-Right", "Ex3-E")), "a click on a label keeps the step, its x and Delete take it off" + where + ": " + copied);
+         check("2".equals(got[1]), "two pills left" + where + ": " + got[1]);
+         check(keys.log.isEmpty(), "editing the list presses nothing" + where);
+      }
+   }
+
+   private static List<StepPill> pills(java.awt.Container in) {
+      List<StepPill> found = new ArrayList<>();
+      for (java.awt.Component c : in.getComponents()) {
+         if (c instanceof StepPill) {
+            found.add((StepPill) c);
+         } else if (c instanceof java.awt.Container) {
+            found.addAll(pills((java.awt.Container) c));
+         }
+      }
+      return found;
+   }
+
+   /** A click at x on the pill, as the mouse makes it: pressed there, then the button's action. */
+   private static void click(StepPill pill, int x) {
+      java.awt.event.MouseEvent e = new java.awt.event.MouseEvent(pill, java.awt.event.MouseEvent.MOUSE_PRESSED, 0, 0, x, 8, 1, false);
+      for (java.awt.event.MouseListener l : pill.getMouseListeners()) {
+         l.mousePressed(e);
+      }
+      pill.doClick();
    }
 
    private static javax.swing.JButton button(java.awt.Container in, String text) {
