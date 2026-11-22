@@ -152,11 +152,13 @@ let onPage: { shown: boolean; el: HTMLDivElement; redraw: () => void } | null = 
 /** Whether the app page's controller shows: Controls in the toolbar is pressed while it does. */
 export function padShown() { return !!onPage && onPage.shown; }
 
-export function padOnPage() {
+const fingerFirst = () => !!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches);
+
+export function padOnPage(groups = PADS[appId()!]) {
   var light!: (which: number, down: boolean) => void;
-  openLayer(<PadOnPage onMount={(el, redraw, l) => { onPage = { shown: true, el: el, redraw: redraw }; light = l; }} />);
+  openLayer(<PadOnPage groups={groups} onMount={(el, redraw, l) => { onPage = { shown: true, el: el, redraw: redraw }; light = l; }} />);
   setPadLight(light);
-  showPad(pad.wanted(!!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches)));
+  showPad(pad.wanted(fingerFirst()));
   addEventListener('resize', function () { if (onPage!.shown) showPad(true); });
   ['keydown', 'keyup'].forEach(function (type) {
     document.addEventListener(type, function (e) { if (e.isTrusted) light((e as KeyboardEvent).keyCode, type === 'keydown'); }, true);
@@ -175,16 +177,26 @@ export function togglePad() {
   pad.remember(onPage!.shown);
 }
 
-function PadOnPage({ onMount }: { onMount: (el: HTMLDivElement, redraw: () => void, light: (which: number, down: boolean) => void) => void }) {
+function PadOnPage({ groups, onMount }: { groups: PadGroup[]; onMount: (el: HTMLDivElement, redraw: () => void, light: (which: number, down: boolean) => void) => void }) {
   const el = useRef<HTMLDivElement>(null);
   const light = useRef<(which: number, down: boolean) => void>(null);
   const [, setTick] = useState(0);
   useLayoutEffect(() => { onMount(el.current!, () => flushSync(() => setTick(n => n + 1)), (w, d) => light.current!(w, d)); }, []);
   return (
     <div className="shim-pad" aria-label="Controller" hidden={!!onPage && !onPage.shown} ref={el}>
-      <Pad groups={PADS[appId()!]} send={fireKey} onMount={l => { light.current = l; }} />
+      <Pad groups={groups} send={fireKey} onMount={l => { light.current = l; }} />
     </div>
   );
+}
+
+// An embedded app outside the home page's player (the story's sheet, play.html, compare.html, a docked app) has no
+// controller around it, so on a touch screen it floats its own at the bottom of the frame, with only the groups
+// that play (a D-pad, a piano, a big button): the shortcut rows would take half a small frame. The player
+// docks its own under the screen (padInPlayer), so its frame draws none.
+export function padInFrame() {
+  var id = appId()!;
+  if (!PADS[id] || (window.frameElement && window.frameElement.id === 'player-frame') || !pad.wanted(fingerFirst())) return;
+  padOnPage(PADS[id].filter(function (g) { return g.dpad || g.piano || (g.buttons || []).some(function (b) { return b.big; }); }));
 }
 
 // In the home page's player the controller lives on the home page: it sends presses here, and hears

@@ -8,7 +8,7 @@ import { setPhotoDesk } from './photo-booth';
 import { passport, stampOnPlay, stampToast } from './passport';
 import { watchApp, watchWanted } from './watch';
 import { saverHost } from './saver';
-import { padInPlayer } from './touch-pad';
+import { padInFrame, padInPlayer } from './touch-pad';
 import { gamepads } from './gamepads';
 import { appId, catalog } from './catalog';
 import { programFile } from './then-and-now';
@@ -66,6 +66,7 @@ export function init() {
     if (body.hasAttribute('data-tab-title') && !embedded) followTitle(desktop);
     var saverMode = document.documentElement.hasAttribute('data-saver');
     if (embedded && window.parent !== window && !saverMode) padInPlayer();
+    if (embedded && !saverMode && !clipMode && !document.documentElement.hasAttribute('data-shot')) padInFrame();
     if (body.hasAttribute('data-console')) {
       var out = showConsole();
       if (!embedded) stageEdge(out, '--out-h');

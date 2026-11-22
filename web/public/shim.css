@@ -2862,6 +2862,12 @@ button.shim-toast-go {
   background: none;   /* boot.js moves it to center the windows, so the desk is painted on the page */
 }
 
+/* An embedded app's own controller (touch-pad.tsx padInFrame) floats at the bottom of its frame: the stage ends
+   above it, as on an app page. */
+:root[data-embed] #desktop {
+  bottom: var(--pad-h, 0px);
+}
+
 /* A desktop scaled down to fit (boot.js centerWindows) would clip its windows at its unscaled size. The
    toolbar and the controller sit above anything dragged past the stage's edges. */
 :root[data-stage] #desktop,

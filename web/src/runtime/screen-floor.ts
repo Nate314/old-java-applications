@@ -26,7 +26,7 @@ export function screenFloor(desktop: HTMLElement): Floor {
   var html = document.documentElement;
   var on = desktop.ownerDocument === document && html.hasAttribute('data-full') && !document.body.hasAttribute('data-shell');
   if (!on) return unfloored(desktop);   // before reading the frame's size, which lays the page out
-  var fw = innerWidth, fh = innerHeight;
+  var fw = innerWidth, fh = innerHeight - (parseFloat(html.style.getPropertyValue('--pad-h')) || 0);   // above the frame's own controller (padInFrame)
   var big = fw > 0 && fh > 0 ? Math.max(1, FLOOR_LONG / Math.max(fw, fh), FLOOR_SHORT / Math.min(fw, fh)) : 1;
   var s = desktop.style;
   if (big === 1) return unfloored(desktop);
