@@ -24,6 +24,8 @@ export interface Route {
 }
 
 const ICON = <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />;
+// boot.js links the manifest on its pages; the story and compare.html register the worker without it, so they link it here (installable from them too).
+const MANIFEST = <link rel="manifest" href="manifest.webmanifest" />;
 const skin = <script dangerouslySetInnerHTML={{ __html: SKIN_SCRIPT }} />;
 const homeDescription = 'Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play ' +
   apps.length + ' of them in the browser, installed as an app or offline.';
@@ -104,6 +106,7 @@ export const ROUTES: Route[] = [
         <ShareTags type="article" title="Twenty old programs, brought back to play" description={storyDescription} url="story.html"
           image="cards/story.jpg" alt="Flappy Bird's decompiled class b beside the same code renamed to class Bird" />
         {ICON}
+        {MANIFEST}
         <link rel="stylesheet" href="shim.css" />
         {skin}
       </>
@@ -130,6 +133,7 @@ export const ROUTES: Route[] = [
         <title>{'Then and now: ' + SITE}</title>
         <meta name="description" content="An old Java app as it was first restored and as it is today, both playable side by side, with every change in between." />
         {ICON}
+        {MANIFEST}
         <link rel="stylesheet" href="shim.css" />
         {skin}
       </>

@@ -18,7 +18,7 @@ import { openMaker } from './skin-maker';
 import { More, moreOut } from './toolbar-more';
 import { PhoneKeys } from './phone-keys';
 import { SlowMo } from './slow-mo';
-import { keepPictures } from '../sw/keep-pictures';
+import { registerWorker } from '../sw/register';
 import { openLayer } from './ui/layer';
 
 export let siteRoot: string;
@@ -192,21 +192,9 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
  * calls this only once its program has loaded: on a slow phone that download held Play back.
  */
 export function keepOffline() {
-  if ('serviceWorker' in navigator && window.isSecureContext) {
-    navigator.serviceWorker.register(siteRoot + 'sw.js').catch(function (e) {
-      console.warn('Offline play is not available: ' + e.message);
-    });
-    if (!controlledAtLoad) navigator.serviceWorker.ready.then(sendLoaded);
-    keepPictures();
-  }
+  registerWorker(siteRoot, controlledAtLoad);
 }
 let controlledAtLoad = true;
-/** This page loaded before the worker saw it, so once the worker controls it, it is told what to keep (sw.ts message). */
-function sendLoaded() {
-  const sw = navigator.serviceWorker;
-  if (!sw.controller) { sw.addEventListener('controllerchange', sendLoaded, { once: true }); return; }
-  sw.controller.postMessage({ oldjavaKeep: [location.href].concat(performance.getEntriesByType('resource').map(e => e.name)) });
-}
 
 export function init() {
   // ---- installable and offline: the web app manifest, icons and the service worker (sw.js) ----
