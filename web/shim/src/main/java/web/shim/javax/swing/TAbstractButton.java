@@ -166,8 +166,8 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
     }
 
     /**
-     * The gap to c when it is a same-size button next to this one in a row or a column, at most a quarter tile away
-     * (RubiksCube2D's first stickers), else MAX_VALUE.
+     * The gap to c when it is a same-size button next to this one in a row or a column, at most half a tile away
+     * (RubiksCube2D's first stickers; the first SynthesizerKeyboard's black keys, a quarter key apart), else MAX_VALUE.
      */
     private int tileGap(TComponent c) {
         int w = getWidth();
@@ -176,7 +176,7 @@ public abstract class TAbstractButton extends TJComponent implements TSwingConst
             return Integer.MAX_VALUE;
         }
         int gap = c.getY() == getY() ? Math.abs(c.getX() - getX()) - w : c.getX() == getX() ? Math.abs(c.getY() - getY()) - h : -1;
-        return gap >= 0 && gap * 4 <= Math.min(w, h) ? gap : Integer.MAX_VALUE;
+        return gap >= 0 && gap * 2 <= Math.min(w, h) ? gap : Integer.MAX_VALUE;
     }
 
     @Override
