@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import './home.css';
 import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
-import { FIRST, H, draw, useHomeDraw } from './model';
+import { FIRST, H, draw, useHomeDraw, usePart } from './model';
 import { TourBox, TourStart } from './TourBox';
 import { ComeBack } from './ComeBack';
 import { MoreButton, MoreMenu, useMore } from './PlayerMore';
@@ -229,15 +229,10 @@ function Gallery() {
   );
 }
 
-export function Home() {
-  useHomeDraw();
-  const t = H.take;
-  if (H.filter === 'yours' && !stampCount()) H.filter = 'all';   // the passport was reset, here or on another page
-  // A first visit (no stamps when the page loaded) shows the 20 apps before Your arcade, whose passport and records
-  // are still empty: on a phone that put the apps about two screens further down. Kept for the visit, so a first
-  // stamp does not move the panel above the gallery while the visitor scrolls.
-  const [newcomer] = useState(() => !stampCount());
-  const arcade = (
+/** Your arcade: one panel, four tabs (tabs.ts); a tab click draws only this (drawPart). */
+function Arcade() {
+  usePart('arcade');
+  return (
     <section className="arcade" id="arcade" aria-label="Your arcade">
       <div className="arcade-tabs" role="tablist" aria-label="Your arcade">
         <Tab id="news" label="What’s new" />
@@ -256,20 +251,14 @@ export function Home() {
       <TakeItWithYou off={off('takeaway')} />
     </section>
   );
-  // The page's <main> and its title and lead are in the HTML (src/routes.tsx), painted before this runs.
+}
+
+/** The gallery under its filters and Find; a filter or a preview clip draws only this (drawPart). */
+function Apps() {
+  usePart('gallery');
+  if (H.filter === 'yours' && !stampCount()) H.filter = 'all';   // the passport was reset, here or on another page
   return (
     <>
-      <HeroWall />
-      <ComeBack />
-      {/* What to do first, in one row: the tour, and the story for those who want to know how. */}
-      <div className="start">
-        <TourStart />
-        <p className="story-link"><a href="story.html">How they came back: the story →</a></p>
-      </div>
-      <p className="offline-banner" id="offline-banner" role="status" hidden={!(t.checked && t.offline)}>{t.checked ? bannerText() : null}</p>
-      <Player />
-      {!newcomer && arcade}
-      <h2>Play in the browser</h2>
       <div className="filters" role="group" aria-label="Filter apps">
         {[['all', 'All'], ['game', 'Games'], ['music', 'Music'], ['toy', 'Toys'], ['tool', 'Tools'], ...(stampCount() ? [['yours', 'Yours']] : [])].map(([f, label], i) => [
           i ? ' ' : null,
@@ -282,7 +271,33 @@ export function Home() {
         <kbd>{FIND_KEY}</kbd>
       </button>
       <Gallery />
-      {newcomer && arcade}
+    </>
+  );
+}
+
+export function Home() {
+  useHomeDraw();
+  const t = H.take;
+  // A first visit (no stamps when the page loaded) shows the 20 apps before Your arcade, whose passport and records
+  // are still empty: on a phone that put the apps about two screens further down. Kept for the visit, so a first
+  // stamp does not move the panel above the gallery while the visitor scrolls.
+  const [newcomer] = useState(() => !stampCount());
+  // The page's <main> and its title and lead are in the HTML (src/routes.tsx), painted before this runs.
+  return (
+    <>
+      <HeroWall />
+      <ComeBack />
+      {/* What to do first, in one row: the tour, and the story for those who want to know how. */}
+      <div className="start">
+        <TourStart />
+        <p className="story-link"><a href="story.html">How they came back: the story →</a></p>
+      </div>
+      <p className="offline-banner" id="offline-banner" role="status" hidden={!(t.checked && t.offline)}>{t.checked ? bannerText() : null}</p>
+      <Player />
+      {!newcomer && <Arcade />}
+      <h2>Play in the browser</h2>
+      <Apps />
+      {newcomer && <Arcade />}
     </>
   );
 }
