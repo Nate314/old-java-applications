@@ -188,6 +188,48 @@ public class WindowsKeyCheck {
          key.setSize(2 * Test.WIDTH, 2 * (Test.HEIGHT - 24));
          paint(key);
       });
+      // The shelf and the key as one: a shortcut shows its chord on the key for a moment, and the key held lights the shelf.
+      WindowsKey[] paired = new WindowsKey[1];
+      SwingUtilities.invokeAndWait(() -> {
+         log.clear();
+         WindowsKey key = new WindowsKey(keys);
+         key.setSize(100, 106);
+         ShortcutShelf shelf = new ShortcutShelf(keys, () -> false, () -> { }, key);
+         shelf.setSize(Test.WIDTH, ShortcutShelf.HEIGHT);
+         check(key.echoed() == null && !shelf.keyHeld(), "nothing echoed or held at first");
+         java.awt.Rectangle r = shelf.rect(0);
+         click(shelf, r.x + 5, r.y + 5, r.x + 5, r.y + 5);
+         check("Win+E".equals(key.echoed()) && !key.isDown() && log.equals(List.of("+" + win, "+" + KeyEvent.VK_E, "-" + KeyEvent.VK_E, "-" + win)),
+            "a click on E makes Win+E once and the key shows Win+E without pressing Windows again: " + key.echoed() + " " + log);
+         paint(key);
+         r = shelf.rect(4);
+         click(shelf, r.x + 5, r.y + 5, r.x + 5, r.y + 5);
+         check("Win+←".equals(key.echoed()), "an arrow echoes as Win+←: " + key.echoed());
+         mouse(key, MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
+         check(shelf.keyHeld(), "the key held: the shelf knows, to light its keys");
+         shelf.paint(new BufferedImage(Test.WIDTH, ShortcutShelf.HEIGHT, BufferedImage.TYPE_INT_ARGB).getGraphics());
+         mouse(key, MouseEvent.MOUSE_RELEASED, MouseEvent.BUTTON1);
+         check(!shelf.keyHeld(), "let go: the shelf's keys go back");
+         if (System.getProperty("litshot") != null) {
+            // The shelf lit under a held key, above the key, as on the screen.
+            mouse(key, MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
+            BufferedImage lit = new BufferedImage(Test.WIDTH, ShortcutShelf.HEIGHT + 106, BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics g = lit.getGraphics();
+            shelf.paint(g);
+            g.translate(8, ShortcutShelf.HEIGHT);
+            key.paint(g);
+            mouse(key, MouseEvent.MOUSE_RELEASED, MouseEvent.BUTTON1);
+            try {
+               javax.imageio.ImageIO.write(lit, "png", new File(System.getProperty("litshot")));
+            } catch (java.io.IOException e) {
+               throw new RuntimeException(e);
+            }
+         }
+         paired[0] = key;
+      });
+      Thread.sleep(WindowsKey.ECHO_MS + 400);
+      SwingUtilities.invokeAndWait(() -> check(paired[0].echoed() == null, "the echo goes after a moment"));
+      log.clear();
       // Where the key was left: kept in a file of its own, damaged or missing lines falling back to the defaults.
       File file = File.createTempFile("windows-key", ".txt");
       file.deleteOnExit();

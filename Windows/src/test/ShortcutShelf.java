@@ -48,6 +48,8 @@ final class ShortcutShelf extends JButton {
    private final BooleanSupplier dwellOn;
    private final Runnable toggleDwell;
    private final Dwell dwell;
+   /** The big key, which shows each chord the shelf makes and, held, lights the shelf's keys; null for none. */
+   private final WindowsKey key;
    /** The shortcut under the pointer, the one the mouse button holds, and the one the arrow keys picked; -1 for none. */
    private int hover = -1;
    private int held = -1;
@@ -58,7 +60,15 @@ final class ShortcutShelf extends JButton {
    }
 
    ShortcutShelf(WindowsKey.Keys keys, BooleanSupplier dwellOn, Runnable toggleDwell) {
+      this(keys, dwellOn, toggleDwell, null);
+   }
+
+   ShortcutShelf(WindowsKey.Keys keys, BooleanSupplier dwellOn, Runnable toggleDwell, WindowsKey key) {
       this.keys = keys;
+      this.key = key;
+      if (key != null) {
+         key.heldChanged = this::repaint;
+      }
       this.dwellOn = dwellOn;
       this.toggleDwell = toggleDwell;
       this.dwell = new Dwell(this, dwellOn, this::press);
@@ -142,6 +152,14 @@ final class ShortcutShelf extends JButton {
       this.keys.press(CODES[i]);
       this.keys.release(CODES[i]);
       this.keys.release(WindowsKey.WIN);
+      if (this.key != null) {
+         this.key.echo("Win+" + CAPS[i]);
+      }
+   }
+
+   /** Whether the big key is held, so that every key on the shelf is one a key typed now would add to it. */
+   boolean keyHeld() {
+      return this.key != null && this.key.isDown();
    }
 
    /** A row pressed: Win+its key, or hover to press turned on or off. */
@@ -244,6 +262,7 @@ final class ShortcutShelf extends JButton {
       Font capFont = new Font("SansSerif", Font.BOLD, 11);
       Font nameFont = new Font("SansSerif", Font.PLAIN, 11);
       boolean focus = this.isFocusOwner();
+      boolean held = this.keyHeld();
       for (int i = 0; i <= HOVER_ROW; i++) {
          Rectangle r = this.rect(i);
          boolean lit = i == this.held;
@@ -268,15 +287,26 @@ final class ShortcutShelf extends JButton {
          int capW = i < ROWS ? Math.max(18, g.getFontMetrics().stringWidth(CAPS[i]) + 8) : r.width;
          int base = r.y + (r.height + g.getFontMetrics().getAscent()) / 2 - 2;
          if (i < ROWS) {
-            g.setColor(lit ? Color.WHITE : CAP);
+            g.setColor(lit ? Color.WHITE : held ? LIT : CAP);
             g.fillRoundRect(r.x + 3, r.y + 3, capW, r.height - 6, 6, 6);
+            if (held) {
+               // The big key is down: these are the keys to type now.
+               g.setColor(Color.WHITE);
+               g.setStroke(new BasicStroke(1f));
+               g.drawRoundRect(r.x + 3, r.y + 3, capW - 1, r.height - 7, 6, 6);
+            }
             g.setColor(Color.WHITE);
             g.drawString(CAPS[i], r.x + 3 + (capW - g.getFontMetrics().stringWidth(CAPS[i])) / 2, base);
             g.setFont(nameFont);
             g.setColor(lit ? Color.WHITE : TEXT);
             g.drawString(NAMES[i], r.x + capW + 8, base);
          } else {
-            g.setColor(lit ? Color.WHITE : DIM);
+            if (held) {
+               g.setColor(Color.WHITE);
+               g.setStroke(new BasicStroke(1f));
+               g.drawRoundRect(r.x, r.y, r.width - 1, r.height - 1, 8, 8);
+            }
+            g.setColor(lit || held ? Color.WHITE : DIM);
             g.drawString(CAPS[i], r.x + (r.width - g.getFontMetrics().stringWidth(CAPS[i])) / 2, base);
          }
       }
