@@ -31,10 +31,10 @@ function changesOf(history: string, id: string) {
 
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-function Pane({ then }: { then: boolean }) {
+function Pane({ then, shown }: { then: boolean; shown: boolean }) {
   const label = then ? 'Then' : 'Now';
   return (
-    <figure className={'pane' + (then ? ' then' : '')}>
+    <figure className={'pane' + (then ? ' then' : '') + (shown ? ' shown' : '')} id={then ? 'pane-then' : 'pane-now'}>
       <figcaption>
         <strong>{label}</strong>
         <span>{then ? 'As first restored in 2026, before the reworks' : 'Today, after every change below'}</span>
@@ -47,6 +47,8 @@ function Pane({ then }: { then: boolean }) {
 
 export function Compare() {
   const [changes, setChanges] = useState<Change[] | null>(null);
+  // On a narrow screen one pane at a time, full size, flipped with the switch (both stay loaded, each keeps its game).
+  const [then, setThen] = useState(true);
   useEffect(() => {
     document.title = app.name + ', then and now | ' + SITE;
     fetch('history.txt').then(r => { if (!r.ok) throw new Error('history.txt: ' + r.status); return r.text(); })
@@ -64,13 +66,22 @@ export function Compare() {
         <p className="kicker">Then and now</p>
         <h1>{app.name}, then and now</h1>
         <p className="lead">
-          {'On the left, ' + app.name + ' as it ran when it was first brought back: the ' +
+          <span className="wide">{'On the left, ' + app.name + ' as it ran when it was first brought back: the ' +
             (app.origin === 'original' ? 'author’s own source' : 'code recovered from the old jar') +
-            ' with light bug fixes. On the right, the same app today. Play both, then click the one you want the keys.'}
+            ' with light bug fixes. On the right, the same app today. Play both, then click the one you want the keys.'}</span>
+          <span className="narrow">{'Flip between ' + app.name + ' as it ran when it was first brought back (Then) and the same app today (Now). Each keeps its own game while you flip.'}</span>
         </p>
         <div className="panes">
-          <Pane then />
-          <Pane then={false} />
+          <div className="flip" role="group" aria-label="Show">
+            <button type="button" className="then" aria-pressed={then} aria-controls="pane-then" onClick={() => setThen(true)}>
+              Then <small>2026 restore</small>
+            </button>
+            <button type="button" aria-pressed={!then} aria-controls="pane-now" onClick={() => setThen(false)}>
+              Now <small>{changes && changes.length ? '+' + changes.length + (changes.length === 1 ? ' change' : ' changes') : 'today'}</small>
+            </button>
+          </div>
+          <Pane then shown={then} />
+          <Pane then={false} shown={!then} />
         </div>
         <nav className="picks" aria-label="Compare another app">
           <span>Compare another:</span>

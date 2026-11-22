@@ -31,12 +31,32 @@ body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-ser
 .pane figcaption { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 8px 12px; font-size: 13px; }
 .pane figcaption strong { padding: 1px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink, #fff); font-size: 12px;
                           letter-spacing: 0.06em; text-transform: uppercase; }
-/* Then wears the sepia of an old photograph, as its poster in play.html does. */
-.pane.then figcaption strong { background: #8a6a3c; }
+/* Then wears the sepia of an old photograph, as its poster in play.html does; white ink on it (5:1), whatever the skin's. */
+.pane.then figcaption strong { background: #8a6a3c; color: #fff; }
 .pane.then { border-color: #8a6a3c; }
 .pane figcaption span { opacity: 0.8; }
 .pane iframe { display: block; width: 100%; height: clamp(300px, calc(100vh - 270px), 620px); border: 0; background: #0f172a; }
-@media (max-width: 759px) { .pane iframe { height: clamp(260px, 72vw, 420px); } }
+
+/* Narrow: a Then | Now switch over one full-size pane instead of two small ones stacked. */
+.flip, .compare .lead .narrow { display: none; }
+@media (max-width: 759px) {
+  .compare .lead .wide { display: none; }
+  .compare .lead .narrow { display: inline; }
+  .flip { display: flex; position: sticky; top: 0; z-index: 1; padding: 6px; gap: 6px; border: 1px solid var(--card-border);
+          border-radius: 999px; background: var(--card-bg); }
+  .flip button { flex: 1; min-height: 44px; border: 0; border-radius: 999px; background: transparent; color: inherit;
+                 font: inherit; font-weight: 700; cursor: pointer; }
+  .flip small { font-weight: 400; opacity: 0.75; margin-left: 4px; }
+  .flip button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink, #fff); }
+  .flip button.then[aria-pressed="true"] { background: #8a6a3c; color: #fff; }
+  .flip button[aria-pressed="true"] small { opacity: 0.9; }
+  :root[data-skin="classic"] .flip, :root[data-skin="classic"] .flip button { border-radius: 0; }
+  .pane:not(.shown) { display: none; }
+  .pane.shown { animation: flip-in 0.25s ease-out; }
+  .pane iframe { height: clamp(300px, calc(100svh - 150px), 640px); }
+}
+@keyframes flip-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .pane.shown { animation: none; } }
 
 .changes { margin: 32px 0 0; max-width: 820px; }
 .changes h2 { margin: 0 0 4px; font-size: 22px; }
