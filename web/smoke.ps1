@@ -5,7 +5,9 @@
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, or an app whose
 # biggest canvas is one flat color. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
-# back without its title screen. Exits 1 when any page fails.
+# back without its title screen. On the story and the lost page it also opens an app from a link far down the page in
+# the play sheet (PlayHere.tsx), checks it as above, closes the sheet and checks the link is where it was. Exits 1
+# when any page fails.
 # Sound is off (--mute-audio, __shimSynth.noteOn stubbed, new AudioContexts suspended), the clipboard and
 # alert/confirm/prompt are stubbed, Chrome's profile is a throwaway folder under -ProfileRoot, and the server and
 # Chrome are stopped by PID. Build first (mvn -f web/pom.xml package), then run from the repo root:
@@ -75,8 +77,8 @@ $Close = "(function () { if (document.querySelector('.shim-exit')) return 'exit'
 # One page: loads it, waits until `ready` (a selector) is on it, or for an app (-App) presses Play when there is
 # one and checks the window and its paint. -Click presses that button first and -Frame is the iframe the app is in
 # (play.html's player); -Exit closes the app and runs it again (see the top); -Missing expects the address itself to
-# answer 404 (the lost page).
-function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit) {
+# answer 404 (the lost page); -Sheet is the page's app links: the last one opens the app in the play sheet (see the top).
+function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet) {
     $t = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Cdp 'Page.navigate' @{ url = 'about:blank' } | Out-Null
     Invoke-Js '1' | Out-Null   # reads the last page's late events, then forgets them
@@ -87,10 +89,13 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
     # An expression about the app's document: the page's own, or its player frame's.
     $in = { param($expr) if ($Frame) { "(function (document) { return $expr; })(document.querySelector('$Frame').contentDocument)" } else { $expr } }
     $wait = { param($expr, [int]$ms) for ($i = 0; $i -lt $ms / 200; $i++) { Start-Sleep -Milliseconds 200; try { if (Invoke-Js $expr) { return $true } } catch { } }; $false }
+    # The sheet's link is scrolled to the middle of the window and clicked; its place in the window is kept for the close.
+    if ($Sheet) { $Frame = '.play-here[open] iframe'; $pressFirst = "(function (l) { var b = l[l.length - 1]; if (b) { b.scrollIntoView({ block: 'center', behavior: 'instant' }); window.__smokeLink = b; window.__smokeTop = b.getBoundingClientRect().top; b.click(); } return !!b; })(document.querySelectorAll('$Sheet'))" }
+    elseif ($Click) { $pressFirst = "(function (b) { if (b) b.click(); return !!b; })(document.querySelector('$Click'))" }
     if (-not $App) {
         if (-not (& $wait "document.readyState === 'complete' && !!document.querySelector('$ready')" 20000)) { $why = "page did not finish loading ($ready)" }
         else { Start-Sleep -Milliseconds $Settle }
-    } elseif ($Click -and -not (& $wait "(function (b) { if (b) b.click(); return !!b; })(document.querySelector('$Click'))" 20000)) { $why = "no $Click to press" }
+    } elseif ($pressFirst -and -not (& $wait $pressFirst 20000)) { $why = "no $Click$Sheet to press" }
     elseif (-not (& $wait (& $in "!!(document.querySelector('.shim-title-play:not([disabled])') || document.querySelector('#desktop > *'))") 30000)) { $why = 'Play never became ready' }
     else {
         Invoke-Js (& $in "(function (b) { if (b) b.click(); })(document.querySelector('.shim-title-play'))") | Out-Null
@@ -101,6 +106,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
             # adds one circle to the black every 250 ms).
             if (-not (& $wait "$(& $in $Paint) !== 1" 5000)) { $why = 'blank canvas (one flat color)' }
             elseif ($Exit) { $why = Test-Exit $wait }
+            elseif ($Sheet) { $why = Test-SheetClose $wait }
         }
     }
     Invoke-Js '1' | Out-Null   # reads the events that came during the waits
@@ -122,6 +128,8 @@ $pages = @(
     @{ name = "play.html?app=$($Apps[0])"; path = "play.html?app=$($Apps[0])"; App = $true; Click = '#poster-play'; Frame = '#frame' }
     @{ name = 'lost page (missing path)'; path = 'no-such-page'; ready = '#lost'; Missing = $true }
     @{ name = 'compare.html'; path = 'compare.html'; ready = 'main.compare' }
+    @{ name = 'story play sheet'; path = 'story.html'; App = $true; Sheet = '#apps20 a' }
+    @{ name = 'lost page play sheet'; path = 'no-such-page'; App = $true; Sheet = '#cards a.card'; Missing = $true }
 )
 foreach ($app in $Apps) {
     $pages += @{ name = $app; path = "$app/index.html"; App = $true; Exit = $true }
@@ -142,6 +150,15 @@ function Test-Exit($wait) {
     if (-not (Invoke-Js "document.activeElement === document.querySelector('.shim-exit > button')")) { return 'exit: Run again is not focused' }
     Invoke-Js "document.querySelector('.shim-exit > button').click()" | Out-Null
     if (-not (& $wait "!document.querySelector('.shim-exit, .shim-title-play') && $Up" 30000)) { return 'exit: Run again did not bring the app back without its title screen' }
+}
+
+# The play sheet's close button, on a page with an app playing in it; returns why it failed, or nothing.
+function Test-SheetClose($wait) {
+    if (-not (Invoke-Js 'scrollY > 0')) { return 'sheet: the link was not below the fold, so the scroll was not tested' }
+    Invoke-Js "document.querySelector('.play-here-bar .btn.primary').click()" | Out-Null
+    if (-not (& $wait "!document.querySelector('.play-here[open], .play-here iframe')" 5000)) { return 'sheet: did not close, or left its app running' }
+    $moved = Invoke-Js 'Math.round(window.__smokeLink.getBoundingClientRect().top - window.__smokeTop)'
+    if ($moved) { return "sheet: the page moved $moved px under it" }
 }
 
 $total = [Diagnostics.Stopwatch]::StartNew()
