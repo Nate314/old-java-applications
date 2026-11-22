@@ -3,6 +3,7 @@
 // come from apps.json.
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import './home.css';
+import './gallery-cards.css';
 import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
 import { FIRST, H, draw, useHomeDraw, usePart } from './model';
@@ -201,8 +202,10 @@ function Gallery() {
               data-origin={a.origin} data-cat={a.cat} data-min-width={a.minWidth} data-min-height={a.minHeight}
               className={cls || undefined} hidden={!inFilter(a, H.filter)}
               onMouseEnter={() => cardEnter(a.id)} onMouseLeave={() => cardLeave(a.id)} onFocus={e => cardFocus(e, a.id)} onBlur={e => cardBlur(e, a.id)}>
+            <img className="tone" src={webp(a.shot)} alt="" loading="lazy" />
             <a className="thumb" href={page(a.id)} onClick={e => P.cardClick(e, a)}>
               <img src={webp(a.shot)} alt={a.alt} loading="lazy" />
+              <span className="go" aria-hidden="true" />
               <span className="badge">{played(a) ? 'Played ✓' : 'New'}</span>
               <span className="saved" hidden={!(t.checked && (ok || t.offline))}>{t.checked ? (ok ? 'Offline ✓' : 'Needs a connection') : null}</span>
               {c.wanted[a.id] && (
