@@ -39,6 +39,10 @@ final class RunnerPanel extends JPanel {
    private static final int GUIDE_LIT = 12;
    /** Jumps held up to this many steps are shown as TAP (a short hop clears them best), longer ones as HOLD. */
    static final int GUIDE_TAP = 7;
+   /** On a screen narrower than the game (a phone held upright): the thumb pads' height, under the strip. */
+   static final int PADS = 190;
+   private static final Font PAD = new Font(Font.SANS_SERIF, Font.BOLD, 36);
+   private static final Font PAD_TEXT = new Font(Font.SANS_SERIF, Font.PLAIN, 19);
 
    static final Color INK = new Color(0x535353);
    static final Color PAPER = new Color(0xF7F7F7);
@@ -106,19 +110,23 @@ final class RunnerPanel extends JPanel {
    private Ears.Mode ears;
    /** T after a crash: the run just ended, in one picture, shown instead of the game until a key goes on. */
    private RunPicture picture;
+   /** Whether the thumb pads are under the game, and the one a finger holds (Ears.JUMP or Ears.DUCK, else 0). */
+   private final boolean pads;
+   private int padHeld;
 
    /** A quiet panel, for the self-check. */
    RunnerPanel(Records records, long seed) {
-      this(records, seed, Sounds.silent(records.sound));
+      this(records, seed, Sounds.silent(records.sound), false);
    }
 
-   RunnerPanel(Records records, long seed, Sounds sounds) {
+   RunnerPanel(Records records, long seed, Sounds sounds, boolean pads) {
+      this.pads = pads;
       this.runner = new Runner(seed);
       this.records = records;
       this.sounds = sounds;
       this.ears = records.ears;
       this.bot.moveTo(records.markerX, records.markerY);
-      this.setPreferredSize(new Dimension(Runner.WIDTH, HEIGHT));
+      this.setPreferredSize(new Dimension(Runner.WIDTH, HEIGHT + (pads ? PADS : 0)));
       this.setFocusable(true);
       this.addKeyListener(new KeyAdapter() {
          @Override
@@ -168,7 +176,9 @@ final class RunnerPanel extends JPanel {
          @Override
          public void mousePressed(MouseEvent e) {
             RunnerPanel.this.requestFocusInWindow();
-            if (e.getY() >= STRIP) {
+            if (e.getY() >= HEIGHT && RunnerPanel.this.evolution == null && RunnerPanel.this.duel == null) {
+               RunnerPanel.this.padPress(e.getX() < Runner.WIDTH / 2 ? Ears.DUCK : Ears.JUMP);
+            } else if (e.getY() >= STRIP && e.getY() < HEIGHT) {
                RunnerPanel.this.clickStrip(e.getX());
             } else if (RunnerPanel.this.evolution != null) {
                return;
@@ -186,7 +196,9 @@ final class RunnerPanel extends JPanel {
 
          @Override
          public void mouseReleased(MouseEvent e) {
-            if (RunnerPanel.this.dragging) {
+            if (RunnerPanel.this.padHeld != 0) {
+               RunnerPanel.this.padRelease();
+            } else if (RunnerPanel.this.dragging) {
                RunnerPanel.this.dragging = false;
                RunnerPanel.this.saveMarker();
             } else if (RunnerPanel.this.tapped != null) {
@@ -248,6 +260,27 @@ final class RunnerPanel extends JPanel {
          this.humanHelped = true;
       }
       this.runner.duck(down);
+   }
+
+   /** A finger on a thumb pad: DUCK holds Down, JUMP is Space (it starts a run, and runs again after a crash). */
+   void padPress(int need) {
+      this.padHeld = need;
+      if (need == Ears.DUCK) {
+         this.duckKey(true);
+      } else {
+         this.jumpKey(true);
+      }
+      this.repaint();
+   }
+
+   void padRelease() {
+      if (this.padHeld == Ears.DUCK) {
+         this.duckKey(false);
+      } else {
+         this.jumpKey(false);
+      }
+      this.padHeld = 0;
+      this.repaint();
    }
 
    /** In a two-player race: Space, W and S are P1's jump and duck, the up and down arrows P2's. */
@@ -641,6 +674,76 @@ final class RunnerPanel extends JPanel {
       } else {
          this.paintScene(g2, this.blindfolded());
       }
+      if (this.pads) {
+         this.paintPads(g2, this.darkness());
+      }
+   }
+
+   /** How dark the sky is on screen: never while evolving or showing the whole run. */
+   private double darkness() {
+      return this.evolution != null || this.picture != null ? 0 : this.sky.darkness();
+   }
+
+   /**
+    * The thumb pads under the game: DUCK on the left, JUMP on the right, filled while a finger holds one and, on your
+    * first runs, while the mark under the ground is lit (with its TAP, HOLD or DUCK). In two players each is a player's jump.
+    */
+   private void paintPads(Graphics2D g, double dark) {
+      Color paper = Sky.tint(PAPER, dark);
+      Color ink = Sky.tint(INK, dark);
+      Color muted = Sky.tint(MUTED, dark);
+      g.setColor(Sky.tint(STRIP_BG, dark));
+      g.fillRect(0, HEIGHT, Runner.WIDTH, PADS);
+      if (this.evolution != null) {
+         g.setFont(PAD_TEXT);
+         g.setColor(muted);
+         centered(g, "The bots are racing. Back to the game (E) is just above.", HEIGHT + PADS / 2);
+         return;
+      }
+      Runner.State state = this.runner.state();
+      int[] lit = this.guiding() && state == Runner.State.RUNNING ? this.guide() : null;
+      int w = Runner.WIDTH / 2 - 18;
+      int y = HEIGHT + 6;
+      int h = PADS - 18;
+      for (int need : new int[] { Ears.DUCK, Ears.JUMP }) {
+         int x = need == Ears.DUCK ? 12 : Runner.WIDTH / 2 + 6;
+         String word;
+         String hint;
+         boolean on;
+         if (this.duel != null) {
+            word = need == Ears.DUCK ? "P1 JUMP" : "P2 JUMP";
+            hint = this.duel.running() ? "hold to jump higher" : "tap to start both";
+            on = this.tapped == (need == Ears.DUCK ? this.duel.p1 : this.duel.p2);
+         } else {
+            boolean marked = lit != null && lit[1] == 1 && lit[0] == need;
+            on = this.padHeld == need || marked;
+            if (need == Ears.DUCK) {
+               word = "DUCK";
+               hint = "hold under the middle birds";
+            } else {
+               word = marked ? lit[2] == 1 ? "HOLD" : "TAP" : state == Runner.State.READY ? "RUN"
+                  : state == Runner.State.CRASHED ? "RUN AGAIN" : "JUMP";
+               hint = state == Runner.State.RUNNING ? "hold to jump higher" : "then tap to jump";
+            }
+         }
+         g.setColor(on ? ink : paper);
+         g.fillRoundRect(x, y, w, h, 28, 28);
+         g.setColor(on ? paper : muted);
+         g.setStroke(new BasicStroke(2f));
+         g.drawRoundRect(x, y, w, h, 28, 28);
+         g.setStroke(new BasicStroke(1f));
+         int cx = x + w / 2;
+         // An arrow: up for a jump, down for the duck.
+         int ay = y + 40;
+         int dir = need == Ears.DUCK && this.duel == null ? 1 : -1;
+         g.setColor(on ? paper : ink);
+         g.fillPolygon(new int[] { cx - 18, cx, cx + 18 }, new int[] { ay - dir * 10, ay + dir * 10, ay - dir * 10 }, 3);
+         g.setFont(PAD);
+         g.drawString(word, cx - g.getFontMetrics().stringWidth(word) / 2, y + 98);
+         g.setFont(PAD_TEXT);
+         g.setColor(on ? paper : muted);
+         g.drawString(hint, cx - g.getFontMetrics().stringWidth(hint) / 2, y + 134);
+      }
    }
 
    /** In the browser, when the system asks for reduced motion: the crash does not shake (null on the desktop JDK). */
@@ -649,7 +752,7 @@ final class RunnerPanel extends JPanel {
    }
 
    private void paintScene(Graphics2D g, boolean blind) {
-      double dark = this.evolution != null || this.picture != null ? 0 : this.sky.darkness();
+      double dark = this.darkness();
       if (this.evolution != null) {
          EvolveView.paint(g, this.evolution, SPEEDS[this.speed]);
       } else if (this.duel != null) {
@@ -1053,7 +1156,8 @@ final class RunnerPanel extends JPanel {
       if (state == Runner.State.RUNNING || this.duel != null && this.duel.running()) {
          return;
       }
-      String title = state != Runner.State.READY ? "G A M E   O V E R" : this.duel != null ? "Two players: Space, W or ↑ to run" : "Space to run";
+      String title = state != Runner.State.READY ? "G A M E   O V E R" : this.duel != null ? this.pads ? "Two players: tap your pad to run" : "Two players: Space, W or ↑ to run"
+         : this.pads ? "Tap RUN to start" : "Space to run";
       String[] lines = state == Runner.State.READY && this.duel != null
          ? new String[] { "P1 jumps with W or Space and ducks with S. P2 has ↑ and ↓.",
             "One course for both, P2 a step ahead. Or tap your half of the game." }
