@@ -4,7 +4,7 @@
 # screen with touch emulation (where the band must offer its Keyboard button and the touch controller must show on the
 # apps that have one, without the buttons the app draws itself) and its Then page where it has one. On an app's own
 # page (wide and phone) and its Then page it first checks the early title card from the HTML has the live card's rows in the same places
-# (Test-EarlyTitle). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
+# (Test-EarlyTitle). On the home page it types into the gallery's filter field (Test-Search). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
@@ -105,7 +105,7 @@ $KnownUnnamed = @{}
 # answer 404 (the lost page); -Sheet is the page's app links: the last one opens the app in the play sheet (see the top);
 # -Phone loads it in a 400x800 phone screen with a finger for a pointer, so apps that pick a narrow layout at start are
 # checked in it too, and checks its touch extras (Test-Touch).
-function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [switch]$Phone) {
+function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [switch]$Phone, [switch]$Search) {
     $t = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Cdp 'Page.navigate' @{ url = 'about:blank' } | Out-Null
     Invoke-Js '1' | Out-Null   # reads the last page's late events, then forgets them
@@ -125,7 +125,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
     elseif ($Click) { $pressFirst = "(function (b) { if (b) b.click(); return !!b; })(document.querySelector('$Click'))" }
     if (-not $App) {
         if (-not (& $wait "document.readyState === 'complete' && !!document.querySelector('$ready')" 20000)) { $why = "page did not finish loading ($ready)" }
-        else { Start-Sleep -Milliseconds $Settle }
+        else { Start-Sleep -Milliseconds $Settle; if ($Search) { $why = Test-Search $wait } }
     } elseif ($pressFirst -and -not (& $wait $pressFirst 20000)) { $why = "no $Click$Sheet to press" }
     elseif (-not (& $wait (& $in "!!(document.querySelector('.shim-title-play:not([disabled])') || document.querySelector('#desktop > *'))") 30000)) { $why = 'Play never became ready' }
     elseif (($Exit -or $Phone -or $path -like '*/then.html') -and ($why = Test-EarlyTitle)) { }   # the app's own page, wide and on a phone, and its Then page
@@ -161,7 +161,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
 # The pages visitors land on, then each app's page, its embedded forms (another site's widget, and filling it) and its
 # Then page where it has one.
 $pages = @(
-    @{ name = 'home page'; path = 'index.html'; ready = '#player-frame' }
+    @{ name = 'home page'; path = 'index.html'; ready = '#player-frame'; Search = $true }
     @{ name = 'story'; path = 'story.html'; ready = 'main' }
     # No ?app=: the tile picker of every app; its last tile plays that app right there.
     @{ name = 'play.html (no app, picker)'; path = 'play.html'; App = $true; Click = '#oops:not([hidden]) .pick li:last-child button'; Frame = '#frame' }
@@ -234,6 +234,28 @@ function Test-Exit($wait) {
     if (-not (Invoke-Js "document.activeElement === document.querySelector('.shim-exit > button')")) { return 'exit: Run again is not focused' }
     Invoke-Js "document.querySelector('.shim-exit > button').click()" | Out-Null
     if (-not (& $wait "!document.querySelector('.shim-exit, .shim-title-play') && $Up" 30000)) { return 'exit: Run again did not bring the app back without its title screen' }
+}
+
+# The home gallery's filter field (Home.tsx Apps, player.ts queryInput/queryKey), typed into with real keys: a word no
+# app has leaves no card and says so, Esc brings every card back, the last app's id narrows the cards to a few with it
+# among them, and Enter plays the first card left in the home player. Returns why it failed, or nothing.
+function Test-Search($wait) {
+    $cards = "document.querySelectorAll('#apps > li:not([hidden])')"
+    $all = "document.querySelectorAll('#apps > li').length"
+    $id = @(Get-Content -Raw (Join-Path $Site 'apps.json') | ConvertFrom-Json)[-1].id
+    if (-not (& $wait "!!document.getElementById('gallery-filter') && $all > 1" 10000)) { return 'search: no filter field or cards' }
+    Invoke-Js "document.getElementById('gallery-filter').focus()" | Out-Null
+    foreach ($c in 'zqxj'.ToCharArray()) { Send-Key $c }
+    if (-not (& $wait "$cards.length === 0 && !!document.querySelector('.no-match')" 3000)) { return "search: 'zqxj' left $(Invoke-Js "$cards.length") cards or no 'No app' line" }
+    Send-Key Escape
+    if (-not (& $wait "document.getElementById('gallery-filter').value === '' && $cards.length === $all" 3000)) { return 'search: Esc did not clear the field and bring every card back' }
+    foreach ($c in $id.ToLower().ToCharArray()) { Send-Key $c }
+    if (-not (& $wait "(function (s) { return s.length > 0 && s.length < $all && [].some.call(s, function (l) { return l.dataset.app === '$id'; }) && /Enter plays/.test(document.getElementById('gallery-filter-said').textContent); })($cards)" 3000)) {
+        return "search: typing '$($id.ToLower())' did not narrow the cards to a few with $id ($(Invoke-Js "$cards.length") shown)"
+    }
+    $first = Invoke-Js "$cards[0].dataset.app"
+    Send-Key Enter
+    if (-not (& $wait "location.hash === '#$first' && document.getElementById('player-frame').src.indexOf('/$first/') >= 0" 5000)) { return "search: Enter did not play $first in the home player" }
 }
 
 # Controller buttons an app draws itself on a 400 px screen, so its touch controller must leave them out (ownBelow in
