@@ -108,14 +108,19 @@ export function titleScreen(files: string[]) {
     }
     document.removeEventListener('keydown', go, true);
     leaving = true;
-    ui.leave();
-    html.removeAttribute('data-title');
+    // With a picture in view, it stays up until the app's window is there and then opens into it (launch); otherwise it fades.
+    var pic = launchPicture(screen);
+    if (!pic) {
+      ui.leave();
+      html.removeAttribute('data-title');
+    }
     var start = started;
     started = null;
     // Let go of Play, so the app's first button or field can take the keyboard (the shim's TDesktop.show).
     if (screen.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     start();
-    setTimeout(function () { close(); titleLog = null; }, 400);
+    if (pic) launch(pic, function () { close(); titleLog = null; html.removeAttribute('data-title'); });
+    else setTimeout(function () { close(); titleLog = null; }, 400);
   }
 
   return {
@@ -140,6 +145,46 @@ export function titleScreen(files: string[]) {
     // Straight on, as if Play were pressed (now, or once the files are in).
     skip: function () { if (started) go(); else skipping = true; }
   };
+}
+
+// Play opens the title's picture (or its playing preview clip) into the app's own window: one same-page view transition
+// carries the picture across while the rest of the card fades, so the visitor sees the game they picked become the game
+// they play. Not for reduced motion, browsers without view transitions, Arcade (its stage has its own power-on), or a
+// picture off screen (a scrolled phone card).
+function launchPicture(screen: HTMLElement): HTMLElement | null {
+  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches ||
+    document.documentElement.getAttribute('data-skin') === 'arcade') return null;
+  const pic = screen.querySelector<HTMLElement>('.shim-title-clip.on') || screen.querySelector<HTMLImageElement>('.shim-title-art img');
+  if (!pic || (pic instanceof HTMLImageElement && !pic.naturalWidth)) return null;
+  const r = pic.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight ? pic : null;
+}
+
+/** The app's biggest window, once it has stood still for one look (the stage centres it after show); the stage itself after 1.2 s. */
+function launch(pic: HTMLElement, leave: () => void) {
+  const t0 = Date.now();
+  let last = '';
+  (function look() {
+    let win: HTMLElement | null = null, area = 0;
+    document.querySelectorAll<HTMLElement>('#desktop .window').forEach(w => {
+      const r = w.getBoundingClientRect();
+      if (r.width * r.height > area) { area = r.width * r.height; win = w; }
+    });
+    const at = win ? JSON.stringify((win as HTMLElement).getBoundingClientRect()) : '';
+    if ((!at || at !== last) && Date.now() - t0 < 1200) { last = at; setTimeout(look, 40); return; }
+    const to = win || document.getElementById('desktop');
+    pic.style.viewTransitionName = 'oldjava-launch';
+    document.documentElement.setAttribute('data-launch', '');
+    const vt = document.startViewTransition(() => {
+      leave();
+      if (to) to.style.viewTransitionName = 'oldjava-launch';
+    });
+    vt.ready.catch(() => { /* skipped (a hidden tab): the title is gone all the same */ });
+    vt.finished.finally(() => {
+      document.documentElement.removeAttribute('data-launch');
+      if (to) to.style.viewTransitionName = '';
+    });
+  })();
 }
 
 const TAP = matchMedia('(pointer: coarse)').matches;   // a phone or tablet: no keys to press
