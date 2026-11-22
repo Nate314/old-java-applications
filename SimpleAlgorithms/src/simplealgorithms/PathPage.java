@@ -16,10 +16,15 @@ import java.util.Random;
  */
 class PathPage extends Page {
 	private static final int CELL = 16;
-	private static final int GX = 16;
-	private static final int GY = 64;
-	private static final int PX = GX + Grid.COLS * CELL + 16;
-	private static final int ROW_TOP = GY + 16;
+	/** Narrow, the table goes under the grid, with the search's idea beside it. */
+	private static final int GX = NARROW ? 8 : 16;
+	private static final int GY = NARROW ? 84 : 64;
+	private static final int PX = NARROW ? 8 : GX + Grid.COLS * CELL + 16;
+	private static final int ROW_TOP = NARROW ? GY + Grid.ROWS * CELL + 30 : GY + 16;
+	/** The table's right edge, and where the idea's lines go. */
+	private static final int TABLE_RIGHT = NARROW ? PX + 222 : LabPanel.WIDTH - 8;
+	private static final int IDEA_X = NARROW ? TABLE_RIGHT + 12 : PX + 4;
+	private static final int IDEA_W = LabPanel.WIDTH - 8 - IDEA_X;
 	private static final int ROW = 24;
 	private static final double[] SPEEDS = { 0.5, 2, 6, 20 };
 	private static final int[] PATH_SPEEDS = { 1, 1, 2, 4 };
@@ -214,7 +219,7 @@ class PathPage extends Page {
 	}
 
 	private static int rowAt(int x, int y) {
-		if (x < PX || x >= LabPanel.WIDTH - 8 || y < ROW_TOP) {
+		if (x < PX || x >= TABLE_RIGHT || y < ROW_TOP) {
 			return -1;
 		}
 		int row = (y - ROW_TOP) / ROW;
@@ -280,6 +285,11 @@ class PathPage extends Page {
 	}
 
 	@Override
+	boolean drags() {
+		return true;
+	}
+
+	@Override
 	void release() {
 		dragging = NONE;
 		lastCell = -1;
@@ -299,8 +309,8 @@ class PathPage extends Page {
 		text(g, "Pathfinding", TITLE, INK, 20, 32);
 		text(g, status(), BOLD, search().found() || shown < search().order.length ? INK : RED,
 				w - 20 - width(g, status(), BOLD), 32);
-		text(g, "Drag on the grid to draw " + (tool == Grid.WALL ? "walls" : "mud") + " (D switches), drag S or G to move"
-				+ " them. Every search reruns as you draw.", TEXT, PENCIL, 20, 54);
+		paragraph(g, "Drag on the grid to draw " + (tool == Grid.WALL ? "walls" : "mud") + (NARROW ? "" : " (D switches)")
+				+ ", drag S or G to move them. Every search reruns as you draw.", TEXT, PENCIL, 20, 54, w - 40, 0, 16, 2);
 		paintGrid(g);
 		paintPath(g);
 		paintEnd(g, grid.start, GREEN, "S");
@@ -415,7 +425,7 @@ class PathPage extends Page {
 	private void paintTable(Graphics2D g) {
 		String[] heads = { "looked", "steps", "cost" };
 		for (int i = 0; i < heads.length; i++) {
-			text(g, heads[i], SMALL, PENCIL, COLUMNS[i] - width(g, heads[i], SMALL), GY + 10);
+			text(g, heads[i], SMALL, PENCIL, COLUMNS[i] - width(g, heads[i], SMALL), ROW_TOP - 6);
 		}
 		int fewestLooked = Integer.MAX_VALUE;
 		int fewestSteps = Integer.MAX_VALUE;
@@ -432,11 +442,11 @@ class PathPage extends Page {
 			int y = ROW_TOP + i * ROW;
 			if (i == algorithm || i == hoverRow) {
 				g.setColor(i == algorithm ? Color.WHITE : new Color(255, 252, 236));
-				g.fillRoundRect(PX, y, LabPanel.WIDTH - 8 - PX, ROW - 3, 10, 10);
+				g.fillRoundRect(PX, y, TABLE_RIGHT - PX, ROW - 3, 10, 10);
 				if (i == algorithm) {
 					g.setColor(INK);
 					g.setStroke(new BasicStroke(1.5f));
-					g.drawRoundRect(PX, y, LabPanel.WIDTH - 8 - PX, ROW - 3, 10, 10);
+					g.drawRoundRect(PX, y, TABLE_RIGHT - PX, ROW - 3, 10, 10);
 					g.setStroke(new BasicStroke(1f));
 				}
 			}
@@ -450,35 +460,16 @@ class PathPage extends Page {
 				text(g, cells[c], font, best[c] ? GREEN : INK, COLUMNS[c] - width(g, cells[c], font), y + 16);
 			}
 		}
-		int y = ROW_TOP + Paths.NAMES.length * ROW + 14;
-		for (String line : wrap(g, Paths.IDEAS[algorithm], TEXT, LabPanel.WIDTH - 12 - PX)) {
-			text(g, line, TEXT, INK, PX + 4, y);
+		int y = NARROW ? ROW_TOP + 12 : ROW_TOP + Paths.NAMES.length * ROW + 14;
+		for (String line : wrap(g, Paths.IDEAS[algorithm], TEXT, IDEA_W, 0)) {
+			text(g, line, TEXT, INK, IDEA_X, y);
 			y += 17;
 		}
 		y += 4;
 		for (String line : wrap(g, "Green: best in its column. A step onto mud costs " + Grid.MUD_COST + ", onto open ground 1.",
-				SMALL, LabPanel.WIDTH - 12 - PX)) {
-			text(g, line, SMALL, PENCIL, PX + 4, y);
+				SMALL, IDEA_W, 0)) {
+			text(g, line, SMALL, PENCIL, IDEA_X, y);
 			y += 14;
 		}
-	}
-
-	/** Splits text into lines no wider than width, at spaces. */
-	private static List<String> wrap(Graphics2D g, String text, Font font, int width) {
-		List<String> lines = new ArrayList<>();
-		String line = "";
-		for (String word : text.split(" ")) {
-			String longer = line.isEmpty() ? word : line + " " + word;
-			if (!line.isEmpty() && width(g, longer, font) > width) {
-				lines.add(line);
-				line = word;
-			} else {
-				line = longer;
-			}
-		}
-		if (!line.isEmpty()) {
-			lines.add(line);
-		}
-		return lines;
 	}
 }

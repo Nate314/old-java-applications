@@ -20,11 +20,15 @@ class WeighPage extends Page {
 	private static final int ROW = 38;
 	private static final int DIAGRAM_X = 16;
 	private static final int DIAGRAM_W = 440;
-	private static final int DIAGRAM_TOP = 78;
-	private static final int DIAGRAM_BOTTOM = 384;
-	private static final int SIDE_X = 472;
-	private static final int SIDE_W = 232;
-	private static final int PIVOT_Y = 92;
+	/** Narrow, the picture takes the width and the balance and the side go under it, side by side. */
+	private static final int DIAGRAM_TOP = NARROW ? 110 : 78;
+	private static final int DIAGRAM_BOTTOM = NARROW ? 420 : 384;
+	private static final int SIDE_X = NARROW ? 248 : 472;
+	private static final int SIDE_W = NARROW ? 220 : 232;
+	private static final int SCALE_X = NARROW ? 124 : SIDE_X + SIDE_W / 2;
+	private static final int PIVOT_Y = NARROW ? 462 : 92;
+	/** How far down the side's lines sit from where they sit when wide. */
+	private static final int SIDE_DY = NARROW ? 226 : 0;
 	private static final int ARM = 80;
 	private static final Color CARD = new Color(222, 192, 142);
 	private static final Color CARD_EDGE = new Color(150, 112, 66);
@@ -70,7 +74,7 @@ class WeighPage extends Page {
 		peeked = false;
 		hint = null;
 		tilt = 0;
-		status = "Click two boxes, or press their letters.";
+		status = NARROW ? "Tap two boxes to weigh them." : "Click two boxes, or press their letters.";
 		boxX = null;
 		place(true);
 	}
@@ -112,7 +116,7 @@ class WeighPage extends Page {
 		String what = name(result.lighter) + " is lighter than " + name(result.heavier) + ".";
 		if (weighing.sorted()) {
 			status = "Sorted in " + weighing.log.size() + (weighing.log.size() == 1 ? " weighing." : " weighings.")
-					+ (peeked ? " (You peeked.)" : "") + " N: new boxes.";
+					+ (peeked ? " (You peeked.)" : "") + (NARROW ? "" : " N: new boxes.");
 		} else if (result.after == result.before) {
 			status = "Nothing new: you knew " + name(result.lighter) + " < " + name(result.heavier) + ".";
 		} else {
@@ -231,7 +235,7 @@ class WeighPage extends Page {
 	}
 
 	private int panX(int side) {
-		return SIDE_X + SIDE_W / 2 + (int) Math.round((side == 0 ? -ARM : ARM) * Math.cos(tilt));
+		return SCALE_X + (int) Math.round((side == 0 ? -ARM : ARM) * Math.cos(tilt));
 	}
 
 	/** The top of the pan's plate on side 0 (left) or 1 (right). */
@@ -242,8 +246,10 @@ class WeighPage extends Page {
 	@Override
 	void paint(Graphics2D g, int w, int h) {
 		text(g, "Sort by weighing", TITLE, INK, 20, 30);
-		text(g, "The boxes look alike. Weigh two at a time to find their order, lightest first, in few weighings.", TEXT, PENCIL, 20, 50);
-		text(g, "A line runs from a box proven lighter to one proven heavier. One straight row is sorted.", SMALL, PENCIL, 20, 68);
+		int y = paragraph(g, "The boxes look alike. Weigh two at a time to find their order, lightest first, in few weighings.", TEXT, PENCIL,
+				20, 50, w - 40, 0, 16, 2);
+		paragraph(g, "A line runs from a box proven lighter to one proven heavier. One straight row is sorted.", SMALL, PENCIL, 20,
+				NARROW ? y + 2 : 68, w - 40, 0, 14, 2);
 		paintDiagram(g);
 		paintScale(g);
 		paintSide(g);
@@ -293,7 +299,7 @@ class WeighPage extends Page {
 	}
 
 	private void paintScale(Graphics2D g) {
-		int cx = SIDE_X + SIDE_W / 2;
+		int cx = SCALE_X;
 		g.setColor(CARD_EDGE);
 		g.fillRect(cx - 3, PIVOT_Y, 6, 92);
 		g.fillRoundRect(cx - 34, PIVOT_Y + 88, 68, 8, 6, 6);
@@ -324,20 +330,21 @@ class WeighPage extends Page {
 		int x = SIDE_X;
 		long all = Weighing.factorial(count);
 		long orders = weighing.orders();
-		text(g, "Orders still possible", SMALL, PENCIL, x, 210);
+		int dy = SIDE_DY;
+		text(g, "Orders still possible", SMALL, PENCIL, x, 210 + dy);
 		String big = String.format("%,d", orders);
-		text(g, big, TITLE, INK, x, 234);
-		text(g, "of " + String.format("%,d", all), TEXT, PENCIL, x + width(g, big, TITLE) + 8, 234);
+		text(g, big, TITLE, INK, x, 234 + dy);
+		text(g, "of " + String.format("%,d", all), TEXT, PENCIL, x + width(g, big, TITLE) + 8, 234 + dy);
 		// The bar fills by information found: each weighing that halves the orders adds the same length.
 		int filled = (int) Math.round(SIDE_W * (1 - Math.log(orders) / Math.log(all)));
 		g.setColor(GRID);
-		g.fillRoundRect(x, 242, SIDE_W, 8, 8, 8);
+		g.fillRoundRect(x, 242 + dy, SIDE_W, 8, 8, 8);
 		g.setColor(weighing.sorted() ? GREEN : INK);
-		g.fillRoundRect(x, 242, filled, 8, 8, 8);
-		text(g, "Weighings: " + weighing.log.size() + "    always enough: " + Weighing.fewestSure(count), TEXT, INK, x, 268);
+		g.fillRoundRect(x, 242 + dy, filled, 8, 8, 8);
+		text(g, "Weighings: " + weighing.log.size() + (NARROW ? "  " : "    ") + "always enough: " + Weighing.fewestSure(count), TEXT, INK, x, 268 + dy);
 		// The status in up to two lines of the side's width.
 		String line = "";
-		int y = 290;
+		int y = 290 + dy;
 		for (String word : status.split(" ")) {
 			if (!line.isEmpty() && width(g, line + " " + word, BOLD) > SIDE_W) {
 				text(g, line, BOLD, weighing.sorted() ? GREEN : INK, x, y);
@@ -360,7 +367,7 @@ class WeighPage extends Page {
 		for (int i = 0; i < shown; i++) {
 			int index = weighing.log.size() - shown + i;
 			Weighing.Result result = weighing.log.get(index);
-			int y = 326 + i * 14;
+			int y = 326 + SIDE_DY + i * 14;
 			boolean wasted = result.after == result.before;
 			text(g, (index + 1) + ".  " + name(result.lighter) + " < " + name(result.heavier), CODE, wasted ? PENCIL : INK, x, y);
 			String counts = String.format("%,d", result.before) + " → " + String.format("%,d", result.after);
@@ -372,7 +379,7 @@ class WeighPage extends Page {
 		String[] labels = { "You", "Merge sort, same boxes", "Insertion sort", "Bubble sort" };
 		int[] values = { weighing.log.size(), weighing.compares(3), weighing.compares(2), weighing.compares(0) };
 		for (int i = 0; i < labels.length; i++) {
-			int y = 326 + i * 14;
+			int y = 326 + SIDE_DY + i * 14;
 			Font font = i == 0 ? BOLD : TEXT;
 			text(g, labels[i], font, i == 0 ? INK : PENCIL, x, y);
 			String value = String.valueOf(values[i]);

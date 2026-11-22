@@ -19,7 +19,9 @@ class DividePage extends Page {
 	private static final double MAX_QUOTIENT = 100;
 	private static final int LEFT = 40;
 	private static final int RULER_W = 380;
-	private static final int FIRST_ROW = 108;
+	private static final int FIRST_ROW = NARROW ? 124 : 108;
+	/** Narrow, what divide prints goes under the rulers or the code (from this y), and the two lines under it wrap. */
+	private static final int LINES_TOP = 360;
 	private static final int ROW_GAP = 62;
 	private static final Font SOURCE_FONT = new Font("Monospaced", Font.PLAIN, 12);
 	private static final Color NOTE = new Color(60, 100, 180);
@@ -239,13 +241,13 @@ class DividePage extends Page {
 	void paint(Graphics2D g, int w, int h) {
 		text(g, "Division by counting", TITLE, INK, 20, 32);
 		if (!code) {
-			text(g, "MyMath.divide adds 1 until guess * b passes a, steps back, then counts by 0.1, then 0.01.",
-					TEXT, PENCIL, 20, 54);
+			paragraph(g, "MyMath.divide adds 1 until guess * b passes a, steps back, then counts by 0.1, then 0.01.",
+					TEXT, PENCIL, 20, 54, w - 40, 0, 16, 2);
 		}
 		paintEntry(g, w);
 		if (steps == null) {
-			text(g, "Type a division like 22/7: two numbers above 0, with a / b at most 100. Backspace deletes.",
-					BOLD, RED, 20, 110);
+			paragraph(g, "Type a division like 22/7: two numbers above 0, with a / b at most 100. Backspace deletes.",
+					BOLD, RED, 20, 110, w - 40, 0, 18, 3);
 			return;
 		}
 		if (code) {
@@ -253,7 +255,7 @@ class DividePage extends Page {
 		} else {
 			paintRulers(g);
 		}
-		paintLines(g, w, code ? 505 : 470);
+		paintLines(g, w, NARROW ? 26 : code ? 505 : 470);
 		paintCaption(g, h);
 	}
 
@@ -436,7 +438,7 @@ class DividePage extends Page {
 			int y = top + i * lineH;
 			if (ran[i]) {
 				g.setColor(i == 21 ? new Color(46, 125, 80, 60) : new Color(255, 226, 120, 170));
-				g.fillRect(16, y - 10, 480, lineH);
+				g.fillRect(16, y - 10, Math.min(480, LabPanel.WIDTH - 32), lineH);
 			}
 			text(g, SOURCE[i], SOURCE_FONT, ran[i] ? INK : PENCIL, 20, y);
 			if (notes[i] != null && ran[i]) {
@@ -450,9 +452,9 @@ class DividePage extends Page {
 
 	/** The lines divide printed, the one for this step highlighted; red ones passed a. */
 	private void paintLines(Graphics2D g, int w, int x) {
-		int top = 78;
+		int top = NARROW ? LINES_TOP : 78;
 		text(g, "what divide prints", BOLD, INK, x, top);
-		int rows = 12;
+		int rows = NARROW ? 8 : 12;
 		int first = Math.max(0, Math.min(shown - rows + 2, steps.size() - rows));
 		for (int i = first; i <= shown && i < first + rows; i++) {
 			Step step = steps.get(i);
@@ -474,9 +476,15 @@ class DividePage extends Page {
 		String compare = product > a ? "more than" : product < a ? "less than" : "exactly";
 		// When rounding would hide a miss by a hair (3.5000000000000004 * 2), show the doubles as they are.
 		boolean hair = product != a && number(product, 10).equals(number(a, 10));
-		text(g, "guess * b = " + (hair ? String.valueOf(step.guess) : number(step.guess, 10)) + " * " + number(b, 10)
-				+ " = " + (hair ? String.valueOf(product) : number(product, 10))
-				+ ", " + compare + " a = " + number(a, 10), CODE_BOLD, product > a ? RED : INK, 20, h - 34);
+		String sum = "guess * b = " + (hair ? String.valueOf(step.guess) : number(step.guess, 10)) + " * " + number(b, 10)
+				+ " = " + (hair ? String.valueOf(product) : number(product, 10)) + ", " + compare + " a = " + number(a, 10);
+		if (NARROW) {
+			int width = LabPanel.WIDTH - 40;
+			paragraph(g, sum, CODE_BOLD, product > a ? RED : INK, 20, h - 74, width, 0, 17, 2);
+			paragraph(g, explain(step), BOLD, INK, 20, h - 32, width, 0, 18, 2);
+			return;
+		}
+		text(g, sum, CODE_BOLD, product > a ? RED : INK, 20, h - 34);
 		text(g, explain(step), BOLD, INK, 20, h - 12);
 	}
 

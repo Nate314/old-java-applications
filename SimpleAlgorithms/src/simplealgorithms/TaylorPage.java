@@ -13,9 +13,10 @@ import java.awt.event.KeyEvent;
 class TaylorPage extends Page {
 	private static final int MAX_TERMS = 10;
 	private static final int LEFT = 30;
-	private static final int TOP = 74;
-	private static final int PLOT_W = 450;
-	private static final int PLOT_H = 270;
+	/** Narrow, the plot takes the lab's width and the terms go under it, in two columns. */
+	private static final int TOP = NARROW ? 92 : 74;
+	private static final int PLOT_W = NARROW ? 420 : 450;
+	private static final int PLOT_H = NARROW ? 240 : 270;
 	private static final double X_RANGE = 2 * Math.PI;
 	private static final double Y_RANGE = 2;
 
@@ -124,8 +125,8 @@ class TaylorPage extends Page {
 	void paint(Graphics2D g, int w, int h) {
 		String name = sine ? "sine" : "cosine";
 		text(g, "Taylor series for " + name, TITLE, INK, 20, 32);
-		text(g, "MyMath.estimate" + (sine ? "Sine" : "Cosine") + " with " + terms + " term" + (terms == 1 ? "" : "s")
-				+ " (red) against the real curve (green). Point at the plot to pick x.", TEXT, PENCIL, 20, 54);
+		paragraph(g, "MyMath.estimate" + (sine ? "Sine" : "Cosine") + " with " + terms + " term" + (terms == 1 ? "" : "s")
+				+ " (red) against the real curve (green). " + (NARROW ? "Tap" : "Point at") + " the plot to pick x.", TEXT, PENCIL, 20, 54, w - 40, 0, 16, 2);
 		paintAxes(g);
 		for (int count = 1; count < terms; count++) {
 			int fade = 40 + 120 * count / terms;
@@ -201,20 +202,25 @@ class TaylorPage extends Page {
 	}
 
 	private void paintTerms(Graphics2D g, int w) {
-		int left = LEFT + PLOT_W + 24;
-		int y = TOP + 6;
+		int left = NARROW ? LEFT : LEFT + PLOT_W + 24;
+		int y = NARROW ? TOP + PLOT_H + 40 : TOP + 6;
 		text(g, "at x = " + number(x, 5), BOLD, INK, left, y);
 		y += 22;
 		int first = sine ? 1 : 0;
+		// Narrow: five terms a column, two columns across.
+		int perColumn = NARROW ? 5 : MAX_TERMS;
+		int columnW = NARROW ? (w - 20 - left - 24) / 2 : w - 20 - left;
 		for (int i = 0; i < terms; i++) {
 			int power = 2 * i + first;
 			double value = (i % 2 == 0 ? 1 : -1) * MyMath.pow(x, power) / MyMath.factorial(power);
 			String term = (i % 2 == 0 ? (i == 0 ? "  " : "+ ") : "- ") + (power == 0 ? "1" : "x^" + power + "/" + power + "!");
-			text(g, term, CODE, INK, left, y);
+			int tx = left + i / perColumn * (columnW + 24);
+			int ty = y + i % perColumn * 18;
+			text(g, term, CODE, INK, tx, ty);
 			String shown = number(value, 4);
-			text(g, shown, CODE, PENCIL, w - 20 - width(g, shown, CODE), y);
-			y += 18;
+			text(g, shown, CODE, PENCIL, tx + columnW - width(g, shown, CODE), ty);
 		}
+		y += Math.min(terms, perColumn) * 18;
 		g.setColor(PENCIL);
 		g.drawLine(left, y - 12, w - 20, y - 12);
 		y += 4;
@@ -235,7 +241,11 @@ class TaylorPage extends Page {
 				? "The original program printed this: " + (sine ? "sin" : "cos") + "(pi/4) ~= " + estimate(x, terms)
 				: "More terms reach further: with " + terms + ", the sum stays within 0.01 of the curve out to x = "
 						+ number(reach(), 3) + ".";
-		text(g, caption, BOLD, INK, 20, h - 14);
+		if (NARROW) {
+			paragraph(g, caption, BOLD, INK, 20, h - 32, LabPanel.WIDTH - 40, 0, 18, 2);
+		} else {
+			text(g, caption, BOLD, INK, 20, h - 14);
+		}
 	}
 
 	/** The largest x from 0 out to which the sum stays within 0.01 of the real function. */

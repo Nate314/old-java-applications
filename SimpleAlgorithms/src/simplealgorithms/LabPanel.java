@@ -20,13 +20,27 @@ import javax.swing.Timer;
  */
 @SuppressWarnings("serial")
 public class LabPanel extends JPanel {
-	static final int WIDTH = 720;
-	static final int HEIGHT = 480;
-	private static final int TABS = 40;
-	private static final int BAR = 50;
+	static final int WIDTH = Page.NARROW ? 480 : 720;
+	static final int HEIGHT = Page.NARROW ? 800 : 480;
+	/** Narrow, the tabs take two rows of four and the buttons wrap onto two rows of taller (touch) buttons. */
+	private static final int TAB_ROWS = Page.NARROW ? 2 : 1;
+	private static final int TAB_ROW = Page.NARROW ? 36 : 40;
+	private static final int TABS = TAB_ROWS * TAB_ROW;
+	private static final int BAR = Page.NARROW ? 96 : 50;
+	private static final int BUTTON = Page.NARROW ? 34 : 30;
 
 	private final Page[] pages;
 	private int current;
+	private boolean dragsOn;
+	private final MouseAdapter dragger = new MouseAdapter() {
+		@Override
+		public void mouseDragged(MouseEvent event) {
+			if (dragging) {
+				page().drag(event.getX(), event.getY() - TABS);
+				repaint();
+			}
+		}
+	};
 	private Page.Button pressed;
 	/** True while the button is held after a click on the page's area. */
 	private boolean dragging;
@@ -56,14 +70,6 @@ public class LabPanel extends JPanel {
 			}
 
 			@Override
-			public void mouseDragged(MouseEvent event) {
-				if (dragging) {
-					page().drag(event.getX(), event.getY() - TABS);
-					repaint();
-				}
-			}
-
-			@Override
 			public void mouseMoved(MouseEvent event) {
 				int y = event.getY() - TABS;
 				boolean inPage = y >= 0 && y < pageHeight();
@@ -79,6 +85,7 @@ public class LabPanel extends JPanel {
 		};
 		addMouseListener(mouse);
 		addMouseMotionListener(mouse);
+		syncDrags();
 		addKeyListener(new KeyAdapter() {
 			@Override
 			public void keyPressed(KeyEvent event) {
@@ -96,6 +103,22 @@ public class LabPanel extends JPanel {
 		return pages[current];
 	}
 
+	/**
+	 * The drag listener is on only while the page showing takes drags (drawing walls, scrubbing prints): in the
+	 * browser a panel with one keeps a finger's swipe for itself, so on the other pages an embedded lab lets the
+	 * host page scroll.
+	 */
+	private void syncDrags() {
+		if (page().drags() != dragsOn) {
+			dragsOn = !dragsOn;
+			if (dragsOn) {
+				addMouseMotionListener(dragger);
+			} else {
+				removeMouseMotionListener(dragger);
+			}
+		}
+	}
+
 	private int pageHeight() {
 		return getHeight() - TABS - BAR;
 	}
@@ -108,14 +131,16 @@ public class LabPanel extends JPanel {
 			}
 			page().hidden();
 			current = index;
+			syncDrags();
 			repaint();
 		}
 	}
 
 	private void press(int x, int y) {
 		if (y < TABS) {
+			int row = y / TAB_ROW;
 			for (int i = pages.length - 1; i >= 0; i--) {
-				if (x >= tabX(i, getWidth())) {
+				if (tabRow(i) == row && x >= tabX(i, getWidth())) {
 					show(i);
 					return;
 				}
@@ -134,12 +159,14 @@ public class LabPanel extends JPanel {
 		}
 		dragging = true;
 		page().click(x, y - TABS);
+		syncDrags();
 		repaint();
 	}
 
 	private void keyPressed(KeyEvent event) {
 		char key = Character.toLowerCase(event.getKeyChar());
 		if (page().key(event)) {
+			syncDrags();
 			repaint();
 			return;
 		}
@@ -185,23 +212,33 @@ public class LabPanel extends JPanel {
 		g.fillRect(0, 0, w, TABS);
 		for (int i = 0; i < pages.length; i++) {
 			int x = tabX(i, w);
-			int tabWidth = tabX(i + 1, w) - x;
+			int tabWidth = (i + 1 < pages.length && tabRow(i + 1) == tabRow(i) ? tabX(i + 1, w) : w) - x;
+			int top = tabRow(i) * TAB_ROW;
 			boolean on = i == current;
 			if (on) {
 				g.setColor(Page.PAPER);
-				g.fillRoundRect(x + 4, 6, tabWidth - 8, TABS, 12, 12);
+				// Narrow, a tab in the top row can't reach the paper, so the picked one is a pill in its row.
+				g.fillRoundRect(x + 4, top + 6, tabWidth - 8, Page.NARROW ? TAB_ROW - 10 : TABS, 12, 12);
 			}
-			String label = (i + 1) + "  " + pages[i].title;
-			Page.centered(g, label, Page.BOLD, on ? Page.INK : new Color(200, 212, 232), x + tabWidth / 2, 28);
+			// Phones have no number keys to match, so narrow tabs drop the numbers.
+			String label = Page.NARROW ? pages[i].title : (i + 1) + "  " + pages[i].title;
+			Page.centered(g, label, Page.BOLD, on ? Page.INK : new Color(200, 212, 232), x + tabWidth / 2, top + (Page.NARROW ? 24 : 28));
 		}
 	}
 
-	/** Left edge of tab i: each tab is as wide as its label (by letters) plus a margin, so eight fit in 720 px. */
+	private int tabRow(int i) {
+		return i * TAB_ROWS / pages.length;
+	}
+
+	/** Left edge of tab i in its row: each tab is as wide as its label (by letters) plus a margin, so eight fit in 720 px. */
 	private int tabX(int i, int w) {
 		int before = 0;
 		int total = 0;
 		for (int j = 0; j < pages.length; j++) {
-			int share = pages[j].title.length() + 9;
+			if (tabRow(j) != tabRow(i)) {
+				continue;
+			}
+			int share = pages[j].title.length() + (Page.NARROW ? 4 : 9);
 			total += share;
 			if (j < i) {
 				before += share;
@@ -217,23 +254,49 @@ public class LabPanel extends JPanel {
 		g.setColor(Page.PENCIL);
 		g.drawLine(0, top, w, top);
 		int gap = 8;
-		int total = -gap;
-		for (Page.Button button : page().buttons) {
-			total += buttonWidth(g, button) + gap;
+		// Rows of buttons that fit the width (one row when wide), each row centered.
+		java.util.List<Page.Button> buttons = page().buttons;
+		java.util.List<Integer> ends = new java.util.ArrayList<>();
+		for (int first = 0; first < buttons.size();) {
+			int total = buttonWidth(g, buttons.get(first));
+			int end = first + 1;
+			while (end < buttons.size() && (!Page.NARROW || total + gap + buttonWidth(g, buttons.get(end)) <= w - 16)) {
+				total += gap + buttonWidth(g, buttons.get(end));
+				end++;
+			}
+			ends.add(end);
+			first = end;
 		}
-		int x = (w - total) / 2;
-		for (Page.Button button : page().buttons) {
-			int bw = buttonWidth(g, button);
-			button.bounds.setBounds(x, top + 10, bw, 30);
-			g.setColor(button == pressed ? Page.HIGHLIGHT : Color.WHITE);
-			g.fillRoundRect(x, top + 10, bw, 30, 14, 14);
-			g.setColor(Page.INK);
-			g.setStroke(new BasicStroke(1.5f));
-			g.drawRoundRect(x, top + 10, bw, 30, 14, 14);
-			g.setStroke(new BasicStroke(1f));
-			Page.text(g, button.label, Page.BOLD, Page.INK, x + 12, top + 30);
-			Page.text(g, keyName(button.key), Page.SMALL, Page.PENCIL, x + bw - 12 - Page.width(g, keyName(button.key), Page.SMALL), top + 30);
-			x += bw + gap;
+		int y = top + (BAR - ends.size() * (BUTTON + gap) + gap) / 2;
+		int first = 0;
+		for (int end : ends) {
+			int total = -gap;
+			for (int i = first; i < end; i++) {
+				total += buttonWidth(g, buttons.get(i)) + gap;
+			}
+			int x = (w - total) / 2;
+			for (int i = first; i < end; i++) {
+				paintButton(g, buttons.get(i), x, y);
+				x += buttonWidth(g, buttons.get(i)) + gap;
+			}
+			first = end;
+			y += BUTTON + gap;
+		}
+	}
+
+	private void paintButton(Graphics2D g, Page.Button button, int x, int y) {
+		int bw = buttonWidth(g, button);
+		int baseline = y + BUTTON / 2 + 5;
+		button.bounds.setBounds(x, y, bw, BUTTON);
+		g.setColor(button == pressed ? Page.HIGHLIGHT : Color.WHITE);
+		g.fillRoundRect(x, y, bw, BUTTON, 14, 14);
+		g.setColor(Page.INK);
+		g.setStroke(new BasicStroke(1.5f));
+		g.drawRoundRect(x, y, bw, BUTTON, 14, 14);
+		g.setStroke(new BasicStroke(1f));
+		Page.text(g, button.label, Page.BOLD, Page.INK, x + 12, baseline);
+		if (!Page.NARROW) {
+			Page.text(g, keyName(button.key), Page.SMALL, Page.PENCIL, x + bw - 12 - Page.width(g, keyName(button.key), Page.SMALL), baseline);
 		}
 	}
 
@@ -241,7 +304,9 @@ public class LabPanel extends JPanel {
 		return key == ' ' ? "Space" : String.valueOf(Character.toUpperCase(key));
 	}
 
+	/** Narrow (a phone) the key names are left off, so the buttons fit two rows. */
 	private static int buttonWidth(Graphics2D g, Page.Button button) {
-		return 12 + Page.width(g, button.label, Page.BOLD) + 10 + Page.width(g, keyName(button.key), Page.SMALL) + 12;
+		int key = Page.NARROW ? 0 : 10 + Page.width(g, keyName(button.key), Page.SMALL);
+		return 12 + Page.width(g, button.label, Page.BOLD) + key + 12;
 	}
 }

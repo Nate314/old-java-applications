@@ -143,8 +143,8 @@ class RootPage extends Page {
 	@Override
 	void paint(Graphics2D g, int w, int h) {
 		text(g, "Square root by averaging", TITLE, INK, 20, 32);
-		text(g, "MyMath.estimateSquareRoot starts at 1, then averages the guess with n / guess until they agree.",
-				TEXT, PENCIL, 20, 54);
+		paragraph(g, "MyMath.estimateSquareRoot starts at 1, then averages the guess with n / guess until they agree.",
+				TEXT, PENCIL, 20, 54, w - 40, 0, 16, 2);
 		paintEntry(g, w);
 		if (steps == null) {
 			text(g, "Type a number above 0 (up to 1,000,000,000,000). Backspace deletes.", BOLD, RED, 20, 110);
@@ -177,7 +177,8 @@ class RootPage extends Page {
 		int hb = (int) Math.max(1, Math.round(b * drawnScale));
 		int side = (int) Math.round(Math.sqrt(num) * drawnScale);
 		int cx = 240;
-		int cy = 192;
+		// Narrow, the table goes under the picture, so the picture sits lower, under the wrapped line above.
+		int cy = NARROW ? 214 : 192;
 		g.setColor(new Color(60, 100, 180, 60));
 		g.fillRect(cx - wa / 2, cy - hb / 2, wa, hb);
 		g.setColor(INK);
@@ -195,16 +196,16 @@ class RootPage extends Page {
 		if (wa > width(g, area, SMALL) + 8 && hb > 20) {
 			centered(g, area, SMALL, INK, cx, cy + 4);
 		}
-		text(g, "Blue: a by n / a, area n.  Green: the square of side sqrt(n).", SMALL, PENCIL, 20, 348);
+		text(g, "Blue: a by n / a, area n.  Green: the square of side sqrt(n).", SMALL, PENCIL, 20, NARROW ? 370 : 348);
 	}
 
 	private void paintTable(Graphics2D g, int w) {
-		int x = 420;
-		int top = 78;
+		int x = NARROW ? 26 : 420;
+		int top = NARROW ? 396 : 78;
 		double root = Math.sqrt(num);
 		text(g, "guess", BOLD, INK, x + 34, top);
 		text(g, "right digits", BOLD, INK, w - 20 - width(g, "right digits", BOLD), top);
-		int rows = 12;
+		int rows = NARROW ? 8 : 12;
 		int first = Math.max(0, Math.min(shown - rows + 2, steps.size() - rows));
 		for (int i = first; i <= shown && i < first + rows; i++) {
 			int y = top + 22 + (i - first) * 21;
@@ -234,7 +235,11 @@ class RootPage extends Page {
 			caption = "Guess " + shown + ": the average of " + number(guess, 8) + " and " + number(num / guess, 8)
 					+ " is " + number(steps.get(shown + 1), 8) + ", the next guess.";
 		}
-		text(g, caption, BOLD, INK, 20, h - 14);
+		if (NARROW) {
+			paragraph(g, caption, BOLD, INK, 20, h - 32, LabPanel.WIDTH - 40, 0, 18, 2);
+		} else {
+			text(g, caption, BOLD, INK, 20, h - 14);
+		}
 	}
 
 	/** Correct significant digits of guess against root, 0 to 16. */
