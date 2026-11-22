@@ -256,6 +256,7 @@ export function startReplay(desktop: Element): Replay | null {
       appOut(audio).connect(tap);
       stream = null;   // a recording's tracks cannot change under it, so the voices start a stream of their own
     }
+    if (!track) return;   // let go of (a new size, or the page put away in the back/forward cache): the next frame makes one
     // One stream for every recording of this track: a MediaStream lives as long as its tracks run, so a new one
     // per recording (six a minute) was never freed.
     if (!stream) stream = new MediaStream([track!].concat(tap ? tap.stream.getAudioTracks() : []));
@@ -366,6 +367,23 @@ export function startReplay(desktop: Element): Replay | null {
   }
   requestAnimationFrame(frame);
   document.addEventListener('visibilitychange', sync);
+  // Leaving the page: Chrome keeps no page with a live media track in its back/forward cache, so Back to an app
+  // reloaded it at its title screen. Its recordings and tracks are let go; once the page is back, the next frame
+  // starts recording again (the clip starts over from there).
+  window.addEventListener('pagehide', function () {
+    recs.forEach(function (r) { r.rec.stop(); });
+    recs = [];
+    if (track) track.stop();
+    track = null;
+    stream = null;
+    if (tap) {
+      tap.stream.getTracks().forEach(function (t) { t.stop(); });
+      if (audio) appOut(audio).disconnect(tap);
+      tap = null;
+    }
+    changed = true;
+    last = 0;
+  });
 
   return {
     live: function () { return recs.length > 0; },
