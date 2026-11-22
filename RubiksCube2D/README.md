@@ -29,7 +29,7 @@ Level n starts from a solved cube and mixes it with n moves while you watch (eac
 - **Mix** with **Moves** (default 1000) and **Secs** (default 0.5): free play, scrambling with that many random moves (any face, any square, any of the four directions) spread over that many seconds in total. Hint and Solve also work after a Mix.
 - Typing in the Moves and Secs fields no longer turns the cube. The title bar shows the level and your move count. Non-numeric Moves or Secs show a message there instead of mixing.
 - The best stars and fewest moves per level, the level played last, the view and the patterns made by hand are saved to `~/.rubikscube-levels.txt` (lines like `level=4` and `3=3,3` for level 3: 3 stars, 3 moves, `view=net` once the flat net is picked, `mirrors=off` while the mirrors are off, and `patterns=spots,checkerboard`, and `times=` with the Timer's latest 100 times in milliseconds, oldest first). The app opens on that level and in that view.
-- No command-line arguments. The window is 550x700.
+- No command-line arguments. The window is 550x700. On a screen narrower than 600 px (a phone held upright, in the browser) it is as wide as the screen instead of being scaled down: the row of buttons spans the top, the cube takes the width and whatever height the screen leaves (at least 300 px), the message or card sits at the left under it, and the level panel, Mix and the w/a/s/d keys stack at the right. The flat net is drawn in the cube's place there, with the same controls under it. The layout is chosen at start and doesn't follow a rotation.
 
 Hint and Solve know the way back because every move is recorded as a path of cube positions from the solved cube. A move that returns to a position already on the path (its inverse, or the fourth turn of one slice) cuts the path back there, so the hints never retrace a loop. A level's mix never simply undoes its previous move and always ends that many steps along the path from solved, which is the level's par.
 
@@ -159,6 +159,13 @@ java -ea -Djava.awt.headless=true -cp ../out/check/RubiksCube2D rubikscube.DragC
 ```
 javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
 java -ea -Djava.awt.headless=true -cp ../out/check/RubiksCube2D rubikscube.MirrorCheck
+```
+
+`test/rubikscube/LayoutCheck.java` checks the phone layout: on screens 360 to 599 px wide the window is as wide as the screen and fits its height, and in both views every control lies inside the window, clear of the others and below the cube; the desktop window is still 550x700 with its buttons where they were. It needs a display (it makes the window without showing it). From `RubiksCube2D/`:
+
+```
+javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
+java -ea -cp ../out/check/RubiksCube2D rubikscube.LayoutCheck
 ```
 
 The check found that `d` on the yellow and white faces turned the top or bottom face the wrong way (so `a` then `d` did not undo), which is now fixed.

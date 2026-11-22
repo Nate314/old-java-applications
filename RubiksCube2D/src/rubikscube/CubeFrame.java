@@ -1,6 +1,7 @@
 package rubikscube;
 
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.KeyboardFocusManager;
 import java.awt.Toolkit;
@@ -112,6 +113,16 @@ public final class CubeFrame extends JFrame implements ActionListener {
    private int frameHeight = 0;
    private int cellWidth = 0;
    private int cellHeight = 0;
+   /** Screens narrower than this (a phone held upright, in the browser) get the phone layout: as wide as the screen, the cube on top, the controls under it. */
+   static final int NARROW = 600;
+   /** Width of the level column on the right of the phone layout. */
+   private static final int COLUMN = 165;
+   private boolean narrow = false;
+   /** The 3D cube's height (with the row of buttons over it); the net is drawn in the same place on a phone. */
+   private int viewHeight = 0;
+   /** How far right the net starts: centered on a phone, 0 on the desktop. */
+   private int netX = 0;
+   private int netY = 0;
    protected Cube cube = null;
    private MoveHistory history = null;
    private final LevelRecords records;
@@ -133,11 +144,34 @@ public final class CubeFrame extends JFrame implements ActionListener {
    private long solvedMillis = 0L;
 
    public CubeFrame() {
-      this.setSize(550, 700);
-      this.frameWidth = this.getWidth();
+      this(Toolkit.getDefaultToolkit().getScreenSize());
+   }
+
+   /** Laid out for a screen of this size (LayoutCheck passes phone sizes). */
+   CubeFrame(Dimension screen) {
+      this.narrow = screen.width < NARROW;
+      if (this.narrow) {
+         // The window takes the screen's width instead of being scaled down, and the cube whatever height is left.
+         int width = Math.max(360, screen.width);
+         this.viewHeight = Math.max(300, Math.min(width, screen.height - 376));
+         // Room under the cube for the controls (334 px) and the title bar and borders (about 40 px on the desktop).
+         this.setSize(width, this.viewHeight + 376);
+      } else {
+         this.setSize(550, 700);
+      }
+      // On a phone the controls are laid out across the content's width (the window's less its borders), not past it.
+      this.frameWidth = this.getWidth() - (this.narrow ? 16 : 0);
       this.frameHeight = this.getHeight();
-      this.cellWidth = this.frameWidth / 11;
-      this.cellHeight = this.frameHeight / 14;
+      if (this.narrow) {
+         // Square cells that fit the net (12 rows, starting under the row of buttons) in the cube's place.
+         this.cellWidth = this.cellHeight = Math.min(this.frameWidth / 11, (this.viewHeight - 46) / 12);
+         this.netX = (this.frameWidth - 11 * this.cellWidth) / 2;
+         this.netY = 44 - this.cellHeight;
+      } else {
+         this.cellWidth = this.frameWidth / 11;
+         this.cellHeight = this.frameHeight / 14;
+         this.viewHeight = 7 * this.cellHeight + 2;
+      }
       this.cube = new Cube(this, this.stickerButtons, this.cellWidth, this.cellHeight);
       this.history = new MoveHistory(this.cube);
       this.records = LevelRecords.load(RECORDS_FILE);
@@ -168,12 +202,12 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.panel.add(this.mixFields[1]);
       this.mixButton.addActionListener(this);
       this.panel.add(this.mixButton);
-      this.cube.topFace.panel.setBounds(4 * this.cellWidth, this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.frontFace.panel.setBounds(4 * this.cellWidth, 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.rightFace.panel.setBounds(7 * this.cellWidth, 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.bottomFace.panel.setBounds(4 * this.cellWidth, 7 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.backFace.panel.setBounds(4 * this.cellWidth, 10 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.leftFace.panel.setBounds(this.cellWidth, 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.topFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.frontFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.rightFace.panel.setBounds(this.netX + 7 * this.cellWidth, this.netY + 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.bottomFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + 7 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.backFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + 10 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.leftFace.panel.setBounds(this.netX + this.cellWidth, this.netY + 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
       for (Face face : this.cube.faces()) {
          face.panel.setBackground(new Color(0, 0, 0));
          this.panel.add(face.panel);
@@ -206,9 +240,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** The level ladder: labels and buttons right of the bottom and back faces, the message and help left of them. */
    private void layoutLevelControls() {
-      int x = (int)(7.2 * this.cellWidth);
-      int y = (int)(7.15 * this.cellHeight);
-      int width = (int)(3.3 * this.cellWidth);
+      // On a phone: the level column at the right under the cube, the message (or card) at the left.
+      int x = this.narrow ? this.frameWidth - 6 - COLUMN : (int)(7.2 * this.cellWidth);
+      int y = this.narrow ? this.viewHeight + 6 : (int)(7.15 * this.cellHeight);
+      int width = this.narrow ? COLUMN : (int)(3.3 * this.cellWidth);
       int half = width / 2 - 3;
       this.levelLabel.setFont(new Font("Dialog", Font.BOLD, 16));
       this.levelLabel.setBounds(x, y, width, 24);
@@ -222,8 +257,8 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.panel.add(buttons[index]);
       }
       this.totalLabel.setBounds(x, y + 196, width, 18);
-      int left = (int)(0.3 * this.cellWidth);
-      int leftWidth = (int)(3.5 * this.cellWidth);
+      int left = this.narrow ? 6 : (int)(0.3 * this.cellWidth);
+      int leftWidth = this.narrow ? x - 20 : (int)(3.5 * this.cellWidth);
       this.messageLabel.setFont(new Font("Dialog", Font.BOLD, 14));
       this.messageLabel.setBounds(left, y, leftWidth, 90);
       this.helpLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
@@ -251,36 +286,41 @@ public final class CubeFrame extends JFrame implements ActionListener {
       if (net) {
          this.view.demo(null, 0, null);
       }
-      this.view.setBounds(0, 0, this.frameWidth, 7 * h + 2);
+      this.view.setBounds(0, 0, this.frameWidth, this.viewHeight);
       this.view.reset();
       this.viewButton.setText(net ? "3D cube" : "Flat net");
-      this.viewButton.setBounds(this.frameWidth - 112, 10, 92, 28);
-      this.teachButton.setBounds(12, 10, 116, 28);
-      this.patternButton.setBounds(134, 10, 124, 28);
-      this.paintButton.setBounds(264, 10, 100, 28);
-      this.timerButton.setBounds(368, 10, 68, 28);
-      int keyWidth = (int)(2.75 * w / 3.0);
-      int keyHeight = (int)(2.75 * h / 3.0);
-      int keyX = net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
-      int keyY = net ? (int)(1.75 * h) : (int)(9.0 * h);
+      if (this.narrow) {
+         this.layoutTopButtons();
+      } else {
+         this.viewButton.setBounds(this.frameWidth - 112, 10, 92, 28);
+         this.teachButton.setBounds(12, 10, 116, 28);
+         this.patternButton.setBounds(134, 10, 124, 28);
+         this.paintButton.setBounds(264, 10, 100, 28);
+         this.timerButton.setBounds(368, 10, 68, 28);
+      }
+      int keyWidth = this.narrow ? 44 : (int)(2.75 * w / 3.0);
+      int keyHeight = this.narrow ? 28 : (int)(2.75 * h / 3.0);
+      // On a phone both views keep the keys at the foot of the level column, under Mix.
+      int keyX = this.narrow ? this.frameWidth - 6 - COLUMN / 2 - keyWidth / 2 : net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
+      int keyY = this.narrow ? this.viewHeight + 6 + 272 : net ? (int)(1.75 * h) : (int)(9.0 * h);
       this.moveButtons[0].setBounds(keyX, keyY, keyWidth, keyHeight);
       for (int index = 1; index < 4; index++) {
          this.moveButtons[index].setBounds(keyX + (index - 2) * keyWidth, keyY + keyHeight, keyWidth, keyHeight);
       }
-      if (net) {
+      if (net && !this.narrow) {
          this.mixLabels[0].setBounds((int)(7.5 * w), h, (int)(1.25 * w), h / 2);
          this.mixLabels[1].setBounds((int)(8.75 * w), h, (int)(1.25 * w), h / 2);
          this.mixFields[0].setBounds((int)(7.5 * w), (int)(1.5 * h), (int)(1.25 * w), h / 2);
          this.mixFields[1].setBounds((int)(8.75 * w), (int)(1.5 * h), (int)(1.25 * w), h / 2);
          this.mixButton.setBounds((int)(7.5 * w), 2 * h, (int)(2.5 * w), (int)(1.5 * h));
       } else {
-         int x = (int)(7.2 * w);
-         int y = (int)(11.6 * h);
+         int x = this.narrow ? this.frameWidth - 6 - COLUMN : (int)(7.2 * w);
+         int y = this.narrow ? this.viewHeight + 6 + 222 : (int)(11.6 * h);
          this.mixLabels[0].setBounds(x, y, 56, 16);
          this.mixLabels[1].setBounds(x + 60, y, 50, 16);
          this.mixFields[0].setBounds(x, y + 18, 56, 26);
          this.mixFields[1].setBounds(x + 60, y + 18, 46, 26);
-         this.mixButton.setBounds(x + 110, y + 18, (int)(3.3 * w) - 110, 26);
+         this.mixButton.setBounds(x + 110, y + 18, (this.narrow ? COLUMN : (int)(3.3 * w)) - 110, 26);
       }
       this.helpLabel.setText(net ? this.helpNet : HELP_3D);
       if (this.painting) {
@@ -294,6 +334,20 @@ public final class CubeFrame extends JFrame implements ActionListener {
       }
       this.records.setNetView(net);
       this.panel.repaint();
+   }
+
+   /** The row of buttons over the cube on a phone: as wide as the window, the longer labels given more room. */
+   private void layoutTopButtons() {
+      JButton[] buttons = {this.teachButton, this.patternButton, this.paintButton, this.timerButton, this.viewButton};
+      double[] share = {1.3, 1.3, 1.0, 0.8, 1.0};
+      double unit = (this.frameWidth - 12 - 4 * (buttons.length - 1)) / 5.4;
+      Font font = new Font("Dialog", Font.BOLD, 11);
+      double x = 6;
+      for (int index = 0; index < buttons.length; index++) {
+         buttons[index].setFont(font);
+         buttons[index].setBounds((int) x, 8, (int) (unit * share[index]), 28);
+         x += unit * share[index] + 4;
+      }
    }
 
    /** V: the other view. */
