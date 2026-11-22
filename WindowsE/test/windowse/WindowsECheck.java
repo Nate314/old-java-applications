@@ -215,11 +215,26 @@ public class WindowsECheck {
             button(w, "Send").doClick();
             got[1] = String.valueOf(pills(w).size());
             w.dispose();
+            // A full list of 8: every step gets its own frame, on the board and clear of the others.
+            WindowsEWindow full = new WindowsEWindow(keys, copied::add, null, Step.parse("E-Left-Ex2-Right-Tab-Up-Down-D"), pocket);
+            List<StepPill> eight = pills(full);
+            int width = eight.isEmpty() ? 0 : eight.get(0).getParent().getPreferredSize().width;
+            boolean apart = eight.size() == 8;
+            for (int i = 0; apart && i < 8; i++) {
+               java.awt.Rectangle r = eight.get(i).getBounds();
+               apart = r.x >= 0 && r.x + r.width <= width && r.width >= 60;
+               for (int j = 0; j < i; j++) {
+                  apart &= !r.intersects(eight.get(j).getBounds());
+               }
+            }
+            got[3] = eight.size() + (apart ? " apart" : " overlapping or off the board");
+            full.dispose();
          });
          String where = " (pocket " + pocket + ")";
          check("4".equals(got[0]), "four steps, four pills" + where + ": " + got[0]);
          check(copied.equals(Arrays.asList("Ex3-Left-E-Right", "Ex3-E-Right", "Ex3-E")), "a click on a label keeps the step, its x and Delete take it off" + where + ": " + copied);
          check("2".equals(got[1]), "two pills left" + where + ": " + got[1]);
+         check("8 apart".equals(got[3]), "eight steps, eight frames on the board" + where + ": " + got[3]);
          check(keys.log.isEmpty(), "editing the list presses nothing" + where);
       }
    }
