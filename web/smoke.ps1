@@ -1,8 +1,8 @@
 # A browser smoke test of the built site in headless Chrome over the DevTools protocol (web/cdp.ps1): the pages
 # visitors land on (home, story, play.html with and without ?app=, the lost page for a missing path, compare.html) and,
 # for every app in the build's apps.json, its page, its ?embed and ?embed&full forms, its page again on a 400x800 phone
-# screen and its Then page where it has
-# one. On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
+# screen with touch emulation (where the band must offer its Keyboard button and the touch controller must show on the
+# apps that have one, without the buttons the app draws itself) and its Then page where it has one. On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
@@ -101,13 +101,16 @@ $KnownUnnamed = @{}
 # one and checks the window and its paint. -Click presses that button first and -Frame is the iframe the app is in
 # (play.html's player); -Exit closes the app and runs it again (see the top); -Missing expects the address itself to
 # answer 404 (the lost page); -Sheet is the page's app links: the last one opens the app in the play sheet (see the top);
-# -Phone loads it in a 400x800 phone screen, so apps that pick a narrow layout at start are checked in it too.
+# -Phone loads it in a 400x800 phone screen with a finger for a pointer, so apps that pick a narrow layout at start are
+# checked in it too, and checks its touch extras (Test-Touch).
 function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [switch]$Phone) {
     $t = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Cdp 'Page.navigate' @{ url = 'about:blank' } | Out-Null
     Invoke-Js '1' | Out-Null   # reads the last page's late events, then forgets them
     if ($Phone) { Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = 400; height = 800; deviceScaleFactor = 1; mobile = $true } | Out-Null }
     else { Invoke-Cdp 'Emulation.clearDeviceMetricsOverride' | Out-Null }
+    # A phone's finger: (pointer: coarse) matches, so the page offers its Keyboard button and touch controller.
+    Invoke-Cdp 'Emulation.setTouchEmulationEnabled' @{ enabled = [bool]$Phone; maxTouchPoints = 5 } | Out-Null
     $script:Errors.Clear(); $script:Urls.Clear()
     $why = $null
     $url = "http://127.0.0.1:$Port/$path"
@@ -133,6 +136,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
             if (-not (& $wait "$(& $in $Paint) !== 1" 5000)) { $why = 'blank canvas (one flat color)' }
             elseif ($Exit) { $why = Test-Exit $wait }
             elseif ($Sheet) { $why = Test-SheetClose $wait }
+            elseif ($Phone) { $why = Test-Touch (($path -split '/')[0]) }
         }
     }
     $note = ''
@@ -184,6 +188,23 @@ function Test-Exit($wait) {
     if (-not (Invoke-Js "document.activeElement === document.querySelector('.shim-exit > button')")) { return 'exit: Run again is not focused' }
     Invoke-Js "document.querySelector('.shim-exit > button').click()" | Out-Null
     if (-not (& $wait "!document.querySelector('.shim-exit, .shim-title-play') && $Up" 30000)) { return 'exit: Run again did not bring the app back without its title screen' }
+}
+
+# Controller buttons an app draws itself on a 400 px screen, so its touch controller must leave them out (ownBelow in
+# runtime/touch-pad.tsx).
+$OwnOnPhone = @{ DinoGame = 'Jump', 'Duck' }
+
+# The phone page's touch extras, with the app running: the band's Keyboard button, and the touch controller exactly on
+# the apps that have one (window.oldjavaPad.has), without the buttons the app draws itself. Returns why it failed, or nothing.
+function Test-Touch([string]$app) {
+    if (-not (Invoke-Js "matchMedia('(pointer: coarse)').matches")) { return 'touch: (pointer: coarse) does not match under touch emulation' }
+    if (-not (Invoke-Js "(function (b) { return !!b && b.getClientRects().length > 0; })(document.querySelector('.shim-keys-open'))")) { return 'touch: no Keyboard button in the band' }
+    $has = Invoke-Js "window.oldjavaPad.has('$app')"
+    $shown = Invoke-Js "(function (p) { return !!p && !p.hidden && p.getClientRects().length > 0; })(document.querySelector('.shim-pad'))"
+    if ($has -ne $shown) { return "touch: the controller is $(if ($shown) { 'shown' } else { 'not shown' }), expected $(if ($has) { 'shown' } else { 'none' })" }
+    $labels = @(Invoke-Js "[].map.call(document.querySelectorAll('.shim-pad .shim-pad-btn > span'), function (s) { return s.textContent; })")
+    $twice = @($OwnOnPhone[$app] | Where-Object { $labels -contains $_ })
+    if ($twice) { return "touch: the controller repeats the app's own $($twice -join ', ')" }
 }
 
 # Every way out of the play sheet, on a page with an app playing in it: Back (then Forward opens it again), Esc from
