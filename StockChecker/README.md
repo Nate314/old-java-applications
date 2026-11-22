@@ -80,6 +80,17 @@ Mo, Val and Nell hold one stock at a time, buy nothing new after 3:30 PM and sel
 - **Start over** starts the rivals over with you. A desk saved before the rivals existed gives them $10,000 each on the day it is on.
 - The window's content is 720 x 476 px and it is not resizable. No command-line arguments.
 
+## On a phone held upright
+
+On a screen narrower than 600 px (a phone held upright, in the browser) the desk is laid out in one column, 360 px wide, at full size instead of shrunk to half:
+
+- The header takes two rows: the day, the clock and OPEN/PAUSED/CLOSED with your net worth on the first; Pause, Play and Fast with your place, today's change and your cash on the second.
+- The chart card goes across the whole width, with its Chart, Days and Race tabs. Hear and Hindsight sit on a row of their own under the chart's time labels, and the title shows just the percent change when the whole line does not fit.
+- The two lines about your position, then the trade buttons in two rows of three, buys over sells, each 112 x 40 px.
+- The watch list comes under the buttons, each row as wide as the screen with a longer sparkline; then the news, the ticker tape and a shorter note that the prices are simulated.
+- At the closing bell the results card covers the chart and the buttons: "Since day 1" and the day's best trade in hindsight get lines of their own.
+- The ticker box at the top is shorter. The layout is chosen when the app starts, so turning the phone does not switch it.
+
 ## The simulated market
 
 - Each stock's whole day is a random walk worked out from the day number and its symbol, so a day replays the same after a reload, does not depend on which other stocks are on the desk, and is the same for everybody.
@@ -110,10 +121,11 @@ The working directory must be `StockChecker/`, since `myStocks.txt` and `stockCh
 
 ## Self-check
 
-`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown, each headline pushing for 15 to 45 minutes, or 30 to 60 for the market, and moving its stock its way on average), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the Days candles (kept at each close and across a reload, the wick spanning the body, the last 19 kept, cleared by Start over), the money text, what a trade would buy or sell matching what it then does (and nothing after the close), Hindsight's best trade (the low before the high, only up to now, none on a day that only fell, and the same as trying every buy and sell pair over 50 days) and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). From `StockChecker/`:
+`test/stockchecker/StockCheckerCheck.java` checks CSV parsing, symbol lookup and the quote URL. `test/stockchecker/DeskCheck.java` checks the market (replays the same, stays positive, news in time order and only about the stocks shown, each headline pushing for 15 to 45 minutes, or 30 to 60 for the market, and moving its stock its way on average), buying and selling, the desk file across a reload and a close, Start over, the rivals (the same trades on two desks, never on credit, day traders out by the close, Hal holding the list and selling what left it, the same day's end after a mid-day reload, an old desk without them), the Days candles (kept at each close and across a reload, the wick spanning the body, the last 19 kept, cleared by Start over), the money text, what a trade would buy or sell matching what it then does (and nothing after the close), Hindsight's best trade (the low before the high, only up to now, none on a day that only fell, and the same as trying every buy and sell pair over 50 days) and the notes Hear plays (the chart's bottom and top, clamping, the playhead running from the open to now). `test/stockchecker/LayoutCheck.java` checks both layouts, wide and upright phone: the desk's size, and that every button showing lies inside the desk with no two overlapping, with the market open and at the close, and that each paints. From `StockChecker/`:
 
 ```
 javac -d ../out/check/StockChecker src/stockchecker/*.java test/stockchecker/*.java
 java -ea -cp ../out/check/StockChecker stockchecker.StockCheckerCheck
 java -ea -cp ../out/check/StockChecker stockchecker.DeskCheck
+java -ea -cp ../out/check/StockChecker stockchecker.LayoutCheck
 ```
