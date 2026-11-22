@@ -154,5 +154,9 @@ public class PresentCheck {
       public int[] sizes() {
          return new int[] {2, 3};
       }
+
+      @Override
+      public void setSizes(int min, int max) {
+      }
    }
 }

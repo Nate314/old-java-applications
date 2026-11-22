@@ -86,6 +86,9 @@ public class GroupBoard extends JPanel {
       /** The min and max typed now, or null when they are not whole numbers (the board previews round 1 with them). */
       int[] sizes();
 
+      /** A size was picked on the board before round 1: put min and max in their fields. */
+      void setSizes(int min, int max);
+
       /** The wheel picked someone, or a pick was put back or forgotten: save the class. */
       void picksChanged();
 
@@ -178,6 +181,9 @@ public class GroupBoard extends JPanel {
    /** Before round 1: where each name of the class sits on the board, and the Deal round 1 button. */
    private final Map<String, Rectangle> pile = new HashMap<>();
    private final Rectangle dealButton = new Rectangle();
+   /** Before round 1: the size chips under the pile ({min, max} each) and where they were drawn. */
+   private List<int[]> sizeChoices = Collections.emptyList();
+   private Rectangle[] sizeChips = new Rectangle[0];
    /** Where round 1's names fly from: their places in the class before the deal (null for later rounds). */
    private Map<String, Rectangle> dealFrom;
    /** Looking back: the number of the earlier round shown, or 0 while the newest is shown. */
@@ -387,6 +393,10 @@ public class GroupBoard extends JPanel {
       unpick();
       glideFrom.clear();
       if (deal && !groups.isEmpty()) {
+         chart = false;
+      }
+      // With reduced motion on, the names are in their groups at once.
+      if (deal && !groups.isEmpty() && !reducedMotion()) {
          int count = 0;
          for (List<String> group : groups) {
             count += group.size();
@@ -395,7 +405,6 @@ public class GroupBoard extends JPanel {
          dealStep = Math.max(8, Math.min(45, 1700 / Math.max(1, count)));
          dealStart = System.currentTimeMillis();
          dealFrom = history.size() == 1 && !pile.isEmpty() ? new HashMap<>(pile) : null;
-         chart = false;
          dealTimer.start();
       } else {
          dealStart = 0;
@@ -519,12 +528,17 @@ public class GroupBoard extends JPanel {
 
    /** The name slides from where it is drawn now into its place (at once with reduced motion on). */
    private void glide(String name, Rectangle from) {
-      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+      if (reducedMotion()) {
          return;
       }
       glideFrom.put(name, new Rectangle(from));
       glideStart = System.currentTimeMillis();
       dealTimer.start();
+   }
+
+   /** The site's reduced-motion setting (null, so false, on the desktop). */
+   private static boolean reducedMotion() {
+      return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
    }
 
    private List<Button> buttons() {
@@ -552,6 +566,9 @@ public class GroupBoard extends JPanel {
          return;
       }
       wheel.spin(pool, name);
+      if (reducedMotion()) {
+         wheel.finish();   // lands on the name at once
+      }
       actions.picksChanged();
    }
 
@@ -601,6 +618,14 @@ public class GroupBoard extends JPanel {
          if (dots[i].contains(x, y)) {
             lookAt(dotRounds[i]);
             return;
+         }
+      }
+      if (groups.isEmpty()) {
+         for (int i = 0; i < sizeChips.length; i++) {
+            if (sizeChips[i].contains(x, y)) {
+               actions.setSizes(sizeChoices.get(i)[0], sizeChoices.get(i)[1]);
+               return;
+            }
          }
       }
       if (groups.isEmpty() && (dealButton.contains(x, y) || pileContains(x, y))) {
@@ -660,6 +685,15 @@ public class GroupBoard extends JPanel {
       }
       if (key == ' ') {
          key = picking ? 's' : 'n';
+      }
+      // Before round 1, 2 to 6 pick that size's chip.
+      if (!picking && !chart && !rollCall && groups.isEmpty()) {
+         for (int[] choice : sizeChoices) {
+            if (key == (char) ('0' + choice[0])) {
+               actions.setSizes(choice[0], choice[1]);
+               return;
+            }
+         }
       }
       for (Button button : buttons()) {
          if (button.key == key && button.enabled) {
@@ -1269,6 +1303,11 @@ public class GroupBoard extends JPanel {
       return chips[c][k];
    }
 
+   /** Where size chip i was drawn in the last paint, or null (for DragCheck). */
+   Rectangle sizeChipBounds(int i) {
+      return i < sizeChips.length ? sizeChips[i] : null;
+   }
+
    /** Who name k of group c meets again, and who is new to them. */
    private String describe(int c, int k) {
       List<String> group = groups.get(c);
@@ -1349,6 +1388,8 @@ public class GroupBoard extends JPanel {
       pile.clear();
       List<String> here = distinct(rules.present(actions.classNames()));
       int away = distinct(actions.classNames()).size() - here.size();
+      sizeChoices = GroupMaker.sizeChoices(here.size());
+      sizeChips = new Rectangle[0];
       if (here.isEmpty()) {
          dealButton.setBounds(0, 0, 0, 0);
          paintEmptyDeck(g, w, bottom);
@@ -1364,12 +1405,14 @@ public class GroupBoard extends JPanel {
          }
          plan = "Make groups deals " + GroupMaker.plan(here.size(), sizes[0], sizes[1]) + ".";
       } catch (IllegalArgumentException ex) {
-         plan = ex.getMessage() + " Change min or max above.";
+         plan = ex.getMessage() + (sizeChoices.isEmpty() ? " Change min or max above." : " Pick a size below, or change min or max above.");
          ok = false;
       }
+      // Under the pile, a row of size chips (when there are some to pick from), then the button.
+      int sizesHeight = sizeChoices.isEmpty() ? 0 : 52;
       // The pile: as many columns of chips as fit, rows squeezed to fit the board.
       int top = headerHeight + 14;
-      int buttonTop = bottom - 56;
+      int buttonTop = bottom - 56 - sizesHeight;
       int chipWidth = Math.min(130, Math.max(70, (w - 48) / Math.max(1, Math.min(6, here.size())) - 8));
       int columns = Math.max(1, Math.min(here.size(), (w - 48) / (chipWidth + 8)));
       int rows = (here.size() + columns - 1) / columns;
@@ -1377,8 +1420,10 @@ public class GroupBoard extends JPanel {
       int chipHeight = Math.min(26, rowHeight - 6);
       int left = (w - columns * (chipWidth + 8) + 8) / 2;
       // The pile and the button, as one block in the middle of the board.
-      int y0 = Math.max(top, (headerHeight + bottom - rows * rowHeight - 52) / 2);
+      int y0 = Math.max(top, (headerHeight + bottom - rows * rowHeight - 52 - sizesHeight) / 2);
       buttonTop = y0 + rows * rowHeight + 12;
+      paintSizes(g, w, buttonTop, sizes, here.size());
+      buttonTop += sizesHeight;
       boolean hover = groups.isEmpty() && ok && (dealButton.contains(mouseX, mouseY) || pileContains(mouseX, mouseY));
       for (int i = 0; i < here.size(); i++) {
          String name = here.get(i);
@@ -1407,6 +1452,43 @@ public class GroupBoard extends JPanel {
       }
       String title = "Your class: " + here.size() + (here.size() == 1 ? " name" : " names") + (away > 0 ? " here, " + away + " away" : "");
       return new String[] {title, plan + (ok ? " Later rounds mix in new partners and new roles." : ""), ok ? "" : "error"};
+   }
+
+   private static final String[] SIZE_NAMES = {"", "", "Pairs", "Threes", "Fours", "Fives", "Sixes"};
+
+   /**
+    * The size chips, one per {@link GroupMaker#sizeChoices} entry, centered at {@code y}: the size's name, how many
+    * groups it makes, and the one matching min and max now filled in. A click (or its digit) puts it in min and max.
+    */
+   private void paintSizes(Graphics2D g, int w, int y, int[] sizes, int count) {
+      int n = sizeChoices.size();
+      if (n == 0) {
+         return;
+      }
+      int chipWidth = Math.min(118, (w - 32 - (n - 1) * 8) / n);
+      int left = (w - n * chipWidth - (n - 1) * 8) / 2;
+      sizeChips = new Rectangle[n];
+      for (int i = 0; i < n; i++) {
+         int[] choice = sizeChoices.get(i);
+         Rectangle chip = new Rectangle(left + i * (chipWidth + 8), y, chipWidth, 40);
+         sizeChips[i] = chip;
+         boolean on = sizes != null && sizes[0] == choice[0] && sizes[1] == choice[1];
+         boolean hover = chip.contains(mouseX, mouseY);
+         g.setColor(new Color(0, 0, 0, 22));
+         g.fillRoundRect(chip.x + 1, chip.y + 2, chip.width, chip.height, 12, 12);
+         g.setColor(on ? INK : Color.WHITE);
+         g.fillRoundRect(chip.x, chip.y, chip.width, chip.height, 12, 12);
+         g.setColor(hover ? CARD_COLORS[0] : on ? INK : new Color(205, 198, 186));
+         g.drawRoundRect(chip.x, chip.y, chip.width - 1, chip.height - 1, 12, 12);
+         Color ink = on ? Color.WHITE : INK;
+         int cx = chip.x + chip.width / 2;
+         centered(g, fit(g, SIZE_NAMES[choice[0]], BOLD, chipWidth - 8), BOLD, ink, cx, chip.y + 18);
+         String groups = GroupMaker.groupCount(count, choice[0], choice[1]);
+         if (width(g, groups, SMALL) > chipWidth - 8) {
+            groups = groups.replace(" groups", "");   // "5 to 6" on a narrow chip
+         }
+         centered(g, fit(g, groups, SMALL, chipWidth - 8), SMALL, on ? new Color(255, 255, 255, 200) : MUTED, cx, chip.y + 33);
+      }
    }
 
    private boolean pileContains(int x, int y) {
