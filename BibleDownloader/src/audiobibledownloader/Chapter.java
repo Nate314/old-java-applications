@@ -12,13 +12,27 @@ public final class Chapter {
    public final int[] verseNumbers;
    /** Verse text, one entry per verse number, with line breaks and runs of spaces folded to one space. */
    public final String[] verses;
+   /** The same text keeping a poem's line breaks as '\n' (Psalms, Proverbs, the Magnificat ...), to set it in verse lines. */
+   public final String[] lines;
 
-   Chapter(int book, int number, String translation, int[] verseNumbers, String[] verses) {
+   /** @param lines verse text, with '\n' between the lines of a verse set as poetry */
+   Chapter(int book, int number, String translation, int[] verseNumbers, String[] lines) {
       this.book = book;
       this.number = number;
       this.translation = translation;
       this.verseNumbers = verseNumbers;
-      this.verses = verses;
+      this.lines = new String[lines.length];
+      this.verses = new String[lines.length];
+      for (int v = 0; v < lines.length; v++) {
+         this.verses[v] = lines[v].replace('\n', ' ');
+         // Poetry runs on over verses; a lone verse with a break is a stray one (KJV has "The LORD\nis my shepherd").
+         boolean poem = broken(lines, v) && (broken(lines, v - 1) || broken(lines, v + 1));
+         this.lines[v] = poem ? lines[v] : this.verses[v];
+      }
+   }
+
+   private static boolean broken(String[] lines, int v) {
+      return v >= 0 && v < lines.length && lines[v].indexOf('\n') >= 0;
    }
 
    public String title() {
@@ -56,7 +70,7 @@ public final class Chapter {
          StringBuilder text = new StringBuilder();
          at = readString(json, quote + 1, text);
          numbers.add(verse);
-         texts.add(text.toString().replaceAll("\\s+", " ").trim());
+         texts.add(fold(text.toString()));
       }
       if (numbers.isEmpty()) {
          throw new IllegalArgumentException("no verses in the answer");
@@ -66,6 +80,18 @@ public final class Chapter {
          verseNumbers[k] = numbers.get(k);
       }
       return new Chapter(book, number, translation, verseNumbers, texts.toArray(new String[0]));
+   }
+
+   /** Runs of spaces folded to one within each line, blank lines dropped, the rest joined by '\n'. */
+   static String fold(String text) {
+      StringBuilder out = new StringBuilder();
+      for (String line : text.split("\n")) {
+         String folded = line.replaceAll("\\s+", " ").trim();
+         if (!folded.isEmpty()) {
+            out.append(out.length() > 0 ? "\n" : "").append(folded);
+         }
+      }
+      return out.toString();
    }
 
    /** The index of the first character at or after {@code i} that is not JSON whitespace. */
@@ -90,6 +116,8 @@ public final class Chapter {
          char e = json.charAt(i++);
          switch (e) {
             case 'n':
+               out.append('\n');
+               break;
             case 'r':
             case 't':
                out.append(' ');
