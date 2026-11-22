@@ -29,7 +29,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules')) return 'react';
           if (id.includes('/src/shared/link-state')) return 'link-state';   // boot.js needs it too, not the rest of shared
-          // The worker's page side (boot.js, the story, compare.html) rides in that chunk: no extra request on app pages.
+          // The worker's page side (boot.js, the story, compare.html, play.html) rides in that chunk: no extra request on app pages.
           if (/\/src\/sw\/(register|keep-pictures)\./.test(id)) return 'link-state';
           if (id.includes('/src/shared/menu-keys')) return 'menu-keys';     // the same for the More menu's keys
           if (id.includes('/src/shared/')) return 'shared';

@@ -1,5 +1,5 @@
 // Page side of offline: registers the service worker (sw.js at the site root) and has it keep this page. boot.js
-// calls it (runtime/install.tsx keepOffline), and so do the pages that don't load boot.js (the story, compare.html),
+// calls it (runtime/install.tsx keepOffline), and so do the pages that don't load boot.js (the story, compare.html, play.html),
 // so a visit that starts on one of them still plays offline later. Imports only keep-pictures.ts.
 import { keepPictures } from './keep-pictures';
 
