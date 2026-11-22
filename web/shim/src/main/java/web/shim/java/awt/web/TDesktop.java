@@ -557,7 +557,7 @@ public final class TDesktop {
         repaintUnfocusable(e);
         TComponent c = lookup(Js.target(e));
         TWindow w = c != null ? c.windowAncestor() : null;
-        if (w == null || !c.acceptsFocus() || !c.isEnabled() || w.focusOwner() == c) {
+        if (w == null || !c.tabStop() || !c.isEnabled() || w.focusOwner() == c) {
             return;
         }
         if (w != active && w.getFocusableWindowState()) {
@@ -625,7 +625,7 @@ public final class TDesktop {
         if (!c.isVisible()) {
             return;
         }
-        if (!(c instanceof TWindow) && c.acceptsFocus() && c.isEnabled()) {
+        if (!(c instanceof TWindow) && c.tabStop() && c.isEnabled()) {
             found.add(c);
         }
         if (c instanceof TContainer) {

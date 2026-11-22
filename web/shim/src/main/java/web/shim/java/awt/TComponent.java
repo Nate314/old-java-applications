@@ -35,6 +35,8 @@ public class TComponent implements TImageObserver {
     protected boolean visible = true;
     boolean enabled = true;
     boolean focusable = true;
+    /** The app called setFocusable itself (Swing's isFocusTraversableOverridden). */
+    private boolean focusableSet;
     TColor background;
     TColor foreground;
     TFont font;
@@ -609,18 +611,39 @@ public class TComponent implements TImageObserver {
 
     public void setFocusable(boolean b) {
         focusable = b;
+        focusableSet = true;
         syncFocusable();
+        syncAccessible();
     }
 
-    /** A component Swing's Tab would skip is left out of the browser's Tab order too. */
+    /**
+     * A component Swing's Tab would skip is left out of the browser's Tab order too; a painted panel the app made
+     * focusable joins it as an application (keys go to the app, not a screen reader's browse mode).
+     */
     private void syncFocusable() {
         if (element != null) {
+            Js.setTabStop(element, paintedTabStop());
             if (focusable) {
-                Js.removeAttr(element, "tabindex");
+                if (!paintedTabStop()) {
+                    Js.removeAttr(element, "tabindex");
+                }
             } else {
                 Js.setAttr(element, "tabindex", "-1");
             }
         }
+    }
+
+    /**
+     * Whether Tab stops here: a button, field or list, or a painted panel the app called setFocusable(true) on, which
+     * Swing's LayoutFocusTraversalPolicy accepts (NumberGuess's board, Clock's face, GroupCreator's board).
+     */
+    public boolean tabStop() {
+        return acceptsFocus() || paintedTabStop();
+    }
+
+    /** A component that is not a button or field but that the app made focusable itself. */
+    protected final boolean paintedTabStop() {
+        return focusable && focusableSet && !acceptsFocus() && !(this instanceof TWindow);
     }
 
     /** Whether Swing's focus traversal policy would give this component the keyboard focus. */
@@ -658,7 +681,7 @@ public class TComponent implements TImageObserver {
 
     /**
      * Called when this component becomes the focus owner. Keyboard focus on the page follows: a component drawn as a
-     * button, field or list gets it, so a screen reader and the focus ring follow Swing's focus; any other component
+     * button, field or list, or a panel the app made focusable, gets it, so a screen reader and the focus ring follow Swing's focus; any other component
      * (a painted panel) takes it off the app's buttons, so Space no longer presses the last one clicked.
      */
     protected void focusGained() {

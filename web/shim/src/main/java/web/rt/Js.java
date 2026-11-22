@@ -60,6 +60,11 @@ public final class Js {
     @JSBody(params = { "el", "name" }, script = "el.removeAttribute(name);")
     public static native void removeAttr(JSObject el, String name);
 
+    /** A painted panel that takes Tab: in the page's Tab order, as an application (keys go to the app, not a screen reader's browse mode). */
+    @JSBody(params = { "el", "on" }, script = "if (on) { el.setAttribute('tabindex', '0'); if (!el.hasAttribute('role')) el.setAttribute('role', 'application'); }"
+            + " else if (el.getAttribute('role') === 'application') { el.removeAttribute('role'); el.removeAttribute('tabindex'); }")
+    public static native void setTabStop(JSObject el, boolean on);
+
     /** ARIA ignores a name on a plain div, so a named painted panel (StockChecker's desk) becomes a group. */
     @JSBody(params = { "el" }, script = "if (el.tagName === 'DIV' && !el.hasAttribute('role')) el.setAttribute('role', 'group');")
     public static native void giveNamedRole(JSObject el);
@@ -104,7 +109,7 @@ public final class Js {
             + " addEventListener('pointerdown', function () { window.__shimKeyed.on = false; }, true); }"
             + " var _k = el.ownerDocument.activeElement;" // the phone Keyboard's box (phone-keys.tsx) keeps the focus, or the phone's keyboard drops
             + " if (_k && _k.classList.contains('shim-keys-box') && !el.matches('input, textarea')) return;"
-            + " if (el.matches('button, input, select, textarea')) {"
+            + " if (el.matches('button, input, select, textarea, [role=application]')) {"
             // a frame without the keyboard (the home page's player, a docked app) never takes it: el.focus() would pull it in
             + " if (el.ownerDocument.activeElement !== el && el.isConnected && (el.ownerDocument.hasFocus() || !el.ownerDocument.defaultView.frameElement))"
             + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
@@ -122,10 +127,10 @@ public final class Js {
 
     /**
      * True when the page's keyboard focus is free for the app to take: the element's page is focused, nothing on it
-     * has the focus (it is on the body, or on an app window itself), and the screen is not touch-first (a focused field there raises the phone's
+     * but the app has the focus (it is on the body, or in an app window), and the screen is not touch-first (a focused field there raises the phone's
      * keyboard). The home page's player is not focused, so it never grabs the keyboard.
      */
-    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body || _d.activeElement.classList.contains('window'))"
+    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body || !!_d.activeElement.closest('.window'))"
             + " && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);")
     public static native boolean pageFocusFree(JSObject el);
 
