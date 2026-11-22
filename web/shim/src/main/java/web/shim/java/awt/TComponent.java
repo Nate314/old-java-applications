@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.web.TCanvasGraphics;
+import web.shim.java.awt.web.TDesktop;
 import web.rt.Drags;
 import web.rt.Files;
 import web.rt.Js;
@@ -675,7 +676,7 @@ public class TComponent implements TImageObserver {
         if (w == null || w.focusOwner() != this) {
             return false;
         }
-        return w.getFocusableWindowState() ? w.isActive() : w.hasElement() && Js.focusWithin(w.element());
+        return w.getFocusableWindowState() ? w.isActive() && TDesktop.pageFocused() : w.hasElement() && Js.focusWithin(w.element());
     }
 
     public boolean isFocusOwner() {
