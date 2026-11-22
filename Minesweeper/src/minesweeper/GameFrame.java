@@ -31,6 +31,8 @@ public final class GameFrame extends JFrame {
    private static final int RIPPLE_MS = 22;
    /** Mines burst in this many ms per tile of distance from the one hit; a win's flags plant at the same pace. */
    private static final int BURST_STEP_MS = 45;
+   /** A won field grows back as meadow just behind the wave of flags. */
+   private static final int BLOOM_LAG_MS = 120;
    /** Watch: the computer makes a move this often, and starts the next game this long after one ends. */
    private static final int WATCH_STEP_MS = 280;
    private static final int WATCH_NEXT_GAME_MS = 2600;
@@ -387,8 +389,11 @@ public final class GameFrame extends JFrame {
          this.finish();
          for (int r = 0; r < this.rows; r++) {
             for (int c = 0; c < this.columns; c++) {
+               int delay = BURST_STEP_MS * distance(r, c, row, column);
                if (MineFieldGenerator.isMine(this.grid, r, c)) {
-                  this.tiles[r][c].showFlag(BURST_STEP_MS * distance(r, c, row, column));
+                  this.tiles[r][c].showFlag(delay);
+               } else {
+                  this.tiles[r][c].bloom(delay + BLOOM_LAG_MS);
                }
             }
          }
