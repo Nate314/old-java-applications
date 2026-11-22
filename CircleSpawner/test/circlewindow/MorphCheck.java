@@ -124,6 +124,15 @@ public class MorphCheck {
          int back = SizeSlider.valueAt(SizeSlider.xOf(size, 150, 400), 150, 400);
          check(Math.abs(back - size) <= 3, "the knob at " + size + " reads back as " + back);
       }
+      // Size track keys: arrows step a fiftieth (at least 1), pages five steps, Home/End the ends, never past them.
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_RIGHT, 510) == 210, "Right steps up");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_DOWN, 510) == 190, "Down steps down");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_PAGE_UP, 510) == 250, "Page Up takes five steps");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_HOME, 510) == SizeSlider.MIN, "Home is the smallest");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_END, 510) == 510, "End is the largest");
+      check(SizeSlider.stepped(505, java.awt.event.KeyEvent.VK_PAGE_UP, 510) == 510, "never past the largest");
+      check(SizeSlider.stepped(12, java.awt.event.KeyEvent.VK_LEFT, 20) == 11, "a short track still steps by 1");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_A, 510) == 200, "other keys leave it");
       // Color buttons: each strip runs from its colors' start to their end.
       check(CircleCreatorWindow.shade("Blue", 0).equals(CircleCreatorWindow.shade("Blue", 1)), "blue is one color");
       check(!CircleCreatorWindow.shade("Rainbow", 0).equals(CircleCreatorWindow.shade("Rainbow", 1)), "the rainbow changes");
