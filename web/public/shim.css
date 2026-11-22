@@ -1976,6 +1976,54 @@ canvas.paint.top {
   }
 }
 
+/* The title card's More line (title-screen.tsx): the source, the other version, the jar and the story, folded away
+   until asked for. */
+.shim-title-more {
+  width: 100%;
+  font-size: 13px;
+  cursor: auto;
+}
+
+.shim-title-more[hidden] {
+  display: none;
+}
+
+.shim-title-more > summary {
+  width: fit-content;
+  padding: 4px 0;
+  font-weight: 600;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.shim-title-more > summary:hover,
+.shim-title-more[open] > summary {
+  opacity: 1;
+}
+
+.shim-title-more > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.shim-title-more > :not(summary) {
+  display: block;
+  margin: 8px 0 0;
+}
+
+/* A phone: Play as wide as the card and tall enough for a thumb. */
+@media (max-width: 680px) {
+  .shim-title-play {
+    align-self: stretch;
+    padding: 14px 30px;
+    font-size: 20px;
+  }
+
+  .shim-title-press {
+    align-self: center;
+  }
+}
+
 /* ---- source viewer (boot.js): the app's README and Java sources in a panel docked on the right ----
    No scrim: the app keeps running, and stays playable, on the left. Above the toolbar (the panel has its
    own close button). Under 900 px the panel takes the whole page. */
