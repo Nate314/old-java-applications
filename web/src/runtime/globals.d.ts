@@ -35,7 +35,7 @@ interface Window {
   __shimImages: Record<string, unknown>;
   __shimScale?: number;
   __shimRender?: number;
-  __shimPainted?: boolean;
+  __shimPainted?: boolean | Element;
   __shimDoc: Document | null;
   __shimListen?: (doc: Document) => void;
   __shimKeyed?: { on: boolean };

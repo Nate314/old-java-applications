@@ -105,10 +105,10 @@ public final class TCanvasGraphics extends TGraphics2D {
     }
 
     private JSObject ctx() {
-        Js.painted();
         if (ctx == null) {
             ctx = surface.context();
         }
+        Js.painted(ctx);
         if (lastCtx != ctx || lastOwner != this || appliedVersion != myVersion) {
             lastCtx = ctx;
             lastOwner = this;
