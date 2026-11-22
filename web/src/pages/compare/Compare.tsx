@@ -3,16 +3,15 @@
 // From 760 px wide the two players lie one over the other, full width, split by a line to drag (Wipe below): Then
 // left of it, Now right of it, both started by one Play.
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
-import { APPS, webp } from '../../shared/catalog';
+import { webp } from '../../shared/catalog';
 import { SITE } from '../../shared/ShareTags';
+import { WITH_THEN, pick } from './Intro';
 
 // The Then versions are built from commit 5a28e46 (then.commit in web/then/pom.xml); this is its commit time, so the
 // changes listed are the ones made after it. history.txt carries no hashes, so change this together with then.commit
 // (web/then/pom.xml and web/then-nathanos/pom.xml).
 const THEN_AT = 1793558285 * 1000;
-const WITH_THEN = APPS.filter(a => a.then);
-const asked = new URLSearchParams(location.search).get('app');
-const app = WITH_THEN.find(a => a.id === asked) || WITH_THEN.find(a => a.id === 'FlappyBird') || WITH_THEN[0];
+const app = pick(new URLSearchParams(location.search).get('app'));
 
 interface Change { t: number; title: string; more: string }
 
@@ -101,69 +100,53 @@ export function Compare() {
   }, []);
   return (
     <>
-      <header className="compare-top">
-        <a className="home" href="index.html">{SITE}</a>
-        {' '}
-        <a href="story.html">The story</a>
-      </header>
-      <main className="compare">
-        <p className="kicker">Then and now</p>
-        <h1>{app.name}, then and now</h1>
-        <p className="lead">
-          <span className="wide">{'On the left, ' + app.name + ' as it ran when it was first brought back: the ' +
-            (app.origin === 'original' ? 'author’s own source' : 'code recovered from the old jar') +
-            ' with light bug fixes. On the right, the same app today, over the same spot. One Play starts both: drag the line to wipe' +
-            ' from one to the other, and click the side you want the keys.'}</span>
-          <span className="narrow">{'Flip between ' + app.name + ' as it ran when it was first brought back (Then) and the same app today (Now). Each keeps its own game while you flip.'}</span>
-        </p>
-        <div className="panes" ref={panes} style={{ '--cut': cut + '%' } as CSSProperties}>
-          <div className="flip" role="group" aria-label="Show">
-            <button type="button" className="then" aria-pressed={then} aria-controls="pane-then" onClick={() => setThen(true)}>
-              Then <small>2026 restore</small>
-            </button>
-            <button type="button" aria-pressed={!then} aria-controls="pane-now" onClick={() => setThen(false)}>
-              Now <small>{changes && changes.length ? '+' + changes.length + (changes.length === 1 ? ' change' : ' changes') : 'today'}</small>
-            </button>
-          </div>
-          <Pane then shown={then} covered={!started} />
-          <Pane then={false} shown={!then} covered={!started} />
-          <Wipe cut={cut} setCut={setCut} box={() => panes.current!} />
-          {!started && (
-            <div className="play-both">
-              <button type="button" onClick={playBoth}><span aria-hidden="true">▶</span> Play both</button>
-              <p>Then and Now start together. Drag the line to compare.</p>
-            </div>
-          )}
+      <div className="panes" ref={panes} style={{ '--cut': cut + '%' } as CSSProperties}>
+        <div className="flip" role="group" aria-label="Show">
+          <button type="button" className="then" aria-pressed={then} aria-controls="pane-then" onClick={() => setThen(true)}>
+            Then <small>2026 restore</small>
+          </button>
+          <button type="button" aria-pressed={!then} aria-controls="pane-now" onClick={() => setThen(false)}>
+            Now <small>{changes && changes.length ? '+' + changes.length + (changes.length === 1 ? ' change' : ' changes') : 'today'}</small>
+          </button>
         </div>
-        <nav className="picks" aria-label="Compare another app">
-          <span>Compare another:</span>
-          {WITH_THEN.map(a => (
-            <a key={a.id} href={'compare.html?app=' + a.id} aria-current={a === app ? 'page' : undefined}>{a.name}</a>
+        <Pane then shown={then} covered={!started} />
+        <Pane then={false} shown={!then} covered={!started} />
+        <Wipe cut={cut} setCut={setCut} box={() => panes.current!} />
+        {!started && (
+          <div className="play-both">
+            <button type="button" onClick={playBoth}><span aria-hidden="true">▶</span> Play both</button>
+            <p>Then and Now start together. Drag the line to compare.</p>
+          </div>
+        )}
+      </div>
+      <nav className="picks" aria-label="Compare another app">
+        <span>Compare another:</span>
+        {WITH_THEN.map(a => (
+          <a key={a.id} href={'compare.html?app=' + a.id} aria-current={a === app ? 'page' : undefined}>{a.name}</a>
+        ))}
+      </nav>
+      <section className="changes" aria-labelledby="changes-title" hidden={!changes || !changes.length}>
+        <h2 id="changes-title">What changed in between</h2>
+        <p className="count">
+          {changes && changes.length + (changes.length === 1 ? ' change' : ' changes') + ' to ' + app.name + ' since it was first restored, newest first.'}
+        </p>
+        <ol>
+          {changes && changes.map((c, i) => (
+            <li key={i}>
+              <time dateTime={new Date(c.t).toISOString()}>{day(c.t)}</time>
+              {/* "Minesweeper: Odds shows ..." reads as "Odds shows ..." here, under the app's own name. */}
+              {c.title === app.id && c.more
+                ? <span><strong>{c.more.charAt(0).toUpperCase() + c.more.slice(1)}</strong></span>
+                : <span><strong>{c.title}</strong>{c.more ? ': ' + c.more : null}</span>}
+            </li>
           ))}
-        </nav>
-        <section className="changes" aria-labelledby="changes-title" hidden={!changes || !changes.length}>
-          <h2 id="changes-title">What changed in between</h2>
-          <p className="count">
-            {changes && changes.length + (changes.length === 1 ? ' change' : ' changes') + ' to ' + app.name + ' since it was first restored, newest first.'}
-          </p>
-          <ol>
-            {changes && changes.map((c, i) => (
-              <li key={i}>
-                <time dateTime={new Date(c.t).toISOString()}>{day(c.t)}</time>
-                {/* "Minesweeper: Odds shows ..." reads as "Odds shows ..." here, under the app's own name. */}
-                {c.title === app.id && c.more
-                  ? <span><strong>{c.more.charAt(0).toUpperCase() + c.more.slice(1)}</strong></span>
-                  : <span><strong>{c.title}</strong>{c.more ? ': ' + c.more : null}</span>}
-              </li>
-            ))}
-          </ol>
-          <p className="pages">
-            <a href={app.id + '/then.html'}>Open the Then page</a>
-            {' · '}
-            <a href={app.id + '/index.html'}>Open today’s page</a>
-          </p>
-        </section>
-      </main>
+        </ol>
+        <p className="pages">
+          <a href={app.id + '/then.html'}>Open the Then page</a>
+          {' · '}
+          <a href={app.id + '/index.html'}>Open today’s page</a>
+        </p>
+      </section>
     </>
   );
 }
