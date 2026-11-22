@@ -63,6 +63,23 @@ public abstract class TPath2D implements TShape {
         numCoords = 0;
     }
 
+    /** Maps every point already in the path through at, as the JDK's Path2D.transform. */
+    public final void transform(TAffineTransform at) {
+        at.transform(coords, 0, coords, 0, numCoords / 2);
+        for (int i = 0; i < numCoords; i++) {
+            coords[i] = keep(coords[i]);
+        }
+    }
+
+    /** A copy of the same precision, mapped through at when given. */
+    public final TShape createTransformedShape(TAffineTransform at) {
+        TPath2D p = this instanceof Float ? new Float(this) : new Double(this);
+        if (at != null) {
+            p.transform(at);
+        }
+        return p;
+    }
+
     public final int getWindingRule() {
         return rule;
     }
@@ -187,9 +204,9 @@ public abstract class TPath2D implements TShape {
         }
     }
 
-    /** The shape's outline as a path with its winding rule, as new Path2D.Double(shape) makes it. */
-    final TPath2D copy(TShape s) {
-        TPathIterator pi = s.getPathIterator(null);
+    /** The shape's outline (mapped through at when given) as a path with its winding rule, as new Path2D.Double(shape, at) makes it. */
+    final TPath2D copy(TShape s, TAffineTransform at) {
+        TPathIterator pi = s.getPathIterator(at);
         setWindingRule(pi.getWindingRule());
         append(pi, false);
         return this;
@@ -301,9 +318,34 @@ public abstract class TPath2D implements TShape {
             super(rule);
         }
 
+        public Float(int rule, int initialCapacity) {
+            super(rule);
+        }
+
         public Float(TShape s) {
+            this(s, null);
+        }
+
+        public Float(TShape s, TAffineTransform at) {
             super(WIND_NON_ZERO);
-            copy(s);
+            copy(s, at);
+        }
+
+        // the JDK's float overloads: compiled app code calls these by their (FF)V signatures, so they must exist
+        public final void moveTo(float x, float y) {
+            moveTo((double) x, (double) y);
+        }
+
+        public final void lineTo(float x, float y) {
+            lineTo((double) x, (double) y);
+        }
+
+        public final void quadTo(float x1, float y1, float x2, float y2) {
+            quadTo((double) x1, (double) y1, (double) x2, (double) y2);
+        }
+
+        public final void curveTo(float x1, float y1, float x2, float y2, float x3, float y3) {
+            curveTo((double) x1, (double) y1, (double) x2, (double) y2, (double) x3, (double) y3);
         }
 
         @Override
@@ -321,9 +363,17 @@ public abstract class TPath2D implements TShape {
             super(rule);
         }
 
+        public Double(int rule, int initialCapacity) {
+            super(rule);
+        }
+
         public Double(TShape s) {
+            this(s, null);
+        }
+
+        public Double(TShape s, TAffineTransform at) {
             super(WIND_NON_ZERO);
-            copy(s);
+            copy(s, at);
         }
 
         @Override

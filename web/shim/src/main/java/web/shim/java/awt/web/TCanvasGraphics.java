@@ -24,6 +24,7 @@ import web.shim.java.awt.TRectangle;
 import web.shim.java.awt.TRenderingHints;
 import web.shim.java.awt.TShape;
 import web.shim.java.awt.TStroke;
+import web.shim.java.awt.geom.TAffineTransform;
 import web.shim.java.awt.geom.TEllipse2D;
 import web.shim.java.awt.geom.TLine2D;
 import web.shim.java.awt.geom.TPath2D;
@@ -46,13 +47,8 @@ public final class TCanvasGraphics extends TGraphics2D {
     private final Surface surface;
     private final double pixelRatio;
     private JSObject ctx;
-    // User-space transform: x' = a*x + c*y + e, y' = b*x + d*y + f
-    private double a = 1;
-    private double b;
-    private double c;
-    private double d = 1;
-    private double e;
-    private double f;
+    // User-space transform; ClipRun's a..f are its scaleX, shearY, shearX, scaleY, translateX, translateY
+    private final TAffineTransform t = new TAffineTransform();
     private TColor color = TColor.black;
     private TFont font = DEFAULT_FONT;
     private TStroke stroke = new TBasicStroke();
@@ -85,12 +81,7 @@ public final class TCanvasGraphics extends TGraphics2D {
         surface = o.surface;
         pixelRatio = o.pixelRatio;
         ctx = o.ctx;
-        a = o.a;
-        b = o.b;
-        c = o.c;
-        d = o.d;
-        e = o.e;
-        f = o.f;
+        t.setTransform(o.t);
         color = o.color;
         font = o.font;
         stroke = o.stroke;
@@ -120,7 +111,7 @@ public final class TCanvasGraphics extends TGraphics2D {
                 int y0 = ClipRun.pixel(clip[1], r);
                 clipTo(ctx, x0, y0, ClipRun.pixel(clip[2], r) - x0, ClipRun.pixel(clip[3], r) - y0);
             }
-            setTransform(ctx, r * a, r * b, r * c, r * d, r * e, r * f);
+            setTransform(ctx, r * t.getScaleX(), r * t.getShearY(), r * t.getShearX(), r * t.getScaleY(), r * t.getTranslateX(), r * t.getTranslateY());
             applyStroke();
         }
         return ctx;
@@ -177,32 +168,42 @@ public final class TCanvasGraphics extends TGraphics2D {
 
     @Override
     public void translate(double tx, double ty) {
-        e += a * tx + c * ty;
-        f += b * tx + d * ty;
+        t.translate(tx, ty);
         changed();
     }
 
     @Override
     public void rotate(double theta) {
-        double cos = Math.cos(theta);
-        double sin = Math.sin(theta);
-        double na = a * cos + c * sin;
-        double nb = b * cos + d * sin;
-        double nc = -a * sin + c * cos;
-        double nd = -b * sin + d * cos;
-        a = na;
-        b = nb;
-        c = nc;
-        d = nd;
+        t.rotate(theta);
         changed();
     }
 
     @Override
     public void scale(double sx, double sy) {
-        a *= sx;
-        b *= sx;
-        c *= sy;
-        d *= sy;
+        t.scale(sx, sy);
+        changed();
+    }
+
+    @Override
+    public void shear(double shx, double shy) {
+        t.shear(shx, shy);
+        changed();
+    }
+
+    @Override
+    public TAffineTransform getTransform() {
+        return new TAffineTransform(t);
+    }
+
+    @Override
+    public void setTransform(TAffineTransform at) {
+        t.setTransform(at);
+        changed();
+    }
+
+    @Override
+    public void transform(TAffineTransform at) {
+        t.concatenate(at);
         changed();
     }
 
@@ -236,7 +237,7 @@ public final class TCanvasGraphics extends TGraphics2D {
 
     @Override
     public void setClip(int x, int y, int width, int height) {
-        clip = ClipRun.toDevice(a, b, c, d, e, f, x, y, width, height);
+        clip = ClipRun.toDevice(t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(), t.getTranslateX(), t.getTranslateY(), x, y, width, height);
         changed();
     }
 
@@ -259,7 +260,7 @@ public final class TCanvasGraphics extends TGraphics2D {
 
     @Override
     public void clipRect(int x, int y, int width, int height) {
-        double[] box = ClipRun.toDevice(a, b, c, d, e, f, x, y, width, height);
+        double[] box = ClipRun.toDevice(t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(), t.getTranslateX(), t.getTranslateY(), x, y, width, height);
         clip = clip == null ? box : ClipRun.intersect(clip, box);
         changed();
     }
@@ -276,7 +277,7 @@ public final class TCanvasGraphics extends TGraphics2D {
 
     @Override
     public TRectangle getClipBounds() {
-        int[] r = clip == null ? null : ClipRun.userBounds(clip, a, b, c, d, e, f);
+        int[] r = clip == null ? null : ClipRun.userBounds(clip, t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(), t.getTranslateX(), t.getTranslateY());
         return r == null ? null : new TRectangle(r[0], r[1], r[2], r[3]);
     }
 
