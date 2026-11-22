@@ -52,7 +52,7 @@ public class Battle
     private final Controls   greenKeys;
     private final Controls   redKeys;
     /** Watch: the computer drives red too. */
-    private final ComputerControls redComputer = new ComputerControls(new Random());
+    private ComputerControls redComputer = new ComputerControls(new Random());
     private boolean          watching;
     /** The computer drove red at some point in this match, so it does not count in the record. */
     private boolean          watchedMatch;
@@ -561,10 +561,11 @@ public class Battle
         return supplies;
     }
 
-    /** Where crates fall and what they hold (a test can fix it). */
-    void setDropRandom(Random random)
+    /** Where crates fall, what they hold and how the computer drives red while watching (a test fixes them; call before C). */
+    void setRandom(Random random)
     {
         dropRandom = random;
+        redComputer = new ComputerControls(random);
     }
 
     /** The crate on the field, falling or landed, or null. */

@@ -21,8 +21,8 @@ import javax.swing.Timer;
 
 /**
  * Runs the battle on a Swing timer and paints the battlefield (its ground, see Terrain, which keeps the round's track marks and
- * blast scorches, and concrete walls), the supply crates, the tanks, the shells, the sparks and smoke, the score bar
- * with each tank's powers, and the banners.
+ * blast scorches, and walls of the ground's material), what the tracks throw up, the supply crates, the tanks, the shells,
+ * the sparks and smoke, the ground's weather, the score bar with each tank's powers, and the banners.
  */
 @SuppressWarnings("serial")
 public class GamePanel extends JPanel
@@ -31,7 +31,6 @@ public class GamePanel extends JPanel
     private static final int   SLOW_FRAMES = 66;
     /** The ground is drawn this many times finer than the field, so it stays sharp when the page zooms the window. */
     private static final int   GROUND_SCALE = 2;
-    private static final Color CONCRETE    = new Color(150, 146, 138);
     private static final Color SHADE       = new Color(0, 0, 40, 215);
     private static final Color TEXT        = Color.WHITE;
     private static final Color DIM         = new Color(200, 205, 255);
@@ -49,6 +48,10 @@ public class GamePanel extends JPanel
     private Terrain            terrain     = Terrain.MEADOW;
     /** Each tank's x, y and rotation when its tracks last marked the ground. */
     private final double[][]   lastPose    = new double[2][];
+    /** Dust, snow and clods the tracks have thrown up (only drawn: the battle never sees them). */
+    private final List<Spark>  kicks       = new ArrayList<>();
+    private final Random       kickRandom  = new Random();
+    private Weather            weather;
     private int                ticks;
     /** Frames left of the slow motion that plays a destroyed tank's blast, and the blasts seen so far. */
     private int                slowFrames;
@@ -350,6 +353,8 @@ public class GamePanel extends JPanel
             markTracks(g, battle.green(), 1);
             for (double[] scorch : battle.scorches()) scorch(g, scorch[0], scorch[1], scorch[2]);
             g.dispose();
+            kicks.removeIf(kick -> !kick.move());
+            weather.tick(getWidth(), getHeight());
         }
         repaint();
     }
@@ -368,6 +373,8 @@ public class GamePanel extends JPanel
         g.scale(GROUND_SCALE, GROUND_SCALE);
         terrain.lay(g, width, height, new Random(groundArena.name().hashCode()));
         g.dispose();
+        kicks.clear();
+        weather = new Weather(terrain, width, height);
     }
 
     /** Presses the back of each track into the ground when the tank has moved or turned since last time. */
@@ -394,6 +401,21 @@ public class GamePanel extends JPanel
             }
         }
         t.dispose();
+        if (ticks % 2 == 0) kick(pose, last);
+    }
+
+    /** Each track throws up a little of the ground (Terrain.kick) behind it, or ahead of it when backing. */
+    private void kick(double[] pose, double[] last)
+    {
+        double fx = Math.sin(Math.toRadians(pose[2]));
+        double fy = -Math.cos(Math.toRadians(pose[2]));
+        double back = (pose[0] - last[0]) * fx + (pose[1] - last[1]) * fy < 0 ? 1 : -1;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            double x = pose[0] + fx * back * (Tank.SIZE + 2) - fy * side * (Tank.SIZE - 11);
+            double y = pose[1] + fy * back * (Tank.SIZE + 2) + fx * side * (Tank.SIZE - 11);
+            terrain.kick(kicks, x, y, fx * back * 2.5, fy * back * 2.5, kickRandom);
+        }
     }
 
     /** A blackened ring of soot where something blew up, darkest in the middle. */
@@ -405,30 +427,6 @@ public class GamePanel extends JPanel
             g.setColor(new Color(30, 24, 16, 40 + i * 12));
             g.fillOval((int) (x - r), (int) (y - r * 0.85), (int) (2 * r), (int) (1.7 * r));
         }
-    }
-
-    /** A concrete wall with a drop shadow, a lit top and left edge, a shaded bottom and right, and block seams. */
-    private static void wall(Graphics2D g, Arena.Wall wall)
-    {
-        int l = (int) Math.round(wall.left);
-        int t = (int) Math.round(wall.top);
-        int w = (int) Math.round(wall.right - wall.left);
-        int h = (int) Math.round(wall.bottom - wall.top);
-        g.setColor(new Color(0, 0, 0, 80));
-        g.fillRoundRect(l + 6, t + 8, w, h, 6, 6);
-        g.setColor(CONCRETE);
-        g.fillRect(l, t, w, h);
-        g.setColor(Tank.shade(CONCRETE, 1.3));
-        g.fillRect(l, t, w, 4);
-        g.fillRect(l, t, 4, h);
-        g.setColor(Tank.shade(CONCRETE, 0.7));
-        g.fillRect(l, t + h - 4, w, 4);
-        g.fillRect(l + w - 4, t + 4, 4, h - 4);
-        g.setColor(Tank.shade(CONCRETE, 0.78));
-        if (w >= h) for (int x = l + 27; x < l + w - 8; x += 27) g.drawLine(x, t + 4, x, t + h - 5);
-        else for (int y = t + 27; y < t + h - 8; y += 27) g.drawLine(l + 4, y, l + w - 5, y);
-        g.setColor(new Color(60, 56, 50));
-        g.drawRect(l, t, w - 1, h - 1);
     }
 
     @Override
@@ -452,7 +450,8 @@ public class GamePanel extends JPanel
         }
         g.translate(shakeX, shakeY);
         if (ground != null) g.drawImage(ground, 0, 0, getWidth(), getHeight(), null);
-        for (Arena.Wall wall : battle.arena().walls()) wall(g, wall);
+        for (Arena.Wall wall : battle.arena().walls()) terrain.wall(g, wall);
+        for (Spark kick : kicks) kick.paint(g);
         // A landed crate lies under the tanks; a falling one is above everything on the ground.
         Supply supply = battle.supply();
         if (supply != null && supply.landed()) supply.paint(g, ticks);
@@ -469,6 +468,8 @@ public class GamePanel extends JPanel
         for (Shell shell : battle.shells()) shell.paint(g);
         for (Spark spark : battle.sparks()) spark.paint(g);
         g.translate(-shakeX, -shakeY);
+        // The air holds still while the field shakes, and stays clear when the browser asks for less motion.
+        if (weather != null && !calm()) weather.paint(g);
         // The match-over box shows the score where the score bars would be.
         if (battle.phase() != Battle.Phase.TITLE && battle.phase() != Battle.Phase.MATCH_OVER && !building())
         {

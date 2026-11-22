@@ -41,6 +41,7 @@ public final class BattleCheck
         wallsStopShellsAndTanks();
         arenasFitTheField();
         eachLayoutHasItsOwnGround();
+        eachGroundHasItsWallsKicksAndAir();
         matchRulesAndRecord();
         computerDestroysASittingTarget();
         computerShootsRoundTheBunker();
@@ -69,6 +70,7 @@ public final class BattleCheck
         Tank red = new Tank("Red", Color.RED, redKeys, 100, 250, 90);
         Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
         Battle battle = new Battle(red, green, new ComputerControls(new Random(2)), Record.load(file));
+        battle.setRandom(new Random(2));
         battle.toggleWatch();
         assert battle.watching() && red.controls() instanceof ComputerControls;
         int ticks = 0;
@@ -199,6 +201,56 @@ public final class BattleCheck
         assert seen.size() == Arena.LAYOUTS.size() : "grounds " + seen;
         assert Terrain.of(Arena.EMPTY) == Terrain.MEADOW;
         assert Terrain.of(Arena.build(Arena.custom(new boolean[Arena.GRID][Arena.GRID]), W, H)) == Terrain.MEADOW;
+    }
+
+    /**
+     * Each ground paints its walls in its own material inside the wall (only a shadow and, in the desert, drifted sand
+     * reach past it), every ground but the meadow throws something up from each track, and each has air that moves.
+     */
+    private static void eachGroundHasItsWallsKicksAndAir()
+    {
+        Arena.Wall wall = new Arena.Wall(100, 100, 220, 124);
+        Set<Integer> middles = new HashSet<>();
+        for (Terrain terrain : Terrain.values())
+        {
+            BufferedImage image = new BufferedImage(320, 240, BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = image.createGraphics();
+            terrain.wall(g, wall);
+            g.dispose();
+            middles.add(image.getRGB(130, 108));
+            for (int y = 0; y < image.getHeight(); y++)
+                for (int x = 0; x < image.getWidth(); x++)
+                    assert image.getRGB(x, y) == 0 || x >= 95 && x < 235 && y >= 95 && y < 140
+                                    : terrain + " painted a wall at " + x + "," + y;
+
+            List<Spark> kicks = new ArrayList<>();
+            for (int i = 0; i < 30; i++) terrain.kick(kicks, 50, 50, -2.5, 0, new Random(i));
+            assert terrain == Terrain.MEADOW ? !kicks.isEmpty() && kicks.size() < 30 : kicks.size() >= 30 : terrain + " kicked " + kicks.size();
+            for (int i = 0; i < 80; i++) kicks.removeIf(k -> !k.move());
+            assert kicks.isEmpty() : terrain + "'s kicks never settled";
+
+            Weather weather = new Weather(terrain, W, H);
+            BufferedImage before = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
+            BufferedImage after = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
+            g = before.createGraphics();
+            weather.paint(g);
+            g.dispose();
+            // Long enough for every bit to cross the field and come back in from its edge.
+            for (int i = 0; i < 60 * 60; i++) weather.tick(W, H);
+            g = after.createGraphics();
+            weather.paint(g);
+            g.dispose();
+            int lit = 0;
+            int changed = 0;
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    if (after.getRGB(x, y) != 0) lit++;
+                    if (after.getRGB(x, y) != before.getRGB(x, y)) changed++;
+                }
+            assert lit > 20 && changed > 20 : terrain + "'s air: " + lit + " lit, " + changed + " changed";
+        }
+        assert middles.size() == Terrain.values().length : "two grounds share a wall material";
     }
 
     private static void arenasFitTheField()
@@ -430,7 +482,7 @@ public final class BattleCheck
         Tank red = new Tank("Red", Color.RED, new Script(), 100, 250, 90);
         Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
         Battle battle = new Battle(red, green, new ComputerControls(new Random(5)), Record.load(file));
-        battle.setDropRandom(new Random(5));
+        battle.setRandom(new Random(5));
         battle.setSupplies(true);
         battle.startMatch(false);
         while (battle.phase() != Battle.Phase.FIGHT) battle.tick(W, H);
@@ -543,7 +595,7 @@ public final class BattleCheck
             Tank red = new Tank("Red", Color.RED, left, 100, 250, 90);
             Tank green = new Tank("Green", Color.GREEN, new Script(), 380, 250, 270);
             Battle battle = new Battle(red, green, new ComputerControls(random), null);
-            battle.setDropRandom(random);
+            battle.setRandom(random);
             battle.setSupplies(true);
             battle.startMatch(true);
             int ticks = 0;

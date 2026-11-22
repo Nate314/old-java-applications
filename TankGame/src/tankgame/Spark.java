@@ -8,14 +8,15 @@ import java.util.Random;
 
 /**
  * One fading spark of a hit, an explosion or a muzzle flash, a puff of smoke that rises and spreads, the ring of a blast's
- * shock wave, the flash of light a blast throws on the ground, or a tumbling scrap of a destroyed tank.
+ * shock wave, the flash of light a blast throws on the ground, a tumbling scrap of a destroyed tank, or what a track
+ * throws up from the ground (a puff of dust or a clod: see Terrain.kick).
  */
 public class Spark
 {
     private static final Random RANDOM = new Random();
     private static final Color  FLAME  = new Color(255, 220, 90);
     private static final Color  SMOKE  = new Color(70, 66, 62);
-    private enum Kind { SPARK, SMOKE, RING, GLOW, SCRAP }
+    private enum Kind { SPARK, SMOKE, RING, GLOW, SCRAP, DUST, CLOD }
     private double              x;
     private double              y;
     private double              vx;
@@ -80,11 +81,31 @@ public class Spark
                         -0.4 - RANDOM.nextDouble() * 0.6, 40 + RANDOM.nextInt(30), SMOKE, Kind.SMOKE, 0));
     }
 
+    /** A puff of the ground (dust, powder snow) thrown up from (x, y) at (vx, vy), spreading as it settles. */
+    public static void dust(List<Spark> sparks, double x, double y, double vx, double vy, Color color, double size)
+    {
+        sparks.add(new Spark(x + RANDOM.nextInt(7) - 3, y + RANDOM.nextInt(7) - 3, vx + RANDOM.nextDouble() * 0.6 - 0.3,
+                        vy + RANDOM.nextDouble() * 0.6 - 0.3, 30 + RANDOM.nextInt(24), color, Kind.DUST, size));
+    }
+
+    /** A clod of the ground (earth, snow, mud) flung from (x, y) at about (vx, vy), skidding to a stop. */
+    public static void clod(List<Spark> sparks, double x, double y, double vx, double vy, Color color)
+    {
+        double spread = 0.6 + RANDOM.nextDouble() * 0.8;
+        sparks.add(new Spark(x, y, vx * spread + RANDOM.nextDouble() * 1.6 - 0.8, vy * spread + RANDOM.nextDouble() * 1.6 - 0.8,
+                        16 + RANDOM.nextInt(14), color, Kind.CLOD, 3 + RANDOM.nextInt(3)));
+    }
+
     /** Moves one tick; returns false once the spark has faded out. */
     public boolean move()
     {
         x += vx;
         y += vy;
+        if (kind == Kind.DUST || kind == Kind.CLOD)
+        {
+            vx *= kind == Kind.DUST ? 0.93 : 0.84;
+            vy *= kind == Kind.DUST ? 0.93 : 0.84;
+        }
         if (kind == Kind.SCRAP)
         {
             turn += spin * Math.hypot(vx, vy);
@@ -127,6 +148,16 @@ public class Spark
                 t.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), a));
                 t.fillRect(-s / 2, -s / 3, s, s * 2 / 3);
                 t.dispose();
+                return;
+            case DUST:
+                int d = (int) (size * (0.5 + age / (double) life));
+                g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 140 * left / life));
+                g.fillOval((int) x - d / 2, (int) y - d / 2, d, d);
+                return;
+            case CLOD:
+                int c = (int) size;
+                g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.min(255, 400 * left / life)));
+                g.fillOval((int) x - c / 2, (int) y - c / 2, c, c);
                 return;
             default:
                 break;
