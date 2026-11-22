@@ -577,6 +577,44 @@ public final class RunnerCheck {
       p.paint(sg);
       sg.dispose();
       assert shot.getRGB(c.markX, Runner.GROUND + 9) == RunnerPanel.INK.getRGB() : "the mark under the ground";
+      // The slow replay: past the shake the fix's run plays at half speed, its mark hollow until the fix presses and lit
+      // from then on, the fix gets past what you hit, and the replay starts over. A touch screen's line names the pad.
+      assert p.replayView() == null : "no replay during the shake";
+      Runner.Obstacle hit = p.runner().crashedInto();
+      double clear = p.runner().distance() + hit.x + hit.w - Runner.DINO_X;
+      boolean hollow = false;
+      boolean lit = false;
+      boolean cleared = false;
+      boolean looped = false;
+      int frames = 0;
+      long last = -1;
+      for (int i = 0; i < 1200 && !looped; i++) {
+         p.step();
+         Runner v = p.replayView();
+         if (v == null) {
+            continue;
+         }
+         looped = last > v.steps();
+         last = v.steps();
+         frames++;
+         cleared |= v.state() == Runner.State.RUNNING && v.distance() >= clear;
+         Graphics2D rg = shot.createGraphics();
+         p.paint(rg);
+         rg.dispose();
+         boolean filled = shot.getRGB(c.markX, Runner.GROUND + 9) == RunnerPanel.INK.getRGB();
+         if (v.steps() < c.step) {
+            hollow |= !filled;
+         } else {
+            lit |= filled;
+         }
+      }
+      assert hollow && lit && cleared && looped : "replay: hollow " + hollow + ", lit " + lit + ", cleared " + cleared + ", looped " + looped;
+      assert Coach.of(p.runner(), true).line.endsWith("tap JUMP.") : Coach.of(p.runner(), true).line;
+      key(p, java.awt.event.KeyEvent.VK_SPACE, true);
+      key(p, java.awt.event.KeyEvent.VK_SPACE, false);
+      assert p.runner().state() == Runner.State.RUNNING && p.replayView() == null : "Space runs again during the replay";
+      stepToCrash(p.runner());
+      System.out.println("replay: " + frames + " steps a loop, the fix clears it");
       p.setBot(true);
       for (int i = 0; i < 600 && p.runner().state() != Runner.State.RUNNING; i++) {
          p.step();
