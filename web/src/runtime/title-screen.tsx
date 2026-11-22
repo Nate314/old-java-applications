@@ -21,22 +21,52 @@ export type LogLine = [string, string, string];
 export let titleLog: ((row: LogLine) => void) | null = null;
 
 /** What the page's start-up (start.ts) tells the title screen; set once it is in the page. */
-interface TitleControl { line(row: LogLine): void; done(p: number): void; ready(): void; leave(): void }
+interface TitleControl { line(row: LogLine): void; done(p: number): void; ready(): void; leave(): void; start(): void }
+
+declare global {
+  // Set by the page's HTML card (src/pages/app/AppPage.tsx, EarlyTitle): it was pressed; it hands later presses over.
+  interface Window { oldjavaWanted?: number; oldjavaPress?: (e?: Event) => void }
+}
 
 interface Opened { ui: TitleControl; screen: HTMLElement; close: () => void }
 var early: Opened | null = null, waiting = false;
 var onGo: ((e?: Event) => void) | null = null;
 var auto = false;   // it starts by itself once ready (chosen, below), until the visitor stays to read it
+var pressed = false;   // Play (a click on the card, or a key) was pressed before the app was ready: it starts once it is
+var live: TitleControl | null = null;   // the card on screen
+
+/** A press while the files are still arriving: the card says Starting…, and ready starts the app. */
+function want() {
+  pressed = auto = true;
+  if (live) live.start();
+}
+
+/** Keys that are not a press: moving the focus, modifiers, and keys typed into the panels the band opens. */
+function playKey(e: KeyboardEvent) {
+  return !/^(Tab|Shift|Control|Alt|Meta)$/.test(e.key) &&
+    !((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-title-more, .shim-title-clip-pause, .shim-find'));
+}
+
+/** Any key on the title screen; while the page's own card is up, its script has it (AppPage.tsx) and hands it on. */
+function press(e: KeyboardEvent) {
+  if (document.getElementById('shim-title-early')) return;
+  if (onGo) onGo(e);
+  else if (playKey(e)) want();
+}
 
 /** Puts the title screen in the page; apps, when given, is the catalog it shows from its first frame. */
 function open(apps?: CatalogApp[]): Opened {
   document.documentElement.setAttribute('data-title', '');
-  auto = chosen();
+  auto = chosen() || !!window.oldjavaWanted;
+  pressed = !!window.oldjavaWanted;
   var ui: TitleControl | null = null, screen: HTMLElement | null = null;
-  const close = openLayer(<TitleScreen apps={apps} onGo={e => { if (onGo) onGo(e); }} onMount={(c, el) => { ui = c; screen = el; }} />);
+  const close = openLayer(<TitleScreen apps={apps} onGo={e => { if (onGo) onGo(e); else want(); }} onMount={(c, el) => { ui = c; screen = el; }} />);
+  live = ui;
+  window.oldjavaPress = e => { if (onGo) onGo(e); else want(); };
+  document.addEventListener('keydown', press, true);
   dropEarlyOnStage();
   titleLog = ui!.line;
-  return { ui: ui!, screen: screen!, close };
+  return { ui: ui!, screen: screen!, close: () => { document.removeEventListener('keydown', press, true); close(); } };
 }
 
 /** The card the page's HTML painted before the runtime ran (src/pages/app/AppPage.tsx, EarlyTitle). */
@@ -115,10 +145,9 @@ export function titleScreen(files: string[]) {
 
   var started: (() => void) | null = null, skipping = false, leaving = false;
   function go(e?: Event) {
-    if (!started || leaving) return;
+    if (leaving) return;
     if (e && e.type === 'keydown') {
-      if ((e as KeyboardEvent).key === 'Tab' || (e as KeyboardEvent).key === 'Shift' || (e as KeyboardEvent).key === 'Control' || (e as KeyboardEvent).key === 'Alt' || (e as KeyboardEvent).key === 'Meta') return;
-      if ((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-title-more, .shim-title-clip-pause, .shim-find')) return;   // keys for those panels
+      if (!playKey(e as KeyboardEvent)) return;
       e.preventDefault();
       e.stopPropagation();
       // Its release must not reach the app either: it never saw the press.
@@ -129,7 +158,8 @@ export function titleScreen(files: string[]) {
         document.removeEventListener('keyup', swallow, true);
       }, true);
     }
-    document.removeEventListener('keydown', go, true);
+    if (!started) { want(); return; }
+    document.removeEventListener('keydown', press, true);
     leaving = true;
     // With a picture in view, it stays up until the app's window is there and then opens into it (launch); otherwise it fades.
     var pic = launchPicture(screen);
@@ -158,7 +188,6 @@ export function titleScreen(files: string[]) {
       ui.line(['Ready.', '', 'ready']);
       ui.ready();
       if (!sourcePanel) screen.querySelector<HTMLElement>('.shim-title-play')!.focus({ preventScroll: true });   // keep the keyboard in an open source panel
-      document.addEventListener('keydown', go, true);
       if (skipping) go();
       // Not while prerendered (instant open): the app waits until the visitor actually arrives.
       else if (auto && !sourcePanel) {
@@ -248,6 +277,7 @@ function TitleScreen({ apps, onGo, onMount }: {
       done: p => flushSync(() => setDone(p)),
       ready: () => flushSync(() => setReady(true)),
       leave: () => flushSync(() => setLeaving(true)),
+      start: () => flushSync(() => setStarting(true)),
     }, screen.current!);
   }, []);
   useEffect(() => {
@@ -273,7 +303,7 @@ function TitleScreen({ apps, onGo, onMount }: {
   }
   // Scrolling, a wheel, or a tap or focus on anything but Play: the visitor is reading it, so it waits for Play after all.
   function stay(e: SyntheticEvent) {
-    if (!auto || (e.target as Element).closest('.shim-title-play')) return;
+    if (!auto || pressed || (e.target as Element).closest('.shim-title-play')) return;
     auto = false;
     setStarting(false);
   }
@@ -281,7 +311,7 @@ function TitleScreen({ apps, onGo, onMount }: {
     if (!(e.target as Element).closest('a, .shim-title-forget, .shim-title-story, .shim-title-more')) onGo(e.nativeEvent);
   }
   return (
-    <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (listed ? '' : ' unlisted') + (leaving ? ' leaving' : '')}
+    <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (listed ? '' : ' unlisted') + (leaving ? ' leaving' : '') + (starting && !ready ? ' starting' : '')}
       role="dialog" data-sound="none" aria-label={document.title} ref={screen} onClick={onClick}
       onScroll={stay} onWheel={stay} onPointerDown={stay} onFocus={stay}>
       <div className="shim-title-card">
@@ -311,7 +341,7 @@ function TitleScreen({ apps, onGo, onMount }: {
           <span className="shim-title-cat">{app ? (then ? 'As first restored' : CATS[app.cat] || '') : ''}</span>
           <h1>{app ? app.name : document.title}</h1>
           {/* Play right under the name, ahead of the hint and the record lines, so a phone shows it without scrolling. */}
-          <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : starting ? 'Starting…' : 'Loading…'}</button>
+          <button type="button" className="shim-title-play" disabled={!ready}>{ready || !starting ? '▶ Play' : 'Starting…'}</button>
           <span className="shim-title-press">{TAP ? 'or tap anywhere' : 'or press any key'}</span>
           <p className="shim-title-hint">
             {app ? (then

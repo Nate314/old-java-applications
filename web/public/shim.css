@@ -1682,10 +1682,19 @@ canvas.paint.top {
   box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
 }
 
+/* Before the app is ready Play is already pressable: the press falls through to the card, which starts the app as
+   soon as its files are in (title-screen.tsx). Dimmed only once pressed, while it reads Starting…. */
 .shim-title-play:disabled {
-  cursor: progress;
+  pointer-events: none;
+}
+
+.shim-title.starting .shim-title-play:disabled {
   opacity: 0.55;
   box-shadow: none;
+}
+
+.shim-title.starting {
+  cursor: progress;
 }
 
 .shim-title.ready .shim-title-play {
@@ -1700,11 +1709,10 @@ canvas.paint.top {
 .shim-title-press {
   font-size: 12px;
   opacity: 0.6;
-  visibility: hidden;
 }
 
-.shim-title.ready .shim-title-press {
-  visibility: visible;
+.shim-title.starting .shim-title-press {
+  visibility: hidden;
 }
 
 /* The meter and the boot log are drawn over the foot of the picture, like a cabinet booting, rather than in rows
