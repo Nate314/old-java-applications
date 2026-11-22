@@ -70,7 +70,7 @@ public final class WindowsEWindow extends JFrame {
       this.keys = keys;
       this.copy = copy;
       this.page = page;
-      this.board = new ShortcutBoard(this::pick, this::pickAndPress, pocket, this.countField);
+      this.board = new ShortcutBoard(this::pick, this::pickAndPress, this::removeStep, pocket, this.countField);
       this.setTitle(TITLE);
       this.setDefaultCloseOperation(3);
       this.setResizable(false);
@@ -235,6 +235,19 @@ public final class WindowsEWindow extends JFrame {
          List<Step> more = new ArrayList<>(this.steps);
          more.add(new Step(this.shortcut, count));
          this.setSteps(more);
+      }
+   }
+
+   /** A step's x (or Delete on it): off the list, and the keyboard goes on to the step now in its place. */
+   void removeStep(int index) {
+      if (this.presser != null || index < 0 || index >= this.steps.size()) {
+         return;
+      }
+      List<Step> fewer = new ArrayList<>(this.steps);
+      fewer.remove(index);
+      this.setSteps(fewer);
+      if (!this.board.focusStep(Math.min(index, fewer.size() - 1))) {
+         this.countField.requestFocusInWindow();
       }
    }
 

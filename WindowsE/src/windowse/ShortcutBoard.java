@@ -14,6 +14,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.Timer;
@@ -107,13 +108,21 @@ final class ShortcutBoard extends JPanel {
    private Screen live;
    /** The drawn key (its label) last typed on the real keyboard, down for a moment; null when none. */
    private String echoed;
+   private final IntConsumer onRemove;
+   /** The list's steps as pills; those past the window's edge are hidden, and "+N more" stands in for them. */
+   private final List<StepPill> pills = new ArrayList<>();
+   private int moreX = -1;
+   /** The step whose screen the little monitor shows (pointed at), or -1 for the whole plan. */
+   private int peek = -1;
 
    /**
     * onPick runs when a key is clicked; onPress when one is double-clicked (pick it and press it). count: the field
-    * for how many times, placed after the picked shortcut's keys so the head reads "Win + E x 10".
+    * for how many times, placed after the picked shortcut's keys so the head reads "Win + E x 10". onRemove: a step's
+    * x was clicked, with its place on the list.
     */
-   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress, boolean pocket, JComponent count) {
+   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress, IntConsumer onRemove, boolean pocket, JComponent count) {
       this.pocket = pocket;
+      this.onRemove = onRemove;
       this.count = count;
       this.add(count);   // first, so it has the keyboard when the window opens
       this.layout = pocket ? POCKET : LAYOUT;
@@ -162,8 +171,58 @@ final class ShortcutBoard extends JPanel {
 
    /** The list of steps under the picked shortcut. */
    void steps(List<Step> steps) {
-      this.shown = steps;
+      this.shown = new ArrayList<>(steps);
+      this.peek = -1;
+      for (StepPill pill : this.pills) {
+         this.remove(pill);
+      }
+      this.pills.clear();
+      this.moreX = -1;
+      FontMetrics fm = this.getFontMetrics(StepPill.FONT);
+      int x = MARGIN + 2 + 48;
+      int right = this.getPreferredSize().width - MARGIN - 2;
+      for (int i = 0; i < this.shown.size(); i++) {
+         Step step = this.shown.get(i);
+         int w = StepPill.width(fm, step, this.pocket);
+         if (x + w > right - (i < this.shown.size() - 1 ? 60 : 0)) {
+            this.moreX = x;
+            break;
+         }
+         StepPill pill = new StepPill(i, this.shown.size(), step, this.pocket, this::peek, this.onRemove);
+         pill.setBounds(x, this.stepsY, w, 24);
+         this.add(pill);
+         this.pills.add(pill);
+         x += w + 18;   // room for the ">" to the next one
+      }
+      this.revalidate();
       this.repaint();
+   }
+
+   /** The keyboard to step i's pill; false when there is no such pill. */
+   boolean focusStep(int i) {
+      if (i < 0 || i >= this.pills.size()) {
+         return false;
+      }
+      this.pills.get(i).requestFocusInWindow();
+      return true;
+   }
+
+   /** Show on the little monitor the screen after step i (from 0), or the whole plan again (-1). */
+   void peek(int i) {
+      int was = this.peek;
+      this.peek = this.running || i >= this.shown.size() ? -1 : i;
+      if (this.peek != was) {
+         this.light();
+         this.repaint();
+      }
+   }
+
+   /** Each pill drawn lit (being pressed) or peeked (its screen on the monitor). */
+   private void light() {
+      int lit = this.running && this.run.equals(this.shown) && this.done > 0 ? this.stepAt(this.done - 1) : -1;
+      for (StepPill pill : this.pills) {
+         pill.show(pill.index == lit, pill.index == this.peek);
+      }
    }
 
    /** What DO IT!!! would press now; the little screen shows what that does. */
@@ -190,6 +249,12 @@ final class ShortcutBoard extends JPanel {
          this.total += step.times;
       }
       this.count.setVisible(false);   // the head shows the step being pressed, and its count, in its place
+      this.peek = -1;
+      for (StepPill pill : this.pills) {
+         pill.setEnabled(false);
+         pill.repaint();   // its x goes
+      }
+      this.light();
       this.repaint();
    }
 
@@ -202,6 +267,7 @@ final class ShortcutBoard extends JPanel {
       this.caps.get(Shortcut.START).setPushed(true);
       this.caps.get(this.current).setPushed(true);
       this.release.restart();
+      this.light();
       this.repaint();
    }
 
@@ -222,6 +288,11 @@ final class ShortcutBoard extends JPanel {
       for (KeyCap cap : this.caps.values()) {
          cap.setPushed(false);
       }
+      for (StepPill pill : this.pills) {
+         pill.setEnabled(true);
+         pill.repaint();
+      }
+      this.light();
       this.repaint();
    }
 
@@ -339,10 +410,7 @@ final class ShortcutBoard extends JPanel {
       }
    }
 
-   /**
-    * The list of steps as pills joined by arrows, the one being pressed lit; past the right edge, "+N more". Empty, a
-    * line says what the list is for.
-    */
+   /** The list of steps: its pills, joined by arrows; past the right edge, "+N more". Empty, a line says what the list is for. */
    private void paintSteps(Graphics2D g) {
       int x = MARGIN + 2;
       int y = this.stepsY;
@@ -356,36 +424,23 @@ final class ShortcutBoard extends JPanel {
             : "Add step lists the picked key; DO IT!!! then presses the list in order.", x, y + 16);
          return;
       }
-      int lit = this.running && this.run == this.shown && this.done > 0 ? this.stepAt(this.done - 1) : -1;
-      g.setFont(new Font("SansSerif", Font.BOLD, 12));
-      FontMetrics fm = g.getFontMetrics();
-      int right = this.getWidth() - MARGIN - 2;
-      for (int i = 0; i < this.shown.size(); i++) {
-         String text = this.shown.get(i).label();
-         int w = fm.stringWidth(text) + 18;
-         if (x + w > right - (i < this.shown.size() - 1 ? 60 : 0)) {
-            g.setColor(MUTED);
-            g.drawString("+" + (this.shown.size() - i) + " more", x, y + 16);
-            break;
+      g.setFont(StepPill.FONT);
+      g.setColor(MUTED);
+      for (int i = 0; i < this.pills.size(); i++) {   // the pills draw themselves; between them, ">"
+         java.awt.Rectangle r = this.pills.get(i).getBounds();
+         if (i < this.pills.size() - 1) {
+            g.drawString(">", r.x + r.width + 5, y + 16);
          }
-         g.setColor(i == lit ? KeyCap.ACCENT : Color.WHITE);
-         g.fillRoundRect(x, y, w, 24, 12, 12);
-         g.setColor(i == lit ? KeyCap.ACCENT : new Color(170, 176, 190));
-         g.drawRoundRect(x, y, w - 1, 23, 12, 12);
-         g.setColor(i == lit ? Color.WHITE : INK);
-         g.drawString(text, x + 9, y + 16);
-         x += w;
-         if (i < this.shown.size() - 1) {
-            g.setColor(MUTED);
-            g.drawString(">", x + 5, y + 16);
-            x += 18;
-         }
+      }
+      if (this.moreX >= 0) {
+         g.drawString("+" + (this.shown.size() - this.pills.size()) + " more", this.moreX, y + 16);
       }
    }
 
    /** Beside the keyboard, a little monitor showing what the presses do, and under it the same in words. */
    private void paintMonitor(Graphics2D g) {
-      Screen screen = this.live != null ? this.live : this.after;
+      Screen screen = this.peek >= 0 ? Screen.after(this.shown.subList(0, this.peek + 1))
+         : this.live != null ? this.live : this.after;
       int x = this.monitorX;
       int y = this.head;
       int mw = this.monitorW;
@@ -396,7 +451,8 @@ final class ShortcutBoard extends JPanel {
       g.fillRoundRect(x + mw / 2 - 36, y + sh + 2 * BEZEL + 10, 72, 5, 4, 4);
       MiniScreen.paint(g, screen, x + BEZEL, y + BEZEL, this.screenW, sh);
 
-      String label = this.running ? (this.dry ? "PREVIEW, NO KEYS PRESSED" : "PRESSING")
+      String label = this.peek >= 0 ? "AFTER STEP " + (this.peek + 1) + " OF " + this.shown.size()
+         : this.running ? (this.dry ? "PREVIEW, NO KEYS PRESSED" : "PRESSING")
          : this.live != null ? (this.dry ? "PREVIEW" : "WHAT IT DID") : "AFTER DO IT!!!";
       g.setColor(this.running ? KeyCap.ACCENT : MUTED);
       g.setFont(new Font("SansSerif", Font.BOLD, 11));
