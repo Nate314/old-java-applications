@@ -18,23 +18,24 @@
 // alert/confirm/prompt are stubbed, Chrome's profile and the copy live under -ProfileRoot and are deleted
 // afterwards, and the server and Chrome are stopped by PID. Prints PASS or FAIL per step, exits 1 on any FAIL.
 // Build first (mvn -f web/pom.xml package), then run from the repo root:
-//   node web/offline.mjs -ProfileRoot C:\some\scratch
+//   node web/offline.mjs -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch   (no defaults for these three)
 //   node web/offline.mjs -Site <site> -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
 import { spawn, execFileSync, execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const opt = { Site: join(here, 'target/site'), Port: '8101', DebugPort: '9302', ProfileRoot: tmpdir(),
+const opt = { Site: join(here, 'target/site'), Port: '', DebugPort: '', ProfileRoot: '',
   Chrome: join(process.env.ProgramFiles || 'C:\\Program Files', 'Google\\Chrome\\Application\\chrome.exe') };
 for (let i = 2; i < process.argv.length; i += 2) {
   const k = process.argv[i].replace(/^-+/, '');
-  if (!(k in opt) || process.argv[i + 1] === undefined) { console.error('Usage: node web/offline.mjs [-Site dir] [-Port n] [-DebugPort n] [-ProfileRoot dir] [-Chrome exe]'); process.exit(2); }
+  if (!(k in opt) || process.argv[i + 1] === undefined) { console.error('Usage: node web/offline.mjs [-Site dir] -Port n -DebugPort n -ProfileRoot dir [-Chrome exe]'); process.exit(2); }
   opt[k] = process.argv[i + 1];
 }
+// No defaults: two runs on one machine must never share a port or a Chrome profile folder.
+for (const k of ['Port', 'DebugPort', 'ProfileRoot']) if (!opt[k]) { console.error('Pass -' + k + ': -Port, -DebugPort and -ProfileRoot have no defaults.'); process.exit(2); }
 const site = resolve(opt.Site), PORT = +opt.Port, DEBUG = +opt.DebugPort;
 if (!existsSync(join(site, 'index.html')) || !existsSync(join(site, 'sw.js'))) { console.error('No built site in ' + site + '. Run: mvn -f web/pom.xml package'); process.exit(2); }
 mkdirSync(opt.ProfileRoot, { recursive: true });

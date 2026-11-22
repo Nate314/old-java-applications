@@ -15,15 +15,15 @@
 # Sound is off (--mute-audio, __shimSynth.noteOn stubbed, new AudioContexts suspended), the clipboard and
 # alert/confirm/prompt are stubbed, Chrome's profile is a throwaway folder under -ProfileRoot, and the server and
 # Chrome are stopped by PID. Build first (mvn -f web/pom.xml package), then run from the repo root:
-#   ./web/smoke.ps1
+#   ./web/smoke.ps1 -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch   (no defaults for these three)
 #   ./web/smoke.ps1 -Apps Minesweeper,Clock -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
 param(
     [string[]]$Apps,
-    [int]$Port = 8101,
-    [int]$DebugPort = 9302,
+    [int]$Port = $(throw '-Port is required (no default: two runs must never share a port)'),
+    [int]$DebugPort = $(throw '-DebugPort is required (no default: two runs must never share a port)'),
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [string]$Site = (Join-Path $PSScriptRoot 'target/site'),
-    [string]$ProfileRoot = [IO.Path]::GetTempPath(),   # a folder (made if missing) for Chrome's throwaway profile
+    [string]$ProfileRoot = $(throw '-ProfileRoot is required (no default: keep Chrome profiles in your own scratch folder)'),   # a folder (made if missing) for Chrome's throwaway profile
     [int]$Settle = 2000   # ms an app runs after its first window before the paint check
 )
 $ErrorActionPreference = 'Stop'

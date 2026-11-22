@@ -5,21 +5,22 @@
 # same way after a change. Then the image is cropped to its windows, the remaining magenta is made transparent,
 # and wide shots are scaled down to -MaxWidth. Last, Chrome encodes the home page's lighter copies of it (Save-Webp).
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
-#   ./web/shots.ps1
-#   ./web/shots.ps1 -Apps Minesweeper,Clock -Port 8101
-#   ./web/shots.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
-#   ./web/shots.ps1 -WebpOnly   (only re-encode the .webp copies from the PNGs already in -Out, e.g. after a merge)
+# (-Port, -DebugPort and -ProfileRoot have no defaults: pass your own on every run)
+#   ./web/shots.ps1 -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/shots.ps1 -Apps Minesweeper,Clock -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/shots.ps1 -Out somewhere/else ...   (to compare before replacing the committed ones)
+#   ./web/shots.ps1 -WebpOnly ...   (only re-encode the .webp copies from the PNGs already in -Out, e.g. after a merge)
 param(
     [string[]]$Apps,
-    [int]$Port = 8101,
-    [int]$DebugPort = 9302,
+    [int]$Port = $(throw '-Port is required (no default: two runs must never share a port)'),
+    [int]$DebugPort = $(throw '-DebugPort is required (no default: two runs must never share a port)'),
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [int]$Width = 960,
     [int]$Height = 600,
     [int]$MaxWidth = 480,
     [string]$Out = (Join-Path $PSScriptRoot 'public/shots'),
     [switch]$WebpOnly,
-    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
+    [string]$ProfileRoot = $(throw '-ProfileRoot is required (no default: keep Chrome profiles in your own scratch folder)')   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'cdp.ps1')

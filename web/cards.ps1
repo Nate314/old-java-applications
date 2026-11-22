@@ -3,18 +3,19 @@
 # web/src/shared/apps.json, so run this again after changing an app's entry there. The pages' share tags, which point
 # at these cards, are written by the build (web/src/routes.tsx, web/src/pages/app/AppPage.tsx).
 # Build first (npm run build in web/, for the thumbnails and the icon), then run from the repo root:
-#   ./web/cards.ps1
-#   ./web/cards.ps1 -Apps Minesweeper,Clock -Port 8102 -DebugPort 9303
-#   ./web/cards.ps1 -Apps story -Port 8102       # only the story page's card (story.jpg)
-#   ./web/cards.ps1 -Out somewhere/else          (to compare before replacing the committed ones)
+# (-Port, -DebugPort and -ProfileRoot have no defaults: pass your own on every run)
+#   ./web/cards.ps1 -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/cards.ps1 -Apps Minesweeper,Clock -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/cards.ps1 -Apps story ...              # only the story page's card (story.jpg)
+#   ./web/cards.ps1 -Out somewhere/else ...      (to compare before replacing the committed ones)
 # The server and headless Chrome are started as in shots.ps1 and clips.ps1 (web/cdp.ps1's Start-Headless).
 param(
     [string[]]$Apps = @(),
-    [int]$Port = 8102,
-    [int]$DebugPort = 9303,
+    [int]$Port = $(throw '-Port is required (no default: two runs must never share a port)'),
+    [int]$DebugPort = $(throw '-DebugPort is required (no default: two runs must never share a port)'),
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [string]$Out = (Join-Path $PSScriptRoot 'public/cards'),
-    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
+    [string]$ProfileRoot = $(throw '-ProfileRoot is required (no default: keep Chrome profiles in your own scratch folder)')   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'cdp.ps1')
