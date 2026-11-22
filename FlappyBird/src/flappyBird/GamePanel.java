@@ -120,12 +120,13 @@ public final class GamePanel extends JPanel implements KeyListener {
             if (event.getButton() != MouseEvent.BUTTON1) {
                return;
             }
-            int[] button = GamePanel.this.rewindButton();
             int x = event.getX();
             int y = event.getY();
-            if (GamePanel.this.state == GAME_OVER && GamePanel.this.settled() && GamePanel.this.rewind.size() > 0
-               && x >= button[0] && x < button[0] + button[2] && y >= button[1] && y < button[1] + button[3]) {
+            int over = GamePanel.this.state == GAME_OVER && GamePanel.this.settled() ? overHit(GamePanel.this.overButtons(), x, y) : -1;
+            if (over == REWIND_BUTTON) {
                GamePanel.this.startRewind();
+            } else if (over == TITLE_BUTTON) {
+               GamePanel.this.reset();
             } else if (GamePanel.this.state == READY && GamePanel.this.titleCard().hit(x, y) != TitleCard.NONE) {
                GamePanel.this.choose(GamePanel.this.titleCard().hit(x, y));
             } else {
@@ -136,13 +137,15 @@ public final class GamePanel extends JPanel implements KeyListener {
       new Timer(10, event -> this.tick()).start();
    }
 
-   /** Space, a click or a tap: start, flap, or (once the game over screen has settled) back to the title screen. */
+   /** Space, a click or a tap: start, flap, or (once the game over screen has settled) fly again on the same course. */
    private void press() {
       if (this.state == GAME_OVER) {
-         if (this.settled()) {
-            this.reset();
+         if (!this.settled()) {
+            return;
          }
-      } else if (this.state != DYING && this.state != REWINDING && !this.paused) {
+         this.reset();   // then straight into the new run with this press's flap, no title screen between
+      }
+      if (this.state != DYING && this.state != REWINDING && !this.paused) {
          if (this.state == READY) {
             this.guidedPractice = this.guide && this.highScore >= Guide.UNTIL;
          }
@@ -650,32 +653,80 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
    }
 
-   /** The game over screen's rewind button as {x, y, width, height}, under the scoreboard and as wide as it. */
-   private int[] rewindButton() {
-      int[] layout = this.scoreboardLayout();
-      int u = layout[0];
-      return new int[]{layout[1], layout[5], layout[3], u * 2};
+   static final int TITLE_BUTTON = 0;
+   static final int REWIND_BUTTON = 1;
+   static final int AGAIN_BUTTON = 2;
+
+   /**
+    * The game over screen's row of buttons, as wide as the scoreboard at x with width w, each {x, y, width, height}:
+    * Title, Rewind (null with nothing to rewind) and Fly again, the widest.
+    */
+   static int[][] overButtons(int x, int y, int w, int u, boolean rewind) {
+      int gap = u / 2;
+      int h = u * 2;
+      int titleW = (w - gap * 2) * 4 / 22;
+      int rewindW = (w - gap * 2) * 8 / 22;   // Fly again gets the other 10
+      int againX = x + titleW + gap + (rewind ? rewindW + gap : 0);
+      return new int[][]{{x, y, titleW, h}, rewind ? new int[]{x + titleW + gap, y, rewindW, h} : null, {againX, y, x + w - againX, h}};
    }
 
-   private void drawRewindButton(Graphics2D g2) {
-      int[] button = this.rewindButton();
+   /** Which of the buttons a click at (px, py) is on, or -1. */
+   static int overHit(int[][] buttons, int px, int py) {
+      for (int i = 0; i < buttons.length; i++) {
+         int[] b = buttons[i];
+         if (b != null && px >= b[0] && px < b[0] + b[2] && py >= b[1] && py < b[1] + b[3]) {
+            return i;
+         }
+      }
+      return -1;
+   }
+
+   private int[][] overButtons() {
+      int[] layout = this.scoreboardLayout();
+      return overButtons(layout[1], layout[5], layout[3], layout[0], this.rewind.size() > 0);
+   }
+
+   /** A rounded button with a label and an icon: 0 none, 1 rewind (two triangles pointing back), 2 fly (one pointing on). */
+   private static void drawButton(Graphics2D g2, int[] button, Color fill, Color ink, String label, int iconKind) {
       int arc = button[3] / 2;
       g2.setColor(new Color(0, 0, 0, 90));
       g2.fillRoundRect(button[0] + 3, button[1] + 4, button[2], button[3], arc, arc);
-      g2.setColor(new Color(60, 120, 220));
+      g2.setColor(fill);
       g2.fillRoundRect(button[0], button[1], button[2], button[3], arc, arc);
       g2.setColor(new Color(255, 255, 255));
       g2.drawRoundRect(button[0], button[1], button[2], button[3], arc, arc);
-      String label = "Rewind and fly on (Z)";
-      int icon = button[3] / 2;
-      int width = sans(g2, label, button[3] * 9 / 20, button[2] - icon * 3);
-      int left = button[0] + (button[2] - width - icon * 2) / 2;
+      int icon = iconKind == 0 ? 0 : button[3] / 2;
+      int width = sans(g2, label, button[3] * 9 / 20, button[2] - icon * 3 / 2 - button[3] / 3);
+      int left = button[0] + (button[2] - width - icon * 3 / 2) / 2;
       int top = button[1] + (button[3] - icon) / 2;
-      for (int i = 0; i < 2; i++) {
-         int tip = left + i * icon * 3 / 5;
-         g2.fillPolygon(new int[]{tip, tip + icon * 3 / 5, tip + icon * 3 / 5}, new int[]{top + icon / 2, top, top + icon}, 3);
+      g2.setColor(ink);
+      if (iconKind == 1) {
+         for (int i = 0; i < 2; i++) {
+            int tip = left + i * icon * 3 / 5;
+            g2.fillPolygon(new int[]{tip, tip + icon * 3 / 5, tip + icon * 3 / 5}, new int[]{top + icon / 2, top, top + icon}, 3);
+         }
+      } else if (iconKind == 2) {
+         g2.fillPolygon(new int[]{left, left + icon * 4 / 5, left}, new int[]{top, top + icon / 2, top + icon}, 3);
       }
-      g2.drawString(label, left + icon * 2, button[1] + button[3] * 2 / 3);
+      g2.drawString(label, left + icon * 3 / 2, button[1] + button[3] * 2 / 3);
+   }
+
+   /**
+    * Title, Rewind and Fly again under the scoreboard. Fly again is copper like the pipes and glows a little (held
+    * still with reduced motion), since a press anywhere else does the same.
+    */
+   private void drawOverButtons(Graphics2D g2) {
+      int[][] buttons = this.overButtons();
+      int[] again = buttons[AGAIN_BUTTON];
+      float glow = calm() ? 0.5F : 0.5F + 0.5F * (float)Math.sin(this.stateSteps * 2.0 * Math.PI / (this.stepsPerSecond * 1.6));
+      int reach = Math.max(2, again[3] / 6);
+      g2.setColor(new Color(255, 210, 150, Math.round(40 + 80 * glow)));
+      g2.fillRoundRect(again[0] - reach, again[1] - reach, again[2] + reach * 2, again[3] + reach * 2, again[3] / 2 + reach * 2, again[3] / 2 + reach * 2);
+      drawButton(g2, buttons[TITLE_BUTTON], new Color(12, 64, 60, 225), new Color(255, 255, 255), "Title", 0);
+      if (buttons[REWIND_BUTTON] != null) {
+         drawButton(g2, buttons[REWIND_BUTTON], new Color(60, 120, 220), new Color(255, 255, 255), "Rewind", 1);
+      }
+      drawButton(g2, again, new Color(232, 149, 90), new Color(40, 30, 20), "Fly again", 2);
    }
 
    /**
@@ -855,7 +906,7 @@ public final class GamePanel extends JPanel implements KeyListener {
     * The game over screen: "Game Over", then a panel of deep teal glass in a copper rim (the bird's and the pipes'
     * colors) with the medal centered on top (or an empty ring with the pipes the first medal needs) and a row of tiles
     * for the score, which counts up, the best and today's best, a beaten one lit in copper and labelled NEW; under it
-    * the medal line, the rewind button and how to go on. With reduced motion the numbers and medal show at once.
+    * the medal line and the Title, Rewind and Fly again buttons. With reduced motion the numbers and medal show at once.
     */
    private void drawScoreboard(Graphics2D g2) {
       int[] layout = this.scoreboardLayout();
@@ -938,12 +989,9 @@ public final class GamePanel extends JPanel implements KeyListener {
       int lineWidth = sans(g2, line, u, Main.FRAME_WIDTH * 19 / 20);
       outlined(g2, line, center - lineWidth / 2, lineY, new Color(255, 255, 255));
 
-      int hintY = layout[5] + u * 3 / 2;
-      if (this.rewind.size() > 0) {
-         this.drawRewindButton(g2);
-         hintY += u * 2;
-      }
-      String hint = "Space, click or tap for the title screen";
+      this.drawOverButtons(g2);
+      int hintY = layout[5] + u * 7 / 2;
+      String hint = this.rewind.size() > 0 ? "Space or a tap flies again, Z rewinds, R for the title" : "Space or a tap flies again, R for the title";
       int hintWidth = sans(g2, hint, u * 4 / 5, Main.FRAME_WIDTH * 19 / 20);
       outlined(g2, hint, center - hintWidth / 2, hintY, new Color(255, 255, 255));
    }
