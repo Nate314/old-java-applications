@@ -636,7 +636,7 @@ public final class Songwriter extends JPanel {
 	/** The on-screen key under the point, or -1. */
 	private int keyAt(int x, int y) {
 		layOut();
-		return Look.keyAt(16, keysTop, getWidth() - 32, keyboardHeight(), x, y);
+		return Look.keyAt(16, keysTop, getWidth() - 32, keyboardHeight(), getWidth() < NARROW, x, y);
 	}
 
 	private Object targetAt(int x, int y) {
@@ -1174,6 +1174,6 @@ public final class Songwriter extends JPanel {
 		for (int note : player.melodySounding()) {
 			colors[note] = isBlack(note) ? MELODY_BLACK : RIGHT;
 		}
-		Look.paintKeyboard(g, 16, top, getWidth() - 32, keyboardHeight(), colors);
+		Look.paintKeyboard(g, 16, top, getWidth() - 32, keyboardHeight(), getWidth() < NARROW, colors);
 	}
 }

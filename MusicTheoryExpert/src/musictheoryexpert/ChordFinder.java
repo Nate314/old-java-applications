@@ -456,7 +456,7 @@ public final class ChordFinder extends JPanel {
 				return spot;
 			}
 		} else {
-			int note = Look.keyAt(keyboard.x, keyboard.y, keyboard.width, keyboard.height, x, y);
+			int note = Look.keyAt(keyboard.x, keyboard.y, keyboard.width, keyboard.height, getWidth() < NARROW, x, y);
 			if (note >= 0) {
 				return note;
 			}
@@ -838,7 +838,7 @@ public final class ChordFinder extends JPanel {
 				colors[note] = isBlack(note) ? GOLD_BLACK : GOLD;
 			}
 		}
-		Look.paintKeyboard(g, keyboard.x, keyboard.y, keyboard.width, keyboard.height, colors);
+		Look.paintKeyboard(g, keyboard.x, keyboard.y, keyboard.width, keyboard.height, getWidth() < NARROW, colors);
 	}
 
 	// ---- the guitar neck, in the keyboard's place: high E on top as a player looking down sees it ----
