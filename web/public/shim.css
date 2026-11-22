@@ -1538,7 +1538,7 @@ canvas.paint.top {
 .shim-title-card {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  grid-template-areas: "art text" "meter meter" "log log";
+  grid-template-areas: "art text";
   gap: 18px 24px;
   width: min(880px, 100%);
   margin: auto;
@@ -1557,7 +1557,7 @@ canvas.paint.top {
   align-items: center;
   justify-content: center;
   min-height: 220px;
-  max-height: 46vh;
+  max-height: 58vh;
   padding: 18px;
   border-radius: 10px;
   background: var(--desk);
@@ -1566,7 +1566,7 @@ canvas.paint.top {
 
 .shim-title-art img {
   max-width: 100%;
-  max-height: calc(46vh - 36px);
+  max-height: calc(58vh - 36px);
   object-fit: contain;
   filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.3));
 }
@@ -1701,23 +1701,38 @@ canvas.paint.top {
   visibility: visible;
 }
 
+/* The meter and the boot log are drawn over the foot of the picture, like a cabinet booting, rather than in rows
+   of their own: the card fits a 900x600 window and the picture gets that room. Once Ready the log fades (unless a
+   file failed), so the picture or its clip is all that is left; a click on it still starts the app. */
+.shim-title-meter,
+.shim-title-log {
+  grid-area: art;
+  align-self: end;
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.5s ease-out 0.9s;
+}
+
 .shim-title-meter {
-  grid-area: meter;
+  margin: 0 10px 6px;
+}
+
+.shim-title.ready .shim-title-meter,
+.shim-title.ready .shim-title-log:not(:has(.bad)) {
+  opacity: 0;
 }
 
 .shim-title-log {
-  grid-area: log;
   display: flex;
   flex-direction: column-reverse;   /* newest row first in the page (title-screen.tsx), so the box starts scrolled to it */
-  height: 7.5em;
-  margin: 0;
+  max-height: 6em;   /* four rows */
+  margin: 10px 10px 18px;
+  overflow: hidden;
   padding: 8px 12px;
-  overflow: auto;
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.92);
   color: #cbd5e1;
   font: 12px/1.5 ui-monospace, Consolas, "Courier New", monospace;
-  scrollbar-width: thin;
 }
 
 .shim-title-log .row {
@@ -1793,7 +1808,7 @@ canvas.paint.top {
 @media (max-width: 680px) {
   .shim-title-card {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "art" "text" "meter" "log";
+    grid-template-areas: "art" "text";
     gap: 14px;
     padding: 16px;
   }
@@ -1814,13 +1829,18 @@ canvas.paint.top {
   }
 
   .shim-title-log {
-    height: 4.5em;
+    max-height: 3em;
   }
 }
 
-@media (max-height: 560px) {
-  .shim-title-log {
-    height: 4.5em;
+/* A short window (a 900x600 laptop): a tighter card and hint, so a long hint does not push the card past the fold. */
+@media (max-height: 700px) and (min-width: 681px) {
+  .shim-title-card {
+    padding: 16px;
+  }
+
+  .shim-title-hint {
+    font-size: 14px;
   }
 }
 
