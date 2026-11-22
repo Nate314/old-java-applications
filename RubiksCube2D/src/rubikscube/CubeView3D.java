@@ -2,6 +2,7 @@ package rubikscube;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -555,8 +556,12 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       return out;
    }
 
+   /** How many cube sizes the view must fit across (0 for no limit): wide leaves the mirrors room beside a tall cube. */
+   double across = 0;
+
    private double scale() {
-      return Math.min(this.getWidth(), this.getHeight()) / 5.6;
+      double scale = Math.min(this.getWidth(), this.getHeight()) / 5.6;
+      return this.across > 0 ? Math.min(scale, this.getWidth() / this.across) : scale;
    }
 
    /** View coordinates to the panel, in perspective. */
@@ -600,12 +605,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          g.fillRect(0, band * height / 16, width, height / 16 + 1);
       }
       double size = this.scale();
-      for (int ring = 0; ring < 4; ring++) {
-         g.setColor(new Color(40, 50, 80, 14));
-         int w = (int)(size * (3.6 - ring * 0.5));
-         int h = (int)(size * (0.7 - ring * 0.1));
-         g.fillOval(width / 2 - w / 2, (int)(height / 2.0 + size * 2.45) - h / 2, w, h);
-      }
+      this.drawShadow(g, size);
 
       if (this.mirrors) {
          this.drawMirrors(g);
@@ -773,8 +773,8 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
             if (p[k] == sign) {
                int sticker = CubeGeometry.stickerAt(p, normal);
                boolean ringed = sticker == this.marked || sticker == this.hinted;
-               g.setColor(shade(colorOf(this.shown[sticker]), light));
-               this.fillSquare(g, center, a, b, ringed ? STICKER * 0.62 : STICKER, ringed ? 0.06 : 0.09, axis, angle, null);
+               int[] face = this.fillSquare(null, center, a, b, ringed ? STICKER * 0.62 : STICKER, ringed ? 0.06 : 0.09, axis, angle, null);
+               gloss(g, face, shade(colorOf(this.shown[sticker]), light), n);
                int[] hit = this.fillSquare(null, center, a, b, HALF, 0, axis, angle, null);
                hit[0] = sticker;
                this.hits.add(hit);
@@ -786,6 +786,61 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
                }
             }
          }
+      }
+   }
+
+   /** Halfway between the light (upper left, in front) and the viewer: a face turned this way mirrors the light at you. */
+   private static final double[] GLINT = unit(-0.35, 0.62, 0.70 + 1.0);
+
+   private static double[] unit(double x, double y, double z) {
+      double length = Math.sqrt(x * x + y * y + z * z);
+      return new double[]{x / length, y / length, z / length};
+   }
+
+   /**
+    * A sticker as glossy plastic: brighter toward the light's corner and darker away from it, with a sheen from that
+    * corner that flares into a glint as the face turns to mirror the light at the viewer ({@code n}, its view normal).
+    */
+   private static void gloss(Graphics2D g, int[] poly, Color color, double[] n) {
+      int corners = (poly.length - 1) / 2;
+      int[] xs = new int[corners];
+      int[] ys = new int[corners];
+      int lit = 0;
+      int dark = 0;
+      for (int i = 0; i < corners; i++) {
+         xs[i] = poly[1 + 2 * i];
+         ys[i] = poly[2 + 2 * i];
+         lit = xs[i] + ys[i] < xs[lit] + ys[lit] ? i : lit;
+         dark = xs[i] + ys[i] > xs[dark] + ys[dark] ? i : dark;
+      }
+      g.setPaint(new GradientPaint(xs[lit], ys[lit], shade(color, 1.18), xs[dark], ys[dark], shade(color, 0.8)));
+      g.fillPolygon(xs, ys, corners);
+      double glint = Math.pow(Math.max(0, n[0] * GLINT[0] + n[1] * GLINT[1] + n[2] * GLINT[2]), 24);
+      int alpha = (int) Math.round(60 + 180 * glint);
+      g.setPaint(new GradientPaint(xs[lit], ys[lit], new Color(255, 255, 255, alpha),
+            (xs[lit] + xs[dark]) / 2f, (ys[lit] + ys[dark]) / 2f, new Color(255, 255, 255, 0)));
+      g.fillPolygon(xs, ys, corners);
+   }
+
+   /**
+    * The cube's shadow on the floor under it: as wide as its eight corners dropped straight down, so it breathes
+    * wider as a corner turns toward the viewer and narrower face on, soft at the rim and darker under the middle.
+    */
+   private void drawShadow(Graphics2D g, double size) {
+      double left = 0;
+      double right = 0;
+      for (int i = 0; i < 8; i++) {
+         double x = this.view(new double[]{(i & 1) == 0 ? -1.5 : 1.5, (i & 2) == 0 ? -1.5 : 1.5, (i & 4) == 0 ? -1.5 : 1.5})[0];
+         left = Math.min(left, x);
+         right = Math.max(right, x);
+      }
+      double middle = this.getWidth() / 2.0 + (left + right) / 2 * size;
+      double floor = this.getHeight() / 2.0 + size * 2.45;
+      for (int ring = 0; ring < 5; ring++) {
+         double w = (right - left) * size * (1.2 - ring * 0.17);
+         double h = size * (0.75 - ring * 0.12);
+         g.setColor(new Color(40, 50, 80, 13 + ring * 3));
+         g.fillOval((int) Math.round(middle - w / 2), (int) Math.round(floor - h / 2), (int) Math.round(w), (int) Math.round(h));
       }
    }
 

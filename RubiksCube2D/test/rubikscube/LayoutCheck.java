@@ -10,7 +10,8 @@ import javax.swing.JPanel;
 /**
  * Self-check for the phone layout: on screens narrower than 600 px the window takes the screen's width, fits its
  * height, and in both views every control lies inside the window, clear of the others and of the cube; the desktop
- * window is unchanged. Needs a display (it makes the window without showing it). Run with java -ea.
+ * window is unchanged. On landscape screens too short for it (a laptop's browser) the window fits the screen, the cube
+ * takes its height at the left and the same controls stand clear of it at the right. Needs a display (it makes the window without showing it). Run with java -ea.
  */
 public class LayoutCheck {
    public static void main(String[] args) throws Exception {
@@ -24,16 +25,39 @@ public class LayoutCheck {
          check(frame.getWidth() == screen[0], name + ": window as wide as the screen, not " + frame.getWidth());
          check(frame.getHeight() <= Math.max(676, screen[1]), name + ": window fits the screen's height, not " + frame.getHeight());
          for (int pass = 0; pass < 2; pass++) {
-            checkLayout(frame, name + (pass == 0 ? ", 3D" : ", net"));
+            checkLayout(frame, name + (pass == 0 ? ", 3D" : ", net"), true);
             frame.toggleView();
          }
          frame.dispose();
       }
+      for (int[] screen : new int[][]{{900, 560}, {1024, 480}, {1366, 650}, {760, 700}, {1920, 739}}) {
+         CubeFrame frame = new CubeFrame(new Dimension(screen[0], screen[1]));
+         String name = screen[0] + "x" + screen[1];
+         check(frame.getWidth() <= screen[0] && frame.getHeight() == Math.min(720, screen[1]), name + ": window fits the screen, not " + frame.getWidth() + "x" + frame.getHeight());
+         for (int pass = 0; pass < 2; pass++) {
+            checkLayout(frame, name + (pass == 0 ? ", 3D" : ", net"), false);
+            frame.toggleView();
+         }
+         Rectangle cube = cubeOf(frame);
+         check(cube.height == frame.getHeight() - 40 && cube.width >= 360, name + ": the cube takes the height at the left, " + cube);
+         check(findButton(frame, "Solve").getX() > cube.width, name + ": the controls stand right of the cube");
+         frame.dispose();
+      }
+      check(new CubeFrame(new Dimension(1366, 768)).getHeight() == 700, "a screen tall enough keeps the desktop window");
       System.out.println("LayoutCheck passed.");
       System.exit(0);
    }
 
-   private static void checkLayout(CubeFrame frame, String what) {
+   private static Rectangle cubeOf(CubeFrame frame) {
+      for (Component c : ((JPanel) frame.getContentPane().getComponent(0)).getComponents()) {
+         if (c instanceof CubeView3D) {
+            return c.getBounds();
+         }
+      }
+      throw new AssertionError("no cube");
+   }
+
+   private static void checkLayout(CubeFrame frame, String what, boolean phone) {
       JPanel panel = (JPanel) frame.getContentPane().getComponent(0);
       // The window's content: its size less a title bar's worth (about 40 px tall and 16 px wide on the desktop).
       Rectangle window = new Rectangle(0, 0, frame.getWidth() - 16, frame.getHeight() - 40);
@@ -60,10 +84,10 @@ public class LayoutCheck {
          bottom = Math.max(bottom, a.y + a.height);
          // Over the cube only the row of buttons at the top.
          if (cube != null && a.y > 40) {
-            check(a.y >= cube.y + cube.height, what + ": " + shown.get(i) + " clear of the cube");
+            check(!a.intersects(cube), what + ": " + shown.get(i) + " clear of the cube");
          }
       }
-      check(window.height - bottom < 40, what + ": no empty strip at the bottom (" + (window.height - bottom) + " px)");
+      check(!phone || window.height - bottom < 40, what + ": no empty strip at the bottom (" + (window.height - bottom) + " px)");
    }
 
    private static javax.swing.JButton findButton(CubeFrame frame, String text) {
