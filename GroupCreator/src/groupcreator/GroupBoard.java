@@ -785,6 +785,7 @@ public class GroupBoard extends JPanel {
       rolesButton.on = roles;
       clear.label = clearArmed ? "Sure? Press again" : "Clear history";
       List<String> present = rules.present(actions.classNames());
+      classOrder = distinct(actions.classNames());
       spin.enabled = !wheel.spinning() && !present.isEmpty();
       putBack.enabled = !wheel.spinning() && !picks.picked(present).isEmpty();
       keepApartButton.label = keepApart ? "Keep apart: on" : "Keep apart";
@@ -1077,10 +1078,11 @@ public class GroupBoard extends JPanel {
       text(g, label, BOLD, Color.WHITE, left + 12, cardTop + 18);
       Font big = new Font("SansSerif", Font.BOLD, 30);
       if (landed != null) {
-         text(g, fit(g, landed, big, width - 24), big, INK, left + 12, cardTop + 70);
+         Badge.paint(g, landed, classOrder, left + 12, cardTop + 36, 44, false);
+         text(g, fit(g, landed, big, width - 80), big, INK, left + 66, cardTop + 70);
          String group = groupOf(landed);
          if (group != null) {
-            text(g, group, SMALL, MUTED, left + 12, cardTop + 94);
+            text(g, group, SMALL, MUTED, left + 66, cardTop + 94);
          }
       } else if (wheel.spinning() && under != null) {
          text(g, fit(g, under, big, width - 24), big, MUTED, left + 12, cardTop + 70);
@@ -1167,6 +1169,14 @@ public class GroupBoard extends JPanel {
       Font font = height >= 16 ? TEXT : SMALL;
       int baseline = y + height / 2 + (height >= 16 ? 5 : 4);
       int room = width - 16 - (again ? 14 : 0);
+      int nameX = x + 8;
+      if (height >= 14 && width >= 70) {
+         // The person's badge leads the name.
+         int d = Math.min(22, height - 5);
+         Badge.paint(g, name, classOrder, x + 3, y + (height - d) / 2, d, false);
+         nameX = x + 3 + d + 4;
+         room = x + width - 6 - (again ? 14 : 0) - nameX;
+      }
       if (role >= 0 && height >= 12) {
          // The role's tag at the right; only its first letter when the name would be squeezed.
          boolean timing = role == 2 && timerClock != null;
@@ -1176,7 +1186,7 @@ public class GroupBoard extends JPanel {
          }
          int tagWidth = width(g, tag, SMALL) + 10;
          int tagHeight = Math.min(16, height - 4);
-         int tagX = x + 8 + room - tagWidth;
+         int tagX = nameX + room - tagWidth;
          int tagY = y + (height - tagHeight) / 2;
          g.setColor(ROLE_COLORS[role]);
          g.fillRoundRect(tagX, tagY, tagWidth, tagHeight, tagHeight, tagHeight);
@@ -1189,7 +1199,7 @@ public class GroupBoard extends JPanel {
          centered(g, tag, SMALL, INK, tagX + tagWidth / 2, tagY + tagHeight / 2 + 4);
          room -= tagWidth + 6;
       }
-      text(g, fit(g, name, font, room), font, INK, x + 8, baseline);
+      text(g, fit(g, name, font, room), font, INK, nameX, baseline);
       if (again) {
          int dot = Math.min(8, height - 6);
          g.setColor(AGAIN);
@@ -1415,6 +1425,8 @@ public class GroupBoard extends JPanel {
       int buttonTop = bottom - 56 - sizesHeight;
       int chipWidth = Math.min(130, Math.max(70, (w - 48) / Math.max(1, Math.min(6, here.size())) - 8));
       int columns = Math.max(1, Math.min(here.size(), (w - 48) / (chipWidth + 8)));
+      // Chips fill their row, so a badge leaves room for the name.
+      chipWidth = Math.max(chipWidth, Math.min(130, (w - 48) / columns - 8));
       int rows = (here.size() + columns - 1) / columns;
       int rowHeight = Math.max(14, Math.min(34, (buttonTop - 12 - top) / rows));
       int chipHeight = Math.min(26, rowHeight - 6);
@@ -1453,6 +1465,9 @@ public class GroupBoard extends JPanel {
       String title = "Your class: " + here.size() + (here.size() == 1 ? " name" : " names") + (away > 0 ? " here, " + away + " away" : "");
       return new String[] {title, plan + (ok ? " Later rounds mix in new partners and new roles." : ""), ok ? "" : "error"};
    }
+
+   /** The class as typed, each name once: the order that gives each person their badge's color. */
+   private List<String> classOrder = new ArrayList<>();
 
    private static final String[] SIZE_NAMES = {"", "", "Pairs", "Threes", "Fours", "Fives", "Sixes"};
 
@@ -2039,15 +2054,22 @@ public class GroupBoard extends JPanel {
       int room = t.width - 22 - (count > 0 ? 22 : 0);
       boolean twoLines = t.height >= 34;
       int nameY = twoLines ? t.y + t.height / 2 - 2 : t.y + t.height / 2 + 5;
-      text(g, fit(g, name, BOLD, room), BOLD, away ? MUTED : INK, t.x + 14, nameY);
+      int nameX = t.x + 14;
+      if (t.height >= 18 && t.width >= 90) {
+         int d = Math.min(30, t.height - 8);
+         Badge.paint(g, name, people, nameX, t.y + (t.height - d) / 2, d, away);
+         room -= d + 6;
+         nameX += d + 6;
+      }
+      text(g, fit(g, name, BOLD, room), BOLD, away ? MUTED : INK, nameX, nameY);
       if (twoLines) {
          String status = away ? "Away today" : linked ? "Kept apart" : "Here";
-         text(g, status, SMALL, linked ? ERROR : away ? MUTED : FRESH, t.x + 14, nameY + 15);
+         text(g, status, SMALL, linked ? ERROR : away ? MUTED : FRESH, nameX, nameY + 15);
       }
       if (away) {
          // A line through the name.
          g.setColor(MUTED);
-         g.drawLine(t.x + 12, nameY - 4, t.x + 16 + Math.min(room, width(g, name, BOLD)), nameY - 4);
+         g.drawLine(nameX - 2, nameY - 4, nameX + 2 + Math.min(room, width(g, name, BOLD)), nameY - 4);
       }
       if (count > 0) {
          // A red badge: how many names this one is kept apart from.
