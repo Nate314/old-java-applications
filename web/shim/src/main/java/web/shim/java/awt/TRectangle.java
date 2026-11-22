@@ -1,7 +1,7 @@
 package web.shim.java.awt;
 
 /** java.awt.Rectangle; the tests follow the JDK's, including its rules for empty and negative sizes (RectangleCheck). */
-public class TRectangle implements TShape {
+public class TRectangle extends web.shim.java.awt.geom.TRectangularShape {
     public int x;
     public int y;
     public int width;
@@ -30,18 +30,22 @@ public class TRectangle implements TShape {
         return new TRectangle(x, y, width, height);
     }
 
+    @Override
     public double getX() {
         return x;
     }
 
+    @Override
     public double getY() {
         return y;
     }
 
+    @Override
     public double getWidth() {
         return width;
     }
 
+    @Override
     public double getHeight() {
         return height;
     }

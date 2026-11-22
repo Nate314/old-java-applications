@@ -31,10 +31,8 @@ public abstract class TQuadCurve2D implements TShape {
     public TRectangle getBounds() {
         double[] xs = extent(getX1(), getCtrlX(), getX2());
         double[] ys = extent(getY1(), getCtrlY(), getY2());
-        int x = (int) Math.floor(xs[0]);
-        int y = (int) Math.floor(ys[0]);
-        // min + (max - min), not max: Rectangle2D.getBounds rounds through the width, and so may land one pixel wider
-        return new TRectangle(x, y, (int) Math.ceil(xs[0] + (xs[1] - xs[0])) - x, (int) Math.ceil(ys[0] + (ys[1] - ys[0])) - y);
+        // through the width, not max: Rectangle2D.getBounds rounds min + (max - min), and so may land one pixel wider
+        return TRectangularShape.bounds(xs[0], ys[0], xs[1] - xs[0], ys[1] - ys[0]);
     }
 
     /**
