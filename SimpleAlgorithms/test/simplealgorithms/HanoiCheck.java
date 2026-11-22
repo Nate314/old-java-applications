@@ -43,6 +43,7 @@ public class HanoiCheck {
 		check(tower.move(0, 1) == 0 && !tower.canMove(0, 1) && tower.canMove(1, 2), "no disk on a smaller one");
 		check(tower.move(2, 0) == -1, "an empty peg has nothing to move");
 		checkBack();
+		checkCarry();
 		System.out.println("HanoiCheck passed");
 	}
 
@@ -75,6 +76,39 @@ public class HanoiCheck {
 		check(page.onPath == 0 && page.tower.height(0) == page.tower.disks, "Back at the start does nothing");
 		page.step();
 		check(page.onPath == 1, "Step goes on along the printed path after Back");
+	}
+
+	/** A disk carried to a peg it may go on moves there; carried onto a smaller disk it goes back with a warning; a press let go in place lifts it as before. */
+	private static void checkCarry() {
+		HanoiPage page = new HanoiPage();
+		int third = LabPanel.WIDTH / 3;
+		page.click(10, 300); // stops the opening play; disk 0 is lifted and held
+		page.release();
+		page.back();
+		page.step(); // printed move 1 (5 disks): disk 0 to the right peg
+		int small = page.tower.pegOf(0);
+		int big = page.tower.top(0);
+		page.click(10, 300);
+		page.drag(small * third + 40, 280);
+		page.release();
+		check(page.tower.pegOf(big) == 0 && page.tower.top(0) == big, "a disk carried onto a smaller one stays on its peg");
+		page.click(10, 300);
+		page.release();
+		page.click(3 - small == 1 ? third + 10 : 2 * third + 10, 300);
+		page.release();
+		check(page.tower.pegOf(big) == 3 - small && page.onPath == 2, "press, let go, press another peg still moves (the printed move 2)");
+		page.click(small * third + 10, 300);
+		page.drag(page.tower.pegOf(big) * third + 50, 200);
+		page.release();
+		check(page.tower.pegOf(0) == page.tower.pegOf(big) && page.onPath == 3, "disk 0 carried onto the bigger disk moves there (printed move 3)");
+		check(page.drags(), "Hanoi takes drags");
+		page.click(10, 300);
+		page.drag(14, 302);
+		page.release();
+		check(page.tower.top(0) >= 0, "a wobble under 6 px is not a carry");
+		for (int i = 0; i < 10; i++) {
+			page.tick();
+		}
 	}
 
 	private static int[] pegs(HanoiTower tower) {
