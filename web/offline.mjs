@@ -1,6 +1,6 @@
 // An offline check of the built site in headless Chrome over the DevTools protocol, with Node's built-ins only (no
 // npm packages). It serves the site with serve.ps1 (the same headers a visitor gets) and walks four flows:
-//   0. the story, then compare.html, as the first page of a visit (no worker yet), then offline: each loads again;
+//   0. the story, compare.html, then play.html (with an app and with none), each as the first page of a visit (no worker yet), then offline: each loads again;
 //   1. first visit, then offline: home, story, play.html, an app page and compare.html, visited once online, each load again with
 //      no connection;
 //   2. Save all for offline, then offline: several app pages, Then pages, and Find on the home page;
@@ -246,7 +246,9 @@ try {
   // ---- flow 0: a page other than home opened first (a shared story link), then offline; the origin is wiped after
   // each, so flow 1 starts with no worker again ----
   console.log('== story or compare.html first, then offline');
-  for (const [label, path, opts] of [['story', 'story.html', { ready: 'main' }], ['compare.html?app=Minesweeper', 'compare.html?app=Minesweeper', COMPARE]]) {
+  const PLAY = { app: true, click: '#poster-play', frame: '#frame' };
+  for (const [label, path, opts] of [['story', 'story.html', { ready: 'main' }], ['compare.html?app=Minesweeper', 'compare.html?app=Minesweeper', COMPARE],
+    ['play.html?app=Minesweeper', 'play.html?app=Minesweeper', PLAY], ['play.html (no app, picker)', 'play.html', { ready: '#oops:not([hidden]) .pick button' }]]) {
     await page(label + ' first (online)', path, opts);
     await check('service worker controls ' + label, async () => await until('!!navigator.serviceWorker.controller', 15000) ? '' : 'no controller after 15 s');
     await sleep(1500);

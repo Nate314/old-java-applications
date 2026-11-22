@@ -24,7 +24,7 @@ export interface Route {
 }
 
 const ICON = <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />;
-// boot.js links the manifest on its pages; the story and compare.html register the worker without it, so they link it here (installable from them too).
+// boot.js links the manifest on its pages; the story, compare.html and play.html register the worker without it, so they link it here (installable from them too).
 const MANIFEST = <link rel="manifest" href="manifest.webmanifest" />;
 const skin = <script dangerouslySetInnerHTML={{ __html: SKIN_SCRIPT }} />;
 const homeDescription = 'Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play ' +
@@ -84,6 +84,7 @@ export const ROUTES: Route[] = [
             its script, which link previews do not run), so it shows the home page's card. */}
         <ShareTags title={'Play an old Java app: ' + SITE} description={homeDescription} url="play.html" {...homeCard} />
         {ICON}
+        {MANIFEST}
       </>
     ),
   },
