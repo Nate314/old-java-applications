@@ -40,6 +40,7 @@ public final class BattleCheck
         reloadLimitsFire();
         wallsStopShellsAndTanks();
         arenasFitTheField();
+        eachLayoutHasItsOwnGround();
         matchRulesAndRecord();
         computerDestroysASittingTarget();
         computerShootsRoundTheBunker();
@@ -188,6 +189,16 @@ public final class BattleCheck
         close.update(W, H, shells, far, bunker);
         Shell point = shells.get(0);
         assert shells.size() == 1 && point.move(W, H, bunker) && point.bounced() && point.x() < wall.left;
+    }
+
+    /** The four layouts are fought on four different grounds; the open field and your own battlefield on the meadow. */
+    private static void eachLayoutHasItsOwnGround()
+    {
+        java.util.Set<Terrain> seen = java.util.EnumSet.noneOf(Terrain.class);
+        for (Arena.Layout layout : Arena.LAYOUTS) seen.add(Terrain.of(Arena.build(layout, W, H)));
+        assert seen.size() == Arena.LAYOUTS.size() : "grounds " + seen;
+        assert Terrain.of(Arena.EMPTY) == Terrain.MEADOW;
+        assert Terrain.of(Arena.build(Arena.custom(new boolean[Arena.GRID][Arena.GRID]), W, H)) == Terrain.MEADOW;
     }
 
     private static void arenasFitTheField()
