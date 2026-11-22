@@ -7,6 +7,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.ArrayList;
@@ -101,6 +102,9 @@ final class ShortcutBoard extends JPanel {
    private final int monitorW;
    private final Map<Shortcut, KeyCap> caps = new EnumMap<>(Shortcut.class);
    private final Timer release = new Timer(60, event -> this.letGo());
+   /** The little monitor's windows glide to their places; the timer draws it again while they do. */
+   private final Motion motion = new Motion();
+   private final Timer glide = new Timer(16, event -> this.repaintMonitor());
    private Shortcut picked;
    private List<Step> shown = new ArrayList<>();
    private List<Step> run = new ArrayList<>();
@@ -447,6 +451,10 @@ final class ShortcutBoard extends JPanel {
       }
    }
 
+   private void repaintMonitor() {
+      this.repaint(this.monitorX, this.head, this.monitorW, this.screenH + 2 * BEZEL);
+   }
+
    /** Beside the keyboard, a little monitor showing what the presses do, and under it the same in words. */
    private void paintMonitor(Graphics2D g) {
       Screen screen = this.peek >= 0 ? Screen.after(this.shown.subList(0, this.peek + 1))
@@ -459,7 +467,18 @@ final class ShortcutBoard extends JPanel {
       g.fillRoundRect(x, y, mw, sh + 2 * BEZEL, 10, 10);
       g.fillRect(x + mw / 2 - 10, y + sh + 2 * BEZEL, 20, 10);
       g.fillRoundRect(x + mw / 2 - 36, y + sh + 2 * BEZEL + 10, 72, 5, 4, 4);
-      MiniScreen.paint(g, screen, x + BEZEL, y + BEZEL, this.screenW, sh);
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         MiniScreen.paint(g, screen, x + BEZEL, y + BEZEL, this.screenW, sh);
+         this.glide.stop();
+      } else {
+         long now = System.currentTimeMillis();
+         MiniScreen.paint(g, screen, x + BEZEL, y + BEZEL, this.screenW, sh, this.motion, now);
+         if (this.motion.settle(now)) {
+            this.glide.start();
+         } else {
+            this.glide.stop();
+         }
+      }
 
       String label = this.peek >= 0 ? "AFTER STEP " + (this.peek + 1) + " OF " + this.shown.size()
          : this.running ? (this.dry ? "PREVIEW, NO KEYS PRESSED" : "PRESSING")

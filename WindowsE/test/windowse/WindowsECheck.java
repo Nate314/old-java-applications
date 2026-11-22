@@ -54,6 +54,7 @@ public class WindowsECheck {
       check(Shortcut.EXPLORER.times == 10, "Win+E still offers 10, as the original did");
       typingChecks();
       screenChecks();
+      motionChecks();
       boardChecks();
       sendChecks();
       pillChecks();
@@ -62,6 +63,25 @@ public class WindowsECheck {
    }
 
    /** Both keyboards place every shortcut's key once, inside the board and clear of the others; the pocket pad fits a phone. */
+   /** The little monitor's glide: from where an item was to its new place, easing out, chaining when retargeted. */
+   static void motionChecks() {
+      Motion m = new Motion();
+      int[] dock = {100, 110, 8, 6};
+      int[] left = {0, 0, 96, 110};
+      check(Arrays.equals(m.at(0, left, dock, 0), dock), "a new window starts at its taskbar icon");
+      check(m.settle(0), "it is on its way");
+      int[] mid = m.at(0, left, dock, Motion.MILLIS / 2);
+      check(mid[0] < 50 && mid[2] > 52 && mid[2] < 96, "half way it is past half (easing out): " + Arrays.toString(mid));
+      m.settle(Motion.MILLIS / 2);
+      int[] right = {96, 0, 96, 110};
+      int[] turned = m.at(0, right, null, Motion.MILLIS / 2);
+      check(Arrays.equals(turned, mid), "a new place mid-glide starts from where it is drawn: " + Arrays.toString(turned));
+      check(Arrays.equals(m.at(0, right, null, Motion.MILLIS * 3 / 2), right), "it lands on its new place");
+      check(!m.settle(Motion.MILLIS * 3 / 2), "and stops there");
+      check(Arrays.equals(m.at(1, right, null, 0), right) && !m.settle(0), "an item first seen where it belongs does not move");
+      check(Arrays.equals(m.at(0, right, dock, 5000), dock), "an item the last frame did not draw is forgotten, and comes back from its icon");
+   }
+
    static void boardChecks() {
       for (boolean pocket : new boolean[] {false, true}) {
          javax.swing.JTextField field = new javax.swing.JTextField();
