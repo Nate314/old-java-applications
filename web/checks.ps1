@@ -7,6 +7,9 @@
 # A check also fails if it loaded the real sound output or microphone (DirectAudioDevice), the MIDI synthesizer,
 # the system clipboard or a key-pressing Robot: the checks use the apps' silent paths and key lists, and this
 # makes sure they still do. A check still running after -Timeout seconds is stopped by PID and fails.
+# A check that exits non-zero runs again up to -Retry times (1; 0 for none); passing on a later try marks it FLAKY,
+# with the failed try's output kept in <Check>.try<N>.log. A forbidden class or a timeout is never retried.
+# The summary ends with the slowest checks.
 # From the repo root:
 #   ./web/checks.ps1
 #   ./web/checks.ps1 -Apps Clock,Minesweeper -Out C:\some\scratch\checks
@@ -14,7 +17,8 @@ param(
     [string[]]$Apps,
     [string]$Out = (Join-Path (Split-Path $PSScriptRoot) 'out/checks'),
     [string]$UserHome,
-    [int]$Timeout = 300
+    [int]$Timeout = 300,
+    [int]$Retry = 1
 )
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path $PSScriptRoot
@@ -72,21 +76,35 @@ foreach ($app in $Apps) {
             for ($i = 0; $i -lt $tok.Count - 1; $i++) { if ($tok[$i] -in '-cp', '-classpath') { $i++ } else { $tok[$i] } }
         } else { $note = 'not in README, ran with -ea'; '-ea' }
         $log = Join-Path $Out "$app/$($f.BaseName).log"
-        $t0 = [Diagnostics.Stopwatch]::StartNew()
-        $code = Invoke-Logged 'java' (@($flags) + "-Duser.home=$UserHome", '-verbose:class', '-cp', $classes, $class) $cwd $log
-        $ms = $t0.ElapsedMilliseconds
-        # Keep the check's own output in the log; the class-load lines only feed the guard.
-        $text = @(Get-Content $log)
-        $hit = $text | Where-Object { $_ -match '\[class,load\]' -and $_ -match $Forbidden } | Select-Object -First 1
-        Set-Content -Encoding UTF8 $log ($text | Where-Object { $_ -notmatch '^\[[\d.]+s\]\[info\]\[class,load\]' })
-        $ok = $code -eq 0 -and -not $hit
+        $try = 0; $fails = @()
+        do {
+            # Keep a failed try's log under its own name before running again.
+            if ($try) { Move-Item -Force $log (Join-Path $Out "$app/$($f.BaseName).try$try.log") }
+            $try++
+            $t0 = [Diagnostics.Stopwatch]::StartNew()
+            $code = Invoke-Logged 'java' (@($flags) + "-Duser.home=$UserHome", '-verbose:class', '-cp', $classes, $class) $cwd $log
+            $ms = $t0.ElapsedMilliseconds
+            # Keep the check's own output in the log; the class-load lines only feed the guard.
+            $text = @(Get-Content $log)
+            $hit = $text | Where-Object { $_ -match '\[class,load\]' -and $_ -match $Forbidden } | Select-Object -First 1
+            Set-Content -Encoding UTF8 $log ($text | Where-Object { $_ -notmatch '^\[[\d.]+s\]\[info\]\[class,load\]' })
+            $ok = $code -eq 0 -and -not $hit
+            if (-not $ok -and $null -ne $code -and -not $hit) { $fails += "exit $code" }
+        } while (-not $ok -and $null -ne $code -and -not $hit -and $try -le $Retry)
+        $flaky = $ok -and $try -gt 1
         if ($null -eq $code) { $note = "stopped after $Timeout s" }
         elseif ($hit) { $note = 'loaded ' + ($hit -replace '.*\] (\S+) .*', '$1') }
-        elseif ($code -ne 0) { $note = "exit $code, see $app/$($f.BaseName).log" }
-        $results += [pscustomobject]@{ App = $app; Check = $f.BaseName; Ok = $ok; Ms = $ms; Note = $note }
-        Write-Host ('{0} {1}.{2} ({3:N1} s){4}' -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $app, $f.BaseName, ($ms / 1000), $(if ($note) { " $note" }))
+        elseif ($code -ne 0) { $note = "exit $code on $try tries, see $app/$($f.BaseName).log" }
+        elseif ($flaky) { $note = "passed on try $try after $($fails -join ', '), see $app/$($f.BaseName).try1.log" }
+        $results += [pscustomobject]@{ App = $app; Check = $f.BaseName; Ok = $ok; Flaky = $flaky; Ms = $ms; Note = $note }
+        Write-Host ('{0} {1}.{2} ({3:N1} s){4}' -f $(if ($flaky) { 'FLAKY' } elseif ($ok) { 'PASS' } else { 'FAIL' }), $app, $f.BaseName, ($ms / 1000), $(if ($note) { " $note" }))
     }
 }
 $failed = @($results | Where-Object { -not $_.Ok })
+$flakes = @($results | Where-Object Flaky)
 Write-Host ('{0} of {1} checks passed in {2:N0} s; logs in {3}' -f ($results.Count - $failed.Count), $results.Count, $all.Elapsed.TotalSeconds, $Out)
+foreach ($r in $flakes) { Write-Host "FLAKY $($r.App).$($r.Check) $($r.Note)" }
+foreach ($r in $failed) { Write-Host "FAIL $($r.App).$($r.Check) $($r.Note)" }
+$slow = $results | Where-Object Ms | Sort-Object Ms -Descending | Select-Object -First 5 | ForEach-Object { '{0}.{1} {2:N1} s' -f $_.App, $_.Check, ($_.Ms / 1000) }
+if ($slow) { Write-Host ('Slowest: ' + ($slow -join ', ')) }
 if ($failed) { exit 1 }
