@@ -1,6 +1,9 @@
 package web.shim.java.awt;
 
 import java.util.Arrays;
+import web.shim.java.awt.geom.TAffineTransform;
+import web.shim.java.awt.geom.TPath2D;
+import web.shim.java.awt.geom.TPathIterator;
 
 /** java.awt.Polygon: the point lists, bounds and the JDK's even-odd inside test (PolygonCheck compares them). */
 public class TPolygon implements TShape {
@@ -82,6 +85,23 @@ public class TPolygon implements TShape {
             bounds = new TRectangle(x1, y1, x2 - x1, y2 - y1);
         }
         return new TRectangle(bounds);
+    }
+
+    /** Move, lines, close with the even-odd rule, as the JDK's; nothing for no points. */
+    @Override
+    public TPathIterator getPathIterator(TAffineTransform at) {
+        TPath2D p = new TPath2D.Double(TPath2D.WIND_EVEN_ODD);
+        for (int i = 0; i < npoints; i++) {
+            if (i == 0) {
+                p.moveTo(xpoints[i], ypoints[i]);
+            } else {
+                p.lineTo(xpoints[i], ypoints[i]);
+            }
+        }
+        if (npoints > 0) {
+            p.closePath();
+        }
+        return p.getPathIterator(at);
     }
 
     public boolean contains(TPoint p) {

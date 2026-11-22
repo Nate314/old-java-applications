@@ -1,7 +1,7 @@
 package web.shim.java.awt;
 
 /** java.awt.Rectangle; the tests follow the JDK's, including its rules for empty and negative sizes (RectangleCheck). */
-public class TRectangle extends web.shim.java.awt.geom.TRectangularShape {
+public class TRectangle extends web.shim.java.awt.geom.TRectangle2D {
     public int x;
     public int y;
     public int width;
@@ -96,6 +96,7 @@ public class TRectangle extends web.shim.java.awt.geom.TRectangularShape {
         return new int[] { to, size };
     }
 
+    @Override
     public boolean isEmpty() {
         return width <= 0 || height <= 0;
     }
@@ -113,6 +114,50 @@ public class TRectangle extends web.shim.java.awt.geom.TRectangularShape {
         h += y;
         // the w < x and h < y tests catch an edge that overflowed past Integer.MAX_VALUE, as in the JDK
         return (w < x || w > px) && (h < y || h > py);
+    }
+
+    public boolean contains(TPoint p) {
+        return contains(p.x, p.y);
+    }
+
+    /** The JDK's Rectangle.setRect: the smallest whole-pixel rectangle around the doubles, clamped to int. */
+    @Override
+    public void setRect(double x, double y, double width, double height) {
+        int newx;
+        int newy;
+        int neww;
+        int newh;
+        if (x > 2.0 * Integer.MAX_VALUE) {
+            newx = Integer.MAX_VALUE;
+            neww = -1;
+        } else {
+            newx = clip(x, false);
+            if (width >= 0) {
+                width += x - newx;
+            }
+            neww = clip(width, width >= 0);
+        }
+        if (y > 2.0 * Integer.MAX_VALUE) {
+            newy = Integer.MAX_VALUE;
+            newh = -1;
+        } else {
+            newy = clip(y, false);
+            if (height >= 0) {
+                height += y - newy;
+            }
+            newh = clip(height, height >= 0);
+        }
+        setBounds(newx, newy, neww, newh);
+    }
+
+    private static int clip(double v, boolean ceil) {
+        if (v <= Integer.MIN_VALUE) {
+            return Integer.MIN_VALUE;
+        }
+        if (v >= Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) (ceil ? Math.ceil(v) : Math.floor(v));
     }
 
     public boolean contains(TRectangle r) {

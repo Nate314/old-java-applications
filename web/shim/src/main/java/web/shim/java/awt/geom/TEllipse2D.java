@@ -23,6 +23,34 @@ public abstract class TEllipse2D extends TRectangularShape {
         return contains(p.getX(), p.getY());
     }
 
+    // EllipseIterator's control values: per quarter, three x,y points as shares of the frame
+    private static final double PCV = 0.5 + 0.5522847498307933 * 0.5;
+    private static final double NCV = 0.5 - 0.5522847498307933 * 0.5;
+    private static final double[][] CTRL = {
+        { 1.0, PCV, PCV, 1.0, 0.5, 1.0 },
+        { NCV, 1.0, 0.0, PCV, 0.0, 0.5 },
+        { 0.0, NCV, NCV, 0.0, 0.5, 0.0 },
+        { PCV, 0.0, 1.0, NCV, 1.0, 0.5 },
+    };
+
+    /** Four cubics from the right middle, as the JDK's EllipseIterator; nothing for a negative size. */
+    @Override
+    public TPathIterator getPathIterator(TAffineTransform at) {
+        TPath2D p = new TPath2D.Double();
+        double x = getX();
+        double y = getY();
+        double w = getWidth();
+        double h = getHeight();
+        if (w >= 0 && h >= 0) {
+            p.moveTo(x + w, y + h * 0.5);
+            for (double[] k : CTRL) {
+                p.curveTo(x + k[0] * w, y + k[1] * h, x + k[2] * w, y + k[3] * h, x + k[4] * w, y + k[5] * h);
+            }
+            p.closePath();
+        }
+        return p.getPathIterator(at);
+    }
+
     public static class Double extends TEllipse2D {
         public double x;
         public double y;

@@ -446,8 +446,11 @@ public final class TCanvasGraphics extends TGraphics2D {
             ellipse((TEllipse2D) s, false, strokeOffset());
         } else if (s instanceof TPath2D) {
             path((TPath2D) s, false, strokeOffset());
-        } else {
-            super.draw(s);
+        } else if (s instanceof TRectangle) {
+            TRectangle r = (TRectangle) s;
+            drawRect(r.x, r.y, r.width, r.height);
+        } else { // Rectangle2D, RoundRectangle2D, an app's own Shape: its outline, as Java2D strokes it
+            path(new TPath2D.Double(s), false, strokeOffset());
         }
     }
 
@@ -461,8 +464,11 @@ public final class TCanvasGraphics extends TGraphics2D {
             ellipse((TEllipse2D) s, true, 0);
         } else if (s instanceof TPath2D) {
             path((TPath2D) s, true, 0);
+        } else if (s instanceof TRectangle) {
+            TRectangle r = (TRectangle) s;
+            fillRect(r.x, r.y, r.width, r.height);
         } else if (!(s instanceof TLine2D)) { // a line has no inside to fill
-            super.fill(s);
+            path(new TPath2D.Double(s), true, 0);
         }
     }
 

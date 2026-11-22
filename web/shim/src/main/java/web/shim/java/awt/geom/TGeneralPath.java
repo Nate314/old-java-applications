@@ -8,4 +8,8 @@ public final class TGeneralPath extends TPath2D.Float {
     public TGeneralPath(int rule) {
         super(rule);
     }
+
+    public TGeneralPath(web.shim.java.awt.TShape s) {
+        super(s);
+    }
 }

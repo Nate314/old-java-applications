@@ -1,6 +1,6 @@
 package web.shim.java.awt.geom;
 
-/** Holds a 2x3 matrix. FlappyBird only creates and copies these; Graphics2D does not consume them. */
+/** Holds a 2x3 matrix. FlappyBird only creates and copies these; Graphics2D does not consume them, path iterators map points through them. */
 public class TAffineTransform {
     private double m00 = 1;
     private double m10;
@@ -53,6 +53,16 @@ public class TAffineTransform {
 
     public double getScaleY() {
         return m11;
+    }
+
+    /** Maps numPts x,y pairs; src and dst may be the same array at the same offset. */
+    public void transform(double[] src, int srcOff, double[] dst, int dstOff, int numPts) {
+        for (int i = 0; i < numPts * 2; i += 2) {
+            double x = src[srcOff + i];
+            double y = src[srcOff + i + 1];
+            dst[dstOff + i] = m00 * x + m01 * y + m02;
+            dst[dstOff + i + 1] = m10 * x + m11 * y + m12;
+        }
     }
 
     public boolean isIdentity() {

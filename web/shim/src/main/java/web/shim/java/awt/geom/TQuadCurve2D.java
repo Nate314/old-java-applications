@@ -26,6 +26,14 @@ public abstract class TQuadCurve2D implements TShape {
         setCurve(c.getX1(), c.getY1(), c.getCtrlX(), c.getCtrlY(), c.getX2(), c.getY2());
     }
 
+    @Override
+    public TPathIterator getPathIterator(TAffineTransform at) {
+        TPath2D p = new TPath2D.Double();
+        p.moveTo(getX1(), getY1());
+        p.quadTo(getCtrlX(), getCtrlY(), getX2(), getY2());
+        return p.getPathIterator(at);
+    }
+
     /** The curve's own box (since JDK 19 not the control point's), rounded out to whole pixels as the JDK does. */
     @Override
     public TRectangle getBounds() {
