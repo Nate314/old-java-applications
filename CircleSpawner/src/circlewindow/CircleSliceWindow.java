@@ -8,9 +8,6 @@ import javax.swing.JPanel;
 
 /** One undecorated window of the shape: a solid rectangle of color. The hand hears its presses and drags. */
 public final class CircleSliceWindow extends JFrame {
-   /** Where it flies to when the shape is scattered, in pixels per frame. */
-   double velocityX;
-   double velocityY;
    double x;
    double y;
    private final JPanel panel = new JPanel();
