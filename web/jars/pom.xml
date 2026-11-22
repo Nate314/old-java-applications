@@ -25,38 +25,6 @@
     <jars.out>${site.dir}/downloads</jars.out>
   </properties>
 
-  <dependencies>
-    <!-- Build order only (a test-scoped pom puts nothing on the compile classpath TeaVM reads): web/.mvn builds modules in parallel, and program-stamps must run after every classes.js and then.js is written. -->
-    <dependency>
-      <groupId>io.github.nate314.oldjava</groupId>
-      <artifactId>apps</artifactId>
-      <version>${project.version}</version>
-      <type>pom</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.github.nate314.oldjava</groupId>
-      <artifactId>nathanos</artifactId>
-      <version>${project.version}</version>
-      <type>pom</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.github.nate314.oldjava</groupId>
-      <artifactId>then</artifactId>
-      <version>${project.version}</version>
-      <type>pom</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.github.nate314.oldjava</groupId>
-      <artifactId>then-nathanos</artifactId>
-      <version>${project.version}</version>
-      <type>pom</type>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-
   <build>
     <plugins>
       <plugin>
@@ -153,21 +121,6 @@
                     <zipfileset dir="${repo}/StockChecker" includes="myStocks.txt stockCheck.csv" prefix="workfolder"/>
                   </files>
                 </workjar>
-              </target>
-            </configuration>
-          </execution>
-          <!-- Here because this module builds last, after every app's classes.js and then.js: each app page loads
-               its program as ?v=<content hash> (web/vite/stamp-programs.mjs), so a cache never mixes builds. -->
-          <execution>
-            <id>program-stamps</id>
-            <phase>package</phase>
-            <goals><goal>run</goal></goals>
-            <configuration>
-              <target>
-                <exec executable="node" failonerror="true">
-                  <arg file="${project.basedir}/../vite/stamp-programs.mjs"/>
-                  <arg file="${site.dir}"/>
-                </exec>
               </target>
             </configuration>
           </execution>

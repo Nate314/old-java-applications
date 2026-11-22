@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>apps-js</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>apps-js-3</artifactId>
+  <packaging>pom</packaging>
+  <name>Apps compiled to JavaScript, part 3: StockChecker, SynthesizerKeyboard, UltimateTicTacToe, GroupCreator, MusicTheoryExpert</name>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.teavm</groupId>
+        <artifactId>teavm-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>StockChecker</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>stockchecker.Main</mainClass>
+              <targetDirectory>${site.dir}/StockChecker</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>SynthesizerKeyboard</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>synthesizer.Main</mainClass>
+              <targetDirectory>${site.dir}/SynthesizerKeyboard</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>UltimateTicTacToe</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>ultimateticktacktoe.Main</mainClass>
+              <targetDirectory>${site.dir}/UltimateTicTacToe</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>GroupCreator</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>groupcreator.Main</mainClass>
+              <targetDirectory>${site.dir}/GroupCreator</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>MusicTheoryExpert</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>musictheoryexpert.Main</mainClass>
+              <targetDirectory>${site.dir}/MusicTheoryExpert</targetDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
