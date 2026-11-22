@@ -797,6 +797,15 @@ public final class GamePanel extends JPanel implements KeyListener {
       float squash = this.bird.squash();
       g.scale(1.0 + 0.15 * squash, 1.0 - 0.2 * squash);
       g.drawImage(this.bird.image, -Bird.WIDTH / 2, -Bird.HEIGHT / 2, null);
+      float tilt;
+      if (this.state == READY) {
+         tilt = Wing.hover(this.stateSteps / (this.stepsPerSecond * 0.8), calm());
+      } else if (this.state == DYING || this.state == GAME_OVER) {
+         tilt = Wing.LIMP;
+      } else {
+         tilt = Wing.flight(squash, this.bird.rotation());
+      }
+      Wing.draw(g, tilt);
       g.dispose();
    }
 
