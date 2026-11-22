@@ -147,7 +147,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
             KeyboardWindow.this.loopLaneClicked(KeyboardWindow.this.loopView.laneAt(event.getX(), event.getY()));
          }
       });
-      this.piano.addMouseListener(new MouseAdapter() {
+      MouseAdapter keys = new MouseAdapter() {
+         /** The key the mouse (or a finger) holds down, or -1. */
+         private int held = -1;
+
          @Override
          public void mousePressed(MouseEvent event) {
             int key = KeyboardWindow.this.piano.keyAt(event.getX(), event.getY());
@@ -155,14 +158,29 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
                KeyboardWindow.this.toggleBacking();
             } else if (key >= 0) {
                KeyboardWindow.this.press(MOUSE, key);
+               this.held = key;
+            }
+         }
+
+         /** A glissando: sliding a held press onto another key lets the old one go and plays the new one. */
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            int key = KeyboardWindow.this.piano.keyAt(event.getX(), event.getY());
+            if (this.held >= 0 && key >= 0 && key != this.held) {
+               KeyboardWindow.this.release(MOUSE);
+               KeyboardWindow.this.press(MOUSE, key);
+               this.held = key;
             }
          }
 
          @Override
          public void mouseReleased(MouseEvent event) {
             KeyboardWindow.this.release(MOUSE);
+            this.held = -1;
          }
-      });
+      };
+      this.piano.addMouseListener(keys);
+      this.piano.addMouseMotionListener(keys);
       this.bar.addMouseListener(new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent event) {
