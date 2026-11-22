@@ -26,11 +26,19 @@ final class Coach {
    /** The step that press comes at, and for a jump how many steps the key is held. */
    final int step;
    final int hold;
+   /** The step of your press near the crash, or -1. */
+   final int press;
+   /** The course and your keys before the fix, then the fix: played on a Ghost, the run that clears it. */
+   private final long course;
+   private final int[] keys;
 
-   private Coach(Fix fix, String line, int markX, int pressX, int step, int hold) {
+   private Coach(Fix fix, String line, int markX, int pressX, int step, int hold, int press, long course, int[] keys) {
       this.fix = fix;
       this.step = step;
       this.hold = hold;
+      this.press = press;
+      this.course = course;
+      this.keys = keys;
       this.line = line;
       this.markX = markX;
       this.pressX = pressX;
@@ -38,6 +46,11 @@ final class Coach {
 
    /** What would have cleared the obstacle runner crashed into, or null when nothing near the crash does. */
    static Coach of(Runner runner) {
+      return of(runner, false);
+   }
+
+   /** The same, with touch set naming the thumb pads (JUMP, DUCK) instead of the keys. */
+   static Coach of(Runner runner, boolean touch) {
       Runner.Obstacle o = runner.crashedInto();
       if (o == null || runner.state() != Runner.State.CRASHED) {
          return null;
@@ -115,26 +128,32 @@ final class Coach {
          if ((budget -= crash) < 0) {
             break;
          }
-         if (!clears(runner.course(), mine, t, clear)) {
+         int[] keys = keys(mine, t);
+         if (!clears(runner.course(), keys, clear)) {
             continue;
          }
          Fix fix = Fix.values()[t[1]];
          int pressX = press < 0 ? -1 : (int) Math.round(ahead[press - first]);
-         return new Coach(fix, line(fix, t, press, ducked, hold), markX, pressX, t[0], t[2]);
+         return new Coach(fix, line(fix, t, press, ducked, hold, touch), markX, pressX, t[0], t[2], press, runner.course(), keys);
       }
       return null;
    }
 
-   private static String line(Fix fix, int[] t, int press, boolean ducked, int hold) {
+   /** The run with the fix, from its start: a slow replay of it shows the press that clears the obstacle. */
+   Ghost fixed() {
+      return new Ghost(this.course, 0, this.keys);
+   }
+
+   private static String line(Fix fix, int[] t, int press, boolean ducked, int hold, boolean touch) {
       if (fix == Fix.STAY) {
          return "That bird flies high: stay on the ground and run under it.";
       }
       if (fix == Fix.DUCK) {
          return ducked && t[0] < press ? "Duck " + seconds(press - t[0]) + " sooner, when it reaches the mark."
-            : "Duck under that bird: hold ↓ when it reaches the mark.";
+            : "Duck under that bird: hold " + (touch ? "DUCK" : "↓") + " when it reaches the mark.";
       }
       if (press < 0 || ducked) {
-         return "Jump when it reaches the mark: Space or ↑.";
+         return "Jump when it reaches the mark: " + (touch ? "tap JUMP." : "Space or ↑.");
       }
       if (t[0] < press) {
          return "You jumped " + seconds(press - t[0]) + " late: jump when it reaches the mark.";
@@ -142,7 +161,7 @@ final class Coach {
       if (t[0] > press) {
          return "You jumped " + seconds(t[0] - press) + " early: wait until it reaches the mark.";
       }
-      return t[2] > hold ? "Right moment: hold the key longer to jump higher." : "Right moment: a quick tap lands sooner.";
+      return t[2] > hold ? "Right moment: hold " + (touch ? "JUMP" : "the key") + " longer to jump higher." : "Right moment: a quick tap lands sooner.";
    }
 
    /** Steps as seconds, to a twentieth. */
@@ -151,8 +170,8 @@ final class Coach {
       return hundredths / 100 + "." + (hundredths % 100 < 10 ? "0" : "") + hundredths % 100 + " s";
    }
 
-   /** Whether your keys before try[0], then the try, get the dinosaur to distance clear without a crash. */
-   private static boolean clears(long course, List<Integer> mine, int[] t, double clear) {
+   /** Your keys before try[0], then the try's. */
+   private static int[] keys(List<Integer> mine, int[] t) {
       List<Integer> keys = new ArrayList<>();
       for (int in : mine) {
          if (in / 4 < t[0]) {
@@ -175,7 +194,12 @@ final class Coach {
       for (int i = 0; i < inputs.length; i++) {
          inputs[i] = keys.get(i);
       }
-      Ghost g = new Ghost(course, 0, inputs);
+      return inputs;
+   }
+
+   /** Whether keys get the dinosaur on course to distance clear without a crash. */
+   private static boolean clears(long course, int[] keys, double clear) {
+      Ghost g = new Ghost(course, 0, keys);
       g.start();
       while (g.runner().state() == Runner.State.RUNNING && g.runner().distance() < clear) {
          g.step();

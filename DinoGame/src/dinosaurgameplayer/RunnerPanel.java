@@ -69,6 +69,11 @@ final class RunnerPanel extends JPanel {
    private static final int FLASH_STEPS = 60;
    private static final int BEST_STEPS = 150;
    private static final int SHAKE_STEPS = 14;
+   /** The slow replay after a coached crash: steps it waits (past the shake), starts before the press and runs past the crash, then rests. */
+   private static final int REPLAY_WAIT = 40;
+   private static final int REPLAY_LEAD = 20;
+   private static final int REPLAY_AFTER = 24;
+   private static final int REPLAY_HOLD = 30;
 
    private final Runner runner;
    private final PixelBot bot = new PixelBot();
@@ -85,6 +90,10 @@ final class RunnerPanel extends JPanel {
    private String[] crashLines = new String[0];
    /** After a run of your own crashes: what would have cleared it, or null. */
    private Coach coach;
+   /** The slow replay of the crash: your run (see-through) and the coach's fix (solid), and its frame, or -1 before it starts. */
+   private Ghost replayYou;
+   private Ghost replayFix;
+   private int replayAt = -1;
    private boolean dragging;
    /** Non-null while bots are evolving instead of the game being played. */
    private Evolution evolution;
@@ -548,8 +557,46 @@ final class RunnerPanel extends JPanel {
          this.crashed();
       } else if (this.runner.state() == Runner.State.RUNNING) {
          this.runStep(wasJumping);
+      } else if (this.runner.state() == Runner.State.CRASHED) {
+         this.replayStep();
       }
       this.seen = this.runner.state();
+   }
+
+   /** Whether the slow replay shows: after your coached crash, past the shake, unless the system asks for reduced motion. */
+   boolean replaying() {
+      return this.coach != null && this.runner.state() == Runner.State.CRASHED && !this.bot.isOn() && this.picture == null
+         && this.runner.idleSteps() >= REPLAY_WAIT && !reducedMotion();
+   }
+
+   /** One step of the slow replay, at half speed: from just before the press to just past the crash, a rest, and again. */
+   private void replayStep() {
+      Coach c = this.coach;
+      if (!this.replaying() || (this.runner.idleSteps() - REPLAY_WAIT) % 2 != 0) {
+         return;
+      }
+      int begin = Math.max(0, Math.min(c.step, c.press >= 0 ? c.press : c.step) - REPLAY_LEAD);
+      int length = (int) this.runner.steps() + REPLAY_AFTER - begin;
+      this.replayAt = (this.replayAt + 1) % (length + REPLAY_HOLD);
+      if (this.replayAt == 0) {
+         // shortcut: each loop plays the run again from its start (a few ms after a long run); keep a copy at begin if that ever shows.
+         this.replayYou = Ghost.of(this.runner);
+         this.replayFix = c.fixed();
+         this.replayYou.start();
+         this.replayFix.start();
+         while (this.replayFix.runner().steps() < begin) {
+            this.replayYou.step();
+            this.replayFix.step();
+         }
+      } else if (this.replayAt <= length) {
+         this.replayYou.step();
+         this.replayFix.step();
+      }
+   }
+
+   /** The fix's run while the slow replay shows, else null. */
+   Runner replayView() {
+      return this.replayFix != null && this.replayAt >= 0 && this.replaying() ? this.replayFix.runner() : null;
    }
 
    /** After a running step: the sky, the dust, the jump blip, the chime every 100 points and a new best. */
@@ -620,6 +667,7 @@ final class RunnerPanel extends JPanel {
    private void crashed() {
       int score = this.runner.score();
       this.coach = null;
+      this.replayAt = -1;
       if (this.botWholeRun && !this.humanHelped) {
          boolean best = score > this.records.botBest;
          if (best) {
@@ -650,7 +698,7 @@ final class RunnerPanel extends JPanel {
             : this.records.botBest == 0 ? "Press B to see how far the original bot gets."
             : score > this.records.botBest ? "You beat the bot's best of " + this.records.botBest + "."
             : "The bot's best is " + this.records.botBest + ". Beat it?";
-         this.coach = Coach.of(this.runner);
+         this.coach = Coach.of(this.runner, this.pads);
          String you = (best && score > 0 ? "New best: " : "You scored ") + score + ".";
          this.crashLines = new String[] { this.coach == null ? you : you + " " + this.coach.line, bot };
       }
@@ -769,8 +817,11 @@ final class RunnerPanel extends JPanel {
       } else if (this.picture != null) {
          this.picture.paint(g);
       } else {
-         paintWorld(g, this.runner, this.sky, !blind);
-         this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
+         Runner replay = this.replayView();
+         paintWorld(g, replay != null ? replay : this.runner, this.sky, !blind);
+         if (replay == null) {
+            this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
+         }
          if (this.racing && !this.bot.isOn()) {
             g.setFont(SCORE);
             g.setColor(Sky.tint(MUTED, dark));
@@ -781,16 +832,18 @@ final class RunnerPanel extends JPanel {
             g.setColor(Sky.tint(MUTED, dark));
             g.drawString(this.ears == Ears.Mode.BLINDFOLD ? "BLINDFOLD: LISTEN" : "PLAYING BY EAR", 14, this.racing ? 40 : 24);
          }
-         if (this.ghost != null && !this.bot.isOn()) {
+         if (this.ghost != null && !this.bot.isOn() && replay == null) {
             this.paintGhost(g, dark);
          }
          if (this.coach != null && this.runner.state() == Runner.State.CRASHED && !this.bot.isOn()) {
-            this.paintCoach(g, dark);
+            this.paintCoach(g, dark, replay);
          }
          if (this.guiding()) {
             this.paintGuide(g, dark);
          }
-         paintDino(g, this.runner, Sky.tint(INK, dark), Sky.tint(PAPER, dark));
+         if (replay == null) {
+            paintDino(g, this.runner, Sky.tint(INK, dark), Sky.tint(PAPER, dark));
+         }
          this.paintScore(g, dark);
          if (this.bot.isOn()) {
             this.paintBot(g);
@@ -986,31 +1039,64 @@ final class RunnerPanel extends JPanel {
 
    /**
     * After a crash: the obstacle see-through and a filled mark under the ground where it was when the press that clears
-    * it should have come, and a hollow mark where it was when you pressed.
+    * it should have come, and a hollow mark where it was when you pressed. In the slow replay (fix, the fix's run) the
+    * real obstacle comes to the mark instead: it lights with TAP, HOLD or DUCK when the fix presses, the fix's dinosaur
+    * runs solid and yours see-through until it crashes.
     */
-   private void paintCoach(Graphics2D g, double dark) {
+   private void paintCoach(Graphics2D g, double dark, Runner fix) {
       Coach c = this.coach;
       g.setFont(TINY);
       FontMetrics fm = g.getFontMetrics();
       int y = Runner.GROUND + 3;
-      if (c.pressX >= 0 && c.pressX < Runner.WIDTH) {
+      Color ink = Sky.tint(INK, dark);
+      Color seeThrough = new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 70);
+      if (fix != null) {
+         g.setColor(Sky.tint(MUTED, dark));
+         g.drawString("SLOW REPLAY: HOW TO GET PAST IT", 14, 24 + (this.racing ? 16 : 0) + (this.ears != Ears.Mode.OFF ? 16 : 0));
+      }
+      if (c.pressX >= 0 && c.pressX < Runner.WIDTH && (fix == null || fix.steps() >= c.press)) {
          g.setColor(Sky.tint(MUTED, dark));
          g.drawPolygon(new int[] { c.pressX - 5, c.pressX, c.pressX + 5 }, new int[] { y + 8, y, y + 8 }, 3);
          String you = c.fix == Coach.Fix.STAY ? "you jumped" : "you";
          g.drawString(you, c.pressX - fm.stringWidth(you) / 2, y + 19);
       }
       if (c.fix != Coach.Fix.STAY) {
-         Color ink = Sky.tint(INK, dark);
-         // The obstacle you hit, see-through, where it was when the press should have come.
-         g.setColor(new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 70));
-         paintObstacle(g, this.runner, this.runner.crashedInto(), c.markX);
+         boolean lit = fix == null || fix.steps() >= c.step;
+         if (fix == null) {
+            // The obstacle you hit, see-through, where it was when the press should have come.
+            g.setColor(seeThrough);
+            paintObstacle(g, this.runner, this.runner.crashedInto(), c.markX);
+         }
+         if (fix != null) {
+            g.setColor(Sky.tint(PAPER, dark));
+            g.fillRect(c.markX - 7, y - 1, 15, 10);   // clear of the pebbles, as on your first runs
+         }
          g.setColor(ink);
-         g.fillPolygon(new int[] { c.markX - 5, c.markX, c.markX + 5 }, new int[] { y + 8, y, y + 8 }, 3);
-         String here = c.fix == Coach.Fix.DUCK ? "duck here" : "jump here";
+         int[] xs = { c.markX - 5, c.markX, c.markX + 5 };
+         int[] ys = { y + 8, y, y + 8 };
+         if (lit) {
+            g.fillPolygon(xs, ys, 3);
+         } else {
+            g.drawPolygon(xs, ys, 3);
+         }
+         String here = fix != null && lit ? c.fix == Coach.Fix.DUCK ? "DUCK" : c.hold > GUIDE_TAP ? "HOLD" : "TAP"
+            : c.fix == Coach.Fix.DUCK ? "duck here" : "jump here";
          // Beside your mark when they are close, so the two labels do not overlap.
          int lx = Math.abs(c.markX - c.pressX) < 40 && c.pressX >= 0
             ? c.markX < c.pressX ? c.markX - 4 - fm.stringWidth(here) : c.markX + 8 : c.markX - fm.stringWidth(here) / 2;
          g.drawString(here, lx, Math.abs(c.markX - c.pressX) < 40 && c.pressX >= 0 ? y + 8 : y + 19);
+      }
+      if (fix != null) {
+         Runner you = this.replayYou.runner();
+         boolean apart = you.state() == Runner.State.CRASHED || you.dinoTop() != fix.dinoTop() || you.isDucking() != fix.isDucking();
+         this.paintBeside(g, you, fix, seeThrough, apart ? "you" : null, 0, dark);
+         paintDino(g, fix, ink, Sky.tint(PAPER, dark));
+         if (apart) {
+            // Above the fix's dinosaur, lifted clear of yours when yours is just above it.
+            boolean near = Math.abs(you.distance() - fix.distance()) < 60 && Math.abs(you.dinoTop() - fix.dinoTop()) < 14;
+            g.setColor(ink);
+            g.drawString("like this", fix.dinoX() + 2, near ? Math.min(fix.dinoTop(), you.dinoTop()) - 16 : fix.dinoTop() - 4);
+         }
       }
    }
 
