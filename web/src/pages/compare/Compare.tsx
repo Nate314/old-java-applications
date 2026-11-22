@@ -11,7 +11,9 @@ import { WITH_THEN, pick } from './Intro';
 // changes listed are the ones made after it. history.txt carries no hashes, so change this together with then.commit
 // (web/then/pom.xml and web/then-nathanos/pom.xml).
 const THEN_AT = 1793558285 * 1000;
-const app = pick(new URLSearchParams(location.search).get('app'));
+let app = pick(typeof location === 'object' ? new URLSearchParams(location.search).get('app') : null);
+/** The build (vite/pages.ts) renders the page once for every app with a Then version and writes it into compare.html. */
+export const renderFor = (id: string) => { app = pick(id); };
 
 interface Change { t: number; title: string; more: string }
 

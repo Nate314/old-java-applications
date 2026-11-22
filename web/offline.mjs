@@ -1,6 +1,6 @@
 // An offline check of the built site in headless Chrome over the DevTools protocol, with Node's built-ins only (no
 // npm packages). It serves the site with serve.ps1 (the same headers a visitor gets) and walks three flows:
-//   1. first visit, then offline: home, story, play.html and an app page, visited once online, each load again with
+//   1. first visit, then offline: home, story, play.html, an app page and compare.html, visited once online, each load again with
 //      no connection;
 //   2. Save all for offline, then offline: several app pages, Then pages, and Find on the home page;
 //   3. a second build arrives: a copy of the site under -ProfileRoot with one tiny change (boot.js marked 'B', every
@@ -238,6 +238,10 @@ try {
     });
   }
 
+  // compare.html: its players are written into the page (vite/pages.ts, compareRest); the Then one must draw its poster and picture.
+  const COMPARE = { ready: '#pane-then iframe' };
+  const comparePoster = async () => await until("(function(f){var p=f&&f.contentDocument&&f.contentDocument.getElementById('poster');return !!p&&!p.hidden&&(function(i){return !!i&&i.complete&&i.naturalWidth>0})(f.contentDocument.getElementById('poster-bg'))})(document.querySelector('#pane-then iframe'))", 15000) ? '' : 'no poster in the Then frame';
+
   // ---- flow 1: first visit, then offline ----
   console.log('== first visit, then offline');
   await page('home (online)', 'index.html', home);
@@ -246,6 +250,8 @@ try {
   await page('story (online)', 'story.html', { ready: 'main' });
   await page('play.html?app=Minesweeper (online)', 'play.html?app=Minesweeper', { app: true, click: '#poster-play', frame: '#frame' });
   await page('Clock (online)', 'Clock/index.html', { app: true });
+  await page('compare.html?app=Minesweeper (online)', 'compare.html?app=Minesweeper', COMPARE);
+  await check("compare.html's Then frame shows its poster (online)", comparePoster);
   await sleep(1500);   // the last page settles into the cache
   await setOffline(true);
   await page('home (offline)', 'index.html', { ...home, firstVisit: true });
@@ -253,6 +259,8 @@ try {
   await page('story (offline)', 'story.html', { ready: 'main', firstVisit: true });
   await page('play.html?app=Minesweeper (offline)', 'play.html?app=Minesweeper', { app: true, click: '#poster-play', frame: '#frame', firstVisit: true });
   await page('Clock (offline)', 'Clock/index.html', { app: true, firstVisit: true });
+  await page('compare.html?app=Minesweeper (offline)', 'compare.html?app=Minesweeper', { ...COMPARE, firstVisit: true });
+  await check("compare.html's Then frame shows its poster (offline)", comparePoster);
   await setOffline(false);
 
   // Find on the page in view: Ctrl K, "tank", a TankGame result.
