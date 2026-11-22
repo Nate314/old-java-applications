@@ -97,6 +97,8 @@ public final class GameFrame extends JFrame {
    /** The move under the mouse or the keyboard cursor (board * 9 + cell), or -1; and the boards it would send the opponent to. */
    private int previewMove = -1;
    private boolean[] previewTargets;
+   /** Where the opponent could win a small board after the previewed move (board * 9 + cell), or null. */
+   private boolean[] previewDangers;
    /** The cell the arrow keys are on, or -1 once the mouse is used. */
    private int cursorMove = -1;
    /** The game's status line, shown again when a preview's line ends. */
@@ -584,6 +586,11 @@ public final class GameFrame extends JFrame {
       return this.previewTargets;
    }
 
+   /** True if the opponent could win a small board on that cell after the previewed move. */
+   final boolean previewDanger(int move) {
+      return this.previewDangers != null && this.previewDangers[move];
+   }
+
    /** The cell the arrow keys are on, or -1. */
    final int cursorMove() {
       return this.cursorMove;
@@ -629,6 +636,7 @@ public final class GameFrame extends JFrame {
     */
    private void updatePreview() {
       this.previewTargets = null;
+      this.previewDangers = null;
       String hint = null;
       if (this.previewMove() >= 0) {
          int board = this.previewMove / 9;
@@ -645,6 +653,19 @@ public final class GameFrame extends JFrame {
             // Short enough to fit over a phone-sized board: the line does not wrap.
             String where = after.activeBoard == -1 ? "any open board" : "the " + CellButton.PLACES[after.activeBoard] + (wins ? "" : " board");
             hint = wins ? "Wins the board! They go to " + where + "." : "Sends " + this.opponent() + " to " + where + ".";
+            // The answer it hands them: every square where they would then win a board, and whether that wins the game.
+            int[] replies = after.boardWinningMoves();
+            if (replies.length > 0) {
+               this.previewDangers = new boolean[81];
+               boolean game = false;
+               for (int reply : replies) {
+                  this.previewDangers[reply] = true;
+                  GameState next = after.copy();
+                  next.play(reply / 9, reply % 9);
+                  game |= next.winner != null && !GameState.DRAW.equals(next.winner);
+               }
+               hint = "Careful: " + this.opponent() + (game ? " could win the game!" : " can win there!");
+            }
          }
       }
       this.status.setText(hint != null ? hint : this.statusLine);

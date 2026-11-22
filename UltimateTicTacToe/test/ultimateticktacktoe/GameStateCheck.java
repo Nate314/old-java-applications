@@ -41,6 +41,16 @@ public class GameStateCheck {
       check("X".equals(game.winner), "X wins the game, got " + game.winner);
       check(!game.canPlay(8, 8), "no moves after the game ends");
 
+      // The moves that win a small board for the side to move (the preview's warning), on the board sent to or anywhere.
+      game = new GameState();
+      game.marks[0][0] = game.marks[0][1] = game.marks[4][3] = game.marks[4][4] = "X";
+      game.activeBoard = 0;
+      check(java.util.Arrays.equals(game.boardWinningMoves(), new int[]{2}), "board-winning move on the board sent to");
+      game.activeBoard = -1;
+      check(java.util.Arrays.equals(game.boardWinningMoves(), new int[]{2, 4 * 9 + 5}), "board-winning moves anywhere");
+      game.xTurn = false;
+      check(game.boardWinningMoves().length == 0, "none for the other side");
+
       // Copies are independent, and legal moves follow the active board.
       game = new GameState();
       game.play(4, 0);

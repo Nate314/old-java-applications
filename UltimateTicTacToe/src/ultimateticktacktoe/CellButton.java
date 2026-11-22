@@ -186,6 +186,12 @@ public final class CellButton extends JButton implements ActionListener {
             progress(now, this.game.placedAt[this.move()], MARK_MS), alpha);
       } else if (this.game.previewMove() == this.move()) {
          this.paintMark(g, state.xTurn ? "X" : "O", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 90);
+      } else if (this.game.previewDanger(this.move())) {
+         // The previewed move hands the opponent this square to win a board: their faint mark, ringed in their color.
+         this.paintMark(g, state.xTurn ? "O" : "X", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 150);
+         g.setColor(state.xTurn ? O_COLOR : X_COLOR);
+         g.setStroke(new BasicStroke(Math.max(2f, w / 16f)));
+         g.drawRoundRect(pad, pad, w - 2 * pad - 1, h - 2 * pad - 1, arc, arc);
       } else if (focus == 1) {
          // Its favorite so far, as a faint mark; it may change its mind before the move lands.
          this.paintMark(g, state.xTurn ? "X" : "O", w / 2.0, h / 2.0, Math.min(w, h) * 0.26, Math.max(2f, Math.min(w, h) / 9f), 1, 110);
