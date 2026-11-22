@@ -110,17 +110,18 @@ export function titleScreen(files: string[]) {
     leaving = true;
     // With a picture in view, it stays up until the app's window is there and then opens into it (launch); otherwise it fades.
     var pic = launchPicture(screen);
-    if (!pic) {
+    function fade() {
       ui.leave();
       html.removeAttribute('data-title');
+      setTimeout(function () { close(); titleLog = null; }, 400);
     }
     var start = started;
     started = null;
     // Let go of Play, so the app's first button or field can take the keyboard (the shim's TDesktop.show).
     if (screen.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     start();
-    if (pic) launch(pic, function () { close(); titleLog = null; html.removeAttribute('data-title'); });
-    else setTimeout(function () { close(); titleLog = null; }, 400);
+    if (pic) launch(pic, function () { close(); titleLog = null; html.removeAttribute('data-title'); }, fade);
+    else fade();
   }
 
   return {
@@ -150,28 +151,33 @@ export function titleScreen(files: string[]) {
 // Play opens the title's picture (or its playing preview clip) into the app's own window: one same-page view transition
 // carries the picture across while the rest of the card fades, so the visitor sees the game they picked become the game
 // they play. Not for reduced motion, browsers without view transitions, Arcade (its stage has its own power-on), or a
-// picture off screen (a scrolled phone card).
+// picture off screen (a scrolled phone card). A picture still arriving counts by its panel: launch waits for it.
 function launchPicture(screen: HTMLElement): HTMLElement | null {
   if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches ||
     document.documentElement.getAttribute('data-skin') === 'arcade') return null;
-  const pic = screen.querySelector<HTMLElement>('.shim-title-clip.on') || screen.querySelector<HTMLImageElement>('.shim-title-art img');
-  if (!pic || (pic instanceof HTMLImageElement && !pic.naturalWidth)) return null;
-  const r = pic.getBoundingClientRect();
+  const pic = screen.querySelector<HTMLElement>('.shim-title-clip.on') || screen.querySelector<HTMLImageElement>('.shim-title-art img[src]:not(.shim-title-tone)');
+  if (!pic) return null;
+  const r = (pic instanceof HTMLImageElement && !pic.naturalWidth ? pic.parentElement! : pic).getBoundingClientRect();
   return r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight ? pic : null;
 }
 
-/** The app's biggest window, once it has stood still for one look (the stage centres it after show); the stage itself after 1.2 s. */
-function launch(pic: HTMLElement, leave: () => void) {
+/** The app's biggest window, once it has stood still for one look (the stage centres it after show); the stage itself
+ *  after 1.2 s. A picture not decoded yet (a phone, a fresh page) is decoded meanwhile; if it is still not in by then,
+ *  or it does not load, the title fades instead (fade). */
+function launch(pic: HTMLElement, leave: () => void, fade: () => void) {
   const t0 = Date.now();
-  let last = '';
+  let last = '', decoded = !(pic instanceof HTMLImageElement) || pic.naturalWidth > 0, broken = false;
+  if (!decoded) (pic as HTMLImageElement).decode().then(() => { decoded = true; }, () => { broken = true; });
   (function look() {
+    if (broken) { fade(); return; }
     let win: HTMLElement | null = null, area = 0;
     document.querySelectorAll<HTMLElement>('#desktop .window').forEach(w => {
       const r = w.getBoundingClientRect();
       if (r.width * r.height > area) { area = r.width * r.height; win = w; }
     });
     const at = win ? JSON.stringify((win as HTMLElement).getBoundingClientRect()) : '';
-    if ((!at || at !== last) && Date.now() - t0 < 1200) { last = at; setTimeout(look, 40); return; }
+    if ((!at || at !== last || !decoded) && Date.now() - t0 < 1200) { last = at; setTimeout(look, 40); return; }
+    if (!decoded) { fade(); return; }
     const to = win || document.getElementById('desktop');
     pic.style.viewTransitionName = 'oldjava-launch';
     document.documentElement.setAttribute('data-launch', '');
@@ -263,8 +269,11 @@ function TitleScreen({ apps, onGo, onMount }: {
       onScroll={stay} onWheel={stay} onPointerDown={stay} onFocus={stay}>
       <div className="shim-title-card">
         <div className="shim-title-art">
-          {/* Shown as it arrives: today's picture has its room from the start on a phone (shim.css), so nothing moves. */}
-          <img alt="" fetchPriority="high" src={app && !then ? app.shot.replace(/[.]png$/, '.webp') : undefined} onLoad={() => setShown(true)} />
+          {/* Shown as it arrives: today's picture has its room from the start on a phone (shim.css), so nothing moves.
+              The phone poster lays a blurred copy of it behind, so the panel glows in the app's own colours. The
+              catalog's shot is already the WebP. */}
+          {app && !then && <img className="shim-title-tone" alt="" src={app.shot} />}
+          <img alt="" fetchPriority="high" src={app && !then ? app.shot : undefined} onLoad={() => setShown(true)} />
           {app && app.clip && !then && <Attract id={id} go={ready && shown} />}
           {app && then && (
             // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.
