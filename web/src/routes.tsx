@@ -8,6 +8,7 @@ import { SITE, ShareTags } from './shared/ShareTags';
 import apps from './shared/apps.json';
 import { Lead } from './pages/home/Lead';
 import { Hero, TopBar } from './pages/story/Hero';
+import { Intro } from './pages/compare/Intro';
 
 export interface Route {
   /** The file the build writes, at the site root. */
@@ -133,6 +134,9 @@ export const ROUTES: Route[] = [
         {skin}
       </>
     ),
+    // The top bar, title and lead (the largest text on a phone) are in the page itself, so a phone paints them while
+    // React and the page's module load; the module renders the players and the changes after them, into #compare-rest.
+    placeholder: <Intro />,
   },
   // Lost and found: the page GitHub Pages (and any host that serves a 404.html) shows for an address with nothing
   // at it. Short links: an address that names an app sends the visitor straight to it, keeping the query and the

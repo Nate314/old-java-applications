@@ -160,7 +160,7 @@ $pages = @(
     @{ name = 'play.html (no app, picker)'; path = 'play.html'; App = $true; Click = '#oops:not([hidden]) .pick li:last-child button'; Frame = '#frame' }
     @{ name = "play.html?app=$($Apps[0])"; path = "play.html?app=$($Apps[0])"; App = $true; Click = '#poster-play'; Frame = '#frame' }
     @{ name = 'lost page (missing path)'; path = 'no-such-page'; ready = '#lost'; Missing = $true }
-    @{ name = 'compare.html'; path = 'compare.html'; ready = 'main.compare' }
+    @{ name = 'compare.html'; path = 'compare.html'; ready = 'main.compare .panes' }
     @{ name = 'story play sheet'; path = 'story.html'; App = $true; Sheet = '#apps20 a' }
     @{ name = 'lost page play sheet'; path = 'no-such-page'; App = $true; Sheet = '#cards a.card'; Missing = $true }
 )
