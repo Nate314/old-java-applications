@@ -144,17 +144,17 @@ function welcomeBack() {
       setSaverOn(false);
       var said = 'Screen saver off. ', how = app.name + '’s title screen turns it back on.';
       if (news) news.show('saver', null, <><strong>{said}</strong><span>{how}</span></>, null, 6000);
-      else floatToast(app.shot, said, how, null, function () { return null; });
+      else floatToast(app.pic, said, how, null, function () { return null; });
     }
     function offButton(cls: string, close: () => void) {
       return <button type="button" className={cls} onClick={() => { close(); off(); }}>Turn it off</button>;
     }
     if (news) {
-      news.show('saver', <span className="shim-news-seal"><img src={app.shot} alt="" /></span>, <><strong>{title}</strong><span>{line}</span></>,
+      news.show('saver', <span className="shim-news-seal"><img src={app.pic} alt="" /></span>, <><strong>{title}</strong><span>{line}</span></>,
         <><a className="shim-news-go" href={pageOf(app)}>{'Pick your saver ›'}</a>{offButton('shim-news-go', news.clear)}</>, 10000);
       return;
     }
-    floatToast(app.shot, title, line, null, function (close) {
+    floatToast(app.pic, title, line, null, function (close) {
       return <>{toastLink(close, app, 'Pick your saver ›')}{offButton('shim-toast-go', close)}</>;
     });
   });

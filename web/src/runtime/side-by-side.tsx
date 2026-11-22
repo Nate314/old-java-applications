@@ -166,7 +166,7 @@ function DockPanel({ app: first, onMount }: { app: CatalogApp; onMount: (show: (
     <aside className={'shim-dock' + (active ? ' shim-dock-active' : '')} aria-label={app.name + ', side by side'} ref={box}>
       <DockEdge />
       <div className="shim-dock-head">
-        <img className="shim-dock-pic" alt="" src={app.shot} />
+        <img className="shim-dock-pic" alt="" src={app.pic} />
         <strong className="shim-dock-name">{app.name}</strong>
         <span className="shim-dock-keys" title="Keys go to this app until you click the other one">Keys here</span>
         <button type="button" className="shim-dock-swap" title="Swap: make this the main app, with the other one beside it" aria-label="Swap" onClick={swap}>

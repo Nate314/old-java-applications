@@ -339,7 +339,7 @@ function Shell({ shell, onMount }: { shell: ShellModel; onMount: (layer: HTMLDiv
 }
 
 function Pic({ app, className }: { app: CatalogApp; className: string }) {
-  return <span className={className}><img src={app.shot} alt="" /></span>;
+  return <span className={className}><img src={app.pic} alt="" /></span>;
 }
 
 function StartMenu({ shell, query }: { shell: ShellModel; query: string }) {
@@ -363,7 +363,7 @@ function StartMenu({ shell, query }: { shell: ShellModel; query: string }) {
         {apps && apps.map(app => (
           <a key={app.id} className={'shim-tile' + (q && app === hits[0] ? ' first' : '')} {...playProps(app)} title={app.hint} hidden={!hit(app)}>
             <span className="shim-tile-pic">
-              <img src={app.shot} alt="" />
+              <img src={app.pic} alt="" />
               {played[app.id] && <span className="shim-badge played" title="Played">{'✓'}</span>}
             </span>
             <span className="shim-tile-name">{app.name}</span>

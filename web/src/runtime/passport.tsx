@@ -40,7 +40,7 @@ export function stampToast(id: string) {
     playSound(done ? 'complete' : 'stamp');
     if (done) { confetti(); homeDoc(); }   // its Share it shows the arcade's description
     if (news) { stampNews(app, count, apps.length, next); return; }
-    floatToast(app.shot, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
+    floatToast(app.pic, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
       done ? 'You have played all ' + apps.length + ' apps.' : count + ' of ' + apps.length + ' apps played.',
       <Meter p={count / apps.length} />, function (close) {
         return (
@@ -120,7 +120,7 @@ export function toastLink(close: () => void, app: OldjavaCatalogApp, label: stri
 function stampNews(app: OldjavaCatalogApp, count: number, total: number, next: OldjavaCatalogApp | undefined) {
   var done = count >= total;
   var brag: HTMLButtonElement | null = null;
-  news!.show('stamp', <span className="shim-news-seal"><img src={app.shot} alt="" /></span>, (
+  news!.show('stamp', <span className="shim-news-seal"><img src={app.pic} alt="" /></span>, (
     <>
       <strong>{done ? 'Arcade complete! ' : 'Stamp collected: ' + app.name + ' '}</strong>
       <span>{done ? 'You have played all ' + total + ' apps.' : count + ' of ' + total + ' apps played.'}</span>
