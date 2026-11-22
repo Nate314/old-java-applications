@@ -572,24 +572,32 @@ public final class EarTrainer extends JPanel {
 	private void paintPiano(Graphics2D g, int x, int y, int width, int height) {
 		boolean reveal = started && round.answered() && !round.isOver() || round.isOver() && sounding != null;
 		Color[] colors = new Color[Look.HIGH_NOTE + 1];
+		String[] names = new String[Look.HIGH_NOTE + 1];
 		if (reveal && !round.isOver()) {
 			for (int[] step : round.question().steps()) {
 				for (int note : step) {
 					int key = clamp(note);
 					colors[key] = Look.isBlack(key) ? new Color(214, 160, 40) : new Color(255, 226, 150);
+					names[key] = sharpName(key);
 				}
 			}
 		}
 		if (reveal && sounding != null) {
 			for (int note : sounding) {
 				colors[clamp(note)] = GOLD;
+				names[clamp(note)] = sharpName(clamp(note));
 			}
 		}
-		Look.paintKeyboard(g, x, y, width, height, narrow(), colors);
+		Look.paintKeyboard(g, x, y, width, height, narrow(), colors, names);
 	}
 
 	private static int clamp(int note) {
 		return Math.min(Look.HIGH_NOTE, Math.max(Look.LOW_NOTE, note));
+	}
+
+	/** A note's name with sharps, such as "F#". */
+	private static String sharpName(int note) {
+		return Notes.getNoteName(note, MusicalTerms.SHARP).replace('s', '#');
 	}
 
 	/** The distinct notes of a question in the order they first sound, as names such as "F#4". */
@@ -601,7 +609,7 @@ public final class EarTrainer extends JPanel {
 				if (!seen.contains(note)) {
 					seen.add(note);
 					names.append(names.length() == 0 ? "" : " ")
-							.append(Notes.getNoteName(note, MusicalTerms.SHARP).replace('s', '#')).append(note / 12 - 1);
+							.append(sharpName(note)).append(note / 12 - 1);
 				}
 			}
 		}

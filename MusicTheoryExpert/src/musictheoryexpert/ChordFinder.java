@@ -830,15 +830,19 @@ public final class ChordFinder extends JPanel {
 	/** The keyboard: held notes blue, the notes sounding gold. */
 	private void paintKeyboard(Graphics2D g) {
 		Color[] colors = new Color[HIGH_NOTE + 1];
+		String[] names = new String[HIGH_NOTE + 1];
+		String[] spelled = ChordNamer.spellings(held());
 		for (int note : held) {
 			colors[note] = isBlack(note) ? HELD_BLACK : HELD;
+			names[note] = spelled[note % 12];
 		}
 		if (sounding != null) {
 			for (int note : sounding) {
 				colors[note] = isBlack(note) ? GOLD_BLACK : GOLD;
 			}
 		}
-		Look.paintKeyboard(g, keyboard.x, keyboard.y, keyboard.width, keyboard.height, getWidth() < NARROW, colors);
+		Look.paintKeyboard(g, keyboard.x, keyboard.y, keyboard.width, keyboard.height, getWidth() < NARROW, colors,
+				names);
 	}
 
 	// ---- the guitar neck, in the keyboard's place: high E on top as a player looking down sees it ----
