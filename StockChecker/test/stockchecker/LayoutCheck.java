@@ -26,6 +26,18 @@ public class LayoutCheck {
          desk.buy("CRM", 10);
          desk.market.minute = 200;
          paintAndCheck(panel, name + ", open", width, height, 14);
+         // A trade flies to its row and lands, and the shown cash rolls to the real figure instead of jumping.
+         panel.animate();
+         double before = desk.portfolio.cash;
+         panel.trade(10);
+         check(panel.flying() == 1, name + ": the trade flies");
+         panel.animate();
+         check(panel.shownCash() < before && panel.shownCash() > desk.portfolio.cash, name + ": the cash rolls, " + panel.shownCash());
+         paintAndCheck(panel, name + ", trade flying", width, height, 14);
+         for (int i = 0; i < 60; i++) {
+            panel.animate();
+         }
+         check(panel.flying() == 0 && panel.shownCash() == desk.portfolio.cash, name + ": the trade landed and the cash settled");
          desk.market.minute = Market.CLOSE;
          paintAndCheck(panel, name + ", closed", width, height, 8);
       }
