@@ -46,6 +46,14 @@
       <scope>system</scope>
       <systemPath>${repo.dir}/NathaNOS/assets/Clock.jar</systemPath>
     </dependency>
+    <!-- Build order only (a test-scoped pom puts nothing on the compile classpath TeaVM reads): web/.mvn builds modules in parallel, and this module rewrites the manifest-only jars nathanos writes into NathaNOS/assets, so it runs after it. -->
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>nathanos</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
