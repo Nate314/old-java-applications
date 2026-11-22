@@ -17,7 +17,7 @@ export default defineConfig({
     outDir: process.env.SITE_DIR || resolve(__dirname, 'target/site'),
     emptyOutDir: false,
     modulePreload: false,
-    // The stylesheets ship as written (readable, and each rule exactly as the pages had it).
+    // Not Vite's minifier: each rule ships exactly as the pages had it, vite/pages.ts (packed) takes out only comments and spaces.
     cssMinify: false,
     rollupOptions: {
       output: {
