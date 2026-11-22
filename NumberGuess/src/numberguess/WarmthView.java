@@ -178,9 +178,13 @@ final class WarmthView {
 		g.setFont(new Font("SansSerif", Font.BOLD, 12));
 		FontMetrics metrics = g.getFontMetrics();
 		int x = area.x, y = CHIPS_Y, height = 22;
-		for (int i = 0; i < guesses.size(); i++) {
+		int[] widths = new int[guesses.size()];
+		for (int i = 0; i < widths.length; i++) {
+			widths[i] = metrics.stringWidth(guesses.get(i) + " " + word(reads.get(i))) + 16;
+		}
+		for (int i = Board.firstChip(widths, area.x, area.x + area.width, (area.y + area.height + 12 - CHIPS_Y + 6) / (height + 6)); i < guesses.size(); i++) {
 			String label = guesses.get(i) + " " + word(reads.get(i));
-			int width = metrics.stringWidth(label) + 16;
+			int width = widths[i];
 			if (x + width > area.x + area.width) {
 				x = area.x;
 				y += height + 6;

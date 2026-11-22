@@ -33,6 +33,10 @@ public final class Board extends JPanel {
 	public static final int WIDTH = 640, HEIGHT = 350;
 	/** On a narrow screen: the second row of tabs and the subline's second line push the rest down, and Magic's cards stack. */
 	private static final int NARROW_SHIFT = 44 + 6 + 16, NARROW_HEIGHT = HEIGHT + NARROW_SHIFT + 90;
+	/** The shortest narrow board: room for two rows of chips; Magic's card and the chips give up the rest. */
+	static final int NARROW_MIN_HEIGHT = HEIGHT + NARROW_SHIFT - 16;
+	/** Room the window's title bar and the row under the board take on the screen. */
+	private static final int WINDOW_EXTRA = 80;
 
 	static final Color BACKGROUND = new Color(22, 25, 36);
 	static final Color CARD = new Color(36, 40, 56);
@@ -106,10 +110,9 @@ public final class Board extends JPanel {
 		this.modeChanged = modeChanged;
 		setBackground(BACKGROUND);
 		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-		// The tall narrow board only where it fits upright (a phone); a short screen, like a small embed, gets the wide board scaled to fit.
-		narrow = screen.width - 24 < WIDTH && screen.height >= NARROW_HEIGHT + 80;
-		int width = narrow ? Math.max(340, screen.width - 24) : WIDTH;
-		setPreferredSize(new Dimension(width, narrow ? NARROW_HEIGHT : HEIGHT));
+		Dimension size = boardSize(screen.width, screen.height);
+		narrow = size.width != WIDTH;
+		setPreferredSize(size);
 		setFocusable(true);
 		MouseAdapter mouse = new MouseAdapter() {
 			@Override
@@ -136,6 +139,19 @@ public final class Board extends JPanel {
 		addMouseMotionListener(mouse);
 		computerTurn.setRepeats(false);
 		start(records.suggested());
+	}
+
+	/**
+	 * The board for a screen: on one narrower than the wide board (a phone held upright) the narrow board, as tall as the
+	 * screen allows from {@link #NARROW_MIN_HEIGHT} up, so the numbers stay full size on short phones too; a screen too
+	 * short even for that (a small embedded frame) gets the wide board, scaled to fit.
+	 */
+	static Dimension boardSize(int screenWidth, int screenHeight) {
+		int tall = Math.min(NARROW_HEIGHT, screenHeight - WINDOW_EXTRA);
+		if (screenWidth - 24 >= WIDTH || tall < NARROW_MIN_HEIGHT) {
+			return new Dimension(WIDTH, HEIGHT);
+		}
+		return new Dimension(Math.max(340, screenWidth - 24), tall);
 	}
 
 	// ---- state ----
@@ -165,9 +181,14 @@ public final class Board extends JPanel {
 		return isWarm() ? WARM_TAB : isDuel() ? DUEL_TAB : isMagic() ? MAGIC_TAB : isPicking() ? PICK_TAB : level.ordinal();
 	}
 
-	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic, 3 for a won range (Challenge a friend). */
+	/** Which buttons the window needs: 0 for guessing, 1 for You pick, 2 for Magic, 3 for a won range (Challenge a friend), 4 for hiding a number in Duel. */
 	private int kind() {
-		return isMagic() ? 2 : isPicking() ? 1 : canChallenge() ? 3 : 0;
+		return isMagic() ? 2 : isPicking() ? 1 : canChallenge() ? 3 : isHiding() ? 4 : 0;
+	}
+
+	/** True before a duel starts, while your number is still to be hidden. */
+	public boolean isHiding() {
+		return isDuel() && duel.isHiding();
 	}
 
 	/** True when a range was just won, so it can be sent to a friend to beat. */
@@ -495,6 +516,7 @@ public final class Board extends JPanel {
 		if (duel.isHiding()) {
 			if (duel.hide(number)) {
 				say("Round 1: your guess", TEXT, "Its number is from 1 to " + Duel.MAX + ". Type a guess or click your line.");
+				switched(4);
 			} else {
 				notice("Hide a number from 1 to " + Duel.MAX + ".");
 			}
@@ -1327,15 +1349,16 @@ public final class Board extends JPanel {
 			}
 		}
 		List<Hindsight.Read> reads = isPicking() ? null : Hindsight.reads(level, game.number(), guesses);
-		for (int i = 0; i < guesses.size(); i++) {
+		int[] widths = new int[guesses.size()];
+		for (int i = 0; i < widths.length; i++) {
+			widths[i] = metrics.stringWidth(Level.commas(guesses.get(i))) + 26;
+		}
+		for (int i = firstChip(widths, MARGIN, right - 90, (getHeight() - shift() - CHIPS_Y + 6) / (height + 6)); i < guesses.size(); i++) {
 			String label = Level.commas(guesses.get(i));
 			int width = metrics.stringWidth(label) + 26;
 			if (x + width > right - 90) {
 				x = MARGIN;
 				y += height + 6;
-				if (y + height > getHeight() - shift()) {
-					break;
-				}
 			}
 			Color color = chipColor(i);
 			g.setColor(CARD);
@@ -1360,6 +1383,27 @@ public final class Board extends JPanel {
 			}
 			x += width + 6;
 		}
+	}
+
+	/**
+	 * The first chip to draw so the latest ones fit in {@code rows} rows from {@code left} to {@code right}: on a short
+	 * board a long game's earliest chips give way.
+	 */
+	static int firstChip(int[] widths, int left, int right, int rows) {
+		for (int first = 0; first < widths.length; first++) {
+			int used = 1, x = left;
+			for (int i = first; i < widths.length; i++) {
+				if (x + widths[i] > right) {
+					used++;
+					x = left;
+				}
+				x += widths[i] + 6;
+			}
+			if (used <= Math.max(1, rows)) {
+				return first;
+			}
+		}
+		return Math.max(0, widths.length - 1);
 	}
 
 	static void paintStar(Graphics2D g, int centerX, int centerY, int radius, Color color) {

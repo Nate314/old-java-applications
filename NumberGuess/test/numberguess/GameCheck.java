@@ -35,6 +35,18 @@ public class GameCheck {
 		check(Level.commas(1000000).equals("1,000,000") && Level.commas(100).equals("100") && Level.commas(1000).equals("1,000"), "commas");
 		check(Level.THOUSAND.label().equals("1-1,000"), "label");
 
+		// Board size: wide on a roomy screen, narrow and as tall as fits on an upright phone (short ones too), wide again when too short.
+		java.awt.Dimension wide = new java.awt.Dimension(Board.WIDTH, Board.HEIGHT);
+		check(Board.boardSize(1280, 720).equals(wide), "wide board");
+		check(Board.boardSize(400, 735).equals(new java.awt.Dimension(376, 506)), "tall phone board");
+		check(Board.boardSize(375, 495).equals(new java.awt.Dimension(351, 415)), "short phone board");
+		check(Board.boardSize(320, 480).equals(new java.awt.Dimension(340, Board.NARROW_MIN_HEIGHT)), "shortest phone board");
+		check(Board.boardSize(375, 470).equals(wide) && Board.boardSize(660, 400).equals(wide), "too short for narrow");
+		// Chips: all of them when they fit, else the latest ones (three of 44 px make a row of 150 px).
+		int[] chips = { 44, 44, 44, 44, 44, 44, 44 };
+		check(Board.firstChip(chips, 0, 150, 3) == 0 && Board.firstChip(chips, 0, 150, 2) == 1 && Board.firstChip(chips, 0, 150, 1) == 4, "latest chips stay");
+		check(Board.firstChip(new int[0], 0, 150, 1) == 0, "no chips");
+
 		Game game = new Game(Level.HUNDRED, 40);
 		check(game.guess(0) == Game.Verdict.OUT_OF_RANGE && game.guess(101) == Game.Verdict.OUT_OF_RANGE, "out of range");
 		check(game.getGuesses() == 0, "out of range not counted");
