@@ -3,6 +3,7 @@ package test;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -29,13 +30,12 @@ final class WindowsKey extends JButton {
    }
 
    static final int WIN = KeyEvent.VK_WINDOWS;
-   private static final Color ACCENT = new Color(0, 120, 215);
-   private static final Color ACCENT_TEXT = new Color(110, 186, 255);
-   private static final Color ACCENT_SIDE = new Color(0, 78, 150);
-   private static final Color LIT = new Color(96, 182, 255);
-   private static final Color FACE = new Color(66, 70, 82);
+   static final Color ACCENT_TEXT = new Color(110, 186, 255);
+   static final Color ACCENT_SIDE = new Color(0, 78, 150);
+   static final Color LIT = new Color(96, 182, 255);
+   static final Color FACE = new Color(66, 70, 82);
    private static final Color FACE_HOVER = new Color(82, 87, 102);
-   private static final Color SIDE = new Color(36, 38, 46);
+   static final Color SIDE = new Color(36, 38, 46);
    private static final Color TEXT = new Color(236, 239, 244);
    static final Color BACK = new Color(28, 30, 36);
    private static final int MARGIN = 8;
@@ -218,6 +218,43 @@ final class WindowsKey extends JButton {
       }
    }
 
+   /** a and b mixed, t of the way from a to b. */
+   static Color mix(Color a, Color b, double t) {
+      return new Color((int) Math.round(a.getRed() + (b.getRed() - a.getRed()) * t),
+         (int) Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t), (int) Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t));
+   }
+
+   static Color alpha(Color c, int a) {
+      return new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.max(0, Math.min(255, a)));
+   }
+
+   /**
+    * A backlit keycap, w by h at (x, y): a skirt depth px deep under a face lit from above, with a shallow dish in it
+    * and a bright top edge; sink pushes the face down into the skirt. Light from under the cap (glow 0 to 1) spills
+    * round the skirt in the accent, faint at rest and bright while it is pressed. The key and the shelf's caps share
+    * it, so the window reads as one piece of a backlit keyboard.
+    */
+   static void drawCap(Graphics2D g, int x, int y, int w, int h, int arc, int depth, Color face, Color side, int sink, double glow) {
+      int step = Math.max(1, h / 40);
+      for (int i = 3; i >= 1 && glow > 0; i--) {
+         int out = i * step;
+         g.setColor(alpha(LIT, (int) Math.round(glow * (75 - 20 * i))));
+         g.fillRoundRect(x - out, y + depth - out, w + 2 * out, h - depth + 2 * out, arc + 2 * out, arc + 2 * out);
+      }
+      g.setPaint(new GradientPaint(0, y + depth, mix(side, Color.WHITE, 0.12f), 0, y + h, mix(side, Color.BLACK, 0.3f)));
+      g.fillRoundRect(x, y + depth, w, h - depth, arc, arc);
+      int top = y + sink;
+      int fh = h - depth - 1;
+      g.setPaint(new GradientPaint(0, top, mix(face, Color.WHITE, 0.16f), 0, top + fh, mix(face, Color.BLACK, 0.12f)));
+      g.fillRoundRect(x, top, w, fh, arc, arc);
+      // The dish: darker at its top edge, as if the face curves in.
+      int d = Math.max(2, w / 14);
+      g.setPaint(new GradientPaint(0, top + d, mix(face, Color.BLACK, 0.14f), 0, top + fh - d, mix(face, Color.WHITE, 0.06f)));
+      g.fillRoundRect(x + d, top + d, w - 2 * d, fh - 2 * d, Math.max(2, arc - d), Math.max(2, arc - d));
+      g.setColor(alpha(Color.WHITE, 60));
+      g.drawLine(x + arc / 2, top + 1, x + w - 1 - arc / 2, top + 1);
+   }
+
    int echoArrow() {
       return this.echoArrow;
    }
@@ -251,15 +288,7 @@ final class WindowsKey extends JButton {
       // A chord from the shelf draws the key down too, so it reads as this key plus that one.
       boolean lit = this.down || this.echo != null;
       int sink = lit ? 4 : 0;
-      g.setColor(lit ? ACCENT_SIDE : SIDE);
-      g.fillRoundRect(0, 5, w, h - 5, 16, 16);
-      g.setColor(lit ? LIT : this.hover ? FACE_HOVER : FACE);
-      g.fillRoundRect(0, sink, w, h - 6, 16, 16);
-      if (!lit) {
-         g.setColor(ACCENT);
-         g.setStroke(new BasicStroke(2f));
-         g.drawRoundRect(1, 1, w - 3, h - 9, 14, 14);
-      }
+      drawCap(g, 0, 0, w, h, 16, 5, lit ? LIT : this.hover ? FACE_HOVER : FACE, lit ? ACCENT_SIDE : SIDE, sink, lit ? 1 : this.hover ? 0.6 : 0.35);
       if (this.isFocusOwner()) {
          g.setColor(TEXT);
          g.setStroke(new BasicStroke(1f));
@@ -289,11 +318,14 @@ final class WindowsKey extends JButton {
          int sw = size + 12;
          drawSnap(g, snap, x + size / 2 - sw / 2, y + 2, sw, size - 4, Color.WHITE, Color.WHITE);
       } else {
-         g.setColor(lit ? Color.WHITE : ACCENT_TEXT);
-         g.fillRect(x, y, half, half);
-         g.fillRect(x + half + 3, y, half, half);
-         g.fillRect(x, y + half + 3, half, half);
-         g.fillRect(x + half + 3, y + half + 3, half, half);
+         // A backlit legend: each pane over a soft halo of its own light.
+         Color legend = lit ? Color.WHITE : ACCENT_TEXT;
+         for (int o = 3; o >= 0; o--) {
+            g.setColor(o == 0 ? legend : alpha(legend, 28));
+            for (int p = 0; p < 4; p++) {
+               g.fillRoundRect(x + p % 2 * (half + 3) - o, y + p / 2 * (half + 3) - o, half + 2 * o, half + 2 * o, 2 * o, 2 * o);
+            }
+         }
       }
       if (this.down) {
          // Held, the key shows the four ways it can slide, the one picked lit, so the slide is found by holding it.

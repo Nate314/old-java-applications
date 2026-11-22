@@ -268,8 +268,16 @@ final class ShortcutShelf extends JButton {
       for (int i = 0; i <= HOVER_ROW; i++) {
          Rectangle r = this.rect(i);
          boolean lit = i == this.held;
-         g.setColor(lit ? LIT : i == this.hover ? HOVER : FACE);
-         g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+         boolean arrow = i >= ROWS && i < HOVER_ROW;
+         // An arrow is a key of its own, a keycap like the big key's; the other rows hold a keycap and a name.
+         int sink = arrow && lit ? 2 : 0;
+         if (arrow) {
+            WindowsKey.drawCap(g, r.x, r.y, r.width, r.height, 8, 3, lit ? LIT : i == this.hover ? WindowsKey.mix(WindowsKey.FACE, Color.WHITE, 0.12)
+               : WindowsKey.FACE, lit || held ? WindowsKey.ACCENT_SIDE : WindowsKey.SIDE, sink, lit || held ? 1 : 0.25);
+         } else {
+            g.setColor(lit ? LIT : i == this.hover ? HOVER : FACE);
+            g.fillRoundRect(r.x, r.y, r.width, r.height, 8, 8);
+         }
          // Hover to press: the row fills from the left while the pointer rests on it.
          int fill = (int) Math.round(r.width * this.dwell.progress(i));
          if (fill > 0 && !lit) {
@@ -289,16 +297,17 @@ final class ShortcutShelf extends JButton {
          int capW = i < ROWS ? Math.max(18, g.getFontMetrics().stringWidth(CAPS[i]) + 8) : r.width;
          int base = r.y + (r.height + g.getFontMetrics().getAscent()) / 2 - 2;
          if (i < ROWS) {
-            g.setColor(lit ? Color.WHITE : held ? LIT : CAP);
-            g.fillRoundRect(r.x + 3, r.y + 3, capW, r.height - 6, 6, 6);
+            // A backlit cap: its letter glows in the accent; pressed, or the big key held, the whole cap lights.
+            WindowsKey.drawCap(g, r.x + 3, r.y + 2, capW, r.height - 4, 6, 3, lit ? Color.WHITE : held ? LIT : WindowsKey.FACE,
+               lit || held ? WindowsKey.ACCENT_SIDE : WindowsKey.SIDE, lit ? 2 : 0, lit || held ? 1 : 0.3);
             if (held) {
                // The big key is down: these are the keys to type now.
                g.setColor(Color.WHITE);
                g.setStroke(new BasicStroke(1f));
-               g.drawRoundRect(r.x + 3, r.y + 3, capW - 1, r.height - 7, 6, 6);
+               g.drawRoundRect(r.x + 3, r.y + 2, capW - 1, r.height - 9, 6, 6);
             }
-            g.setColor(Color.WHITE);
-            g.drawString(CAPS[i], r.x + 3 + (capW - g.getFontMetrics().stringWidth(CAPS[i])) / 2, base);
+            g.setColor(lit ? WindowsKey.ACCENT_SIDE : held ? Color.WHITE : WindowsKey.ACCENT_TEXT);
+            g.drawString(CAPS[i], r.x + 3 + (capW - g.getFontMetrics().stringWidth(CAPS[i])) / 2, base - 2 + (lit ? 2 : 0));
             g.setFont(nameFont);
             g.setColor(lit ? Color.WHITE : TEXT);
             g.drawString(NAMES[i], r.x + capW + 8, base);
@@ -309,10 +318,10 @@ final class ShortcutShelf extends JButton {
                g.drawRoundRect(r.x, r.y, r.width - 1, r.height - 1, 8, 8);
             }
             // Where the window goes, over the arrow that sends it there.
-            WindowsKey.drawSnap(g, CODES[i], r.x + 3, r.y + 4, r.width - 6, 13, lit || held || i == this.hover ? Color.WHITE : DIM,
+            WindowsKey.drawSnap(g, CODES[i], r.x + 4, r.y + 4 + sink, r.width - 8, 12, lit || held || i == this.hover ? Color.WHITE : DIM,
                lit ? Color.WHITE : CAP);
-            g.setColor(lit || held ? Color.WHITE : DIM);
-            g.drawString(CAPS[i], r.x + (r.width - g.getFontMetrics().stringWidth(CAPS[i])) / 2, r.y + r.height - 5);
+            g.setColor(lit || held ? Color.WHITE : WindowsKey.ACCENT_TEXT);
+            g.drawString(CAPS[i], r.x + (r.width - g.getFontMetrics().stringWidth(CAPS[i])) / 2, r.y + r.height - 7 + sink);
          }
       }
    }
