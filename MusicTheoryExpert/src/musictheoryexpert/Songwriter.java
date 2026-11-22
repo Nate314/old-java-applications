@@ -1165,15 +1165,19 @@ public final class Songwriter extends JPanel {
 				colors[note] = isBlack(note) ? in ? IN_KEY_BLACK : null : in ? null : OUT_OF_KEY;
 			}
 		}
+		String[] names = new String[HIGH_NOTE + 1];
 		for (int note : sounding) {
 			colors[note] = isBlack(note) ? GOLD_BLACK : GOLD;
+			names[note] = Progression.noteName(note % 12, song.position());
 		}
 		for (int note : soundingBass) {
 			colors[note] = isBlack(note) ? BASS_BLACK : BASS;
+			names[note] = Progression.noteName(note % 12, song.position());
 		}
 		for (int note : player.melodySounding()) {
 			colors[note] = isBlack(note) ? MELODY_BLACK : RIGHT;
+			names[note] = Progression.noteName(note % 12, song.position());
 		}
-		Look.paintKeyboard(g, 16, top, getWidth() - 32, keyboardHeight(), getWidth() < NARROW, colors);
+		Look.paintKeyboard(g, 16, top, getWidth() - 32, keyboardHeight(), getWidth() < NARROW, colors, names);
 	}
 }
