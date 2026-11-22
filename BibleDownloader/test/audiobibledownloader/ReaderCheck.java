@@ -381,7 +381,30 @@ public class ReaderCheck {
       check(!DownloadManager.chapterHtml(chapter, false).contains("<b>"), "verse numbers off");
       check(ReaderPanel.commas(1189).equals("1,189") && ReaderPanel.commas(42).equals("42"), "commas");
       pageTurns();
+      thumbIndex();
       System.out.println("ReaderCheck: all checks passed");
+   }
+
+   /** The thumb index: down an edge of any height, every book in Bible order, each reachable, Genesis at the top and Revelation at the foot. */
+   private static void thumbIndex() {
+      for (int strip = 100; strip <= 1600; strip += 7) {
+         int n = ReaderPanel.tabs(strip);
+         check(n >= 1 && n <= 66 && (n == 66 || strip / n >= ReaderPanel.TAB_H), "tabs at least TAB_H tall: " + strip);
+         check(ReaderPanel.tabFirst(0, n) == 0 && ReaderPanel.tabFirst(n, n) == 66, "tabs cover the books: " + strip);
+         boolean[] seen = new boolean[66];
+         int previous = 0;
+         for (int dy = 0; dy < strip; dy++) {
+            int b = ReaderPanel.bookAtEdge(dy, strip);
+            check(b >= previous && b < 66, "books in order down the edge: " + strip + " at " + dy);
+            seen[b] = true;
+            previous = b;
+         }
+         for (int b = 0; b < 66; b++) {
+            check(seen[b], "every book has a place on the edge: " + Books.NAMES[b] + " at " + strip);
+         }
+         check(ReaderPanel.bookAtEdge(0, strip) == 0 && ReaderPanel.bookAtEdge(strip - 1, strip) == 65, "Genesis at the top, Revelation at the foot: " + strip);
+         check(ReaderPanel.bookAtEdge(-5, strip) == 0 && ReaderPanel.bookAtEdge(strip + 5, strip) == 65, "past the ends: " + strip);
+      }
    }
 
    /** A page turn shows the old pages at its start, the new ones at its end, and the leaf over the spine between. */
