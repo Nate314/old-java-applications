@@ -316,6 +316,22 @@ public class LauncherCheck {
       Files.delete(menu.resolve("icons"));
       Files.delete(menu);
 
+      // Selection moves: eased out (past halfway at a third of the time), ending exactly where they go.
+      check(Glide.at(0, 100) == 0 && Glide.at(100, 100) == 1 && Glide.at(500, 100) == 1 && Glide.at(-5, 100) == 0, "glide ends");
+      check(Glide.at(33, 100) > 0.5 && Glide.at(50, 100) < 1, "glide eases out: " + Glide.at(33, 100));
+      java.awt.Rectangle ringA = new java.awt.Rectangle(0, 0, 100, 200);
+      java.awt.Rectangle ringB = new java.awt.Rectangle(300, 100, 200, 200);
+      check(Glide.between(ringA, ringB, 0).equals(ringA) && Glide.between(ringA, ringB, 1).equals(ringB)
+         && Glide.between(ringA, ringB, 0.5).equals(new java.awt.Rectangle(150, 50, 150, 200)), "ring between cards");
+      check(Glide.between(java.awt.Color.BLACK, new java.awt.Color(200, 100, 50), 0.5).equals(new java.awt.Color(100, 50, 25)),
+         "tone washes between apps");
+      Thumbs fitThumbs = new Thumbs();
+      java.awt.Rectangle landed = fitThumbs.fit(rubik, 12, 12, 275, 176);
+      java.awt.image.BufferedImage rubikPic = fitThumbs.original(rubik);
+      check(landed.width <= 275 && landed.height <= 176 && (landed.width == 275 || landed.height == 176 || landed.width == rubikPic.getWidth())
+         && landed.x == 12 + (275 - landed.width) / 2 && landed.y == 12 + (176 - landed.height) / 2,
+         "the picture lands where the pane draws it: " + landed);
+
       System.out.println("LauncherCheck: all checks passed");
    }
 

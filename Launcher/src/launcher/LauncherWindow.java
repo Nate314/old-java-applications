@@ -14,6 +14,7 @@ import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -97,6 +98,13 @@ public final class LauncherWindow extends JFrame {
    private Catalog.App selected;
    private History history = History.NONE;
    private boolean then;   // Play runs the apps as first restored
+   // A selection move: the ring slides from the last card, the picture flies into the pane and its tone washes in.
+   // shortcut: always moves (the JDK reads no reduced-motion setting on the desktop); add a switch if anyone asks.
+   private final javax.swing.Timer glide = new javax.swing.Timer(15, e -> glideStep());
+   private long glideStart;
+   private Rectangle ringFrom;   // in the grid, null for none to slide from
+   private Rectangle flyFrom;    // in the root pane, null for no flight
+   private Color toneFrom;
 
    public LauncherWindow(List<Catalog.App> apps, PlayLog log, Runner runner, Runner thenRunner, Path root,
          LongSupplier clock, StartMenu start) {
@@ -134,6 +142,7 @@ public final class LauncherWindow extends JFrame {
       content.add(detailScroll, BorderLayout.EAST);
       content.add(statusBar(), BorderLayout.SOUTH);
       setContentPane(content);
+      setGlassPane(new Flight());
       wireKeys();
 
       setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -399,6 +408,7 @@ public final class LauncherWindow extends JFrame {
    }
 
    void select(Catalog.App app, boolean reveal) {
+      if (app != null && app != selected && isDisplayable()) glideFrom(app);
       selected = app;
       detail.show(app);
       for (Tile t : tiles) t.repaint();
@@ -412,6 +422,70 @@ public final class LauncherWindow extends JFrame {
                }
             }
          });
+      }
+   }
+
+   /** Starts a selection move to {@code app} from wherever the ring, picture and tone are now (mid-move too). */
+   private void glideFrom(Catalog.App app) {
+      ringFrom = ring();
+      toneFrom = selected == null ? null : detail.tone();
+      flyFrom = null;
+      Tile t = tileOf(app);
+      Rectangle pic = t == null ? null : t.picture();
+      // Only from a card in view: one scrolled away would fly in over the header or the status line.
+      if (pic != null && t.isVisible() && t.isDisplayable() && t.getVisibleRect().contains(pic) && !then) {
+         flyFrom = SwingUtilities.convertRectangle(t, pic, getRootPane());
+         getGlassPane().setVisible(true);
+      }
+      glideStart = System.currentTimeMillis();
+      glide.start();
+   }
+
+   private double glideAt(int ms) {
+      return glide.isRunning() ? Glide.at(System.currentTimeMillis() - glideStart, ms) : 1;
+   }
+
+   private void glideStep() {
+      Rectangle was = ring();
+      boolean done = System.currentTimeMillis() - glideStart >= Glide.FLY_MS;
+      if (done) {
+         glide.stop();
+         ringFrom = null;
+         flyFrom = null;
+         toneFrom = null;
+         getGlassPane().setVisible(false);
+      }
+      Rectangle now = ring();
+      if (was != null && now != null) grid.repaint(was.union(now));   // only where the ring was and is
+      detail.repaint();
+      getGlassPane().repaint();
+   }
+
+   /** Where the selection ring is drawn in the grid now, or null with no card selected. */
+   private Rectangle ring() {
+      Tile t = tileOf(selected);
+      if (t == null || !t.isVisible()) return null;
+      Rectangle to = t.getBounds();
+      return ringFrom == null ? to : Glide.between(ringFrom, to, glideAt(Glide.RING_MS));
+   }
+
+   private Tile tileOf(Catalog.App app) {
+      for (Tile t : tiles) if (t.app == app) return t;
+      return null;
+   }
+
+   /** Over the window while a picture flies: it draws the picture on its way from the card to the detail pane. */
+   private final class Flight extends JComponent {
+      @Override
+      protected void paintComponent(Graphics g) {
+         Rectangle to = detail.pictureBox();
+         if (flyFrom == null || to == null) return;
+         Graphics2D g2 = Ui.smooth(g);
+         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+         Rectangle r = Glide.between(flyFrom, SwingUtilities.convertRectangle(detail.picture, to, getRootPane()),
+            glideAt(Glide.FLY_MS));
+         g2.drawImage(thumbs.original(selected), r.x, r.y, r.width, r.height, null);
+         g2.dispose();
       }
    }
 
@@ -714,6 +788,19 @@ public final class LauncherWindow extends JFrame {
          g2.dispose();
       }
 
+      /** The selection ring, over the cards so it can slide between them. */
+      @Override
+      protected void paintChildren(Graphics g) {
+         super.paintChildren(g);
+         Rectangle r = ring();
+         if (r == null) return;
+         Graphics2D g2 = Ui.smooth(g);
+         g2.setColor(Ui.ACCENT);
+         g2.setStroke(new BasicStroke(2.5f));
+         g2.drawRoundRect(r.x + 1, r.y + 1, r.width - 3, r.height - 3, 16, 16);
+         g2.dispose();
+      }
+
       @Override
       public Dimension getPreferredScrollableViewportSize() {
          return getPreferredSize();
@@ -743,6 +830,7 @@ public final class LauncherWindow extends JFrame {
    /** One app's card: picture, name, category and how often it was played. Click selects, double-click plays. */
    private final class Tile extends JComponent {
       final Catalog.App app;
+      private static final int PH = 124;   // the picture well's height
       private boolean hover;
 
       Tile(Catalog.App app) {
@@ -779,7 +867,7 @@ public final class LauncherWindow extends JFrame {
          g2.setColor(hover || sel ? Ui.TILE_HOVER : Ui.TILE);
          g2.fillRoundRect(0, 0, w, h, 16, 16);
          // picture well
-         int ph = 124;
+         int ph = PH;
          thumbs.drawGlow(g2, app, 6, 6, w - 12, ph, 12);   // the well takes on the picture's own colors
          thumbs.draw(g2, app, 14, 12, w - 28, ph - 12);
          List<History.Change> fresh = then ? List.of() : news(app);
@@ -814,12 +902,12 @@ public final class LauncherWindow extends JFrame {
             g2.setColor(starting ? Ui.ACCENT : phase != null ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
             g2.drawString(fit(g2, line, w - 24), 12, h - 12);
          }
-         if (sel) {
-            g2.setColor(Ui.ACCENT);
-            g2.setStroke(new BasicStroke(2.5f));
-            g2.drawRoundRect(1, 1, w - 3, h - 3, 16, 16);
-         }
          g2.dispose();
+      }
+
+      /** Where the card's picture sits in it: where a flight to the detail pane starts. */
+      Rectangle picture() {
+         return thumbs.fit(app, 14, 12, getWidth() - 28, PH - 12);
       }
 
       private void badge(Graphics2D g2, int w, String text, Color c) {
@@ -885,8 +973,10 @@ public final class LauncherWindow extends JFrame {
                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
                thenCard(g2, s, getWidth(), getHeight());
             } else {
+               double t = flyFrom == null ? 1 : glideAt(Glide.FLY_MS);   // mid-flight its glow fades in, the picture lands
+               g2.setComposite(java.awt.AlphaComposite.SrcOver.derive((float) t));
                thumbs.drawGlow(g2, app, 0, 0, getWidth(), getHeight(), 16);
-               thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
+               if (t >= 1) thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
             }
             g2.dispose();
          }
@@ -1018,9 +1108,21 @@ public final class LauncherWindow extends JFrame {
          super.paintComponent(g);
          if (app == null) return;
          Graphics2D g2 = (Graphics2D) g.create();
-         g2.setPaint(new GradientPaint(0, 0, thumbs.tone(app), 0, WASH, Ui.PANEL));
+         g2.setPaint(new GradientPaint(0, 0, tone(), 0, WASH, Ui.PANEL));
          g2.fillRect(1, 0, getWidth() - 1, WASH);   // right of the pane's 1 px line
          g2.dispose();
+      }
+
+      /** The wash's color now: the app's tone, or partway there from the last app's while the selection moves. */
+      Color tone() {
+         Color c = thumbs.tone(app);
+         return toneFrom == null ? c : Glide.between(toneFrom, c, glideAt(Glide.FLY_MS));
+      }
+
+      /** Where the picture lands in the well (in the well), or null while the well is squeezed out or shows Then. */
+      Rectangle pictureBox() {
+         if (app == null || !picture.isVisible() || picture.getHeight() < 60 || then) return null;
+         return thumbs.fit(app, 12, 12, picture.getWidth() - 24, picture.getHeight() - 24);
       }
 
       /** As tall as it can shrink to: the picture's full height is spare room, not a reason to scroll. */

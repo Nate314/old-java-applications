@@ -7,6 +7,7 @@ import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -45,12 +46,19 @@ final class Thumbs {
    /** Draws the app's picture centered in the box, as large as fits, never above its own size. */
    void draw(Graphics2D g, Catalog.App app, int x, int y, int w, int h) {
       BufferedImage img = original(app);
+      Rectangle r = fit(app, x, y, w, h);
+      Image pic = scaled.computeIfAbsent(app.id + "@" + r.width + "x" + r.height,
+         k -> r.width == img.getWidth() ? img : img.getScaledInstance(r.width, r.height, Image.SCALE_SMOOTH));
+      g.drawImage(pic, r.x, r.y, null);
+   }
+
+   /** Where {@link #draw} puts the picture in the box. */
+   Rectangle fit(Catalog.App app, int x, int y, int w, int h) {
+      BufferedImage img = original(app);
       double s = Math.min(1.0, Math.min((double) w / img.getWidth(), (double) h / img.getHeight()));
       int sw = Math.max(1, (int) Math.round(img.getWidth() * s));
       int sh = Math.max(1, (int) Math.round(img.getHeight() * s));
-      Image pic = scaled.computeIfAbsent(app.id + "@" + sw + "x" + sh,
-         k -> sw == img.getWidth() ? img : img.getScaledInstance(sw, sh, Image.SCALE_SMOOTH));
-      g.drawImage(pic, x + (w - sw) / 2, y + (h - sh) / 2, null);
+      return new Rectangle(x + (w - sw) / 2, y + (h - sh) / 2, sw, sh);
    }
 
    /** Fills a rounded box with the picture's glow: the picture covering the box, blurred and dimmed. */
