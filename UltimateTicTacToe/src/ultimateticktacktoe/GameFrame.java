@@ -5,6 +5,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridLayout;
 import java.awt.FontMetrics;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
@@ -24,6 +25,9 @@ public final class GameFrame extends JFrame {
    private static final File RECORD_FILE = new File(System.getProperty("user.home", "."), ".ultimatetictactoe-record.txt");
    /** Room for the mode buttons, the status line and the record line (or the friend row), taken from the board so the window fits the screen. */
    private static final int BARS_HEIGHT = 96;
+   /** On a wide, short screen the bars go in a column beside the board (at least this wide, at most COLUMN_MAX), which takes their height instead. */
+   private static final int COLUMN_MIN = 300;
+   private static final int COLUMN_MAX = 340;
    /** Space between the buttons of a row. */
    private static final int GAP = 6;
    /** How long the hard computer searches for a move. */
@@ -50,8 +54,8 @@ public final class GameFrame extends JFrame {
    private final JLabel status = new JLabel(" ", SwingConstants.CENTER);
    /** The record against the computer on this level; blank in two-player games. */
    private final JLabel tally = new JLabel(" ", SwingConstants.CENTER);
-   /** The board's width, which the record line (with the button beside it) must fit in. */
-   private int boardWidth;
+   /** The bars' width (the board's, or the column's beside it), which the record line (with the button beside it) must fit in. */
+   private int barsWidth;
    private final Random random = new Random();
    private final Timer computerTimer = new Timer(MOVE_DELAY_MILLIS, event -> this.computerMove());
    /** Hard and Watch: the computer's search, grown a slice per tick so the board shows where it is looking (and the page never waits long); null when it is not thinking. */
@@ -162,10 +166,13 @@ public final class GameFrame extends JFrame {
       this.setResizable(false);
       // 3/4 of the screen height, but no wider than the screen, so the board also fits a narrow (portrait) browser window.
       Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-      int boardArea = Math.min(screen.width - 24, screen.height * 3 / 4 - BARS_HEIGHT);
-      int boardSize = boardArea / 3;
+      int stacked = Math.min(screen.width - 24, screen.height * 3 / 4 - BARS_HEIGHT);
+      // A landscape screen often has room beside the board: the bars move into a column there and the board takes their height.
+      int beside = Math.min(screen.height * 3 / 4, screen.width - 24 - COLUMN_MIN - GAP * 4);
+      boolean column = beside > stacked;
+      int boardSize = Math.max(stacked, beside) / 3;
       int gap = Math.max(4, boardSize / 28);
-      this.boardWidth = boardSize * 3;
+      this.barsWidth = column ? Math.min(COLUMN_MAX, screen.width - 24 - GAP * 4 - boardSize * 3) : boardSize * 3;
       JPanel grid = new JPanel();
       grid.setLayout(null);
       grid.setPreferredSize(new Dimension(boardSize * 3, boardSize * 3));
@@ -176,8 +183,8 @@ public final class GameFrame extends JFrame {
       }
 
       // The mode buttons and the review's chart share the top slot; only one shows at a time.
-      this.modeBar = this.modeBar(boardSize * 3);
-      Dimension topSize = new Dimension(boardSize * 3, this.modeBar.getPreferredSize().height);
+      this.modeBar = this.modeBar(this.barsWidth, column);
+      Dimension topSize = new Dimension(this.barsWidth, this.modeBar.getPreferredSize().height);
       this.graph = new ReviewGraph(this, topSize);
       JPanel top = new JPanel(new BorderLayout());
       top.setPreferredSize(topSize);
@@ -186,8 +193,7 @@ public final class GameFrame extends JFrame {
       this.layoutLessonBar();
       top.add(this.lessonBar, BorderLayout.SOUTH);
       this.graph.setVisible(false);
-      this.add(top, BorderLayout.NORTH);
-      JPanel gridHolder = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+      JPanel gridHolder = new JPanel(new FlowLayout(FlowLayout.CENTER, column ? GAP * 2 : 0, 0));
       gridHolder.add(grid);
       this.add(gridHolder, BorderLayout.CENTER);
       JPanel statusLines = new JPanel(new BorderLayout());
@@ -198,21 +204,30 @@ public final class GameFrame extends JFrame {
       statusLines.add(this.status, BorderLayout.NORTH);
       // The record line and the friend row share one slot, as tall as the row, and only one shows at a time.
       JPanel lower = new JPanel(new BorderLayout());
-      this.layoutFriendRow(boardSize * 3);
-      lower.setPreferredSize(new Dimension(boardSize * 3, this.friendRow.getPreferredSize().height));
+      this.layoutFriendRow(this.barsWidth);
+      lower.setPreferredSize(new Dimension(this.barsWidth, this.friendRow.getPreferredSize().height));
       lower.add(this.tally, BorderLayout.CENTER);
       lower.add(this.friendRow, BorderLayout.SOUTH);
       this.layoutReviewRow();
       lower.add(this.reviewButtonHolder, BorderLayout.EAST);
       lower.add(this.reviewRow, BorderLayout.NORTH);
       statusLines.add(lower, BorderLayout.SOUTH);
-      this.add(statusLines, BorderLayout.SOUTH);
+      // Beside the board, the buttons line up with its top edge and the status lines with its bottom edge.
+      JPanel side = new JPanel(new BorderLayout());
+      if (column) {
+         side.add(top, BorderLayout.NORTH);
+         side.add(statusLines, BorderLayout.SOUTH);
+         this.add(side, BorderLayout.EAST);
+      } else {
+         this.add(top, BorderLayout.NORTH);
+         this.add(statusLines, BorderLayout.SOUTH);
+      }
       // A friend's link or code from the arguments, unless it is this game before this side answered it (the page reloaded).
       if (code != null && !(this.mode == Mode.FRIEND && this.moves.startsWith(code) && this.moves.length() > code.length())) {
          this.openFriendGame(code);
       }
       // The whole window sits on the boards' dark color.
-      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), this.modeBar, top, gridHolder, grid, statusLines, lower, this.friendRow, this.reviewButtonHolder, this.reviewRow, this.lessonBar}) {
+      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), this.modeBar, top, side, gridHolder, grid, statusLines, lower, this.friendRow, this.reviewButtonHolder, this.reviewRow, this.lessonBar}) {
          panel.setBackground(CellButton.BACKGROUND);
       }
       this.refresh();
@@ -220,9 +235,9 @@ public final class GameFrame extends JFrame {
       this.setVisible(true);
    }
 
-   /** One button per mode; the current one is lit. Short labels where the full ones are wider than the board. */
-   private JPanel modeBar(int width) {
-      JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
+   /** One button per mode; the current one is lit. Short labels where the full ones are wider than the board. In a column, two to a row. */
+   private JPanel modeBar(int width, boolean column) {
+      JPanel bar = new JPanel(column ? new GridLayout(0, 2, GAP, GAP) : new FlowLayout(FlowLayout.CENTER, GAP, 4));
       for (Mode choice : Mode.values()) {
          JButton button = new JButton(choice.label);
          button.setFocusable(false);
@@ -248,7 +263,13 @@ public final class GameFrame extends JFrame {
       if (bar.getPreferredSize().width > width) {
          bar.remove(this.soundButton);   // no room on a short screen: M still works
       }
-      return bar;
+      if (!column) {
+         return bar;
+      }
+      JPanel holder = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 4));
+      bar.setBackground(CellButton.BACKGROUND);
+      holder.add(bar);
+      return holder;
    }
 
    /** The friend row: the field takes what the buttons leave of the board's width. Enter in the field opens it, like Open. */
@@ -794,7 +815,7 @@ public final class GameFrame extends JFrame {
 
    /** Shows the first of the lines (longest first) that fits beside the button on the record line, the full one as its tooltip. */
    private void fitTally(String[] lines, boolean withButton) {
-      int room = this.boardWidth - (withButton ? this.reviewButtonHolder.getPreferredSize().width : 0) - GAP * 2;
+      int room = this.barsWidth - (withButton ? this.reviewButtonHolder.getPreferredSize().width : 0) - GAP * 2;
       FontMetrics metrics = this.tally.getFontMetrics(this.tally.getFont());
       String fit = lines[lines.length - 1];
       for (String line : lines) {
