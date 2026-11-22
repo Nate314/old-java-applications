@@ -187,6 +187,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
          }
       }
       this.gallery = new Gallery(this.savers, this.index());
+      this.gallery.music = this.music;
       this.captionLeft = 0;
       this.fadeLeft = 0;
    }
@@ -204,6 +205,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    /** Leaves the gallery on saver index, growing it from its cell; picking one (stay) stops the cycling, as 1-9 do. */
    private void pick(int index, boolean stay) {
+      this.play = false;
       this.zoomFrom = this.gallery.cell(index);
       // Calm: the picked saver is simply there, without growing out of its cell.
       this.zoomLeft = this.zoomFrom == null || calm() ? 0 : Gallery.ZOOM_MILLIS;
@@ -218,6 +220,31 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       this.pickedMillis = System.currentTimeMillis();
       this.firstMouse = null;
       this.settings.save();
+   }
+
+   /** Picked by its Play badge (or T on the wall): straight into play with it, the mouse its to play with. */
+   private void pickToPlay(int index) {
+      this.pick(index, true);
+      this.play = true;
+   }
+
+   /** A button along the bottom of the wall: every saver in turn, music on or off, or close. */
+   private void press(int button) {
+      if (button == Gallery.TURNS) {
+         this.settings.cycle = true;
+         this.pick(this.gallery.selected, false);
+      } else if (button == Gallery.MUSIC) {
+         this.gallery.music = this.music = !this.music;
+      } else {
+         this.kill();
+      }
+   }
+
+   /** The Done chip, top right while playing, so a finger (with no keyboard for T) can stop playing and get back to the wall. */
+   private Rectangle done(int width, int height) {
+      int size = Gallery.textSize(width, height);
+      int margin = Math.max(8, Math.min(width, height) / 40);
+      return new Rectangle(width - margin - size * 5, margin, size * 5, size * 2);
    }
 
    private boolean justPicked() {
@@ -247,6 +274,10 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       }
       if (this.captionLeft > 0) {
          this.paintCaption(g, width, height);
+      }
+      if (this.playing()) {
+         Font font = new Font(Font.SANS_SERIF, Font.BOLD, Gallery.textSize(width, height));
+         Gallery.paintButton(g, this.done(width, height), "Done", false, font);
       }
    }
 
@@ -297,7 +328,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       if (!this.play) {
          return "Move the mouse to see all ten   Esc: close   T: play with it";
       }
-      return "Playing: " + playHint(this.saver) + "   T: hands off   Esc: close";
+      return "Playing: " + playHint(this.saver) + "   Done or T: back to watching   Esc: close";
    }
 
    /** What the mouse does to each saver in play (T). */
@@ -428,6 +459,12 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       Gallery g = this.gallery;
       if (keyCode == KeyEvent.VK_G) {
          this.pick(this.index(), false);
+      } else if (keyCode == KeyEvent.VK_T) {
+         this.pickToPlay(g.selected);
+      } else if (keyCode == KeyEvent.VK_M) {
+         this.press(Gallery.MUSIC);
+      } else if (keyCode == KeyEvent.VK_C) {
+         this.press(Gallery.TURNS);
       } else if (keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE) {
          this.pick(g.selected, true);
       } else if (keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_9) {
@@ -447,7 +484,13 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
 
    /** Any click wakes the saver to the wall, except in the gallery (where letting go picks) and just after a pick. */
    private void clicked(MouseEvent e, boolean release) {
-      if (this.playing()) {
+      if (this.playing() && this.done(this.screen.getWidth(), this.screen.getHeight()).contains(e.getX(), e.getY())) {
+         if (release) {
+            this.saver.touch(null, false);
+            this.play = false;
+            this.wake(false);
+         }
+      } else if (this.playing()) {
          this.saver.touch(e.getPoint(), !release);
       } else if (this.gallery != null) {
          if (release && this.wakeHeld) {
@@ -455,8 +498,14 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
             return;
          }
          this.wakeHeld = this.wakeHeld && release;
+         int button = release ? this.gallery.button(e.getX(), e.getY()) : -1;
+         int toPlay = release ? this.gallery.playAt(e.getX(), e.getY()) : -1;
          int index = release ? this.gallery.at(e.getX(), e.getY()) : -1;
-         if (index >= 0) {
+         if (button >= 0) {
+            this.press(button);
+         } else if (toPlay >= 0) {
+            this.pickToPlay(toPlay);
+         } else if (index >= 0) {
             this.pick(index, true);
          }
       } else if (!this.justPicked()) {
