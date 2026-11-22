@@ -26,7 +26,14 @@ public abstract class TGraphics2D extends TGraphics {
 
     public abstract void drawString(String str, float x, float y);
 
-    // shortcut: only Rectangle is a TShape, add paths when an app draws another shape
+    public abstract void setPaint(TPaint paint);
+
+    public abstract TPaint getPaint();
+
+    /** Narrows the clip to the shape (null drops it). */
+    public abstract void clip(TShape s);
+
+    // shortcut: any other shape draws as its bounds (TCanvasGraphics draws Polygon and QuadCurve2D), add paths when an app needs one
     public void draw(TShape s) {
         TRectangle r = s.getBounds();
         drawRect(r.x, r.y, r.width, r.height);

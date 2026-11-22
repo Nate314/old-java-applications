@@ -49,6 +49,28 @@ public abstract class TGraphics {
 
     public abstract void fillPolygon(int[] xPoints, int[] yPoints, int nPoints);
 
+    public void drawPolygon(TPolygon p) {
+        drawPolygon(p.xpoints, p.ypoints, p.npoints);
+    }
+
+    public void fillPolygon(TPolygon p) {
+        fillPolygon(p.xpoints, p.ypoints, p.npoints);
+    }
+
+    /** Drawing is kept inside this rectangle (in user space now; later transforms do not move it), as in AWT. */
+    public abstract void setClip(int x, int y, int width, int height);
+
+    /** null drops the clip. */
+    public abstract void setClip(TShape clip);
+
+    public abstract TShape getClip();
+
+    /** Narrows the clip to its overlap with this rectangle (or sets it, when there is none). */
+    public abstract void clipRect(int x, int y, int width, int height);
+
+    /** The clip's box in user space, or null with no clip. */
+    public abstract TRectangle getClipBounds();
+
     public abstract void drawString(String str, int x, int y);
 
     public abstract boolean drawImage(TImage img, int x, int y, TImageObserver observer);

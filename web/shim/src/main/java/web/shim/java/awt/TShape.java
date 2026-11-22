@@ -1,6 +1,6 @@
 package web.shim.java.awt;
 
-/** Only rectangles are shapes here; Graphics2D.draw and fill accept nothing else. */
+/** java.awt.Shape: Rectangle, Polygon and QuadCurve2D here; Graphics2D draws others as their bounds. */
 public interface TShape {
     TRectangle getBounds();
 }
