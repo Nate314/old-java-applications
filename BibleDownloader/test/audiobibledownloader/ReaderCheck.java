@@ -149,6 +149,36 @@ public class ReaderCheck {
       check(pages.get(third).lastVerse >= 3 && (third == 0 || pages.get(third - 1).lastVerse < 3), "verse 3 is first shown on page " + third);
       check(Layout.pageOf(pages, 1) == 0 && Layout.pageOf(pages, 99) == pages.size() - 1, "page of a verse");
 
+      // Poetry: a poem's line breaks are kept, each verse's first line leads and its later lines stand in, a line too
+      // long for the page runs on further in, and prose after a poem starts a line of its own.
+      Chapter psalm23 = Chapter.parse(Books.find("PSA"), 23, "web", "{\"verses\":[{\"verse\":1,\"text\":\"" + long1.substring(0, 300).trim()
+         + "\\n\"},{\"verse\":2,\"text\":\"He makes me lie down:\\n  he leads  me.\\n\"},{\"verse\":3,\"text\":\"He restores my soul;\\n"
+         + "he guides me in the paths of righteousness, for his name's sake, all the long day and night.\\n\"},"
+         + "{\"verse\":4,\"text\":\"Then plain prose.\"}]}");
+      check(psalm23.lines[1].equals("He makes me lie down:\nhe leads me.") && psalm23.verses[1].equals("He makes me lie down: he leads me."),
+         "a poem's lines kept, folded for the rest: " + psalm23.lines[1]);
+      Chapter stray = Chapter.parse(Books.find("PSA"), 23, "kjv", "{\"verses\":[{\"verse\":1,\"text\":\"The LORD\\nis my shepherd\\n\"},"
+         + "{\"verse\":2,\"text\":\"He maketh me\"},{\"verse\":3,\"text\":\"for thou\\nart\"}]}");
+      check(stray.lines[0].equals("The LORD is my shepherd") && stray.lines[2].equals("for thou art"), "a lone break is no poem: " + stray.lines[0]);
+      List<Layout.Page> poem = Layout.paginate(psalm23, body, metrics(new Font("SansSerif", Font.BOLD, 10)), metrics(new Font("Serif", Font.BOLD, 51)), 320, 30);
+      int step = body.stringWidth(Layout.STEP);
+      int poemWords = 0;
+      for (Layout.Run run : poem.get(0).runs) {
+         poemWords += run.kind == Layout.WORD ? 1 : 0;
+         check(run.kind != Layout.WORD || run.x + run.width <= 320, "poem word inside the width");
+      }
+      check(poem.size() == 1 && poemWords == psalm23.verses[0].split(" ").length + 8 + 22 + 3, "every poem word placed once: " + poemWords);
+      check(startsLine(poem.get(0), "2", 0) && startsLine(poem.get(0), "he", step) && startsLine(poem.get(0), "3", 0)
+         && startsLine(poem.get(0), "4", 0), "verses lead, later lines stand in, prose after a poem on its own line");
+      Layout.Run turnover = null;
+      for (Layout.Run run : poem.get(0).runs) {
+         if (run.verse == 3 && turnover == null && run.line > firstLine(poem.get(0), 3) + 1) {
+            turnover = run;
+         }
+      }
+      check(turnover != null && turnover.x == body.stringWidth(Layout.HANG), "a long poem line runs on further in: " + (turnover == null ? "none" : turnover.x));
+      check(rightEdge(poem.get(0), firstLine(poem.get(0), 3) + 1) < 320, "poem lines stay ragged");
+
       // Side by side: two translations verse by verse. Pages come in pairs, each verse starts on the same line of
       // both pages, every word of both is placed once, and a verse only one translation has still gets its place.
       Chapter beside = new Chapter(Books.find("LUK"), 1, "kjv", new int[]{1, 2, 4},
@@ -503,6 +533,17 @@ public class ReaderCheck {
          }
       }
       return edge;
+   }
+
+   /** Whether some run with this text is the first on its line, at x. */
+   private static boolean startsLine(Layout.Page page, String text, int x) {
+      for (int i = 0; i < page.runs.size(); i++) {
+         Layout.Run run = page.runs.get(i);
+         if (run.text.equals(text) && run.x == x && (i == 0 || page.runs.get(i - 1).line != run.line)) {
+            return true;
+         }
+      }
+      return false;
    }
 
    private static int firstLine(Layout.Page page, int verse) {
