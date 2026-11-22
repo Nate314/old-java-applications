@@ -47,7 +47,7 @@ public final class CatchPanel extends JPanel {
    private static final Color CARD = new Color(20, 26, 70, 235);
    private static final Color BAD = new Color(255, 90, 90);
 
-   private enum Screen { MENU, INTRO, PLAYING, RESULT }
+   private enum Screen { MENU, INTRO, PLAYING, PAUSED, RESULT }
 
    /** A short-lived ring and label where a click landed. */
    private static final class Effect {
@@ -94,9 +94,14 @@ public final class CatchPanel extends JPanel {
    final Rectangle againButton = new Rectangle();
    final Rectangle nextButton = new Rectangle();
    final Rectangle menuButton = new Rectangle();
+   /** The pause button at the right of the bar, and the paused card's Resume. */
+   final Rectangle pauseButton = new Rectangle();
+   final Rectangle resumeButton = new Rectangle();
    private final boolean[] arrows = new boolean[4];
    private final Timer timer;
    private Screen screen = Screen.MENU;
+   /** The screen a pause came from (the intro card or the night), so Resume goes back to it. */
+   private Screen pausedFrom = Screen.PLAYING;
    private Night selected;
    CatchGame game;
    /** The clock just before the last black hole, and the seconds since it. */
@@ -131,6 +136,9 @@ public final class CatchPanel extends JPanel {
       this.columns = this.narrow ? 2 : 3;
       this.netX = this.w / 2.0;
       this.netY = this.hud + (this.h - this.hud) / 2.0;
+      // A 44 px square on a phone, the size a thumb needs; 40 px in the 46 px bar on a wide screen.
+      int pause = this.narrow ? 44 : 40;
+      this.pauseButton.setBounds(this.w - pause - 8, (this.hud - pause) / 2, pause, pause);
       this.setPreferredSize(new Dimension(this.w, this.h));
       this.setFocusable(true);
       this.sky = new StarField(this.selected.mode(), new Dimension(this.w, this.h - this.hud), 90, 5, false);
@@ -210,8 +218,18 @@ public final class CatchPanel extends JPanel {
          } else if (confirm || code == KeyEvent.VK_N) {
             this.start(this.selected);
          }
+      } else if (this.screen == Screen.PAUSED) {
+         if (confirm || code == KeyEvent.VK_P) {
+            this.resume();
+         } else if (code == KeyEvent.VK_R) {
+            this.start(this.game.night());
+         } else if (toMenu) {
+            this.screen = Screen.MENU;
+         }
       } else if (this.screen == Screen.INTRO || this.screen == Screen.PLAYING) {
-         if (this.arrow(code, true)) {
+         if (code == KeyEvent.VK_P) {
+            this.pause();
+         } else if (this.arrow(code, true)) {
             this.netShown = true;
          } else if (confirm && this.screen == Screen.PLAYING) {
             this.netShown = true;
@@ -231,6 +249,21 @@ public final class CatchPanel extends JPanel {
          }
       }
       this.repaint();
+   }
+
+   /** Stops the clock and shows the paused card, with Resume, Again and Nights. */
+   void pause() {
+      if (this.screen == Screen.INTRO || this.screen == Screen.PLAYING) {
+         this.pausedFrom = this.screen;
+         this.screen = Screen.PAUSED;
+         java.util.Arrays.fill(this.arrows, false);
+      }
+   }
+
+   private void resume() {
+      if (this.screen == Screen.PAUSED) {
+         this.screen = this.pausedFrom;
+      }
    }
 
    /** Moves the menu's choice, skipping nights that are still locked. */
@@ -270,8 +303,18 @@ public final class CatchPanel extends JPanel {
                this.start(Night.values()[i]);
             }
          }
+      } else if ((this.screen == Screen.INTRO || this.screen == Screen.PLAYING) && this.pauseButton.contains(x, y)) {
+         this.pause();
       } else if (this.screen == Screen.PLAYING) {
          this.catchAt(x, y);
+      } else if (this.screen == Screen.PAUSED) {
+         if (this.resumeButton.contains(x, y) || this.pauseButton.contains(x, y)) {
+            this.resume();
+         } else if (this.againButton.contains(x, y)) {
+            this.start(this.game.night());
+         } else if (this.menuButton.contains(x, y)) {
+            this.screen = Screen.MENU;
+         }
       } else if (this.screen == Screen.RESULT) {
          if (this.againButton.contains(x, y)) {
             this.start(this.game.night());
@@ -324,6 +367,10 @@ public final class CatchPanel extends JPanel {
 
    /** Moves everything on by a number of seconds. */
    void advance(double seconds) {
+      if (this.screen == Screen.PAUSED) {
+         // Everything holds still while paused: the clock, the stars and black holes, the effects and the sky.
+         return;
+      }
       this.spin += seconds;
       this.penaltyAge += seconds;
       this.screenSeconds += seconds;
@@ -388,6 +435,8 @@ public final class CatchPanel extends JPanel {
       this.drawFlyers(g);
       if (this.screen == Screen.INTRO) {
          this.drawIntro(g);
+      } else if (this.screen == Screen.PAUSED) {
+         this.drawPaused(g);
       } else if (this.screen == Screen.RESULT) {
          this.drawResult(g);
       }
@@ -484,7 +533,7 @@ public final class CatchPanel extends JPanel {
          // On a phone the HUD's second row is the catch count, and there are no keys to name.
          g.setFont(new Font("SansSerif", Font.PLAIN, 12));
          g.setColor(DIM);
-         g.drawString("Esc: nights   R: restart", 12, 37);
+         g.drawString("P: pause   Esc: nights   R: restart", 12, 37);
       }
 
       // Catch count: one small star per gold star to catch, lit once its caught star has flown in, popping as it lands.
@@ -510,8 +559,9 @@ public final class CatchPanel extends JPanel {
       g.drawString(this.game.caught() + " / " + goal, left + goal * step + 8, countY + 5);
 
       // The clock: a bar that empties, red in the last five seconds, with the stars thresholds marked.
-      int barW = this.narrow ? 140 : 158;
-      int barX = this.narrow ? this.w - 12 - barW : 470;
+      // The bar ends left of the pause button.
+      int barW = this.narrow ? Math.min(140, this.w - 220) : 150;
+      int barX = this.pauseButton.x - 8 - barW;
       int barY = this.narrow ? 8 : 14;
       double left10 = Math.min(Night.SECONDS, this.game.secondsLeft());
       g.setColor(new Color(40, 46, 96));
@@ -541,7 +591,36 @@ public final class CatchPanel extends JPanel {
       if (this.game.combo() >= 3 && this.screen == Screen.PLAYING) {
          g.setColor(GOLD);
          String combo = "Combo x" + this.game.combo();
-         g.drawString(combo, this.narrow ? this.w - 12 - metrics.stringWidth(combo) : left + goal * step + 58, countY + 5);
+         // On a phone right of the count, left of the pause button; on a wide screen under the count, clear of the bar.
+         if (this.narrow) {
+            g.drawString(combo, this.pauseButton.x - 8 - metrics.stringWidth(combo), countY + 5);
+         } else {
+            g.drawString(combo, left, 43);
+         }
+      }
+      this.drawPauseButton(g);
+   }
+
+   /** Two bars while the night runs, a gold play triangle while paused; none on the result card. */
+   private void drawPauseButton(Graphics2D g) {
+      if (this.screen == Screen.RESULT) {
+         return;
+      }
+      Rectangle b = this.pauseButton;
+      boolean paused = this.screen == Screen.PAUSED;
+      g.setColor(paused ? GOLD : new Color(44, 52, 110));
+      g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+      g.setColor(paused ? GOLD_EDGE : new Color(90, 100, 180));
+      g.drawRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+      int cx = b.x + b.width / 2;
+      int cy = b.y + b.height / 2;
+      if (paused) {
+         g.setColor(new Color(40, 24, 0));
+         g.fillPolygon(new int[]{cx - 6, cx - 6, cx + 9}, new int[]{cy - 9, cy + 9, cy}, 3);
+      } else {
+         g.setColor(TEXT);
+         g.fillRoundRect(cx - 8, cy - 9, 6, 18, 2, 2);
+         g.fillRoundRect(cx + 2, cy - 9, 6, 18, 2, 2);
       }
    }
 
@@ -555,8 +634,8 @@ public final class CatchPanel extends JPanel {
    }
 
    private int step(int goal) {
-      // On a phone the count leaves room on its right for "15 / 15" and the combo.
-      return Math.min(16, (this.narrow ? this.w - 150 : 200) / goal);
+      // The count leaves room on its right for "15 / 15" (and on a phone the combo) before the clock bar.
+      return Math.min(16, (this.narrow ? this.w - 190 : 190) / goal);
    }
 
    /** The middle of a place in the catch count. */
@@ -719,6 +798,37 @@ public final class CatchPanel extends JPanel {
          this.button(g, this.againButton, cardX + 70, buttonY, 120, "Again (R)", true);
          this.button(g, this.menuButton, cardX + 210, buttonY, 120, "Nights (Esc)", false);
       }
+   }
+
+   /** The paused card: what is left of the night, then Resume, Again and Nights. */
+   private void drawPaused(Graphics2D g) {
+      Night night = this.game.night();
+      // The field goes dark, so a pause is no time to study where the stars are.
+      g.setColor(new Color(8, 12, 40, 215));
+      g.fillRect(0, this.hud, this.w, this.h - this.hud);
+      int cardW = Math.min(400, this.w - 24);
+      int cardX = (this.w - cardW) / 2;
+      int cardY = this.h / 2 - 100;
+      g.setColor(CARD);
+      g.fillRoundRect(cardX, cardY, cardW, 190, 20, 20);
+      g.setColor(new Color(90, 100, 180));
+      g.drawRoundRect(cardX, cardY, cardW, 190, 20, 20);
+      g.setFont(new Font("SansSerif", Font.BOLD, 26));
+      g.setColor(GOLD);
+      this.drawCentered(g, "Paused", cardY + 44);
+      g.setFont(new Font("SansSerif", Font.PLAIN, 14));
+      g.setColor(TEXT);
+      int more = night.goal() - this.game.caught();
+      this.drawCentered(g, more + (more == 1 ? " gold star" : " gold stars") + " to go, " + String.format("%.1f", this.game.secondsLeft()) + " s left", cardY + 80);
+      g.setColor(DIM);
+      g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+      this.drawCentered(g, "The clock waits until you resume", cardY + 103);
+      int bw = this.narrow ? (cardW - 40 - 20) / 3 : 110;
+      int x = cardX + (cardW - 3 * bw - 20) / 2;
+      int y = cardY + 130;
+      this.button(g, this.resumeButton, x, y, bw, this.narrow ? "Resume" : "Resume (P)", true);
+      this.button(g, this.againButton, x + bw + 10, y, bw, this.narrow ? "Again" : "Again (R)", false);
+      this.button(g, this.menuButton, x + 2 * (bw + 10), y, bw, this.narrow ? "Nights" : "Nights (Esc)", false);
    }
 
    private void button(Graphics2D g, Rectangle bounds, int x, int y, int width, String label, boolean primary) {
