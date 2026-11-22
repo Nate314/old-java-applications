@@ -72,6 +72,10 @@ const NET = { offline: false, latency: 150, downloadThroughput: 1.6e6 / 8, uploa
 let chrome, ws, failed = 0;
 const median = xs => { const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 console.assert(median([3, 1, 2]) === 2 && median([4, 1, 3, 2]) === 2.5, 'median');
+// A load that finished with under half the requests the page usually makes (one round 75 home load: 4 of ~58) measured
+// only part of the page, so it is dropped and loaded again. usual = median of the site's loads, warm-up included.
+const short = (req, usual) => req < usual / 2;
+console.assert(short(4, median([58, 4, 57])) && !short(48, median([58, 57, 4])) && !short(58, median([4, 58])), 'short');
 const METRICS = [['fcp', 'FCP ms'], ['lcp', 'LCP ms'], ['cls', 'CLS'], ['tbt', 'TBT ms'], ['kb', 'KB'], ['req', 'requests']].concat(opt.Tap ? [['inp', 'INP ms']] : []);
 const fmt = (k, x) => k === 'cls' ? x.toFixed(3) : String(Math.round(x));
 
@@ -151,17 +155,28 @@ try {
   const t0 = Date.now();
   console.log('Phone 412x823 @2x, Slow 4G, 4x CPU, cold; ' + RUNS + ' run(s) per page' + (opt.Before ? ', before = ' + sites[0] + ', after = ' + sites[1] : ', ' + sites[0]));
   for (const path of PAGES) {
-    const runs = sites.map(() => []);
-    for (let i = 0; i < sites.length; i++) await load(base(i) + path).catch(() => { });   // warm-up, not counted
+    const runs = sites.map(() => []), warm = [];
+    for (let i = 0; i < sites.length; i++) warm[i] = await load(base(i) + path).catch(() => null);   // warm-up, not counted
+    const name = (i, n) => (opt.Before ? (i ? 'after ' : 'before') + ' ' : '') + path + ' #' + n;
+    const measure = async (i, n) => {
+      try {
+        const v = await load(base(i) + path);
+        runs[i].push({ ...v, n });
+        console.log('  ' + name(i, n) + ': ' + METRICS.map(([k, n]) => n + ' ' + fmt(k, v[k])).join(', ') + ', LCP ' + v.lcpEl + (v.tapped ? ' (' + v.tapped + ')' : ''));
+      } catch (e) { failed++; console.log('  FAIL ' + path + ' #' + n + ': ' + e.message); }
+    };
     for (let r = 0; r < RUNS; r++) {
       const order = sites.map((_, i) => i);
       if (r % 2) order.reverse();   // ABBA: before first, then after first
-      for (const i of order) {
-        try {
-          const v = await load(base(i) + path);
-          runs[i].push(v);
-          console.log('  ' + (opt.Before ? (i ? 'after ' : 'before') + ' ' : '') + path + ' #' + (r + 1) + ': ' + METRICS.map(([k, n]) => n + ' ' + fmt(k, v[k])).join(', ') + ', LCP ' + v.lcpEl + (v.tapped ? ' (' + v.tapped + ')' : ''));
-        } catch (e) { failed++; console.log('  FAIL ' + path + ' #' + (r + 1) + ': ' + e.message); }
+      for (const i of order) await measure(i, r + 1);
+    }
+    for (let i = 0; i < sites.length; i++) {
+      const usual = median(runs[i].concat(warm[i] || []).map(v => v.req));
+      for (let j = 0, n = RUNS; j < runs[i].length; j++) {
+        if (!short(runs[i][j].req, usual)) continue;
+        console.log('  dropped ' + name(i, runs[i][j].n) + ': ' + runs[i][j].req + ' requests, usually ' + Math.round(usual));
+        runs[i].splice(j--, 1);
+        if (n < 2 * RUNS) await measure(i, ++n);   // at most RUNS reloads per site, so a page that keeps loading short still ends
       }
     }
     console.log(path + ' (median)');
