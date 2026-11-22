@@ -105,8 +105,10 @@ public final class Board extends JPanel {
 		this.records = records;
 		this.modeChanged = modeChanged;
 		setBackground(BACKGROUND);
-		int width = Math.max(340, Math.min(WIDTH, Toolkit.getDefaultToolkit().getScreenSize().width - 24));
-		narrow = width < WIDTH;
+		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+		// The tall narrow board only where it fits upright (a phone); a short screen, like a small embed, gets the wide board scaled to fit.
+		narrow = screen.width - 24 < WIDTH && screen.height >= NARROW_HEIGHT + 80;
+		int width = narrow ? Math.max(340, screen.width - 24) : WIDTH;
 		setPreferredSize(new Dimension(width, narrow ? NARROW_HEIGHT : HEIGHT));
 		setFocusable(true);
 		MouseAdapter mouse = new MouseAdapter() {
