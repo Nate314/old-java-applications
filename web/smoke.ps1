@@ -93,11 +93,8 @@ function Get-Unnamed {
 }
 # Unnamed controls each page had when the check came in (round 68, 960x600); a page fails with more, so a new one
 # must get a name (aria-label, a label, setLabelFor in the shim). Lower a number when one of them gets its name.
-$KnownUnnamed = @{
-    'CircleSpawner' = 1; 'CircleSpawner ?embed' = 1; 'CircleSpawner ?embed&full' = 1   # the color combo box
-    'CircleSpawner Then' = 1; 'WindowsE Then' = 1; 'StockChecker Then' = 5   # text fields
-    'SynthesizerKeyboard Then' = 5   # the black keys
-}
+# Since round 68's shim names (NearLabel, grid keys) every page has 0, so none is listed.
+$KnownUnnamed = @{}
 
 # One page: loads it, waits until `ready` (a selector) is on it, or for an app (-App) presses Play when there is
 # one and checks the window and its paint. -Click presses that button first and -Frame is the iframe the app is in
