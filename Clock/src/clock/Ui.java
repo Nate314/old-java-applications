@@ -118,9 +118,10 @@ final class Ui {
       return value < 10 ? "0" + value : String.valueOf(value);
    }
 
-   /** A timer's time left, rounded up to the second: "4:59", "60:00". */
+   /** A timer's time left, rounded up to the second: "4:59", "1:00:00". */
    static String countdown(long millis) {
-      return minutesSeconds((Math.max(0, millis) + 999) / 1000);
+      long seconds = (Math.max(0, millis) + 999) / 1000;
+      return seconds >= 3600 ? seconds / 3600 + ":" + twoDigits(seconds / 60 % 60) + ":" + twoDigits(seconds % 60) : minutesSeconds(seconds);
    }
 
    /** Whole seconds as minutes and seconds: "4:59". */

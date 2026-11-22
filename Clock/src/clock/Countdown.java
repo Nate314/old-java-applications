@@ -1,12 +1,13 @@
 package clock;
 
 /**
- * The kitchen timer behind the Timer tab: a length of up to an hour set on the dial, counted down against the wall
+ * The kitchen timer behind the Timer tab: a length of up to four hours set on the dial (one turn an hour), counted down against the wall
  * clock (epoch milliseconds passed in), so it keeps time while the window is closed and reopened.
  */
 final class Countdown {
    static final long MINUTE = 60_000L;
-   static final long MAX = 60 * MINUTE;
+   static final long HOUR = 60 * MINUTE;
+   static final long MAX = 4 * HOUR;
 
    private long length = 5 * MINUTE;
    /** When it runs out, while running; 0 otherwise. */
@@ -59,6 +60,19 @@ final class Countdown {
          this.endsAt = 0;
          this.left = this.length;
       }
+   }
+
+   /**
+    * Turning the dial's knob to {@code pointed} (0 to 59) from {@code previous} whole minutes: the total nearest the
+    * previous one that points there, so turning on past 12 winds on into the next hour (or back out of it). It stops at
+    * 0 and at the most. A press ({@code fromRest}) never lands below 0: pointing at 50 with 5 set means 50, not 0.
+    */
+   static int turn(int previous, int pointed, boolean fromRest) {
+      int total = previous + ((pointed - previous + 30) % 60 + 60) % 60 - 30;
+      if (fromRest && total < 0) {
+         total += 60;
+      }
+      return (int) Math.max(0, Math.min(MAX / MINUTE, total));
    }
 
    /** Up or Down: the time left rounded to a whole minute, plus or minus minutes. */

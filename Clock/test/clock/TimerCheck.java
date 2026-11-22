@@ -26,7 +26,16 @@ public class TimerCheck {
 
       // The dial's limits, and Up and Down by whole minutes.
       timer.set(90 * M, 0);
-      check(timer.length() == Countdown.MAX, "capped at an hour");
+      check(timer.length() == 90 * M, "more than an hour");
+      timer.set(5 * 60 * M, 0);
+      check(timer.length() == Countdown.MAX && Countdown.MAX == 4 * 60 * M, "capped at four hours");
+
+      // Turning the knob: on past 12 winds into the next hour, back past 12 unwinds, and it stops at 0 and 4 hours.
+      check(Countdown.turn(55, 2, false) == 62 && Countdown.turn(62, 58, false) == 58, "past 12 and back");
+      check(Countdown.turn(3, 58, false) == 0 && Countdown.turn(0, 50, false) == 0, "stops at 0 turning back");
+      check(Countdown.turn(239, 5, false) == 240, "stops at four hours");
+      check(Countdown.turn(5, 50, true) == 50 && Countdown.turn(0, 55, true) == 55, "a press sets the minute pointed at");
+      check(Countdown.turn(95, 40, true) == 100 && Countdown.turn(125, 10, true) == 130, "a press stays in its hour");
       timer.set(-5, 0);
       check(timer.length() == 0, "never negative");
       timer.toggle(0);
@@ -66,7 +75,8 @@ public class TimerCheck {
 
       // Formats.
       check(Ui.countdown(299_001).equals("5:00") && Ui.countdown(299_000).equals("4:59"), "countdown rounds up");
-      check(Ui.countdown(Countdown.MAX).equals("60:00"), "a full hour");
+      check(Ui.countdown(60 * M).equals("1:00:00") && Ui.countdown(59 * M).equals("59:00")
+            && Ui.countdown(Countdown.MAX - 1).equals("4:00:00") && Ui.countdown(61 * M + 5000).equals("1:01:05"), "hours");
       check(Ui.stopwatch(7_429).equals("0:07.42"), "stopwatch hundredths");
       check(Ui.stopwatch(3_723_040).equals("1:02:03.04"), "stopwatch hours");
 
