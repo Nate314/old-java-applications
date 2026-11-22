@@ -58,6 +58,7 @@ public final class BattleCheck
         computerFightsOnABuiltBattlefield();
         narrowWindowSetsABlockingFieldAside();
         sightShowsWhereTheShellGoes();
+        pauseHoldsTheMatch();
         System.out.println("BattleCheck: all checks passed");
     }
 
@@ -676,6 +677,65 @@ public final class BattleCheck
             press(panel, width * 3 / 4, 150);
             assert battle.phase() == Battle.Phase.ROUND_START && !battle.vsComputer() : battle.phase() + " at " + width;
         }
+    }
+
+    /**
+     * Pause: not on the title; in a fight everything holds still (tanks, shells, the round's clock) while keys are held;
+     * a fire key goes on into a countdown that drops presses; then the match moves again. On the panel the pause button
+     * pauses and a tap anywhere goes on.
+     */
+    private static void pauseHoldsTheMatch()
+    {
+        Script redKeys = new Script();
+        Script greenKeys = new Script();
+        Tank red = new Tank("Red", Color.RED, redKeys, 100, 250, 90);
+        Tank green = new Tank("Green", Color.GREEN, greenKeys, 380, 250, 270);
+        Battle battle = new Battle(red, green, new ComputerControls(new Random(5)), null);
+        battle.setLayouts(Arena.OPEN);
+        battle.tick(W, H);
+        battle.pause(true);
+        assert !battle.paused() : "the title card paused";
+        greenKeys.fire = true;
+        battle.tick(W, H);
+        for (int i = 0; i < Battle.ROUND_START_TICKS; i++) battle.tick(W, H);
+        assert battle.phase() == Battle.Phase.FIGHT;
+        redKeys.fire = true;
+        battle.tick(W, H);
+        assert battle.shells().size() == 1;
+        double shellX = battle.shells().get(0).x();
+        int clock = battle.phaseTicks();
+        battle.pause(true);
+        assert battle.paused() && battle.pausedAway();
+        redKeys.forward = true;
+        greenKeys.left = true;
+        for (int i = 0; i < 200; i++) battle.tick(W, H);
+        assert red.x() == 100 && green.rotation() == 270 : "a tank moved while paused";
+        assert battle.shells().get(0).x() == shellX && battle.phaseTicks() == clock : "the fight went on while paused";
+        greenKeys.fire = true;                   // a fire key goes on
+        battle.tick(W, H);
+        assert !battle.paused() && battle.resumeTicks() > 0;
+        redKeys.fire = true;                     // dropped while counting down
+        while (battle.held()) battle.tick(W, H);
+        assert red.x() == 100 && battle.shells().size() == 1 : "the countdown let something move";
+        battle.tick(W, H);
+        assert red.x() > 100 && battle.shells().size() == 1 && battle.shells().get(0).x() != shellX : "the match did not go on";
+        redKeys.forward = greenKeys.left = false;
+        battle.togglePause();
+        assert battle.paused() && !battle.pausedAway();
+        battle.togglePause();
+        assert !battle.paused() && battle.held();
+        while (battle.held()) battle.tick(W, H);
+
+        GamePanel panel = new GamePanel(battle);
+        panel.setSize(W, H);
+        press(panel, W / 2, 30);                 // the pause button between the score bars
+        assert battle.paused() : "the pause button did not pause";
+        press(panel, 60, H - 60);                // anywhere goes on
+        assert !battle.paused() && battle.held() : "a tap did not go on";
+        while (battle.held()) battle.tick(W, H);
+        press(panel, W / 2, 30);
+        press(panel, W / 2, 160);                // the Go on button
+        assert !battle.paused() : "Go on did not go on";
     }
 
     private static void press(GamePanel panel, int x, int y)

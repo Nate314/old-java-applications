@@ -2,8 +2,12 @@ package tankgame;
 
 import java.awt.Color;
 import java.awt.Toolkit;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.Random;
 import javax.swing.JFrame;
@@ -36,20 +40,50 @@ public class Main extends JFrame
         battle.setSounds(Sounds.open(record.sound()));
         GamePanel panel = new GamePanel(battle);
         // C: watch the computer play both tanks (Battle.toggleWatch). X: supply drops on / off. B: build a battlefield. V: sound.
+        // P: pause.
         this.addKeyListener(new KeyAdapter()
         {
             @Override
             public void keyPressed(KeyEvent e)
             {
+                claimFocus();
+                if (e.getKeyCode() == KeyEvent.VK_P) battle.togglePause();
                 if (e.getKeyCode() == KeyEvent.VK_C) battle.toggleWatch();
                 if (e.getKeyCode() == KeyEvent.VK_X) battle.toggleSupplies();
                 if (e.getKeyCode() == KeyEvent.VK_B) battle.toggleBuild();
                 if (e.getKeyCode() == KeyEvent.VK_V) battle.toggleSound();
             }
         });
+        // A match pauses when the window loses the keyboard (another window, another tab, a click outside the page's game).
+        this.addFocusListener(new FocusAdapter()
+        {
+            @Override
+            public void focusLost(FocusEvent e)
+            {
+                battle.pause(true);
+            }
+        });
+        panel.addMouseListener(new MouseAdapter()
+        {
+            @Override
+            public void mousePressed(MouseEvent e)
+            {
+                claimFocus();
+            }
+        });
         this.add(panel);
         this.setVisible(visibility);
         panel.start();
+    }
+
+    /**
+     * Makes the window its own focus owner once someone plays, so its focus listener hears the keyboard leave. On the
+     * desktop it already is; in the browser a game's window has none until asked, and asking at a press never pulls the
+     * page's focus away from anything (the press put it here).
+     */
+    private void claimFocus()
+    {
+        if (!isFocusOwner()) requestFocusInWindow();
     }
 
     public static void main(String[] args)
