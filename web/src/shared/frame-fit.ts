@@ -1,4 +1,4 @@
-// How play.html and the story's play sheet size an app's page in a frame: the page keeps a viewport of at least
+// How play.html and the play sheet (story, lost page) size an app's page in a frame: the page keeps a viewport of at least
 // 640 x 520 (so a small frame is the app's page scaled down, its notes and windows laid out as usual), or as big as
 // its card asks for (CircleSpawner places its own 380 px window, Rubik's Cube's is 700 px tall), as in the home
 // page's player. The viewport keeps the frame's shape.

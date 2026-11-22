@@ -1,0 +1,24 @@
+/* Play without leaving the page (PlayHere.tsx): the app over the page, the page still there behind it.
+   The colors are the page's: the story's --card-border/--card-bg, else the lost page's --edge/--card. */
+.play-here { --sheet-edge: var(--card-border, var(--edge)); width: min(1000px, calc(100vw - 32px)); height: min(720px, calc(100dvh - 32px)); max-width: none; max-height: none;
+             padding: 0; border: 1px solid var(--sheet-edge); border-radius: 14px; background: var(--card-bg, var(--card)); color: inherit;
+             overflow: hidden; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.45); }
+.play-here[open] { display: flex; flex-direction: column; animation: play-here-in 0.25s ease-out; }
+.play-here::backdrop { background: rgba(2, 6, 23, 0.6); backdrop-filter: blur(3px); }
+.play-here-bar { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--sheet-edge); }
+.play-here-bar b { margin-right: auto; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.play-here-bar .btn { display: inline-block; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--sheet-edge); background: transparent;
+                     color: inherit; font-family: inherit; font-size: 14px; line-height: 1.5; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.play-here-bar .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+.play-here-bar .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.play-here-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--desk, #0f172a); }
+.play-here-stage iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+@keyframes play-here-in { from { opacity: 0; translate: 0 24px; } }
+/* On a phone, a sheet from the bottom edge that leaves a strip of the page showing above it. */
+@media (max-width: 760px) {
+  .play-here { width: 100%; box-sizing: border-box; height: 86dvh; margin: auto 0 0; border-radius: 14px 14px 0 0; border-bottom: 0; }
+  .play-here-bar .btn { padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .play-here[open] { animation: none; } }
+:root[data-skin="classic"] .play-here { border-radius: 0; box-shadow: none; }
+:root[data-skin="arcade"] .play-here { box-shadow: 0 0 0 1px rgba(255, 43, 214, 0.35), 0 0 40px rgba(255, 43, 214, 0.3); }

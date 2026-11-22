@@ -4,6 +4,7 @@ import './notfound.css';
 import { useState, type FormEvent } from 'react';
 import { LOST_APPS, named, score, type LostApp } from './match';
 import { Spotlight, lastPlayed } from './Spotlight';
+import { PlayHere } from '../../shared/PlayHere';
 
 function Card({ root, app, best }: { root: string; app: LostApp; best: boolean }) {
   return (
@@ -76,6 +77,8 @@ function Lost({ root, missing }: { root: string; missing: string }) {
         <iframe id="dino-frame" title="Dino Game" allow="autoplay; fullscreen; clipboard-write" loading="lazy"
                 src={root + 'play.html?app=DinoGame'} />
       </aside>
+      {/* Play, a card or the spotlight opens the app over this page: the search stays as typed for the next try. */}
+      <PlayHere root={root} back="Back to the search" />
     </div>
   );
 }
