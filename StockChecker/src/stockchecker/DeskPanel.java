@@ -25,8 +25,8 @@ import javax.swing.Timer;
  */
 @SuppressWarnings("serial")
 final class DeskPanel extends JPanel {
-   static final int WIDTH = 720;
-   static final int HEIGHT = 440;
+   /** A screen narrower than this (a phone held upright, in the browser) gets the desk in one column. */
+   static final int NARROW = 600;
    private static final int TICK_MS = 40;
    private static final int MESSAGE_MS = 3000;
 
@@ -95,9 +95,38 @@ final class DeskPanel extends JPanel {
    private final List<Rectangle> marks = new ArrayList<>();
    private double plotLow;
    private double plotSpan;
-   DeskPanel(Desk desk) {
+
+   /**
+    * Where the parts of the desk go. Wide (720 x 440): the watch list on the left, the chart card with the trade buttons
+    * under it on the right. Narrow (360 x 680, a phone held upright): a two-row header, the chart card across the
+    * width, the trade buttons in two rows of three under it, then the watch list, all at full size instead of shrunk.
+    */
+   private final boolean narrow;
+   private final int width;
+   private final int height;
+   private final int header;
+   /** The chart card (Chart, Days and Race while the market is open). */
+   private final Rectangle card;
+   /** The results card at the closing bell (and the standings): the chart card and the trade buttons' room. */
+   private final Rectangle closeCard;
+   private final Rectangle watchBox;
+   /** The baseline of the first of the two lines under the chart card. */
+   private final int positionY;
+   /** The baseline of the headline; the ticker tape and the note about the prices are under it. */
+   private final int newsY;
+
+   DeskPanel(Desk desk, boolean narrow) {
       this.desk = desk;
-      setPreferredSize(new Dimension(WIDTH, HEIGHT));
+      this.narrow = narrow;
+      width = narrow ? 360 : 720;
+      height = narrow ? 680 : 440;
+      header = narrow ? 70 : 46;
+      card = narrow ? new Rectangle(8, 76, 344, 222) : new Rectangle(272, 54, 438, 222);
+      closeCard = narrow ? new Rectangle(8, 76, 344, 350) : new Rectangle(272, 54, 438, 322);
+      watchBox = narrow ? new Rectangle(8, 434, 344, 180) : new Rectangle(10, 54, 250, 322);
+      positionY = card.y + card.height + (narrow ? 18 : 22);
+      newsY = narrow ? 634 : 398;
+      setPreferredSize(new Dimension(width, height));
       setFocusable(true);
       BooleanSupplier open = () -> !desk.market.closed();
       BooleanSupplier closed = () -> desk.market.closed();
@@ -106,7 +135,7 @@ final class DeskPanel extends JPanel {
       char[] speedKeys = {' ', 'p', 'f'};
       for (int i = 0; i < speeds.length; i++) {
          int speed = i;
-         Button button = new Button(speeds[i], speedKeys[i], null, new Rectangle(236 + i * 64, 10, 60, 26), always, () -> speed(speed));
+         Button button = new Button(speeds[i], speedKeys[i], null, narrow ? new Rectangle(10 + i * 52, 38, 48, 26) : new Rectangle(236 + i * 64, 10, 60, 26), always, () -> speed(speed));
          button.lit = () -> desk.speed == speed;
          buttons.add(button);
       }
@@ -115,16 +144,17 @@ final class DeskPanel extends JPanel {
       char[] tabKeys = {'c', 'w', 'r'};
       for (int i = 0; i < tabs.length; i++) {
          int which = i;
-         Button button = new Button(tabs[i], tabKeys[i], null, new Rectangle(572 + i * 46, 60, 42, 22), always, () -> tab = which);
+         Button button = new Button(tabs[i], tabKeys[i], null, new Rectangle(card.x + card.width - 138 + i * 46, card.y + 6, 42, 22), always, () -> tab = which);
          button.lit = () -> tab == which;
          buttons.add(button);
       }
       // At the chart card's bottom right corner, under the price labels.
-      Button hear = new Button("Hear", 'h', null, new Rectangle(660, 259, 46, 16), () -> open.getAsBoolean() && tab == CHART, this::hear);
+      int under = card.y + card.height - 17;
+      Button hear = new Button("Hear", 'h', null, new Rectangle(card.x + card.width - 50, under, 46, 16), () -> open.getAsBoolean() && tab == CHART, this::hear);
       hear.lit = () -> ear.hearing() != null;
       buttons.add(hear);
-      // Between the 2 PM and 4 PM labels under the chart.
-      Button look = new Button("Hindsight", 'i', null, new Rectangle(556, 259, 64, 16), () -> open.getAsBoolean() && tab == CHART, this::toggleHindsight);
+      // Between the 2 PM and 4 PM labels under the chart (narrow: beside Hear, on a row of their own under the labels).
+      Button look = new Button("Hindsight", 'i', null, new Rectangle(card.x + card.width - (narrow ? 118 : 154), under, 64, 16), () -> open.getAsBoolean() && tab == CHART, this::toggleHindsight);
       look.lit = () -> hindsight;
       buttons.add(look);
       String[] labels = {"Buy 1", "Buy 10", "Buy max", "Sell 1", "Sell 10", "Sell all"};
@@ -133,12 +163,13 @@ final class DeskPanel extends JPanel {
       for (int i = 0; i < labels.length; i++) {
          int count = counts[i];
          Color fill = count > 0 ? new Color(30, 140, 80) : new Color(170, 50, 60);
-         Button button = new Button(labels[i], keys[i], fill, new Rectangle(272 + i * 74, 336, 68, 36), open, () -> trade(count));
+         Button button = new Button(labels[i], keys[i], fill, narrow
+            ? new Rectangle(card.x + i % 3 * 116, positionY + 26 + i / 3 * 44, 112, 40) : new Rectangle(272 + i * 74, 336, 68, 36), open, () -> trade(count));
          button.count = count;
          buttons.add(button);
       }
-      buttons.add(new Button("Next day", '\n', new Color(30, 140, 80), new Rectangle(290, 330, 150, 32), closed, this::nextDay));
-      buttons.add(new Button("Start over", 'x', null, new Rectangle(450, 330, 150, 32), closed, this::startOver));
+      buttons.add(new Button("Next day", '\n', new Color(30, 140, 80), narrow ? new Rectangle(25, 380, 150, 32) : new Rectangle(290, 330, 150, 32), closed, this::nextDay));
+      buttons.add(new Button("Start over", 'x', null, narrow ? new Rectangle(185, 380, 150, 32) : new Rectangle(450, 330, 150, 32), closed, this::startOver));
 
       timer = new Timer(TICK_MS, event -> tick());
       timer.start();
@@ -553,7 +584,7 @@ final class DeskPanel extends JPanel {
          if (tab == RACE) {
             paintStandings(g);
          } else if (tab == DAYS) {
-            paintDays(g, new Rectangle(272, 54, 438, 268));
+            paintDays(g, new Rectangle(closeCard.x, closeCard.y, closeCard.width, closeCard.height - 54));
          } else {
             paintClose(g);
          }
@@ -561,7 +592,7 @@ final class DeskPanel extends JPanel {
          if (tab == RACE) {
             paintRace(g);
          } else if (tab == DAYS) {
-            paintDays(g, new Rectangle(272, 54, 438, 222));
+            paintDays(g, card);
          } else {
             paintChart(g);
          }
@@ -574,7 +605,7 @@ final class DeskPanel extends JPanel {
    private void paintHeader(Graphics2D g) {
       Market market = desk.market;
       g.setColor(new Color(0, 0, 0, 70));
-      g.fillRect(0, 0, WIDTH, 46);
+      g.fillRect(0, 0, width, header);
       text(g, "Day " + market.day, BIG, accent, 14, 30);
       int x = 14 + width(g, "Day " + market.day, BIG) + 12;
       text(g, Market.clock(market.minute), PLAIN, TEXT, x, 29);
@@ -589,16 +620,24 @@ final class DeskPanel extends JPanel {
       double worth = desk.portfolio.worth(market);
       double opening = desk.portfolio.openingWorth();
       String value = Money.dollars(worth);
-      int valueX = WIDTH - 14 - width(g, value, BIG);
-      text(g, value, BIG, TEXT, valueX, 38);
+      int valueX = width - 14 - width(g, value, BIG);
+      text(g, value, BIG, TEXT, valueX, narrow ? 29 : 38);
       // Your place among the five traders by net worth.
       int rank = desk.rank(false);
       String place = ordinal(rank) + " of " + (desk.rivals.size() + 1);
-      text(g, place, BOLD, rank == 1 ? UP : WARN, valueX - 12 - width(g, place, BOLD), 37);
       String today = Money.change(worth - opening) + " today";
-      String cash = "Cash " + Money.dollars(desk.portfolio.cash) + "   ";
-      int right = WIDTH - 14 - width(g, today, SMALL);
+      String cash = "Cash " + Money.dollars(desk.portfolio.cash);
+      int right = width - 14 - width(g, today, SMALL);
+      if (narrow) {
+         // Under the net worth, beside the speed buttons: the place and today's change, then the cash.
+         text(g, today, SMALL, worth >= opening ? UP : DOWN, right, 49);
+         text(g, place, BOLD, rank == 1 ? UP : WARN, right - 10 - width(g, place, BOLD), 49);
+         text(g, cash, SMALL, MUTED, width - 14 - width(g, cash, SMALL), 64);
+         return;
+      }
+      text(g, place, BOLD, rank == 1 ? UP : WARN, valueX - 12 - width(g, place, BOLD), 37);
       text(g, today, SMALL, worth >= opening ? UP : DOWN, right, 17);
+      cash += "   ";
       text(g, cash, SMALL, MUTED, right - width(g, cash, SMALL), 17);
    }
 
@@ -608,18 +647,18 @@ final class DeskPanel extends JPanel {
          rows[i] = null;
       }
       if (symbols.isEmpty()) {
-         text(g, "Type tickers in the box above,", PLAIN, MUTED, 20, 80);
-         text(g, "then press Enter.", PLAIN, MUTED, 20, 98);
+         text(g, "Type tickers in the box above,", PLAIN, MUTED, watchBox.x + 10, watchBox.y + 26);
+         text(g, "then press Enter.", PLAIN, MUTED, watchBox.x + 10, watchBox.y + 44);
          return;
       }
-      int rowHeight = Math.min(40, 322 / symbols.size());
+      int rowHeight = Math.min(narrow ? 36 : 40, watchBox.height / symbols.size());
       for (int i = 0; i < symbols.size() && i < rows.length; i++) {
          String symbol = symbols.get(i);
          Market.Stock stock = desk.market.stock(symbol);
          if (stock == null) {
             continue;
          }
-         Rectangle row = new Rectangle(10, 54 + i * rowHeight, 250, rowHeight - 4);
+         Rectangle row = new Rectangle(watchBox.x, watchBox.y + i * rowHeight, watchBox.width, rowHeight - 4);
          rows[i] = row;
          boolean picked = i == selected;
          g.setColor(picked ? withAlpha(accent, 60) : row.contains(mouseX, mouseY) ? new Color(255, 255, 255, 30) : new Color(255, 255, 255, 14));
@@ -644,7 +683,7 @@ final class DeskPanel extends JPanel {
             String change = Money.percent(stock.open(), price);
             text(g, change, SMALL, up ? UP : DOWN, row.x + 160 - width(g, change, SMALL), row.y + 31);
          }
-         paintLine(g, stock, new Rectangle(row.x + 170, row.y + 5, 72, row.height - 10), false);
+         paintLine(g, stock, new Rectangle(row.x + 170, row.y + 5, row.width - 178, row.height - 10), false);
       }
    }
 
@@ -847,7 +886,7 @@ final class DeskPanel extends JPanel {
          tag = "Hindsight: " + Market.clock(best[0]) + " " + Money.dollars(buy) + " to " + Market.clock(best[1]) + " "
             + Money.dollars(sell) + ", " + Money.percent(buy, sell);
       }
-      tag = fit(g, tag, SMALL, box.width - 12);
+      tag = fitOr(g, tag, tag.substring("Hindsight: ".length()), SMALL, box.width - 12);
       int w = width(g, tag, SMALL) + 10;
       int top = box.y + box.height - 17;
       g.setColor(new Color(10, 16, 40, 220));
@@ -947,7 +986,6 @@ final class DeskPanel extends JPanel {
    }
 
    private void paintChart(Graphics2D g) {
-      Rectangle card = new Rectangle(272, 54, 438, 222);
       g.setColor(new Color(255, 255, 255, 14));
       g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
       String symbol = symbol();
@@ -964,8 +1002,9 @@ final class DeskPanel extends JPanel {
       x += width(g, Money.dollars(price), BIG) + 10;
       boolean up = price >= stock.open();
       String change = Money.change(price - stock.open()) + " (" + Money.percent(stock.open(), price) + ") today";
-      text(g, fit(g, change, PLAIN, 564 - x), PLAIN, up ? UP : DOWN, x, card.y + 24);
-      paintLine(g, stock, new Rectangle(card.x + 14, card.y + 38, card.width - 84, card.height - 62), true);
+      text(g, fitOr(g, change, Money.percent(stock.open(), price), PLAIN, tabsX() - 8 - x), PLAIN, up ? UP : DOWN, x, card.y + 24);
+      // Narrow, the chart is a row shorter, so Hear and Hindsight sit under its time labels.
+      paintLine(g, stock, new Rectangle(card.x + 14, card.y + 38, card.width - 84, card.height - (narrow ? 80 : 62)), true);
    }
 
    /** Five price lines across {@code box}, from {@code low} up by {@code span}, labelled at the right. */
@@ -1012,7 +1051,7 @@ final class DeskPanel extends JPanel {
       x += width(g, symbol, BIG) + 10;
       text(g, Money.dollars(price), BIG, TEXT, x, card.y + 25);
       x += width(g, Money.dollars(price), BIG) + 10;
-      text(g, fit(g, daysChange(bars), PLAIN, 564 - x), PLAIN, price >= first ? UP : DOWN, x, card.y + 24);
+      text(g, fitOr(g, daysChange(bars), daysChange(bars).split(" ")[0], PLAIN, tabsX() - 8 - x), PLAIN, price >= first ? UP : DOWN, x, card.y + 24);
 
       int held = desk.portfolio.shares(symbol);
       double paid = held > 0 ? desk.portfolio.holdings.get(symbol).cost / held : 0;
@@ -1100,7 +1139,6 @@ final class DeskPanel extends JPanel {
 
    /** The race tab while the market is open: everyone's net worth today as a line, the order, the latest rival trade. */
    private void paintRace(Graphics2D g) {
-      Rectangle card = new Rectangle(272, 54, 438, 222);
       g.setColor(new Color(255, 255, 255, 14));
       g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
       text(g, "Race today", BIG, accent, card.x + 14, card.y + 25);
@@ -1109,7 +1147,7 @@ final class DeskPanel extends JPanel {
       List<Desk.Standing> standings = desk.standings(true);
 
       // Each trader's change since the open, minute by minute, on one scale (at least +/-0.5%).
-      Rectangle box = new Rectangle(card.x + 14, card.y + 44, 232, 140);
+      Rectangle box = new Rectangle(card.x + 14, card.y + 44, card.width - 206, 140);
       List<double[]> series = new ArrayList<>();
       double reach = 0.005;
       for (Desk.Standing standing : standings) {
@@ -1213,13 +1251,13 @@ final class DeskPanel extends JPanel {
 
    /** The race tab after the closing bell: the five traders by net worth, with today's change and their rules. */
    private void paintStandings(Graphics2D g) {
-      Rectangle card = new Rectangle(272, 54, 438, 322);
+      Rectangle card = closeCard;
       g.setColor(new Color(0, 0, 0, 60));
       g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
       g.setColor(withAlpha(accent, 120));
       g.drawRoundRect(card.x, card.y, card.width, card.height, 12, 12);
       text(g, "Standings, day " + desk.market.day, BIG, accent, card.x + 18, card.y + 30);
-      int todayRight = card.x + 340;
+      int todayRight = card.x + card.width - 98;
       int worthRight = card.x + card.width - 12;
       text(g, "Today", SMALL, MUTED, todayRight - width(g, "Today", SMALL), card.y + 52);
       text(g, "Net worth", SMALL, MUTED, worthRight - width(g, "Net worth", SMALL), card.y + 52);
@@ -1280,12 +1318,13 @@ final class DeskPanel extends JPanel {
             }
          }
       }
-      text(g, fit(g, first, PLAIN, 438), PLAIN, TEXT, 274, 298);
-      text(g, fit(g, second, PLAIN, 438), PLAIN, color, 274, 318);
+      Font font = narrow ? SMALL : PLAIN;
+      text(g, fit(g, first, font, card.width), font, TEXT, card.x + 2, positionY);
+      text(g, fit(g, second, font, card.width), font, color, card.x + 2, positionY + (narrow ? 16 : 20));
    }
 
    private void paintClose(Graphics2D g) {
-      Rectangle card = new Rectangle(272, 54, 438, 322);
+      Rectangle card = closeCard;
       g.setColor(new Color(0, 0, 0, 60));
       g.fillRoundRect(card.x, card.y, card.width, card.height, 12, 12);
       g.setColor(withAlpha(accent, 120));
@@ -1294,11 +1333,13 @@ final class DeskPanel extends JPanel {
       double worth = desk.portfolio.worth(market);
       double opening = desk.portfolio.openingWorth();
       int x = card.x + 18;
+      // Narrow, "Since day 1" takes a line of its own under "Today", and everything under it moves down one line.
+      int drop = narrow ? 18 : 0;
       text(g, "Closing bell, day " + market.day, BIG, accent, x, card.y + 30);
       text(g, "Net worth " + Money.dollars(worth), TITLE, TEXT, x, card.y + 56);
       text(g, "Today " + Money.change(worth - opening) + " (" + Money.percent(opening, worth) + ")", PLAIN, worth >= opening ? UP : DOWN, x, card.y + 78);
       text(g, "Since day 1 " + Money.change(worth - Portfolio.START) + " (" + Money.percent(Portfolio.START, worth) + ")", PLAIN,
-         worth >= Portfolio.START ? UP : DOWN, x + 210, card.y + 78);
+         worth >= Portfolio.START ? UP : DOWN, x + (narrow ? 0 : 210), card.y + 78 + drop);
       Market.Stock best = null;
       Market.Stock worst = null;
       for (Market.Stock stock : market.stocks()) {
@@ -1316,7 +1357,7 @@ final class DeskPanel extends JPanel {
       if (best != null) {
          String movers = "Best " + best.symbol + " " + Money.percent(best.open(), best.close())
             + "    Worst " + worst.symbol + " " + Money.percent(worst.open(), worst.close());
-         text(g, movers, SMALL, MUTED, x, card.y + 120);
+         text(g, movers, SMALL, MUTED, x, card.y + 120 + drop);
       }
       // In hindsight, the day's best single trade among the stocks on the desk.
       String bestSymbol = null;
@@ -1330,8 +1371,17 @@ final class DeskPanel extends JPanel {
       }
       if (bestSymbol != null) {
          String[] parts = hindsight(bestSymbol, Market.CLOSE);
-         text(g, fit(g, "In hindsight, " + parts[0] + ",", SMALL, card.width - 36), SMALL, WARN, x, card.y + 138);
-         text(g, fit(g, parts[1] + ".", SMALL, card.width - 36), SMALL, WARN, x, card.y + 152);
+         String[] lines = {"In hindsight, " + parts[0] + ",", parts[1] + "."};
+         if (narrow) {
+            // Four short lines: "In hindsight, NFLX's best trade today:", "buy at ...,", "sell at ..., +3.76%,", "about ...".
+            int colon = parts[0].indexOf(": ");
+            int about = parts[1].indexOf(", about");
+            lines = new String[] {"In hindsight, " + parts[0].substring(0, colon + 1), parts[0].substring(colon + 2) + ",",
+               parts[1].substring(0, about + 1), parts[1].substring(about + 2) + "."};
+         }
+         for (int i = 0; i < lines.length; i++) {
+            text(g, fit(g, lines[i], SMALL, card.width - 36), SMALL, WARN, x, card.y + 138 + drop + i * 14);
+         }
       }
       // How the race against the rivals went today.
       List<Desk.Standing> race = desk.standings(true);
@@ -1340,13 +1390,14 @@ final class DeskPanel extends JPanel {
       String finish = place == 1 ? "You won today's race, " + (race.size() - 1) + " rivals behind you. R: standings"
          : "You came " + ordinal(place) + " of " + race.size() + " today; " + winner.name + " won with "
             + Money.percent(1, 1 + winner.today) + ". R: standings";
-      text(g, fit(g, finish, PLAIN, card.width - 36), PLAIN, place == 1 ? UP : WARN, x, card.y + 100);
+      Font font = narrow ? SMALL : PLAIN;
+      text(g, fit(g, finish, font, card.width - 36), font, place == 1 ? UP : WARN, x, card.y + 100 + drop);
 
       // Net worth at every close so far (the last 14), today's bar last, against the starting cash.
       List<Double> closes = new ArrayList<>(desk.portfolio.closes);
       closes.add(worth);
       int from = Math.max(0, closes.size() - 14);
-      Rectangle box = new Rectangle(x, card.y + 164, card.width - 36, 92);
+      Rectangle box = narrow ? new Rectangle(x, card.y + 210, card.width - 36, 60) : new Rectangle(x, card.y + 164, card.width - 36, 92);
       double low = Portfolio.START;
       double high = Portfolio.START;
       for (int i = from; i < closes.size(); i++) {
@@ -1402,8 +1453,8 @@ final class DeskPanel extends JPanel {
          Color ink = on ? new Color(10, 16, 40) : faded ? MUTED : TEXT;
          if (button.count != 0) {
             String note = fit(g, buttonNote(button.count), SMALL, r.width - 6);
-            text(g, label, font, ink, r.x + (r.width - width(g, label, font)) / 2, r.y + 16);
-            text(g, note, SMALL, faded ? MUTED : withAlpha(TEXT, 210), r.x + (r.width - width(g, note, SMALL)) / 2, r.y + 30);
+            text(g, label, font, ink, r.x + (r.width - width(g, label, font)) / 2, r.y + r.height / 2 - 2);
+            text(g, note, SMALL, faded ? MUTED : withAlpha(TEXT, 210), r.x + (r.width - width(g, note, SMALL)) / 2, r.y + r.height / 2 + 12);
          } else {
             text(g, label, font, ink, r.x + (r.width - width(g, label, font)) / 2, r.y + r.height / 2 + 5);
          }
@@ -1414,23 +1465,24 @@ final class DeskPanel extends JPanel {
       Market market = desk.market;
       List<Market.Headline> news = market.news(desk.symbols());
       if (news.isEmpty()) {
-         text(g, "No news yet today.", PLAIN, MUTED, 14, 398);
+         text(g, "No news yet today.", PLAIN, MUTED, 14, newsY);
       } else {
          Market.Headline last = news.get(news.size() - 1);
          int x = 14;
          g.setColor(last.up ? UP : DOWN);
          int[] tx = {x, x + 10, x + 5};
-         int[] ty = last.up ? new int[] {396, 396, 387} : new int[] {387, 387, 396};
+         int[] ty = last.up ? new int[] {newsY - 2, newsY - 2, newsY - 11} : new int[] {newsY - 11, newsY - 11, newsY - 2};
          g.fillPolygon(tx, ty, 3);
          x += 16;
          String time = Market.clock(last.minute);
-         text(g, time, BOLD, accent, x, 398);
-         text(g, last.text, PLAIN, TEXT, x + width(g, time, BOLD) + 8, 398);
+         text(g, time, BOLD, accent, x, newsY);
+         x += width(g, time, BOLD) + 8;
+         text(g, fit(g, last.text, PLAIN, width - 10 - x), PLAIN, TEXT, x, newsY);
       }
 
       // The ticker tape: every stock's price and change, sliding left.
       g.setColor(new Color(0, 0, 0, 110));
-      g.fillRect(0, 406, WIDTH, 20);
+      g.fillRect(0, newsY + 8, width, 20);
       StringBuilder tape = new StringBuilder();
       List<String> symbols = desk.symbols();
       List<int[]> spans = new ArrayList<>();
@@ -1448,19 +1500,20 @@ final class DeskPanel extends JPanel {
          String text = tape.toString();
          int full = width(g, text, TAPE);
          int start = -(ticks % Math.max(1, full));
-         for (int copy = start; copy < WIDTH; copy += full) {
+         for (int copy = start; copy < width; copy += full) {
             for (int[] span : spans) {
                String part = text.substring(span[0], span[0] + span[1]);
                int px = copy + width(g, text.substring(0, span[0]), TAPE);
-               if (px > WIDTH || px + width(g, part, TAPE) < 0) {
+               if (px > width || px + width(g, part, TAPE) < 0) {
                   continue;
                }
-               text(g, part, TAPE, span[2] == 1 ? UP : DOWN, px, 421);
+               text(g, part, TAPE, span[2] == 1 ? UP : DOWN, px, newsY + 23);
             }
          }
       }
-      text(g, "Practice market with simulated prices. Day 1 opens at the last real quotes saved in stockCheck.csv (May 13, 2016).",
-         SMALL, MUTED, 14, 437);
+      text(g, narrow ? "Practice market with simulated prices, not real quotes."
+         : "Practice market with simulated prices. Day 1 opens at the last real quotes saved in stockCheck.csv (May 13, 2016).",
+         SMALL, MUTED, 14, newsY + 39);
    }
 
    // ---- helpers ----
@@ -1477,6 +1530,27 @@ final class DeskPanel extends JPanel {
 
    private static int width(Graphics2D g, String text, Font font) {
       return g.getFontMetrics(font).stringWidth(text);
+   }
+
+   /** The bounds of the buttons showing now (for LayoutCheck). */
+   List<Rectangle> shownButtons() {
+      List<Rectangle> shown = new ArrayList<>();
+      for (Button button : buttons) {
+         if (button.shown.getAsBoolean()) {
+            shown.add(button.bounds);
+         }
+      }
+      return shown;
+   }
+
+   /** Where the chart card's tabs start: the title row's text keeps left of them. */
+   private int tabsX() {
+      return card.x + card.width - 138;
+   }
+
+   /** The text when it fits {@code room} pixels, else the shorter one (cut short if even that does not fit). */
+   private static String fitOr(Graphics2D g, String text, String shorter, Font font, int room) {
+      return fit(g, width(g, text, font) <= room ? text : shorter, font, room);
    }
 
    /** The text, cut short with "..." to fit {@code room} pixels. */
