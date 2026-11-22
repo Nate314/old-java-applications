@@ -1,17 +1,13 @@
 // The embeddable player (play.html?app=<App>): a poster first, the app only after Play, in a frame scaled to the widget.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { APPS, webp, type App } from '../../shared/catalog';
+import { frameFit } from '../../shared/frame-fit';
 import { linkState } from '../../shared/link-state';
 import { Shot } from './Shot';
 import './play.css';
 
 // The same four apps the runtime's WATCH table lets the computer play.
 const WATCHABLE = ['Minesweeper', 'UltimateTicTacToe', 'TankGame', 'DinoGame'];
-// The app's page keeps a viewport of at least 640 x 520 (so a small widget is the app's page scaled down, its
-// notes and windows laid out as usual), or as big as its card asks for (CircleSpawner places its own 380 px
-// window, Rubik's Cube's is 700 px tall), as in the home page's player. The viewport keeps the widget's shape.
-const MIN_W = 640;
-const MIN_H = 520;   // the home page player's height, which leaves the watch line room above the windows
 
 type Shown =
   | { mode: 'oops'; text: string }
@@ -36,7 +32,7 @@ function page(app: App, watch: boolean) {
 
 export function Play() {
   const [shown, setShown] = useState<Shown>(first);
-  const [size, setSize] = useState<{ w: number; h: number; scale: number } | null>(null);
+  const [size, setSize] = useState<CSSProperties | null>(null);
   const [lit, setLit] = useState(0);   // how many times the Full page link has been pointed at
   const [full, setFull] = useState(false);   // the page fills the screen
   const main = useRef<HTMLElement>(null);
@@ -51,9 +47,7 @@ export function Play() {
 
   function fit() {
     if (!app || !main.current) return;
-    const w = main.current.clientWidth;
-    const h = main.current.clientHeight;
-    setSize({ w, h, scale: Math.min(1, w / Math.max(MIN_W, app.minWidth || 0), h / Math.max(MIN_H, app.minHeight || 0)) });
+    setSize(frameFit(app, main.current.clientWidth, main.current.clientHeight));
   }
   function run(a: App, watch: boolean) { setShown({ mode: 'stage', app: a, watch }); }
 
@@ -114,10 +108,7 @@ export function Play() {
         <div className="stage" id="stage" hidden={!running}>
           <iframe id="frame" title={running ? running.app.name : 'App'} allow="autoplay; fullscreen; clipboard-write; microphone" ref={frame}
             src={running ? page(running.app, running.watch) : undefined}
-            style={running && size ? {
-              width: Math.round(size.w / size.scale) + 'px', height: Math.round(size.h / size.scale) + 'px',
-              transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined,
-            } : undefined} />
+            style={running && size ? size : undefined} />
         </div>
         {/* No app named (or a wrong name): every app as a tile, one tap from playing it right here. */}
         <div className="oops" id="oops" hidden={shown.mode !== 'oops'}>

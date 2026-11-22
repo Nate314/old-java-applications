@@ -2,17 +2,15 @@
 // Pick one for me) opens that app over the story, in its own page in embed mode, as the home page's player does.
 // Closing it puts the reader back where they were. A link to a place on the page (#source), a modified click
 // (new tab) or a click the page already handled still goes to the app's page.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { APPS, type App } from '../../shared/catalog';
+import { frameFit } from '../../shared/frame-fit';
 
 const PAGE = /^([A-Za-z0-9]+)\/index\.html$/;
-// As in play.html: the app's page keeps a viewport of at least 640 x 520, scaled down to fit, or as big as its card asks.
-const MIN_W = 640;
-const MIN_H = 520;
 
 export function PlayHere() {
   const [app, setApp] = useState<App | null>(null);
-  const [size, setSize] = useState<{ w: number; h: number; scale: number } | null>(null);
+  const [size, setSize] = useState<CSSProperties | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -43,8 +41,7 @@ export function PlayHere() {
 
   function fit() {
     if (!app || !stage.current) return;
-    const w = stage.current.clientWidth, h = stage.current.clientHeight;
-    setSize({ w, h, scale: Math.min(1, w / Math.max(MIN_W, app.minWidth || 0), h / Math.max(MIN_H, app.minHeight || 0)) });
+    setSize(frameFit(app, stage.current.clientWidth, stage.current.clientHeight));
   }
   useLayoutEffect(() => {
     const d = dialog.current!;
@@ -69,8 +66,7 @@ export function PlayHere() {
         {app && (
           <iframe key={app.id} ref={frame} title={app.name} src={app.id + '/index.html?embed'} allow="autoplay; clipboard-write; microphone"
             onLoad={e => e.currentTarget.focus()}
-            style={size ? { width: Math.round(size.w / size.scale) + 'px', height: Math.round(size.h / size.scale) + 'px',
-              transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined } : undefined} />
+            style={size ?? undefined} />
         )}
       </div>
     </dialog>
