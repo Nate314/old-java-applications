@@ -35,7 +35,7 @@ export const ROUTES: Route[] = [
   // The home page: the player, Your arcade and the gallery. boot.js (the site's shared runtime, as on every app
   // page) runs before it (its module imports it first), and What's new (src/runtime/lazy/news.ts) after it. The share tags point at the card web/cards.ps1
   // renders, as the app pages' do (src/pages/app/AppPage.tsx); -Dsite.url makes og:url and og:image absolute
-  // (web/apps/pom.xml).
+  // (web/pages/pom.xml).
   {
     file: 'index.html',
     entry: 'src/pages/home/main.tsx',

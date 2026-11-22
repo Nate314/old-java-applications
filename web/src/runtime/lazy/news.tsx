@@ -1,6 +1,6 @@
 /*
  * What's new: the arcade's own history, read from the repo's git log at build time (history.txt, written by
- * web/apps/pom.xml: one "@@<commit time> <subject>" line per commit, newest first, then the top-level folders
+ * web/pages/pom.xml: one "@@<commit time> <subject>" line per commit, newest first, then the top-level folders
  * it changed). Loaded after boot.js, by the home page and (on demand) by the app pages' title screens.
  *
  * - Home page (#news): src/pages/home/news.ts shows the latest changes from load(), and what changed since the

@@ -1,6 +1,6 @@
 // The site's name, and the link preview tags of a page with a share card (a 1200x630 JPEG that web/cards.ps1
 // renders): Open Graph, which chat apps and social sites read, and Twitter's large card. Keep property before
-// content: built with -Dsite.url, web/apps/pom.xml makes og:url and og:image absolute by matching that order.
+// content: built with -Dsite.url, web/pages/pom.xml makes og:url and og:image absolute by matching that order.
 export const SITE = 'Old Java Applications';
 
 export function ShareTags({ type = 'website', title, description, url, image, alt }:

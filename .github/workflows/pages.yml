@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history: web/then and web/then-nathanos run git archive on a pinned commit, and web/apps writes
+          # Full history: web/then and web/then-nathanos run git archive on a pinned commit, and web/pages writes
           # What's new (history.txt) from git log.
           fetch-depth: 0
 

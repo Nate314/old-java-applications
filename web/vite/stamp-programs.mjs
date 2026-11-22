@@ -1,5 +1,5 @@
 // The app pages' programs get their build's stamp: once Maven has compiled every app (this runs last, from
-// web/jars/pom.xml), each <App>/index.html and then.html loads its classes.js or then.js as ?v=<hash of its content>,
+// web/stamps/pom.xml), each <App>/index.html and then.html loads its classes.js or then.js as ?v=<hash of its content>,
 // so no cache pairs a page with another build's program. The files keep their names, so the service worker's cache
 // key (which leaves out the query), Save all for offline and anything linking them stay as they were.
 // Usage: node web/vite/stamp-programs.mjs <site dir>
