@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { APPS, webp, type App } from '../../shared/catalog';
 import { frameFit } from '../../shared/frame-fit';
 import { linkState } from '../../shared/link-state';
+import { Picker } from './Picker';
 import { Shot } from './Shot';
 import './play.css';
 
@@ -21,7 +22,7 @@ const then = params.has('then');
 function first(): Shown {
   const id = params.get('app');
   const app = APPS.find(a => a.id === id);
-  if (!app) return { mode: 'oops', text: (id ? 'There is no app named "' + id + '" here. ' : '') + 'Pick one to play:' };
+  if (!app) return { mode: 'oops', text: (id ? 'There is no app named "' + id + '" here. ' : '') + 'Pick one to play' };
   if (params.has('watch') && WATCHABLE.indexOf(app.id) >= 0 && !(then && app.then)) return { mode: 'stage', app, watch: true };
   return { mode: 'poster', app };
 }
@@ -95,7 +96,7 @@ export function Play() {
           <img className="bg" id="poster-bg" alt="" src={poster ? webp(poster.shot) : undefined} />
           {' '}
           {/* The thumbnail and hint show today's app, so the Then poster keeps only a faded backdrop of it. */}
-          <Shot app={poster} still={thenPoster} shown={shown.mode === 'poster'} onPlay={() => run(poster!, false)} />
+          {poster && <Shot app={poster} still={thenPoster} shown={shown.mode === 'poster'} onPlay={() => run(poster!, false)} />}
           <div className="text">
             <p className="kicker" id="poster-kicker">{thenPoster ? 'Then: as first restored' : 'Play in your browser'}</p>
             <h1 id="poster-name">{poster ? poster.name : null}</h1>
@@ -110,24 +111,12 @@ export function Play() {
             src={running ? page(running.app, running.watch) : undefined}
             style={running && size ? size : undefined} />
         </div>
-        {/* No app named (or a wrong name): every app as a tile, one tap from playing it right here. */}
-        <div className="oops" id="oops" hidden={shown.mode !== 'oops'}>
-          <p id="oops-text">{shown.mode === 'oops' ? shown.text : null}</p>
-          <ul className="pick">
-            {APPS.map(a => (
-              <li key={a.id}>
-                <button type="button" onClick={() => {
-                  params.set('app', a.id);
-                  history.replaceState(null, '', '?' + params);   // a reload or a copied address keeps the app
-                  run(a, false);
-                }}>
-                  <img alt="" src={webp(a.shot, true)} loading="lazy" />
-                  <span>{a.name}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        {/* No app named (or a wrong name): a channel guide of every app, one tap from playing it right here. */}
+        {shown.mode === 'oops' && <Picker text={shown.text} onPick={a => {
+          params.set('app', a.id);
+          history.replaceState(null, '', '?' + params);   // a reload or a copied address keeps the app
+          run(a, false);
+        }} />}
       </main>
       <nav className="bar" aria-label="Old Java Applications">
         <a className="brand" href="index.html" target="_blank" rel="noopener" title="Old Java Applications: 20 recovered Java apps you can play in the browser">
