@@ -33,6 +33,7 @@ export const H = {
   chart: null as string[][] | null, // a controller's buttons, shown in the hint for a while (the runtime's gamepads)
   replay: false,                    // the app's page says it is recording (Replay shows)
   photo: false,                     // the app's page says it runs (Photo shows)
+  poster: false,                    // the app's picture covers its screen while its page loads (until it says it runs)
   pop: { shown: false, on: false, synced: false },   // Pop out, whether the app is out, and whether that has been asked
   filter: 'all',
   query: '',                        // the words typed into the gallery's filter field

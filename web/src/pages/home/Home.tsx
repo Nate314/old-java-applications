@@ -95,6 +95,7 @@ function Player() {
   const zoom = window.oldjavaZoom.fit();
   const arcade = window.oldjavaSkin.get() === 'arcade';
   const size = H.frame.size;
+  const frameBox = size ? { width: size.w + 'px', height: size.h + 'px', transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined } : undefined;
   const [more, setMore, moreAt] = useMore();
   return (
     <section className={'player' + (H.then ? ' then' : '') + (H.big ? ' big' : '')} id="player" aria-label="Now playing">
@@ -148,7 +149,10 @@ function Player() {
           {'Skip past ' + (a ? a.name : FIRST.name) + ' to the app list'}
         </button>
         <iframe key={H.frame.key} id="player-frame" title={H.frame.title} src={H.frame.src} allow="autoplay; clipboard-write; microphone" onLoad={P.frameLoaded}
-          style={size ? { width: size.w + 'px', height: size.h + 'px', transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined } : undefined} />
+          style={frameBox} />
+        {/* The app's picture while its page loads, so the screen is never blank; it fades as the app starts. Sized like the frame, so the app lands near its size. */}
+        {!H.then && <img key={'poster' + H.frame.key} className="poster" data-gone={H.poster ? undefined : ''} src={webp((a || FIRST).shot)} alt="" fetchPriority="high"
+          style={frameBox} />}
       </div>
       {/* The controller, docked under the screen: the runtime draws it in here (oldjavaPad.render). */}
       <div className={'docked' + (H.pad.drawn ? ' shim-pad' : '')} id="player-pad" aria-label={H.pad.drawn ? 'Controller' : undefined} hidden={!H.pad.shown}
