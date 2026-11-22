@@ -4,7 +4,7 @@
 # screen with touch emulation (where the band must offer its Keyboard button and the touch controller must show on the
 # apps that have one, without the buttons the app draws itself) and its Then page where it has one. On an app's own
 # page (wide and phone) and its Then page it first checks the early title card from the HTML has the live card's rows in the same places
-# (Test-EarlyTitle). On the home page it types into the gallery's filter field (Test-Search). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
+# (Test-EarlyTitle). On the home page it types into the gallery's filter field (Test-Search). The home page also loads on 400 and 360 px phones, where the poster the HTML paints must hand over to the player's own in place (Test-EarlyPoster). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
@@ -47,6 +47,12 @@ $Guard = @'
   try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: ok, write: ok, readText: function () { return Promise.resolve(''); }, read: function () { return Promise.resolve([]); } } }); } catch (e) {}
   document.execCommand = function () { return false; };
   ['alert', 'confirm', 'prompt'].forEach(function (n) { window[n] = function () { console.error('smoke: page called ' + n + '()'); return null; }; });
+  // The home page's early phone poster (Lead.tsx EarlyPoster), as the HTML painted it, for Test-EarlyPoster: its box
+  // is set once (absolute, in px) and the page removes it a frame after its player draws.
+  document.addEventListener('readystatechange', function () {
+    var e = document.getElementById('early-poster');
+    if (document.readyState === 'interactive' && e) { var r = e.getBoundingClientRect(); window.__smokeEarly = { left: r.left, width: r.width, mid: r.top + scrollY + r.height / 2, src: e.querySelector('img').src }; }
+  });
 })();
 '@
 
@@ -103,13 +109,14 @@ $KnownUnnamed = @{}
 # one and checks the window and its paint. -Click presses that button first and -Frame is the iframe the app is in
 # (play.html's player); -Exit closes the app and runs it again (see the top); -Missing expects the address itself to
 # answer 404 (the lost page); -Sheet is the page's app links: the last one opens the app in the play sheet (see the top);
-# -Phone loads it in a 400x800 phone screen with a finger for a pointer, so apps that pick a narrow layout at start are
-# checked in it too, and checks its touch extras (Test-Touch).
-function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [switch]$Phone, [switch]$Search) {
+# -Phone <width> loads it in a phone screen that wide and 800 tall with a finger for a pointer, so apps that pick a
+# narrow layout at start are checked in it too, and checks an app's touch extras (Test-Touch), the home page's early
+# poster (Test-EarlyPoster).
+function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [int]$Phone, [switch]$Search) {
     $t = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Cdp 'Page.navigate' @{ url = 'about:blank' } | Out-Null
     Invoke-Js '1' | Out-Null   # reads the last page's late events, then forgets them
-    if ($Phone) { Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = 400; height = 800; deviceScaleFactor = 1; mobile = $true } | Out-Null }
+    if ($Phone) { Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = $Phone; height = 800; deviceScaleFactor = 1; mobile = $true } | Out-Null }
     else { Invoke-Cdp 'Emulation.clearDeviceMetricsOverride' | Out-Null }
     # A phone's finger: (pointer: coarse) matches, so the page offers its Keyboard button and touch controller.
     Invoke-Cdp 'Emulation.setTouchEmulationEnabled' @{ enabled = [bool]$Phone; maxTouchPoints = 5 } | Out-Null
@@ -125,7 +132,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
     elseif ($Click) { $pressFirst = "(function (b) { if (b) b.click(); return !!b; })(document.querySelector('$Click'))" }
     if (-not $App) {
         if (-not (& $wait "document.readyState === 'complete' && !!document.querySelector('$ready')" 20000)) { $why = "page did not finish loading ($ready)" }
-        else { Start-Sleep -Milliseconds $Settle; if ($Search) { $why = Test-Search $wait } }
+        else { Start-Sleep -Milliseconds $Settle; if ($Search) { $why = Test-Search $wait } elseif ($Phone) { $why = Test-EarlyPoster $wait } }
     } elseif ($pressFirst -and -not (& $wait $pressFirst 20000)) { $why = "no $Click$Sheet to press" }
     elseif (-not (& $wait (& $in "!!(document.querySelector('.shim-title-play:not([disabled])') || document.querySelector('#desktop > *'))") 30000)) { $why = 'Play never became ready' }
     elseif (($Exit -or $Phone -or $path -like '*/then.html') -and ($why = Test-EarlyTitle)) { }   # the app's own page, wide and on a phone, and its Then page
@@ -161,6 +168,9 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
 # The pages visitors land on, then each app's page, its embedded forms (another site's widget, and filling it) and its
 # Then page where it has one.
 $pages = @(
+    # The phone ones first, while the profile has no stamps (a stamped visitor gets no early poster).
+    @{ name = 'home page at 400 px'; path = 'index.html'; ready = '#player-frame'; Phone = 400 }
+    @{ name = 'home page at 360 px'; path = 'index.html'; ready = '#player-frame'; Phone = 360 }
     @{ name = 'home page'; path = 'index.html'; ready = '#player-frame'; Search = $true }
     @{ name = 'story'; path = 'story.html'; ready = 'main' }
     # No ?app=: the tile picker of every app; its last tile plays that app right there.
@@ -175,7 +185,7 @@ foreach ($app in $Apps) {
     $pages += @{ name = $app; path = "$app/index.html"; App = $true; Exit = $true }
     $pages += @{ name = "$app ?embed"; path = "$app/index.html?embed"; App = $true }
     $pages += @{ name = "$app ?embed&full"; path = "$app/index.html?embed&full"; App = $true }
-    $pages += @{ name = "$app at 400 px"; path = "$app/index.html"; App = $true; Phone = $true }
+    $pages += @{ name = "$app at 400 px"; path = "$app/index.html"; App = $true; Phone = 400 }
     if (Test-Path (Join-Path $Site "$app/then.html")) { $pages += @{ name = "$app Then"; path = "$app/then.html"; App = $true } }
 }
 
@@ -220,6 +230,26 @@ $EarlyRows = @'
 function Test-EarlyTitle {
     $r = Invoke-Js $EarlyRows -Await
     if ($r) { "early title: $r (early vs live)" }
+}
+
+# How far (px) the live poster's middle may sit from the early one's at a phone width: the early one guesses the start
+# row and player bar take 190 px under the lead (Lead.tsx), which holds from ~380 px up; under that they wrap and
+# early-poster.ts glides the live one into place. Lower a number when the guess gets better.
+$KnownPosterGlide = @{ 360 = 15 }   # 13 px when it came in (round 78)
+
+# The home page's early phone poster (window.__smokeEarly from $Guard) handed over to the player's own (early-poster.ts):
+# gone from the page, the same picture's address (one download), the same width and place across, and its middle
+# within 2 px of the live one's (or the width's $KnownPosterGlide). Returns why it failed, or nothing.
+function Test-EarlyPoster($wait) {
+    $live = "document.querySelector('#screen .poster')"
+    if (-not (Invoke-Js '!!window.__smokeEarly')) { return 'early poster: the HTML painted none' }
+    if (-not (& $wait "!document.getElementById('early-poster') && !!$live && !$live.getAnimations().length" 5000)) { return 'early poster: still on the page, or no live poster that has stopped gliding' }
+    $r = Invoke-Js "(function (e, l) { var b = l.getBoundingClientRect(); return [e.src === l.src ? '' : 'picture ' + e.src + ' vs ' + l.src, Math.round(e.left - b.left), Math.round(e.width - b.width), Math.round(e.mid - (b.top + scrollY + b.height / 2))].join(','); })(window.__smokeEarly, $live)"
+    $src, $left, $width, $mid = "$r" -split ','
+    $slack = [Math]::Max(2, [int]$KnownPosterGlide[$Phone])
+    $bad = @($src) + $(if ([Math]::Abs($left) -gt 2) { "left $left px" }) + $(if ([Math]::Abs($width) -gt 2) { "width $width px" }) + $(if ([Math]::Abs($mid) -gt $slack) { "middle $mid px (allowed $slack)" }) | Where-Object { $_ }
+    if ($bad) { return "early poster: $($bad -join ', ') (early vs live)" }
+    Write-Host "     early poster: middle $mid px from the live one's at $Phone px"
 }
 
 # The app's exit and Run again, on its page with the app running; returns why it failed, or nothing.
