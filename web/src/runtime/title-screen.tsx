@@ -12,6 +12,7 @@ import { AGAIN_KEY, CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
 import { Attract } from './title-attract';
+import { moreParts } from './title-card';
 
 /** A line of the boot log: [label, value, class]. */
 export type LogLine = [string, string, string];
@@ -33,8 +34,29 @@ function open(apps?: CatalogApp[]): Opened {
   auto = chosen();
   var ui: TitleControl | null = null, screen: HTMLElement | null = null;
   const close = openLayer(<TitleScreen apps={apps} onGo={e => { if (onGo) onGo(e); }} onMount={(c, el) => { ui = c; screen = el; }} />);
+  dropEarlyOnStage();
   titleLog = ui!.line;
   return { ui: ui!, screen: screen!, close };
+}
+
+/** The card the page's HTML painted before the runtime ran (src/pages/app/AppPage.tsx, EarlyTitle). */
+const dropEarly = () => document.getElementById('shim-title-early')?.remove();
+
+/**
+ * The live card waits unseen under the early one (shim.css) until the band is up and has its height (start.ts stages
+ * it a frame after the title opens, or at DOMContentLoaded), so it is first seen where it stays. At most a second.
+ */
+function dropEarlyOnStage(frames = 60) {
+  const html = document.documentElement;
+  if (!document.getElementById('shim-title-early')) return;
+  if (frames && !(html.hasAttribute('data-stage') && parseFloat(html.style.getPropertyValue('--bar-h')) > 0)) {
+    requestAnimationFrame(() => dropEarlyOnStage(frames - 1));
+    return;
+  }
+  dropEarly();
+  // Ready while it was unseen, Play could not take the keyboard then (ready, below).
+  const play = document.querySelector<HTMLElement>('.shim-title.ready:not(.leaving) .shim-title-play');
+  if (play && !sourcePanel && document.activeElement === document.body) play.focus({ preventScroll: true });
 }
 
 // The title screen opens as soon as the runtime has run and apps.json has answered, not at DOMContentLoaded:
@@ -44,12 +66,13 @@ function open(apps?: CatalogApp[]): Opened {
 export function init() {
   var again = null;
   try { again = sessionStorage.getItem(AGAIN_KEY); } catch (e) { /* no Run again shortcut */ }
-  if (!appId() || embedded || watchWanted() || again === appId()) return;   // start.ts's own reasons to skip it
+  if (!appId() || embedded || watchWanted() || again === appId()) { dropEarly(); return; }   // start.ts's own reasons to skip it
   waiting = true;
   catalog().then(function (apps) { if (waiting) early = open(apps); });
   // After start.ts's listener (its init runs first): by now it has taken the screen over, if the page has one.
   document.addEventListener('DOMContentLoaded', function () {
     waiting = false;
+    if (!onGo) dropEarly();   // no title screen after all (a screen saver or shot mode)
     if (!early) return;
     early.close();
     early = null;
@@ -194,12 +217,6 @@ function launch(pic: HTMLElement, leave: () => void, fade: () => void) {
 }
 
 const TAP = matchMedia('(pointer: coarse)').matches;   // a phone or tablet: no keys to press
-
-/** What the title's More line folds away, named in its summary. */
-function moreParts(app: CatalogApp, then: boolean) {
-  return ['the source', app.then && (then ? 'today’s version' : 'the first version'), !then && 'the desktop jar', !then && 'its story']
-    .filter(Boolean).join(', ');
-}
 
 /** The title screen itself; titleScreen above runs it. */
 function TitleScreen({ apps, onGo, onMount }: {

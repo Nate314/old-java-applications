@@ -3097,6 +3097,25 @@ button.shim-toast-go {
   padding-top: calc(var(--bar-h, 40px) + 16px);
 }
 
+/* The title card an app page's HTML paints before the runtime has run (AppPage.tsx, EarlyTitle) keeps the room the
+   band will take (one 40 px row; two, about 65 px, under 560 px), so it stays put while the band arrives. */
+#shim-title-early {
+  padding-top: 56px;
+}
+
+@media (max-width: 560px) {
+  #shim-title-early {
+    padding-top: 81px;
+  }
+}
+
+/* Its boot log keeps its room but shows no empty box; the live title screen under it waits until it takes over
+   (title-screen.tsx). */
+#shim-title-early .shim-title-log,
+#shim-title-early ~ .shim-title {
+  visibility: hidden;
+}
+
 /* Where the source panel docks beside the app (wider pages), the stage ends at its left edge, so the windows
    stay in view next to their code. */
 @media (min-width: 901px) {
