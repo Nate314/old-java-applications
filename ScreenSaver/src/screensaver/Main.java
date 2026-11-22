@@ -1,5 +1,6 @@
 package screensaver;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -35,6 +36,10 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    static final double CYCLE_MILLIS = 30_000;
    static final double CAPTION_MILLIS = 5_000;
    static final double FADE_MILLIS = 450;
+   /** While cycling, the next saver runs this long in a little screen in the corner before it grows to the whole one. */
+   static final double PREVIEW_MILLIS = 4_000;
+   /** How long the corner screen takes to grow in when it appears. */
+   static final double PREVIEW_IN_MILLIS = 300;
    /** Mouse moves in the first moments only set where the mouse rests, since showing the window can report one. */
    static final long GRACE_MILLIS = 1_500;
    static final double MIN_SPEED = 0.05;
@@ -78,6 +83,8 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    private boolean play;
    /** Music (M): off at every start and never saved, so the site's idle screen saver stays silent. */
    private boolean music;
+   /** Cycling, in the last moments of a saver: the next one, already running in its corner screen, or null. */
+   private Saver upNext;
 
    public Main() {
       this.savers = Arrays.asList(new Tiles(Tiles.GREEN_CIRCLES), new Tiles(Tiles.GREEN_SQUARES), new Tiles(Tiles.BRIGHT_CIRCLES),
@@ -155,10 +162,84 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       this.shownFor += millis;
       this.fadeLeft = Math.max(0, this.fadeLeft - millis);
       this.captionLeft = Math.max(0, this.captionLeft - millis);
-      if (this.settings.cycle && this.shownFor >= CYCLE_MILLIS) {
-         this.show((this.index() + 1) % this.savers.size(), true);
-      }
+      this.tickUpNext(millis);
       this.screen.repaint();
+   }
+
+   /**
+    * Cycling: for the last few seconds the next saver runs (quietly) in a little screen in the corner, then grows from
+    * it to the whole screen, so one saver hands over to the next instead of cutting to black.
+    */
+   private void tickUpNext(double millis) {
+      if (!this.settings.cycle || this.shownFor < CYCLE_MILLIS - PREVIEW_MILLIS) {
+         this.upNext = null;
+         return;
+      }
+      if (this.upNext == null) {
+         this.upNext = this.savers.get((this.index() + 1) % this.savers.size());
+         this.upNext.reset(this.SCREEN_WIDTH, this.SCREEN_HEIGHT, this.random);
+      }
+      Saver next = this.upNext;
+      Music.quietly(() -> next.tick(millis * this.speedFor(next)));
+      if (this.shownFor >= CYCLE_MILLIS) {
+         this.handOff();
+      }
+   }
+
+   /** The corner screen becomes the whole one: the next saver carries on from where its preview was. */
+   private void handOff() {
+      this.saver.touch(null, false);
+      this.zoomFrom = this.preview(this.screen.getWidth(), this.screen.getHeight(), 1);
+      // Calm: no growing, the next saver fades in as one picked by the keys does.
+      this.zoomLeft = calm() ? 0 : Gallery.ZOOM_MILLIS;
+      this.fadeLeft = calm() ? FADE_MILLIS : 0;
+      this.saver = this.upNext;
+      this.upNext = null;
+      this.settings.saver = this.index();
+      this.shownFor = 0;
+      this.captionLeft = CAPTION_MILLIS;
+      this.settings.save();
+   }
+
+   /** The corner screen, bottom right, in the whole screen's shape, grown t (0 to 1) of the way in from that corner. */
+   Rectangle preview(int width, int height, double t) {
+      int margin = Math.max(8, Math.min(width, height) / 40);
+      int w = Math.max(1, (int)(Math.min(width * 0.4, Math.max(110, width / 5.0)) * t));
+      int h = Math.max(1, (int)(w * (double)this.SCREEN_HEIGHT / this.SCREEN_WIDTH));
+      return new Rectangle(width - margin - w, height - margin - h, w, h);
+   }
+
+   /** The next saver live in its corner screen, framed as on the wall, with its name and the seconds left over it. */
+   private void paintUpNext(Graphics2D g, int width, int height) {
+      double in = calm() ? 1 : Math.min(1, (this.shownFor - (CYCLE_MILLIS - PREVIEW_MILLIS)) / PREVIEW_IN_MILLIS);
+      Rectangle r = this.preview(width, height, in);
+      this.paintBetween(g, this.upNext, r, 0, width, height);
+      g.setStroke(new BasicStroke(2));
+      g.setColor(Gallery.GREEN);
+      g.drawRect(r.x - 1, r.y - 1, r.width + 1, r.height + 1);
+      g.setStroke(new BasicStroke(1));
+      if (in < 1) {
+         return;
+      }
+      int size = Math.max(10, Gallery.textSize(width, height) * 4 / 5);
+      g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, size));
+      FontMetrics m = g.getFontMetrics();
+      String label = this.upNextLabel();
+      if (m.stringWidth(label) > r.width) {
+         label = "Next: " + this.upNext.name();
+      }
+      int x = r.x + r.width - m.stringWidth(label);
+      int y = r.y - size / 2 - m.getDescent();
+      g.setColor(new Color(0, 0, 0, 170));
+      g.fillRoundRect(x - size / 2, y - m.getAscent() - size / 4, m.stringWidth(label) + size, m.getHeight() + size / 2, size, size);
+      g.setColor(Gallery.GREEN);
+      g.drawString(label, x, y);
+   }
+
+   /** Over the corner screen: what comes next and in how many seconds, or null when nothing is coming. */
+   String upNextLabel() {
+      return this.upNext == null ? null
+         : "Next: " + this.upNext.name() + " in " + (int)Math.ceil((CYCLE_MILLIS - this.shownFor) / 1000);
    }
 
    private double speedFor(Saver s) {
@@ -259,12 +340,12 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
          this.gallery.paint(g, width, height, this.SCREEN_WIDTH, this.SCREEN_HEIGHT);
          Rectangle to = this.gallery.cell(this.index());
          if (this.shrinkLeft > 0 && to != null) {
-            this.paintBetween(g, to, this.shrinkLeft / Gallery.ZOOM_MILLIS, width, height);
+            this.paintBetween(g, this.saver, to, this.shrinkLeft / Gallery.ZOOM_MILLIS, width, height);
          }
          return;
       }
       if (this.zoomLeft > 0) {
-         this.paintBetween(g, this.zoomFrom, 1 - this.zoomLeft / Gallery.ZOOM_MILLIS, width, height);
+         this.paintBetween(g, this.saver, this.zoomFrom, 1 - this.zoomLeft / Gallery.ZOOM_MILLIS, width, height);
       } else {
          this.saver.paint(g);
       }
@@ -275,14 +356,17 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       if (this.captionLeft > 0) {
          this.paintCaption(g, width, height);
       }
+      if (this.upNext != null) {
+         this.paintUpNext(g, width, height);
+      }
       if (this.playing()) {
          Font font = new Font(Font.SANS_SERIF, Font.BOLD, Gallery.textSize(width, height));
          Gallery.paintButton(g, this.done(width, height), "Done", false, font);
       }
    }
 
-   /** Paints the saver t of the way (eased) from its little screen cell to the whole width x height one. */
-   private void paintBetween(Graphics2D g, Rectangle cell, double t, int width, int height) {
+   /** Paints saver s t of the way (eased) from its little screen cell to the whole width x height one. */
+   private void paintBetween(Graphics2D g, Saver s, Rectangle cell, double t, int width, int height) {
       t = t * t * (3 - 2 * t);
       Graphics2D z = (Graphics2D)g.create();
       z.translate(cell.x * (1 - t), cell.y * (1 - t));
@@ -290,7 +374,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       z.scale((cell.width + (width - cell.width) * t) / this.SCREEN_WIDTH, (cell.height + (height - cell.height) * t) / this.SCREEN_HEIGHT);
       z.setColor(Color.BLACK);
       z.fillRect(0, 0, this.SCREEN_WIDTH, this.SCREEN_HEIGHT);
-      this.saver.paint(z);
+      s.paint(z);
       z.dispose();
    }
 

@@ -421,6 +421,15 @@ public class SaverCheck {
          }
       }
       check(Music.sounding() <= 32, "a bounded number of notes held");
+      // The next saver, previewing in its corner while cycling, ticks quietly: it rings nothing and cuts no note short.
+      int held = Music.sounding();
+      heard.clear();
+      Saver next = list.get(0);
+      next.reset(1920, 1080, new Random(4));
+      for (int frame = 0; frame < 1000; frame++) {
+         Music.quietly(() -> next.tick(16 * 40));
+      }
+      check(heard.isEmpty() && Music.sounding() == held && Music.live(), "a previewing saver is quiet: " + heard.size() + " notes");
       Music.live(false);
       check(Music.sounding() == 0 && open[0] == 0, "off lets every note go: " + open[0]);
       Music.listen(null);
