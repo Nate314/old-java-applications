@@ -283,5 +283,6 @@ public class TWindow extends TContainer {
         if (c != null) {
             Edt.post(c::repaint);
         }
+        TDesktop.focusMayHaveMoved(); // every change that can move hasFocus() comes through here
     }
 }

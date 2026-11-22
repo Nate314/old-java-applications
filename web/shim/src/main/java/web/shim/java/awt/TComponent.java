@@ -9,6 +9,8 @@ import web.rt.Files;
 import web.rt.Js;
 import web.shim.java.awt.web.TRepaint;
 import web.shim.java.awt.event.TComponentEvent;
+import web.shim.java.awt.event.TFocusEvent;
+import web.shim.java.awt.event.TFocusListener;
 import web.shim.java.awt.event.TKeyEvent;
 import web.shim.java.awt.event.TKeyListener;
 import web.shim.java.awt.event.TMouseEvent;
@@ -50,6 +52,7 @@ public class TComponent implements TImageObserver {
     private final List<TMouseListener> mouseListeners = new ArrayList<>();
     private final List<TMouseMotionListener> mouseMotionListeners = new ArrayList<>();
     private final List<TKeyListener> keyListeners = new ArrayList<>();
+    private final List<TFocusListener> focusListeners = new ArrayList<>();
 
     private JSObject element;
     private TAccessibleContext accessibleContext;
@@ -787,6 +790,20 @@ public class TComponent implements TImageObserver {
         keyListeners.remove(l);
     }
 
+    public void addFocusListener(TFocusListener l) {
+        if (l != null) {
+            focusListeners.add(l);
+        }
+    }
+
+    public void removeFocusListener(TFocusListener l) {
+        focusListeners.remove(l);
+    }
+
+    public TFocusListener[] getFocusListeners() {
+        return focusListeners.toArray(new TFocusListener[0]);
+    }
+
     public boolean hasMouseListeners() {
         return !mouseListeners.isEmpty();
     }
@@ -809,6 +826,8 @@ public class TComponent implements TImageObserver {
             } else {
                 processMouseEvent((TMouseEvent) e);
             }
+        } else if (e instanceof TFocusEvent) {
+            processFocusEvent((TFocusEvent) e);
         } else if (e instanceof TComponentEvent) {
             processComponentEvent((TComponentEvent) e);
         }
@@ -867,6 +886,16 @@ public class TComponent implements TImageObserver {
     }
 
     protected void processComponentEvent(TComponentEvent e) {
+    }
+
+    protected void processFocusEvent(TFocusEvent e) {
+        for (TFocusListener l : new ArrayList<>(focusListeners)) {
+            if (e.getID() == TFocusEvent.FOCUS_GAINED) {
+                l.focusGained(e);
+            } else {
+                l.focusLost(e);
+            }
+        }
     }
 
     @Override

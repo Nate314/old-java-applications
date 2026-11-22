@@ -545,6 +545,31 @@ public final class TDesktop {
         });
     }
 
+    private static boolean focusSweepPosted;
+
+    /** Posted once per burst of focus changes: the focus listeners hear where the focus ended up (FocusListener). */
+    public static void focusMayHaveMoved() {
+        if (focusSweepPosted) {
+            return;
+        }
+        focusSweepPosted = true;
+        Edt.post(() -> {
+            focusSweepPosted = false;
+            TKeyboardFocusManager.getCurrentKeyboardFocusManager().focusMovedTo(focusedComponent());
+        });
+    }
+
+    /** The component whose hasFocus() is true, most recently used window first; null when none has it. */
+    private static TComponent focusedComponent() {
+        for (int i = windows.size() - 1; i >= 0; i--) {
+            TComponent owner = windows.get(i).focusOwner();
+            if (owner != null && owner.hasFocus()) {
+                return owner;
+            }
+        }
+        return null;
+    }
+
     private static TComponent focusOwnerOf(TWindow w) {
         TComponent owner = w.focusOwner();
         return owner != null && owner.isShowing() ? owner : w;
