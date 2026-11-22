@@ -78,6 +78,53 @@ public class WindowsKeyCheck {
          mouse(key, MouseEvent.MOUSE_RELEASED, MouseEvent.BUTTON1);
          check(log.equals(List.of("+" + win, "-" + win)), "sliding back onto the key before letting go is a plain click: " + log);
          log.clear();
+         // The slide lesson: a fingertip drawn holding the key and sliding it right, then left; it presses nothing.
+         int loop = WindowsKey.LESSON_LOOP;
+         check(WindowsKey.lesson(-1) == null && WindowsKey.lesson(2L * loop) == null, "no lesson before it starts or after it ends");
+         int[] pose = WindowsKey.lesson(1800);
+         check(pose[0] == 1 && pose[1] == right && pose[2] == WindowsKey.SLIDE + 12 && pose[3] == 255, "first the lesson slides right");
+         pose = WindowsKey.lesson(1000);
+         check(pose[0] == 1 && pose[1] == 0 && pose[2] > 0 && pose[2] < WindowsKey.SLIDE, "short of SLIDE it picks no arrow yet: " + pose[2]);
+         pose = WindowsKey.lesson(loop + 1800);
+         check(pose[0] == 1 && pose[1] == KeyEvent.VK_LEFT && pose[2] == -(WindowsKey.SLIDE + 12), "then left");
+         pose = WindowsKey.lesson(2600);
+         check(pose[0] == 0 && pose[3] == 0, "between slides it lets go and fades");
+         WindowsKey taught = new WindowsKey(keys);
+         taught.setSize(100, 106);
+         int[] slid = {0};
+         taught.slid = () -> slid[0]++;
+         BufferedImage plain = new BufferedImage(100, 106, BufferedImage.TYPE_INT_ARGB);
+         taught.paint(plain.getGraphics());
+         taught.teach(-1800);
+         check(taught.teaching() && !taught.isDown(), "a lesson under way, the key itself not down");
+         BufferedImage ghost = new BufferedImage(100, 106, BufferedImage.TYPE_INT_ARGB);
+         taught.paint(ghost.getGraphics());
+         int changed = 0;
+         for (int py = 0; py < 106; py++) {
+            for (int px = 0; px < 100; px++) {
+               changed += plain.getRGB(px, py) != ghost.getRGB(px, py) ? 1 : 0;
+            }
+         }
+         check(changed > 1500 && log.isEmpty(), "the lesson draws the key held and slid, pressing nothing: " + changed + " px, " + log);
+         if (System.getProperty("lessonshot") != null) {
+            try {
+               javax.imageio.ImageIO.write(ghost, "png", new File(System.getProperty("lessonshot")));
+            } catch (java.io.IOException e) {
+               throw new RuntimeException(e);
+            }
+         }
+         mouse(taught, MouseEvent.MOUSE_ENTERED, MouseEvent.NOBUTTON);
+         check(!taught.teaching(), "the pointer coming onto the key ends the lesson");
+         taught.teach(-1800);
+         mouse(taught, MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
+         check(!taught.teaching(), "and so does a press");
+         drag(taught, 50 + WindowsKey.SLIDE + 30, 50);
+         taught.dispatchEvent(new MouseEvent(taught, MouseEvent.MOUSE_RELEASED, 0, 0, 50 + WindowsKey.SLIDE + 30, 50, 1, false, MouseEvent.BUTTON1));
+         check(slid[0] == 1, "a real slide is told, so the lesson can stop for good");
+         mouse(taught, MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
+         mouse(taught, MouseEvent.MOUSE_RELEASED, MouseEvent.BUTTON1);
+         check(slid[0] == 1, "a plain click is not a slide");
+         log.clear();
          ShortcutShelf shelf = new ShortcutShelf(keys);
          shelf.setSize(Test.WIDTH, ShortcutShelf.HEIGHT);
          for (int i = 0; i < ShortcutShelf.count(); i++) {
@@ -260,9 +307,11 @@ public class WindowsKeyCheck {
       left.size = 2;
       left.shelf = true;
       left.hover = true;
+      left.slid = true;
       left.save(file);
       Placement back = Placement.load(file);
-      check(back.x == 300 && back.bottom == 500 && back.size == 2 && back.shelf && back.hover && back.scale() == 2, "a place comes back as it was saved");
+      check(back.x == 300 && back.bottom == 500 && back.size == 2 && back.shelf && back.hover && back.slid && back.scale() == 2, "a place comes back as it was saved");
+      check(!fresh.slid, "the slide lesson shows until the key has been slid");
       check(!fresh.hover, "hover to press starts off");
       java.nio.file.Files.write(file.toPath(), "x=12\nbottom=oops\nsize=9\nshelf=on\njunk\n".getBytes("utf-8"));
       back = Placement.load(file);
@@ -292,6 +341,7 @@ public class WindowsKeyCheck {
             click(shelf, row.x + 5, row.y + 5, row.x + 5, row.y + 5);
             check(Placement.load(file).hover, "hover to press is kept once turned on");
             WindowsKey frameKey = (WindowsKey) frame.getContentPane().getComponent(1);
+            check(frameKey.teaching(), "a first start shows the slide lesson");
             frameKey.dwell().at(0, System.currentTimeMillis() - Dwell.MS * 2 / 3);
             shelf.dwell().at(1, System.currentTimeMillis() - Dwell.MS / 3);
             if (System.getProperty("shot") != null) {
