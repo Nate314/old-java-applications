@@ -151,7 +151,7 @@ function EarlyTitle({ app }: { app: App }) {
         <div className="shim-title-text">
           <span className="shim-title-cat">{app.cat[0].toUpperCase() + app.cat.slice(1)}</span>
           <h1>{app.name}</h1>
-          <button type="button" className="shim-title-play" disabled>Loading…</button>
+          <button type="button" className="shim-title-play" disabled>▶ Play</button>
           <span className="shim-title-press">or press any key</span>
           <p className="shim-title-hint">{app.hint}</p>
           <p className="shim-title-stamp" style={{ visibility: 'hidden' }}>{'New: playing it adds stamp 1 of ' + APPS.length + ' to your passport'}</p>
@@ -164,9 +164,16 @@ function EarlyTitle({ app }: { app: App }) {
       </div>
     </div>,
   ).replace(/^<link rel="preload"[^>]*>/, '');   // React's own preload for the picture: the head already asks for it
-  return '<template id="shim-title-early-t">' + card + '</template><script>try{/[?&](embed|watch)(=|&|$)/.test(location.search)||' +
-    'sessionStorage.getItem("oldjava.again")===' + JSON.stringify(app.id) +
-    '||document.currentScript.before(document.getElementById("shim-title-early-t").content)}catch(e){}</script>\n';
+  // A press already counts on it (a click on the card, or a key): it reads Starting…, and the runtime starts the app once
+  // its files are in (title-screen.tsx: oldjavaWanted on arrival, oldjavaPress after).
+  return '<template id="shim-title-early-t">' + card + '</template><script>try{if(!(/[?&](embed|watch)(=|&|$)/.test(location.search)||' +
+    'sessionStorage.getItem("oldjava.again")===' + JSON.stringify(app.id) + ')){' +
+    'document.currentScript.before(document.getElementById("shim-title-early-t").content);' +
+    'var c=document.getElementById("shim-title-early"),b=c.querySelector(".shim-title-play");' +
+    'if(matchMedia("(pointer: coarse)").matches)c.querySelector(".shim-title-press").textContent="or tap anywhere";' +
+    'var w=function(e){if(!c.isConnected||(e.type=="click"?e.target.closest("a"):/^(Tab|Shift|Control|Alt|Meta)$/.test(e.key)||' +
+    '(e.target!=document.body&&!c.contains(e.target))))return;window.oldjavaWanted=1;c.classList.add("starting");b.textContent="Starting…";' +
+    'window.oldjavaPress&&window.oldjavaPress(e)};c.addEventListener("click",w);document.addEventListener("keydown",w,true)}}catch(e){}</script>\n';
 }
 
 function page(head: ReactElement, body: Record<string, string>, inBody = ''): string {
