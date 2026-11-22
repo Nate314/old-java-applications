@@ -5,7 +5,7 @@
 // The tab chosen last is remembered; fresh news (an app you played has changed) takes the panel once per visit.
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { APPS } from '../../shared/catalog';
-import { H, draw, setBeforeDraw } from './model';
+import { H, draw, drawPart, setBeforeDraw } from './model';
 import { unseenCount } from './WhatsNew';
 import { store, stored } from '../../shared/stored';
 
@@ -46,7 +46,7 @@ export function tabClick(id: string) {
   chosenByVisitor = true;
   store(KEY, id);
   H.tab = id;
-  draw();
+  drawPart('arcade');
 }
 
 export function tabKey(e: ReactKeyboardEvent, id: string) {

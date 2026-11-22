@@ -7,7 +7,7 @@ import { APPS, type App } from '../../shared/catalog';
 import { byId } from '../../shared/dom';
 import { linkState, linkedApp } from '../../shared/link-state';
 import { readJson, store } from '../../shared/stored';
-import { H, draw, indexOfApp } from './model';
+import { H, draw, drawPart, indexOfApp } from './model';
 import { TOUR } from './tour';
 
 const MIN_WIDTH = 900;
@@ -224,7 +224,7 @@ export function bigClick() {
 
 export function filterClick(f: string) {
   H.filter = f;
-  draw();
+  drawPart('gallery');
 }
 
 // The keyboard games get a controller docked under the screen (the runtime builds it). Its presses go into
