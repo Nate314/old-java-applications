@@ -484,6 +484,7 @@ public final class RunnerCheck {
 
       coachChecks();
       guideChecks();
+      padChecks();
       System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore()
          + ", ear player average " + earTotal / 40 + ", " + lateTotal / 40 + " when up to 2 steps late)");
       System.exit(0);
@@ -652,6 +653,86 @@ public final class RunnerCheck {
       assert !new RunnerPanel(past, 1).guiding() : "gone once your best reaches the first night";
       System.out.println("guide: following the mark reached " + RunnerPanel.GUIDE_UNTIL + " on " + reached + " of 10 courses, average "
          + total / 10);
+   }
+
+   /**
+    * The thumb pads (a phone held upright): only when asked for, under the game; a press on RUN starts the run, DUCK ducks
+    * until let go, JUMP jumps, the lit mark fills its pad, a crash's pad says RUN AGAIN, and in two players they are P1 and P2.
+    */
+   private static void padChecks() throws Exception {
+      assert panel(1, null).getPreferredSize().height == RunnerPanel.HEIGHT : "no pads unless asked for";
+      File file = File.createTempFile("dinogame", ".txt");
+      file.delete();
+      file.deleteOnExit();
+      RunnerPanel p = new RunnerPanel(Records.load(file), 1, Sounds.silent(false), true);
+      int height = RunnerPanel.HEIGHT + RunnerPanel.PADS;
+      assert p.getPreferredSize().height == height;
+      p.setSize(Runner.WIDTH, height);
+      Runner r = p.runner();
+      int padY = RunnerPanel.HEIGHT + RunnerPanel.PADS / 2;
+      int duckX = Runner.WIDTH / 4;
+      int jumpX = Runner.WIDTH * 3 / 4;
+      mouse(p, jumpX, padY, true);
+      assert r.state() == Runner.State.RUNNING : "RUN starts the run";
+      mouse(p, jumpX, padY, false);
+      while (r.isJumping()) {
+         p.step();
+      }
+      mouse(p, duckX, padY, true);
+      p.step();
+      assert r.isDucking() : "DUCK ducks while held";
+      mouse(p, duckX, padY, false);
+      p.step();
+      assert !r.isDucking() : "and lets go";
+      mouse(p, jumpX, padY, true);
+      assert r.isJumping() : "JUMP jumps";
+      mouse(p, jumpX, padY, false);
+      BufferedImage shot = new BufferedImage(Runner.WIDTH, height, BufferedImage.TYPE_INT_RGB);
+      // The lit mark fills the pad it asks for (sampled at the pad's top left, inside its border, clear of its words).
+      boolean litPad = false;
+      for (int i = 0; i < 600 && r.state() == Runner.State.RUNNING && !litPad; i++) {
+         int[] g = p.guide();
+         if (g[1] == 1 && !r.isJumping()) {
+            Graphics2D sg = shot.createGraphics();
+            p.paint(sg);
+            sg.dispose();
+            int x = g[0] == Ears.DUCK ? 30 : Runner.WIDTH / 2 + 24;
+            litPad = shot.getRGB(x, RunnerPanel.HEIGHT + 20) == RunnerPanel.INK.getRGB()
+               && shot.getRGB(g[0] == Ears.DUCK ? Runner.WIDTH / 2 + 24 : 30, RunnerPanel.HEIGHT + 20) == RunnerPanel.PAPER.getRGB();
+         }
+         p.step();
+      }
+      assert litPad : "the lit mark fills its pad, the other stays paper";
+      stepToCrash(r);
+      for (int i = 0; i < 30; i++) {
+         p.step();
+      }
+      mouse(p, jumpX, padY, true);
+      mouse(p, jumpX, padY, false);
+      assert r.state() == Runner.State.RUNNING : "RUN AGAIN runs again";
+      p.togglePlayers();
+      mouse(p, duckX, padY, true);
+      mouse(p, duckX, padY, false);
+      assert p.duel().running() : "either pad starts both players";
+      while (p.duel().p1.isJumping() || p.duel().p2.isJumping()) {
+         p.step();
+      }
+      mouse(p, duckX, padY, true);
+      assert p.duel().p1.isJumping() && !p.duel().p2.isJumping() : "the left pad is P1's jump";
+      mouse(p, duckX, padY, false);
+      System.out.println("pads: run, duck, jump, lit mark, run again and two players");
+   }
+
+   private static void mouse(RunnerPanel p, int x, int y, boolean down) {
+      java.awt.event.MouseEvent e = new java.awt.event.MouseEvent(p, down ? java.awt.event.MouseEvent.MOUSE_PRESSED
+         : java.awt.event.MouseEvent.MOUSE_RELEASED, 0, 0, x, y, 1, false, java.awt.event.MouseEvent.BUTTON1);
+      for (java.awt.event.MouseListener l : p.getMouseListeners()) {
+         if (down) {
+            l.mousePressed(e);
+         } else {
+            l.mouseReleased(e);
+         }
+      }
    }
 
    private static void stepToCrash(Runner r) {
