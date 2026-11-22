@@ -3,9 +3,9 @@
 // Saved cards get an Offline chip, and the panel's cartridge case shows each app saved or not (tap one to save it alone); with no connection the banner says so and unsaved cards step back.
 // What the panel, the chips and the banner show is in H.take; Home.tsx draws it.
 import { APPS, webp } from '../../shared/catalog';
+import { CACHE, pageNames } from '../../sw/offline-files';
 import { H, draw } from './model';
 
-const CACHE = 'oldjava-v1';   // the cache sw.js serves from
 const total = APPS.length;
 const take = H.take;
 
@@ -36,26 +36,30 @@ function shell(bundle: string[]) {
   APPS.forEach(a => files.push(a.shot, webp(a.shot), webp(a.shot, true)));
   return files.map(abs);
 }
+type Page = { page: string; program: string; own: string[] };
+// An app with a Then page (its first restored version, one tap away on its page) is saved with it, and with the
+// README that page reads its known quirks from (then-and-now.tsx).
+function pagesOf(id: string): Page[] {
+  const pages: Page[] = [{ page: 'index.html', program: 'classes.js', own: [] }];
+  if (APPS.find(a => a.id === id)?.then) pages.push({ page: 'then.html', program: 'then.js', own: ['then-source/README.md'] });
+  return pages;
+}
 const lists: Record<string, Promise<string[]>> = {};
-function pageFiles(id: string, page: string, program: string, own: string[] = []) {
-  return fetch(id + '/' + page).then(r => {
+function pageFiles(id: string, { page, program, own }: Page) {
+  const url = abs(id + '/' + page);
+  return fetch(url).then(r => {
     if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
     return r.text();
   }).then(html => {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const extra = (doc.body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
+    const named = pageNames(url, html);
     // the program as the page names it (classes.js?v=<its build's stamp>), the key sw.js keeps it under
-    const named = doc.querySelector('script[src^="' + program + '"]')?.getAttribute('src') || program;
-    return [named].concat(extra, own, page).map(f => id + '/' + f);   // the page last, once what it needs is in
+    const stamped = named.code.find(f => new URL(f).pathname === new URL(program, url).pathname) || abs(id + '/' + program);
+    return [stamped].concat(named.data, own.map(f => abs(id + '/' + f)), url);   // the page last, once what it needs is in
   });
 }
-// An app with a Then page (its first restored version, one tap away on its page) is saved with it, and with the
-// README that page reads its known quirks from (then-and-now.tsx).
 function filesOf(id: string) {
   if (!lists[id]) {
-    const pages = [pageFiles(id, 'index.html', 'classes.js')];
-    if (APPS.find(a => a.id === id)?.then) pages.push(pageFiles(id, 'then.html', 'then.js', ['then-source/README.md']));
-    lists[id] = Promise.all(pages).then(both => [...new Set(both.flat())].map(abs));
+    lists[id] = Promise.all(pagesOf(id).map(p => pageFiles(id, p))).then(both => [...new Set(both.flat())]);
     lists[id].catch(() => { delete lists[id]; });
   }
   return lists[id];
@@ -79,7 +83,7 @@ function check() {
   return caches.open(CACHE).then(cache => Promise.all(APPS.map(a => {
     const id = a.id;
     // an app whose pages are not kept is not saved: no need to fetch them for their file lists (which fails offline)
-    const pages = [id + '/index.html'].concat(a.then ? [id + '/then.html'] : []).map(abs);
+    const pages = pagesOf(id).map(p => abs(id + '/' + p.page));
     return Promise.all(pages.map(p => cache.match(p))).then(hits => hits.every(Boolean)
       ? filesOf(id).then(files => Promise.all(files.map(f => cache.match(f)))) : [undefined])
       .then(hits => { take.saved[id] = hits.every(Boolean); }, () => { take.saved[id] = false; });
