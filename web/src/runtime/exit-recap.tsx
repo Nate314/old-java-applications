@@ -1,4 +1,4 @@
-// The exit screen's recap of the run that just ended (exitScreen in source-viewer.tsx shows it at the top): the
+// The exit screen's recap of the run that just ended (exit-screen.tsx shows it at the top): the
 // last moments on a muted loop from instant replay (a click opens them to save or share), how long the app ran
 // since Play, and the visitor's record line, marked Updated when this run changed it.
 import { useEffect, useState } from 'react';

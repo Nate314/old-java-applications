@@ -1,4 +1,4 @@
-// The box over the stage: Loading..., a missing program, the app's exit screen (exitScreen in source-viewer.tsx)
+// The box over the stage: Loading..., a missing program, the app's exit screen (exitScreen in exit-screen.tsx)
 // and its plain form in the player.
 import type { ReactNode, Ref } from 'react';
 import { appId } from '../catalog';
