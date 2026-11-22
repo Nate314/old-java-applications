@@ -15,6 +15,7 @@
 // needed (src/runtime/lazy) is imported, so Vite writes it as chunks of its own.
 // Built names carry a hash of their content (vite.config.ts). public/shim.css (with the forced-colors.css it imports) is
 // written once more as assets/shim-<hash>.css, which the pages link; the root copy stays for anyone who links it there.
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -68,7 +69,7 @@ const withSkins = (html: string) => html.replace(/href="((?:\.\.\/)?)shim\.css"/
 /** A script that writes the render-blocking tag only on a trip from another page of the site (Painted early, below). */
 const onTrip = (blockingTag: string) => '<script>try{sessionStorage.getItem("oldjava.trip")&&document.write(' +
   JSON.stringify(blockingTag).replace(/<\//g, '<\\/') + ')}catch(e){}</script>';
-/** An app page, whose HTML holds its title card (AppPage.tsx, EarlyTitle), paints early as the home page does. */
+/** An app page or Then page, whose HTML holds its title card (AppPage.tsx, EarlyTitle), paints early as the home page does. */
 const paintedEarly = (html: string) => html.replace(/<script type="module" src="[^"]+" blocking="render"><\/script>/,
   tag => onTrip(tag) + tag.replace(' blocking="render"', ''));
 
@@ -90,6 +91,16 @@ function compareRest(html: string): string {
   const json = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
   return html.replace(empty, () => '<script>(function(){var m=' + json(copies) + ',a=new URLSearchParams(location.search).get("app");' +
     'document.write(' + json(empty.replace('></div>', '>')) + '+m[{}.hasOwnProperty.call(m,a)?a:' + json(pick(null).id) + ']+"</div>")})()</script>');
+}
+
+/**
+ * An app's README as first restored, for its Then page's early card: read from git at web/then/pom.xml's then.commit,
+ * as the then module reads the sources it copies to <App>/then-source/ (which may not be written yet: modules build in parallel).
+ */
+function thenReadme(id: string): string {
+  const commit = /<then\.commit>([0-9a-f]{40})<\/then\.commit>/.exec(readFileSync(resolve(root, 'then/pom.xml'), 'utf8'));
+  if (!commit) throw new Error('web/then/pom.xml has no then.commit: update thenReadme in vite/pages.ts');
+  return execFileSync('git', ['show', commit[1] + ':' + id + '/README.md'], { cwd: root, encoding: 'utf8' });
 }
 
 const htmlId = (r: Route) => resolve(root, r.file);
@@ -187,7 +198,7 @@ export function pages(): Plugin {
         .replace('"../assets/news.js"', () => '"../' + chunk('news') + '"');
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
       for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: await withEarly(paintedEarly(named(appPage(app)))) });
-      for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: await withEarly(named(thenPage(app))) });
+      for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: await withEarly(paintedEarly(named(thenPage(app, thenReadme(app.id))))) });
       const files = [...new Set(Object.keys(bundle).concat(Object.keys(skins)))].filter(name => name.startsWith('assets/')).sort();
       // sw.js lists this build's files, so it changes with every build (the browser then installs it) and knows which to keep.
       this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts', false, { BUILT: JSON.stringify(files) }) });

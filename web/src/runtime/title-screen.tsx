@@ -12,7 +12,7 @@ import { AGAIN_KEY, CATS, newsScript, savedRecord, size } from './records';
 import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
 import { Attract } from './title-attract';
-import { moreParts } from './title-card';
+import { moreParts, thenHint } from './title-card';
 
 /** A line of the boot log: [label, value, class]. */
 export type LogLine = [string, string, string];
@@ -79,7 +79,9 @@ const dropEarly = () => document.getElementById('shim-title-early')?.remove();
 function dropEarlyOnStage(frames = 60) {
   const html = document.documentElement;
   if (!document.getElementById('shim-title-early')) return;
-  if (frames && !(html.hasAttribute('data-stage') && parseFloat(html.style.getPropertyValue('--bar-h')) > 0)) {
+  // A Then page's early card lists its quirks: the live one takes over once it lists them too (its README is preloaded).
+  if (frames && !(html.hasAttribute('data-stage') && parseFloat(html.style.getPropertyValue('--bar-h')) > 0 &&
+    (!isThen() || document.querySelector('.shim-title.then .shim-title-art li')))) {
     requestAnimationFrame(() => dropEarlyOnStage(frames - 1));
     return;
   }
@@ -344,10 +346,7 @@ function TitleScreen({ apps, onGo, onMount }: {
           <button type="button" className="shim-title-play" disabled={!ready}>{ready || !starting ? '▶ Play' : 'Starting…'}</button>
           <span className="shim-title-press">{TAP ? 'or tap anywhere' : 'or press any key'}</span>
           <p className="shim-title-hint">
-            {app ? (then
-              ? (app.origin === 'original' ? 'The author’s own source as it was found' : 'The code as it came out of the old jar') +
-                ', with the light bug fixes of its 2026 restoration, before the later reworks.'
-              : app.hint) : ''}
+            {app ? (then ? thenHint(app) : app.hint) : ''}
           </p>
           <p className={'shim-title-stamp' + (was ? ' played' : '')}>
             {app ? (was

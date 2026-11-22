@@ -10,3 +10,16 @@ export function moreParts(app: { then?: boolean }, then: boolean) {
   return ['the source', app.then && (then ? 'today’s version' : 'the first version'), !then && 'the desktop jar', !then && 'its story']
     .filter(Boolean).join(', ');
 }
+
+/** A Then page's hint (then.html), where today's page has the app's own. */
+export const thenHint = (app: { origin?: string }) => (app.origin === 'original' ? 'The author’s own source as it was found' : 'The code as it came out of the old jar') +
+  ', with the light bug fixes of its 2026 restoration, before the later reworks.';
+
+// #6 fixed the quirks the READMEs listed before it, so most then.html pages have none to list.
+export const NO_QUIRKS = 'None left: its README at that commit lists no known quirks.';
+
+/** The "## Known quirks" list of a README as first restored: one entry per bullet, as [text, code, text, ...]. */
+export function quirkItems(readme: string): string[][] {
+  const section = /^## Known quirks[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(readme.replace(/\r\n?/g, '\n'));
+  return section ? section[1].split(/^- /m).slice(1).map(item => item.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim().split('`')) : [];
+}
