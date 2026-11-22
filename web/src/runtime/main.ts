@@ -87,6 +87,7 @@ import { init as hiddenHold } from './hidden-hold';
 import { init as keptKeys } from './kept-keys';
 import { init as exitRecap } from './exit-recap';
 import { init as titleScreen } from './title-screen';
+import { init as newBuild } from './new-build';
 
 // In the order boot.js ran them.
 skin();
@@ -124,4 +125,5 @@ slowMo();
 hiddenHold();
 keptKeys();
 exitRecap();
+newBuild();
 titleScreen();   // last: the title screen it may open at once reads what the others set up (the passport, share)
