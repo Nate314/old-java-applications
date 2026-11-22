@@ -248,6 +248,14 @@ public class LauncherCheck {
       check(String.join("|", parts).equals(History.QUIET.pattern()), "the launcher's quiet rule matches news-kind.ts: " + parts);
       check(Runner.homeOption("-Xmx1g", Paths.get("/h o")).endsWith("\"-Duser.home=" + Paths.get("/h o").toAbsolutePath() + "\"")
          && Runner.homeOption(null, Paths.get("/h")).startsWith("\"-D"), "then home option");
+      // A launch's phase from the programs under its PowerShell: building beats a short java (NathaNOS's jar build).
+      check(Runner.phase(List.of(), -1) == Runner.Phase.READY && Runner.phase(List.of("javac"), -1) == Runner.Phase.BUILDING
+         && Runner.phase(List.of("powershell", "jar", "java"), 5000) == Runner.Phase.BUILDING
+         && Runner.phase(List.of("java"), 300) == Runner.Phase.OPENING
+         && Runner.phase(List.of("java"), Runner.OPENING_MILLIS) == Runner.Phase.RUNNING, "launch phases");
+      check(Runner.phase(ProcessHandle.current(), System.currentTimeMillis()) == Runner.Phase.READY, "no children: getting ready");
+      check(LauncherWindow.elapsed(7_400).equals("0:07") && LauncherWindow.elapsed(192_000).equals("3:12")
+         && LauncherWindow.elapsed(3_723_000).equals("1:02:03") && LauncherWindow.elapsed(-5).equals("0:00"), "running clock");
       // The unpacker refuses entries that would land outside its folder.
       Path unpack = Files.createTempDirectory("launcher-then");
       java.io.ByteArrayOutputStream zipBytes = new java.io.ByteArrayOutputStream();
