@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "mvn -q -f pom.xml clean package",
-    "build:pages": "tsc --noEmit && tsc --noEmit -p src/sw && vite build",
+    "build:pages": "node wiring.mjs && tsc --noEmit && tsc --noEmit -p src/sw && vite build",
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/sw"
   },
   "dependencies": {
