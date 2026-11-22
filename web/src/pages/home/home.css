@@ -42,6 +42,11 @@ p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
                   transform-origin: 0 0; pointer-events: none; transition: opacity .3s ease-out; }
 .screen .poster[data-gone] { opacity: 0; visibility: hidden; transition: opacity .3s ease-out, visibility 0s .3s; }
 @media (prefers-reduced-motion: reduce) { .screen .poster, .screen .poster[data-gone] { transition: none; } }
+/* The poster painted with the title on a phone (Lead.tsx EarlyPoster), the screen's box until React draws the player
+   over it (early-poster.ts); the live poster shows at once while it is there, not fading in over it. */
+#early-poster { position: absolute; left: 17px; right: 17px; background: var(--desk); }
+#early-poster img { width: 100%; height: 100%; object-fit: scale-down; }
+#early-poster ~ #home-root .screen .poster { transition: none; }
 /* Skip past the app: out of sight until the keyboard reaches it, then over the screen's corner. */
 .screen .skip-app { position: absolute; z-index: 2; top: 8px; left: 8px; background: var(--card-bg); }
 .screen .skip-app:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); border: 0; }
