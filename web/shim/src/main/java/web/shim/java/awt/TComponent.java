@@ -223,6 +223,7 @@ public class TComponent implements TImageObserver {
     /** Clears earlier paint output, if this component has painted before (the CSS background shows through). */
     protected void clearCanvas() {
         if (canvas != null) {
+            TCanvasGraphics.release(Js.context2d(canvas)); // a clip left on the canvas would keep part of it from clearing
             Js.clearCanvas(canvas);
         }
     }
