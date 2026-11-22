@@ -65,6 +65,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private final Map<Integer, int[][]> heldNotes = new HashMap<>();
    /** Whether each key plays its chord rather than its note. */
    private boolean chords;
+   /** Hears which song free play is the start of, so its lesson can carry on from there. */
+   private final SongFinder finder = new SongFinder(Song.ALL);
    /** The song being played along with, or null in free play. */
    private Lesson lesson;
    private boolean newBest;
@@ -510,6 +512,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (this.listenNote >= 0) {
          this.stopListening();
       }
+      if (this.lesson == null && this.recorder == null && !this.looping) {
+         this.finder.add(key);
+         this.bar.setFound(this.finder.song(), this.finder.inKey());
+      }
       if (this.lesson != null && !this.lesson.finished()) {
          if (this.lesson.press(key)) {
             this.backChord(this.lesson.position() - 1);
@@ -557,10 +563,19 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.stopListening();
       this.bar.setNotice(null);
       boolean hadLesson = this.lesson != null;
-      this.lesson = index < 0 ? null : new Lesson(this.menu()[index]);
+      Song song = index < 0 ? null : this.menu()[index];
+      // The song just heard in free play, in its own key, carries on after the notes played.
+      int played = song != null && song == this.finder.song() && this.finder.inKey() ? this.finder.notes() : 0;
+      this.finder.clear();
+      this.bar.setFound(null, false);
+      this.lesson = song == null ? null : new Lesson(song, played);
       this.stopBacking();
-      this.backingChords = this.lesson == null ? null : Backing.chords(this.lesson.song());
-      this.piano.setSong(this.lesson == null ? null : this.lesson.song());
+      this.backingChords = song == null ? null : Backing.chords(song);
+      this.piano.setSong(song);
+      if (played > 0) {
+         this.piano.follow(played, 0);
+         this.backChord(played - 1);
+      }
       if (hadLesson != (this.lesson != null)) {
          // The falling notes get room of their own, so the keys keep their size.
          this.setSize(this.getWidth(), this.getHeight() + (hadLesson ? -PianoPanel.FALL : PianoPanel.FALL));

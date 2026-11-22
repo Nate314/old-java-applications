@@ -11,7 +11,13 @@ public final class Lesson {
    private int misses;
 
    public Lesson(Song song) {
+      this(song, 0);
+   }
+
+   /** A lesson that carries on after the first {@code played} notes, already played right in free play. */
+   public Lesson(Song song, int played) {
       this.song = song;
+      this.position = played;
    }
 
    public Song song() {

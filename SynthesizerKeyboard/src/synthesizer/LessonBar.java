@@ -52,6 +52,9 @@ public final class LessonBar extends JPanel {
    private boolean newBest;
    /** The songs in the free play menu, which ends with a Record chip. */
    private Song[] menu = Song.ALL;
+   /** The song free play was heard to be the start of (gold in the menu), or null; and whether picking it carries on. */
+   private Song found;
+   private boolean carryOn;
    /** Whether recording is on, and the notes so far (null before the first). */
    private boolean recording;
    private Song recorded;
@@ -92,6 +95,13 @@ public final class LessonBar extends JPanel {
       this.lesson = lesson;
       this.listenNote = listenNote;
       this.newBest = newBest;
+      this.repaint();
+   }
+
+   /** Lights {@code song}'s chip in gold as the song just heard (null for none), saying whether it plays on or starts over. */
+   public void setFound(Song song, boolean carryOn) {
+      this.found = song;
+      this.carryOn = carryOn;
       this.repaint();
    }
 
@@ -233,6 +243,10 @@ public final class LessonBar extends JPanel {
          } else {
             this.paintNotes(g, this.recorded, this.lastFitting(this.recorded), notes - 1, RECORD);
          }
+      } else if (this.lesson == null && this.found != null) {
+         this.header(g, "That's " + this.found.shortTitle() + "!", NEXT,
+            (java.util.Arrays.asList(this.menu).indexOf(this.found) + 1) + " or click it to " + (this.carryOn ? "play on with the notes lit" : "learn it"));
+         this.paintMenu(g);
       } else if (this.lesson == null) {
          this.header(g, "Free play", TEXT, "Pick a song: click it, or T or 1-" + this.menu.length + "   Space record   O looper   Q chords");
          this.paintMenu(g);
@@ -408,10 +422,11 @@ public final class LessonBar extends JPanel {
             continue;
          }
          boolean record = song == this.menu.length;
-         g.setColor(CHIP);
+         boolean found = !record && this.menu[song] == this.found;
+         g.setColor(found ? NEXT : CHIP);
          g.fillRoundRect(x + 2, CHIP_TOP, chipWidth - 4, chipHeight, 10, 10);
          g.setFont(CHIP_FONT);
-         g.setColor(TEXT);
+         g.setColor(found ? BACKGROUND : TEXT);
          // Too narrow for a name: just the number to press.
          String label = record ? (chipWidth < 90 ? "Rec" : "Record")
             : chipWidth < 90 ? String.valueOf(song + 1) : (song + 1) + "  " + this.menu[song].shortTitle();
@@ -421,6 +436,17 @@ public final class LessonBar extends JPanel {
          if (record) {
             g.setColor(RECORD);
             g.fillOval(x + chipWidth / 2 - 7, CHIP_TOP + 31, 14, 14);
+         } else if (found) {
+            // In place of the stars: what a click does with the notes just played.
+            g.setFont(HELP);
+            String action = this.carryOn ? "play on" : "learn it";
+            int actionWidth = g.getFontMetrics().stringWidth(action);
+            int center = x + chipWidth / 2;
+            if (actionWidth <= chipWidth - 8) {
+               g.drawString(action, center - actionWidth / 2, CHIP_TOP + 42);
+            } else {
+               g.fillPolygon(new int[]{center - 4, center - 4, center + 5}, new int[]{CHIP_TOP + 32, CHIP_TOP + 44, CHIP_TOP + 38}, 3);
+            }
          } else if (this.menu[song].id() == null) {
             g.setFont(HELP);
             g.setColor(SOFT);
