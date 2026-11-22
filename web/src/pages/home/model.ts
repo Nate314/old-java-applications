@@ -23,8 +23,9 @@ export const H = {
   current: null as App | null,   // the app the player has
   played: null as App | null,    // the app last started in it (none while the page's own first frame runs)
   then: false,                   // as first restored (<App>/then.html)
-  /** The player's iframe: a new one (key) for each app, so the old app's timers and audio stop with it. */
-  frame: { key: 0, src: FIRST.id + '/index.html?embed&watch', title: FIRST.name, focus: false, size: null as null | { w: number; h: number; scale: number } },
+  /** The player's iframe: a new one (key) for each app, so the old app's timers and audio stop with it. Blank until
+   *  the page's own demo starts (player.ts calmStart). */
+  frame: { key: 0, src: 'about:blank', title: FIRST.name, focus: false, size: null as null | { w: number; h: number; scale: number } },
   screenH: null as number | null,   // the screen's height (none on the big screen, which takes the room it has)
   big: false,                       // the player covers the window (where real fullscreen is not allowed)
   hintOpen: false,                  // the pocket bar's hint, opened to its full length
