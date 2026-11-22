@@ -55,7 +55,7 @@ public class LayoutCheck {
 			press.invoke(lab, (left + right) / 2, i / 4 * 36 + 18);
 			check((int) current.get(lab) == i, "a click on tab " + pages[i].title + " shows it");
 			fits(lab, pages[i].title);
-			check((lab.getMouseMotionListeners().length == 2) == (pages[i] instanceof PathPage),
+			check((lab.getMouseMotionListeners().length == 2) == (pages[i] instanceof PathPage || pages[i] instanceof HanoiPage),
 					pages[i].title + ": listens for drags only if it takes them");
 		}
 

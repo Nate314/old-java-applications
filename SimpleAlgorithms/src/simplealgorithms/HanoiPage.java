@@ -51,6 +51,19 @@ class HanoiPage extends Page {
 	private int animTo;
 	private double animT;
 
+	/** A disk carried by the pointer: it hangs from (carryX, carryY) once the pointer has moved off the press. */
+	private boolean carrying;
+	private boolean carried;
+	private int pressX;
+	private int pressY;
+	private int carryX;
+	private int carryY;
+	/** A dropped disk gliding from where it was let go to the top of its peg, progress from 0 to 1. */
+	private int settleDisk = -1;
+	private int settleX;
+	private int settleY;
+	private double settleT;
+
 	private final Button play;
 	private final Button speedButton;
 
@@ -75,6 +88,8 @@ class HanoiPage extends Page {
 		lifted = -1;
 		warning = null;
 		animDisk = -1;
+		carrying = false;
+		settleDisk = -1;
 	}
 
 	private void resize(int count) {
@@ -116,6 +131,7 @@ class HanoiPage extends Page {
 			animDisk = -1;
 		} else if (lifted >= 0) {
 			lifted = -1;
+			carrying = false;
 		} else if (!history.isEmpty()) {
 			int[] last = history.pop();
 			tower.move(last[1], last[0]);
@@ -140,6 +156,8 @@ class HanoiPage extends Page {
 	/** Starts animating the next printed move, or the solver's move off the printed path. */
 	private void startNextMove() {
 		lifted = -1;
+		carrying = false;
+		settleDisk = -1;
 		int[] next = tower.nextMove();
 		if (next == null) {
 			return;
@@ -173,6 +191,13 @@ class HanoiPage extends Page {
 
 	@Override
 	boolean tick() {
+		if (settleDisk >= 0) {
+			settleT += 0.2;
+			if (settleT >= 1) {
+				settleDisk = -1;
+			}
+			return true;
+		}
 		if (animDisk >= 0) {
 			animT += SPEEDS[speed];
 			if (animT >= 1) {
@@ -204,21 +229,87 @@ class HanoiPage extends Page {
 				finishAnimation();
 			}
 		}
-		int peg = Math.max(0, Math.min(2, x * 3 / LabPanel.WIDTH));
+		settleDisk = -1;
+		int peg = pegAt(x);
 		if (lifted < 0) {
 			if (tower.top(peg) >= 0) {
 				lifted = peg;
 				warning = null;
+				// Held, it can be carried to another peg; let go where it was pressed, it stays lifted for a second click.
+				carrying = true;
+				carried = false;
+				pressX = x;
+				pressY = y;
+				carryX = x;
+				carryY = y;
 			}
-		} else if (lifted == peg) {
+			return;
+		}
+		carrying = false;
+		if (lifted == peg) {
 			lifted = -1;
 		} else if (tower.canMove(lifted, peg)) {
 			apply(lifted, peg);
 			lifted = -1;
 			warning = null;
 		} else {
-			warning = "Disk " + tower.top(lifted) + " can't go on disk " + tower.top(peg) + ", which is smaller.";
+			warning = tooBig(peg);
 		}
+	}
+
+	private String tooBig(int peg) {
+		return "Disk " + tower.top(lifted) + " can't go on disk " + tower.top(peg) + ", which is smaller.";
+	}
+
+	private static int pegAt(int x) {
+		return Math.max(0, Math.min(2, x * 3 / LabPanel.WIDTH));
+	}
+
+	@Override
+	void drag(int x, int y) {
+		if (carrying) {
+			carried |= Math.abs(x - pressX) > 6 || Math.abs(y - pressY) > 6;
+			carryX = x;
+			carryY = y;
+		}
+	}
+
+	/** A carried disk is let go: on the peg under it if it may go there, else back on its own peg; either way it glides into place. */
+	@Override
+	void release() {
+		if (!carrying) {
+			return;
+		}
+		carrying = false;
+		if (!carried) {
+			return;
+		}
+		int disk = tower.top(lifted);
+		int peg = pegAt(carryX);
+		if (peg != lifted) {
+			if (tower.canMove(lifted, peg)) {
+				apply(lifted, peg);
+				warning = null;
+			} else {
+				warning = tooBig(peg);
+			}
+		}
+		lifted = -1;
+		settleDisk = disk;
+		settleX = carryX;
+		settleY = carryY - diskHeight() / 2;
+		settleT = 0;
+	}
+
+	@Override
+	boolean drags() {
+		return true;
+	}
+
+	@Override
+	void hidden() {
+		carrying = false;
+		settleDisk = -1;
 	}
 
 	@Override
@@ -241,8 +332,8 @@ class HanoiPage extends Page {
 	@Override
 	void paint(Graphics2D g, int w, int h) {
 		text(g, "Tower of Hanoi", TITLE, INK, 20, 32);
-		paragraph(g, "Stack every disk on the right peg, never on a smaller one. " + (NARROW ? "Tap a peg to lift its top disk; Back takes a move back."
-				: "Click a peg to lift its top disk; B takes a move back."), TEXT, PENCIL, 20, 54, w - 40, 0, 16, 2);
+		paragraph(g, "Stack every disk on the right peg, never on a smaller one. " + (NARROW ? "Drag a disk to another peg; Back takes a move back."
+				: "Drag a disk to another peg; B takes a move back."), TEXT, PENCIL, 20, 54, w - 40, 0, 16, 2);
 		text(g, "Moves " + moves, BOLD, INK, w - 20 - width(g, "Moves " + moves, BOLD), 32);
 		paintExplanation(g, w);
 		paintPegs(g, w);
@@ -255,9 +346,18 @@ class HanoiPage extends Page {
 		g.drawRoundRect(16, BOX_TOP, w - 32, BOX_H, 12, 12);
 		int fewest = (1 << disks) - 1;
 		int textW = w - 60;
+		String warning = this.warning;
+		int over = pegAt(carryX);
+		if (carrying && carried && over != lifted && !tower.canMove(lifted, over)) {
+			// Said while the disk hangs over the peg, before it is let go.
+			warning = tooBig(over);
+		}
 		if (warning != null) {
 			int y = paragraph(g, warning, BOLD, RED, 30, LINE1, textW, 0, LINE, 2);
-			paragraph(g, "Drop it on an empty peg or a bigger disk, or " + (NARROW ? "tap" : "click") + " its own peg to put it back.",
+			String how = carrying && carried ? "Let go over an empty peg or a bigger disk; anywhere else it goes back."
+					: lifted >= 0 ? "Drop it on an empty peg or a bigger disk, or " + (NARROW ? "tap" : "click") + " its own peg to put it back."
+					: "It went back to its peg. A disk goes on an empty peg or a bigger disk.";
+			paragraph(g, how,
 					TEXT, INK, 30, NARROW ? y : LINE1 + LINE, textW, 0, LINE, 2);
 			return;
 		}
@@ -341,19 +441,35 @@ class HanoiPage extends Page {
 			g.fillRoundRect(pegX(peg) - 4, pegTop, 8, BASE - pegTop, 6, 6);
 			centered(g, PEG_NAMES[peg] + (peg == tower.goal ? " (goal)" : ""), BOLD, peg == tower.goal ? GREEN : PENCIL, pegX(peg), BASE + 26);
 		}
+		boolean held = carrying && carried;
+		if (held) {
+			paintTarget(g, pegTop, dh);
+		}
 		for (int peg = 0; peg < 3; peg++) {
 			int level = 0;
 			for (int disk = disks - 1; disk >= 0; disk--) {
-				if (tower.pegOf(disk) != peg || disk == animDisk) {
+				if (tower.pegOf(disk) != peg) {
 					continue;
 				}
 				int y = BASE - (level + 1) * dh;
+				level++;
+				if (disk == animDisk || disk == settleDisk || held && peg == lifted && disk == tower.top(peg)) {
+					continue;
+				}
 				if (peg == lifted && disk == tower.top(peg)) {
 					y = pegTop - dh - 14;
 				}
 				paintDisk(g, disk, pegX(peg), y, dh);
-				level++;
 			}
+		}
+		if (held) {
+			paintDisk(g, tower.top(lifted), carryX, carryY - dh / 2, dh);
+		}
+		if (settleDisk >= 0) {
+			double t = 1 - (1 - settleT) * (1 - settleT);
+			int peg = tower.pegOf(settleDisk);
+			int y = BASE - tower.height(peg) * dh;
+			paintDisk(g, settleDisk, (int) (settleX + (pegX(peg) - settleX) * t), (int) (settleY + (y - settleY) * t), dh);
 		}
 		if (animDisk >= 0) {
 			double t = animT * animT * (3 - 2 * animT);
@@ -364,6 +480,34 @@ class HanoiPage extends Page {
 			double y = y0 + (y1 - y0) * t - Math.sin(Math.PI * t) * (Math.min(y0, y1) - lift);
 			paintDisk(g, animDisk, (int) x, (int) y, dh);
 		}
+	}
+
+	/**
+	 * While a disk is carried, the peg under it lights: green with an outline where the disk would land, red with the
+	 * smaller disk ringed when it can't go there.
+	 */
+	private void paintTarget(Graphics2D g, int pegTop, int dh) {
+		int peg = pegAt(carryX);
+		if (peg == lifted) {
+			return;
+		}
+		boolean ok = tower.canMove(lifted, peg);
+		Color tint = ok ? GREEN : RED;
+		int colW = LabPanel.WIDTH / 3 - 16;
+		g.setColor(new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), 36));
+		g.fillRoundRect(pegX(peg) - colW / 2, pegTop - dh - 20, colW, BASE - pegTop + dh + 28, 16, 16);
+		g.setColor(tint);
+		g.setStroke(new BasicStroke(2f));
+		int dw = diskWidth(tower.top(lifted));
+		int y = BASE - (tower.height(peg) + 1) * dh;
+		if (ok) {
+			g.drawRoundRect(pegX(peg) - dw / 2, y + 1, dw, dh - 2, dh - 2, dh - 2);
+		} else {
+			int top = tower.top(peg);
+			int tw = diskWidth(top) + 8;
+			g.drawRoundRect(pegX(peg) - tw / 2, y + dh - 3, tw, dh + 4, dh, dh);
+		}
+		g.setStroke(new BasicStroke(1f));
 	}
 
 	private void paintDisk(Graphics2D g, int disk, int centerX, int y, int dh) {
