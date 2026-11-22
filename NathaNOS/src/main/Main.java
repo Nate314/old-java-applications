@@ -26,6 +26,7 @@ public class Main extends JFrame {
    CalendarFlyout calendar;
    DesktopMenu desktopMenu;
    IconTip iconTip;
+   DesktopShortcuts shortcuts;
    final Zoom zoom = new Zoom();
    Power power;
    DesktopSettings settings = new DesktopSettings();
@@ -66,7 +67,8 @@ public class Main extends JFrame {
       this.desktopPane.add(this.calendar, JLayeredPane.POPUP_LAYER);
       this.iconTip = new IconTip(this);
       this.desktopPane.add(this.iconTip, JLayeredPane.POPUP_LAYER);
-      this.desktopMenu = new DesktopMenu(this, new DesktopShortcuts(this, launcher));
+      this.shortcuts = new DesktopShortcuts(this, launcher);
+      this.desktopMenu = new DesktopMenu(this, this.shortcuts);
       this.desktopPane.add(this.desktopMenu, JLayeredPane.POPUP_LAYER);
       this.desktopPane.add(this.zoom, JLayeredPane.DRAG_LAYER);
       // Above everything, even the outlines and a dragged icon.

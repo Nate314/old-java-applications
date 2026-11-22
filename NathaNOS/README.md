@@ -26,7 +26,8 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 - **Icons**: `assets/<name>.png` (matched ignoring case) on a light tile. Every app on the desktop has one: Circle Spawner's ring of windows, Flappy Bird's bird between two pipes, Group Creator's three people, Music Theory Expert's circle of fifths, Screen Saver's aquarium on a monitor, Simple Algorithms' bars swapping places, Sprite Floaty Stars' sun with star trails and Tank Game's red tank were added last, for the eight apps that had only their initials. An app without a picture (a jar added by hand) still gets a colored tile with its initials ("FB" for FlappyBird).
 - Opening an app loads the jar's `Main-Class`, then:
   - If it has a public `(Boolean)` constructor (Clock), calls it with `false`, moves that frame's content pane into a centered internal window and disposes the hidden frame. Internal app windows can be closed but not resized or maximized.
-  - Otherwise runs its `main(String[])` with no arguments on a thread of its own, as `java` would, and the app opens its own windows. A window that opens at the top-left corner of the screen (where most apps put theirs) is moved to the middle of the desktop, so it does not cover the icons.
+  - Otherwise runs its `main(String[])` with no arguments on a thread of its own, as `java` would, and the app opens its own windows.
+- **Where a new window opens**: as a window manager would place it, where it hides the least of the windows already open, then of the desktop icons, and among spots that are equally clear, the one nearest the middle. The first window opens in the middle of the desktop; open a second app and it opens beside the first rather than on top of it (before, every app opened in the middle, so Clock, an internal window, opened hidden behind an app's window that was already there). This applies to internal windows (Clock, Paint) and to app windows that open at the top-left corner or the middle of the screen, where most apps put theirs; a window an app placed anywhere else stays where the app put it.
   - Each open starts another copy. Opening an app whose jar failed to load prints an error; the other apps still work.
 - Closing an app's window closes only that app. Apps use `EXIT_ON_CLOSE` when run alone, so NathaNOS switches every window opened after it starts to `DISPOSE_ON_CLOSE`. An app that calls `System.exit` itself still ends NathaNOS (ScreenSaver and Minesweeper's Esc close their window instead).
 - The desktop window never takes focus, so clicking the taskbar or background does not raise it over open apps. That also means an internal window (Clock) stays behind app windows that cover it, even after its taskbar button brings it to the front of the desktop.
@@ -41,7 +42,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 `~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`, or `wallpaper=picture:Picture 1` for a picture from Paint) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
 - The shipped `assets/` has one jar, `Clock.jar`, an older Clock build, kept for the Then version. `./run.ps1 old NathaNOS` puts today's build of every app in its place, Clock included (see Running), and so does the site.
 
-The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines, then Restart and the shut down screen, then the calendar on the clock, then drawn icons for the eight apps that still showed initials, then the cards that say what each icon is, then the start menu sorted by kind with a pane saying what each app is.
+The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines, then Restart and the shut down screen, then the calendar on the clock, then drawn icons for the eight apps that still showed initials, then the cards that say what each icon is, then the start menu sorted by kind with a pane saying what each app is, then new windows opening beside the open ones.
 
 ## Code layout
 
@@ -57,7 +58,8 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 - `src/main/Wallpaper.java`: the five wallpapers; paints the four scenes into an image the size of the screen.
 - `src/main/DesktopSettings.java`: reads and writes `~/.nathanos.txt`.
 - `src/main/LauncherWindow.java`: the taskbar, with the MENU button, the window buttons, the clock and Show desktop.
-- `src/main/TaskList.java`: tracks the open app windows for the taskbar, minimizes and restores them, and centers new windows that open in the top-left corner.
+- `src/main/TaskList.java`: tracks the open app windows for the taskbar, minimizes and restores them, and places new windows.
+- `src/main/Placement.java`: picks where a new window opens (the clearest spot, nearest the middle).
 - `src/main/Zoom.java`: the outlines that fly between a window and its icon or taskbar button.
 - `src/main/CalendarFlyout.java`: the calendar that opens above the taskbar clock, and its date sums (day numbers, weekdays, the month grid).
 - `src/main/StartMenu.java`: the start menu panel with the logo, the app list by kind, the pane saying what the pointed app is, Restart and Shut Down.
@@ -82,6 +84,7 @@ java -ea -cp ../out/check/NathaNOS main.CalendarCheck
 java -ea -cp ../out/check/NathaNOS main.TaskListCheck
 java -ea -cp ../out/check/NathaNOS main.IconTipCheck
 java -ea -cp ../out/check/NathaNOS main.StartMenuCheck
+java -ea -cp ../out/check/NathaNOS main.PlacementCheck
 ```
 
 `test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land. `test/main/PowerCheck.java` checks the Restart and Shut Down timeline: the fade to black, the logo shown only on Restart and only on black, the fade back to the desktop, and the steps shown at once with reduced motion. `test/main/CalendarCheck.java` checks the calendar's date sums: day numbers read back to their dates over about 4,400 years, known weekdays, leap years (2000 and 2024 but not 2100), months rolling into the next year, the grid starting on the Sunday before the 1st, and the lines a picked day and today give.
@@ -89,6 +92,8 @@ java -ea -cp ../out/check/NathaNOS main.StartMenuCheck
 `test/main/IconTipCheck.java` checks where an icon's card opens (right of the icon, left of it at the right edge, under or over it on a narrow screen, always above the taskbar), that every app's line fits the card's three lines with no word lost, that icon labels still stop at two lines, and that a jar added by hand is named by its file.
 
 `test/main/StartMenuCheck.java` checks that every app is listed under its kind (8 games, 2 music, 3 toys, 5 tools) and a jar added by hand under Other, and that the menu's headings and rows run down and into the next column without overflowing it, a heading never ending a column and a kind that fits a column never split.
+
+`test/main/PlacementCheck.java` checks where new windows open: the first in the exact middle, the second beside it with neither it nor the icons covered, a third on a full desktop covering at most one of the others, a window bigger than the desktop at its corner, and a window on a phone-sized screen kept on it.
 
 `test/main/TaskListCheck.java` checks that a closed window leaves the taskbar and the list Restart and Shut Down close, and that nothing in NathaNOS keeps it in memory after that (it is freed by the garbage collector), while the windows still open stay listed and are still closed by Restart.
 
