@@ -60,6 +60,10 @@ public final class Js {
     @JSBody(params = { "el", "name" }, script = "el.removeAttribute(name);")
     public static native void removeAttr(JSObject el, String name);
 
+    /** ARIA ignores a name on a plain div, so a named painted panel (StockChecker's desk) becomes a group. */
+    @JSBody(params = { "el" }, script = "if (el.tagName === 'DIV' && !el.hasAttribute('role')) el.setAttribute('role', 'group');")
+    public static native void giveNamedRole(JSObject el);
+
     @JSBody(params = { "el", "on" }, script = "el.disabled = on;")
     public static native void setDisabled(JSObject el, boolean on);
 

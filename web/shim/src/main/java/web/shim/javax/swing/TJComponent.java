@@ -2,6 +2,7 @@ package web.shim.javax.swing;
 
 import web.rt.Js;
 import web.shim.java.awt.TColor;
+import web.shim.java.awt.TComponent;
 import web.shim.java.awt.TContainer;
 import web.shim.java.awt.TFont;
 import web.shim.java.awt.TGraphics;
@@ -20,8 +21,61 @@ public abstract class TJComponent extends TContainer {
     private TBorder border;
     private boolean borderSet;
     private String toolTip;
+    /** Set by JLabel.setLabelFor. */
+    TJLabel labeledBy;
 
     protected TJComponent() {
+    }
+
+    // ---- accessible name from a label ----
+
+    @Override
+    protected String labelId() {
+        TJLabel label = labeledBy != null ? labeledBy : takesNearbyLabel() ? nearbyLabel() : null;
+        return label == null ? null : label.elementId();
+    }
+
+    /** A field with no labelFor is named by the nearest JLabel beside it on its left or just above it, as a reader sees it. */
+    protected boolean takesNearbyLabel() {
+        return false;
+    }
+
+    private TJLabel nearbyLabel() {
+        TContainer p = getParent();
+        TJLabel best = null;
+        int bestGap = Integer.MAX_VALUE;
+        for (int i = 0; p != null && i < p.getComponentCount(); i++) {
+            TComponent c = p.getComponent(i);
+            if (!(c instanceof TJLabel) || !c.isVisible() || ((TJLabel) c).getText().isEmpty()) {
+                continue;
+            }
+            int left = getX() - (c.getX() + c.getWidth());
+            int above = getY() - (c.getY() + c.getHeight());
+            boolean sameRow = c.getY() < getY() + getHeight() && c.getY() + c.getHeight() > getY();
+            boolean sameColumn = c.getX() < getX() + getWidth() && c.getX() + c.getWidth() > getX();
+            // A label's box may overlap the field's edge by a couple of pixels.
+            int gap = sameRow && left >= -2 ? left : sameColumn && above >= -2 ? above : Integer.MAX_VALUE;
+            if (gap < bestGap) {
+                best = (TJLabel) c;
+                bestGap = gap;
+            }
+        }
+        return best;
+    }
+
+    @Override
+    public void validate() {
+        super.validate();
+        if (takesNearbyLabel()) {
+            syncAccessible(); // laid out: the labels around it have their places now
+        }
+    }
+
+    /** The component offset places from this one in its container's order, or null. */
+    TComponent sibling(int offset) {
+        TContainer p = getParent();
+        int i = p == null ? -1 : p.getComponentZOrder(this) + offset;
+        return p == null || i < 0 || i >= p.getComponentCount() ? null : p.getComponent(i);
     }
 
     @Override
@@ -85,6 +139,7 @@ public abstract class TJComponent extends TContainer {
             } else {
                 Js.setAttr(element(), "title", text);
             }
+            syncAccessible();
         }
     }
 

@@ -669,13 +669,33 @@ public class TComponent implements TImageObserver {
         return accessibleContext;
     }
 
-    /** Copies the accessible name and description to the element, where screen readers look for them. */
+    /**
+     * Copies the accessible name and description to the element, where screen readers look for them. A component
+     * the app never named is named by its label (labelId) or by what it shows (fallbackName), as Swing would.
+     */
     public void syncAccessible() {
-        if (element == null || accessibleContext == null) {
+        if (element == null) {
             return;
         }
-        setOrRemove("aria-label", accessibleContext.getAccessibleName());
-        setOrRemove("aria-description", accessibleContext.getAccessibleDescription());
+        String name = accessibleContext == null ? null : accessibleContext.getAccessibleName();
+        boolean named = name != null && !name.isEmpty();
+        String label = named ? null : labelId();
+        setOrRemove("aria-labelledby", label);
+        setOrRemove("aria-label", named ? name : label == null ? fallbackName() : null);
+        if (named) {
+            Js.giveNamedRole(element);
+        }
+        setOrRemove("aria-description", accessibleContext == null ? null : accessibleContext.getAccessibleDescription());
+    }
+
+    /** The element id of a label naming this component, or null. */
+    protected String labelId() {
+        return null;
+    }
+
+    /** A name for a component the app did not name and no label names, or null to leave the element's own text. */
+    protected String fallbackName() {
+        return null;
     }
 
     private void setOrRemove(String attribute, String value) {

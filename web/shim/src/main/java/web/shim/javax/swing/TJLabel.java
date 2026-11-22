@@ -3,13 +3,17 @@ package web.shim.javax.swing;
 import org.teavm.jso.JSObject;
 import web.rt.Js;
 import web.shim.java.awt.TColor;
+import web.shim.java.awt.TComponent;
 import web.shim.java.awt.TDimension;
 import web.shim.java.awt.TFont;
 import web.shim.java.awt.TFontMetrics;
 
 public class TJLabel extends TJComponent implements TSwingConstants {
+    private static int ids;
     private String text;
     private int horizontalAlignment;
+    private String id;
+    private TComponent labelFor;
 
     public TJLabel() {
         this("", LEADING);
@@ -87,6 +91,32 @@ public class TJLabel extends TJComponent implements TSwingConstants {
             syncText();
         }
         invalidate();
+    }
+
+    /** The element's id, given on first use, for a field's aria-labelledby: its name follows this label's text. */
+    String elementId() {
+        if (id == null) {
+            id = "shim-label-" + ++ids;
+            Js.setAttr(element(), "id", id);
+        }
+        return id;
+    }
+
+    public TComponent getLabelFor() {
+        return labelFor;
+    }
+
+    public void setLabelFor(TComponent c) {
+        TComponent old = labelFor;
+        labelFor = c;
+        if (old instanceof TJComponent) {
+            ((TJComponent) old).labeledBy = null;
+            old.syncAccessible();
+        }
+        if (c instanceof TJComponent) {
+            ((TJComponent) c).labeledBy = this;
+            c.syncAccessible();
+        }
     }
 
     public int getHorizontalAlignment() {
