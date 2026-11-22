@@ -2,8 +2,8 @@
 # visitors land on (home, story, play.html with and without ?app=, the lost page for a missing path, compare.html) and,
 # for every app in the build's apps.json, its page, its ?embed and ?embed&full forms and its Then page where it has
 # one. On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
-# time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, or an app whose
-# biggest canvas is one flat color. On each app's own page it then closes the app's windows (frontmost first) until the
+# time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
+# biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
 # back without its title screen. On the story and the lost page it also opens an app from a link far down the page in
 # the play sheet (PlayHere.tsx), checks it as above, closes the sheet each way a visitor can (Back, Esc, a click
@@ -75,6 +75,30 @@ $Paint = "(function (c) { if (!c) return -1; var d = c.getContext('2d').getImage
 # With no window left it closes the Start menu, since pretend Windows holds the exit while it is open.
 $Close = "(function () { if (document.querySelector('.shim-exit')) return 'exit'; var rank = function (w) { return (w.querySelector(':scope > .titlebar').getClientRects().length ? 1e9 : 0) + (+getComputedStyle(w).zIndex || 0); }; var w = [].slice.call(document.querySelectorAll('#desktop > *')).filter(function (w) { return w.getClientRects().length && w.querySelector(':scope > .titlebar:not(.no-close) .close'); }).sort(function (x, y) { return rank(x) - rank(y); }).pop(); if (!w) { w = document.querySelector('.shim-start-power'); if (!w) return 'none'; w.click(); return 'closed'; } w.querySelector(':scope > .titlebar .close').click(); return 'closed'; })()"
 
+# Controls a screen reader announces with no name (an empty accessible name in Chrome's accessibility tree), in the
+# page and the frames on it, as "role <tag.class>". Shown (not hidden) ones only; the shim's widgets count too.
+$Controls = '^(button|checkbox|combobox|link|listbox|menuitem|menuitemcheckbox|menuitemradio|radio|searchbox|slider|spinbutton|switch|tab|textbox|treeitem)$'
+function Get-Unnamed {
+    $frames = New-Object Collections.Generic.List[object]
+    $frames.Add((Invoke-Cdp 'Page.getFrameTree').frameTree)
+    for ($i = 0; $i -lt $frames.Count; $i++) {
+        foreach ($c in @($frames[$i].childFrames)) { if ($c) { $frames.Add($c) } }
+        foreach ($n in (Invoke-Cdp 'Accessibility.getFullAXTree' @{ frameId = $frames[$i].frame.id }).nodes) {
+            if ($n.ignored -or $n.role.value -notmatch $Controls -or "$($n.name.value)".Trim()) { continue }
+            $d = (Invoke-Cdp 'DOM.describeNode' @{ backendNodeId = $n.backendDOMNodeId }).node
+            $k = [array]::IndexOf(@($d.attributes), 'class')
+            "$($n.role.value) <$($d.localName)$(if ($k -ge 0) { '.' + ($d.attributes[$k + 1] -replace '\s+', '.') })>"
+        }
+    }
+}
+# Unnamed controls each page had when the check came in (round 68, 960x600); a page fails with more, so a new one
+# must get a name (aria-label, a label, setLabelFor in the shim). Lower a number when one of them gets its name.
+$KnownUnnamed = @{
+    'CircleSpawner' = 1; 'CircleSpawner ?embed' = 1; 'CircleSpawner ?embed&full' = 1   # the color combo box
+    'CircleSpawner Then' = 1; 'WindowsE Then' = 1; 'StockChecker Then' = 5   # text fields
+    'SynthesizerKeyboard Then' = 5   # the black keys
+}
+
 # One page: loads it, waits until `ready` (a selector) is on it, or for an app (-App) presses Play when there is
 # one and checks the window and its paint. -Click presses that button first and -Frame is the iframe the app is in
 # (play.html's player); -Exit closes the app and runs it again (see the top); -Missing expects the address itself to
@@ -110,12 +134,19 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
             elseif ($Sheet) { $why = Test-SheetClose $wait }
         }
     }
+    $note = ''
+    if (-not $why) {
+        $unnamed = @(Get-Unnamed)
+        $known = [int]$KnownUnnamed[$name]
+        if ($unnamed.Count -gt $known) { $why = "$($unnamed.Count) unnamed controls (known: $known): " + (($unnamed | Group-Object | ForEach-Object { "$($_.Count) x $($_.Name)" }) -join ', ') }
+        elseif ($unnamed.Count -lt $known) { $note = "  ($($unnamed.Count) unnamed controls, $known known: lower its `$KnownUnnamed)" }
+    }
     Invoke-Js '1' | Out-Null   # reads the events that came during the waits
     # Chrome asks for /favicon.ico by itself on a page with no icon link (the lost page); a miss there is not the page's.
     $errors = $script:Errors | Select-Object -Unique | Where-Object { -not ($Missing -and $_ -eq "HTTP 404: $url") -and $_ -notmatch '^HTTP 404: \S+/favicon\.ico$' }
     if ($errors) { $why = (@($why) + $errors | Where-Object { $_ }) -join ' | ' }
     $line = '{0,-4} {1,-32} {2,5:0.0} s' -f $(if ($why) { 'FAIL' } else { 'PASS' }), $name, $t.Elapsed.TotalSeconds
-    if ($why) { Write-Host "$line  $why" -ForegroundColor Red } else { Write-Host $line }
+    if ($why) { Write-Host "$line  $why" -ForegroundColor Red } else { Write-Host "$line$note" }
     -not $why
 }
 
