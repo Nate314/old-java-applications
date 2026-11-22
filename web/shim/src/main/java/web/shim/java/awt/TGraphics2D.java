@@ -33,14 +33,7 @@ public abstract class TGraphics2D extends TGraphics {
     /** Narrows the clip to the shape (null drops it). */
     public abstract void clip(TShape s);
 
-    // shortcut: a shape TCanvasGraphics doesn't know (an app's own Shape class) draws as its bounds, add PathIterator when an app needs one
-    public void draw(TShape s) {
-        TRectangle r = s.getBounds();
-        drawRect(r.x, r.y, r.width, r.height);
-    }
+    public abstract void draw(TShape s);
 
-    public void fill(TShape s) {
-        TRectangle r = s.getBounds();
-        fillRect(r.x, r.y, r.width, r.height);
-    }
+    public abstract void fill(TShape s);
 }

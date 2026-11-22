@@ -6,7 +6,7 @@ import web.shim.java.awt.TShape;
 
 /**
  * java.awt.geom.Path2D (and GeneralPath): lines, quadratic and cubic curves and closes, which Graphics2D.draw strokes
- * and fill fills with the path's winding rule, as in Java2D.
+ * and fill fills with the path's winding rule, as in Java2D; the other shim shapes build one of these for their path iterator.
  */
 public abstract class TPath2D implements TShape {
     public static final int WIND_EVEN_ODD = 0;
@@ -103,6 +103,96 @@ public abstract class TPath2D implements TShape {
 
     public final int segments() {
         return numTypes;
+    }
+
+    private static int size(int type) {
+        return type == MOVE || type == LINE ? 2 : type == QUAD ? 4 : type == CUBIC ? 6 : 0;
+    }
+
+    /** Walks the path as it is now (later changes show, as in the JDK), each point mapped through at when given. */
+    @Override
+    public final TPathIterator getPathIterator(TAffineTransform at) {
+        return new TPathIterator() {
+            private int i;
+            private int k;
+
+            @Override
+            public int getWindingRule() {
+                return rule;
+            }
+
+            @Override
+            public boolean isDone() {
+                return i >= numTypes;
+            }
+
+            @Override
+            public void next() {
+                k += size(types[i++]);
+            }
+
+            @Override
+            public int currentSegment(double[] c) {
+                int type = types[i];
+                int n = size(type);
+                System.arraycopy(coords, k, c, 0, n);
+                if (at != null) {
+                    at.transform(c, 0, c, 0, n / 2);
+                }
+                return type;
+            }
+
+            @Override
+            public int currentSegment(float[] c) {
+                double[] d = new double[6];
+                int type = currentSegment(d);
+                for (int j = 0; j < 6; j++) {
+                    c[j] = (float) d[j];
+                }
+                return type;
+            }
+        };
+    }
+
+    public final void append(TShape s, boolean connect) {
+        append(s.getPathIterator(null), connect);
+    }
+
+    /** The JDK's Path2D.append: with connect, a leading move becomes a line, or is dropped where the path already ends. */
+    public final void append(TPathIterator pi, boolean connect) {
+        double[] c = new double[6];
+        for (; !pi.isDone(); pi.next()) {
+            switch (pi.currentSegment(c)) {
+                case MOVE:
+                    if (!connect || numTypes < 1 || numCoords < 1) {
+                        moveTo(c[0], c[1]);
+                    } else if (types[numTypes - 1] == CLOSE || coords[numCoords - 2] != keep(c[0]) || coords[numCoords - 1] != keep(c[1])) {
+                        lineTo(c[0], c[1]);
+                    }
+                    break;
+                case LINE:
+                    lineTo(c[0], c[1]);
+                    break;
+                case QUAD:
+                    quadTo(c[0], c[1], c[2], c[3]);
+                    break;
+                case CUBIC:
+                    curveTo(c[0], c[1], c[2], c[3], c[4], c[5]);
+                    break;
+                default:
+                    closePath();
+                    break;
+            }
+            connect = false;
+        }
+    }
+
+    /** The shape's outline as a path with its winding rule, as new Path2D.Double(shape) makes it. */
+    final TPath2D copy(TShape s) {
+        TPathIterator pi = s.getPathIterator(null);
+        setWindingRule(pi.getWindingRule());
+        append(pi, false);
+        return this;
     }
 
     /** The JDK's Path2D.getBounds2D (ends, then curve turning points with their rounding margin), rounded out to pixels. */
@@ -211,6 +301,11 @@ public abstract class TPath2D implements TShape {
             super(rule);
         }
 
+        public Float(TShape s) {
+            super(WIND_NON_ZERO);
+            copy(s);
+        }
+
         @Override
         double keep(double v) {
             return (float) v;
@@ -224,6 +319,11 @@ public abstract class TPath2D implements TShape {
 
         public Double(int rule) {
             super(rule);
+        }
+
+        public Double(TShape s) {
+            super(WIND_NON_ZERO);
+            copy(s);
         }
 
         @Override

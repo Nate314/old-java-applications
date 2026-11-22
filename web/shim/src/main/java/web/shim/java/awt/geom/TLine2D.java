@@ -26,6 +26,14 @@ public abstract class TLine2D implements TShape {
         setLine(l.getX1(), l.getY1(), l.getX2(), l.getY2());
     }
 
+    @Override
+    public TPathIterator getPathIterator(TAffineTransform at) {
+        TPath2D p = new TPath2D.Double();
+        p.moveTo(getX1(), getY1());
+        p.lineTo(getX2(), getY2());
+        return p.getPathIterator(at);
+    }
+
     public TPoint2D getP1() {
         return new TPoint2D.Double(getX1(), getY1());
     }

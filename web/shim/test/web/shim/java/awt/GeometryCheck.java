@@ -14,20 +14,28 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.GeneralPath;
 import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.geom.QuadCurve2D;
 import java.awt.image.BufferedImage;
 import java.util.Random;
 import web.shim.java.awt.geom.TEllipse2D;
 import web.shim.java.awt.geom.TGeneralPath;
 import web.shim.java.awt.geom.TLine2D;
+import web.shim.java.awt.geom.TAffineTransform;
 import web.shim.java.awt.geom.TPath2D;
+import web.shim.java.awt.geom.TPathIterator;
+import web.shim.java.awt.geom.TRectangle2D;
+import web.shim.java.awt.geom.TRoundRectangle2D;
 import web.shim.java.awt.geom.TPoint2D;
 import web.shim.java.awt.geom.TQuadCurve2D;
 import web.shim.java.awt.web.ClipRun;
 
 /**
- * Compares the shim's Rectangle, Point, Polygon, Line2D, Ellipse2D, QuadCurve2D and Path2D geometry, GridLayout arithmetic (GridRun) and clip arithmetic
+ * Compares the shim's Rectangle, Rectangle2D, RoundRectangle2D, every shape's PathIterator and Path2D.append, Point, Polygon, Line2D, Ellipse2D, QuadCurve2D and Path2D geometry, GridLayout arithmetic (GridRun) and clip arithmetic
  * (ClipRun) with the real JDK's on thousands of random cases, including the overflow and negative-size edges.
  * Run headless (see web/README.md, Components).
  */
@@ -43,6 +51,8 @@ public final class GeometryCheck {
         lines();
         ellipses();
         paths();
+        rectangles2D();
+        iterators();
         grids();
         clips();
         System.out.println("GeometryCheck: " + cases + " cases match the JDK");
@@ -230,6 +240,178 @@ public final class GeometryCheck {
             jp.reset();
             sp.reset();
             same(jp.getBounds().toString(), sp.getBounds().toString(), "reset path bounds " + c);
+        }
+    }
+
+    /** Rectangle2D and RoundRectangle2D inside and overlap tests, Rectangle.setRect rounding and Rectangle.contains(Point). */
+    private static void rectangles2D() {
+        double[] edge = { 2.0 * Integer.MAX_VALUE + 5, Integer.MIN_VALUE - 7.5, Integer.MAX_VALUE - 0.5, -0.0 };
+        for (int i = 0; i < 20000; i++) {
+            double[] p = { coord(i), coord(i), coord(i) + 10, coord(i) + 10, coord(i) * 2, coord(i) * 2 };
+            boolean far = i % 10 == 0;
+            if (far) {
+                p[RND.nextInt(4)] = edge[RND.nextInt(edge.length)];
+            }
+            String c = java.util.Arrays.toString(p);
+            Rectangle2D jd = new Rectangle2D.Double(p[0], p[1], p[2], p[3]);
+            Rectangle2D jf = new Rectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+            TRectangle2D sd = new TRectangle2D.Double(p[0], p[1], p[2], p[3]);
+            TRectangle2D sf = new TRectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+            RoundRectangle2D jr = new RoundRectangle2D.Double(p[0], p[1], p[2], p[3], p[4], p[5]);
+            TRoundRectangle2D sr = new TRoundRectangle2D.Double(p[0], p[1], p[2], p[3], p[4], p[5]);
+            RoundRectangle2D jrf = new RoundRectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3], (float) p[4], (float) p[5]);
+            TRoundRectangle2D srf = new TRoundRectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3], (float) p[4], (float) p[5]);
+            same(jd.isEmpty(), sd.isEmpty(), "rect2d isEmpty " + c);
+            same(jf.isEmpty(), sf.isEmpty(), "rect2d float isEmpty " + c);
+            if (!far) { // getBounds past the int range is the JDK's own overflow
+                same(jd.getBounds().toString(), sd.getBounds().toString(), "rect2d bounds " + c);
+                same(jr.getBounds().toString(), sr.getBounds().toString(), "roundrect bounds " + c);
+            }
+            Rectangle jint = new Rectangle();
+            TRectangle sint = new TRectangle();
+            jint.setRect(p[0], p[1], p[2], p[3]);
+            sint.setRect(p[0], p[1], p[2], p[3]);
+            same(jint.toString(), sint.toString(), "Rectangle.setRect " + c);
+            for (int k = 0; k < 8; k++) {
+                double x = p[0] + RND.nextDouble() * (Math.abs(p[2]) + 4) - 2;
+                double y = p[1] + RND.nextDouble() * (Math.abs(p[3]) + 4) - 2;
+                if (k == 0) {
+                    x = p[0];
+                    y = p[1] + p[3];
+                }
+                double w = RND.nextDouble() * 20 - 2;
+                double h = RND.nextDouble() * 20 - 2;
+                String at = " at " + x + "," + y + " " + w + "x" + h;
+                same(jd.contains(x, y), sd.contains(x, y), "rect2d contains " + c + at);
+                same(jf.contains(x, y), sf.contains(x, y), "rect2d float contains " + c + at);
+                same(jd.contains(new Point2D.Double(x, y)), sd.contains(new TPoint2D.Double(x, y)), "rect2d contains point " + c + at);
+                same(jd.contains(x, y, w, h), sd.contains(x, y, w, h), "rect2d contains rect " + c + at);
+                same(jd.intersects(x, y, w, h), sd.intersects(x, y, w, h), "rect2d intersects " + c + at);
+                same(jr.contains(x, y), sr.contains(x, y), "roundrect contains " + c + at);
+                same(jrf.contains(x, y), srf.contains(x, y), "roundrect float contains " + c + at);
+                int ix = (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, Math.floor(x)));
+                int iy = (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, Math.floor(y)));
+                same(jint.contains(new Point(ix, iy)), sint.contains(new TPoint(ix, iy)), "Rectangle contains Point " + jint + at);
+            }
+            same(jd.intersects(jf), sd.intersects(sf), "rect2d intersects rect2d " + c);
+        }
+    }
+
+    /** Every shape's path iterator (double and float coords, with and without a transform), new Path2D(shape) and append. */
+    private static void iterators() {
+        AffineTransform jt = new AffineTransform();
+        jt.translate(3.25, -7.5);
+        TAffineTransform st = new TAffineTransform();
+        st.translate(3.25, -7.5);
+        for (int i = 0; i < 20000; i++) {
+            double[] p = { coord(i), coord(i), coord(i), coord(i), coord(i), coord(i) };
+            if (i % 7 != 0) { // mostly a positive size; else a negative one, which draws nothing
+                p[2] = Math.abs(p[2]);
+                p[3] = Math.abs(p[3]);
+            }
+            String c = (i % 9) + " " + java.util.Arrays.toString(p);
+            java.awt.Shape j;
+            TShape s;
+            switch (i % 9) {
+                case 0:
+                    j = new Rectangle2D.Double(p[0], p[1], p[2], p[3]);
+                    s = new TRectangle2D.Double(p[0], p[1], p[2], p[3]);
+                    break;
+                case 1:
+                    j = new Rectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+                    s = new TRectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+                    break;
+                case 2:
+                    j = new RoundRectangle2D.Double(p[0], p[1], p[2], p[3], p[4], p[5]);
+                    s = new TRoundRectangle2D.Double(p[0], p[1], p[2], p[3], p[4], p[5]);
+                    break;
+                case 3:
+                    j = new RoundRectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3], (float) p[4], (float) p[5]);
+                    s = new TRoundRectangle2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3], (float) p[4], (float) p[5]);
+                    break;
+                case 4:
+                    j = new Ellipse2D.Double(p[0], p[1], p[2], p[3]);
+                    s = new TEllipse2D.Double(p[0], p[1], p[2], p[3]);
+                    break;
+                case 5:
+                    j = new Line2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+                    s = new TLine2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+                    break;
+                case 6:
+                    j = new QuadCurve2D.Double(p[0], p[1], p[2], p[3], p[4], p[5]);
+                    s = new TQuadCurve2D.Double(p[0], p[1], p[2], p[3], p[4], p[5]);
+                    break;
+                case 7: {
+                    int n = RND.nextInt(5);
+                    int[] xs = new int[n];
+                    int[] ys = new int[n];
+                    for (int k = 0; k < n; k++) {
+                        xs[k] = RND.nextInt(61) - 30;
+                        ys[k] = RND.nextInt(61) - 30;
+                    }
+                    j = new Polygon(xs, ys, n);
+                    s = new TPolygon(xs, ys, n);
+                    c += " polygon " + java.util.Arrays.toString(xs) + java.util.Arrays.toString(ys);
+                    break;
+                }
+                default:
+                    j = new Rectangle((int) p[0], (int) p[1], (int) p[2], (int) p[3]);
+                    s = new TRectangle((int) p[0], (int) p[1], (int) p[2], (int) p[3]);
+                    break;
+            }
+            same(walk(j.getPathIterator(null), false), walk(s.getPathIterator(null), false), "path " + c);
+            same(walk(j.getPathIterator(null), true), walk(s.getPathIterator(null), true), "float path " + c);
+            same(walk(j.getPathIterator(jt), false), walk(s.getPathIterator(st), false), "moved path " + c);
+            same(walk(new Path2D.Double(j).getPathIterator(null), false), walk(new TPath2D.Double(s).getPathIterator(null), false), "Path2D of " + c);
+            same(walk(new GeneralPath(j).getPathIterator(null), false), walk(new TGeneralPath(s).getPathIterator(null), false), "GeneralPath of " + c);
+            // append onto a path that ends at the shape's first point, or somewhere else, or is closed
+            Path2D ja = new Path2D.Float();
+            TPath2D sa = new TPath2D.Float();
+            int how = RND.nextInt(3);
+            double[] first = new double[6];
+            boolean any = !j.getPathIterator(null).isDone();
+            if (any) {
+                j.getPathIterator(null).currentSegment(first);
+            }
+            ja.moveTo(1, 2);
+            sa.moveTo(1, 2);
+            ja.lineTo(how == 0 && any ? first[0] : 5, how == 0 && any ? first[1] : 6);
+            sa.lineTo(how == 0 && any ? first[0] : 5, how == 0 && any ? first[1] : 6);
+            if (how == 2) {
+                ja.closePath();
+                sa.closePath();
+            }
+            boolean connect = RND.nextBoolean();
+            ja.append(j, connect);
+            sa.append(s, connect);
+            same(walk(ja.getPathIterator(null), false), walk(sa.getPathIterator(null), false), "append " + how + " " + connect + " " + c);
+        }
+    }
+
+    private static String walk(PathIterator it, boolean asFloat) {
+        StringBuilder b = new StringBuilder("rule " + it.getWindingRule());
+        for (; !it.isDone(); it.next()) {
+            double[] d = new double[6];
+            float[] f = new float[6];
+            segment(b, asFloat ? it.currentSegment(f) : it.currentSegment(d), d, f, asFloat);
+        }
+        return b.toString();
+    }
+
+    private static String walk(TPathIterator it, boolean asFloat) {
+        StringBuilder b = new StringBuilder("rule " + it.getWindingRule());
+        for (; !it.isDone(); it.next()) {
+            double[] d = new double[6];
+            float[] f = new float[6];
+            segment(b, asFloat ? it.currentSegment(f) : it.currentSegment(d), d, f, asFloat);
+        }
+        return b.toString();
+    }
+
+    private static void segment(StringBuilder b, int type, double[] d, float[] f, boolean asFloat) {
+        b.append(" | ").append(type);
+        for (int k = 0; k < (type == 4 ? 0 : type == 3 ? 6 : type == 2 ? 4 : 2); k++) {
+            b.append(' ').append(asFloat ? f[k] : d[k]);
         }
     }
 
