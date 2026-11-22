@@ -112,6 +112,10 @@ public final class Js {
             + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a) && _a !== el.closest('.window')) _a.blur();")
     public static native void focusComponent(JSObject el);
 
+    /** True when the page has the keyboard and its focus is on el or inside it. */
+    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && el.contains(_d.activeElement);")
+    public static native boolean focusWithin(JSObject el);
+
     /** Gives a window itself the page's keyboard focus (no ring), so a screen reader names it and keys are plainly the app's. */
     @JSBody(params = "el", script = "el.setAttribute('tabindex', '-1'); el.focus({preventScroll: true, focusVisible: false});")
     public static native void focusWindow(JSObject el);

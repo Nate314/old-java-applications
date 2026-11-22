@@ -640,9 +640,16 @@ public class TComponent implements TImageObserver {
         return true;
     }
 
+    /**
+     * As in Swing, only the active window's focus owner has the focus. A window that cannot take focus (the Windows
+     * key) has it only while the page's keyboard focus is in it (Tab took it there), so it draws no focus box otherwise.
+     */
     public boolean hasFocus() {
         TWindow w = windowAncestor();
-        return w != null && w.focusOwner() == this;
+        if (w == null || w.focusOwner() != this) {
+            return false;
+        }
+        return w.getFocusableWindowState() ? w.isActive() : w.hasElement() && Js.focusWithin(w.element());
     }
 
     public boolean isFocusOwner() {
