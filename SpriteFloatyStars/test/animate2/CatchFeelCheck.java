@@ -47,17 +47,18 @@ public class CatchFeelCheck {
             hole = body;
          }
       }
-      // The night has run 1.5 s of its clock by now, so the bar is full to about 620 px.
-      int full = draw(panel).getRGB(610, 16);
+      // The night has run 1.5 s of its clock by now, so the bar is full to about 576 px.
+      int full = draw(panel).getRGB(570, 16);
       check(isBlue(full), "a full clock bar is blue at its end " + Integer.toHexString(full));
       panel.catchAt(hole.x, hole.y + HUD);
       check(panel.game.secondsLeft() < Night.SECONDS, "the hole cost time");
       panel.advance(0.01);
-      int lost = draw(panel).getRGB(610, 16);
+      int lost = draw(panel).getRGB(570, 16);
       check(isRed(lost), "the lost seconds show red on the bar " + Integer.toHexString(lost));
       panel.advance(CatchPanel.DRAIN);
-      int after = draw(panel).getRGB(610, 16);
+      int after = draw(panel).getRGB(570, 16);
       check(!isRed(after) && !isBlue(after), "then drain away " + Integer.toHexString(after));
+      paused(panel, CatchPanel.WIDTH, CatchPanel.HEIGHT);
       upright(none);
       System.out.println("CatchFeelCheck passed");
    }
@@ -97,6 +98,62 @@ public class CatchFeelCheck {
          check(button.width >= 90 && field.contains(button), "result button fits " + button);
       }
       check(!panel.againButton.intersects(panel.menuButton), "result buttons apart");
+      paused(panel, size.width, size.height);
+   }
+
+   /** The pause button stops the clock and the stars; the card's buttons fit and resume, restart or go back to the nights, by tap alone. */
+   private static void paused(CatchPanel panel, int width, int height) {
+      java.awt.Rectangle field = new java.awt.Rectangle(width, height);
+      java.awt.Rectangle pause = panel.pauseButton;
+      check(pause.width >= 40 && pause.height >= 40 && field.contains(pause), "the pause button is big enough and on the field " + pause);
+      panel.start(Night.CONFETTI);
+      panel.advance(1.5);
+      double clock = panel.game.secondsLeft();
+      CatchGame.Body star = firstGold(panel.game);
+      double starX = star.x;
+      tap(panel, pause);
+      panel.advance(5);
+      check(panel.game.secondsLeft() == clock && star.x == starX, "paused, the clock and the stars hold still");
+      draw(panel);
+      java.awt.Rectangle[] buttons = {panel.resumeButton, panel.againButton, panel.menuButton};
+      for (int i = 0; i < buttons.length; i++) {
+         check(buttons[i].width >= 70 && field.contains(buttons[i]), "paused card button fits " + buttons[i]);
+         for (int j = 0; j < i; j++) {
+            check(!buttons[i].intersects(buttons[j]), "paused card buttons apart");
+         }
+      }
+      tap(panel, panel.resumeButton);
+      panel.advance(1);
+      check(Math.abs(panel.game.secondsLeft() - (clock - 1)) < 1e-9, "Resume runs the clock again from where it stopped");
+      tap(panel, pause);
+      draw(panel);
+      tap(panel, pause);
+      check(panel.game.secondsLeft() > 0 && advanced(panel), "the pause button resumes too");
+      tap(panel, pause);
+      draw(panel);
+      tap(panel, panel.againButton);
+      check(panel.game.secondsLeft() == Night.SECONDS && panel.game.caught() == 0, "Again starts the night over");
+      tap(panel, pause);
+      draw(panel);
+      tap(panel, panel.menuButton);
+      CatchGame before = panel.game;
+      tap(panel, panel.nightCards[0]);
+      check(panel.game != before && panel.game.night() == Night.DRIFT, "Nights goes back to the menu, whose cards start a night");
+   }
+
+   private static boolean advanced(CatchPanel panel) {
+      double clock = panel.game.secondsLeft();
+      panel.advance(0.5);
+      return panel.game.secondsLeft() < clock;
+   }
+
+   private static void tap(CatchPanel panel, java.awt.Rectangle target) {
+      long now = System.currentTimeMillis();
+      int x = (int)target.getCenterX();
+      int y = (int)target.getCenterY();
+      for (java.awt.event.MouseListener listener : panel.getMouseListeners()) {
+         listener.mousePressed(new java.awt.event.MouseEvent(panel, java.awt.event.MouseEvent.MOUSE_PRESSED, now, 0, x, y, 1, false));
+      }
    }
 
    private static BufferedImage draw(CatchPanel panel) {
