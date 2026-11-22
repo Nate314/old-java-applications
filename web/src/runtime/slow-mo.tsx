@@ -15,29 +15,68 @@ import { embedded } from './skin';
 // Each app keeps its own choice (oldjava.slowmo.<app>).
 
 /** The apps that move on their own, where a slower world helps or is fun to watch. */
-const APPS = ['FlappyBird', 'DinoGame', 'TankGame', 'SpriteFloatyStars', 'CircleSpawner', 'ScreenSaver'];
+export const APPS = ['FlappyBird', 'DinoGame', 'TankGame', 'SpriteFloatyStars', 'CircleSpawner', 'ScreenSaver'];
 const RATES = [1, 0.5, 0.25];
 const NAMES: Record<number, string> = { 1: 'full speed', 0.5: 'half speed', 0.25: 'quarter speed' };
 const FACES: Record<number, string> = { 1: '', 0.5: ' ½×', 0.25: ' ¼×' };
 
-let rate = 1, realAt = 0, warpAt = 0, warping = false;
+let rate = 1, realAt = 0, warpAt = 0, warping = false, held = false;
+/** What came due while held (timers by 't' + id, frames by 'f' + id), to run once the hold lifts. */
+const due = new Map<string, () => void>();
 /** The clock and timers as they were before any warp, for site code that must keep real time. */
 export const real = { now: performance.now.bind(performance), setInterval: setInterval.bind(window) };
 const realNow = real.now;
 /** The page's time now, in performance.now terms: real time at the rates it has run at since warping began. */
-function warpNow() { return warpAt + (realNow() - realAt) * rate; }
+function warpNow() { return held ? warpAt : warpAt + (realNow() - realAt) * rate; }
 /** The page's time for a real performance.now stamp. */
-function warped(real: number) { return warpAt + (real - realAt) * rate; }
+function warped(real: number) { return held ? warpAt : warpAt + Math.max(0, real - realAt) * rate; }
 
 function warp() {
   if (warping) return;
   warping = true;
   var timeout = setTimeout, interval = setInterval, frame = requestAnimationFrame;
+  var clearT = clearTimeout, clearI = clearInterval, clearF = cancelAnimationFrame;
   realAt = warpAt = realNow();
   performance.now = warpNow;
-  window.setTimeout = function (fn: TimerHandler, ms?: number, ...a: unknown[]) { return timeout(fn, (ms || 0) / rate, ...a); } as typeof setTimeout;
-  window.setInterval = function (fn: TimerHandler, ms?: number, ...a: unknown[]) { return interval(fn, (ms || 0) / rate, ...a); } as typeof setInterval;
-  window.requestAnimationFrame = function (cb: FrameRequestCallback) { return frame(function (t) { cb(warped(t)); }); };
+  // A timer that comes due while held waits in `due` (an interval's ticks coalesce into one), cleared with it.
+  function wrap(fn: TimerHandler, a: unknown[], key: () => string): TimerHandler {
+    if (typeof fn !== 'function') return fn;
+    return function () {
+      if (held) due.set(key(), function () { timeout(function () { fn(...a); }); });
+      else fn(...a);
+    };
+  }
+  window.setTimeout = function (fn: TimerHandler, ms?: number, ...a: unknown[]) {
+    var id: number = timeout(wrap(fn, a, function (): string { return 't' + id; }), (ms || 0) / rate);
+    return id;
+  } as typeof setTimeout;
+  window.setInterval = function (fn: TimerHandler, ms?: number, ...a: unknown[]) {
+    var id: number = interval(wrap(fn, a, function (): string { return 't' + id; }), (ms || 0) / rate);
+    return id;
+  } as typeof setInterval;
+  window.clearTimeout = function (id?: number) { due.delete('t' + id); clearT(id); } as typeof clearTimeout;
+  window.clearInterval = function (id?: number) { due.delete('t' + id); clearI(id); } as typeof clearInterval;
+  window.requestAnimationFrame = function (cb: FrameRequestCallback) {
+    var id = frame(function (t) {
+      if (held) due.set('f' + id, function () { frame(function (t) { cb(warped(t)); }); });
+      else cb(warped(t));
+    });
+    return id;
+  };
+  window.cancelAnimationFrame = function (id: number) { due.delete('f' + id); clearF(id); };
+}
+
+/** Stops the page's clock, its timers and its frames where they are (true), or runs them on from there (false): an
+ *  app in a frame nobody can see (hidden-hold.ts) waits instead of playing on unseen. */
+export function hold(on: boolean) {
+  warp();   // the first call wraps the timers, so any the app sets afterwards can be held
+  if (on === held) return;
+  if (on) { warpAt = warpNow(); held = true; return; }
+  realAt = realNow();
+  held = false;
+  var runs = Array.from(due.values());
+  due.clear();
+  runs.forEach(function (run) { run(); });
 }
 
 /** Runs the page's clock at `r` (1, 0.5 or 0.25). */
