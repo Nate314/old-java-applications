@@ -22,6 +22,7 @@ import { overlay, runAgain } from './ui/overlay';
 import { showConsole } from './system-out';
 import { playSound } from './sounds';
 import { fitBand, whenShown } from './toolbar-more';
+import { afterPaint } from './after-paint';
 
 
 
@@ -134,7 +135,9 @@ export function init() {
         window.addEventListener('online', runAgain, { once: true });   // the connection came back: try by itself
         return;
       }
-      if (title) title.ready(start); else whenShown(start);   // no app runs unseen in a prerendered page
+      // Play paints its press (the title screen starts leaving) first, then the app's main runs: on a slow phone
+      // main and its first timer held that paint for 0.4 to 1 s.
+      if (title) title.ready(function () { afterPaint(start); }); else whenShown(start);   // no app runs unseen in a prerendered page
       keepOffline();   // only now: installing the worker downloads the whole build
     });
   });

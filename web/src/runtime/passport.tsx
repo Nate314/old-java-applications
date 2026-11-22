@@ -6,6 +6,7 @@ import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { openShare } from './share';
 import { playSound } from './sounds';
 import { storedJson } from './stored';
+import { afterPaint } from './after-paint';
 
 declare global {
   interface OldjavaPassport { stamp(id: string): void }
@@ -173,7 +174,7 @@ export function stampOnPlay() {
     if (e.target && (e.target as Element).closest && (e.target as Element).closest(CHROME)) return;
     document.removeEventListener('pointerdown', onInput, true);
     document.removeEventListener('keydown', onInput, true);
-    passport.stamp(id!);
+    afterPaint(function () { passport.stamp(id!); });   // the app answers the first tap before the stamp shows
   }
   document.addEventListener('pointerdown', onInput, true);
   document.addEventListener('keydown', onInput, true);

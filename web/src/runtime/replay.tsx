@@ -273,6 +273,10 @@ export function startReplay(desktop: Element): Replay | null {
     while (recs.length > 1) recs.shift()!.rec.stop();
     begin();
   }
+  var pressed = false;   // the visitor has pressed or let go since the last frame
+  ['pointerdown', 'pointerup', 'keydown', 'keyup'].forEach(function (type) {
+    document.addEventListener(type, function (e) { if (!(e as KeyboardEvent).repeat) pressed = true; }, { capture: true, passive: true });
+  });
   var on: Window = window;   // the window the next frame was asked of
   function frame() {
     var w = popped && !popped.win.closed ? popped.win : window;
@@ -281,11 +285,15 @@ export function startReplay(desktop: Element): Replay | null {
     on = w;
     w.requestAnimationFrame(frame);
     var t = real.now();   // not the frame's time, which a popped out window counts from its own start
+    var answering = pressed;
+    pressed = false;
     if (away()) return;
     if (drew()) changed = true;
     // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
     // less often: the app keeps at least nine tenths of the time.
     if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
+    // Not in the frame that answers a tap or key: on a slow phone one drawing held that answer for 0.1 to 0.5 s.
+    if (answering) return;
     last = t;
     changed = false;
     var t0 = real.now(), box = drawDesk(g, canvas, desktop);
