@@ -88,6 +88,8 @@ public final class CircleCreatorWindow extends JFrame {
    private final String page;
    /** True when the app opened on a shape from a friend's link: nothing is saved, so the visitor's own stays. */
    private final boolean fromFriend;
+   /** True until the first shape is laid out: the size in the field is the saved one, perhaps from a roomier screen. */
+   private boolean savedSize = true;
    private final JLabel status = new JLabel(" ");
    private final DrawPad pad = new DrawPad(() -> {
       this.stopPlaying();
@@ -550,6 +552,12 @@ public final class CircleCreatorWindow extends JFrame {
       } catch (NumberFormatException e) {
          size = -1;
       }
+      if (this.savedSize && size > maxSize) {
+         // A size saved on a roomier screen shrinks to this one's room rather than leaving no shape.
+         size = maxSize;
+         this.sizeField.setText(String.valueOf(size));
+      }
+      this.savedSize = false;
       this.sizeSlider.show(size, maxSize);
       boolean draw = this.drawing();
       if (draw && size > maxSize) {
