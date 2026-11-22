@@ -1,5 +1,6 @@
 // An offline check of the built site in headless Chrome over the DevTools protocol, with Node's built-ins only (no
-// npm packages). It serves the site with serve.ps1 (the same headers a visitor gets) and walks three flows:
+// npm packages). It serves the site with serve.ps1 (the same headers a visitor gets) and walks four flows:
+//   0. the story, then compare.html, as the first page of a visit (no worker yet), then offline: each loads again;
 //   1. first visit, then offline: home, story, play.html, an app page and compare.html, visited once online, each load again with
 //      no connection;
 //   2. Save all for offline, then offline: several app pages, Then pages, and Find on the home page;
@@ -241,6 +242,19 @@ try {
   // compare.html: its players are written into the page (vite/pages.ts, compareRest); the Then one must draw its poster and picture.
   const COMPARE = { ready: '#pane-then iframe' };
   const comparePoster = async () => await until("(function(f){var p=f&&f.contentDocument&&f.contentDocument.getElementById('poster');return !!p&&!p.hidden&&(function(i){return !!i&&i.complete&&i.naturalWidth>0})(f.contentDocument.getElementById('poster-bg'))})(document.querySelector('#pane-then iframe'))", 15000) ? '' : 'no poster in the Then frame';
+
+  // ---- flow 0: a page other than home opened first (a shared story link), then offline; the origin is wiped after
+  // each, so flow 1 starts with no worker again ----
+  console.log('== story or compare.html first, then offline');
+  for (const [label, path, opts] of [['story', 'story.html', { ready: 'main' }], ['compare.html?app=Minesweeper', 'compare.html?app=Minesweeper', COMPARE]]) {
+    await page(label + ' first (online)', path, opts);
+    await check('service worker controls ' + label, async () => await until('!!navigator.serviceWorker.controller', 15000) ? '' : 'no controller after 15 s');
+    await sleep(1500);
+    await setOffline(true);
+    await page(label + ' first (offline)', path, { ...opts, firstVisit: true });
+    await setOffline(false);
+    await send('Storage.clearDataForOrigin', { origin: BASE.slice(0, -1), storageTypes: 'service_workers,cache_storage' }, S);
+  }
 
   // ---- flow 1: first visit, then offline ----
   console.log('== first visit, then offline');
