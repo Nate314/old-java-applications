@@ -1,6 +1,7 @@
 # A browser smoke test of the built site in headless Chrome over the DevTools protocol (web/cdp.ps1): the pages
 # visitors land on (home, story, play.html with and without ?app=, the lost page for a missing path, compare.html) and,
-# for every app in the build's apps.json, its page, its ?embed and ?embed&full forms and its Then page where it has
+# for every app in the build's apps.json, its page, its ?embed and ?embed&full forms, its page again on a 400x800 phone
+# screen and its Then page where it has
 # one. On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
@@ -99,11 +100,14 @@ $KnownUnnamed = @{}
 # One page: loads it, waits until `ready` (a selector) is on it, or for an app (-App) presses Play when there is
 # one and checks the window and its paint. -Click presses that button first and -Frame is the iframe the app is in
 # (play.html's player); -Exit closes the app and runs it again (see the top); -Missing expects the address itself to
-# answer 404 (the lost page); -Sheet is the page's app links: the last one opens the app in the play sheet (see the top).
-function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet) {
+# answer 404 (the lost page); -Sheet is the page's app links: the last one opens the app in the play sheet (see the top);
+# -Phone loads it in a 400x800 phone screen, so apps that pick a narrow layout at start are checked in it too.
+function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [switch]$Phone) {
     $t = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Cdp 'Page.navigate' @{ url = 'about:blank' } | Out-Null
     Invoke-Js '1' | Out-Null   # reads the last page's late events, then forgets them
+    if ($Phone) { Invoke-Cdp 'Emulation.setDeviceMetricsOverride' @{ width = 400; height = 800; deviceScaleFactor = 1; mobile = $true } | Out-Null }
+    else { Invoke-Cdp 'Emulation.clearDeviceMetricsOverride' | Out-Null }
     $script:Errors.Clear(); $script:Urls.Clear()
     $why = $null
     $url = "http://127.0.0.1:$Port/$path"
@@ -164,6 +168,7 @@ foreach ($app in $Apps) {
     $pages += @{ name = $app; path = "$app/index.html"; App = $true; Exit = $true }
     $pages += @{ name = "$app ?embed"; path = "$app/index.html?embed"; App = $true }
     $pages += @{ name = "$app ?embed&full"; path = "$app/index.html?embed&full"; App = $true }
+    $pages += @{ name = "$app at 400 px"; path = "$app/index.html"; App = $true; Phone = $true }
     if (Test-Path (Join-Path $Site "$app/then.html")) { $pages += @{ name = "$app Then"; path = "$app/then.html"; App = $true } }
 }
 
