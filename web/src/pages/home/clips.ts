@@ -8,7 +8,7 @@
 import type { FocusEvent as ReactFocusEvent } from 'react';
 import { APPS } from '../../shared/catalog';
 import { H, drawPart } from './model';
-import { inFilter } from './yours';
+import { onView } from './yours';
 
 const still = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = matchMedia('(hover: hover) and (pointer: fine)');
@@ -20,7 +20,7 @@ let wait = 0;
 export function hasClip(id: string) { return canPlay && !!APPS.find(a => a.id === id)?.clip && !clip.broken[id]; }
 const card = (id: string) => document.querySelector<HTMLLIElement>('#apps li[data-app="' + id + '"]')!;
 const videoOf = (id: string) => card(id).querySelector<HTMLVideoElement>('a.thumb video');
-const shown = (id: string) => inFilter(APPS.find(a => a.id === id)!, H.filter);
+const shown = (id: string) => onView(APPS.find(a => a.id === id)!);
 
 function play(id: string) {
   clearTimeout(wait);
@@ -77,5 +77,8 @@ export function initClips(): void {
   document.addEventListener('click', e => {
     const target = e.target as Element;
     if (clip.current && target.closest && target.closest('.filters') && !shown(clip.current)) stop(clip.current);
+  });
+  document.addEventListener('input', e => {   // after React's own listener on its root has taken the words in
+    if (clip.current && (e.target as Element).id === 'gallery-filter' && !shown(clip.current)) stop(clip.current);
   });
 }
