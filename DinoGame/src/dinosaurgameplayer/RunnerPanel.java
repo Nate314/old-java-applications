@@ -942,6 +942,7 @@ final class RunnerPanel extends JPanel {
       if (dark > 0) {
          paintNightSky(g, sky, paper, dark);
       }
+      Land.paint(g, runner.distance(), dark);
       g.setColor(Sky.tint(CLOUD, dark));
       double[] clouds = runner.clouds();
       for (int i = 0; i < clouds.length; i++) {
