@@ -13,7 +13,7 @@ interface OldjavaPassport {
   onChange(fn: (fresh: string | null) => void): void;
   open: ((id: string) => void) | null;
   catalog(): Promise<OldjavaCatalogApp[]>;
-  unplayed(apps: OldjavaCatalogApp[], current: string | null): OldjavaCatalogApp[];
+  unplayed<T extends { id: string; cat: string }>(apps: T[], current: string | null): T[];
 }
 
 /** An app page's pop out (the player's iframe has one once its page has loaded). */

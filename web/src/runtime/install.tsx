@@ -8,7 +8,7 @@ import { replayNow } from './replay';
 import { snapPhoto, takePhoto } from './photo-booth';
 import { pad, padOnPage, padShown, togglePad } from './touch-pad';
 import { appId, catalog, root } from './catalog';
-import { EraSwitch, indexOf, openDrawer, pageOf } from './then-and-now';
+import { EraSwitch, indexOf, openDrawer, pageOf, picks } from './then-and-now';
 import { openShare } from './share';
 import { howToPlay } from './source-viewer';
 import { setSoundOn, soundOn } from './sounds';
@@ -69,10 +69,7 @@ function Toolbar({ isApp, onMount }: { isApp: boolean; onMount: (parts: BarParts
   useLayoutEffect(() => {
     redraw = () => flushSync(() => setTick(n => n + 1));
     onMount({ bar: bar.current!, slot: slot.current!, help: on => flushSync(() => setHint(on)), news: on => flushSync(() => setNewsOn(on)) });
-    if (isApp) catalog().then(apps => {
-      const i = indexOf(apps, appId());
-      if (i >= 0) setNext(apps[(i + 1) % apps.length]);
-    });
+    if (isApp) catalog().then(apps => { if (indexOf(apps, appId()) >= 0) setNext(picks(apps, appId(), 1)[0] || null); });
   }, []);
   const blur = (e: { currentTarget: HTMLElement }) => e.currentTarget.blur();
   // A control's class, and More's mark when it has stepped out (toolbar-more.tsx).
