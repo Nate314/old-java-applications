@@ -9,7 +9,7 @@ import { openPanel } from './ui/panel';
 import { appOut, audio } from './midi';
 import { playSound } from './sounds';
 import { real } from './slow-mo';
-import { paintWatch } from './painted';
+import { paintWatch, paintedCanvases } from './painted';
 
 /** A recorded clip: its video, how many seconds it holds, and the app it shows. */
 export interface ReplayClip { blob: Blob; seconds: number; app: string }
@@ -19,6 +19,8 @@ export interface Replay { live(): boolean; take(): Promise<ReplayClip | null> }
 interface Recording { chunks: Blob[]; t0: number; rec: MediaRecorder; pausedAt: number }
 /** An element to draw, in stacking order (z, then i). */
 interface Layer { el: Element; cs: CSSStyleDeclaration; z: number; i: number }
+/** What to draw again (rects in page pixels; null: everything), where each drawn element was, and the last drawing's frame. */
+interface Damage { rects: DOMRect[] | null; seen: WeakMap<Element, DOMRect>; frame: string }
 
 export let replay: Replay | null;
 let clipBox: HTMLElement | null;
@@ -39,6 +41,10 @@ let clipBox: HTMLElement | null;
 // A drawing is done a few ms per frame (paintDesk, REPLAY_SLICE), so a big app never holds a tap for a whole drawing;
 // when frames come far apart (a window behind others) a frame may draw a tenth of the time since the last one, up to
 // REPLAY_SLICE_MAX, so the clip's newest picture stays fresh there too.
+// Only the part that changed is drawn again (damage): the canvases the shim drew on and the elements that changed,
+// where they are and where they were, over the last picture; an app of many widgets (Minesweeper's 256 tiles)
+// where one tile changed draws that tile, not the board. A whole drawing still comes every REPLAY_WHOLE, and at once
+// when the windows move as one (scrolling, a new size, zoom, Pop out, a skin).
 const REPLAY_SEG = 20000;
 
 const REPLAY_FPS = 30;     // at most; fewer where drawing the windows costs more (REPLAY_SHARE)
@@ -52,6 +58,9 @@ const REPLAY_MAX = 1280;   // the clip's longest side, in pixels
 const REPLAY_PAD = 16;     // desk around the windows, in page pixels
 
 const REPLAY_SLICE = 6;    // ms of drawing per frame at most (one element may run over): a slow phone drew big apps in 0.1-0.5 s at once
+
+const REPLAY_WHOLE = 2000;   // ms: a whole drawing at least this often, for what damage cannot see (CSS animations, overflowing children);
+                             // or 4 times as long as the last one took, so a slow phone mostly draws what changed
 
 const REPLAY_SLICE_MAX = 24;   // ms, when frames come far apart: half a long task, so a tap still never waits long
 
@@ -111,10 +120,16 @@ function drawText(g: CanvasRenderingContext2D, node: Text, cs: CSSStyleDeclarati
 
 // Paints el and everything in it into g, at its place on the page (k: the desktop's CSS scale), pausing
 // (yield) after each element so a big app can be drawn over several frames (paintDesk).
-function* drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclaration, k: number): Generator<void, void> {
+// With damage, an element that meets none of its rects is left as the last picture had it, and seen keeps where
+// each drawn element was (for the next damage).
+function* drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclaration, k: number, damage?: Damage): Generator<void, void> {
   if (cs.display === 'none' || cs.visibility === 'hidden') return;
   var r = el.getBoundingClientRect();
   if (!r.width || !r.height) return;
+  if (damage) {
+    if (damage.rects && !damage.rects.some(function (d) { return d.left < r.right && r.left < d.right && d.top < r.bottom && r.top < d.bottom; })) return;
+    damage.seen.set(el, r);
+  }
   g.save();
   g.globalAlpha *= +cs.opacity;
   var rad = (parseFloat(cs.borderTopLeftRadius) || 0) * k;
@@ -171,9 +186,9 @@ function* drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclara
       }
     }
     kids.sort(function (a, b) { return a.z - b.z || a.i - b.i; });
-    for (var c of kids) if (c.z < 0) yield* drawNode(g, c.el, c.cs, k);
+    for (var c of kids) if (c.z < 0) yield* drawNode(g, c.el, c.cs, k, damage);
     texts.forEach(function (t) { drawText(g, t, cs, k); });
-    for (c of kids) if (c.z >= 0) yield* drawNode(g, c.el, c.cs, k);
+    for (c of kids) if (c.z >= 0) yield* drawNode(g, c.el, c.cs, k, damage);
   }
   g.restore();
   yield;
@@ -181,8 +196,9 @@ function* drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclara
 
 // Draws the app's windows, on the skin's desk, fitted into canvas. Returns the size they and the desk around
 // them have at actual size (unzoomed), or null while there is no window. paintDesk does it a slice at a time
-// (each next() draws one element); drawDesk all at once.
-function* paintDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element): Generator<void, number[] | null> {
+// (each next() draws one element); drawDesk all at once. With damage over the picture already in canvas, only
+// its rects are drawn again, unless the windows' frame changed (then damage.rects is set to null: all of it).
+function* paintDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element, damage?: Damage): Generator<void, number[] | null> {
   var view = desktop.ownerDocument.defaultView!;
   var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, wins: Layer[] = [];
   for (var c = desktop.firstElementChild; c; c = c.nextElementSibling) {
@@ -199,13 +215,30 @@ function* paintDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desk
   var W = canvas.width, H = canvas.height;
   var s = Math.min(W / (x1 - x0), H / (y1 - y0));
   var root = view.getComputedStyle(desktop.ownerDocument.documentElement);
+  var frame = [x0, y0, x1, y1, W, H, view === window].join();
+  if (damage) {
+    if (damage.frame !== frame) damage.rects = null;
+    damage.frame = frame;
+  }
+  var desk = function () { g.setTransform(s, 0, 0, s, (W - (x1 - x0) * s) / 2 - x0 * s, (H - (y1 - y0) * s) / 2 - y0 * s); };
+  g.save();
+  if (damage && damage.rects) {
+    desk();
+    g.beginPath();
+    damage.rects.forEach(function (d) { g.rect(d.left, d.top, d.width, d.height); });
+    g.clip();
+  }
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 1;
   g.fillStyle = cssFill(g, root.getPropertyValue('--desk'), root.getPropertyValue('--desk').trim(), 0, 0, W, H) || '#1e293b';
   g.fillRect(0, 0, W, H);
-  g.setTransform(s, 0, 0, s, (W - (x1 - x0) * s) / 2 - x0 * s, (H - (y1 - y0) * s) / 2 - y0 * s);
+  desk();
   wins.sort(function (a, b) { return a.z - b.z || a.i - b.i; });
-  for (var w of wins) yield* drawNode(g, w.el, w.cs, k);
+  try {
+    for (var w of wins) yield* drawNode(g, w.el, w.cs, k, damage);
+  } finally {
+    g.restore();
+  }
   return [(x1 - x0) / k, (y1 - y0) / k];
 }
 
@@ -235,10 +268,38 @@ export function startReplay(desktop: Element): Replay | null {
   var job: Generator<void, number[] | null> | null = null, spent = 0, started = false;
   var track: MediaStreamTrack | null = null, stream: MediaStream | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
   var drew = paintWatch();
-  function look() { changed = true; }
+  // What changed since the last drawing began: the canvases the shim drew on, the nodes changed or let go.
+  var painted = paintedCanvases(), touched = new Set<Node>(), whole = -Infinity, wholeTook = 0, began = 0, damage: Damage = { rects: null, seen: new WeakMap(), frame: '' };
+  function look(records: MutationRecord[]) {
+    changed = true;
+    records.forEach(function (m) {
+      touched.add(m.target);
+      m.removedNodes.forEach(function (n) { touched.add(n); });
+    });
+    if (touched.size > 2000) { touched.clear(); whole = -Infinity; }   // long out of sight: drawn whole when back
+  }
   if (window.MutationObserver) {
     new MutationObserver(look).observe(desktop, { subtree: true, childList: true, attributes: true, characterData: true });
-    new MutationObserver(look).observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+    new MutationObserver(function () { changed = true; whole = -Infinity; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+  }
+  // The rects to draw again, where each changed element is now and where the last drawing had it (2 px wider for
+  // smoothed edges), or null for everything.
+  function damaged(t: number) {
+    var rects: DOMRect[] | null = [];
+    if (t - whole >= Math.max(REPLAY_WHOLE, 4 * wholeTook)) rects = null;
+    function add(r: DOMRect | undefined) { if (rects && r && r.width && r.height) rects.push(new DOMRect(r.x - 2, r.y - 2, r.width + 4, r.height + 4)); }
+    function at(n: Node) {
+      var el = n.nodeType === 1 ? n as Element : n.parentElement;
+      if (!el || !rects) return;
+      if (el === desktop) { rects = null; return; }   // a window opened or closed
+      add(damage.seen.get(el));
+      if (el.isConnected) add(el.getBoundingClientRect());
+    }
+    touched.forEach(at);
+    painted.forEach(function (c) { if (desktop.contains(c)) at(c); });
+    touched.clear();
+    painted.clear();
+    return rects;
   }
   // The body, not the desktop: it stays in this page while the desktop is popped out. In the home page's
   // player it is the whole iframe, so this says whether the visitor has scrolled the player away.
@@ -322,14 +383,22 @@ export function startReplay(desktop: Element): Replay | null {
       last = t;
       changed = false;
       spent = 0;
-      if (back.width !== canvas.width || back.height !== canvas.height) { back.width = canvas.width; back.height = canvas.height; }
-      job = paintDesk(bg, back, desktop);
+      began = t;
+      damage.rects = damaged(t);
+      if (back.width !== canvas.width || back.height !== canvas.height) { back.width = canvas.width; back.height = canvas.height; damage.rects = null; }
+      // Nothing to draw again: the last picture still holds (it is copied below, so the video keeps a frame a second).
+      job = damage.rects && !damage.rects.length ? null : paintDesk(bg, back, desktop, damage);
+    }
+    if (!job) {
+      if (track) g.drawImage(back, 0, 0);
+      return;
     }
     var t0 = real.now(), step;
     while (!(step = job.next()).done && real.now() - t0 < budget);
     spent += real.now() - t0;
     if (!step.done) return;
     job = null;
+    if (!damage.rects) { whole = t; wholeTook = t - began; }
     cost = 0.8 * cost + 0.2 * spent;
     var box = step.value;
     if (!box) return;
