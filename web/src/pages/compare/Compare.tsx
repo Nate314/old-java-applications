@@ -1,7 +1,9 @@
 // Then and now (compare.html?app=<App>): an app as first restored and as it is today, both live side by side in
 // the embeddable player (play.html, one with &then), and every change to the app in between, read from history.txt.
-import { useEffect, useState } from 'react';
-import { APPS } from '../../shared/catalog';
+// From 760 px wide the two players lie one over the other, full width, split by a line to drag (Wipe below): Then
+// left of it, Now right of it, both started by one Play.
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { APPS, webp } from '../../shared/catalog';
 import { SITE } from '../../shared/ShareTags';
 
 // The Then versions are built from commit 5a28e46 (then.commit in web/then/pom.xml); this is its commit time, so the
@@ -31,7 +33,7 @@ function changesOf(history: string, id: string) {
 
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-function Pane({ then, shown }: { then: boolean; shown: boolean }) {
+function Pane({ then, shown, covered }: { then: boolean; shown: boolean; covered: boolean }) {
   const label = then ? 'Then' : 'Now';
   return (
     <figure className={'pane' + (then ? ' then' : '') + (shown ? ' shown' : '')} id={then ? 'pane-then' : 'pane-now'}>
@@ -41,7 +43,42 @@ function Pane({ then, shown }: { then: boolean; shown: boolean }) {
       </figcaption>
       <iframe title={app.name + ', ' + label.toLowerCase()} allow="autoplay; fullscreen; clipboard-write"
         src={'play.html?app=' + encodeURIComponent(app.id) + (then ? '&then' : '')} />
+      {/* Wide only: the app's picture over the poster until Play both (Then's in old-photo sepia). */}
+      {covered && <img className="cover" src={webp(app.shot)} alt="" />}
     </figure>
+  );
+}
+
+/** Presses Play on a frame's poster (play.html), once it has been drawn; a frame already playing is left alone. */
+function press(f: HTMLIFrameElement) {
+  const d = f.contentDocument, poster = d && d.getElementById('poster');
+  if (poster) { if (!poster.hidden) d!.getElementById('poster-play')!.click(); }
+  else f.addEventListener('load', () => press(f), { once: true });
+}
+
+const KEY_STEP: Record<string, number> = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5, PageDown: -25, PageUp: 25, Home: -100, End: 100 };
+
+/** The line between Then (left) and Now (right): dragged, or moved with the arrow keys, as a slider. */
+function Wipe({ cut, setCut, box }: { cut: number; setCut: (n: number) => void; box: () => HTMLElement }) {
+  function drag(e: PointerEvent<HTMLDivElement>) {
+    const r = box().getBoundingClientRect();
+    setCut(Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)));
+  }
+  function key(e: KeyboardEvent<HTMLDivElement>) {
+    if (!(e.key in KEY_STEP)) return;
+    e.preventDefault();
+    setCut(Math.max(0, Math.min(100, cut + KEY_STEP[e.key])));
+  }
+  return (
+    <div className="wipe" role="slider" tabIndex={0} aria-label="Line between Then and Now" aria-orientation="horizontal"
+      aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(cut)}
+      aria-valuetext={cut <= 0 ? 'All Now' : cut >= 100 ? 'All Then' : Math.round(cut) + '% Then, ' + Math.round(100 - cut) + '% Now'}
+      onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); box().classList.add('dragging'); drag(e); }}
+      onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) drag(e); }}
+      onPointerUp={() => box().classList.remove('dragging')} onPointerCancel={() => box().classList.remove('dragging')}
+      onKeyDown={key}>
+      <span className="knob" aria-hidden="true">‹ ›</span>
+    </div>
   );
 }
 
@@ -49,6 +86,13 @@ export function Compare() {
   const [changes, setChanges] = useState<Change[] | null>(null);
   // On a narrow screen one pane at a time, full size, flipped with the switch (both stay loaded, each keeps its game).
   const [then, setThen] = useState(true);
+  const [cut, setCut] = useState(50);              // wide: how much of the width is Then, in percent
+  const [started, setStarted] = useState(false);   // wide: Play both pressed
+  const panes = useRef<HTMLDivElement>(null);
+  function playBoth() {
+    setStarted(true);
+    panes.current!.querySelectorAll('iframe').forEach(press);
+  }
   useEffect(() => {
     document.title = app.name + ', then and now | ' + SITE;
     fetch('history.txt').then(r => { if (!r.ok) throw new Error('history.txt: ' + r.status); return r.text(); })
@@ -68,10 +112,11 @@ export function Compare() {
         <p className="lead">
           <span className="wide">{'On the left, ' + app.name + ' as it ran when it was first brought back: the ' +
             (app.origin === 'original' ? 'author’s own source' : 'code recovered from the old jar') +
-            ' with light bug fixes. On the right, the same app today. Play both, then click the one you want the keys.'}</span>
+            ' with light bug fixes. On the right, the same app today, over the same spot. One Play starts both: drag the line to wipe' +
+            ' from one to the other, and click the side you want the keys.'}</span>
           <span className="narrow">{'Flip between ' + app.name + ' as it ran when it was first brought back (Then) and the same app today (Now). Each keeps its own game while you flip.'}</span>
         </p>
-        <div className="panes">
+        <div className="panes" ref={panes} style={{ '--cut': cut + '%' } as CSSProperties}>
           <div className="flip" role="group" aria-label="Show">
             <button type="button" className="then" aria-pressed={then} aria-controls="pane-then" onClick={() => setThen(true)}>
               Then <small>2026 restore</small>
@@ -80,8 +125,15 @@ export function Compare() {
               Now <small>{changes && changes.length ? '+' + changes.length + (changes.length === 1 ? ' change' : ' changes') : 'today'}</small>
             </button>
           </div>
-          <Pane then shown={then} />
-          <Pane then={false} shown={!then} />
+          <Pane then shown={then} covered={!started} />
+          <Pane then={false} shown={!then} covered={!started} />
+          <Wipe cut={cut} setCut={setCut} box={() => panes.current!} />
+          {!started && (
+            <div className="play-both">
+              <button type="button" onClick={playBoth}><span aria-hidden="true">▶</span> Play both</button>
+              <p>Then and Now start together. Drag the line to compare.</p>
+            </div>
+          )}
         </div>
         <nav className="picks" aria-label="Compare another app">
           <span>Compare another:</span>
