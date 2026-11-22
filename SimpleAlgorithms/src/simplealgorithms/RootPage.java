@@ -9,16 +9,29 @@ import java.util.List;
 /**
  * Square root: steps through {@link MyMath#squareRootSteps}. Each guess a is drawn as an a by n / a rectangle, whose
  * area is always n; averaging its sides makes it squarer each step, until it is the square of side sqrt(n). The
- * table lists every guess with its correct digits in green. The visitor types the number.
+ * table lists every guess with its correct digits in green. The visitor types the number, and can drag a side of the
+ * rectangle to start from a first guess of their own instead of 1: the other side follows, so the area stays n.
  */
 class RootPage extends Page {
 	private static final String[] PRESETS = { "42", "2", "10", "1000", "0.5", "123456789" };
 	private static final int TICKS_PER_STEP = 28;
+	/** Centre of the picture, and how far from it a dragged rectangle may reach. */
+	private static final int CX = 240;
+	private static final int CY = NARROW ? 214 : 192;
+	private static final int HALF_W = 150;
+	private static final int HALF_H = 115;
 
 	private String entry = "42";
 	private double num;
 	private List<Double> steps;
 	private int shown;
+	/** The first guess: 1 as the author's loop starts, or one the visitor dragged the rectangle to. */
+	private double start = 1;
+	/** How many averages the author's start (1) takes on this number, to set a dragged start against. */
+	private int fromOne;
+	/** True while a side of the rectangle is held; the scale then stays put under the finger. */
+	private boolean grabbing;
+	private boolean overPicture;
 	private int preset;
 	private boolean playing = true;
 	private int wait;
@@ -49,15 +62,80 @@ class RootPage extends Page {
 			return;
 		}
 		num = value;
-		steps = MyMath.squareRootSteps(num);
+		steps = guesses(num, start);
+		fromOne = guesses(num, 1).size() - 1;
+		shown = 0;
+		wait = 0;
+		drawnA = start;
+		drawnScale = scaleFor(start);
+	}
+
+	/** Every guess from start, the last one once. */
+	static List<Double> guesses(double num, double start) {
+		List<Double> steps = MyMath.squareRootSteps(num, start);
 		// The last average repeats the guess before it (that is how the loop knows to stop): show it once.
 		while (steps.size() > 1 && steps.get(steps.size() - 1).equals(steps.get(steps.size() - 2))) {
 			steps.remove(steps.size() - 1);
 		}
+		return steps;
+	}
+
+	@Override
+	boolean drags() {
+		return true;
+	}
+
+	private boolean inPicture(int x, int y) {
+		return x < (NARROW ? LabPanel.WIDTH : 410) && y > CY - HALF_H - 10 && y < CY + HALF_H + 10;
+	}
+
+	@Override
+	void click(int x, int y) {
+		if (steps == null || !inPicture(x, y)) {
+			return;
+		}
+		pause();
+		grabbing = true;
+		drag(x, y);
+	}
+
+	/**
+	 * The held side sets a: the rectangle is 2 |x - CX| wide, and n / a tall. While held the picture is zoomed out so
+	 * that guesses from about sqrt(n) / 6 to 8 sqrt(n) fit inside it; let go, it zooms back in.
+	 */
+	@Override
+	void drag(int x, int y) {
+		if (!grabbing) {
+			return;
+		}
+		double scale = 2 * HALF_H / (Math.sqrt(num) * 6);
+		double most = 2 * HALF_W / scale;
+		double least = num * scale / (2 * HALF_H);
+		start = Math.max(least, Math.min(most, 2 * Math.abs(x - CX) / scale));
+		steps = guesses(num, start);
 		shown = 0;
-		wait = 0;
-		drawnA = 1;
-		drawnScale = scaleFor(1);
+		drawnA = start;
+		drawnScale = scale;
+	}
+
+	@Override
+	void release() {
+		if (grabbing) {
+			grabbing = false;
+			// Let go: the averaging plays from the guess just made.
+			togglePlay();
+		}
+	}
+
+	@Override
+	void hover(int x, int y) {
+		overPicture = steps != null && inPicture(x, y);
+	}
+
+	@Override
+	void hidden() {
+		grabbing = false;
+		overPicture = false;
 	}
 
 	private void togglePlay() {
@@ -87,6 +165,7 @@ class RootPage extends Page {
 	private void nextPreset() {
 		preset = (preset + 1) % PRESETS.length;
 		entry = PRESETS[preset];
+		start = 1;
 		compute();
 		playing = false;
 		togglePlay();
@@ -108,6 +187,7 @@ class RootPage extends Page {
 		} else {
 			return false;
 		}
+		start = 1;
 		compute();
 		pause();
 		return true;
@@ -118,7 +198,7 @@ class RootPage extends Page {
 		if (steps != null) {
 			double a = steps.get(shown);
 			double scale = scaleFor(a);
-			if (Math.abs(drawnA - a) > 1e-9 * a || Math.abs(drawnScale - scale) > 1e-9 * scale) {
+			if (!grabbing && Math.abs(drawnA - a) > 1e-9 * a || Math.abs(drawnScale - scale) > 1e-9 * scale) {
 				drawnA += (a - drawnA) * 0.2;
 				drawnScale += (scale - drawnScale) * 0.2;
 			}
@@ -176,9 +256,9 @@ class RootPage extends Page {
 		int wa = (int) Math.max(1, Math.round(a * drawnScale));
 		int hb = (int) Math.max(1, Math.round(b * drawnScale));
 		int side = (int) Math.round(Math.sqrt(num) * drawnScale);
-		int cx = 240;
+		int cx = CX;
 		// Narrow, the table goes under the picture, so the picture sits lower, under the wrapped line above.
-		int cy = NARROW ? 214 : 192;
+		int cy = CY;
 		g.setColor(new Color(60, 100, 180, 60));
 		g.fillRect(cx - wa / 2, cy - hb / 2, wa, hb);
 		g.setColor(INK);
@@ -188,15 +268,33 @@ class RootPage extends Page {
 		g.setStroke(new BasicStroke(1.5f));
 		g.drawRect(cx - side / 2, cy - side / 2, side, side);
 		g.setStroke(new BasicStroke(1f));
+		// Grips on the two sides say they can be dragged; they grow while the pointer is on the picture.
+		int grip = grabbing ? 7 : overPicture ? 6 : 5;
+		for (int x : new int[] { cx - wa / 2, cx + wa / 2 }) {
+			g.setColor(HIGHLIGHT);
+			g.fillOval(x - grip, cy - grip, 2 * grip, 2 * grip);
+			g.setColor(INK);
+			g.setStroke(new BasicStroke(2f));
+			g.drawOval(x - grip, cy - grip, 2 * grip, 2 * grip);
+		}
+		g.setStroke(new BasicStroke(1f));
 		double guess = steps.get(shown);
 		centered(g, "a = " + number(guess, 6), BOLD, INK, cx, cy + Math.max(hb, side) / 2 + 18);
 		String bLabel = "n / a = " + number(num / guess, 6);
-		text(g, bLabel, BOLD, INK, Math.max(4, cx - Math.max(wa, side) / 2 - 8 - width(g, bLabel, BOLD)), cy + 5);
+		int left = cx - Math.max(wa, side) / 2 - 8 - width(g, bLabel, BOLD);
+		if (left >= 4) {
+			text(g, bLabel, BOLD, INK, left, cy + 5);
+		} else {
+			// A wide, flat rectangle leaves no room on its left: the label goes above it.
+			centered(g, bLabel, BOLD, INK, cx, cy - Math.max(hb, side) / 2 - 8);
+		}
 		String area = "area " + number(num, 12);
 		if (wa > width(g, area, SMALL) + 8 && hb > 20) {
 			centered(g, area, SMALL, INK, cx, cy + 4);
 		}
-		text(g, "Blue: a by n / a, area n.  Green: the square of side sqrt(n).", SMALL, PENCIL, 20, NARROW ? 370 : 348);
+		text(g, NARROW ? "Blue: a by n / a, area n. Green: side sqrt(n). Drag a side: your own guess."
+				: "Blue: a by n / a, area n.  Green: the square of side sqrt(n).  Drag a blue side to guess first yourself.",
+				SMALL, PENCIL, 20, NARROW ? 370 : 348);
 	}
 
 	private void paintTable(Graphics2D g, int w) {
@@ -228,9 +326,12 @@ class RootPage extends Page {
 	private void paintCaption(Graphics2D g, int h) {
 		double guess = steps.get(shown);
 		String caption;
-		if (shown == steps.size() - 1) {
+		if (grabbing) {
+			caption = "Your first guess: a = " + number(guess, 6) + ", so n / a = " + number(num / guess, 6)
+					+ ". Let go to average from it.";
+		} else if (shown == steps.size() - 1) {
 			caption = "Guess " + shown + " and n / guess agree: sqrt(" + number(num, 12) + ") ~= " + guess
-					+ " after " + shown + " averages.";
+					+ " after " + shown + " averages" + (start == 1 ? "." : " (from 1: " + fromOne + ").");
 		} else {
 			caption = "Guess " + shown + ": the average of " + number(guess, 8) + " and " + number(num / guess, 8)
 					+ " is " + number(steps.get(shown + 1), 8) + ", the next guess.";

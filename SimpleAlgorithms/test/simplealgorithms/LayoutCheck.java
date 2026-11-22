@@ -12,7 +12,7 @@ import java.lang.reflect.Method;
  * Self-check for the phone layout. Run with java -ea -Djava.awt.headless=true -Dsimplealgorithms.narrow=true: the
  * lab is 480 x 800, every tab can be picked by a click in its row, and on every page, in several states, nothing is
  * drawn outside the lab and the bar's buttons fit inside it without overlapping. Only the pages that take drags
- * listen for them, so on the others a swipe over an embedded lab scrolls the page around it.
+ * (Hanoi, Square root, Pathfinding, Prints) listen for them, so on the others a swipe over an embedded lab scrolls the page around it.
  */
 public class LayoutCheck {
 	private static final int SENTINEL = new Color(255, 0, 255).getRGB();
@@ -55,7 +55,7 @@ public class LayoutCheck {
 			press.invoke(lab, (left + right) / 2, i / 4 * 36 + 18);
 			check((int) current.get(lab) == i, "a click on tab " + pages[i].title + " shows it");
 			fits(lab, pages[i].title);
-			check((lab.getMouseMotionListeners().length == 2) == (pages[i] instanceof PathPage || pages[i] instanceof HanoiPage),
+			check((lab.getMouseMotionListeners().length == 2) == (pages[i] instanceof PathPage || pages[i] instanceof HanoiPage || pages[i] instanceof RootPage),
 					pages[i].title + ": listens for drags only if it takes them");
 		}
 
@@ -70,6 +70,16 @@ public class LayoutCheck {
 					check((lab.getMouseMotionListeners().length == 2) == sort.drags(), "Sorting race: listens for drags only in Prints");
 				}
 			}
+		}
+		// Square root: drag a side out to each end of its reach and let go; the picture stays inside the lab.
+		show(lab, 2);
+		RootPage root = (RootPage) pages[2];
+		for (int x : new int[] { 470, 240, 10, 300 }) {
+			press.invoke(lab, 240 + 40, 72 + 214);
+			root.drag(x, 214);
+			fits(lab, "Square root, dragged to " + x);
+			root.release();
+			fits(lab, "Square root, let go at " + x);
 		}
 		// Weigh until sorted: the results list fits too.
 		show(lab, 6);
