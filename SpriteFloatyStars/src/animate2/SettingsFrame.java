@@ -3,6 +3,8 @@ package animate2;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JButton;
@@ -14,6 +16,8 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 public final class SettingsFrame extends JFrame implements ActionListener {
+   /** Below this screen width (an upright phone, in the browser) the window takes the screen's width. */
+   static final int NARROW = 580;
    private JPanel panel = new JPanel();
    private String[] modeNames = new String[]{"Mode 1", "Mode 2", "Mode 3", "Mode 4", "Mode 5", "Mode 6", "Mode 7"};
    private JComboBox<String> modeComboBox = new JComboBox<>(this.modeNames);
@@ -27,7 +31,15 @@ public final class SettingsFrame extends JFrame implements ActionListener {
    public SettingsFrame() {
       this.setTitle("Sprite Floaty Stars");
       this.setDefaultCloseOperation(3);
-      this.setSize(new Dimension(580, 350));
+      Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+      boolean narrow = screen.width < NARROW;
+      this.setSize(narrow ? new Dimension(screen.width, 640) : new Dimension(580, 350));
+      // A sky opens the shape of the screen when the screen is smaller than the 800 x 800 window,
+      // with the stars thinned to keep the same look.
+      Dimension sky = skySize(screen);
+      this.textFields[1].setText("" + sky.width);
+      this.textFields[2].setText("" + sky.height);
+      this.textFields[3].setText("" + starsFor(sky));
       this.okButton.addActionListener(this);
       this.catchButton.setFont(this.catchButton.getFont().deriveFont(Font.BOLD, 15f));
       this.catchButton.addActionListener(event -> {
@@ -35,22 +47,40 @@ public final class SettingsFrame extends JFrame implements ActionListener {
          this.setVisible(false);
       });
       this.add(this.catchButton, BorderLayout.NORTH);
-      this.add(new SkyPicker(this.modeComboBox, this::open), BorderLayout.CENTER);
+      this.add(new SkyPicker(this.modeComboBox, this::open, narrow), BorderLayout.CENTER);
       this.add(this.panel, BorderLayout.SOUTH);
-      this.panel.add(this.labels[0]);
-      this.panel.add(this.modeComboBox);
+      // On a phone the fields take two rows, so none falls off the window's edge.
+      JPanel first = this.panel;
+      JPanel second = this.panel;
+      if (narrow) {
+         this.panel.setLayout(new GridLayout(2, 1));
+         this.panel.add(first = new JPanel());
+         this.panel.add(second = new JPanel());
+      }
+      first.add(this.labels[0]);
+      first.add(this.modeComboBox);
       this.textFields[1].setColumns(4);
       this.textFields[2].setColumns(4);
-      this.panel.add(this.labels[1]);
-      this.panel.add(this.textFields[1]);
-      this.panel.add(this.textFields[2]);
+      first.add(this.labels[1]);
+      first.add(this.textFields[1]);
+      first.add(this.textFields[2]);
       this.textFields[3].setColumns(5);
-      this.panel.add(this.labels[2]);
-      this.panel.add(this.textFields[3]);
+      second.add(this.labels[2]);
+      second.add(this.textFields[3]);
       this.textFields[4].setColumns(3);
-      this.panel.add(this.labels[3]);
-      this.panel.add(this.textFields[4]);
-      this.panel.add(this.okButton);
+      second.add(this.labels[3]);
+      second.add(this.textFields[4]);
+      second.add(this.okButton);
+   }
+
+   /** The stars' window: 800 x 800 as it always was, or no bigger than the screen in either direction. */
+   static Dimension skySize(Dimension screen) {
+      return new Dimension(Math.min(800, screen.width), Math.min(800, screen.height));
+   }
+
+   /** 1000 stars for 800 x 800, fewer in a smaller sky so it is as full as ever (at least 100). */
+   static int starsFor(Dimension sky) {
+      return Math.max(100, (int)Math.round(1000.0 * sky.width * sky.height / (800 * 800)));
    }
 
    @Override
