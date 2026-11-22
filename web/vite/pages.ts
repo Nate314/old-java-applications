@@ -127,11 +127,15 @@ function cssOf(bundle: OutputBundle, chunk: OutputChunk, seen = new Set<string>(
  * A module preload for every chunk a chunk imports, theirs too, so they load beside it instead of after it has
  * arrived and been read (vite.config.ts turns Vite's own off): one round trip less before first paint on a slow phone.
  */
-function preloadTags(bundle: OutputBundle, chunk: OutputChunk, up: string, seen = new Set<string>()): string {
-  return chunk.imports.filter(name => !seen.has(name) && seen.add(name)).map(name => {
+/** A chunk's static imports, theirs after each, once each. */
+function importsOf(bundle: OutputBundle, chunk: OutputChunk, seen = new Set<string>()): string[] {
+  return chunk.imports.filter(name => !seen.has(name) && seen.add(name)).flatMap(name => {
     const dep = bundle[name];
-    return '<link rel="modulepreload" href="' + up + name + '">' + (dep && dep.type === 'chunk' ? preloadTags(bundle, dep, up, seen) : '');
-  }).join('');
+    return [name, ...(dep && dep.type === 'chunk' ? importsOf(bundle, dep, seen) : [])];
+  });
+}
+function preloadTags(bundle: OutputBundle, chunk: OutputChunk, up: string): string {
+  return importsOf(bundle, chunk).map(name => '<link rel="modulepreload" href="' + up + name + '">').join('');
 }
 
 export function pages(): Plugin {
@@ -215,7 +219,7 @@ export function pages(): Plugin {
           const asset = bundle[name];
           return asset.type === 'asset' ? String(asset.source) : '';
         }).join('\n');
-        const head = '<style>\n' + styles + '</style>\n<script>' + loaderScript(chunk.fileName) + '</script>';
+        const head = '<style>\n' + styles + '</style>\n<script>' + loaderScript(chunk.fileName, importsOf(bundle, chunk)) + '</script>';
         this.emitFile({ type: 'asset', fileName: r.file, source: document(r, '', head) });
       }
     },
