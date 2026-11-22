@@ -26,6 +26,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,6 +76,12 @@ public final class LauncherWindow extends JFrame {
    private final Thumbs thumbs = new Thumbs();
    private final Random random = new Random();
    private final Set<String> running = new HashSet<>();
+   // Each launch's PowerShell, when it began and where it has got to, by key(app, old): read while it runs.
+   private final Map<String, ProcessHandle> shells = new HashMap<>();
+   private final Map<String, Long> began = new HashMap<>();
+   private final Map<String, Runner.Phase> phases = new HashMap<>();
+   private final javax.swing.Timer pulse = new javax.swing.Timer(40, e -> pulse());
+   private int beat;   // pulse ticks, for the sweep
    private final List<Tile> tiles = new ArrayList<>();
    private final Map<String, Ui.FlatButton> chips = new LinkedHashMap<>();
 
@@ -511,8 +518,11 @@ public final class LauncherWindow extends JFrame {
          if (answer != JOptionPane.OK_OPTION) return;
       }
       CompletableFuture<Integer> done;
+      String key = key(app, old);
       try {
-         done = (old ? thenRunner : runner).start(app.id);
+         done = (old ? thenRunner : runner).start(app.id, h -> SwingUtilities.invokeLater(() -> {
+            if (running.contains(key)) shells.put(key, h);
+         }));
       } catch (IOException e) {
          status("Could not start " + name + ": " + e.getMessage());
          return;
@@ -520,13 +530,19 @@ public final class LauncherWindow extends JFrame {
       History.Story story = history.of(app.id);
       long started = clock.getAsLong();
       if (!old) log.launched(app.id, started, story == null ? null : story.newest());
-      running.add(key(app, old));
+      running.add(key);
+      began.put(key, started);
+      phases.put(key, Runner.Phase.READY);
+      pulse.start();
       status(old ? "Starting " + name + ": the first time, its code is unpacked from git history into out/then;"
             + " that commit's run.ps1 compiles it."
          : "Starting " + app.name + ": run.ps1 compiles it, then its window opens. You can start others meanwhile.");
       refresh();
       done.whenComplete((code, err) -> SwingUtilities.invokeLater(() -> {
-         running.remove(key(app, old));
+         running.remove(key);
+         shells.remove(key);
+         began.remove(key);
+         phases.remove(key);
          Throwable why = err != null && err.getCause() != null ? err.getCause() : err;
          if (why != null) status(name + " could not be started: " + why.getMessage());
          else if (code != 0) status(name + " stopped with exit code " + code + ". The console that started the launcher says why.");
@@ -547,6 +563,63 @@ public final class LauncherWindow extends JFrame {
          }
          refresh();
       }));
+   }
+
+   /**
+    * While apps run: every tick moves the starting cards' sweep and the running clocks; every tenth reads each
+    * launch's processes in the background (a process snapshot takes tens of ms on Windows), and a launch that
+    * moved on (built, window opening, running) says so.
+    */
+   private void pulse() {
+      if (running.isEmpty()) {
+         pulse.stop();
+         return;
+      }
+      if (++beat % 10 == 0 && !reading && !shells.isEmpty()) {
+         reading = true;
+         Map<String, ProcessHandle> now = new HashMap<>(shells);
+         CompletableFuture.supplyAsync(() -> {
+            Map<String, Runner.Phase> read = new HashMap<>();
+            now.forEach((k, h) -> read.put(k, Runner.phase(h, System.currentTimeMillis())));
+            return read;
+         }).whenComplete((read, err) -> SwingUtilities.invokeLater(() -> {
+            reading = false;
+            if (read != null) read.forEach(this::moved);
+         }));
+      }
+      for (Tile t : tiles) if (isRunning(t.app.id)) t.repaint();
+      detail.live();
+   }
+
+   private boolean reading;   // a background read of the launches' processes is under way
+
+   /** A launch read to be at {@code now}: if that is further on (never back: a short java mid-build), say so. */
+   private void moved(String key, Runner.Phase now) {
+      Runner.Phase was = phases.get(key);
+      if (was == null || now.compareTo(was) <= 0) return;   // closed meanwhile, or no further
+      phases.put(key, now);
+      String id = key.replace(" then", "");
+      String name = apps.stream().filter(a -> a.id.equals(id)).findFirst().map(a -> a.name).orElse(id);
+      status(now == Runner.Phase.BUILDING ? "Building " + name + ": javac compiles its source, as run.ps1 does."
+         : now == Runner.Phase.OPENING ? name + " is built. Its window is opening..."
+         : name + " is running. Close its window to finish; you can start others meanwhile.");
+      refresh();
+   }
+
+   /** How long the launch (by key(app, old)) has run, as "0:07", "3:12" or "1:02:03". */
+   private String clockOf(String key) {
+      Long t = began.get(key);
+      return t == null ? "" : elapsed(clock.getAsLong() - t);
+   }
+
+   static String elapsed(long millis) {
+      long s = Math.max(0, millis) / 1000;
+      return s >= 3600 ? String.format("%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String.format("%d:%02d", s / 60, s % 60);
+   }
+
+   /** The sweep's place, 0..1, crossing about once a second. */
+   private float sweepAt() {
+      return beat % 30 / 30f;
    }
 
    private void refresh() {
@@ -711,7 +784,12 @@ public final class LauncherWindow extends JFrame {
          thumbs.draw(g2, app, 14, 12, w - 28, ph - 12);
          List<History.Change> fresh = then ? List.of() : news(app);
          // badge on the picture
-         if (isRunning(app.id)) badge(g2, w, running.contains(app.id) ? "RUNNING" : "RUNNING THEN", Ui.GO);
+         String k = running.contains(app.id) ? app.id : app.id + " then";   // today's launch first
+         Runner.Phase phase = phases.get(k);
+         boolean starting = phase != null && phase != Runner.Phase.RUNNING;
+         if (starting) Ui.sweep(g2, new java.awt.geom.RoundRectangle2D.Float(6, 6, w - 12, ph, 12, 12), sweepAt());
+         if (starting) badge(g2, w, phase.badge, Ui.ACCENT);
+         else if (phase != null) badge(g2, w, (k.equals(app.id) ? "RUNNING " : "RUNNING THEN ") + clockOf(k), Ui.GO);
          else if (log.count(app.id) == 0 && !then) badge(g2, w, "NEW", Ui.ACCENT);
          else if (!fresh.isEmpty()) badge(g2, w, fresh.size() == 1 ? "1 UPDATE" : fresh.size() + " UPDATES", Ui.FRESH);
          // words
@@ -722,7 +800,7 @@ public final class LauncherWindow extends JFrame {
          if (app.pressesKeys()) Ui.chip(g2, x + 6, ph + 40, "Real keys", Ui.WARN);
          g2.setFont(Ui.font(Font.PLAIN, 12f));
          History.Story story = then ? history.of(app.id) : null;
-         String line = isRunning(app.id) ? "Running now"
+         String line = phase != null ? phase.line
             : story != null ? growth(story)
             : !fresh.isEmpty() ? "New: " + tidy(app, fresh.get(0).subject)
             : order.equals("most") && log.total(app.id) > 0 ? PlayLog.duration(log.total(app.id)) + " played"
@@ -733,7 +811,7 @@ public final class LauncherWindow extends JFrame {
          List<String> pitch = lines(g2.getFontMetrics(), app.hint, w - 24, line == null ? 2 : 1);
          for (int i = 0; i < pitch.size(); i++) g2.drawString(pitch.get(i), 12, h - 28 + i * 16);
          if (line != null) {
-            g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
+            g2.setColor(starting ? Ui.ACCENT : phase != null ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
             g2.drawString(fit(g2, line, w - 24), 12, h - 12);
          }
          if (sel) {
@@ -1007,12 +1085,14 @@ public final class LauncherWindow extends JFrame {
          old.setSelected(then);
          boolean on = running.contains(key(a, playsOld));
          record.setForeground(s != null ? Ui.THEN : Ui.MUTED);
-         record.setText(on ? "Running now. Close its window to finish."
+         record.setText(on ? (phases.get(key(a, playsOld)) == Runner.Phase.RUNNING ? "Running now. Close its window to finish."
+               : "Starting: the bars on Play show each step.")
             : s == null ? recordLine(a)
             : !s.changed ? "Its code has not changed since: Play runs today's."
             : changeCount(s) + " since then. History (Alt+H) lists them.");
-         play.setText(on ? "Running..." : playsOld ? "Play it as first restored" : "Play " + a.name);
+         play.setText(playsOld ? "Play it as first restored" : "Play " + a.name);
          play.setEnabled(!on);
+         live();
          play.setFill(warn != null ? new Color(0xc9822a) : playsOld ? Ui.THEN_FILL : Ui.ACCENT);
          startRow.setVisible(start != null && StartMenu.allowed(a));
          if (start != null) {
@@ -1030,6 +1110,19 @@ public final class LauncherWindow extends JFrame {
          }
          revalidate();
          repaint();
+      }
+
+      /** While the shown app's launch runs, Play says where it has got to (a sweep while starting) or for how long. */
+      void live() {
+         String k = app == null ? null : key(app, playsThen(app));
+         Runner.Phase p = k == null ? null : phases.get(k);
+         if (p == null) {
+            play.clearLaunch();
+            return;
+         }
+         boolean on = p == Runner.Phase.RUNNING;
+         play.setText(on ? "Running for " + clockOf(k) : p.line);
+         play.setLaunch(p.ordinal(), Runner.Phase.RUNNING.ordinal(), sweepAt(), on);
       }
 
       /** "Played 3 times, last yesterday", with the time played under it once there is some. */
