@@ -3,9 +3,10 @@
 //   1. first visit, then offline: home, story, play.html and an app page, visited once online, each load again with
 //      no connection;
 //   2. Save all for offline, then offline: several app pages, Then pages, and Find on the home page;
-//   3. a second build arrives: a copy of the site under -ProfileRoot with one tiny change (boot.js renamed and marked
-//      'B', every program marked 'B' and restamped), served in its place; once its service worker takes over, the
-//      same pages offline must all run build B whole: B's runtime, B's program, only B's files.
+//   3. a second build arrives: a copy of the site under -ProfileRoot with one tiny change (boot.js marked 'B', every
+//      hashed script and stylesheet renamed, every program marked 'B' and restamped), served in its place; a home page
+//      left open from build A must still open Find once B's worker takes it over, and the same pages offline must all
+//      run build B whole: B's runtime, B's program, only B's files.
 // Offline means no network for the page AND the service worker (each gets Network.emulateNetworkConditions), with
 // Chrome's HTTP cache cleared first, so answers can only come from the worker's cache. A page step fails on an
 // uncaught error, a console error, a failed or 4xx/5xx request, the worker's "Offline" page, no window after Play or
@@ -45,27 +46,30 @@ const BASE = 'http://localhost:' + PORT + '/';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const total = Date.now();
 
-// ---- the second build: a copy of the site with boot.js renamed (new content, so a new hashed name everywhere it is
-// named, sw.js's file list too) and every program ending in a mark, restamped by vite/stamp-programs.mjs ----
+// ---- the second build: a copy of the site with boot.js marked, every hashed file renamed everywhere it is named
+// (sw.js's file list too) and every program ending in a mark, restamped by vite/stamp-programs.mjs ----
 function secondBuild(dst) {
   cpSync(site, dst, { recursive: true });
   const assets = join(dst, 'assets');
   const old = (/assets\/(boot-[A-Za-z0-9_-]{8}\.js)/.exec(readFileSync(join(dst, 'index.html'), 'utf8')) || [])[1];   // the one the pages name
   if (!old) throw new Error('index.html names no assets/boot-<hash>.js in ' + site);
-  const body = readFileSync(join(assets, old), 'utf8') + "\n;window.__build = 'B';\n";
-  const name = 'boot-' + createHash('sha256').update(body).digest('base64url').slice(0, 8) + '.js';
-  writeFileSync(join(assets, old), body);
-  renameSync(join(assets, old), join(assets, name));
+  appendFileSync(join(assets, old), "\n;window.__build = 'B';\n");
+  // Every hashed script and stylesheet gets a new name, as when shared code changes: build A's names are gone.
+  const renamed = new Map(readdirSync(assets).filter(f => /-[A-Za-z0-9_-]{8}\.(js|css)$/.test(f)).map(f =>
+    [f, f.replace(/-[A-Za-z0-9_-]{8}(\.\w+)$/, (_, ext) => '-' + createHash('sha256').update(f + 'B').digest('base64url').slice(0, 8) + ext)]));
+  for (const [a, b] of renamed) renameSync(join(assets, a), join(assets, b));
+  const names = new RegExp([...renamed.keys()].map(f => f.replace(/[.-]/g, '\\$&')).join('|'), 'g');
   const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
   for (const f of walk(dst)) {
     if (/[\\/](classes|then)\.js$/.test(f)) appendFileSync(f, "\n;(self.__programs = self.__programs || []).push('B');\n");
     else if (/\.(html|js|css|json|webmanifest)$/.test(f) && statSync(f).size < 4e6) {
-      const text = readFileSync(f, 'utf8');
-      if (text.includes(old)) writeFileSync(f, text.split(old).join(name));
+      const text = readFileSync(f, 'utf8'), next = text.replace(names, m => renamed.get(m));
+      if (next !== text) writeFileSync(f, next);
     }
   }
+  const name = renamed.get(old);
   execFileSync(process.execPath, [join(here, 'vite/stamp-programs.mjs'), dst], { stdio: 'ignore' });
-  return { dir: dst, boot: name };
+  return { dir: dst, boot: name, bootA: old };
 }
 
 // ---- server (serve.ps1) and Chrome ----
@@ -103,7 +107,7 @@ function report(name, why, t0, note = '') {
 
 try {
   mkdirSync(work, { recursive: true });
-  const { dir: siteB, boot: bootB } = secondBuild(copy);
+  const { dir: siteB, boot: bootB, bootA } = secondBuild(copy);
   await serve(site);
   chrome = spawn(opt.Chrome, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio', '--no-first-run',
     '--remote-debugging-port=' + DEBUG, '--user-data-dir=' + join(work, 'p'), '--window-size=960,600', 'about:blank'], { stdio: 'ignore' });
@@ -251,6 +255,17 @@ try {
   await page('Clock (offline)', 'Clock/index.html', { app: true, firstVisit: true });
   await setOffline(false);
 
+  // Find on the page in view: Ctrl K, "tank", a TankGame result.
+  async function findTank() {
+    await js("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', keyCode: 75, ctrlKey: true, bubbles: true }))");
+    if (!await until("!!document.querySelector('.shim-find-input')", 10000)) return 'Find did not open';
+    await js("(function (i) { i.value = 'tank'; i.dispatchEvent(new Event('input', { bubbles: true })); })(document.querySelector('.shim-find-input'))");
+    if (!await until("[].some.call(document.querySelectorAll('.shim-find-item'), function (e) { return /TankGame|Tank/.test(e.textContent); })", 5000)) return 'no TankGame result';
+    await sleep(300);
+    // Find's source-file search reads <App>/source/files.txt, which Save all does not keep: those misses are expected.
+    return keep(errors).filter(e => !/\/source\/files\.txt$/.test(e)).slice(0, 3).join(' | ');
+  }
+
   // ---- flow 2: Save all, then offline ----
   const SAVED = ['TankGame', 'NathaNOS', 'FlappyBird', 'SynthesizerKeyboard', 'StockChecker'];
   const THEN = ['Clock', 'TankGame', 'Minesweeper'];
@@ -263,15 +278,7 @@ try {
     for (const a of THEN) await page(a + ' Then ' + label, a + '/then.html', { app: true, build });
     await page('play.html?app=Minesweeper ' + label, 'play.html?app=Minesweeper', { app: true, click: '#poster-play', frame: '#frame', build });
     await page('home ' + label + ', for Find', 'index.html', home);
-    await check('Find ' + label + ' (Ctrl K, "tank")', async () => {
-      await js("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', keyCode: 75, ctrlKey: true, bubbles: true }))");
-      if (!await until("!!document.querySelector('.shim-find-input')", 10000)) return 'Find did not open';
-      await js("(function (i) { i.value = 'tank'; i.dispatchEvent(new Event('input', { bubbles: true })); })(document.querySelector('.shim-find-input'))");
-      if (!await until("[].some.call(document.querySelectorAll('.shim-find-item'), function (e) { return /TankGame|Tank/.test(e.textContent); })", 5000)) return 'no TankGame result';
-      await sleep(300);
-      // Find's source-file search reads <App>/source/files.txt, which Save all does not keep: those misses are expected.
-      return keep(errors).filter(e => !/\/source\/files\.txt$/.test(e)).slice(0, 3).join(' | ');
-    });
+    await check('Find ' + label + ' (Ctrl K, "tank")', findTank);
     await setOffline(false);
   }
   console.log('== Save all, then offline');
@@ -289,19 +296,31 @@ try {
   await savedOffline('(saved, offline)', false);
 
   // ---- flow 3: a second build arrives ----
+  // A home page stays open from build A while B is served and B's worker takes it over (the page asks for an update,
+  // as a visit in another tab would); A's runtime then loads Find under A's names, which only the worker still has.
   console.log('== a second build arrives');
+  await page('home (build A, left open)', 'index.html', home);
+  const filesA = "caches.open('oldjava-v1').then(function (c) { return c.keys(); }).then(function (ks) { return ks.map(function (k) { return k.url; }).filter(function (u) { return /\\/assets\\/.+-[A-Za-z0-9_-]{8}\\.(js|css)$/.test(u); }); })";
+  const builtA = await js(filesA);
   await serve(siteB);
-  await page('home (build B online)', 'index.html', home);
   await check("build B's service worker takes over", async () => {
     await js('navigator.serviceWorker.getRegistration().then(function (r) { return r && r.update(); })').catch(() => { });
-    // activating prunes the files no kept page names, so the cache holds B's boot.js and not A's once B took over
-    const name = bootB;
-    const boots = "caches.open('oldjava-v1').then(function (c) { return c.keys(); }).then(function (ks) { return JSON.stringify(ks.map(function (k) { return k.url; }).filter(function (u) { return u.indexOf('/assets/boot-') > 0; }).map(function (u) { return u.split('/assets/')[1]; })); })";
+    // activating prunes the files no kept page names, except build A's (the build before): the cache holds both boot.js
+    const want = JSON.stringify([bootA, bootB].sort());
+    const boots = "caches.open('oldjava-v1').then(function (c) { return c.keys(); }).then(function (ks) { return JSON.stringify(ks.map(function (k) { return k.url; }).filter(function (u) { return u.indexOf('/assets/boot-') > 0; }).map(function (u) { return u.split('/assets/')[1]; }).sort()); })";
     const ready = "navigator.serviceWorker.getRegistration().then(function (r) { return !!r && !!r.active && r.active.state === 'activated' && !r.waiting && !r.installing; })";
-    if (!await until(`${ready}.then(function (ok) { return ok && ${boots}; }).then(function (b) { return b === ${JSON.stringify(JSON.stringify([name]))}; })`, 120000))
-      return 'after 120 s the cache holds boot ' + await js(boots).catch(e => e.message) + ', build B is ' + name;
+    if (!await until(`${ready}.then(function (ok) { return ok && ${boots}; }).then(function (b) { return b === ${JSON.stringify(want)}; })`, 120000))
+      return 'after 120 s the cache holds boot ' + await js(boots).catch(e => e.message) + ', want ' + want;
     return '';
   });
+  await check('home left open from build A: Find (Ctrl K)', async () => {
+    errors = [];
+    const answered = await js('Promise.all(' + JSON.stringify(builtA) + '.map(function (u) { return fetch(u).then(function (r) { return r.ok; }, function () { return false; }); })).then(function (a) { return a.filter(Boolean).length; })');
+    console.log('     ' + answered + ' of ' + builtA.length + " build A files still answer in A's open tab");
+    errors = [];
+    return findTank();
+  });
+  await page('home (build B online)', 'index.html', home);
   await savedOffline('(build B, offline)', true);
 } catch (e) {
   report('offline check ran', e.message, total);
