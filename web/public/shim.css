@@ -5993,3 +5993,25 @@ html[data-saver] * {
   font-family: "Courier New", ui-monospace, monospace;
   text-transform: uppercase;
 }
+
+/* ---- launch: Play opens the title's picture into the app's window (title-screen.tsx launch, a same-page view
+   transition). The picture and the window share the name oldjava-launch and morph; the card fades out around it. ---- */
+:root[data-launch]::view-transition-old(root) {
+  animation: var(--trip-ms) ease both oldjava-launch-out;
+}
+
+:root[data-launch]::view-transition-new(root) {
+  animation: var(--trip-ms) ease both oldjava-launch-in;
+}
+
+::view-transition-group(oldjava-launch) {
+  animation-duration: calc(var(--trip-ms) * 1.3);
+}
+
+@keyframes oldjava-launch-out {
+  to { opacity: 0; }
+}
+
+@keyframes oldjava-launch-in {
+  from { opacity: 0; }
+}
