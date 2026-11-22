@@ -18,6 +18,7 @@ import { openMaker } from './skin-maker';
 import { More, moreOut } from './toolbar-more';
 import { PhoneKeys } from './phone-keys';
 import { SlowMo } from './slow-mo';
+import { keepPictures } from '../sw/keep-pictures';
 import { openLayer } from './ui/layer';
 
 export let siteRoot: string;
@@ -196,6 +197,7 @@ export function keepOffline() {
       console.warn('Offline play is not available: ' + e.message);
     });
     if (!controlledAtLoad) navigator.serviceWorker.ready.then(sendLoaded);
+    keepPictures();
   }
 }
 let controlledAtLoad = true;
