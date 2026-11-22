@@ -88,6 +88,16 @@ final class Stopwatch {
       return pick;
    }
 
+   /** The fastest finished lap, even when it is the only one, or -1 with none. */
+   int bestLap() {
+      return this.laps.isEmpty() ? -1 : this.laps.size() == 1 ? 0 : this.extremeLap(false);
+   }
+
+   /** The lap under way against the best lap so far: negative while ahead of it. Only meaningful with a lap done. */
+   long pace(long now) {
+      return this.currentLap(now) - this.lapTime(this.bestLap());
+   }
+
    void restore(long startedAt, long banked, List<Long> lapEnds) {
       this.startedAt = Math.max(0, startedAt);
       this.banked = Math.max(0, banked);

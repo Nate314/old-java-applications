@@ -137,6 +137,12 @@ final class Ui {
       return minutes >= 60 ? minutes / 60 + ":" + twoDigits(minutes % 60) + ":" + rest : minutes + ":" + rest;
    }
 
+   /** A gap between two times, to the hundredth: "1.20 s" under a minute, else as the stopwatch shows it. */
+   static String seconds(long millis) {
+      long hundredths = Math.max(0, millis) / 10;
+      return hundredths < 6000 ? hundredths / 100 + "." + twoDigits(hundredths % 100) + " s" : stopwatch(millis);
+   }
+
    /** A wall clock time in local time: "3:42 pm" or "15:42". */
    @SuppressWarnings("deprecation")
    static String wallTime(long epochMillis, boolean twentyFour) {
