@@ -175,7 +175,7 @@ type Moment =
       news.show('clock', <span className="shim-news-tag shim-clock-tag" data-kind={m.kind}>{m.kind === 'break' ? 'Break' : m.kind === 'back' ? 'Focus' : 'Timer'}</span>,
         title + '. ' + line, link(null), 15000);
     } else {
-      var shot = (app || clockApp || {} as Partial<OldjavaCatalogApp>).shot;
+      var shot = (app || clockApp || {} as Partial<OldjavaCatalogApp>).pic;
       if (shot) site.toast(shot, title, line, link);
     }
   }

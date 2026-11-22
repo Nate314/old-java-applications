@@ -27,7 +27,7 @@ export function AppCard({ app, current = false, showNew = false, text, onOpen }:
   return (
     <a className={'shim-app' + (current ? ' current' : '')} aria-current={current ? (onOpen ? 'true' : 'page') : undefined} {...link}>
       <span className="shim-app-pic">
-        <img src={app.shot} alt="" />
+        <img src={app.pic} alt="" />
         {(was || showNew) && (
           <span className={'shim-badge' + (was ? ' played' : ' new')} title={was ? 'Played' : 'Not played yet'}>{was ? '✓' : 'New'}</span>
         )}

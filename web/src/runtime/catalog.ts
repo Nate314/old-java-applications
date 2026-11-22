@@ -27,8 +27,10 @@ export function catalog() {
           clip: !!a.clip,
           name: a.name,
           hint: a.hint,
-          // The WebP copy (web/shots.ps1), a third to a fifth of the PNG's bytes: Find, toasts, cards and menus show it small.
-          shot: root() + a.shot.replace(/\.png$/, '.webp')
+          // The WebP copy (web/shots.ps1), a third to a fifth of the PNG's bytes, for the title screen and photos.
+          shot: root() + a.shot.replace(/\.png$/, '.webp'),
+          // Its 240 px copy (about 40% of those bytes) for what shows it at 96 px or less: Find, toasts, cards and menus.
+          pic: root() + a.shot.replace(/\.png$/, '-240.webp')
         };
       });
     }).catch(function (e) {
