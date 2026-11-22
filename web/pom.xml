@@ -11,11 +11,15 @@
 
   <modules>
     <module>shim</module>
+    <module>pages</module>
     <module>apps</module>
+    <module>apps-js</module>
     <module>nathanos</module>
     <module>then</module>
+    <module>then-js</module>
     <module>then-nathanos</module>
     <module>jars</module>
+    <module>stamps</module>
   </modules>
 
   <properties>

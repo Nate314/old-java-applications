@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>apps-js</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>apps-js-4</artifactId>
+  <packaging>pom</packaging>
+  <name>Apps compiled to JavaScript, part 4: NumberGuess, SimpleAlgorithms, TankGame, Windows, WindowsE</name>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.teavm</groupId>
+        <artifactId>teavm-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>NumberGuess</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>numberguess.Main</mainClass>
+              <targetDirectory>${site.dir}/NumberGuess</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>SimpleAlgorithms</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>simplealgorithms.Main</mainClass>
+              <targetDirectory>${site.dir}/SimpleAlgorithms</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>TankGame</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>tankgame.Main</mainClass>
+              <targetDirectory>${site.dir}/TankGame</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Windows</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>test.Test</mainClass>
+              <targetDirectory>${site.dir}/Windows</targetDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>WindowsE</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <mainClass>windowse.WindowsEMain</mainClass>
+              <targetDirectory>${site.dir}/WindowsE</targetDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
