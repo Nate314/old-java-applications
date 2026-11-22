@@ -79,6 +79,12 @@ public class ReaderCheck {
          }
       }
       check(words == 400 + 2 + 2, "every word placed once: " + words);
+      for (Layout.Page page : pages) {
+         for (int i = 0; i < page.runs.size(); i++) {
+            check(page.runs.get(i).kind != Layout.VERSE_NUMBER || page.runs.get(i + 1).line == page.runs.get(i).line,
+               "a verse number stays on its first word's line");
+         }
+      }
       // Justified: every line but the chapter's last ends at the page's edge; the last stays ragged.
       for (int p = 0; p < pages.size(); p++) {
          int lastLine = p == pages.size() - 1 ? pages.get(p).runs.get(pages.get(p).runs.size() - 1).line : 99;
@@ -87,6 +93,55 @@ public class ReaderCheck {
             check(edge < 0 || (ln == lastLine ? edge < 320 : edge == 320), "page " + p + " line " + ln + " justified: " + edge);
          }
       }
+      // Hyphens: syllable breaks, cautious ones only, and a narrow page breaks long words or narrows gaps a little
+      // instead of spreading them.
+      String[][] hyphens = {
+         {"darkness", "dark-ness"}, {"people", "peo-ple"}, {"children", "chil-dren"}, {"kingdom", "king-dom"},
+         {"commandments", "com-mand-ments"}, {"betray", "be-tray"}, {"angry", "an-gry"}, {"(sanctified,", "(sanc-tified,"},
+         {"burnt-offering", "burnt--offering"}, {"returned", "returned"}, {"nothing", "nothing"}, {"knowledge", "knowledge"},
+         {"LORD's", "LORD's"}, {"Abraham", "Abraham"}, {"unto", "unto"}, {"word12", "word12"}, {"buckle", "buckle"}
+      };
+      for (String[] h : hyphens) {
+         StringBuilder shown = new StringBuilder(h[0]);
+         List<Integer> at = Hyphen.breaks(h[0]);
+         for (int k = at.size() - 1; k >= 0; k--) {
+            shown.insert((int) at.get(k), '-');
+         }
+         check(shown.toString().equals(h[1]), "hyphen breaks " + h[0] + ": " + shown);
+      }
+      String prologue = "In the beginning was the Word, and the Word was with God, and the Word was God. The same was in the beginning"
+         + " with God. All things were made through him. Without him was not anything made that has been made. In him was life,"
+         + " and the life was the light of men. The light shines in the darkness, and the darkness hasn't overcome it. There came"
+         + " a man, sent from God, whose name was John. The same came as a witness, that he might testify about the light,"
+         + " that all might believe through him. He was not the light, but was sent that he might testify about the light."
+         + " The true light that enlightens everyone was coming into the world. He was in the world, and the world was made"
+         + " through him, and the world didn't recognize him. He came to his own, and those who were his own didn't receive"
+         + " him. But as many as received him, to them he gave the right to become God's children, to those who believe in"
+         + " his name: who were born not of blood, nor of the desire of the flesh, nor of the desire of man, but of God."
+         + " Commandments, understanding, righteousness, everlasting congregation, wilderness, uncleanness, testimony.";
+      Chapter narrow = new Chapter(Books.find("JHN"), 2, "web", new int[]{1}, new String[]{prologue});
+      int hyphenated = 0;
+      StringBuilder joined = new StringBuilder();
+      for (Layout.Page page : Layout.paginate(narrow, body, metrics(new Font("SansSerif", Font.BOLD, 10)), metrics(new Font("Serif", Font.BOLD, 51)), 150, 14)) {
+         for (int i = 0; i < page.runs.size(); i++) {
+            Layout.Run run = page.runs.get(i);
+            if (run.kind != Layout.WORD) {
+               continue;
+            }
+            check(run.x + run.width <= 150, "hyphenated word inside the width");
+            boolean ends = i == page.runs.size() - 1 || page.runs.get(i + 1).line != run.line;
+            int gap = ends ? 99 : page.runs.get(i + 1).x - run.x - body.stringWidth(run.text);
+            check(gap * 3 >= body.stringWidth(" ") * 2, "a squeezed gap keeps two thirds of a space: " + gap);
+            if (ends && run.text.endsWith("-")) {
+               hyphenated++;
+               joined.append(run.text, 0, run.text.length() - 1);
+            } else {
+               joined.append(run.text).append(' ');
+            }
+         }
+      }
+      check(hyphenated > 0 && joined.toString().trim().equals(prologue), "a narrow page hyphenates, text kept: "
+         + hyphenated + " " + joined);
       check(pages.size() > 2, "a long chapter takes several pages");
       check(pages.get(0).runs.get(0).kind == Layout.TITLE, "chapter 1 opens with the book title");
       check(pages.get(0).firstVerse == 1 && pages.get(pages.size() - 1).lastVerse == 3, "first and last verse");

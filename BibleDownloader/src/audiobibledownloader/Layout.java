@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Sets a chapter as printed pages: a title on a book's first chapter, a large chapter numeral beside the first two
  * lines, small raised verse numbers, and words wrapped to the page width and justified, as in a printed Bible (a
- * paragraph's last line stays ragged). Pages hold a fixed number of lines.
+ * paragraph's last line stays ragged), breaking a word with a hyphen ({@link Hyphen}) where a line would set loose. Pages hold a fixed number of lines.
  */
 public final class Layout {
    public static final int WORD = 0;
@@ -93,8 +93,14 @@ public final class Layout {
             int textWidth = kind == VERSE_NUMBER ? small.stringWidth(text) + 2 : body.stringWidth(text);
             int left = line < indentUntil ? indent : 0;
             // A verse number stays with the first word of its verse.
-            int need = kind == VERSE_NUMBER && words.length > 0 ? textWidth + body.stringWidth(words[0]) : textWidth;
-            if (x > left && x + need > width) {
+            int need = kind == VERSE_NUMBER && words.length > 0 ? textWidth + 1 + body.stringWidth(words[0]) : textWidth;
+            if (x > left && x + need > width && !squeezes(page.runs, lineStart, x + need - width, space)) {
+               String[] parts = kind == WORD ? hyphenate(page.runs, lineStart, text, body, width, x, space) : null;
+               if (parts != null) {
+                  page.runs.add(new Run(WORD, parts[0], x, line, body.stringWidth(parts[0]), verse));
+                  text = parts[1];
+                  textWidth = body.stringWidth(text);
+               }
                justify(page.runs, lineStart, width);
                line++;
                x = line < indentUntil ? indent : 0;
@@ -113,6 +119,7 @@ public final class Layout {
             x += textWidth + (kind == VERSE_NUMBER ? 1 : space);
          }
       }
+      narrowLast(page.runs, lineStart, width);
       return pages;
    }
 
@@ -245,8 +252,14 @@ public final class Layout {
          boolean number = w < 0;
          int tw = number ? small.stringWidth(t) + 2 : body.stringWidth(t);
          int left = start + row < indentUntil ? indent : 0;
-         int need = number ? tw + body.stringWidth(words[0]) : tw;
-         if (x > left && x + need > width) {
+         int need = number ? tw + 1 + body.stringWidth(words[0]) : tw;
+         if (x > left && x + need > width && !squeezes(runs, rowStart, x + need - width, space)) {
+            String[] parts = number ? null : hyphenate(runs, rowStart, t, body, width, x, space);
+            if (parts != null) {
+               runs.add(new Run(kind, parts[0], x, row, body.stringWidth(parts[0]), verse));
+               t = parts[1];
+               tw = body.stringWidth(t);
+            }
             justify(runs, rowStart, width);
             rowStart = runs.size();
             row++;
@@ -255,12 +268,45 @@ public final class Layout {
          runs.add(new Run(number ? VERSE_NUMBER : kind, t, x, row, tw, verse));
          x += tw + (number ? 1 : space);
       }
+      narrowLast(runs, rowStart, width);
       return runs;
    }
 
+   /** Whether a word {@code over} pixels too long still goes on the line by narrowing its gaps, by a third of a space at most. */
+   private static boolean squeezes(List<Run> runs, int from, int over, int space) {
+      int gaps = 0;
+      for (int i = from; i < runs.size(); i++) {
+         gaps += runs.get(i).kind == VERSE_NUMBER ? 0 : 1;
+      }
+      return over <= gaps * (space / 3);
+   }
+
+   /** A last line stays ragged, but one a squeezed word ran past the width is narrowed to fit. */
+   private static void narrowLast(List<Run> runs, int from, int width) {
+      Run last = runs.isEmpty() ? null : runs.get(runs.size() - 1);
+      if (last != null && last.x + last.width > width) {
+         justify(runs, from, width);
+      }
+   }
+
    /**
-    * Spreads a full line's runs (from {@code from} to the end of the list) so its last word ends at the width. The space
-    * goes between words, never between a verse number and its first word, and is added to the width of the run before
+    * A word that does not fit at {@code x}, broken with a hyphen when the line would otherwise be spread loosely (its
+    * gaps more than half again as wide as a space), as a printed Bible's narrow columns are: the head that ends the line
+    * and the rest; null to carry the whole word over.
+    */
+   private static String[] hyphenate(List<Run> runs, int from, String word, FontMetrics body, int width, int x, int space) {
+      int gaps = 0;
+      for (int i = from; i < runs.size() - 1; i++) {
+         gaps += runs.get(i).kind == VERSE_NUMBER ? 0 : 1;
+      }
+      Run last = runs.get(runs.size() - 1);
+      int slack = width - last.x - last.width;
+      return slack * 2 > Math.max(gaps, 1) * space ? Hyphen.split(word, body, width - x) : null;
+   }
+
+   /**
+    * Spreads a full line's runs (from {@code from} to the end of the list) so its last word ends at the width, or
+    * narrows its gaps when a squeezed word runs past it. The space goes between words, never between a verse number and its first word, and is added to the width of the run before
     * it. A loose line is spread all the same, as in a printed book: one left ragged mid-verse reads as a break.
     */
    static void justify(List<Run> runs, int from, int width) {
@@ -270,7 +316,7 @@ public final class Layout {
       }
       Run last = runs.isEmpty() ? null : runs.get(runs.size() - 1);
       int slack = last == null ? 0 : width - last.x - last.width;
-      if (gaps == 0 || slack <= 0) {
+      if (gaps == 0 || slack == 0) {
          return;
       }
       int gap = 0;
