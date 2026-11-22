@@ -688,6 +688,10 @@ public final class CircleCreatorWindow extends JFrame {
       if (this.scatterTimer.isRunning() || this.slices.isEmpty()) {
          return;
       }
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         this.status.setText("Scatter is off while reduced motion is on.");
+         return;
+      }
       this.stopPlaying();
       this.stopAll();
       this.pending.clear();
