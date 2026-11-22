@@ -3109,6 +3109,13 @@ button.shim-toast-go {
   }
 }
 
+/* A touch screen's band controls are 32 px tall (pointer: coarse, below), so its two rows take about 84 px. */
+@media (max-width: 560px) and (pointer: coarse) {
+  #shim-title-early {
+    padding-top: 100px;
+  }
+}
+
 /* Its boot log keeps its room but shows no empty box; the live title screen under it waits until it takes over
    (title-screen.tsx). */
 #shim-title-early .shim-title-log,
