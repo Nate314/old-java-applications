@@ -8,6 +8,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -115,6 +116,19 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private static final Color GOLD = new Color(255, 196, 40);
    private static final Color GOLD_EDGE = new Color(150, 96, 0);
    private static final Color STAR_EMPTY = new Color(40, 50, 80, 60);
+   /**
+    * The turn arrow: a curved arrow round the layer that is turning, its head riding with the layer, which stays a
+    * moment after the turn and fades, so a mix or a Solve can be followed turn by turn.
+    */
+   private CubeGeometry.Turn arcTurn = null;
+   private long arcEnd = 0L;
+   private long lastTurned = 0L;
+   /** No arrow for the newest turn: it came hard on the one before (a long Mix, keys held), or a drag made it. */
+   private boolean quick = false;
+   static final int ARC_FADE = 600;
+   /** How far out from the turning axis the arrow runs: just over the cube's surface (1.5). */
+   private static final double ARC_OVER = 1.53;
+   private static final double ARC_SPAN = Math.PI * 0.5;
 
    CubeView3D(Cube cube, BiConsumer<String, Integer> onSelect, Consumer<String> onTurn) {
       this.cube = cube;
@@ -148,6 +162,9 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    public void turned(CubeGeometry.Turn turn) {
       this.turnsSeen++;
       this.cheerStart = 0L;
+      long now = System.currentTimeMillis();
+      this.quick = now - this.lastTurned < 100;
+      this.lastTurned = now;
       this.pending.add(turn);
       this.pendingAfter.add(this.cubeColors());
       if (this.pending.size() > 6) {
@@ -173,6 +190,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.turnStart = 0L;
       this.turnAngle = 0.0;
       this.cheerStart = 0L;
+      this.arcTurn = null;
       this.repaint();
    }
 
@@ -345,7 +363,8 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.turnAngle = Math.PI / 2 * (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
          if (t >= 1.0) {
             System.arraycopy(this.pendingAfter.remove(0), 0, this.shown, 0, 54);
-            this.pending.remove(0);
+            this.arcTurn = this.pending.remove(0);
+            this.arcEnd = now;
             this.turnAngle = 0.0;
             this.turnStart = 0L;
          }
@@ -375,6 +394,10 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       }
       if (this.cheerStart != 0L) {
          this.cheerStart = System.currentTimeMillis() - this.cheerStart >= CHEER_MILLIS ? 0L : this.cheerStart;
+         busy = true;
+      }
+      if (this.arcTurn != null) {
+         this.arcTurn = System.currentTimeMillis() - this.arcEnd >= ARC_FADE ? null : this.arcTurn;
          busy = true;
       }
       double dy = this.targetYaw - this.yaw;
@@ -452,6 +475,9 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
                // The move was not taken after all: spring back.
                this.resumeFrom = 0.0;
                this.liveTurn = taken;
+            } else {
+               // The player's own hand made it: no arrow needed.
+               this.quick = true;
             }
          }
          this.wake();
@@ -641,6 +667,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
             this.drawCubie(g, new int[]{(int) c[1], (int) c[2], (int) c[3]}, c[4] > 0 ? angle : 0, axis);
          }
       }
+      this.drawTurnArrow(g);
       this.drawHint(g);
       if (demo) {
          this.drawFinger(g);
@@ -974,28 +1001,91 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       }
       double[] tail = this.screen(this.surface(this.hinted, -0.5, along));
       double[] tip = this.screen(this.surface(this.hinted, 0.95, along));
-      double dx = tip[0] - tail[0];
-      double dy = tip[1] - tail[1];
+      drawArrow(g, new double[][]{tail, tip}, 255);
+   }
+
+   /**
+    * The turn arrow round the layer turning now (its head riding with the layer), or the one just turned, fading. None
+    * while a drag holds a layer or the turns come too fast to follow.
+    */
+   private void drawTurnArrow(Graphics2D g) {
+      if (this.liveTurn != null) {
+         return;
+      }
+      if (!this.pending.isEmpty()) {
+         if (!this.quick) {
+            drawArrow(g, this.arc(this.pending.get(0), this.turnAngle / (Math.PI / 2)), 255);
+         }
+      } else if (this.arcTurn != null && !this.quick) {
+         double left = 1 - (System.currentTimeMillis() - this.arcEnd) / (double) ARC_FADE;
+         drawArrow(g, this.arc(this.arcTurn, 1), (int) (255 * Math.max(0, Math.min(1, left))));
+      }
+   }
+
+   /**
+    * The turn arrow's points on screen, tail to tip: round the turning layer's axis over the middle of its squares, on
+    * the side most toward the viewer (and a little above), swept the way the layer turns as far as {@code progress} (0 to 1).
+    */
+   double[][] arc(CubeGeometry.Turn turn, double progress) {
+      int a = (turn.axis + 1) % 3;
+      int b = (turn.axis + 2) % 3;
+      double[] unitA = new double[3];
+      double[] unitB = new double[3];
+      unitA[a] = 1;
+      unitB[b] = 1;
+      double[] ea = this.view(unitA);
+      double[] eb = this.view(unitB);
+      double toward = Math.atan2(eb[2] + 0.35 * eb[1], ea[2] + 0.35 * ea[1]);
+      double from = toward - turn.dir * ARC_SPAN / 2;
+      double sweep = turn.dir * ARC_SPAN * Math.max(0.15, Math.min(1, progress));
+      double[][] points = new double[25][];
+      for (int i = 0; i < points.length; i++) {
+         double phi = from + sweep * i / (points.length - 1);
+         // On the layer's squares: out from the axis to just over the cube's surface, round the corners.
+         double out = ARC_OVER / Math.max(Math.abs(Math.cos(phi)), Math.abs(Math.sin(phi)));
+         double[] p = new double[3];
+         p[turn.axis] = turn.layer;
+         p[a] = out * Math.cos(phi);
+         p[b] = out * Math.sin(phi);
+         points[i] = this.screen(this.view(p));
+      }
+      return points;
+   }
+
+   /** A white arrow with a dark rim along the points (tail to tip), {@code alpha} of 255 opaque. */
+   private static void drawArrow(Graphics2D g, double[][] points, int alpha) {
+      double[] tip = points[points.length - 1];
+      double[] before = points[points.length - 2];
+      double dx = tip[0] - before[0];
+      double dy = tip[1] - before[1];
       double length = Math.hypot(dx, dy);
-      if (length < 4) {
+      double whole = 0;
+      for (int i = 1; i < points.length; i++) {
+         whole += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+      }
+      if (length < 0.5 || whole < 4 || alpha <= 0) {
          return;
       }
       double ux = dx / length;
       double uy = dy / length;
-      double head = Math.min(20, length * 0.4);
+      double head = Math.min(20, whole * 0.4);
       int[] xs = {(int) tip[0], (int)(tip[0] - ux * head - uy * head * 0.6), (int)(tip[0] - ux * head + uy * head * 0.6)};
       int[] ys = {(int) tip[1], (int)(tip[1] - uy * head + ux * head * 0.6), (int)(tip[1] - uy * head - ux * head * 0.6)};
-      double neckX = tip[0] - ux * head * 0.8;
-      double neckY = tip[1] - uy * head * 0.8;
-      g.setColor(ARROW_EDGE);
+      Path2D.Double shaft = new Path2D.Double();
+      shaft.moveTo(points[0][0], points[0][1]);
+      for (int i = 1; i < points.length - 1; i++) {
+         shaft.lineTo(points[i][0], points[i][1]);
+      }
+      shaft.lineTo(tip[0] - ux * head * 0.8, tip[1] - uy * head * 0.8);
+      g.setColor(withAlpha(ARROW_EDGE, alpha));
       g.setStroke(new BasicStroke(8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-      g.drawLine((int) tail[0], (int) tail[1], (int) neckX, (int) neckY);
+      g.draw(shaft);
       g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
       g.drawPolygon(xs, ys, 3);
       g.fillPolygon(xs, ys, 3);
-      g.setColor(ARROW);
+      g.setColor(withAlpha(ARROW, alpha));
       g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-      g.drawLine((int) tail[0], (int) tail[1], (int) neckX, (int) neckY);
+      g.draw(shaft);
       g.setStroke(new BasicStroke(1f));
       int[] inner = {(int)(tip[0] - ux * 2.5), xs[1] + (int)(ux * 2 + uy * 1.2), xs[2] + (int)(ux * 2 - uy * 1.2)};
       int[] innerY = {(int)(tip[1] - uy * 2.5), ys[1] + (int)(uy * 2 - ux * 1.2), ys[2] + (int)(uy * 2 + ux * 1.2)};

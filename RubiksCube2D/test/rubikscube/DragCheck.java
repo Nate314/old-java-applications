@@ -93,6 +93,40 @@ public final class DragCheck {
       release(at, along, 0.3, 500);
       ticks(40);
 
+      // The turn arrow: round the turning layer, inside the view, going the way the layer's squares facing you go;
+      // drawn while a key, a mix or Solve turns it and a moment after, never for the player's own drag.
+      view.canTurn = () -> true;
+      for (int s = best * 9; s < best * 9 + 9; s++) {
+         for (String key : CubeGeometry.KEYS) {
+            CubeGeometry.Turn turn = CubeGeometry.turnOf(CubeGeometry.FACE_COLORS[best], key, s % 9 + 1);
+            double[][] arc = view.arc(turn, 1);
+            for (double[] p : arc) {
+               assert p[0] > 0 && p[0] < 550 && p[1] > 0 && p[1] < 352 : "the arrow is in view: " + p[0] + "," + p[1];
+            }
+            double[] square = view.screenAlong(s, key, 0.4);
+            double[] middle = {arc[13][0] - arc[11][0], arc[13][1] - arc[11][1]};
+            assert square[0] * middle[0] + square[1] * middle[1] > 0 : "the arrow goes the way the layer turns: " + key + " on " + s;
+         }
+      }
+      int plain = white();
+      drag(at, along, 0.7, 1000);
+      ticks(3);
+      assert white() < plain + 30 : "a turn the player's drag made has no arrow";
+      ticks(40);
+      Thread.sleep(150);
+      face = CubeGeometry.FACE_COLORS[best];
+      square = 1;
+      view.turned(CubeGeometry.turnOf(face, "d", square));
+      ticks(1);
+      Thread.sleep(150);
+      ticks(1);
+      assert white() > plain + 150 : "an arrow round the layer while a key, mix or Solve turns it: " + plain + " -> " + white();
+      ticks(30);
+      assert get("arcTurn") != null : "the arrow stays a moment after the turn";
+      Thread.sleep(CubeView3D.ARC_FADE + 50);
+      ticks(2);
+      assert get("arcTurn") == null && white() < plain + 30 : "it fades after the turn";
+
       // A solve's cheer: two gold stars pop in over the cube a beat apart, then go; a press ends it early.
       int before = gold();
       view.cheer(2, "Level 2 solved!", true);
@@ -189,6 +223,18 @@ public final class DragCheck {
    private static void paint() {
       image = new BufferedImage(550, 352, BufferedImage.TYPE_INT_RGB);
       view.paint(image.createGraphics());
+   }
+
+   /** Pure white pixels: the arrows (squares are glossy, never flat 255 white over a whole stroke). */
+   private static int white() {
+      paint();
+      int n = 0;
+      for (int y = 0; y < 352; y++) {
+         for (int x = 0; x < 550; x++) {
+            n += (image.getRGB(x, y) & 0xffffff) == 0xffffff ? 1 : 0;
+         }
+      }
+      return n;
    }
 
    /** Pixels of the stars' gold (strong orange-yellow, unlike the cube's yellow squares near the stars' band). */
