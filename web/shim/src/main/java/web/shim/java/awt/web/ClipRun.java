@@ -8,7 +8,7 @@ public final class ClipRun {
     private ClipRun() {
     }
 
-    // shortcut: a rotated clip becomes the box around it, make it a path when an app clips while rotated
+    // a box keeps its corners only: TClipShape adds the slanted outline when the transform turns or slants it
     public static double[] toDevice(double a, double b, double c, double d, double e, double f, double x, double y, double w, double h) {
         double[] out = { Double.MAX_VALUE, Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE };
         for (int i = 0; i < 4; i++) {

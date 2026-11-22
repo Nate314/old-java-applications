@@ -67,6 +67,7 @@
                 <check class="web.shim.javax.swing.TextChangeCheck"/>
                 <check class="web.shim.javax.swing.NearLabelCheck"/>
                 <check class="web.shim.java.awt.geom.TransformCheck"/>
+                <check class="web.shim.java.awt.web.ClipShapeCheck"/>
               </target>
             </configuration>
           </execution>
