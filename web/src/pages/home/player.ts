@@ -45,6 +45,8 @@ export function isBig() {
 // down from 900 px, its apps were a third of their size (Minesweeper's tiles 7 px wide), while the app's
 // page fits its windows to a phone-sized screen itself, as it does when opened on a phone.
 const pocket = matchMedia('(max-width: 640px)');
+// A phone's or a short laptop window's hint is clamped until clicked (home.css, first-screen.css).
+const clamped = matchMedia('(max-width: 640px), (max-height: 860px)');
 let fitted = [0, 0];   // the window's size at the last fit()
 let firstView = true;  // no app picked yet
 
@@ -63,9 +65,9 @@ export function fit() {
     // tall as that room, not 16:10, since the phone is taller than wide.
     const around = player().offsetHeight - screen().offsetHeight + (pocket.matches ? 12 : 24);
     let room = window.innerHeight - around;
-    // Until the visitor picks an app (which scrolls the player to the top), a phone's screen ends where the
-    // first view does, under the title, so the app that is already running is seen whole.
-    if (pocket.matches && firstView) room = Math.min(room, window.innerHeight - 12 - (screen().getBoundingClientRect().top + window.scrollY));
+    // Until the visitor picks an app (which scrolls the player to the top), the screen ends where the first view
+    // does, under the title, so the app that is already running is seen whole (a laptop's too, first-screen.css).
+    if (firstView) room = Math.min(room, window.innerHeight - 12 - (screen().getBoundingClientRect().top + window.scrollY));
     room = Math.max(MIN_SCREEN, room);
     height = Math.round(pocket.matches ? room : Math.min(width / ASPECT, room));
   }
@@ -313,9 +315,9 @@ export function arcadeClick(button: HTMLElement) {
   frame().focus();
 }
 
-// The pocket bar: two lines of hint until tapped.
+// The pocket bar: two lines of hint until tapped (one on a short laptop window).
 export function hintClick(e: ReactMouseEvent) {
-  if (pocket.matches && !(e.target as Element).closest('a')) { H.hintOpen = !H.hintOpen; draw(); }
+  if (clamped.matches && !(e.target as Element).closest('a')) { H.hintOpen = !H.hintOpen; draw(); }
 }
 
 // ---- the tour ----
