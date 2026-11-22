@@ -18,7 +18,7 @@ function Console({ onMount }: { onMount: (el: HTMLElement, print: (chunk: string
   const [chunks, setChunks] = useState<string[]>([]);
   useLayoutEffect(() => { onMount(pre.current!, chunk => setChunks(l => l.concat([chunk]))); }, []);
   useLayoutEffect(() => { pre.current!.scrollTop = pre.current!.scrollHeight; }, [chunks]);
-  return <pre className="shim-console" ref={pre}>{chunks}</pre>;
+  return <pre className="shim-console" role="region" aria-label="Program output" ref={pre}>{chunks}</pre>;
 }
 
 export function init() {

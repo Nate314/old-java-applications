@@ -58,6 +58,10 @@ export function init() {
 
     var desktop = document.createElement('div');
     desktop.id = 'desktop';
+    // The app is the page's main content: a screen reader's landmarks jump straight to it, and borderless windows
+    // (NathaNOS's full-screen desktop, a screen saver) are inside a landmark like the titled ones (role=dialog).
+    desktop.setAttribute('role', 'main');
+    desktop.setAttribute('aria-label', document.title);
     body.insertBefore(desktop, body.firstChild);
     // <body data-own-layout> (CircleSpawner): the app places its windows on the screen itself, and recentering
     // them as a group while a shape grows in, one window at a time, would slide the whole group about.
