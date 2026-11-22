@@ -189,7 +189,11 @@ public final class MineTile extends JButton implements MouseListener {
       this.value = value;
       this.shown = SHOW_VALUE;
       this.animate(delayMs, POP_MS);
-      this.describe(value.trim().isEmpty() ? "clear" : value.equals("1") ? "1 mine near" : value + " mines near");
+      this.describeValue();
+   }
+
+   private void describeValue() {
+      this.describe(this.value.trim().isEmpty() ? "clear" : this.value.equals("1") ? "1 mine near" : this.value + " mines near");
    }
 
    /** Shows a mine after {@code delayMs}: the one that was hit on red, the others on sand. A flagged mine keeps its flag. */
@@ -217,6 +221,27 @@ public final class MineTile extends JButton implements MouseListener {
          this.animate(delayMs, PLANT_MS);
       }
       this.describe("flagged mine");
+   }
+
+   /**
+    * A lost game is undone: the mines go back under the grass, the one hit with a flag on it, wrong flags come off
+    * (the loss showed them to be wrong) and the guess tags go.
+    */
+   void undoLoss() {
+      this.gamble = -1;
+      if (this.shown == SHOW_VALUE) {
+         this.describeValue();
+      } else if (this.shown != SHOW_HIDDEN) {
+         if (this.shown == SHOW_HIT) {
+            this.mark = FLAG;
+            this.animate(0, PLANT_MS);
+         } else if (this.shown == SHOW_WRONG_FLAG) {
+            this.mark = HIDDEN;
+         }
+         this.shown = SHOW_HIDDEN;
+         this.describe(this.mark == FLAG ? "flag" : this.mark == QUESTION ? "question mark" : "hidden");
+      }
+      this.repaint();
    }
 
    boolean isFlagged() {
@@ -543,7 +568,9 @@ public final class MineTile extends JButton implements MouseListener {
    private void play(boolean reveal) {
       this.game.takeOver();
       if (this.game.gameOver) {
-         this.game.restart();
+         if (this.shown != SHOW_HIT || !this.game.undoMine()) {
+            this.game.restart();
+         }
          return;
       }
 

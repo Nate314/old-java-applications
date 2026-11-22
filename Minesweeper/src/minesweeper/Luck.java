@@ -23,6 +23,16 @@ public final class Luck {
       }
    }
 
+   /** The last move is taken back (a mine undone): forgets it, as noted with that risk (-1 when Odds could not read it). */
+   void takeBack(double risk) {
+      if (risk < 0) {
+         this.unread--;
+      } else if (risk > 1e-9) {
+         this.cells.remove(this.cells.size() - 1);
+         this.risks.remove(this.risks.size() - 1);
+      }
+   }
+
    int guesses() {
       return this.risks.size();
    }
