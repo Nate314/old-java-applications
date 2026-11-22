@@ -24,6 +24,9 @@ import web.shim.java.awt.TRectangle;
 import web.shim.java.awt.TRenderingHints;
 import web.shim.java.awt.TShape;
 import web.shim.java.awt.TStroke;
+import web.shim.java.awt.geom.TEllipse2D;
+import web.shim.java.awt.geom.TLine2D;
+import web.shim.java.awt.geom.TPath2D;
 import web.shim.java.awt.geom.TQuadCurve2D;
 import web.shim.java.awt.image.TImageObserver;
 
@@ -435,6 +438,14 @@ public final class TCanvasGraphics extends TGraphics2D {
             drawPolygon((TPolygon) s);
         } else if (s instanceof TQuadCurve2D) {
             quad((TQuadCurve2D) s, false, strokeOffset());
+        } else if (s instanceof TLine2D) {
+            TLine2D l = (TLine2D) s;
+            double o = strokeOffset();
+            strokeLine(ctx(), style(), l.getX1() + o, l.getY1() + o, l.getX2() + o, l.getY2() + o);
+        } else if (s instanceof TEllipse2D) {
+            ellipse((TEllipse2D) s, false, strokeOffset());
+        } else if (s instanceof TPath2D) {
+            path((TPath2D) s, false, strokeOffset());
         } else {
             super.draw(s);
         }
@@ -446,13 +457,31 @@ public final class TCanvasGraphics extends TGraphics2D {
             fillPolygon((TPolygon) s);
         } else if (s instanceof TQuadCurve2D) {
             quad((TQuadCurve2D) s, true, 0);
-        } else {
+        } else if (s instanceof TEllipse2D) {
+            ellipse((TEllipse2D) s, true, 0);
+        } else if (s instanceof TPath2D) {
+            path((TPath2D) s, true, 0);
+        } else if (!(s instanceof TLine2D)) { // a line has no inside to fill
             super.fill(s);
         }
     }
 
     private void quad(TQuadCurve2D q, boolean fill, double o) {
         quad(ctx(), style(), fill, q.getX1() + o, q.getY1() + o, q.getCtrlX() + o, q.getCtrlY() + o, q.getX2() + o, q.getY2() + o);
+    }
+
+    private void ellipse(TEllipse2D el, boolean fill, double o) {
+        double w = el.getWidth();
+        double h = el.getHeight();
+        if (fill ? w > 0 && h > 0 : w >= 0 && h >= 0) {
+            ellipse(ctx(), style(), fill, el.getX() + o + w / 2, el.getY() + o + h / 2, w / 2, h / 2);
+        }
+    }
+
+    private void path(TPath2D p, boolean fill, double o) {
+        if (p.segments() > 0) {
+            path(ctx(), style(), fill, p.getWindingRule() == TPath2D.WIND_EVEN_ODD, p.types(), p.coords(), p.segments(), o);
+        }
     }
 
     @Override
@@ -524,6 +553,17 @@ public final class TCanvasGraphics extends TGraphics2D {
             "g.beginPath(); for (var _i = 0; _i < n; _i++) { if (_i === 0) g.moveTo(xs[_i] + o, ys[_i] + o); else g.lineTo(xs[_i] + o, ys[_i] + o); }"
             + "g.closePath(); if (isFill) { g.fillStyle = s; g.fill(); } else { g.strokeStyle = s; g.stroke(); }")
     private static native void polygon(JSObject g, JSObject s, boolean fill, int[] xs, int[] ys, int n, double o);
+
+    /** Segment kinds are PathIterator's SEG_ numbers (TPath2D); a fill closes open subpaths, as Java2D's does. */
+    @JSBody(params = { "g", "s", "isFill", "evenOdd", "ts", "cs", "n", "o" }, script =
+            "g.beginPath(); for (var _i = 0, _k = 0; _i < n; _i++) { var _t = ts[_i];"
+            + "if (_t === 0) { g.moveTo(cs[_k] + o, cs[_k + 1] + o); _k += 2; }"
+            + "else if (_t === 1) { g.lineTo(cs[_k] + o, cs[_k + 1] + o); _k += 2; }"
+            + "else if (_t === 2) { g.quadraticCurveTo(cs[_k] + o, cs[_k + 1] + o, cs[_k + 2] + o, cs[_k + 3] + o); _k += 4; }"
+            + "else if (_t === 3) { g.bezierCurveTo(cs[_k] + o, cs[_k + 1] + o, cs[_k + 2] + o, cs[_k + 3] + o, cs[_k + 4] + o, cs[_k + 5] + o); _k += 6; }"
+            + "else g.closePath(); }"
+            + "if (isFill) { g.fillStyle = s; g.fill(evenOdd ? 'evenodd' : 'nonzero'); } else { g.strokeStyle = s; g.stroke(); }")
+    private static native void path(JSObject g, JSObject s, boolean fill, boolean evenOdd, int[] ts, double[] cs, int n, double o);
 
     @JSBody(params = { "g", "s", "cssFont", "str", "x", "y" }, script =
             "g.fillStyle = s; g.font = cssFont; g.textBaseline = 'alphabetic'; g.fillText(str, x, y);")

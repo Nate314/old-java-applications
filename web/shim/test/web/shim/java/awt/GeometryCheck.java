@@ -9,14 +9,25 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Polygon;
 import java.awt.Rectangle;
+import java.awt.Point;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.GeneralPath;
+import java.awt.geom.Line2D;
+import java.awt.geom.Path2D;
+import java.awt.geom.Point2D;
 import java.awt.geom.QuadCurve2D;
 import java.awt.image.BufferedImage;
 import java.util.Random;
+import web.shim.java.awt.geom.TEllipse2D;
+import web.shim.java.awt.geom.TGeneralPath;
+import web.shim.java.awt.geom.TLine2D;
+import web.shim.java.awt.geom.TPath2D;
+import web.shim.java.awt.geom.TPoint2D;
 import web.shim.java.awt.geom.TQuadCurve2D;
 import web.shim.java.awt.web.ClipRun;
 
 /**
- * Compares the shim's Rectangle, Polygon, QuadCurve2D bounds, GridLayout arithmetic (GridRun) and clip arithmetic
+ * Compares the shim's Rectangle, Point, Polygon, Line2D, Ellipse2D, QuadCurve2D and Path2D geometry, GridLayout arithmetic (GridRun) and clip arithmetic
  * (ClipRun) with the real JDK's on thousands of random cases, including the overflow and negative-size edges.
  * Run headless (see web/README.md, Components).
  */
@@ -28,6 +39,10 @@ public final class GeometryCheck {
         rectangles();
         polygons();
         quadCurves();
+        points();
+        lines();
+        ellipses();
+        paths();
         grids();
         clips();
         System.out.println("GeometryCheck: " + cases + " cases match the JDK");
@@ -109,6 +124,112 @@ public final class GeometryCheck {
             Rectangle jf = new QuadCurve2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3], (float) p[4], (float) p[5]).getBounds();
             TRectangle sf = new TQuadCurve2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3], (float) p[4], (float) p[5]).getBounds();
             same(jf.toString(), sf.toString(), "quad float bounds " + java.util.Arrays.toString(p));
+        }
+    }
+
+    private static double coord(int i) {
+        return i % 3 == 0 ? RND.nextInt(61) - 30 : RND.nextDouble() * 60 - 30;
+    }
+
+    private static void points() {
+        for (int i = 0; i < 5000; i++) {
+            double x = coord(i) * 1.7;
+            double y = coord(i) * 1.3;
+            Point jp = new Point();
+            TPoint sp = new TPoint();
+            jp.setLocation(x, y);
+            sp.setLocation(x, y);
+            same(jp.toString(), sp.toString(), "Point.setLocation " + x + "," + y);
+            Point2D.Float jf = new Point2D.Float((float) x, (float) y);
+            TPoint2D.Float sf = new TPoint2D.Float((float) x, (float) y);
+            same(jf.toString(), sf.toString(), "Point2D.Float " + x + "," + y);
+            same(jf.distance(3.25, -7), sf.distance(3.25, -7), "distance " + x + "," + y);
+            same(jf.distanceSq(new Point2D.Double(y, x)), sf.distanceSq(new TPoint2D.Double(y, x)), "distanceSq " + x + "," + y);
+            same(new Point2D.Double(x, y).toString(), new TPoint2D.Double(x, y).toString(), "Point2D.Double " + x + "," + y);
+        }
+    }
+
+    private static void lines() {
+        for (int i = 0; i < 5000; i++) {
+            double[] p = { coord(i), coord(i), coord(i), coord(i) };
+            String c = java.util.Arrays.toString(p);
+            same(new Line2D.Double(p[0], p[1], p[2], p[3]).getBounds().toString(),
+                    new TLine2D.Double(p[0], p[1], p[2], p[3]).getBounds().toString(), "line bounds " + c);
+            same(new Line2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]).getBounds().toString(),
+                    new TLine2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]).getBounds().toString(), "line float bounds " + c);
+            same(new Line2D.Double(p[0], p[1], p[2], p[3]).getP2().toString(),
+                    new TLine2D.Double(new TPoint2D.Double(p[0], p[1]), new TPoint2D.Double(p[2], p[3])).getP2().toString(), "line P2 " + c);
+        }
+    }
+
+    private static void ellipses() {
+        for (int i = 0; i < 2000; i++) {
+            double[] p = { coord(i), coord(i), coord(i) + 10, coord(i) + 10 }; // some negative sizes
+            String c = java.util.Arrays.toString(p);
+            Ellipse2D je = new Ellipse2D.Double(p[0], p[1], p[2], p[3]);
+            TEllipse2D se = new TEllipse2D.Double(p[0], p[1], p[2], p[3]);
+            Ellipse2D jf = new Ellipse2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+            TEllipse2D sf = new TEllipse2D.Float((float) p[0], (float) p[1], (float) p[2], (float) p[3]);
+            same(je.getBounds().toString(), se.getBounds().toString(), "ellipse bounds " + c);
+            same(jf.getBounds().toString(), sf.getBounds().toString(), "ellipse float bounds " + c);
+            same(je.getCenterX() + "," + je.getCenterY() + "," + je.getMaxX() + "," + je.getMaxY(),
+                    se.getCenterX() + "," + se.getCenterY() + "," + se.getMaxX() + "," + se.getMaxY(), "ellipse center " + c);
+            for (int k = 0; k < 40; k++) {
+                double x = coord(k) * 1.5;
+                double y = coord(k) * 1.5;
+                same(je.contains(x, y), se.contains(x, y), "ellipse contains " + x + "," + y + " " + c);
+                same(jf.contains(x, y), sf.contains(x, y), "ellipse float contains " + x + "," + y + " " + c);
+            }
+            int[] r = smallRect();
+            Rectangle jr = new Rectangle(r[0], r[1], r[2], r[3]);
+            TRectangle sr = new TRectangle(r[0], r[1], r[2], r[3]);
+            same(jr.getCenterX() + "," + jr.getCenterY() + "," + jr.getMinX() + "," + jr.getMaxY(),
+                    sr.getCenterX() + "," + sr.getCenterY() + "," + sr.getMinX() + "," + sr.getMaxY(), "Rectangle center " + jr);
+        }
+    }
+
+    /** Random paths of moves, lines, quads, cubics and closes, built the same way on both sides. */
+    private static void paths() {
+        for (int i = 0; i < 5000; i++) {
+            int kind = i % 3;
+            int rule = RND.nextInt(2);
+            Path2D jp = kind == 0 ? new Path2D.Double(rule) : kind == 1 ? new Path2D.Float(rule) : new GeneralPath(rule);
+            TPath2D sp = kind == 0 ? new TPath2D.Double(rule) : kind == 1 ? new TPath2D.Float(rule) : new TGeneralPath(rule);
+            StringBuilder c = new StringBuilder(jp.getClass().getSimpleName());
+            int n = RND.nextInt(7);
+            for (int k = 0; k < n; k++) {
+                int op = k == 0 ? 0 : RND.nextInt(5);
+                double[] p = { coord(i), coord(i), coord(i), coord(i), coord(i), coord(i) };
+                c.append(' ').append(op).append(java.util.Arrays.toString(p));
+                if (op == 0) {
+                    jp.moveTo(p[0], p[1]);
+                    sp.moveTo(p[0], p[1]);
+                } else if (op == 1) {
+                    jp.lineTo(p[0], p[1]);
+                    sp.lineTo(p[0], p[1]);
+                } else if (op == 2) {
+                    jp.quadTo(p[0], p[1], p[2], p[3]);
+                    sp.quadTo(p[0], p[1], p[2], p[3]);
+                } else if (op == 3) {
+                    jp.curveTo(p[0], p[1], p[2], p[3], p[4], p[5]);
+                    sp.curveTo(p[0], p[1], p[2], p[3], p[4], p[5]);
+                } else {
+                    jp.closePath();
+                    sp.closePath();
+                }
+            }
+            same(jp.getBounds().toString(), sp.getBounds().toString(), "path bounds " + c);
+            same(jp.getWindingRule(), sp.getWindingRule(), "winding rule " + c);
+            int segs = 0;
+            for (java.awt.geom.PathIterator it = jp.getPathIterator(null); !it.isDone(); it.next()) {
+                double[] jc = new double[6];
+                same(it.currentSegment(jc), sp.types()[segs], "segment " + segs + " kind " + c);
+                segs++;
+            }
+            same(segs, sp.segments(), "segments " + c);
+            jp.reset();
+            sp.reset();
+            same(jp.getBounds().toString(), sp.getBounds().toString(), "reset path bounds " + c);
         }
     }
 
