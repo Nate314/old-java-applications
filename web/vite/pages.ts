@@ -166,7 +166,10 @@ export function pages(): Plugin {
         // scripts load. Only a trip from another page of the site (one-machine.ts's 'oldjava.trip', left by the page
         // before) still holds the first frame for them, so its pagereveal listener sees the player it animates into.
         // Written by the parser, the blocking copy runs like the tag it was; the module itself runs once.
-        return html.replace(entry, (tag, src) => onTrip(blocking(src)) + tag);
+        // Its scripts ask at low priority: at high they shared a slow phone's bandwidth with the render-blocking
+        // stylesheets and held the first paint (throttled phone FCP ~1.2 -> ~0.9 s, round 72).
+        return html.replace(entry, (tag, src) => onTrip(blocking(src)) + tag.replace('<script ', '<script fetchpriority="low" '))
+          .replace(/<link rel="modulepreload" /g, '<link rel="modulepreload" fetchpriority="low" ');
       },
     },
     async generateBundle(_options, bundle) {
