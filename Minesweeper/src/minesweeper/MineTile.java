@@ -33,15 +33,15 @@ public final class MineTile extends JButton implements MouseListener {
 
    static final Color GRASS_LIGHT = new Color(128, 204, 84);
    static final Color GRASS_DARK = new Color(114, 190, 72);
-   private static final Color GRASS_EDGE = new Color(58, 112, 36);
+   static final Color GRASS_EDGE = new Color(58, 112, 36);
    private static final Color GRASS_SHINE = new Color(176, 232, 134);
    private static final Color GRASS_HOVER = new Color(158, 222, 112);
-   private static final Color SAND_LIGHT = new Color(238, 228, 206);
-   private static final Color SAND_DARK = new Color(228, 216, 190);
-   private static final Color SAND_LINE = new Color(214, 199, 170);
-   private static final Color HIT = new Color(229, 57, 53);
+   static final Color SAND_LIGHT = new Color(238, 228, 206);
+   static final Color SAND_DARK = new Color(228, 216, 190);
+   static final Color SAND_LINE = new Color(214, 199, 170);
+   static final Color HIT = new Color(229, 57, 53);
    private static final Color FLAG_RED = new Color(222, 44, 44);
-   private static final Color POLE = new Color(52, 52, 58);
+   static final Color POLE = new Color(52, 52, 58);
    private static final Color MINE = new Color(34, 34, 40);
    private static final Color CURSOR = new Color(20, 60, 160);
    /** Number colors, 1 to 8: the classic blue, green, red, purple, then orange, teal, gray and silver. */
@@ -463,9 +463,13 @@ public final class MineTile extends JButton implements MouseListener {
 
    /** A flag on a pole, planted (growing from the ground) as {@code t} goes from 0 to 1. */
    private void paintFlag(Graphics2D g, int s, double t) {
+      drawFlag(g, this.getWidth() / 2, this.getHeight() / 2, s, t);
+   }
+
+   /** The flag of {@link #paintFlag} in a square of side {@code s} centered on (cx, cy); the scoreboard draws one too. */
+   static void drawFlag(Graphics2D g, int cx, int cy, int s, double t) {
       double grow = 0.4 + 0.6 * overshoot(t);
-      int cx = this.getWidth() / 2;
-      int ground = (int) (this.getHeight() / 2 + s * 0.30);
+      int ground = (int) (cy + s * 0.30);
       int poleX = (int) (cx - s * 0.10);
       int top = (int) (ground - s * 0.56 * grow);
       int stroke = Math.max(2, s / 16);
