@@ -13,11 +13,11 @@ A full-screen gallery of ten screen savers written in Java. The first is the ori
 9. **Aquarium**: a painted tank of fish that are yours. They live in the settings file, so the same fish are there the next time, with their names. The first time the aquarium is shown three fish move in; on each later day it is shown, one more swims in from the side with a "new today" name tag, until there are 12 (one new fish per day you look in, however long you were away). There are six kinds (clownfish, blue tang, neon tetra, angelfish, goldfish, yellow tang), each new fish being of a kind the tank has fewest of. **F** drops a pinch of flakes and every fish goes for the nearest one; flakes they miss settle on the sand and fade. Fish grow from 60% to full size over a fortnight, a little faster for every flake eaten. The water follows the clock: sunlit from 7:00 to 19:00, dark blue from 20:30 to 5:30 (easing between), when the fish swim slower and keep low among the weed. Neon tetras keep together. Every name shows for a few seconds when the aquarium comes up and on **H**.
 10. **Maze**: walking a brick maze in first person, at night, toward a gold orb hovering in the far corner. Each maze is 9 by 9 rooms with exactly one way between any two, carved at random. The walker keeps a hand on its left wall, so it tries dead ends on the way but always arrives. When it reaches the orb, the maze is shown from above for a few seconds: the way through in gold, the dead ends it tried in dim amber, and how many steps it took. Then a new maze.
 
-By default it moves on to the next saver every 30 seconds. It closes if you move the mouse.
+By default it moves on to the next saver every 30 seconds. Moving the mouse wakes it: rather than closing, the saver shrinks back into its own little screen on a wall of all ten, live (the gallery, below, headed "You woke it"), so whoever moved the mouse sees what else there is to watch and can pick one with a click. Esc closes it.
 
 **G** shows all ten at once, live, each on a small screen of its own in a grid (four across on a wide screen, two on a phone), with its number and name under it. Pick one with the arrow keys and Enter (or Space), its number, or a click (a tap in the browser): it grows from its little screen to the whole one and stays there, as a number key would. **G** again goes back to the saver that was showing, cycling as before. In the grid the mouse does not close anything; it lights up the screen under it. Each saver is drawn at full screen size and scaled into its own picture, so it looks as it will when picked.
 
-**T** turns a saver into a toy you can play with: the mouse (or a finger) no longer closes it, and each saver answers it in its own way. Esc still closes, and T again hands it back (the next mouse move, after a moment, closes it as before). The caption's last line says what the mouse does to the saver showing.
+**T** turns a saver into a toy you can play with: the mouse (or a finger) no longer wakes it, and each saver answers it in its own way. Esc still closes, and T again hands it back (the next mouse move, after a moment, wakes it to the wall as before). The caption's last line says what the mouse does to the saver showing.
 
 - **Green circles, Green squares, Bright circles**: the tiles near the pointer slip aside and shrink, like a hand through beads; held down, it pushes wider and harder.
 - **Starfield**: the stars stream out of a point most of the way to the pointer, so pointing steers the flight; hold the button for warp speed (five times as fast, longer streaks).
@@ -28,7 +28,7 @@ By default it moves on to the next saver every 30 seconds. It closes if you move
 - **Aquarium**: a click drops a pinch of flakes where you click, and the fish come for it.
 - **Maze**: hold the button and the walker hurries, three times as fast.
 
-Play is not saved: the screen saver always starts out closing on the mouse.
+Play is not saved: the screen saver always starts out waking on the mouse.
 
 **M** turns on music made by the saver on screen: each one plays its own instrument, and what it draws sets the notes. Every note is from one pentatonic scale (C major), so whatever rings together sounds right, and each instrument waits a moment between notes (from 0.05 s to 0.4 s, in real time), so a fast speed gives a busier tune rather than a buzz.
 
@@ -57,8 +57,8 @@ The music is off at every start and is not saved, so the site's idle screen save
 - **Up / Down** (tile savers): shrink / grow the tiles by a factor of 1.1 (at least 10 px). The grid is rebuilt for the new size and the cycle starts over.
 - **F** (Aquarium): feed the fish. It shows for 5 seconds when the screen saver starts, on every change of saver, and when the speed or cycling changes.
 - **Esc**: close.
-- **Mouse** (unless playing, T): moving or dragging more than a few pixels, clicking, pressing, releasing or leaving the window closes it. Mouse moves in the first 1.5 seconds are ignored (showing the window can report one when the mouse has not moved), as is leaving the window then.
-- Closing works like the window's close button would: run alone it exits, and inside NathaNOS only the screen saver closes.
+- **Mouse** (unless playing, T): moving or dragging more than a few pixels, clicking, pressing, releasing or leaving the window wakes it to the wall of all ten (G); the release of a press that woke it does not pick the screen under it. Mouse moves in the first 1.5 seconds, and for 1.5 seconds after a pick, are ignored (showing the window can report one when the mouse has not moved), as is leaving the window then.
+- Closing (Esc) works like the window's close button would: run alone it exits, and inside NathaNOS only the screen saver closes.
 - Keys act on key release. No command-line arguments.
 - The window is undecorated and fills the screen. The tile size is the greatest common factor of the screen width and height (120 px on 1920x1080) when that gives between 4 and 12 rows, as the original; on other screens, where that factor is often a pixel or two, it is a ninth of the screen height. The grid is centered, so the edge tiles are cut evenly.
 - The saver last shown, cycling, the speed and a changed tile size are kept in `~/.screensaver.txt` (lines like `saver 5`, `cycle on`, `speed 1.0`, `tiles 0.0`; 0 means the size from the screen), so the next run starts where this one left off. The Aquarium's fish are kept there too: `fishday 20394` (the day number the last fish moved in) and one `fish <kind> <day it moved in> <flakes eaten> <name>` line each, like `fish 0 20394 7 Pip` (kinds in the order above, from 0).

@@ -20,6 +20,8 @@ class Gallery {
 
    private final List<Saver> savers;
    int selected;
+   /** Opened by the mouse waking the saver rather than by G: the header says so. */
+   boolean woke;
    private Rectangle[] cells = new Rectangle[0];
    private BufferedImage[] images;
    private int laidWidth = -1;
@@ -125,7 +127,11 @@ class Gallery {
       Font plain = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(10, size * 4 / 5));
       g.setFont(bold);
       g.setColor(GREEN);
-      g.drawString("All " + this.savers.size() + " screen savers, live", margin, margin + size);
+      String title = "All " + this.savers.size() + " screen savers, live";
+      if (this.woke && g.getFontMetrics().stringWidth("You woke it: " + title) <= width - margin * 2) {
+         title = "You woke it: " + title;
+      }
+      g.drawString(title, margin, margin + size);
       g.setFont(plain);
       g.setColor(new Color(200, 200, 200));
       String keys = "Arrows and Enter, a number or a click: pick one   G: back   Esc: close";

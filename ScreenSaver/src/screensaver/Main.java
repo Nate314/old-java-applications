@@ -29,7 +29,7 @@ import javax.swing.Timer;
 /**
  * A full-screen gallery of screen savers: the original green circles and its two variants, then Starfield, Mystify,
  * Pipes, a bouncing logo, a dot clock, an aquarium of fish that stay yours between runs and a brick maze walked in first person. It moves on to the next one
- * every 30 seconds unless one was picked, and closes when the mouse moves. M plays music made by the saver on screen.
+ * every 30 seconds unless one was picked; moving the mouse wakes it to a wall of all ten, and Esc closes it. M plays music made by the saver on screen.
  */
 public class Main extends JFrame implements KeyListener, MouseListener, MouseMotionListener {
    static final double CYCLE_MILLIS = 30_000;
@@ -68,6 +68,10 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    /** A saver picked from the gallery grows from its little screen to the whole one. */
    private Rectangle zoomFrom;
    private double zoomLeft;
+   /** Woken by the mouse: the saver shrinks back from the whole screen into its little one on the wall. */
+   private double shrinkLeft;
+   /** The press or drag that woke it is still held: its release must not pick the screen under it. */
+   private boolean wakeHeld;
    /** When a saver was last picked from the gallery: the mouse that picked it needs a moment to come to rest. */
    private long pickedMillis;
    /** Play (T): the mouse (or a finger) plays with the saver instead of closing it; Esc still closes. */
@@ -139,6 +143,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       Music.live(this.music && this.gallery == null);
       Music.tick(millis);
       if (this.gallery != null) {
+         this.shrinkLeft = Math.max(0, this.shrinkLeft - millis);
          for (Saver s : this.savers) {
             s.tick(millis * this.speedFor(s));
          }
@@ -186,6 +191,17 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       this.fadeLeft = 0;
    }
 
+   /**
+    * The mouse moved, clicked or left: instead of closing (Esc does that), the saver wakes up to the wall of all ten,
+    * shrinking into its own little screen there, so whoever moved the mouse sees what else there is to watch.
+    */
+   private void wake(boolean held) {
+      this.openGallery();
+      this.gallery.woke = true;
+      this.wakeHeld = held;
+      this.shrinkLeft = calm() ? 0 : Gallery.ZOOM_MILLIS;
+   }
+
    /** Leaves the gallery on saver index, growing it from its cell; picking one (stay) stops the cycling, as 1-9 do. */
    private void pick(int index, boolean stay) {
       this.zoomFrom = this.gallery.cell(index);
@@ -214,19 +230,14 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       g.fillRect(0, 0, width, height);
       if (this.gallery != null) {
          this.gallery.paint(g, width, height, this.SCREEN_WIDTH, this.SCREEN_HEIGHT);
+         Rectangle to = this.gallery.cell(this.index());
+         if (this.shrinkLeft > 0 && to != null) {
+            this.paintBetween(g, to, this.shrinkLeft / Gallery.ZOOM_MILLIS, width, height);
+         }
          return;
       }
       if (this.zoomLeft > 0) {
-         double t = 1 - this.zoomLeft / Gallery.ZOOM_MILLIS;
-         t = t * t * (3 - 2 * t);
-         Rectangle from = this.zoomFrom;
-         Graphics2D z = (Graphics2D)g.create();
-         z.translate(from.x * (1 - t), from.y * (1 - t));
-         double w = from.width + (width - from.width) * t;
-         double h = from.height + (height - from.height) * t;
-         z.scale(w / this.SCREEN_WIDTH, h / this.SCREEN_HEIGHT);
-         this.saver.paint(z);
-         z.dispose();
+         this.paintBetween(g, this.zoomFrom, 1 - this.zoomLeft / Gallery.ZOOM_MILLIS, width, height);
       } else {
          this.saver.paint(g);
       }
@@ -237,6 +248,19 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       if (this.captionLeft > 0) {
          this.paintCaption(g, width, height);
       }
+   }
+
+   /** Paints the saver t of the way (eased) from its little screen cell to the whole width x height one. */
+   private void paintBetween(Graphics2D g, Rectangle cell, double t, int width, int height) {
+      t = t * t * (3 - 2 * t);
+      Graphics2D z = (Graphics2D)g.create();
+      z.translate(cell.x * (1 - t), cell.y * (1 - t));
+      z.clipRect(0, 0, (int)Math.ceil(cell.width + (width - cell.width) * t), (int)Math.ceil(cell.height + (height - cell.height) * t));
+      z.scale((cell.width + (width - cell.width) * t) / this.SCREEN_WIDTH, (cell.height + (height - cell.height) * t) / this.SCREEN_HEIGHT);
+      z.setColor(Color.BLACK);
+      z.fillRect(0, 0, this.SCREEN_WIDTH, this.SCREEN_HEIGHT);
+      this.saver.paint(z);
+      z.dispose();
    }
 
    /** The caption lines: the saver's name and number, then the keys. */
@@ -271,7 +295,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    /** The last caption line: how to close, or in play what the mouse does to this saver. */
    private String closeLine() {
       if (!this.play) {
-         return "Esc or move the mouse to close   T: play with it";
+         return "Move the mouse to see all ten   Esc: close   T: play with it";
       }
       return "Playing: " + playHint(this.saver) + "   T: hands off   Esc: close";
    }
@@ -421,17 +445,22 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
    public void keyTyped(KeyEvent e) {
    }
 
-   /** Any click closes the saver, except in the gallery (where letting go picks) and just after a pick. */
+   /** Any click wakes the saver to the wall, except in the gallery (where letting go picks) and just after a pick. */
    private void clicked(MouseEvent e, boolean release) {
       if (this.playing()) {
          this.saver.touch(e.getPoint(), !release);
       } else if (this.gallery != null) {
+         if (release && this.wakeHeld) {
+            this.wakeHeld = false;
+            return;
+         }
+         this.wakeHeld = this.wakeHeld && release;
          int index = release ? this.gallery.at(e.getX(), e.getY()) : -1;
          if (index >= 0) {
             this.pick(index, true);
          }
       } else if (!this.justPicked()) {
-         this.kill();
+         this.wake(!release);
       }
    }
 
@@ -466,7 +495,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       if (this.playing()) {
          this.saver.touch(null, false);
       } else if (!this.inGrace() && this.gallery == null) {
-         this.kill();
+         this.wake(false);
       }
    }
 
@@ -474,7 +503,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       return System.currentTimeMillis() - this.startMillis < GRACE_MILLIS || this.justPicked();
    }
 
-   /** Closes once the mouse has really moved after the grace period. */
+   /** Wakes to the wall once the mouse has really moved after the grace period. */
    private void mouseMovedTo(MouseEvent e, boolean down) {
       Point point = e.getLocationOnScreen();
       if (this.playing()) {
@@ -487,7 +516,7 @@ public class Main extends JFrame implements KeyListener, MouseListener, MouseMot
       } else if (this.firstMouse == null || this.inGrace()) {
          this.firstMouse = point;
       } else if (this.firstMouse.distance(point) > 5.0) {
-         this.kill();
+         this.wake(down);
       }
    }
 
