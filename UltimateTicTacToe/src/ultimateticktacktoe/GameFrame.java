@@ -114,6 +114,8 @@ public final class GameFrame extends JFrame {
    private final Timer reviewTimer = new Timer(30, event -> this.analyseStep());
    private final JPanel modeBar;
    private final ReviewGraph graph;
+   /** Beside the board on a landscape screen: the two sides, who is to move and the boards each has won; null above and below the board. */
+   private FaceOff faceOff;
    /** Review game: next to the record once a game ends, and in place of Open in the friend row. */
    private final JButton reviewButton = new JButton("Review game");
    private final JButton friendReviewButton = new JButton("Review");
@@ -204,8 +206,10 @@ public final class GameFrame extends JFrame {
       statusLines.add(this.status, BorderLayout.NORTH);
       // The record line and the friend row share one slot, as tall as the row, and only one shows at a time.
       JPanel lower = new JPanel(new BorderLayout());
-      this.layoutFriendRow(this.barsWidth);
-      lower.setPreferredSize(new Dimension(this.barsWidth, this.friendRow.getPreferredSize().height));
+      this.layoutFriendRow(this.barsWidth, column);
+      if (!column) {   // in the column the face-off takes up any change in height instead, and the link has a row of its own
+         lower.setPreferredSize(new Dimension(this.barsWidth, this.friendRow.getPreferredSize().height));
+      }
       lower.add(this.tally, BorderLayout.CENTER);
       lower.add(this.friendRow, BorderLayout.SOUTH);
       this.layoutReviewRow();
@@ -215,6 +219,9 @@ public final class GameFrame extends JFrame {
       // Beside the board, the buttons line up with its top edge and the status lines with its bottom edge.
       JPanel side = new JPanel(new BorderLayout());
       if (column) {
+         this.faceOff = new FaceOff(still());
+         side.add(this.faceOff, BorderLayout.CENTER);
+         side.setPreferredSize(new Dimension(this.barsWidth, boardSize * 3));   // the column keeps its width whatever its rows hold
          side.add(top, BorderLayout.NORTH);
          side.add(statusLines, BorderLayout.SOUTH);
          this.add(side, BorderLayout.EAST);
@@ -273,7 +280,7 @@ public final class GameFrame extends JFrame {
    }
 
    /** The friend row: the field takes what the buttons leave of the board's width. Enter in the field opens it, like Open. */
-   private void layoutFriendRow(int width) {
+   private void layoutFriendRow(int width, boolean column) {
       JButton open = this.openButton;
       for (JButton button : new JButton[]{this.copyButton, open, this.takeBackButton, this.friendReviewButton}) {
          button.setFocusable(false);
@@ -289,12 +296,24 @@ public final class GameFrame extends JFrame {
          this.copyButton.setText("Copy");   // a short board: Take back must stay on the row
       }
       int fieldWidth = Math.max(40, width - others - this.copyButton.getPreferredSize().width - GAP * 5);
+      JPanel buttons = this.friendRow;
+      if (column) {
+         // Beside the board there is height to spare: the link gets the column's whole width, the buttons a row under it.
+         this.copyButton.setText(this.friendPage == null ? "Copy code" : "Copy link");
+         fieldWidth = width - GAP * 2;
+         buttons = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 0));
+         buttons.setBackground(CellButton.BACKGROUND);
+         this.friendRow.setLayout(new BorderLayout(0, 4));
+         this.friendRow.add(this.friendField, BorderLayout.NORTH);
+         this.friendRow.add(buttons, BorderLayout.SOUTH);
+      } else {
+         this.friendRow.add(this.friendField);
+      }
       this.friendField.setPreferredSize(new Dimension(fieldWidth, this.copyButton.getPreferredSize().height));
-      this.friendRow.add(this.friendField);
-      this.friendRow.add(this.copyButton);
-      this.friendRow.add(open);
-      this.friendRow.add(this.friendReviewButton);
-      this.friendRow.add(this.takeBackButton);
+      buttons.add(this.copyButton);
+      buttons.add(open);
+      buttons.add(this.friendReviewButton);
+      buttons.add(this.takeBackButton);
       this.friendReviewButton.addActionListener(event -> this.startReview());
    }
 
@@ -772,6 +791,7 @@ public final class GameFrame extends JFrame {
       this.soundButton.getAccessibleContext().setAccessibleName(this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)");
 
       String winner = this.state.winner;
+      this.refreshFaceOff();
       if (this.lessonStep >= 0) {
          this.refreshLesson();
          return;
@@ -811,6 +831,21 @@ public final class GameFrame extends JFrame {
       this.friendField.setText(FriendLink.message(this.friendPage, this.moves));
       this.copyButton.setEnabled(!this.moves.isEmpty());
       this.takeBackButton.setEnabled(this.friendWaiting);
+   }
+
+   /** The face-off beside the board: each side's name as the status line calls it, and the boards each has won. */
+   private void refreshFaceOff() {
+      if (this.faceOff == null) {
+         return;
+      }
+      String mine = this.friendWaiting == this.state.xTurn ? "O" : "X";   // Friend by link: the side this screen plays
+      String xName = this.watching ? "Computer" : this.lessonStep >= 0 || this.mode.vsComputer() ? "You"
+         : this.mode == Mode.FRIEND ? ("X".equals(mine) ? "You" : "Friend") : "Player X";
+      String oName = this.watching || this.lessonStep < 0 && this.mode.vsComputer() ? "Computer" : this.lessonStep >= 0 ? "O"
+         : this.mode == Mode.FRIEND ? ("O".equals(mine) ? "You" : "Friend") : "Player O";
+      String winner = this.state.winner;
+      this.faceOff.show(xName, oName, this.state.boardResults, winner == null ? (this.state.xTurn ? "X" : "O") : null, winner,
+         this.review == null && this.computerToMove());
    }
 
    /** Shows the first of the lines (longest first) that fits beside the button on the record line, the full one as its tooltip. */
