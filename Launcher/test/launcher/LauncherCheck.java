@@ -91,6 +91,27 @@ public class LauncherCheck {
       Files.delete(seenFile);
       Files.delete(file);
 
+      // Picture glow: the box's size, rounded (corners clear, middle solid), dimmed below the picture, and the tone
+      // keeps a colorful picture's hue while a gray one stays gray.
+      java.awt.image.BufferedImage red = new java.awt.image.BufferedImage(40, 20, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D rg = red.createGraphics();
+      rg.setColor(new java.awt.Color(230, 40, 30));
+      rg.fillRect(0, 0, 40, 20);
+      rg.setColor(java.awt.Color.GRAY);
+      rg.fillRect(0, 0, 10, 20);   // a gray strip counts for little
+      rg.dispose();
+      java.awt.Color tone = Thumbs.tone(red);
+      check(tone.getRed() > 2 * tone.getGreen() && tone.getRed() > 2 * tone.getBlue() && tone.getRed() < 120, "red tone " + tone);
+      java.awt.image.BufferedImage plain = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      for (int i = 0; i < 64; i++) plain.setRGB(i % 8, i / 8, 0x808080);
+      java.awt.Color gray = Thumbs.tone(plain);
+      check(gray.getRed() == gray.getGreen() && gray.getGreen() == gray.getBlue(), "a gray picture's tone is gray " + gray);
+      java.awt.image.BufferedImage glow = Thumbs.glow(Thumbs.blur(red), tone, 120, 70, 16);
+      check(glow.getWidth() == 120 && glow.getHeight() == 70, "glow fills the box");
+      check((glow.getRGB(0, 0) >>> 24) == 0 && (glow.getRGB(60, 35) >>> 24) == 255, "glow is rounded and solid inside");
+      check((glow.getRGB(100, 35) >> 16 & 255) < 230 && (glow.getRGB(100, 35) >> 16 & 255) > 120, "glow dimmed, still red");
+      for (Catalog.App a : apps) new Thumbs().tone(a);   // every real picture gives a tone
+
       // README view: headings, lists, code and inline marks, with HTML escaped.
       String html = ReadmeView.toHtml("# Title\n\n- **Bold** item with `code`\n- <b>raw</b>\n\n```\nx < y\n```\n| a | b |\n|---|---|\n");
       check(html.contains("<h1") && html.contains("Title</h1>"), "heading");
