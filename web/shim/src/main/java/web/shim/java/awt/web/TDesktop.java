@@ -139,6 +139,7 @@ public final class TDesktop {
             return;
         }
         active = null;
+        TWindow.repaintFocus(w.focusOwner());
         for (int i = windows.size() - 1; i >= 0; i--) {
             TWindow next = windows.get(i);
             if (next != w && next.isVisible() && next.getFocusableWindowState()) {
@@ -176,6 +177,12 @@ public final class TDesktop {
                 && active.getFocusableWindowState()) {
             restack(w); // as in Swing, a window that cannot take focus comes up without taking the keyboard
             return;
+        }
+        if (active != w) { // the focus box moves with the active window
+            if (active != null) {
+                TWindow.repaintFocus(active.focusOwner());
+            }
+            TWindow.repaintFocus(w.focusOwner());
         }
         active = w;
         if (windows.remove(w)) {
@@ -253,6 +260,7 @@ public final class TDesktop {
             }
         });
         Js.listen(doc, "focusin", TDesktop::onFocusIn);
+        Js.listen(doc, "focusout", TDesktop::repaintUnfocusable);
         Js.listen(doc, "keydown", e -> onKey(e, TKeyEvent.KEY_PRESSED));
         Js.listen(doc, "keyup", e -> onKey(e, TKeyEvent.KEY_RELEASED));
         // boot.js changed window.__shimRender (the desktop was zoomed up or back): paint everything again on
@@ -546,6 +554,7 @@ public final class TDesktop {
 
     /** Keyboard focus the browser moved onto an app's button or field (its own Tab, a screen reader) is Swing's too. */
     private static void onFocusIn(JSObject e) {
+        repaintUnfocusable(e);
         TComponent c = lookup(Js.target(e));
         TWindow w = c != null ? c.windowAncestor() : null;
         if (w == null || !c.acceptsFocus() || !c.isEnabled() || w.focusOwner() == c) {
@@ -555,6 +564,15 @@ public final class TDesktop {
             activate(w);
         }
         w.setFocusOwnerQuietly(c);
+    }
+
+    /** The keyboard came into or left a window that cannot take focus: its focus owner shows or drops its focus box. */
+    private static void repaintUnfocusable(JSObject e) {
+        TComponent c = lookup(Js.target(e));
+        TWindow w = c != null ? c.windowAncestor() : null;
+        if (w != null && !w.getFocusableWindowState()) {
+            TWindow.repaintFocus(w.focusOwner());
+        }
     }
 
     /** Rows of components closer than this are one row, as in Swing's LayoutFocusTraversalPolicy. */
