@@ -36,7 +36,9 @@ let clipBox: HTMLElement | null;
 // between ticks, a menu) costs one frame a second (REPLAY_IDLE), and the encoder has nothing new to encode.
 // Nothing is drawn or recorded while nobody can see the app: its tab is hidden, or the page has scrolled the
 // app out of view (the home page's player, once the visitor scrolls down to the gallery).
-// A drawing is done a few ms per frame (paintDesk, REPLAY_SLICE), so a big app never holds a tap for a whole drawing.
+// A drawing is done a few ms per frame (paintDesk, REPLAY_SLICE), so a big app never holds a tap for a whole drawing;
+// when frames come far apart (a window behind others) a frame may draw a tenth of the time since the last one, up to
+// REPLAY_SLICE_MAX, so the clip's newest picture stays fresh there too.
 const REPLAY_SEG = 20000;
 
 const REPLAY_FPS = 30;     // at most; fewer where drawing the windows costs more (REPLAY_SHARE)
@@ -50,6 +52,8 @@ const REPLAY_MAX = 1280;   // the clip's longest side, in pixels
 const REPLAY_PAD = 16;     // desk around the windows, in page pixels
 
 const REPLAY_SLICE = 6;    // ms of drawing per frame at most (one element may run over): a slow phone drew big apps in 0.1-0.5 s at once
+
+const REPLAY_SLICE_MAX = 24;   // ms, when frames come far apart: half a long task, so a tap still never waits long
 
 export function setReplay(v: Replay | null) { replay = v; }
 
@@ -293,6 +297,7 @@ export function startReplay(desktop: Element): Replay | null {
     document.addEventListener(type, function (e) { if (!(e as KeyboardEvent).repeat) pressed = true; }, { capture: true, passive: true });
   });
   var on: Window = window;   // the window the next frame was asked of
+  var prev = 0;   // when the last frame came
   function frame() {
     var w = popped && !popped.win.closed ? popped.win : window;
     // A closed pop out window never answers, so the drawing would stop for good once the app is brought back.
@@ -300,6 +305,9 @@ export function startReplay(desktop: Element): Replay | null {
     on = w;
     w.requestAnimationFrame(frame);
     var t = real.now();   // not the frame's time, which a popped out window counts from its own start
+    // 6 ms at 60 fps; at 1.5 fps a 6 ms slice left a big app's drawing seconds old, so the clip lost its last seconds.
+    var budget = Math.min(REPLAY_SLICE_MAX, Math.max(REPLAY_SLICE, (t - prev) * REPLAY_SHARE));
+    prev = t;
     var answering = pressed;
     pressed = false;
     if (away()) return;
@@ -317,7 +325,7 @@ export function startReplay(desktop: Element): Replay | null {
       job = paintDesk(bg, back, desktop);
     }
     var t0 = real.now(), step;
-    while (!(step = job.next()).done && real.now() - t0 < REPLAY_SLICE);
+    while (!(step = job.next()).done && real.now() - t0 < budget);
     spent += real.now() - t0;
     if (!step.done) return;
     job = null;
