@@ -55,7 +55,7 @@ public final class TCanvasGraphics extends TGraphics2D {
     private TGradientPaint gradient; // null while painting with color
     private JSObject gradientStyle;
     private JSObject gradientCtx;
-    private double[] clip; // device box (ClipRun), before the pixel ratio; null for none
+    private TClipShape clip; // device space, before the pixel ratio; null for none
     private final Map<Object, Object> hints;
 
     // The context state last written, shared by all graphics objects, to avoid redundant canvas calls.
@@ -107,9 +107,17 @@ public final class TCanvasGraphics extends TGraphics2D {
             double r = pixelRatio;
             unclip(ctx); // a canvas clip only comes off by restore(), which also resets the transform and line set below
             if (clip != null) {
-                int x0 = ClipRun.pixel(clip[0], r);
-                int y0 = ClipRun.pixel(clip[1], r);
-                clipTo(ctx, x0, y0, ClipRun.pixel(clip[2], r) - x0, ClipRun.pixel(clip[3], r) - y0);
+                double[] b = clip.box;
+                int x0 = ClipRun.pixel(b[0], r);
+                int y0 = ClipRun.pixel(b[1], r);
+                clipTo(ctx, x0, y0, ClipRun.pixel(b[2], r) - x0, ClipRun.pixel(b[3], r) - y0);
+                if (clip.paths != null) {
+                    setTransform(ctx, r, 0, 0, r, 0, 0);
+                    for (TPath2D p : clip.paths) {
+                        trace(ctx, p.types(), p.coords(), p.segments(), 0);
+                        clipPath(ctx, p.getWindingRule() == TPath2D.WIND_EVEN_ODD);
+                    }
+                }
             }
             setTransform(ctx, r * t.getScaleX(), r * t.getShearY(), r * t.getShearX(), r * t.getScaleY(), r * t.getTranslateX(), r * t.getTranslateY());
             applyStroke();
@@ -237,47 +245,34 @@ public final class TCanvasGraphics extends TGraphics2D {
 
     @Override
     public void setClip(int x, int y, int width, int height) {
-        clip = ClipRun.toDevice(t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(), t.getTranslateX(), t.getTranslateY(), x, y, width, height);
-        changed();
+        setClip(new TRectangle(x, y, width, height));
     }
 
-    // shortcut: a non-rectangle clip clips to its bounds, add clip paths when an app clips to another shape
     @Override
     public void setClip(TShape s) {
-        if (s == null) {
-            clip = null;
-            changed();
-        } else {
-            TRectangle r = s.getBounds();
-            setClip(r.x, r.y, r.width, r.height);
-        }
+        clip = TClipShape.set(s, t);
+        changed();
     }
 
     @Override
     public TShape getClip() {
-        return getClipBounds();
+        return clip == null ? null : clip.isBox() && TClipShape.upright(t) ? getClipBounds() : clip.seenFrom(t); // a box comes back a Rectangle, as apps may cast it
     }
 
     @Override
     public void clipRect(int x, int y, int width, int height) {
-        double[] box = ClipRun.toDevice(t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(), t.getTranslateX(), t.getTranslateY(), x, y, width, height);
-        clip = clip == null ? box : ClipRun.intersect(clip, box);
-        changed();
+        clip(new TRectangle(x, y, width, height));
     }
 
     @Override
     public void clip(TShape s) {
-        if (s == null) {
-            setClip(null);
-        } else {
-            TRectangle r = s.getBounds();
-            clipRect(r.x, r.y, r.width, r.height);
-        }
+        clip = TClipShape.narrow(clip, s, t);
+        changed();
     }
 
     @Override
     public TRectangle getClipBounds() {
-        int[] r = clip == null ? null : ClipRun.userBounds(clip, t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(), t.getTranslateX(), t.getTranslateY());
+        int[] r = clip == null ? null : clip.userBounds(t);
         return r == null ? null : new TRectangle(r[0], r[1], r[2], r[3]);
     }
 
@@ -487,7 +482,10 @@ public final class TCanvasGraphics extends TGraphics2D {
 
     private void path(TPath2D p, boolean fill, double o) {
         if (p.segments() > 0) {
-            path(ctx(), style(), fill, p.getWindingRule() == TPath2D.WIND_EVEN_ODD, p.types(), p.coords(), p.segments(), o);
+            JSObject g = ctx();
+            JSObject s = style();
+            trace(g, p.types(), p.coords(), p.segments(), o);
+            paintPath(g, s, fill, p.getWindingRule() == TPath2D.WIND_EVEN_ODD);
         }
     }
 
@@ -561,16 +559,24 @@ public final class TCanvasGraphics extends TGraphics2D {
             + "g.closePath(); if (isFill) { g.fillStyle = s; g.fill(); } else { g.strokeStyle = s; g.stroke(); }")
     private static native void polygon(JSObject g, JSObject s, boolean fill, int[] xs, int[] ys, int n, double o);
 
-    /** Segment kinds are PathIterator's SEG_ numbers (TPath2D); a fill closes open subpaths, as Java2D's does. */
-    @JSBody(params = { "g", "s", "isFill", "evenOdd", "ts", "cs", "n", "o" }, script =
+    /** Starts a new canvas path from a TPath2D's segments (PathIterator's SEG_ numbers), each point moved by o. */
+    @JSBody(params = { "g", "ts", "cs", "n", "o" }, script =
             "g.beginPath(); for (var _i = 0, _k = 0; _i < n; _i++) { var _t = ts[_i];"
             + "if (_t === 0) { g.moveTo(cs[_k] + o, cs[_k + 1] + o); _k += 2; }"
             + "else if (_t === 1) { g.lineTo(cs[_k] + o, cs[_k + 1] + o); _k += 2; }"
             + "else if (_t === 2) { g.quadraticCurveTo(cs[_k] + o, cs[_k + 1] + o, cs[_k + 2] + o, cs[_k + 3] + o); _k += 4; }"
             + "else if (_t === 3) { g.bezierCurveTo(cs[_k] + o, cs[_k + 1] + o, cs[_k + 2] + o, cs[_k + 3] + o, cs[_k + 4] + o, cs[_k + 5] + o); _k += 6; }"
-            + "else g.closePath(); }"
-            + "if (isFill) { g.fillStyle = s; g.fill(evenOdd ? 'evenodd' : 'nonzero'); } else { g.strokeStyle = s; g.stroke(); }")
-    private static native void path(JSObject g, JSObject s, boolean fill, boolean evenOdd, int[] ts, double[] cs, int n, double o);
+            + "else g.closePath(); }")
+    private static native void trace(JSObject g, int[] ts, double[] cs, int n, double o);
+
+    /** Fills or strokes the traced path; a fill closes open subpaths, as Java2D's does. */
+    @JSBody(params = { "g", "s", "isFill", "evenOdd" }, script =
+            "if (isFill) { g.fillStyle = s; g.fill(evenOdd ? 'evenodd' : 'nonzero'); } else { g.strokeStyle = s; g.stroke(); }")
+    private static native void paintPath(JSObject g, JSObject s, boolean fill, boolean evenOdd);
+
+    /** Narrows the canvas clip (inside clipTo's save) to the traced path. */
+    @JSBody(params = { "g", "evenOdd" }, script = "g.clip(evenOdd ? 'evenodd' : 'nonzero');")
+    private static native void clipPath(JSObject g, boolean evenOdd);
 
     @JSBody(params = { "g", "s", "cssFont", "str", "x", "y" }, script =
             "g.fillStyle = s; g.font = cssFont; g.textBaseline = 'alphabetic'; g.fillText(str, x, y);")
