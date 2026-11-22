@@ -6,6 +6,7 @@ import { CloseButton, useOwnKeys } from './ui/layer';
 import { openPanel } from './ui/panel';
 import { AppCard, PassportLine } from './ui/cards';
 import { fetchOk } from './fetch-ok';
+import { quirkItems } from './title-card';
 
 let drawer: HTMLElement | null;
 
@@ -46,13 +47,7 @@ const quirkLists: Record<string, Promise<string[][]>> = {};
 export function quirks(id?: string | null) {
   id = id || appId()!;
   if (!quirkLists[id]) {
-    quirkLists[id] = fetchOk(root() + id + '/then-source/README.md').then(function (r) { return r.text(); }).then(function (text) {
-      var section = /^## Known quirks[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n?/g, '\n'));
-      if (!section) return [];
-      return section[1].split(/^- /m).slice(1).map(function (item) {
-        return item.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim().split('`');
-      });
-    }).catch(function (e) {
+    quirkLists[id] = fetchOk(root() + id + '/then-source/README.md').then(function (r) { return r.text(); }).then(quirkItems).catch(function (e) {
       console.warn('Could not read the known quirks: ' + e.message);
       return [];
     });
@@ -60,8 +55,7 @@ export function quirks(id?: string | null) {
   return quirkLists[id];
 }
 
-// #6 fixed the quirks the READMEs listed before it, so most then.html pages have none to list.
-export const NO_QUIRKS = 'None left: its README at that commit lists no known quirks.';
+export { NO_QUIRKS } from './title-card';
 
 // Then | Now: two links, the current one marked. Hidden until the catalog says the app has a then.
 export function EraSwitch({ className }: { className: string }) {

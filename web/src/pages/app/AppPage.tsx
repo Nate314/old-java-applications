@@ -6,7 +6,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { APPS, webp, type App } from '../../shared/catalog';
-import { WATCH, moreParts } from '../../runtime/title-card';
+import { NO_QUIRKS, WATCH, moreParts, quirkItems, thenHint } from '../../runtime/title-card';
 import { EarlyScript, RuntimeScript } from '../../shared/EarlyScript';
 import { SITE, ShareTags } from '../../shared/ShareTags';
 
@@ -127,6 +127,8 @@ function ThenHead({ app }: { app: App }) {
       <EarlyScript />
       <RuntimeScript src="../assets/boot.js" />
       <Preloads story={false} />
+      {/* The live card's known quirks (then-and-now.tsx quirks), in by the time it takes over from the early one. */}
+      <link rel="preload" href="then-source/README.md" as="fetch" crossOrigin="anonymous" />
       <script defer src="then.js" />
     </>
   );
@@ -139,25 +141,27 @@ function ThenHead({ app }: { app: App }) {
  * template, so frames and ?watch (which open on the app itself) and Run again never fetch its picture; the script
  * after it puts it in the page otherwise, before the first frame. The live card replaces it in one frame.
  */
-function EarlyTitle({ app }: { app: App }) {
+function EarlyTitle({ app, quirks }: { app: App; quirks?: string[][] }) {
   const shot = '../' + webp(app.shot);
+  // A Then page's card (then.html) has its README's known quirks where today's has the picture, and no Watch.
+  const then = !!quirks;
   const card = renderToStaticMarkup(
-    <div className="shim-title" id="shim-title-early" role="dialog" aria-label={app.name} aria-busy="true">
+    <div className={'shim-title' + (then ? ' then' : '')} id="shim-title-early" role="dialog" aria-label={then ? app.name + ', as first restored' : app.name} aria-busy="true">
       <div className="shim-title-card">
         <div className="shim-title-art">
-          <img className="shim-title-tone" alt="" src={shot} />
-          <img alt="" src={shot} />
+          {quirks ? <><h2>Known quirks, from its README then</h2><ul>{(quirks.length ? quirks : [[NO_QUIRKS]]).map((parts, i) =>
+            <li key={i}>{parts.map((p, j) => j % 2 ? <code key={j}>{p}</code> : p)}</li>)}</ul></> : <><img className="shim-title-tone" alt="" src={shot} /><img alt="" src={shot} /></>}
         </div>
         <div className="shim-title-text">
-          <span className="shim-title-cat">{app.cat[0].toUpperCase() + app.cat.slice(1)}</span>
+          <span className="shim-title-cat">{then ? 'As first restored' : app.cat[0].toUpperCase() + app.cat.slice(1)}</span>
           <h1>{app.name}</h1>
           <button type="button" className="shim-title-play" disabled>▶ Play</button>
           <span className="shim-title-press">or press any key</span>
-          <p className="shim-title-hint">{app.hint}</p>
+          <p className="shim-title-hint">{then ? thenHint(app) : app.hint}</p>
           <p className="shim-title-stamp" style={{ visibility: 'hidden' }}>{'New: playing it adds stamp 1 of ' + APPS.length + ' to your passport'}</p>
-          {app.id === 'ScreenSaver' && <p className="shim-title-saver" style={{ visibility: 'hidden' }}>Also this site’s screen saver, after 3 minutes away. Turn off</p>}
-          {WATCH[app.id] && <a className="shim-title-watch" href="?watch">Watch the computer play it first</a>}
-          <details className="shim-title-more" style={{ visibility: 'hidden' }} aria-hidden="true"><summary>{'More: ' + moreParts(app, false)}</summary></details>
+          {app.id === 'ScreenSaver' && !then && <p className="shim-title-saver" style={{ visibility: 'hidden' }}>Also this site’s screen saver, after 3 minutes away. Turn off</p>}
+          {WATCH[app.id] && !then && <a className="shim-title-watch" href="?watch">Watch the computer play it first</a>}
+          <details className="shim-title-more" style={{ visibility: 'hidden' }} aria-hidden="true"><summary>{'More: ' + moreParts(app, then)}</summary></details>
         </div>
         <span className="shim-meter shim-title-meter" />
         <pre className="shim-title-log" aria-hidden="true" />
@@ -186,7 +190,7 @@ export function appPage(app: App): string {
   return page(<AppHead app={app} />, { 'data-app': app.id, ...BODY[app.id] }, EarlyTitle({ app }));
 }
 
-/** The whole document for an app's Then page. */
-export function thenPage(app: App): string {
-  return page(<ThenHead app={app} />, { 'data-app': app.id, 'data-then': '', ...THEN_BODY[app.id] });
+/** The whole document for an app's Then page; readme is its README as first restored (for the known quirks). */
+export function thenPage(app: App, readme: string): string {
+  return page(<ThenHead app={app} />, { 'data-app': app.id, 'data-then': '', ...THEN_BODY[app.id] }, EarlyTitle({ app, quirks: quirkItems(readme) }));
 }
