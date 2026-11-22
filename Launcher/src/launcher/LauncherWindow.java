@@ -10,6 +10,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
@@ -706,8 +707,7 @@ public final class LauncherWindow extends JFrame {
          g2.fillRoundRect(0, 0, w, h, 16, 16);
          // picture well
          int ph = 124;
-         g2.setColor(new Color(0x171a21));
-         g2.fillRoundRect(6, 6, w - 12, ph, 12, 12);
+         thumbs.drawGlow(g2, app, 6, 6, w - 12, ph, 12);   // the well takes on the picture's own colors
          thumbs.draw(g2, app, 14, 12, w - 28, ph - 12);
          List<History.Change> fresh = then ? List.of() : news(app);
          // badge on the picture
@@ -794,17 +794,22 @@ public final class LauncherWindow extends JFrame {
    /** The selected app: a big picture, its name, origin, hint, any warning, its record and Play. */
    private final class Detail extends JPanel implements Scrollable {
       private static final int W = 340;
+      private static final int WASH = 360;   // how far down the app's tone fades into the pane
       private Catalog.App app;
       private final JComponent picture = new JComponent() {
          @Override
          protected void paintComponent(Graphics g) {
             if (app == null || getHeight() < 60) return;   // squeezed out by a short window: a sliver would look broken
             Graphics2D g2 = Ui.smooth(g);
-            g2.setColor(new Color(0x12141a));
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
             History.Story s = then ? history.of(app.id) : null;
-            if (s != null) thenCard(g2, s, getWidth(), getHeight());
-            else thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
+            if (s != null) {
+               g2.setColor(new Color(0x12141a));
+               g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+               thenCard(g2, s, getWidth(), getHeight());
+            } else {
+               thumbs.drawGlow(g2, app, 0, 0, getWidth(), getHeight(), 16);
+               thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
+            }
             g2.dispose();
          }
       };
@@ -927,6 +932,17 @@ public final class LauncherWindow extends JFrame {
          add(buttons);
          add(Box.createVerticalStrut(8));
          add(startRow);
+      }
+
+      /** The pane is washed from the top in the selected app's tone, so picking a card recolors it. */
+      @Override
+      protected void paintComponent(Graphics g) {
+         super.paintComponent(g);
+         if (app == null) return;
+         Graphics2D g2 = (Graphics2D) g.create();
+         g2.setPaint(new GradientPaint(0, 0, thumbs.tone(app), 0, WASH, Ui.PANEL));
+         g2.fillRect(1, 0, getWidth() - 1, WASH);   // right of the pane's 1 px line
+         g2.dispose();
       }
 
       /** As tall as it can shrink to: the picture's full height is spare room, not a reason to scroll. */
