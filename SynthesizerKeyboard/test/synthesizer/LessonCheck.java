@@ -117,11 +117,15 @@ public final class LessonCheck {
       assert row.start(1) == 1.5 && row.start(4) == 4.5 : "Row Row: dotted and half beats";
    }
 
-   /** The falling notes take the top of the piano during a lesson, and the keys stay where they are drawn. */
+   /** The falling (lesson) or rising (free play) notes take the top of the piano, and the keys stay where they are drawn. */
    private static void checkFall() {
       PianoPanel piano = new PianoPanel();
       piano.setSize(802, 300);
-      assert piano.keyAt(50, 10) == 0 && piano.keyAt(50, 299) == 0 : "no lesson: the keys fill the panel";
+      assert piano.keyAt(50, 10) == -1 && piano.keyAt(50, 120) == 0 : "free play: the keys sit below the rising notes";
+      checkRise(piano);
+      piano.setRising(false);
+      assert piano.keyAt(50, 10) == 0 && piano.keyAt(50, 299) == 0 : "the looper: the keys fill the panel";
+      piano.setRising(true);
       piano.setSong(Song.ALL[0]);
       assert piano.keyAt(50, 10) == -1 && piano.keyAt(50, 119) == -1 : "the falling notes are not keys";
       assert piano.keyAt(50, 120) == 0 && piano.keyAt(50, 299) == 0 && piano.keyAt(100, 130) == 1 : "the keys moved below them";
@@ -130,7 +134,8 @@ public final class LessonCheck {
       piano.play(2, 0);
       assert piano.shownBeat() == 3 : "Listen moves on to the end of the note it plays";
       piano.setSong(null);
-      assert piano.keyAt(50, 10) == 0 : "free play gives the keys their room back";
+      assert piano.keyAt(50, 120) == 0 : "free play keeps the keys where the lesson had them";
+      piano.setRising(false);
       // A key's front edge shows below its face, and a press pushes the face down over most of it.
       int edge = 300 - 2 - PianoPanel.lip(300) / 2;
       int upFront = brightness(paint(piano), 10, edge);
@@ -139,6 +144,24 @@ public final class LessonCheck {
       assert brightness(down, 10, edge) > upFront + 40 : "a pressed key's face covers its front edge";
       assert brightness(down, 10, 2) < brightness(down, 10, 40) : "a pressed key is shaded where it dips under the panel";
       piano.setPressed(0, false);
+   }
+
+   /** A note played outside a lesson grows from its key while held, then rises at the falling notes' scale. */
+   private static void checkRise(PianoPanel piano) {
+      long[] note = {4, 1000, 0};
+      // 120 px show 4.5 beats of 420 ms: about 0.0635 px per ms.
+      assert piano.risen(note, 1840) == 0 && piano.barHeight(note, 1840) == 53 : "held two beats: a two-beat bar on the key";
+      note[2] = 1840;
+      assert piano.risen(note, 2260) == 27 && piano.barHeight(note, 2260) == 53 : "released: it rises a beat's height per beat";
+      assert piano.barHeight(new long[]{4, 1000, 1001}, 1001) == 4 : "a tap still shows";
+      int rest = brightness(paint(piano), 140, 118);
+      piano.setPressed(2, true);
+      assert brightness(paint(piano), 140, 118) > rest + 100 : "a held key's bar starts on its lane";
+      piano.setPressed(2, false);
+      piano.setFound(true);
+      int rgb = paint(piano).getRGB(140, 118);
+      assert ((rgb >> 16) & 255) > 200 && (rgb & 255) < 120 : "a known song's notes rise in gold";
+      piano.setFound(false);
    }
 
    private static java.awt.image.BufferedImage paint(PianoPanel piano) {
