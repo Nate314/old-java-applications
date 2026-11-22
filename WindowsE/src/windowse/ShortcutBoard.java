@@ -41,6 +41,9 @@ final class ShortcutBoard extends JPanel {
    /** The count's slot after the keys: the "x" and the field (or, while a run goes, the step's count). */
    private static final int COUNT_W = 58;
    private static final int TIMES_W = 20;
+   /** The storyboard of steps: the room between two frames (for the ">"), and between two rows. */
+   private static final int FRAME_GAP = 16;
+   private static final int ROW_GAP = 8;
 
    /** One key of a row: its label (null for a gap), its width in tenths of a key, and its shortcut if it has one. */
    private static final class Slot {
@@ -87,6 +90,10 @@ final class ShortcutBoard extends JPanel {
    private final int unit;
    private final int head;
    private final int stepsY;
+   /** The storyboard: where its frames start, how many go on a row, and how wide each is. */
+   private final int stripY;
+   private final int cols;
+   private final int frameW;
    private final int deckW;
    private final int screenW;
    private final int screenH;
@@ -109,9 +116,8 @@ final class ShortcutBoard extends JPanel {
    /** The drawn key (its label) last typed on the real keyboard, down for a moment; null when none. */
    private String echoed;
    private final IntConsumer onRemove;
-   /** The list's steps as pills; those past the window's edge are hidden, and "+N more" stands in for them. */
+   /** The list's steps as frames of a storyboard, every one of them: one row of 8, or on the pocket pad two of 4. */
    private final List<StepPill> pills = new ArrayList<>();
-   private int moreX = -1;
    /** The step whose screen the little monitor shows (pointed at), or -1 for the whole plan. */
    private int peek = -1;
 
@@ -127,15 +133,20 @@ final class ShortcutBoard extends JPanel {
       this.add(count);   // first, so it has the keyboard when the window opens
       this.layout = pocket ? POCKET : LAYOUT;
       this.unit = pocket ? 56 : 48;
-      this.head = pocket ? 122 : 92;   // pocket: what it does gets its own lines under the chips
-      this.stepsY = pocket ? 86 : 56;
+      this.stepsY = pocket ? 86 : 56;   // pocket: what it does gets its own lines under the chips
+      this.stripY = this.stepsY + 22;
+      this.cols = pocket ? 4 : WindowsEWindow.MAX_STEPS;
+      int rows = (WindowsEWindow.MAX_STEPS + this.cols - 1) / this.cols;
+      this.head = this.stripY + rows * (StepPill.HEIGHT + ROW_GAP) + 4;
       this.deckW = 2 * PAD + (pocket ? 30 : 125) * this.unit / 10;   // 3 keys, or 12.5
       this.screenW = pocket ? 144 : 192;
       this.screenH = pocket ? 90 : 120;
       this.monitorX = MARGIN + this.deckW + (pocket ? 12 : 16);
       this.monitorW = this.screenW + 2 * BEZEL;
       this.setLayout(null);
-      this.setPreferredSize(new Dimension(this.monitorX + this.monitorW + MARGIN,
+      int width = this.monitorX + this.monitorW + MARGIN;
+      this.frameW = (width - 2 * (MARGIN + 2) - (this.cols - 1) * FRAME_GAP) / this.cols;
+      this.setPreferredSize(new Dimension(width,
          this.head + 2 * PAD + this.layout.length * this.unit + MARGIN));
       this.release.setRepeats(false);
       for (int row = 0; row < this.layout.length; row++) {
@@ -177,25 +188,23 @@ final class ShortcutBoard extends JPanel {
          this.remove(pill);
       }
       this.pills.clear();
-      this.moreX = -1;
-      FontMetrics fm = this.getFontMetrics(StepPill.FONT);
-      int x = MARGIN + 2 + 48;
-      int right = this.getPreferredSize().width - MARGIN - 2;
       for (int i = 0; i < this.shown.size(); i++) {
-         Step step = this.shown.get(i);
-         int w = StepPill.width(fm, step, this.pocket);
-         if (x + w > right - (i < this.shown.size() - 1 ? 60 : 0)) {
-            this.moreX = x;
-            break;
-         }
-         StepPill pill = new StepPill(i, this.shown.size(), step, this.pocket, this::peek, this.onRemove);
-         pill.setBounds(x, this.stepsY, w, 24);
+         Screen after = Screen.after(this.shown.subList(0, i + 1));
+         StepPill pill = new StepPill(i, this.shown.size(), this.shown.get(i), after, this::peek, this.onRemove);
+         java.awt.Rectangle r = this.frame(i);
+         pill.setBounds(r.x, r.y, r.width, r.height);
          this.add(pill);
          this.pills.add(pill);
-         x += w + 18;   // room for the ">" to the next one
       }
       this.revalidate();
       this.repaint();
+   }
+
+   /** Where step i's frame goes on the storyboard. */
+   java.awt.Rectangle frame(int i) {
+      int x = MARGIN + 2 + (i % this.cols) * (this.frameW + FRAME_GAP);
+      int y = this.stripY + (i / this.cols) * (StepPill.HEIGHT + ROW_GAP);
+      return new java.awt.Rectangle(x, y, this.frameW, StepPill.HEIGHT);
    }
 
    /** The keyboard to step i's pill; false when there is no such pill. */
@@ -410,30 +419,31 @@ final class ShortcutBoard extends JPanel {
       }
    }
 
-   /** The list of steps: its pills, joined by arrows; past the right edge, "+N more". Empty, a line says what the list is for. */
+   /**
+    * The storyboard of steps: each step a frame showing the screen after it, joined by arrows, and faint empty frames
+    * for the room left. Over it, what the list is for, or how many steps it has.
+    */
    private void paintSteps(Graphics2D g) {
       int x = MARGIN + 2;
       int y = this.stepsY;
       g.setColor(MUTED);
       g.setFont(new Font("SansSerif", Font.BOLD, 11));
-      g.drawString("STEPS", x, y + 16);
-      x += 48;
-      if (this.shown.isEmpty()) {
-         g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-         g.drawString(this.pocket ? "Add step: a list to press in order."
-            : "Add step lists the picked key; DO IT!!! then presses the list in order.", x, y + 16);
-         return;
-      }
-      g.setFont(StepPill.FONT);
-      g.setColor(MUTED);
-      for (int i = 0; i < this.pills.size(); i++) {   // the pills draw themselves; between them, ">"
-         java.awt.Rectangle r = this.pills.get(i).getBounds();
-         if (i < this.pills.size() - 1) {
-            g.drawString(">", r.x + r.width + 5, y + 16);
+      g.drawString("STEPS", x, y + 14);
+      g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+      int n = this.shown.size();
+      String says = n == 0 ? (this.pocket ? "Add step: a list to press in order." : "Add step lists the picked key; DO IT!!! then presses the list in order.")
+         : n + " of " + WindowsEWindow.MAX_STEPS + (this.pocket ? ", each with the screen after it" : ", each frame the screen after it: point at one to see it bigger");
+      g.drawString(says, x + 48, y + 14);
+      for (int i = 0; i < WindowsEWindow.MAX_STEPS; i++) {
+         java.awt.Rectangle r = this.frame(i);
+         if (i >= n) {   // room for more
+            g.setColor(new Color(222, 226, 234));
+            g.drawRoundRect(r.x, r.y, r.width - 1, r.height - 1, 12, 12);
+         } else if (i < n - 1 && (i + 1) % this.cols != 0) {
+            g.setColor(MUTED);
+            g.setFont(StepPill.FONT);
+            g.drawString(">", r.x + r.width + FRAME_GAP / 2 - 3, r.y + (r.height - 20) / 2 + 4);
          }
-      }
-      if (this.moreX >= 0) {
-         g.drawString("+" + (this.shown.size() - this.pills.size()) + " more", this.moreX, y + 16);
       }
    }
 
