@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
-import { build } from 'esbuild';
+import { build, transformSync } from 'esbuild';
 import type { Plugin } from 'vite';
 import type { OutputBundle, OutputChunk } from 'rollup';
 import { ROUTES, type Route } from '../src/routes';
@@ -49,6 +49,11 @@ async function withEarly(html: string): Promise<string> {
   if (code.length > 16384) throw new Error('src/runtime/early.ts bundles to ' + code.length + ' bytes (limit 16384): does skin.ts import something now?');
   return html.replace('<script data-early=""></script>', () => '<script>' + code + '</script>');
 }
+/**
+ * A stylesheet as it ships: comments and spaces out, every rule as written (no merging or rewriting). Every page waits
+ * for its stylesheets before its first paint, and this is about a third fewer of their bytes (gzipped) on a slow phone.
+ */
+const packed = (css: string) => transformSync(css, { loader: 'css', minifyWhitespace: true }).code;
 const hash = (text: string) => createHash('sha256').update(text).digest('base64url').slice(0, 8);
 /**
  * public/shim.css as a hashed asset ({ built name: source }), with forced-colors.css written into it under its media
@@ -60,7 +65,7 @@ function skinFiles(): Record<string, string> {
   const line = '@import url("forced-colors.css") (forced-colors: active);';
   const source = readFileSync(resolve(root, 'public/shim.css'), 'utf8');
   if (!source.includes(line) || forced.includes('@')) throw new Error('public/shim.css no longer imports forced-colors.css as ' + line + ', or forced-colors.css has an @-rule: update vite/pages.ts');
-  const shim = source.replace(line, () => '@media (forced-colors: active) {\n' + forced + '}');
+  const shim = packed(source.replace(line, () => '@media (forced-colors: active) {\n' + forced + '}'));
   return { ['assets/shim-' + hash(shim) + '.css']: shim };
 }
 /** A page with the skins' hashed name where it links shim.css (href="shim.css" or "../shim.css"). */
@@ -188,6 +193,8 @@ export function pages(): Plugin {
       },
     },
     async generateBundle(_options, bundle) {
+      // First, so the 404 page's inlined styles below are packed too.
+      for (const a of Object.values(bundle)) if (a.type === 'asset' && a.fileName.endsWith('.css')) a.source = packed(String(a.source));
       const skins = skinFiles();
       for (const [fileName, source] of Object.entries(skins)) this.emitFile({ type: 'asset', fileName, source });
       // The app pages are written here, not by Vite, so they get the hashed names of what they load from here too.
