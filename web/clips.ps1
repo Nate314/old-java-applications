@@ -7,20 +7,21 @@
 # player for the four games that have one), throws away what was recorded so far at "rec", and keeps the next
 # -Seconds seconds.
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
-#   ./web/clips.ps1
-#   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8101
-#   ./web/clips.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
+# (-Port, -DebugPort and -ProfileRoot have no defaults: pass your own on every run)
+#   ./web/clips.ps1 -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/clips.ps1 -Out somewhere/else ...   (to compare before replacing the committed ones)
 # Apps without a recipe (NathaNOS, BibleDownloader, NumberGuess, Windows, WindowsE: nothing moves until the visitor
 # does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its app has
 # "clip": true in web/src/shared/apps.json (its gallery card then has data-clip).
 param(
     [string[]]$Apps,
-    [int]$Port = 8101,
-    [int]$DebugPort = 9301,
+    [int]$Port = $(throw '-Port is required (no default: two runs must never share a port)'),
+    [int]$DebugPort = $(throw '-DebugPort is required (no default: two runs must never share a port)'),
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [int]$Seconds = 6,
     [string]$Out = (Join-Path $PSScriptRoot 'public/clips'),
-    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
+    [string]$ProfileRoot = $(throw '-ProfileRoot is required (no default: keep Chrome profiles in your own scratch folder)')   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 

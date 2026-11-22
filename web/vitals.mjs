@@ -12,25 +12,26 @@
 // suspended), the clipboard and alert/confirm/prompt are stubbed, Chrome's profile lives under -ProfileRoot and is
 // deleted afterwards, and the servers and Chrome are stopped by PID. Exits 1 when a page does not load.
 // Build first (mvn -f web/pom.xml package), then from the repo root:
-//   node web/vitals.mjs -Port 8275 -DebugPort 9475 -ProfileRoot C:\some\scratch -Pages index.html,Minesweeper/index.html
+//   node web/vitals.mjs -Port 8275 -DebugPort 9475 -ProfileRoot C:\some\scratch -Pages index.html,Minesweeper/index.html   (no defaults for -Port, -DebugPort, -ProfileRoot)
 //   node web/vitals.mjs -Before C:\some\before\site -Site web/target/site -Pages story.html -Runs 5 ...
 //   node web/vitals.mjs -Pages index.html -Tap "#gallery-filter" ...
 //   node web/vitals.mjs -Pages index.html -Budget lcp=1500,cls=0.1 ...   (exit 1 when a median is over its number)
 import { spawn, execSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const opt = { Site: join(here, 'target/site'), Before: '', Pages: 'index.html', Runs: '3', Tap: '', Budget: '', Wait: '5000',
-  Port: '8101', DebugPort: '9302', ProfileRoot: tmpdir(),
+  Port: '', DebugPort: '', ProfileRoot: '',
   Chrome: join(process.env.ProgramFiles || 'C:\\Program Files', 'Google\\Chrome\\Application\\chrome.exe') };
 for (let i = 2; i < process.argv.length; i += 2) {
   const k = process.argv[i].replace(/^-+/, '');
-  if (!(k in opt) || process.argv[i + 1] === undefined) { console.error('Usage: node web/vitals.mjs [-Site dir] [-Before dir] [-Pages a.html,b/index.html] [-Runs n] [-Tap selector] [-Budget lcp=ms,cls=n,...] [-Wait ms] [-Port n] [-DebugPort n] [-ProfileRoot dir] [-Chrome exe]'); process.exit(2); }
+  if (!(k in opt) || process.argv[i + 1] === undefined) { console.error('Usage: node web/vitals.mjs [-Site dir] [-Before dir] [-Pages a.html,b/index.html] [-Runs n] [-Tap selector] [-Budget lcp=ms,cls=n,...] [-Wait ms] -Port n -DebugPort n -ProfileRoot dir [-Chrome exe]'); process.exit(2); }
   opt[k] = process.argv[i + 1];
 }
+// No defaults: two runs on one machine must never share a port or a Chrome profile folder.
+for (const k of ['Port', 'DebugPort', 'ProfileRoot']) if (!opt[k]) { console.error('Pass -' + k + ': -Port, -DebugPort and -ProfileRoot have no defaults.'); process.exit(2); }
 const sites = (opt.Before ? [opt.Before, opt.Site] : [opt.Site]).map(d => resolve(d));
 for (const d of sites) if (!existsSync(join(d, 'index.html'))) { console.error('No built site in ' + d + '. Run: mvn -f web/pom.xml package'); process.exit(2); }
 const PAGES = opt.Pages.split(',').map(p => p.trim().replace(/^\//, '')).filter(Boolean), RUNS = Math.max(1, +opt.Runs);
