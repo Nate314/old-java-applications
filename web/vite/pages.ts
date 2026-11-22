@@ -57,6 +57,13 @@ function skinFiles(): Record<string, string> {
 /** A page with the skins' hashed name where it links shim.css (href="shim.css" or "../shim.css"). */
 const withSkins = (html: string) => html.replace(/href="((?:\.\.\/)?)shim\.css"/g, (_, up) => 'href="' + up + Object.keys(skinFiles())[0] + '"');
 
+/** A script that writes the render-blocking tag only on a trip from another page of the site (Painted early, below). */
+const onTrip = (blockingTag: string) => '<script>try{sessionStorage.getItem("oldjava.trip")&&document.write(' +
+  JSON.stringify(blockingTag).replace(/<\//g, '<\\/') + ')}catch(e){}</script>';
+/** An app page, whose HTML holds its title card (AppPage.tsx, EarlyTitle), paints early as the home page does. */
+const paintedEarly = (html: string) => html.replace(/<script type="module" src="[^"]+" blocking="render"><\/script>/,
+  tag => onTrip(tag) + tag.replace(' blocking="render"', ''));
+
 const htmlId = (r: Route) => resolve(root, r.file);
 const inputName = (r: Route) => r.file.replace(/\.html$/, '').replace(/^404$/, 'notfound');
 
@@ -130,8 +137,7 @@ export function pages(): Plugin {
         // scripts load. Only a trip from another page of the site (one-machine.ts's 'oldjava.trip', left by the page
         // before) still holds the first frame for them, so its pagereveal listener sees the player it animates into.
         // Written by the parser, the blocking copy runs like the tag it was; the module itself runs once.
-        return html.replace(entry, (tag, src) => '<script>try{sessionStorage.getItem("oldjava.trip")&&document.write(' +
-          JSON.stringify(blocking(src)).replace(/<\//g, '<\\/') + ')}catch(e){}</script>' + tag);
+        return html.replace(entry, (tag, src) => onTrip(blocking(src)) + tag);
       },
     },
     async generateBundle(_options, bundle) {
@@ -151,7 +157,7 @@ export function pages(): Plugin {
         tag.replace('assets/boot.js', chunk('boot')) + preloadTags(bundle, boot, '../'))
         .replace('"../assets/news.js"', () => '"../' + chunk('news') + '"');
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
-      for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: await withEarly(named(appPage(app))) });
+      for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: await withEarly(paintedEarly(named(appPage(app)))) });
       for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: await withEarly(named(thenPage(app))) });
       const files = [...new Set(Object.keys(bundle).concat(Object.keys(skins)))].filter(name => name.startsWith('assets/')).sort();
       // sw.js lists this build's files, so it changes with every build (the browser then installs it) and knows which to keep.

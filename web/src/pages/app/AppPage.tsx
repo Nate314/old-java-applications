@@ -5,7 +5,8 @@
 // Keep this file free of CSS imports: the build reads it in Node.
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
-import { webp, type App } from '../../shared/catalog';
+import { APPS, webp, type App } from '../../shared/catalog';
+import { WATCH, moreParts } from '../../runtime/title-card';
 import { EarlyScript, RuntimeScript } from '../../shared/EarlyScript';
 import { SITE, ShareTags } from '../../shared/ShareTags';
 
@@ -131,14 +132,51 @@ function ThenHead({ app }: { app: App }) {
   );
 }
 
-function page(head: ReactElement, body: Record<string, string>): string {
+/**
+ * Today's title card as it first shows (src/runtime/title-screen.tsx draws the live one): picture, category, name, a
+ * Loading… Play, hint, the Watch link, and the room the stamp and More lines take, so a slow phone paints it with the stylesheets,
+ * not after boot.js and React have run (vite/pages.ts lets the first frame go before boot.js, except on a trip). A
+ * template, so frames and ?watch (which open on the app itself) and Run again never fetch its picture; the script
+ * after it puts it in the page otherwise, before the first frame. The live card replaces it in one frame.
+ */
+function EarlyTitle({ app }: { app: App }) {
+  const shot = '../' + webp(app.shot);
+  const card = renderToStaticMarkup(
+    <div className="shim-title" id="shim-title-early" role="dialog" aria-label={app.name} aria-busy="true">
+      <div className="shim-title-card">
+        <div className="shim-title-art">
+          <img className="shim-title-tone" alt="" src={shot} />
+          <img alt="" src={shot} />
+        </div>
+        <div className="shim-title-text">
+          <span className="shim-title-cat">{app.cat[0].toUpperCase() + app.cat.slice(1)}</span>
+          <h1>{app.name}</h1>
+          <button type="button" className="shim-title-play" disabled>Loading…</button>
+          <span className="shim-title-press">or press any key</span>
+          <p className="shim-title-hint">{app.hint}</p>
+          <p className="shim-title-stamp" style={{ visibility: 'hidden' }}>{'New: playing it adds stamp 1 of ' + APPS.length + ' to your passport'}</p>
+          {app.id === 'ScreenSaver' && <p className="shim-title-saver" style={{ visibility: 'hidden' }}>Also this site’s screen saver, after 3 minutes away. Turn off</p>}
+          {WATCH[app.id] && <a className="shim-title-watch" href="?watch">Watch the computer play it first</a>}
+          <details className="shim-title-more" style={{ visibility: 'hidden' }} aria-hidden="true"><summary>{'More: ' + moreParts(app, false)}</summary></details>
+        </div>
+        <span className="shim-meter shim-title-meter" />
+        <pre className="shim-title-log" aria-hidden="true" />
+      </div>
+    </div>,
+  ).replace(/^<link rel="preload"[^>]*>/, '');   // React's own preload for the picture: the head already asks for it
+  return '<template id="shim-title-early-t">' + card + '</template><script>try{/[?&](embed|watch)(=|&|$)/.test(location.search)||' +
+    'sessionStorage.getItem("oldjava.again")===' + JSON.stringify(app.id) +
+    '||document.currentScript.before(document.getElementById("shim-title-early-t").content)}catch(e){}</script>\n';
+}
+
+function page(head: ReactElement, body: Record<string, string>, inBody = ''): string {
   const attrs = Object.entries(body).map(([name, value]) => ' ' + name + (value ? '="' + value + '"' : '')).join('');
-  return '<!doctype html>\n<html lang="en">\n<head>\n' + renderToStaticMarkup(head) + '\n</head>\n<body' + attrs + '>\n</body>\n</html>\n';
+  return '<!doctype html>\n<html lang="en">\n<head>\n' + renderToStaticMarkup(head) + '\n</head>\n<body' + attrs + '>\n' + inBody + '</body>\n</html>\n';
 }
 
 /** The whole document for one app. */
 export function appPage(app: App): string {
-  return page(<AppHead app={app} />, { 'data-app': app.id, ...BODY[app.id] });
+  return page(<AppHead app={app} />, { 'data-app': app.id, ...BODY[app.id] }, EarlyTitle({ app }));
 }
 
 /** The whole document for an app's Then page. */
