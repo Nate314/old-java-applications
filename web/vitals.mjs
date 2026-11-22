@@ -15,6 +15,7 @@
 //   node web/vitals.mjs -Port 8275 -DebugPort 9475 -ProfileRoot C:\some\scratch -Pages index.html,Minesweeper/index.html
 //   node web/vitals.mjs -Before C:\some\before\site -Site web/target/site -Pages story.html -Runs 5 ...
 //   node web/vitals.mjs -Pages index.html -Tap "#gallery-filter" ...
+//   node web/vitals.mjs -Pages index.html -Budget lcp=1500,cls=0.1 ...   (exit 1 when a median is over its number)
 import { spawn, execSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -22,12 +23,12 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const opt = { Site: join(here, 'target/site'), Before: '', Pages: 'index.html', Runs: '3', Tap: '', Wait: '5000',
+const opt = { Site: join(here, 'target/site'), Before: '', Pages: 'index.html', Runs: '3', Tap: '', Budget: '', Wait: '5000',
   Port: '8101', DebugPort: '9302', ProfileRoot: tmpdir(),
   Chrome: join(process.env.ProgramFiles || 'C:\\Program Files', 'Google\\Chrome\\Application\\chrome.exe') };
 for (let i = 2; i < process.argv.length; i += 2) {
   const k = process.argv[i].replace(/^-+/, '');
-  if (!(k in opt) || process.argv[i + 1] === undefined) { console.error('Usage: node web/vitals.mjs [-Site dir] [-Before dir] [-Pages a.html,b/index.html] [-Runs n] [-Tap selector] [-Wait ms] [-Port n] [-DebugPort n] [-ProfileRoot dir] [-Chrome exe]'); process.exit(2); }
+  if (!(k in opt) || process.argv[i + 1] === undefined) { console.error('Usage: node web/vitals.mjs [-Site dir] [-Before dir] [-Pages a.html,b/index.html] [-Runs n] [-Tap selector] [-Budget lcp=ms,cls=n,...] [-Wait ms] [-Port n] [-DebugPort n] [-ProfileRoot dir] [-Chrome exe]'); process.exit(2); }
   opt[k] = process.argv[i + 1];
 }
 const sites = (opt.Before ? [opt.Before, opt.Site] : [opt.Site]).map(d => resolve(d));
@@ -78,6 +79,11 @@ const short = (req, usual) => req < usual / 2;
 console.assert(short(4, median([58, 4, 57])) && !short(48, median([58, 57, 4])) && !short(58, median([4, 58])), 'short');
 const METRICS = [['fcp', 'FCP ms'], ['lcp', 'LCP ms'], ['cls', 'CLS'], ['tbt', 'TBT ms'], ['kb', 'KB'], ['req', 'requests']].concat(opt.Tap ? [['inp', 'INP ms']] : []);
 const fmt = (k, x) => k === 'cls' ? x.toFixed(3) : String(Math.round(x));
+// -Budget: the highest median each named metric may have on every page (the after build's, in paired mode), so a
+// regression like round 76's home LCP (812 -> 2740 ms) fails the run instead of being read past.
+const BUDGET = Object.fromEntries(opt.Budget.split(',').filter(Boolean).map(b => b.split('=').map(x => x.trim().toLowerCase())));
+for (const [k, v] of Object.entries(BUDGET)) if (!METRICS.some(m => m[0] === k) || !(v !== '' && isFinite(v))) { console.error('Bad -Budget entry ' + k + '=' + v + ' (metrics: ' + METRICS.map(m => m[0]).join(', ') + ')'); process.exit(2); }
+const overBudget = (k, median) => k in BUDGET && !(median <= +BUDGET[k]);   // a page with no runs (NaN) is over too
 
 try {
   mkdirSync(work, { recursive: true });
@@ -182,6 +188,7 @@ try {
     console.log(path + ' (median)');
     for (const [k, n] of METRICS) {
       const m = runs.map(rs => rs.length ? median(rs.map(v => v[k])) : NaN);
+      if (overBudget(k, m[m.length - 1])) { failed++; console.log('  OVER BUDGET ' + n + ' ' + fmt(k, m[m.length - 1]) + ' > ' + BUDGET[k]); }
       console.log('  ' + n.padEnd(9) + (opt.Before ? fmt(k, m[0]).padStart(8) + ' -> ' + fmt(k, m[1]).padStart(8) + '  (' + (m[1] >= m[0] ? '+' : '') + fmt(k, m[1] - m[0]) + (m[0] ? ', ' + (m[1] >= m[0] ? '+' : '') + Math.round((m[1] - m[0]) / m[0] * 100) + '%' : '') + ')' : fmt(k, m[0]).padStart(8)));
     }
   }
