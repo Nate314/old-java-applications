@@ -58,11 +58,49 @@ public class CatchFeelCheck {
       panel.advance(CatchPanel.DRAIN);
       int after = draw(panel).getRGB(610, 16);
       check(!isRed(after) && !isBlue(after), "then drain away " + Integer.toHexString(after));
+      upright(none);
       System.out.println("CatchFeelCheck passed");
    }
 
+   /** On a phone the game stands upright at the screen's width: everything fits, and a tap still catches. */
+   private static void upright(File none) {
+      java.awt.Insets frame = new java.awt.Insets(30, 4, 4, 4);
+      check(CatchPanel.sizeFor(new java.awt.Dimension(1280, 720), frame).equals(new java.awt.Dimension(640, 480)), "a wide screen keeps 640 x 480");
+      check(CatchPanel.sizeFor(new java.awt.Dimension(400, 860), frame).equals(new java.awt.Dimension(392, 760)), "a phone gets its width, up to 760 tall");
+      check(CatchPanel.sizeFor(new java.awt.Dimension(360, 560), frame).height == CatchPanel.NARROW_MIN_HEIGHT, "never too short for the cards");
+      java.awt.Dimension size = CatchPanel.sizeFor(new java.awt.Dimension(368, 700), frame);
+      CatchPanel panel = new CatchPanel(NightRecords.load(none), size);
+      panel.stop();
+      panel.random.setSeed(229);
+      panel.setSize(size);
+      draw(panel);
+      java.awt.Rectangle field = new java.awt.Rectangle(size);
+      for (int i = 0; i < panel.nightCards.length; i++) {
+         check(field.contains(panel.nightCards[i]), "night card " + i + " fits " + panel.nightCards[i]);
+         for (int j = 0; j < i; j++) {
+            check(!panel.nightCards[i].intersects(panel.nightCards[j]), "night cards " + i + " and " + j + " apart");
+         }
+      }
+      check(panel.nightCards[1].y == panel.nightCards[0].y && panel.nightCards[2].y > panel.nightCards[0].y, "two cards to a row");
+      panel.start(Night.SUPERNOVA);
+      panel.advance(1.5);
+      check(panel.slotX(Night.SUPERNOVA.goal() - 1) + 7 < size.width - 60, "fifteen places in the count leave room for the count's number");
+      panel.start(Night.DRIFT);
+      panel.advance(1.5);
+      CatchGame.Body gold = firstGold(panel.game);
+      check(gold.x < size.width && gold.y + panel.countY() < size.height, "the stars stay on the upright field");
+      panel.catchAt(gold.x, gold.y + 62);
+      check(panel.game.caught() == 1, "a tap on a star in the upright field catches it");
+      panel.advance(Night.SECONDS + 1);
+      draw(panel);
+      for (java.awt.Rectangle button : new java.awt.Rectangle[]{panel.againButton, panel.menuButton}) {
+         check(button.width >= 90 && field.contains(button), "result button fits " + button);
+      }
+      check(!panel.againButton.intersects(panel.menuButton), "result buttons apart");
+   }
+
    private static BufferedImage draw(CatchPanel panel) {
-      BufferedImage image = new BufferedImage(CatchPanel.WIDTH, CatchPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      BufferedImage image = new BufferedImage(panel.getWidth(), panel.getHeight(), BufferedImage.TYPE_INT_RGB);
       Graphics2D g = image.createGraphics();
       panel.paint(g);
       g.dispose();
