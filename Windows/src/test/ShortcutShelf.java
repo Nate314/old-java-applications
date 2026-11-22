@@ -36,7 +36,9 @@ final class ShortcutShelf extends JButton {
    private static final String TIP = "Click a shortcut for Win+that key";
    private static final int PAD = 4;
    private static final int ROW = 26;
-   static final int HEIGHT = 2 * PAD + (ROWS + 2) * ROW;
+   /** The arrows' row is taller: each arrow shows a little screen with the window where that snap puts it. */
+   private static final int ARROW_ROW = ROW + 14;
+   static final int HEIGHT = 2 * PAD + (ROWS + 1) * ROW + ARROW_ROW;
    private static final Color FACE = new Color(48, 51, 61);
    private static final Color HOVER = new Color(66, 70, 82);
    private static final Color LIT = new Color(96, 182, 255);
@@ -153,7 +155,7 @@ final class ShortcutShelf extends JButton {
       this.keys.release(CODES[i]);
       this.keys.release(WindowsKey.WIN);
       if (this.key != null) {
-         this.key.echo("Win+" + CAPS[i]);
+         this.key.echo("Win+" + CAPS[i], i >= ROWS ? CODES[i] : 0);
       }
    }
 
@@ -189,10 +191,10 @@ final class ShortcutShelf extends JButton {
    Rectangle rect(int i) {
       int w = (int) Math.round(this.getWidth() / this.scale()) - 2 * PAD;
       if (i < ROWS || i == HOVER_ROW) {
-         return new Rectangle(PAD, PAD + (i < ROWS ? i : ROWS + 1) * ROW, w, ROW - 3);
+         return new Rectangle(PAD, PAD + (i < ROWS ? i * ROW : ROWS * ROW + ARROW_ROW), w, ROW - 3);
       }
       int cap = (w - 3 * PAD) / 4;
-      return new Rectangle(PAD + (i - ROWS) * (cap + PAD), PAD + ROWS * ROW + 2, cap, ROW - 5);
+      return new Rectangle(PAD + (i - ROWS) * (cap + PAD), PAD + ROWS * ROW + 2, cap, ARROW_ROW - 5);
    }
 
    /** The shortcut at (x, y) on the screen, or -1. */
@@ -306,8 +308,11 @@ final class ShortcutShelf extends JButton {
                g.setStroke(new BasicStroke(1f));
                g.drawRoundRect(r.x, r.y, r.width - 1, r.height - 1, 8, 8);
             }
+            // Where the window goes, over the arrow that sends it there.
+            WindowsKey.drawSnap(g, CODES[i], r.x + 3, r.y + 4, r.width - 6, 13, lit || held || i == this.hover ? Color.WHITE : DIM,
+               lit ? Color.WHITE : CAP);
             g.setColor(lit || held ? Color.WHITE : DIM);
-            g.drawString(CAPS[i], r.x + (r.width - g.getFontMetrics().stringWidth(CAPS[i])) / 2, base);
+            g.drawString(CAPS[i], r.x + (r.width - g.getFontMetrics().stringWidth(CAPS[i])) / 2, r.y + r.height - 5);
          }
       }
    }

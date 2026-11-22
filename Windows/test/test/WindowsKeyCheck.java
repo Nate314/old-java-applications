@@ -204,7 +204,26 @@ public class WindowsKeyCheck {
          paint(key);
          r = shelf.rect(4);
          click(shelf, r.x + 5, r.y + 5, r.x + 5, r.y + 5);
-         check("Win+←".equals(key.echoed()), "an arrow echoes as Win+←: " + key.echoed());
+         check("Win+←".equals(key.echoed()) && key.echoArrow() == KeyEvent.VK_LEFT, "an arrow echoes as Win+← with its snap: " + key.echoed());
+         paint(key);
+         // Each snap's little screen: left fills the left half, right the right, up all of it, down only a sliver.
+         int[][] filled = new int[4][2];
+         for (int a = 0; a < 4; a++) {
+            BufferedImage snap = new BufferedImage(40, 30, BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D sg = snap.createGraphics();
+            WindowsKey.drawSnap(sg, KeyEvent.VK_LEFT + a, 0, 0, 40, 26, java.awt.Color.GRAY, java.awt.Color.WHITE);
+            for (int y = 0; y < 26; y++) {
+               for (int x = 0; x < 40; x++) {
+                  if (snap.getRGB(x, y) == java.awt.Color.WHITE.getRGB()) {
+                     filled[a][x < 20 ? 0 : 1]++;
+                  }
+               }
+            }
+         }
+         int l = 0, u = 1, rt = 2, d = 3;
+         check(filled[l][0] > 300 && filled[l][1] == 0 && filled[rt][0] == 0 && filled[rt][1] > 300
+            && filled[u][0] > 300 && filled[u][1] > 300 && filled[d][0] + filled[d][1] < 60 && filled[d][0] + filled[d][1] > 0,
+            "each snap draws where the window goes: " + java.util.Arrays.deepToString(filled));
          mouse(key, MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
          check(shelf.keyHeld(), "the key held: the shelf knows, to light its keys");
          shelf.paint(new BufferedImage(Test.WIDTH, ShortcutShelf.HEIGHT, BufferedImage.TYPE_INT_ARGB).getGraphics());
@@ -228,7 +247,7 @@ public class WindowsKeyCheck {
          paired[0] = key;
       });
       Thread.sleep(WindowsKey.ECHO_MS + 400);
-      SwingUtilities.invokeAndWait(() -> check(paired[0].echoed() == null, "the echo goes after a moment"));
+      SwingUtilities.invokeAndWait(() -> check(paired[0].echoed() == null && paired[0].echoArrow() == 0, "the echo goes after a moment"));
       log.clear();
       // Where the key was left: kept in a file of its own, damaged or missing lines falling back to the defaults.
       File file = File.createTempFile("windows-key", ".txt");

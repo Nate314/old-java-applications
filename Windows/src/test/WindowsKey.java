@@ -56,6 +56,8 @@ final class WindowsKey extends JButton {
    private int slide;
    /** A chord the shelf just made ("Win+E"), shown on the key for a moment as if it went down for it; null for none. */
    private String echo;
+   /** The arrow of an echoed snap (KeyEvent.VK_LEFT and so on), drawn as where the window went; 0 for other chords. */
+   private int echoArrow;
    private final Timer echoEnd = new Timer(ECHO_MS, e -> this.echo(null));
    /** Told when the key goes down or comes up, so the shelf can light the keys that go with it. */
    Runnable heldChanged = () -> { };
@@ -149,7 +151,13 @@ final class WindowsKey extends JButton {
 
    /** Shows a chord made elsewhere (the shelf) on the key for a moment: lit, pushed down, named under the logo. */
    void echo(String chord) {
+      this.echo(chord, 0);
+   }
+
+   /** As {@link #echo(String)}, for a snap: the key shows where that arrow sent the window. */
+   void echo(String chord, int arrow) {
       this.echo = chord;
+      this.echoArrow = chord == null ? 0 : arrow;
       if (chord != null) {
          this.echoEnd.restart();
       }
@@ -178,6 +186,40 @@ final class WindowsKey extends JButton {
 
    Dwell dwell() {
       return this.dwell;
+   }
+
+   /**
+    * A little screen (w by h) with the window where Win+that arrow puts it: the left or right half, the whole screen,
+    * or down to a sliver at the bottom; a dim outline marks the middle it left. Drawn on the shelf's arrows and on
+    * the key while a slide or an arrow's chord shows, so a snap reads as a picture, not only an arrow.
+    */
+   static void drawSnap(Graphics2D g, int arrow, int x, int y, int w, int h, Color edge, Color window) {
+      int ix = x + 2;
+      int iy = y + 2;
+      int iw = w - 4;
+      int ih = h - 4;
+      g.setStroke(new BasicStroke(1f));
+      g.setColor(edge);
+      g.drawRoundRect(x, y, w - 1, h - 1, 3, 3);
+      // The stand, so it reads as a screen.
+      g.fillRect(x + w / 2 - w / 6, y + h + 1, Math.max(2, w / 3), 1);
+      g.setColor(ACCENT_SIDE);
+      g.drawRect(ix + iw / 4, iy + ih / 4, iw / 2 - 1, ih / 2 - 1);
+      g.setColor(window);
+      int half = (iw + 1) / 2;
+      if (arrow == KeyEvent.VK_LEFT) {
+         g.fillRect(ix, iy, half, ih);
+      } else if (arrow == KeyEvent.VK_RIGHT) {
+         g.fillRect(ix + iw - half, iy, half, ih);
+      } else if (arrow == KeyEvent.VK_UP) {
+         g.fillRect(ix, iy, iw, ih);
+      } else if (arrow == KeyEvent.VK_DOWN) {
+         g.fillRect(ix + iw / 3, iy + ih - Math.max(2, ih / 5), Math.max(2, iw / 3), Math.max(2, ih / 5));
+      }
+   }
+
+   int echoArrow() {
+      return this.echoArrow;
    }
 
    int slide() {
@@ -227,6 +269,8 @@ final class WindowsKey extends JButton {
       int x = (w - size) / 2;
       int y = (h - 6) / 2 - size / 2 - 8 + sink;
       int half = (size - 3) / 2;
+      // Slid (or echoing a snap from the shelf), the logo gives way to the screen that snap makes.
+      int snap = this.down ? this.slide : this.echoArrow;
       if (this.dwellOn.getAsBoolean()) {
          // Hover to press: a ring round the logo, filling clockwise while the pointer rests on the key.
          int ring = size + 14;
@@ -241,11 +285,16 @@ final class WindowsKey extends JButton {
             g.drawArc(rx, ry, ring, ring, 90, -sweep);
          }
       }
-      g.setColor(lit ? Color.WHITE : ACCENT_TEXT);
-      g.fillRect(x, y, half, half);
-      g.fillRect(x + half + 3, y, half, half);
-      g.fillRect(x, y + half + 3, half, half);
-      g.fillRect(x + half + 3, y + half + 3, half, half);
+      if (snap != 0) {
+         int sw = size + 12;
+         drawSnap(g, snap, x + size / 2 - sw / 2, y + 2, sw, size - 4, Color.WHITE, Color.WHITE);
+      } else {
+         g.setColor(lit ? Color.WHITE : ACCENT_TEXT);
+         g.fillRect(x, y, half, half);
+         g.fillRect(x + half + 3, y, half, half);
+         g.fillRect(x, y + half + 3, half, half);
+         g.fillRect(x + half + 3, y + half + 3, half, half);
+      }
       if (this.down) {
          // Held, the key shows the four ways it can slide, the one picked lit, so the slide is found by holding it.
          int cx = x + size / 2;
