@@ -31,31 +31,40 @@
 
   <build>
     <plugins>
-      <!-- Runs test/web/teavm/DragsCheck against the compiled ShimPlugin on every build (no test framework). -->
+      <!-- Runs every test/**/*Check (DragsCheck against the compiled ShimPlugin, Geometry/Layer/TextChange against the shim classes) on every build (no test framework). -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-antrun-plugin</artifactId>
         <version>3.1.0</version>
         <executions>
           <execution>
-            <id>drags-check</id>
+            <id>shim-checks</id>
             <phase>test</phase>
             <goals><goal>run</goal></goals>
             <configuration>
               <target>
                 <property name="checks" location="${project.build.directory}/checks"/>
                 <mkdir dir="${checks}"/>
-                <javac srcdir="${project.basedir}/test" includes="web/teavm/DragsCheck.java" destdir="${checks}"
+                <javac srcdir="${project.basedir}/test" includes="**/*Check.java" destdir="${checks}"
                        classpathref="maven.compile.classpath" release="${maven.compiler.release}"
                        encoding="UTF-8" includeantruntime="false"/>
-                <java classname="web.teavm.DragsCheck" fork="true" failonerror="true">
-                  <jvmarg value="-ea"/>
-                  <jvmarg value="-Djava.awt.headless=true"/>
-                  <classpath>
-                    <pathelement location="${checks}"/>
-                    <path refid="maven.compile.classpath"/>
-                  </classpath>
-                </java>
+                <macrodef name="check">
+                  <attribute name="class"/>
+                  <sequential>
+                    <java classname="@{class}" fork="true" failonerror="true">
+                      <jvmarg value="-ea"/>
+                      <jvmarg value="-Djava.awt.headless=true"/>
+                      <classpath>
+                        <pathelement location="${checks}"/>
+                        <path refid="maven.compile.classpath"/>
+                      </classpath>
+                    </java>
+                  </sequential>
+                </macrodef>
+                <check class="web.teavm.DragsCheck"/>
+                <check class="web.shim.java.awt.GeometryCheck"/>
+                <check class="web.shim.javax.swing.LayerCheck"/>
+                <check class="web.shim.javax.swing.TextChangeCheck"/>
               </target>
             </configuration>
           </execution>

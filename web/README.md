@@ -344,6 +344,8 @@ An app embedded in another page (`?embed`, `?embed&full`, the home page's player
 
 `shim/test/web/teavm/DragsCheck.java` checks that rule against the real `ShimPlugin` on every `mvn package` (the shim module's `test` phase, so a broken rule fails the build): it parses small listener classes with TeaVM's own class parser and asserts that a `mouseDragged` with a body (in a `MouseMotionListener` or a `MouseAdapter`) gets the marker, while an empty one, one that only returns, a `mouseMoved`-only adapter, a two-argument `mouseDragged`, an abstract one and the shim's own `web.*` classes do not.
 
+The same step compiles and runs every other `*Check` under `shim/test/` with assertions on: `GeometryCheck`, `LayerCheck` and `TextChangeCheck` (their desktop commands are under "Windows and widgets" above), so a shim change that breaks their arithmetic also fails `mvn package`. A new shim check named `...Check.java` there is compiled automatically and needs one `<check class="..."/>` line in `web/shim/pom.xml`.
+
 ## Keyboard and screen readers
 
 The apps can be played without a mouse, and a screen reader can tell what is on them:
