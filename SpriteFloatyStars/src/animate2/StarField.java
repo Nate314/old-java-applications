@@ -10,7 +10,9 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import javax.swing.Timer;
 
 public final class StarField extends Component {
@@ -641,12 +643,34 @@ public final class StarField extends Component {
             : new String[]{"Hold to pull the stars in, let go to fling them. Click to burst.",
                            "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help",
                            "S: star music, a note for each star meeting an edge"};
-         int top = this.getHeight() - 8 - lines.length * lineHeight;
+         // A phone-sized window is narrower than a line: wrap each at the window's width, inside its tag.
+         List<String> wrapped = new ArrayList<>();
          for (String line : lines) {
+            wrapped.addAll(wrap(g2.getFontMetrics(), line, this.getWidth() - 44));
+         }
+         int top = this.getHeight() - 8 - wrapped.size() * lineHeight;
+         for (String line : wrapped) {
             this.tag(g2, line, 14, top, alpha);
             top += lineHeight;
          }
       }
+   }
+
+   /** {@code text} split at spaces into lines no wider than {@code width} (a word wider than that keeps its own line). */
+   static List<String> wrap(FontMetrics metrics, String text, int width) {
+      List<String> lines = new ArrayList<>();
+      String line = "";
+      for (String word : text.split(" ")) {
+         String longer = line.isEmpty() ? word : line + " " + word;
+         if (!line.isEmpty() && metrics.stringWidth(longer) > width) {
+            lines.add(line);
+            line = word;
+         } else {
+            line = longer;
+         }
+      }
+      lines.add(line);
+      return lines;
    }
 
    /** Text grows with the window, so it stays readable where the browser shows a big window scaled down. */
