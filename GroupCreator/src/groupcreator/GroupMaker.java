@@ -58,9 +58,6 @@ public final class GroupMaker {
     */
    static String plan(int count, int min, int max) {
       check(count, min, max);
-      // Every number of groups from the fewest to the most works: k groups hold k * min to k * max names.
-      int fewest = (count + max - 1) / max;
-      int most = count / min;
       // A group can have s names when the other count - s names still split.
       int small = max;
       int big = min;
@@ -70,9 +67,31 @@ public final class GroupMaker {
             big = Math.max(big, s);
          }
       }
-      String groups = fewest == most ? fewest + (fewest == 1 ? " group" : " groups") : fewest + " to " + most + " groups";
       String sizes = small == big ? String.valueOf(small) : big == small + 1 ? small + " or " + big : small + " to " + big;
-      return groups + " of " + sizes;
+      return groupCount(count, min, max) + " of " + sizes;
+   }
+
+   /** How many groups count names make in groups of min to max (they must fit): "4 groups", "4 to 6 groups". */
+   static String groupCount(int count, int min, int max) {
+      // Every number of groups from the fewest to the most works: k groups hold k * min to k * max names.
+      int fewest = (count + max - 1) / max;
+      int most = count / min;
+      return fewest == most ? fewest + (fewest == 1 ? " group" : " groups") : fewest + " to " + most + " groups";
+   }
+
+   /**
+    * The one-tap sizes offered before round 1, as {min, max}: pairs, threes and so on up to sixes, each making at
+    * least two groups. A size that does not divide the class lets some groups have one more ({3, 4} for 13 names).
+    */
+   static List<int[]> sizeChoices(int count) {
+      List<int[]> choices = new ArrayList<>();
+      for (int size = 2; size <= 6 && 2 * size <= count; size++) {
+         int max = count % size == 0 ? size : size + 1;
+         if (canSplit(count, size, max)) {
+            choices.add(new int[] {size, max});
+         }
+      }
+      return choices;
    }
 
    /** The trimmed, non-empty names of a comma-separated list, in order. */

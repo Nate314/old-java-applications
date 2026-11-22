@@ -69,6 +69,18 @@ public class GroupMakerCheck {
          }
       }
 
+      // The size chips: pairs to sixes, each at least two groups, each one Make groups can deal.
+      check(sizes(12).equals("2-2 3-3 4-4 5-6 6-6"), sizes(12));
+      check(sizes(13).equals("2-3 3-4 4-5 6-7"), sizes(13));   // 13 in fives or sixes cannot be split
+      check(sizes(3).isEmpty() && sizes(4).equals("2-2"), sizes(3) + "|" + sizes(4));
+      check(GroupMaker.groupCount(12, 2, 2).equals("6 groups") && GroupMaker.groupCount(13, 2, 3).equals("5 to 6 groups"),
+         GroupMaker.groupCount(13, 2, 3));
+      for (int count = 0; count <= 40; count++) {
+         for (int[] choice : GroupMaker.sizeChoices(count)) {
+            check(GroupMaker.canSplit(count, choice[0], choice[1]) && count / choice[0] >= 2, "bad size chip for " + count);
+         }
+      }
+
       // Every order of three names should come up about equally often.
       Map<String, Integer> orders = new HashMap<>();
       for (int i = 0; i < 60000; i++) {
@@ -84,6 +96,14 @@ public class GroupMakerCheck {
       check(GroupMaker.describe(Arrays.asList(Arrays.asList("a", "b", "c"), Arrays.asList("d")), true).equals(
          Arrays.asList("Group 1 --- a (Leader), b (Scribe), c (Timer)", "Group 2 --- d")), "describe with roles");
       System.out.println("GroupMakerCheck passed");
+   }
+
+   private static String sizes(int count) {
+      StringBuilder text = new StringBuilder();
+      for (int[] choice : GroupMaker.sizeChoices(count)) {
+         text.append(text.length() == 0 ? "" : " ").append(choice[0]).append('-').append(choice[1]);
+      }
+      return text.toString();
    }
 
    private static void expectRefused(String list, int min, int max) {

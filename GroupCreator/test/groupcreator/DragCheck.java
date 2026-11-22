@@ -8,12 +8,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** Self-check for dragging a name onto another: the swap, the trade of roles in one group, a drop on no name, and clicks. */
+/**
+ * Self-check for dragging a name onto another: the swap, the trade of roles in one group, a drop on no name, and clicks.
+ * Also the size chips before round 1: a click or a digit puts that size in min and max, without dealing.
+ */
 public class DragCheck {
    private static final List<String> NAMES = GroupMaker.parseNames("Alice,Bob,Carol,Dave,Erin,Frank");
    private static PartnerHistory history;
    private static GroupBoard board;
    private static int edits;
+   private static int dealt;
+   private static String sizesSet;
 
    public static void main(String[] args) {
       reset();
@@ -79,6 +84,19 @@ public class DragCheck {
       drag(0, 0, 1, 0);
       release(1, 0);
       check(edits == 0, "no drag in an earlier round");
+
+      // Before round 1, six names offer Pairs and Threes; a click on Threes, then the 2 key, set min and max only.
+      history = new PartnerHistory();
+      board = new GroupBoard(history, new PickBag(), new ClassRules(), new Stub());
+      board.setSize(760, 440);
+      board.showRound(NAMES, false);
+      paint();
+      Rectangle threes = board.sizeChipBounds(1);
+      check(threes != null && board.sizeChipBounds(2) == null, "six names: two size chips");
+      mouse(MouseEvent.MOUSE_PRESSED, threes.x + 5, threes.y + 5);
+      check("3-3".equals(sizesSet) && dealt == 0, "Threes sets 3-3 without dealing: " + sizesSet);
+      typed('2');
+      check("2-2".equals(sizesSet) && dealt == 0, "2 sets 2-2: " + sizesSet);
       System.out.println("DragCheck: all checks passed");
    }
 
@@ -152,6 +170,12 @@ public class DragCheck {
       }
    }
 
+   private static void typed(char c) {
+      for (java.awt.event.KeyListener listener : board.getKeyListeners()) {
+         listener.keyPressed(new KeyEvent(board, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_UNDEFINED, c));
+      }
+   }
+
    private static void check(boolean condition, String message) {
       if (!condition) {
          throw new AssertionError(message);
@@ -170,6 +194,7 @@ public class DragCheck {
       }
 
       public void newRound() {
+         dealt++;
       }
 
       public void reshuffle() {
@@ -199,6 +224,11 @@ public class DragCheck {
 
       public int[] sizes() {
          return new int[] {2, 2};
+      }
+
+      @Override
+      public void setSizes(int min, int max) {
+         sizesSet = min + "-" + max;
       }
    }
 }

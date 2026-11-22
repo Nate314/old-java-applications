@@ -231,6 +231,13 @@ public class Main extends JFrame implements GroupBoard.Actions {
    }
 
    @Override
+   public void setSizes(int min, int max) {
+      // The fields' document listener repaints the board; Make groups saves them with the round.
+      minTextField.setText(String.valueOf(min));
+      maxTextField.setText(String.valueOf(max));
+   }
+
+   @Override
    public List<String> classNames() {
       return GroupMaker.parseNames(textField.getText());
    }
