@@ -3,7 +3,7 @@
 # for every app in the build's apps.json, its page, its ?embed and ?embed&full forms, its page again on a 400x800 phone
 # screen with touch emulation (where the band must offer its Keyboard button and the touch controller must show on the
 # apps that have one, without the buttons the app draws itself) and its Then page where it has one. On an app's own
-# page (wide and phone) it first checks the early title card from the HTML has the live card's rows in the same places
+# page (wide and phone) and its Then page it first checks the early title card from the HTML has the live card's rows in the same places
 # (Test-EarlyTitle). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
@@ -128,7 +128,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
         else { Start-Sleep -Milliseconds $Settle }
     } elseif ($pressFirst -and -not (& $wait $pressFirst 20000)) { $why = "no $Click$Sheet to press" }
     elseif (-not (& $wait (& $in "!!(document.querySelector('.shim-title-play:not([disabled])') || document.querySelector('#desktop > *'))") 30000)) { $why = 'Play never became ready' }
-    elseif (($Exit -or $Phone) -and ($why = Test-EarlyTitle)) { }   # the app's own page, wide and on a phone
+    elseif (($Exit -or $Phone -or $path -like '*/then.html') -and ($why = Test-EarlyTitle)) { }   # the app's own page, wide and on a phone, and its Then page
     else {
         Invoke-Js (& $in "(function (b) { if (b) b.click(); })(document.querySelector('.shim-title-play'))") | Out-Null
         if (-not (& $wait (& $in $Up) 20000)) { $why = 'no window after Play' }
@@ -179,7 +179,7 @@ foreach ($app in $Apps) {
     if (Test-Path (Join-Path $Site "$app/then.html")) { $pages += @{ name = "$app Then"; path = "$app/then.html"; App = $true } }
 }
 
-# The early title card (the page's HTML, AppPage.tsx EarlyTitle) must keep the rows of the live one (title-screen.tsx)
+# The early title card (the page's HTML, AppPage.tsx EarlyTitle; on a Then page, its quirks list) must keep the rows of the live one (title-screen.tsx)
 # where the live one shows them, or the card jumps when they swap. With the live card ready, a fresh copy of the
 # early card from the page's HTML goes back in front of it (as the page's own script puts it), and each of its rows'
 # boxes is compared with the live card's. 2 px of slack: the live card lands 1 px lower in Classic/Arcade. Returns why
@@ -190,6 +190,8 @@ $EarlyRows = @'
   if (!live) return 'no ready live card';
   // Rows only the runtime knows (a saved record, a shared link's invite) grow the live card; nothing to compare then.
   if ([].some.call(live.querySelectorAll('.shim-title-record, .shim-title-shared'), function (r) { return r.getClientRects().length; })) return '';
+  // A Then page's live card lists its README's quirks a moment after it is ready (title-screen.tsx waits for them too).
+  for (var i = 0; i < 30 && live.classList.contains('then') && !live.querySelector('.shim-title-art li'); i++) await new Promise(function (r) { setTimeout(r, 100); });
   var t = new DOMParser().parseFromString(await (await fetch(location.href)).text(), 'text/html').getElementById('shim-title-early-t');
   if (!t) return 'no early card in the page HTML';
   var early = document.importNode(t.content, true).querySelector('#shim-title-early');
@@ -200,7 +202,7 @@ $EarlyRows = @'
   document.body.prepend(early);
   try {
     await Promise.all([].map.call(early.querySelectorAll('img'), function (i) { return i.decode().catch(function () {}); }));
-    var rows = ['.shim-title-card', '.shim-title-art', '.shim-title-cat', 'h1', '.shim-title-play', '.shim-title-press', '.shim-title-hint',
+    var rows = ['.shim-title-card', '.shim-title-art', '.shim-title-art ul', '.shim-title-cat', 'h1', '.shim-title-play', '.shim-title-press', '.shim-title-hint',
       '.shim-title-stamp', '.shim-title-saver', '.shim-title-watch', '.shim-title-more'], bad = [];
     rows.forEach(function (s) {
       var e = early.querySelector(s), l = live.querySelector(s);
