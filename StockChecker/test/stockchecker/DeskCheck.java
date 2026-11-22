@@ -289,6 +289,16 @@ public class DeskCheck {
          }
       }
 
+      // The day's charts reach a little past now (the first hour at least), never back, and the whole day by the close.
+      for (int at = 0; at <= Market.CLOSE; at++) {
+         int end = DeskPanel.chartEnd(at);
+         check(end >= Math.min(Market.CLOSE, at + 10) && end >= 60 && end <= Market.CLOSE, "the chart reaches past now at minute " + at);
+         check(at == 0 || end >= DeskPanel.chartEnd(at - 1), "the chart never shrinks at minute " + at);
+      }
+      check(DeskPanel.chartEnd(Market.CLOSE) == Market.CLOSE, "the whole day shows at the close");
+      check(DeskPanel.timeLabel(30).equals("10 AM") && DeskPanel.timeLabel(60).equals("10:30") && DeskPanel.timeLabel(390).equals("4 PM"),
+         "time labels: " + DeskPanel.timeLabel(30) + ", " + DeskPanel.timeLabel(60) + ", " + DeskPanel.timeLabel(390));
+
       System.out.println("DeskCheck passed");
    }
 
