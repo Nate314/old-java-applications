@@ -185,6 +185,13 @@ function Tab({ id, label }: { id: string; label: string }) {
 
 const off = (id: string) => (H.tab !== null && H.tab !== id ? ' off' : '');
 
+// Phone tiles show a picture at most ~170 px wide, so phones up to 2.5x take the 240 px copy (~40% of the bytes);
+// the card's blurred tone uses the same source, so each card still downloads one picture.
+const POCKET = '(max-width: 640px) and (max-resolution: 2.5dppx)';
+const CardPic = ({ shot, className, alt }: { shot: string; className?: string; alt: string }) => (
+  <picture><source media={POCKET} srcSet={webp(shot, true)} /><img className={className} src={webp(shot)} alt={alt} loading="lazy" /></picture>
+);
+
 /**
  * The gallery: one card per app, with its passport badge (New / Played), its Offline chip once the cache has been
  * checked, and a preview clip while it is wanted (clips.ts).
@@ -203,9 +210,9 @@ function Gallery() {
               data-origin={a.origin} data-cat={a.cat} data-min-width={a.minWidth} data-min-height={a.minHeight}
               className={cls || undefined} hidden={!onView(a)}
               onMouseEnter={() => cardEnter(a.id)} onMouseLeave={() => cardLeave(a.id)} onFocus={e => cardFocus(e, a.id)} onBlur={e => cardBlur(e, a.id)}>
-            <img className="tone" src={webp(a.shot)} alt="" loading="lazy" />
+            <CardPic shot={a.shot} className="tone" alt="" />
             <a className="thumb" href={page(a.id)} onClick={e => P.cardClick(e, a)}>
-              <img src={webp(a.shot)} alt={a.alt} loading="lazy" />
+              <CardPic shot={a.shot} alt={a.alt} />
               <span className="go" aria-hidden="true" />
               <span className="badge">{played(a) ? 'Played ✓' : 'New'}</span>
               <span className="saved" hidden={!(t.checked && (ok || t.offline))}>{t.checked ? (ok ? 'Offline ✓' : 'Needs a connection') : null}</span>

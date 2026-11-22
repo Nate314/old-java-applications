@@ -8,7 +8,7 @@ ul.apps a.thumb { background: transparent; }
 /* The words sit on the card's own color again, with only a tint of the app's coming through. */
 ul.apps .body { position: relative; background: linear-gradient(color-mix(in srgb, var(--card-bg) 76%, transparent),
                                                                 color-mix(in srgb, var(--card-bg) 92%, transparent) 70%); }
-ul.apps a.thumb > img { transition: transform 0.2s ease; }
+ul.apps a.thumb img { transition: transform 0.2s ease; }
 /* Play over the picture, for a mouse: the picture was always a Play button, now it says so. */
 ul.apps a.thumb > .go { position: absolute; z-index: 1; top: 50%; left: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
                         flex: none; border-radius: 50%; background: var(--accent); opacity: 0; transform: scale(0.8);
@@ -17,7 +17,7 @@ ul.apps a.thumb > .go::before { content: ""; position: absolute; top: 50%; left:
                                 border-style: solid; border-width: 11px 0 11px 18px;
                                 border-color: transparent transparent transparent var(--accent-ink, #fff); }
 @media (hover: hover) {
-  ul.apps li:not(.text):hover a.thumb > img, ul.apps a.thumb:focus-visible > img { transform: scale(1.04); }
+  ul.apps li:not(.text):hover a.thumb img, ul.apps a.thumb:focus-visible img { transform: scale(1.04); }
   ul.apps li:not(.text):hover a.thumb > .go, ul.apps a.thumb:focus-visible > .go { opacity: 0.95; transform: none; }
   /* While the preview clip plays, the disc shrinks and dims so the clip is seen. */
   ul.apps li.previewing a.thumb > .go, ul.apps li.previewing:not(.text):hover a.thumb > .go { opacity: 0.8; transform: scale(0.6); }
@@ -28,7 +28,7 @@ ul.apps a.thumb > .go::before { content: ""; position: absolute; top: 50%; left:
 :root[data-skin="arcade"] ul.apps img.tone { filter: blur(26px) saturate(2) brightness(0.9); }
 :root[data-skin="arcade"] ul.apps a.thumb > .go { box-shadow: 0 0 18px rgba(255, 43, 214, 0.7); }
 @media (prefers-reduced-motion: reduce) {
-  ul.apps a.thumb > img, ul.apps a.thumb > .go { transition: none; }
+  ul.apps a.thumb img, ul.apps a.thumb > .go { transition: none; }
 }
 /* High contrast: the triangle is drawn with borders, which forced colors would paint in full as a box. */
 @media (forced-colors: active) {
