@@ -193,6 +193,7 @@ public class GameCheck {
 		check(again.best(Level.TEN) == 3 && again.best(Level.HUNDRED) == 5 && again.totalStars() == 6, "saved and read back");
 
 		checkDuels(file);
+		checkHidingGrid(file);
 		System.out.println("GameCheck: all checks passed");
 	}
 
@@ -311,6 +312,28 @@ public class GameCheck {
 			}
 		}
 		check(Warmth.par(10) == 5 && Warmth.par(Warmth.MAX) == Warmth.PAR, "hot and cold par");
+	}
+
+	/** Duel's hiding grid: every number is a cell a click finds, inside the duel's area on wide, tall and short boards. */
+	private static void checkHidingGrid(File file) {
+		Records records = Records.load(file);
+		// The duel's area on the wide board, a tall phone's and the shortest phone's.
+		java.awt.Rectangle[] areas = { new java.awt.Rectangle(20, 122, 600, 216), new java.awt.Rectangle(20, 122, 336, 306),
+				new java.awt.Rectangle(20, 122, 300, 200) };
+		for (java.awt.Rectangle area : areas) {
+			DuelView view = new DuelView(() -> { });
+			Duel duel = new Duel(new Random(3), 40);
+			java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(area.x * 2 + area.width, 520, java.awt.image.BufferedImage.TYPE_INT_RGB);
+			view.paint(image.createGraphics(), duel, records, area);
+			java.awt.Rectangle grid = DuelView.hidingGrid(area);
+			check(grid.y + grid.height <= area.y + area.height - 14 && grid.height / (grid.width >= 500 ? 5 : 10) >= 16, "hiding grid fits " + area.width + "x" + area.height);
+			for (int number = 1; number <= Duel.MAX; number++) {
+				java.awt.Rectangle cell = DuelView.cellOf(grid, area.width >= 500 ? 20 : 10, number);
+				check(cell.width >= 28 && view.numberAt(duel, (int) cell.getCenterX(), (int) cell.getCenterY()) == number
+						&& view.numberAt(duel, cell.x, cell.y) == number && view.numberAt(duel, cell.x + cell.width - 1, cell.y + cell.height - 1) == number,
+						"a click on " + number + " in the hiding grid hides it");
+			}
+		}
 	}
 
 	private static void check(boolean condition, String what) {
