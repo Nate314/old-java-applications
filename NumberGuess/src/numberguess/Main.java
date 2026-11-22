@@ -133,6 +133,9 @@ public class Main extends JFrame implements ActionListener {
 		how.setText(board.isExplaining() ? "Hide how" : "How it works");
 		again.setVisible(read);
 		send.setVisible(typing && board.canChallenge());
+		// In Duel the first number hides yours, so the row says so.
+		prompt.setText(board.isHiding() ? "Your number" : "Your guess");
+		button.setText(board.isHiding() ? "HIDE" : "SUBMIT");
 		// Challenge a friend takes the prompt's place, so the row still fits a phone (the field keeps the prompt's name).
 		prompt.setVisible(typing && !send.isVisible());
 		panel.revalidate();
