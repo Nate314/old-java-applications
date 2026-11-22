@@ -62,6 +62,20 @@ final class WindowsKey extends JButton {
    /** Told when the key goes down or comes up, so the shelf can light the keys that go with it. */
    Runnable heldChanged = () -> { };
    static final int ECHO_MS = 700;
+   /**
+    * The slide lesson: until the user has snapped a window by sliding the key, a ghost fingertip shows it once each
+    * start, pressing the key and sliding right, then left, with the key drawn held and slid as it would be. It
+    * presses nothing, and the pointer coming onto the key ends it.
+    */
+   static final int LESSON_WAIT = 1200;
+   static final int LESSON_LOOP = 3000;
+   static final int[] LESSON_ARROWS = {KeyEvent.VK_RIGHT, KeyEvent.VK_LEFT};
+   static final String LESSON_CAPTION = "Slide to snap";
+   /** When the lesson's first slide begins (System.currentTimeMillis), or -1 for no lesson. */
+   private long lessonStart = -1;
+   private final Timer lessonTick = new Timer(40, e -> this.lessonFrame());
+   /** Told when a real slide makes Win+an arrow, so the lesson need not be shown again. */
+   Runnable slid = () -> { };
 
    WindowsKey(Keys keys) {
       this(keys, () -> false);
@@ -85,6 +99,7 @@ final class WindowsKey extends JButton {
                WindowsKey.this.pressY = e.getY();
                WindowsKey.this.slide = 0;
                WindowsKey.this.dwell.clicked();
+               WindowsKey.this.endLesson();
                WindowsKey.this.setDown(true);
             }
          }
@@ -97,6 +112,7 @@ final class WindowsKey extends JButton {
                if (arrow != 0 && WindowsKey.this.down) {
                   WindowsKey.this.keys.press(arrow);
                   WindowsKey.this.keys.release(arrow);
+                  WindowsKey.this.slid.run();
                }
                WindowsKey.this.slide = 0;
                WindowsKey.this.setDown(false);
@@ -111,6 +127,7 @@ final class WindowsKey extends JButton {
          @Override
          public void mouseEntered(MouseEvent e) {
             WindowsKey.this.hover = true;
+            WindowsKey.this.endLesson();
             WindowsKey.this.dwell.at(0);
             WindowsKey.this.repaint();
          }
@@ -159,6 +176,7 @@ final class WindowsKey extends JButton {
       this.echo = chord;
       this.echoArrow = chord == null ? 0 : arrow;
       if (chord != null) {
+         this.endLesson();
          this.echoEnd.restart();
       }
       this.repaint();
@@ -267,7 +285,63 @@ final class WindowsKey extends JButton {
       return this.down;
    }
 
+   /** Starts the slide lesson in that many ms (a moment, so Start is seen first), unless motion is to be kept down. */
+   void teach(long in) {
+      if (Boolean.TRUE.equals(java.awt.Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         return;
+      }
+      this.lessonStart = System.currentTimeMillis() + in;
+      this.lessonTick.start();
+   }
+
+   void endLesson() {
+      if (this.lessonStart >= 0) {
+         this.lessonStart = -1;
+         this.lessonTick.stop();
+         this.repaint();
+      }
+   }
+
+   boolean teaching() {
+      return this.lessonStart >= 0;
+   }
+
+   private void lessonFrame() {
+      long t = System.currentTimeMillis() - this.lessonStart;
+      if (t >= LESSON_ARROWS.length * LESSON_LOOP) {
+         this.endLesson();
+      } else if (t >= 0) {
+         this.repaint();
+      }
+   }
+
+   /**
+    * The lesson t ms into its slides: {held (0 or 1), the arrow picked (or 0), the fingertip's slide in px from
+    * where it pressed, its opacity 0 to 255}; null before it starts and after it ends. Each loop fades the fingertip
+    * in, presses, eases it SLIDE + 12 px one way (picking the arrow past SLIDE, as a real slide does), holds, lets
+    * go and fades out, then rests.
+    */
+   static int[] lesson(long t) {
+      if (t < 0 || t >= LESSON_ARROWS.length * LESSON_LOOP) {
+         return null;
+      }
+      int u = (int) (t % LESSON_LOOP);
+      int dir = LESSON_ARROWS[(int) (t / LESSON_LOOP)] == KeyEvent.VK_LEFT ? -1 : 1;
+      double along = Math.max(0, Math.min(1, (u - 700) / 800.0));
+      int dx = (int) Math.round(dir * (SLIDE + 12) * (along * along * (3 - 2 * along)));
+      boolean held = u >= 400 && u < 2100;
+      int arrow = held && Math.abs(dx) >= SLIDE ? LESSON_ARROWS[(int) (t / LESSON_LOOP)] : 0;
+      int alpha = u < 400 ? u * 255 / 400 : u < 2100 ? 255 : u < 2400 ? (2400 - u) * 255 / 300 : 0;
+      return new int[] {held ? 1 : 0, arrow, dx, alpha};
+   }
+
+   /** The lesson as it is now, or null. */
+   private int[] lessonNow() {
+      return this.lessonStart < 0 ? null : lesson(System.currentTimeMillis() - this.lessonStart);
+   }
+
    void tap() {
+      this.endLesson();
       this.setDown(true);
       this.setDown(false);
    }
@@ -285,8 +359,12 @@ final class WindowsKey extends JButton {
       g.translate(MARGIN, MARGIN);
       int w = (int) Math.round(this.getWidth() / s) - 2 * MARGIN;
       int h = (int) Math.round(this.getHeight() / s) - 2 * MARGIN;
+      // The lesson's fingertip holds and slides the key as a real one would, but only in the drawing.
+      int[] ghost = this.down ? null : this.lessonNow();
+      boolean held = this.down || ghost != null && ghost[0] == 1;
+      int slide = this.down ? this.slide : ghost != null ? ghost[1] : 0;
       // A chord from the shelf draws the key down too, so it reads as this key plus that one.
-      boolean lit = this.down || this.echo != null;
+      boolean lit = held || this.echo != null;
       int sink = lit ? 4 : 0;
       drawCap(g, 0, 0, w, h, 16, 5, lit ? LIT : this.hover ? FACE_HOVER : FACE, lit ? ACCENT_SIDE : SIDE, sink, lit ? 1 : this.hover ? 0.6 : 0.35);
       if (this.isFocusOwner()) {
@@ -299,7 +377,7 @@ final class WindowsKey extends JButton {
       int y = (h - 6) / 2 - size / 2 - 8 + sink;
       int half = (size - 3) / 2;
       // Slid (or echoing a snap from the shelf), the logo gives way to the screen that snap makes.
-      int snap = this.down ? this.slide : this.echoArrow;
+      int snap = held ? slide : this.echoArrow;
       if (this.dwellOn.getAsBoolean()) {
          // Hover to press: a ring round the logo, filling clockwise while the pointer rests on the key.
          int ring = size + 14;
@@ -327,7 +405,7 @@ final class WindowsKey extends JButton {
             }
          }
       }
-      if (this.down) {
+      if (held) {
          // Held, the key shows the four ways it can slide, the one picked lit, so the slide is found by holding it.
          int cx = x + size / 2;
          int cy = y + size / 2;
@@ -337,16 +415,34 @@ final class WindowsKey extends JButton {
             int dy = a == 1 ? -1 : a == 3 ? 1 : 0;
             int tx = cx + dx * reach;
             int ty = cy + dy * (reach - 4);
-            g.setColor(this.slide == KeyEvent.VK_LEFT + a ? Color.WHITE : ACCENT_SIDE);
+            g.setColor(slide == KeyEvent.VK_LEFT + a ? Color.WHITE : ACCENT_SIDE);
             // A small triangle pointing that way.
             g.fillPolygon(new int[] {tx + 5 * dx, tx - 3 * dx + 4 * dy, tx - 3 * dx - 4 * dy},
                new int[] {ty + 5 * dy, ty - 3 * dy + 4 * dx, ty - 3 * dy - 4 * dx}, 3);
          }
       }
-      String caption = !this.down ? (this.echo != null ? this.echo : "Start")
-         : this.slide == 0 ? "+ a key" : SLIDE_NAMES[this.slide - KeyEvent.VK_LEFT];
+      String caption = !held ? (this.echo != null ? this.echo : ghost != null ? LESSON_CAPTION : "Start")
+         : slide == 0 ? "+ a key" : SLIDE_NAMES[slide - KeyEvent.VK_LEFT];
       g.setColor(lit ? Color.WHITE : TEXT);
       g.setFont(new Font("SansSerif", Font.BOLD, 12));
       g.drawString(caption, (w - g.getFontMetrics().stringWidth(caption)) / 2, y + size + 22);
+      if (ghost != null && ghost[3] > 0) {
+         // The fingertip: a soft disc with a ring, pressed flatter (and rippling) while it holds the key.
+         int fx = x + size / 2 + ghost[2];
+         int fy = y + size / 2 + 6;
+         int r = held ? 9 : 11;
+         // Its shadow, nearer while it presses, so it reads over the lit blue cap too.
+         g.setColor(alpha(Color.BLACK, ghost[3] / 3));
+         g.fillOval(fx - r + 1, fy - r + (held ? 1 : 3), 2 * r, 2 * r);
+         g.setColor(alpha(Color.WHITE, ghost[3] * 2 / 5));
+         g.fillOval(fx - r, fy - r, 2 * r, 2 * r);
+         g.setStroke(new BasicStroke(2f));
+         g.setColor(alpha(Color.WHITE, ghost[3] * 4 / 5));
+         g.drawOval(fx - r, fy - r, 2 * r, 2 * r);
+         if (held) {
+            g.setColor(alpha(LIT, ghost[3] / 3));
+            g.drawOval(fx - r - 5, fy - r - 5, 2 * r + 10, 2 * r + 10);
+         }
+      }
    }
 }

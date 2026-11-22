@@ -107,6 +107,15 @@ public class Test {
          place.save(file);
       }, key);
       shelf.setVisible(place.shelf);
+      if (!place.slid) {
+         key.teach(WindowsKey.LESSON_WAIT);
+      }
+      key.slid = () -> {
+         if (!place.slid) {
+            place.slid = true;
+            place.save(file);
+         }
+      };
       JButton more = stripButton(() -> shelf.isVisible() ? "▾" : "▴");
       more.setToolTipText("Shortcuts");
       more.getAccessibleContext().setAccessibleName(place.shelf ? HIDE_SHORTCUTS : SHOW_SHORTCUTS);
