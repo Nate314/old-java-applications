@@ -118,6 +118,11 @@ public final class GameFrame extends JFrame {
    private final Luck luck = new Luck();
    /** The chance the move being made hits a mine, read just before it (0 when certain, -1 when not known). */
    private double moveRisk = -1;
+   /** The mine the player just hit, and what the board showed instead, so a click on it can undo the loss; null otherwise. */
+   private int[] hit;
+   private Logic.Deduction lossHint;
+   /** Mines undone this game; like a hint, one sets no best time. */
+   private int undone;
 
    public GameFrame(SoundPlayer soundPlayer) {
       this(soundPlayer, null, null, null, false, false);
@@ -347,8 +352,10 @@ public final class GameFrame extends JFrame {
             this.setTitle("Minesweeper: the computer hit a mine.");
             this.status.setText("Boom! The computer had to guess. Next game...");
          } else {
-            this.setTitle("Minesweeper: you hit a mine. Click to play again.");
-            this.status.setText("Boom! Click any tile to play again.");
+            this.hit = new int[]{row, column};
+            this.lossHint = instead;
+            this.setTitle("Minesweeper: you hit a mine. Click the red mine to undo it, or another tile to play again.");
+            this.status.setText("Boom! Click the red mine to undo it (U).");
             if (instead != null) {
                this.showDeduction(instead, "No need to guess: the glowing tiles were safe.");
             } else if (this.moveRisk > 1e-9) {
@@ -388,10 +395,12 @@ public final class GameFrame extends JFrame {
          if (!this.computerPlayed) {
             int guesses = this.luck.guesses();
             String cleared = this.luck.clearedLine();
-            this.setHintLines(this.oddsCounted ? "Cleared with the odds showing." : this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
+            this.setHintLines(this.oddsCounted ? "Cleared with the odds showing." : this.undone > 0 ? "Cleared, with " + (this.undone == 1 ? "a mine" : this.undone + " mines") + " undone."
+               : this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
                : cleared != null ? cleared
                : this.fairBoard ? "Cleared by logic alone, no guesses." : "Cleared without a single guess.",
-               guesses > 0 ? this.luck.winLine() : this.luck.unread > 0 ? this.luck.unreadLine() : this.hints > 0 ? "A game won with hints sets no best time." : " ");
+               guesses > 0 ? this.luck.winLine() : this.luck.unread > 0 ? this.luck.unreadLine()
+               : this.undone > 0 ? "A game with a mine undone sets no best time." : this.hints > 0 ? "A game won with hints sets no best time." : " ");
          }
          if (this.computerPlayed) {
             // Not a best time: the computer played some or all of it.
@@ -400,9 +409,9 @@ public final class GameFrame extends JFrame {
             this.status.setText(who + " cleared it in " + BestTimes.format(time) + (this.watching ? ". Next game..." : ". Click to play again."));
             return;
          }
-         if (this.hints > 0) {
+         if (this.hints > 0 || this.undone > 0) {
             this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
-            this.status.setText("You win in " + BestTimes.format(time) + " with hints. Click to play again.");
+            this.status.setText("You win in " + BestTimes.format(time) + (this.hints > 0 ? " with hints" : " with a mine undone") + ". Click to play again.");
             return;
          }
          long before = this.bestTimes.best(this.level);
@@ -455,6 +464,40 @@ public final class GameFrame extends JFrame {
          int cell = this.luck.cells.get(i);
          this.tiles[cell / this.columns][cell % this.columns].setGamble(this.luck.risks.get(i));
       }
+   }
+
+   /**
+    * A click on the red mine (or U) after the player hit it: the move is undone and the game goes on, with a flag on
+    * that mine and the clock running again. False when there is nothing to undo.
+    */
+   boolean undoMine() {
+      if (!this.gameOver || this.hit == null) {
+         return false;
+      }
+      this.flagCount = 0;
+      for (int r = 0; r < this.rows; r++) {
+         for (int c = 0; c < this.columns; c++) {
+            this.tiles[r][c].undoLoss();
+            this.flagged[r][c] = this.tiles[r][c].isFlagged(); // the mine now flagged, the wrong flags gone
+            this.flagCount += this.flagged[r][c] ? 1 : 0;
+         }
+      }
+      this.luck.takeBack(this.moveRisk);
+      this.undone++;
+      this.moves++;
+      this.gameOver = false;
+      this.startMillis += System.currentTimeMillis() - this.finishMillis; // the time spent looking at the loss is not counted
+      this.clock.start();
+      this.updateStatus();
+      this.refreshOdds();
+      if (this.lossHint != null) {
+         this.showDeduction(this.lossHint, "Undone. These glowing tiles were safe to open.");
+      } else if (!this.showOdds) {
+         this.setHintLines("Undone: a flag now marks that mine.", "A game with a mine undone sets no best time.");
+      }
+      this.hit = null;
+      this.lossHint = null;
+      return true;
    }
 
    boolean isRevealed(int row, int column) {

@@ -504,6 +504,11 @@ public class MineFieldCheck {
       System.out.println("Luck: " + luck.winLine());
       luck.add(4, 1);
       check(luck.lossLines()[0].startsWith("The numbers showed"), "a certain mine is no guess: " + luck.lossLines()[0]);
+      luck.takeBack(1);
+      check(luck.guesses() == 2 && luck.cells.get(1) == 9, "an undone mine is forgotten");
+      luck.unread = 1;
+      luck.takeBack(-1);
+      check(luck.unread == 0 && luck.guesses() == 2, "an undone unread move is forgotten");
    }
 
    /** Zoom: the view never leaves the board, and the cursor's tile is brought into view with a tile to spare. */

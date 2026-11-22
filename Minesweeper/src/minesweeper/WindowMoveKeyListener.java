@@ -47,6 +47,11 @@ public final class WindowMoveKeyListener implements KeyListener {
          return;
       }
 
+      if (event.getKeyCode() == KeyEvent.VK_U) {
+         this.frame.undoMine();
+         return;
+      }
+
       if (event.getKeyCode() == KeyEvent.VK_G) {
          this.frame.toggleNoGuess();
          return;
