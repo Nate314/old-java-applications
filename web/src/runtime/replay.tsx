@@ -36,6 +36,7 @@ let clipBox: HTMLElement | null;
 // between ticks, a menu) costs one frame a second (REPLAY_IDLE), and the encoder has nothing new to encode.
 // Nothing is drawn or recorded while nobody can see the app: its tab is hidden, or the page has scrolled the
 // app out of view (the home page's player, once the visitor scrolls down to the gallery).
+// A drawing is done a few ms per frame (paintDesk, REPLAY_SLICE), so a big app never holds a tap for a whole drawing.
 const REPLAY_SEG = 20000;
 
 const REPLAY_FPS = 30;     // at most; fewer where drawing the windows costs more (REPLAY_SHARE)
@@ -47,6 +48,8 @@ const REPLAY_SHARE = 0.1;  // of the page's time, at most, spent drawing them
 const REPLAY_MAX = 1280;   // the clip's longest side, in pixels
 
 const REPLAY_PAD = 16;     // desk around the windows, in page pixels
+
+const REPLAY_SLICE = 6;    // ms of drawing per frame at most (one element may run over): a slow phone drew big apps in 0.1-0.5 s at once
 
 export function setReplay(v: Replay | null) { replay = v; }
 
@@ -102,8 +105,9 @@ function drawText(g: CanvasRenderingContext2D, node: Text, cs: CSSStyleDeclarati
   }
 }
 
-// Paints el and everything in it into g, at its place on the page (k: the desktop's CSS scale).
-function drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclaration, k: number) {
+// Paints el and everything in it into g, at its place on the page (k: the desktop's CSS scale), pausing
+// (yield) after each element so a big app can be drawn over several frames (paintDesk).
+function* drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclaration, k: number): Generator<void, void> {
   if (cs.display === 'none' || cs.visibility === 'hidden') return;
   var r = el.getBoundingClientRect();
   if (!r.width || !r.height) return;
@@ -163,16 +167,18 @@ function drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclarat
       }
     }
     kids.sort(function (a, b) { return a.z - b.z || a.i - b.i; });
-    kids.forEach(function (c) { if (c.z < 0) drawNode(g, c.el, c.cs, k); });
+    for (var c of kids) if (c.z < 0) yield* drawNode(g, c.el, c.cs, k);
     texts.forEach(function (t) { drawText(g, t, cs, k); });
-    kids.forEach(function (c) { if (c.z >= 0) drawNode(g, c.el, c.cs, k); });
+    for (c of kids) if (c.z >= 0) yield* drawNode(g, c.el, c.cs, k);
   }
   g.restore();
+  yield;
 }
 
 // Draws the app's windows, on the skin's desk, fitted into canvas. Returns the size they and the desk around
-// them have at actual size (unzoomed), or null while there is no window.
-export function drawDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element) {
+// them have at actual size (unzoomed), or null while there is no window. paintDesk does it a slice at a time
+// (each next() draws one element); drawDesk all at once.
+function* paintDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element): Generator<void, number[] | null> {
   var view = desktop.ownerDocument.defaultView!;
   var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, wins: Layer[] = [];
   for (var c = desktop.firstElementChild; c; c = c.nextElementSibling) {
@@ -195,8 +201,14 @@ export function drawDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement,
   g.fillRect(0, 0, W, H);
   g.setTransform(s, 0, 0, s, (W - (x1 - x0) * s) / 2 - x0 * s, (H - (y1 - y0) * s) / 2 - y0 * s);
   wins.sort(function (a, b) { return a.z - b.z || a.i - b.i; });
-  wins.forEach(function (w) { drawNode(g, w.el, w.cs, k); });
+  for (var w of wins) yield* drawNode(g, w.el, w.cs, k);
   return [(x1 - x0) / k, (y1 - y0) / k];
+}
+
+export function drawDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element) {
+  var it = paintDesk(g, canvas, desktop), step;
+  while (!(step = it.next()).done);
+  return step.value;
 }
 
 // The clip's size for windows of that size: up to twice as big (small windows make small videos), at most
@@ -214,6 +226,9 @@ export function startReplay(desktop: Element): Replay | null {
   if (!type) return null;
   var canvas = document.createElement('canvas');
   var g = canvas.getContext('2d')!;
+  // Drawn here a slice per frame, then copied to canvas whole, so the recording never shows a half-drawn frame.
+  var back = document.createElement('canvas'), bg = back.getContext('2d')!;
+  var job: Generator<void, number[] | null> | null = null, spent = 0, started = false;
   var track: MediaStreamTrack | null = null, stream: MediaStream | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
   var drew = paintWatch();
   function look() { changed = true; }
@@ -289,36 +304,54 @@ export function startReplay(desktop: Element): Replay | null {
     pressed = false;
     if (away()) return;
     if (drew()) changed = true;
-    // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
-    // less often: the app keeps at least nine tenths of the time.
-    if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
     // Not in the frame that answers a tap or key: on a slow phone one drawing held that answer for 0.1 to 0.5 s.
     if (answering) return;
-    last = t;
-    changed = false;
-    var t0 = real.now(), box = drawDesk(g, canvas, desktop);
-    cost = 0.8 * cost + 0.2 * (real.now() - t0);
+    if (!job) {
+      // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
+      // less often: the app keeps at least nine tenths of the time.
+      if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
+      last = t;
+      changed = false;
+      spent = 0;
+      if (back.width !== canvas.width || back.height !== canvas.height) { back.width = canvas.width; back.height = canvas.height; }
+      job = paintDesk(bg, back, desktop);
+    }
+    var t0 = real.now(), step;
+    while (!(step = job.next()).done && real.now() - t0 < REPLAY_SLICE);
+    spent += real.now() - t0;
+    if (!step.done) return;
+    job = null;
+    cost = 0.8 * cost + 0.2 * spent;
+    var box = step.value;
     if (!box) return;
     // A recording keeps the size it started with (Chrome's MP4 does not follow a resize), so windows much
     // bigger or smaller than it (a splash before the app's window, Minesweeper's Expert board) are fitted in at
     // first, and after a second at their new size the recording starts over at it.
     var want = clipSize(box);
-    var off = Math.max(Math.abs(want[0] / canvas.width - 1), Math.abs(want[1] / canvas.height - 1));
-    if (track && off < 0.1) { moved = 0; return; }
-    if (track && !moved) moved = t;
-    if (track && t - moved < 1000) return;
-    moved = 0;
-    recs.forEach(function (r) { r.rec.stop(); });
-    recs = [];
-    if (track) track.stop();
-    canvas.width = want[0];
-    canvas.height = want[1];
-    drawDesk(g, canvas, desktop);
-    var first = !track;
+    var fits = Math.max(Math.abs(want[0] / canvas.width - 1), Math.abs(want[1] / canvas.height - 1)) < 0.1;
+    if (track && fits) moved = 0;
+    else if (track && !moved) moved = t;
+    if (!track && fits || track && (fits || t - moved < 1000)) {
+      g.drawImage(back, 0, 0);
+      if (track) return;
+    } else {
+      // Drawn again at the new size before a new recording starts on it.
+      moved = 0;
+      recs.forEach(function (r) { r.rec.stop(); });
+      recs = [];
+      if (track) track.stop();
+      track = null;
+      canvas.width = want[0];
+      canvas.height = want[1];
+      changed = true;
+      last = 0;
+      return;
+    }
     track = canvas.captureStream(REPLAY_FPS).getVideoTracks()[0];
     stream = null;
     begin();
-    if (!first) return;
+    if (started) return;
+    started = true;
     real.setInterval(rotate, REPLAY_SEG / 2);   // real time: a slowed app's clip still covers 10 to 20 s
     document.documentElement.setAttribute('data-replay', '');
     if (embedded && window.parent !== window) window.parent.postMessage({ oldjavaReplay: true }, location.origin);
