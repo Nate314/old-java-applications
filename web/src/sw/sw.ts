@@ -71,14 +71,21 @@ function swapIn(saved: Cache, next: Cache): Promise<unknown> {
 function dropOtherCaches(): Promise<unknown> {
   return caches.keys().then(names => Promise.all(names.filter(n => n.indexOf('oldjava-') === 0 && n !== CACHE).map(n => caches.delete(n))));
 }
-/** Programs and built files that no kept page names any more leave the cache. */
+/** Where the cache notes the build before this one's files (a cache key only, never fetched). */
+const previousKey = () => new URL('oldjava-previous-build', sw.registration.scope).href;
+/**
+ * Programs and built files that no kept page names any more leave the cache, except the build before this one's:
+ * a tab still open from it (this worker takes it over) loads its Find, skin maker and other parts later, under that
+ * build's names, which the server no longer has. They go when the build after this one arrives.
+ */
 function prune(saved: Cache): Promise<unknown> {
-  return saved.keys().then(requests => Promise.all(requests.filter(r => isPage(r.url))
+  return Promise.all([saved.keys(), saved.match(previousKey()).then(r => r ? r.json() as Promise<string[]> : [])])
+    .then(([requests, previous]) => Promise.all(requests.filter(r => isPage(r.url))
     .map(r => saved.match(r).then(hit => hit ? hit.text().then(html => needs(r.url, html)) : []))).then(named => {
-    const keep = new Set(built().concat(assets() + 'files.json', ...named.flat()));   // files.json keeps its name (Save all reads it)
+    const keep = new Set(built().concat(assets() + 'files.json', previous, ...named.flat()));   // files.json keeps its name (Save all reads it)
     return Promise.all(requests.filter(r => (r.url.indexOf(assets()) === 0 || isProgram(new URL(r.url))) && !keep.has(r.url))
       .map(r => saved.delete(r)));
-  }));
+  })).then(() => saved.put(previousKey(), new Response(JSON.stringify(built()))));
 }
 sw.addEventListener('activate', e => {
   e.waitUntil(Promise.all([caches.open(CACHE), caches.open(NEXT)]).then(([saved, next]) =>
