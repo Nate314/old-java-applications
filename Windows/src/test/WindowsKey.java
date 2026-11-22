@@ -12,6 +12,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.function.BooleanSupplier;
 import javax.swing.JButton;
+import javax.swing.Timer;
 
 /**
  * A Windows key on the screen that works like the one on a keyboard: it goes down when the mouse button does and
@@ -53,6 +54,12 @@ final class WindowsKey extends JButton {
    private int pressY;
    /** The arrow the pointer has slid toward while the key is held (KeyEvent.VK_LEFT and so on), or 0. */
    private int slide;
+   /** A chord the shelf just made ("Win+E"), shown on the key for a moment as if it went down for it; null for none. */
+   private String echo;
+   private final Timer echoEnd = new Timer(ECHO_MS, e -> this.echo(null));
+   /** Told when the key goes down or comes up, so the shelf can light the keys that go with it. */
+   Runnable heldChanged = () -> { };
+   static final int ECHO_MS = 700;
 
    WindowsKey(Keys keys) {
       this(keys, () -> false);
@@ -62,6 +69,7 @@ final class WindowsKey extends JButton {
       this.keys = keys;
       this.dwellOn = dwellOn;
       this.dwell = new Dwell(this, dwellOn, i -> this.tap());
+      this.echoEnd.setRepeats(false);
       this.setFocusPainted(false);
       this.setBorderPainted(false);
       this.setContentAreaFilled(false);
@@ -135,7 +143,21 @@ final class WindowsKey extends JButton {
       } else {
          this.keys.release(WIN);
       }
+      this.heldChanged.run();
       this.repaint();
+   }
+
+   /** Shows a chord made elsewhere (the shelf) on the key for a moment: lit, pushed down, named under the logo. */
+   void echo(String chord) {
+      this.echo = chord;
+      if (chord != null) {
+         this.echoEnd.restart();
+      }
+      this.repaint();
+   }
+
+   String echoed() {
+      return this.echo;
    }
 
    /** Which arrow a slide to (x, y) from the press makes: the longer way it went, once past SLIDE; back near the key, none. */
@@ -184,12 +206,14 @@ final class WindowsKey extends JButton {
       g.translate(MARGIN, MARGIN);
       int w = (int) Math.round(this.getWidth() / s) - 2 * MARGIN;
       int h = (int) Math.round(this.getHeight() / s) - 2 * MARGIN;
-      int sink = this.down ? 4 : 0;
-      g.setColor(this.down ? ACCENT_SIDE : SIDE);
+      // A chord from the shelf draws the key down too, so it reads as this key plus that one.
+      boolean lit = this.down || this.echo != null;
+      int sink = lit ? 4 : 0;
+      g.setColor(lit ? ACCENT_SIDE : SIDE);
       g.fillRoundRect(0, 5, w, h - 5, 16, 16);
-      g.setColor(this.down ? LIT : this.hover ? FACE_HOVER : FACE);
+      g.setColor(lit ? LIT : this.hover ? FACE_HOVER : FACE);
       g.fillRoundRect(0, sink, w, h - 6, 16, 16);
-      if (!this.down) {
+      if (!lit) {
          g.setColor(ACCENT);
          g.setStroke(new BasicStroke(2f));
          g.drawRoundRect(1, 1, w - 3, h - 9, 14, 14);
@@ -209,7 +233,7 @@ final class WindowsKey extends JButton {
          int rx = x + size / 2 - ring / 2;
          int ry = y + size / 2 - ring / 2;
          g.setStroke(new BasicStroke(3f));
-         g.setColor(this.down ? ACCENT_SIDE : SIDE);
+         g.setColor(lit ? ACCENT_SIDE : SIDE);
          g.drawOval(rx, ry, ring, ring);
          int sweep = (int) Math.round(360 * this.dwell.progress(0));
          if (sweep > 0) {
@@ -217,7 +241,7 @@ final class WindowsKey extends JButton {
             g.drawArc(rx, ry, ring, ring, 90, -sweep);
          }
       }
-      g.setColor(this.down ? Color.WHITE : ACCENT_TEXT);
+      g.setColor(lit ? Color.WHITE : ACCENT_TEXT);
       g.fillRect(x, y, half, half);
       g.fillRect(x + half + 3, y, half, half);
       g.fillRect(x, y + half + 3, half, half);
@@ -238,8 +262,9 @@ final class WindowsKey extends JButton {
                new int[] {ty + 5 * dy, ty - 3 * dy + 4 * dx, ty - 3 * dy - 4 * dx}, 3);
          }
       }
-      String caption = !this.down ? "Start" : this.slide == 0 ? "+ a key" : SLIDE_NAMES[this.slide - KeyEvent.VK_LEFT];
-      g.setColor(this.down ? Color.WHITE : TEXT);
+      String caption = !this.down ? (this.echo != null ? this.echo : "Start")
+         : this.slide == 0 ? "+ a key" : SLIDE_NAMES[this.slide - KeyEvent.VK_LEFT];
+      g.setColor(lit ? Color.WHITE : TEXT);
       g.setFont(new Font("SansSerif", Font.BOLD, 12));
       g.drawString(caption, (w - g.getFontMetrics().stringWidth(caption)) / 2, y + size + 22);
    }

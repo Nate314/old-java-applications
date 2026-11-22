@@ -105,7 +105,7 @@ public class Test {
          key.repaint();
          // Every move rewrites the place, so the rest of it is current.
          place.save(file);
-      });
+      }, key);
       shelf.setVisible(place.shelf);
       JButton more = stripButton(() -> shelf.isVisible() ? "▾" : "▴");
       more.setToolTipText("Shortcuts");
