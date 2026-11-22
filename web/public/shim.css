@@ -3212,11 +3212,6 @@ body[data-app="Windows"] #desktop > * {
   pointer-events: auto;
 }
 
-/* The Start menu goes over everything, as on Windows (on a narrow page it would be under the key). */
-html:has(.shim-start) body[data-app="Windows"] #desktop {
-  z-index: auto;
-}
-
 .shim-shell > * {
   pointer-events: auto;
 }
