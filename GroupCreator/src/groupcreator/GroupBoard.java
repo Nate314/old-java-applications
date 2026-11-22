@@ -8,6 +8,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -24,8 +25,8 @@ import javax.swing.Timer;
 
 /**
  * The board under the inputs. In Groups it deals the newest round onto one card per group, marks the people who were
- * together before, labels each member's role, and swaps two names of different groups when they are clicked one after
- * the other. Partner chart shows, for every pair in the class, how many rounds put them in one group. Pick someone
+ * together before, labels each member's role, and swaps two names when one is dragged onto the other (or two names of
+ * different groups are clicked one after the other). Partner chart shows, for every pair in the class, how many rounds put them in one group. Pick someone
  * spins a wheel of the class that lands on someone who has not had a turn yet. Roll call marks who is away today and which names are kept apart.
  * Its buttons run along the bottom, and change with the view.
  */
@@ -203,6 +204,17 @@ public class GroupBoard extends JPanel {
    private int hoverIndex = -1;
    private int mouseX = -1;
    private int mouseY = -1;
+   /** A name pressed on a card: its group and place, where it was pressed, and whether it is being dragged yet. */
+   private int dragGroup = -1;
+   private int dragIndex = -1;
+   private int pressX;
+   private int pressY;
+   private boolean dragging;
+   /** The name pressed was already picked: a press and release without a drag lets it go. */
+   private boolean pressedPicked;
+   /** After a swap (or a drop on no name): where names were drawn, so they glide into their places. */
+   private final Map<String, Rectangle> glideFrom = new HashMap<>();
+   private long glideStart;
 
    public GroupBoard(PartnerHistory history, PickBag picks, ClassRules rules, Actions actions) {
       this.history = history;
@@ -301,7 +313,7 @@ public class GroupBoard extends JPanel {
          repaint();
       });
       dealTimer = new Timer(16, event -> {
-         if (!dealing()) {
+         if (!dealing() && !gliding()) {
             ((Timer) event.getSource()).stop();
          }
          repaint();
@@ -320,6 +332,22 @@ public class GroupBoard extends JPanel {
          public void mouseMoved(MouseEvent event) {
             mouseX = (int) (event.getX() / scale);
             mouseY = (int) (event.getY() / scale);
+            repaint();
+         }
+
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            mouseX = (int) (event.getX() / scale);
+            mouseY = (int) (event.getY() / scale);
+            if (dragGroup >= 0 && Math.abs(mouseX - pressX) + Math.abs(mouseY - pressY) > 5) {
+               dragging = true;
+            }
+            repaint();
+         }
+
+         @Override
+         public void mouseReleased(MouseEvent event) {
+            release((int) (event.getX() / scale), (int) (event.getY() / scale));
             repaint();
          }
 
@@ -357,6 +385,7 @@ public class GroupBoard extends JPanel {
       message = null;
       clearArmed = false;
       unpick();
+      glideFrom.clear();
       if (deal && !groups.isEmpty()) {
          int count = 0;
          for (List<String> group : groups) {
@@ -414,6 +443,88 @@ public class GroupBoard extends JPanel {
    private void unpick() {
       pickedGroup = -1;
       pickedIndex = -1;
+      dragGroup = -1;
+      dragIndex = -1;
+      dragging = false;
+   }
+
+   private boolean gliding() {
+      return !glideFrom.isEmpty() && System.currentTimeMillis() - glideStart < FLY_MS;
+   }
+
+   /** Where the name held in a drag is drawn: under the pointer, as far from it as where it was pressed. */
+   private Rectangle held() {
+      Rectangle slot = chips[dragGroup][dragIndex];
+      return new Rectangle(slot.x + mouseX - pressX, slot.y + mouseY - pressY, slot.width, slot.height);
+   }
+
+   /** The group and place of the name at (x, y) on the cards, or null. */
+   private int[] chipAt(int x, int y) {
+      for (int g = 0; g < chips.length; g++) {
+         for (int k = 0; k < chips[g].length; k++) {
+            if (chips[g][k] != null && chips[g][k].contains(x, y)) {
+               return new int[] {g, k};
+            }
+         }
+      }
+      return null;
+   }
+
+   /** The name under the pointer that the dragged name would swap with (not itself), or null. */
+   private int[] dropTarget() {
+      int[] at = chipAt(mouseX, mouseY);
+      return at == null || (at[0] == dragGroup && at[1] == dragIndex) ? null : at;
+   }
+
+   /** The end of a press on a name: a drag swaps it with the name it was dropped on; a click on a picked name lets it go. */
+   private void release(int x, int y) {
+      if (dragGroup < 0 || dragGroup >= chips.length || dragIndex >= chips[dragGroup].length) {
+         dragGroup = -1;
+         dragging = false;
+         return;
+      }
+      if (!dragging) {
+         dragGroup = -1;
+         if (pressedPicked) {
+            unpick();
+         }
+         return;
+      }
+      mouseX = x;
+      mouseY = y;
+      int[] target = dropTarget();
+      Rectangle held = held();
+      String name = groups.get(dragGroup).get(dragIndex);
+      if (target != null) {
+         swap(dragGroup, dragIndex, held, target[0], target[1]);
+      } else {
+         unpick();
+         glide(name, held);   // dropped on no name: it slides back to its place
+      }
+   }
+
+   /** Name k of group c trades places (and roles) with name k2 of group c2; both glide over from where they were drawn. */
+   private void swap(int c, int k, Rectangle from, int c2, int k2) {
+      List<List<String>> swapped = PartnerHistory.copy(groups);
+      String a = swapped.get(c).get(k);
+      String b = swapped.get(c2).get(k2);
+      swapped.get(c).set(k, b);
+      swapped.get(c2).set(k2, a);
+      Rectangle other = chips[c2][k2];
+      unpick();
+      actions.edited(swapped);
+      glide(a, from);
+      glide(b, other);
+   }
+
+   /** The name slides from where it is drawn now into its place (at once with reduced motion on). */
+   private void glide(String name, Rectangle from) {
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         return;
+      }
+      glideFrom.put(name, new Rectangle(from));
+      glideStart = System.currentTimeMillis();
+      dealTimer.start();
    }
 
    private List<Button> buttons() {
@@ -499,31 +610,25 @@ public class GroupBoard extends JPanel {
       if (shownRound > 0) {
          return;   // an earlier round is only looked at; Use again deals it as a new round
       }
-      for (int g = 0; g < chips.length; g++) {
-         for (int k = 0; k < chips[g].length; k++) {
-            if (chips[g][k] != null && chips[g][k].contains(x, y)) {
-               pick(g, k);
-               return;
-            }
-         }
-      }
-      unpick();
-   }
-
-   /** The first click picks a name; a click on a name of another group swaps the two. */
-   private void pick(int g, int k) {
-      if (pickedGroup < 0 || pickedGroup == g) {
-         boolean same = pickedGroup == g && pickedIndex == k;
-         pickedGroup = same ? -1 : g;
-         pickedIndex = same ? -1 : k;
+      int[] at = chipAt(x, y);
+      if (at == null) {
+         unpick();
          return;
       }
-      List<List<String>> swapped = PartnerHistory.copy(groups);
-      String a = swapped.get(pickedGroup).get(pickedIndex);
-      swapped.get(pickedGroup).set(pickedIndex, swapped.get(g).get(k));
-      swapped.get(g).set(k, a);
-      unpick();
-      actions.edited(swapped);
+      if (pickedGroup >= 0 && pickedGroup != at[0]) {
+         // The second click: a name of another group swaps with the picked one.
+         swap(pickedGroup, pickedIndex, chips[pickedGroup][pickedIndex], at[0], at[1]);
+         return;
+      }
+      // The first click picks a name (a second click on it lets go), and holding it starts a drag.
+      pressedPicked = pickedGroup == at[0] && pickedIndex == at[1];
+      pickedGroup = at[0];
+      pickedIndex = at[1];
+      dragGroup = at[0];
+      dragIndex = at[1];
+      pressX = x;
+      pressY = y;
+      dragging = false;
    }
 
    private void key(KeyEvent event) {
@@ -827,6 +932,11 @@ public class GroupBoard extends JPanel {
       long elapsed = dealStart > 0 ? System.currentTimeMillis() - dealStart : Long.MAX_VALUE / 2;
       List<int[]> order = dealOrder();
       String timerClock = work.running() ? WorkTimer.clock(work.left(System.currentTimeMillis())) : null;
+      double glided = glideFrom.isEmpty() ? 1 : Math.min(1, (System.currentTimeMillis() - glideStart) / (double) FLY_MS);
+      if (glided >= 1) {
+         glideFrom.clear();
+      }
+      int[] target = dragging ? dropTarget() : null;
       hoverGroup = -1;
       hoverIndex = -1;
       for (int i = 0; i < order.size(); i++) {
@@ -848,14 +958,24 @@ public class GroupBoard extends JPanel {
          int x = (int) Math.round(fromX + (slot.x - fromX) * ease);
          int y = (int) Math.round(fromY + (slot.y - fromY) * ease);
          boolean landed = t >= 1;
+         Rectangle glide = landed ? glideFrom.get(groups.get(c).get(k)) : null;
+         if (glide != null) {
+            double slide = 1 - Math.pow(1 - glided, 3);
+            x = (int) Math.round(glide.x + (slot.x - glide.x) * slide);
+            y = (int) Math.round(glide.y + (slot.y - glide.y) * slide);
+         }
          if (landed && slot.contains(mouseX, mouseY) && !dealing()) {
             hoverGroup = c;
             hoverIndex = k;
          }
+         if (dragging && c == dragGroup && k == dragIndex) {
+            continue;   // drawn last, under the pointer
+         }
+         boolean dropOn = target != null && target[0] == c && target[1] == k;
          int role = roles ? Roles.of(k, groups.get(c).size()) : -1;
          paintChip(g, groups.get(c).get(k), role, landed && role >= 0 && hadRole(c, k), timerClock, x, y, slot.width, slot.height,
             landed ? metAgain(c, k) : false,
-            c == pickedGroup && k == pickedIndex, c == hoverGroup && k == hoverIndex);
+            c == pickedGroup && k == pickedIndex || dropOn, c == hoverGroup && k == hoverIndex);
          if (landed && clashes(c, k)) {
             // Kept apart from someone in this group: a red ring.
             g.setColor(ERROR);
@@ -863,6 +983,13 @@ public class GroupBoard extends JPanel {
             g.drawRoundRect(x, y, slot.width, slot.height, 8, 8);
             g.setStroke(new BasicStroke(1f));
          }
+      }
+      if (dragging) {
+         // The held name, lifted off the card under the pointer, so the tinted name it would land on shows under it.
+         Rectangle held = held();
+         g.setColor(new Color(0, 0, 0, 45));
+         g.fillRoundRect(held.x + 3, held.y + 2, held.width, held.height, 8, 8);
+         paintChip(g, groups.get(dragGroup).get(dragIndex), -1, false, null, held.x - 3, held.y - 8, held.width, held.height, false, true, true);
       }
       return summary();
    }
@@ -1067,9 +1194,12 @@ public class GroupBoard extends JPanel {
       }
       String title = "Round " + round + (shownRound > 0 ? " of " + history.size() : "") + ": " + count + (count == 1 ? " name" : " names") + " in " + groups.size()
          + (groups.size() == 1 ? " group" : " groups");
+      if (dragging) {
+         return new String[] {title, dragLine(), ""};
+      }
       if (pickedGroup >= 0) {
          return new String[] {title, groups.get(pickedGroup).get(pickedIndex)
-            + " is picked: click a name in another group to swap them (Esc cancels).", ""};
+            + " is picked: click a name in another group to swap them, or drag it onto any name (Esc cancels).", ""};
       }
       if (hoverGroup >= 0) {
          return new String[] {title, describe(hoverGroup, hoverIndex), metAgain(hoverGroup, hoverIndex) ? "again" : "fresh"};
@@ -1108,6 +1238,35 @@ public class GroupBoard extends JPanel {
          ? "1 pair was together before (" + pair[0] + " and " + pair[1] + "), the fewest repeats found."
          : repeats.size() + " pairs were together before (marked), the fewest repeats found.";
       return new String[] {title, detail, "again"};
+   }
+
+   /** The header's line while a name is dragged: what dropping it here would do. */
+   String dragLine() {
+      String name = groups.get(dragGroup).get(dragIndex);
+      int[] target = dropTarget();
+      if (target == null) {
+         return "Drop " + name + " on a name to swap them" + (roles && groups.get(dragGroup).size() > 1
+            ? ", or on someone in Group " + (dragGroup + 1) + " to trade roles." : ".");
+      }
+      String other = groups.get(target[0]).get(target[1]);
+      if (target[0] != dragGroup) {
+         return "Drop to swap " + name + " into Group " + (target[0] + 1) + " and " + other + " into Group " + (dragGroup + 1) + ".";
+      }
+      int mine = Roles.of(dragIndex, groups.get(dragGroup).size());
+      int theirs = Roles.of(target[1], groups.get(dragGroup).size());
+      if (!roles || mine == theirs) {
+         return "Drop to trade places with " + other + ".";
+      }
+      return "Drop to trade roles: " + name + " becomes " + role(theirs) + ", " + other + " " + role(mine) + ".";
+   }
+
+   private static String role(int role) {
+      return role < 0 ? "no role" : Roles.NAMES[role];
+   }
+
+   /** Where name k of group c was drawn in the last paint (for DragCheck). */
+   Rectangle chipBounds(int c, int k) {
+      return chips[c][k];
    }
 
    /** Who name k of group c meets again, and who is new to them. */
