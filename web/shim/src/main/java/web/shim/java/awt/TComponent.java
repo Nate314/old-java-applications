@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.web.TCanvasGraphics;
+import web.rt.Drags;
 import web.rt.Files;
 import web.rt.Js;
 import web.shim.java.awt.web.TRepaint;
@@ -709,11 +710,21 @@ public class TComponent implements TImageObserver {
         syncDrags();
     }
 
-    /** Marks a component that follows the mouse as it moves: in an embedded app a finger there works the app, elsewhere it may scroll the page (shim.css). */
+    /** Marks a component that follows drags: in an embedded app a finger there works the app, elsewhere it may scroll the page (shim.css). */
     private void syncDrags() {
         if (element != null) {
-            Js.toggleClass(element, "drags", hasMouseMotionListeners());
+            Js.toggleClass(element, "drags", followsDrags());
         }
+    }
+
+    /** A motion listener whose mouseDragged does something (web.rt.Drags, added by ShimPlugin); hover-only ones let vertical swipes scroll. */
+    private boolean followsDrags() {
+        for (TMouseMotionListener l : mouseMotionListeners) {
+            if (l instanceof Drags) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void addKeyListener(TKeyListener l) {
