@@ -13,12 +13,13 @@
 // assets/files.json, every file the build wrote besides the HTML (and the preview clips), for the home page's Save all for offline, and the
 // service worker (src/sw/sw.ts) as sw.js, a plain script at the site root. What the runtime adds to a page once it is
 // needed (src/runtime/lazy) is imported, so Vite writes it as chunks of its own.
-// Built names carry a hash of their content (vite.config.ts). public/shim.css (and the forced-colors.css it imports) is
+// Built names carry a hash of their content (vite.config.ts). public/shim.css (with the forced-colors.css it imports) is
 // written once more as assets/shim-<hash>.css, which the pages link; the root copy stays for anyone who links it there.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { build } from 'esbuild';
 import type { Plugin } from 'vite';
 import type { OutputBundle, OutputChunk } from 'rollup';
@@ -26,6 +27,8 @@ import { ROUTES, type Route } from '../src/routes';
 import { loaderScript } from '../src/pages/notfound/loader';
 import { appPage, thenPage } from '../src/pages/app/AppPage';
 import { APPS } from '../src/shared/catalog';
+import { WITH_THEN, pick } from '../src/pages/compare/Intro';
+import { Compare, renderFor } from '../src/pages/compare/Compare';
 
 const root = resolve(__dirname, '..');
 
@@ -46,13 +49,18 @@ async function withEarly(html: string): Promise<string> {
   return html.replace('<script data-early=""></script>', () => '<script>' + code + '</script>');
 }
 const hash = (text: string) => createHash('sha256').update(text).digest('base64url').slice(0, 8);
-/** public/shim.css and forced-colors.css as hashed assets: { built name: source }, shim.css first. */
+/**
+ * public/shim.css as a hashed asset ({ built name: source }), with forced-colors.css written into it under its media
+ * query instead of @import-ed: an import is fetched (even when its query doesn't match) only once shim.css has
+ * arrived, and every page waits for both before its first paint, so it was a round trip more on a slow phone.
+ */
 function skinFiles(): Record<string, string> {
   const forced = readFileSync(resolve(root, 'public/forced-colors.css'), 'utf8');
-  const forcedName = 'forced-colors-' + hash(forced) + '.css';
-  const shim = readFileSync(resolve(root, 'public/shim.css'), 'utf8').replace('url("forced-colors.css")', () => 'url("' + forcedName + '")');
-  if (!shim.includes(forcedName)) throw new Error('public/shim.css no longer imports url("forced-colors.css"): update vite/pages.ts');
-  return { ['assets/shim-' + hash(shim) + '.css']: shim, ['assets/' + forcedName]: forced };
+  const line = '@import url("forced-colors.css") (forced-colors: active);';
+  const source = readFileSync(resolve(root, 'public/shim.css'), 'utf8');
+  if (!source.includes(line) || forced.includes('@')) throw new Error('public/shim.css no longer imports forced-colors.css as ' + line + ', or forced-colors.css has an @-rule: update vite/pages.ts');
+  const shim = source.replace(line, () => '@media (forced-colors: active) {\n' + forced + '}');
+  return { ['assets/shim-' + hash(shim) + '.css']: shim };
 }
 /** A page with the skins' hashed name where it links shim.css (href="shim.css" or "../shim.css"). */
 const withSkins = (html: string) => html.replace(/href="((?:\.\.\/)?)shim\.css"/g, (_, up) => 'href="' + up + Object.keys(skinFiles())[0] + '"');
@@ -63,6 +71,26 @@ const onTrip = (blockingTag: string) => '<script>try{sessionStorage.getItem("old
 /** An app page, whose HTML holds its title card (AppPage.tsx, EarlyTitle), paints early as the home page does. */
 const paintedEarly = (html: string) => html.replace(/<script type="module" src="[^"]+" blocking="render"><\/script>/,
   tag => onTrip(tag) + tag.replace(' blocking="render"', ''));
+
+/**
+ * compare.html with its players and changes as React first renders them for each app (one page serves every ?app=),
+ * written in where #compare-rest stands by a script that picks the asked app's copy: the two play.html frames then
+ * start loading as the page is read, not once React and the page's module have arrived (main.tsx hydrates them).
+ */
+function compareRest(html: string): string {
+  const empty = '<div id="compare-rest" style="display:contents"></div>';
+  if (!html.includes(empty)) throw new Error('compare.html has no empty #compare-rest: update compareRest in vite/pages.ts');
+  const copies: Record<string, string> = {};
+  for (const a of WITH_THEN) {
+    renderFor(a.id);
+    // React's preload of the cover picture would be a node the page never renders (hydration must match exactly).
+    copies[a.id] = renderToString(createElement(Compare)).replace(/^<link rel="preload" as="image" href="[^"]*"\/>/, '');
+    if (copies[a.id].includes('<link')) throw new Error('compare.html: React wrote a <link> into #compare-rest');
+  }
+  const json = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
+  return html.replace(empty, () => '<script>(function(){var m=' + json(copies) + ',a=new URLSearchParams(location.search).get("app");' +
+    'document.write(' + json(empty.replace('></div>', '>')) + '+m[{}.hasOwnProperty.call(m,a)?a:' + json(pick(null).id) + ']+"</div>")})()</script>');
+}
 
 const htmlId = (r: Route) => resolve(root, r.file);
 const inputName = (r: Route) => r.file.replace(/\.html$/, '').replace(/^404$/, 'notfound');
@@ -119,7 +147,8 @@ export function pages(): Plugin {
     async load(id) {
       const r = byId.get(id);
       if (!r) return null;
-      return withEarly(document(r, '<script type="module" src="/' + r.entry + '"></script>\n'));
+      const html = document(r, '<script type="module" src="/' + r.entry + '"></script>\n');
+      return withEarly(r.file === 'compare.html' ? compareRest(html) : html);
     },
     // Vite joins a page's module scripts into one entry script; a page that runs the runtime (<RuntimeScript />)
     // keeps it render-blocking, as the runtime's own script is on the app pages.
