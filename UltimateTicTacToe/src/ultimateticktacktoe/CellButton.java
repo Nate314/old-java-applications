@@ -309,7 +309,7 @@ public final class CellButton extends JButton implements ActionListener {
    }
 
    /** Draws X or O centered on (cx, cy), {@code t} of the way drawn in: X stroke by stroke, O round from the top. */
-   private void paintMark(Graphics2D g, String mark, double cx, double cy, double r, float stroke, double t, int alpha) {
+   static void paintMark(Graphics2D g, String mark, double cx, double cy, double r, float stroke, double t, int alpha) {
       if (t <= 0 || alpha <= 0) {
          return;
       }
