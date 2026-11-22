@@ -130,7 +130,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.page = page;
       int screenWidth = (int)Toolkit.getDefaultToolkit().getScreenSize().getWidth();
       int screenHeight = (int)Toolkit.getDefaultToolkit().getScreenSize().getHeight();
-      this.setSize(screenWidth * 3 / 4, Math.max(screenHeight / 2, 340));
+      // The space over the keys (falling notes in a lesson, your notes rising outside one) has room of its own.
+      this.setSize(screenWidth * 3 / 4, Math.max(screenHeight / 2, 340) + PianoPanel.FALL);
       this.setDefaultCloseOperation(3);
       this.addKeyListener(this);
       this.getContentPane().setLayout(new BorderLayout());
@@ -264,10 +265,11 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.clearArmed = false;
       this.bar.setLooper(this.looper);
       if (!this.looping) {
-         // The lanes get room of their own, so the keys keep their size.
-         this.setSize(this.getWidth(), this.getHeight() + LoopView.HEIGHT);
+         // The lanes take the rising notes' place and some more room, so the keys keep their size.
+         this.setSize(this.getWidth(), this.getHeight() + LoopView.HEIGHT - PianoPanel.FALL);
       }
       this.looping = true;
+      this.piano.setRising(false);
       this.loopView.setLooper(this.looper);
       this.bar.setNotice(this.looper.loop().layers().isEmpty() ? null : "Your loop is back: P plays it");
    }
@@ -276,9 +278,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private void stopLooper() {
       this.looper.stop();
       if (this.looping) {
-         this.setSize(this.getWidth(), this.getHeight() - LoopView.HEIGHT);
+         this.setSize(this.getWidth(), this.getHeight() - LoopView.HEIGHT + PianoPanel.FALL);
       }
       this.looping = false;
+      this.piano.setRising(true);
       this.bar.setLooper(null);
       this.loopView.setLooper(null);
       this.bar.setNotice(null);
@@ -515,6 +518,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (this.lesson == null && this.recorder == null && !this.looping) {
          this.finder.add(key);
          this.bar.setFound(this.finder.song(), this.finder.inKey());
+         this.piano.setFound(this.finder.song() != null);
       }
       if (this.lesson != null && !this.lesson.finished()) {
          if (this.lesson.press(key)) {
@@ -562,12 +566,12 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private void startSong(int index) {
       this.stopListening();
       this.bar.setNotice(null);
-      boolean hadLesson = this.lesson != null;
       Song song = index < 0 ? null : this.menu()[index];
       // The song just heard in free play, in its own key, carries on after the notes played.
       int played = song != null && song == this.finder.song() && this.finder.inKey() ? this.finder.notes() : 0;
       this.finder.clear();
       this.bar.setFound(null, false);
+      this.piano.setFound(false);
       this.lesson = song == null ? null : new Lesson(song, played);
       this.stopBacking();
       this.backingChords = song == null ? null : Backing.chords(song);
@@ -575,10 +579,6 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (played > 0) {
          this.piano.follow(played, 0);
          this.backChord(played - 1);
-      }
-      if (hadLesson != (this.lesson != null)) {
-         // The falling notes get room of their own, so the keys keep their size.
-         this.setSize(this.getWidth(), this.getHeight() + (hadLesson ? -PianoPanel.FALL : PianoPanel.FALL));
       }
       this.newBest = false;
       this.refresh();

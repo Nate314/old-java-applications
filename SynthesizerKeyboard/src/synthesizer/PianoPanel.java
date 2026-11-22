@@ -6,6 +6,9 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
@@ -15,11 +18,12 @@ import javax.swing.Timer;
  * During a lesson the top of the panel shows the song as falling notes: a bar per note over its key, as long as the
  * note, coming down to land on the keys. The next note sits on the keys and the song moves down a note at each right press.
  * The backing's chord names ride down with the notes, each on a line where its chord starts, and a pill at the top
- * right shows the backing (and turns it on or off when clicked).
+ * right shows the backing (and turns it on or off when clicked). Outside a lesson the same space shows the notes you play
+ * rising from their keys, each as long as it was held, gold once the keyboard knows the song (none in the looper).
  */
 public final class PianoPanel extends JPanel {
    public static final int KEYS = 13;
-   /** The height of the falling notes over the keys during a lesson (less on a panel under twice as tall). */
+   /** The height of the falling (in a lesson) or rising (free play) notes over the keys (less on a panel under twice as tall). */
    public static final int FALL = 120;
    /** The computer key that plays each key, in note order. */
    public static final String[] LETTERS = {"Z", "S", "X", "D", "C", "V", "G", "B", "H", "N", "J", "M", ","};
@@ -56,6 +60,11 @@ public final class PianoPanel extends JPanel {
    private static final Color PILL_OFF = new Color(40, 42, 54, 220);
    private static final Font CHORD_FONT = new Font("SansSerif", Font.BOLD, 12);
    private static final int PILL_HEIGHT = 20;
+   /** A beat in milliseconds: notes rise at the falling notes' scale, BEATS_SHOWN beats to the space. */
+   private static final double BEAT_MILLIS = 420;
+   /** Under reduced motion a played note stays still on its key for this long, then goes. */
+   private static final int STILL_MILLIS = 1500;
+   private static final Color RISE_TEXT = new Color(120, 128, 150);
 
    private final boolean[] pressed = new boolean[KEYS];
    private int hint = -1;
@@ -80,6 +89,12 @@ public final class PianoPanel extends JPanel {
    private boolean resting;
    private int backingChord = -1;
    private final Timer frames = new Timer(16, event -> this.frame());
+   /** Whether notes played outside a lesson rise over the keys (off in the looper, whose lanes show them). */
+   private boolean rising = true;
+   /** The notes rising: {key, pressed at, released at (0 while held)}, in milliseconds. */
+   private final List<long[]> trail = new ArrayList<>();
+   /** Whether the notes played are the start of a song the keyboard knows (they rise in gold). */
+   private boolean found;
 
    public PianoPanel() {
       this.setFocusable(false);
@@ -88,7 +103,34 @@ public final class PianoPanel extends JPanel {
 
    public void setPressed(int key, boolean down) {
       this.pressed[key] = down;
+      if (this.song == null && this.rising) {
+         long now = System.currentTimeMillis();
+         for (long[] note : this.trail) {
+            if (note[0] == key && note[2] == 0) {
+               note[2] = now;
+            }
+         }
+         if (down) {
+            this.trail.add(new long[]{key, now, 0});
+         }
+         this.frames.start();
+      }
       this.repaint();
+   }
+
+   /** Whether notes played outside a lesson rise over the keys; off, the keys fill the panel. */
+   public void setRising(boolean on) {
+      this.rising = on;
+      this.trail.clear();
+      this.repaint();
+   }
+
+   /** Whether the notes played so far are the start of a known song (see SongFinder). */
+   public void setFound(boolean found) {
+      if (this.found != found) {
+         this.found = found;
+         this.repaint();
+      }
    }
 
    /** Lights key {@code key} as the one to press next; -1 for none. */
@@ -115,6 +157,7 @@ public final class PianoPanel extends JPanel {
    /** Shows {@code song} falling from its first note, or hides the falling notes for null. */
    public void setSong(Song song) {
       this.song = song;
+      this.trail.clear();
       this.chordKeys = song == null ? null : Backing.chords(song);
       this.next = 0;
       this.missKey = -1;
@@ -195,7 +238,8 @@ public final class PianoPanel extends JPanel {
 
    private void frame() {
       long now = System.currentTimeMillis();
-      if (now - this.glideStart >= this.glideMillis && (this.missKey < 0 || now - this.missAt >= MISS_MILLIS)) {
+      this.trail.removeIf(note -> note[2] > 0 && this.risen(note, now) >= this.keysTop());
+      if (now - this.glideStart >= this.glideMillis && (this.missKey < 0 || now - this.missAt >= MISS_MILLIS) && this.trail.isEmpty()) {
          this.missKey = -1;
          this.frames.stop();
       }
@@ -215,9 +259,35 @@ public final class PianoPanel extends JPanel {
       return false;
    }
 
-   /** Where the keys start: below the falling notes during a lesson, else at the top. */
+   /** Where the keys start: below the falling or rising notes, else (in the looper) at the top. */
    int keysTop() {
-      return this.song == null ? 0 : Math.min(FALL, this.getHeight() / 2);
+      return this.song == null && !this.rising ? 0 : Math.min(FALL, this.getHeight() / 2);
+   }
+
+   private static boolean still() {
+      return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+   }
+
+   /** How far above the keys a note's bottom has risen by {@code now}, in pixels (0 while held). */
+   int risen(long[] note, long now) {
+      if (note[2] == 0) {
+         return 0;
+      }
+      if (still()) {
+         // Reduced motion: the note waits on its key, then goes all at once.
+         return now - note[2] < STILL_MILLIS ? 0 : this.keysTop();
+      }
+      return (int)Math.round((now - note[2]) * this.perMilli());
+   }
+
+   /** How tall a note's bar is by {@code now}: as long as it was (or has been) held, at least a sixth of a beat. */
+   int barHeight(long[] note, long now) {
+      long held = (note[2] == 0 ? now : note[2]) - note[1];
+      return (int)Math.round(Math.max(held, BEAT_MILLIS / 6) * this.perMilli());
+   }
+
+   private double perMilli() {
+      return this.keysTop() / BEATS_SHOWN / BEAT_MILLIS;
    }
 
    private int whiteWidth() {
@@ -283,8 +353,11 @@ public final class PianoPanel extends JPanel {
       int letterSize = Math.max(12, Math.min(30, whiteWidth / 3));
       Font letterFont = new Font("SansSerif", Font.BOLD, letterSize);
       Font noteFont = new Font("SansSerif", Font.PLAIN, Math.max(10, letterSize * 3 / 5));
+      Font barFont = new Font("SansSerif", Font.BOLD, Math.max(11, letterSize * 3 / 4));
       if (this.song != null && top > 0) {
-         this.paintFall(g, width, top, new Font("SansSerif", Font.BOLD, Math.max(11, letterSize * 3 / 4)));
+         this.paintFall(g, width, top, barFont);
+      } else if (top > 0) {
+         this.paintRise(g, width, top, barFont);
       }
       g.translate(0, top);
 
@@ -355,21 +428,7 @@ public final class PianoPanel extends JPanel {
 
    /** The falling notes in the {@code top} pixels above the keys: lanes, then a bar per note, landing on the keys' top edge. */
    private void paintFall(Graphics2D g, int width, int top, Font font) {
-      // Darker towards the top, in bands (the browser's shim has no gradient paint).
-      for (int band = 0; band < 8; band++) {
-         g.setColor(new Color(0, 0, 0, 90 - band * 11));
-         g.fillRect(0, top * band / 8, width, top * (band + 1) / 8 - top * band / 8);
-      }
-      int whiteWidth = this.whiteWidth();
-      g.setColor(LANE_LINE);
-      for (int white = 0; white <= WHITE_KEYS.length; white++) {
-         g.drawLine(2 + white * whiteWidth, 0, 2 + white * whiteWidth, top);
-      }
-      g.setColor(BLACK_LANE);
-      for (int key : BLACK_KEYS) {
-         int[] span = this.keySpan(key);
-         g.fillRect(span[0], 0, span[1], top);
-      }
+      this.paintLanes(g, width, top);
       long sinceMiss = System.currentTimeMillis() - this.missAt;
       if (this.missKey >= 0 && sinceMiss < MISS_MILLIS) {
          int[] span = this.keySpan(this.missKey);
@@ -408,6 +467,58 @@ public final class PianoPanel extends JPanel {
       // The line the notes land on, in the gold of the next key.
       g.setColor(LANDING);
       g.fillRect(0, top - 3, width, 3);
+   }
+
+   /** The space over the keys, darker towards the top (in bands: the shim has no gradient paint), with a lane per key. */
+   private void paintLanes(Graphics2D g, int width, int top) {
+      for (int band = 0; band < 8; band++) {
+         g.setColor(new Color(0, 0, 0, 90 - band * 11));
+         g.fillRect(0, top * band / 8, width, top * (band + 1) / 8 - top * band / 8);
+      }
+      int whiteWidth = this.whiteWidth();
+      g.setColor(LANE_LINE);
+      for (int white = 0; white <= WHITE_KEYS.length; white++) {
+         g.drawLine(2 + white * whiteWidth, 0, 2 + white * whiteWidth, top);
+      }
+      g.setColor(BLACK_LANE);
+      for (int key : BLACK_KEYS) {
+         int[] span = this.keySpan(key);
+         g.fillRect(span[0], 0, span[1], top);
+      }
+   }
+
+   /** Outside a lesson: the notes played rise out of their keys, a bar each as long as it was held; a line invites the first. */
+   private void paintRise(Graphics2D g, int width, int top, Font font) {
+      this.paintLanes(g, width, top);
+      long now = System.currentTimeMillis();
+      g.setFont(font);
+      FontMetrics metrics = g.getFontMetrics();
+      if (this.trail.isEmpty()) {
+         String invite = width < 520 ? "Play a key: your notes rise here" : "Play a key, or Z X C V B N M: your notes rise here";
+         g.setColor(RISE_TEXT);
+         g.drawString(invite, (width - metrics.stringWidth(invite)) / 2, (top + metrics.getAscent()) / 2);
+      }
+      // The line the notes leave from, under them.
+      g.setColor(this.found ? LANDING : LANE_LINE);
+      g.fillRect(0, top - 3, width, 3);
+      for (long[] note : this.trail) {
+         int key = (int)note[0];
+         boolean black = isBlack(key);
+         int[] span = this.keySpan(key);
+         int inset = black ? 2 : Math.max(3, span[1] / 8);
+         int bottom = top - this.risen(note, now);
+         int barTop = Math.max(0, bottom - this.barHeight(note, now));
+         if (bottom <= 0) {
+            continue;
+         }
+         g.setColor(this.found ? (black ? HINT_BLACK : HINT) : black ? COMING_BLACK : COMING);
+         g.fillRoundRect(span[0] + inset, barTop, span[1] - 2 * inset, bottom - barTop, 10, 10);
+         String name = Song.noteName(key);
+         if (bottom - barTop >= metrics.getAscent() + 6 && metrics.stringWidth(name) <= span[1] - 2 * inset) {
+            g.setColor(BAR_TEXT);
+            g.drawString(name, span[0] + (span[1] - metrics.stringWidth(name)) / 2, barTop + metrics.getAscent() + 3);
+         }
+      }
    }
 
    /** The backing's chord names, each on a faint line where its chord starts, and the backing pill on top. */
