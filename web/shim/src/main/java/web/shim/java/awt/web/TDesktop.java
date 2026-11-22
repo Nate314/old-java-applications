@@ -6,7 +6,9 @@ import web.rt.Js;
 import web.rt.Keys;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.TComponent;
 import web.shim.java.awt.TContainer;
@@ -28,6 +30,10 @@ public final class TDesktop {
     private static JSObject element;
     private static TWindow active;
     private static int zCounter = 10;
+
+    // Keys pressed and not let go yet, by key code; the page's focus (false only after the browser window blurred).
+    private static final Map<Integer, TKeyEvent> held = new LinkedHashMap<>();
+    private static boolean pageFocused = true;
 
     private static TComponent pressTarget;
     private static TComponent hoverTarget;
@@ -263,6 +269,9 @@ public final class TDesktop {
         Js.listen(doc, "focusout", TDesktop::repaintUnfocusable);
         Js.listen(doc, "keydown", e -> onKey(e, TKeyEvent.KEY_PRESSED));
         Js.listen(doc, "keyup", e -> onKey(e, TKeyEvent.KEY_RELEASED));
+        JSObject view = Js.viewOf(doc);
+        Js.listen(view, "blur", e -> pageFocus(false));
+        Js.listen(view, "focus", e -> pageFocus(true));
         // boot.js changed window.__shimRender (the desktop was zoomed up or back): paint everything again on
         // canvases of the new resolution.
         Js.listen(doc, "shimrender", e -> Edt.post(TRepaint::repaintAll));
@@ -538,11 +547,49 @@ public final class TDesktop {
         // (Minesweeper's arrows) sends the next key, pressed before the move ran, to the new focus owner.
         Edt.post(() -> {
             TComponent source = focusOwnerOf(w);
-            dispatchKey(new TKeyEvent(source, id, when, mods, vk, pressed));
+            TKeyEvent event = new TKeyEvent(source, id, when, mods, vk, pressed);
+            if (id == TKeyEvent.KEY_PRESSED) {
+                held.put(vk, event);
+            } else {
+                held.remove(vk);
+            }
+            dispatchKey(event);
             if (typed != 0) {
                 dispatchKey(new TKeyEvent(source, TKeyEvent.KEY_TYPED, when, mods, 0, typed));
             }
         });
+    }
+
+    /**
+     * The browser window (the tab, the app's frame on another page, Pop out's window) lost or got back the keyboard.
+     * As when Swing's window is deactivated, the focus owner loses the focus for a while (hasFocus() is false, its
+     * focus box goes, focus listeners hear a temporary FOCUS_LOST), and every key still held is let go: the browser
+     * sends its keyup elsewhere, so a held arrow, note or Space would otherwise stay down.
+     */
+    private static void pageFocus(boolean on) {
+        if (pageFocused == on) {
+            return;
+        }
+        pageFocused = on;
+        if (!on) {
+            Edt.post(() -> { // after the presses already posted
+                long when = System.currentTimeMillis();
+                List<TKeyEvent> keys = new ArrayList<>(held.values());
+                held.clear();
+                for (TKeyEvent k : keys) {
+                    dispatchKey(new TKeyEvent((TComponent) k.getSource(), TKeyEvent.KEY_RELEASED, when, 0,
+                            k.getKeyCode(), k.getKeyChar()));
+                }
+            });
+        }
+        if (active != null) {
+            TWindow.repaintFocus(active.focusOwner());
+        }
+    }
+
+    /** False while the browser window is blurred: a window's focus owner has no focus meanwhile. */
+    public static boolean pageFocused() {
+        return pageFocused;
     }
 
     private static boolean focusSweepPosted;

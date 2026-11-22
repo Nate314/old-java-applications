@@ -158,6 +158,10 @@ public final class Js {
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb);")
     public static native void listen(JSObject el, String type, EventCallback cb);
 
+    /** The window a document belongs to: the page's own, or Pop out's Picture-in-Picture window. */
+    @JSBody(params = "doc", script = "return doc.defaultView;")
+    public static native JSObject viewOf(JSObject doc);
+
     /**
      * Pop out (boot.js) moves the page desktop into a Picture-in-Picture window and back. While it is there,
      * window.__shimDoc is that window's document, where the desktop, points and the focus are looked up, and boot.js
