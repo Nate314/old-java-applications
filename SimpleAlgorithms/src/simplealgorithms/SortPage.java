@@ -23,7 +23,10 @@ class SortPage extends Page {
 	private static final Color BAR = new Color(120, 146, 190);
 	private static final Color COMPARE = new Color(232, 146, 40);
 	private static final Color[] MEDALS = { new Color(214, 170, 30), new Color(150, 160, 175), new Color(190, 120, 70) };
-	private static final int TOP = 82;
+	/** Where the lanes start: narrow, under the status, two lines of summary and three about the followed sort. */
+	private static final int TOP = NARROW ? 160 : 82;
+	/** Lanes across: three when wide, two in three rows when narrow. */
+	private static final int COLUMNS = NARROW ? 2 : 3;
 	private static final int MARGIN = 16;
 	private static final int GAP = 8;
 	/** The Bars | Prints switch beside the title: one half per view. */
@@ -52,7 +55,7 @@ class SortPage extends Page {
 	private final int[] printRows = new int[Sorts.NAMES.length];
 	private SortRace printRace;
 	/** The page's height at the last paint, so clicks find the same lanes. */
-	private int pageHeight = LabPanel.HEIGHT - 90;
+	private int pageHeight = LabPanel.HEIGHT - (NARROW ? 168 : 90);
 
 	private final Button play;
 	private final Button orderButton;
@@ -172,6 +175,11 @@ class SortPage extends Page {
 	}
 
 	@Override
+	boolean drags() {
+		return prints;
+	}
+
+	@Override
 	void hidden() {
 		sound.silence();
 	}
@@ -246,9 +254,10 @@ class SortPage extends Page {
 	}
 
 	private Rectangle laneBox(int index, int h) {
-		int laneWidth = (LabPanel.WIDTH - 2 * MARGIN - 2 * GAP) / 3;
-		int laneHeight = (h - TOP - 6 - GAP) / 2;
-		return new Rectangle(MARGIN + index % 3 * (laneWidth + GAP), TOP + index / 3 * (laneHeight + GAP), laneWidth, laneHeight);
+		int rows = Sorts.NAMES.length / COLUMNS;
+		int laneWidth = (LabPanel.WIDTH - 2 * MARGIN - (COLUMNS - 1) * GAP) / COLUMNS;
+		int laneHeight = (h - TOP - 6 - (rows - 1) * GAP) / rows;
+		return new Rectangle(MARGIN + index % COLUMNS * (laneWidth + GAP), TOP + index / COLUMNS * (laneHeight + GAP), laneWidth, laneHeight);
 	}
 
 	/** Where a lane draws its bars or print. */
@@ -271,7 +280,7 @@ class SortPage extends Page {
 		text(g, "Sorting race", TITLE, INK, 20, 32);
 		paintViews(g);
 		String status = race.numbers.length + " numbers, " + Sorts.ORDERS[order].toLowerCase() + "  \u00b7  step " + race.clock;
-		text(g, status, BOLD, INK, w - 20 - width(g, status, BOLD), 32);
+		text(g, status, BOLD, INK, NARROW ? 20 : w - 20 - width(g, status, BOLD), NARROW ? 58 : 32);
 		paintSummary(g);
 		paintFollowed(g);
 		for (int i = 0; i < race.lanes.length; i++) {
@@ -293,10 +302,16 @@ class SortPage extends Page {
 		g.setStroke(new BasicStroke(1.5f));
 		g.drawRoundRect(all.x, all.y, all.width, all.height, 22, 22);
 		g.setStroke(new BasicStroke(1f));
-		text(g, "V", SMALL, PENCIL, all.x + all.width + 6, all.y + 15);
+		if (!NARROW) {
+			text(g, "V", SMALL, PENCIL, all.x + all.width + 6, all.y + 15);
+		}
 	}
 
 	private void paintSummary(Graphics2D g) {
+		if (NARROW) {
+			paintNarrowSummary(g);
+			return;
+		}
 		if (!race.finished() && prints) {
 			text(g, "Each run as one picture: time goes down and each number keeps its color."
 					+ " Drag on one to go back and forth.", TEXT, PENCIL, 20, 54);
@@ -318,6 +333,24 @@ class SortPage extends Page {
 		text(g, slow + (x + width(g, slow + tip, TEXT) < LabPanel.WIDTH - 16 ? tip : ""), TEXT, INK, x, 54);
 	}
 
+	/** The summary in up to two wrapped lines, for a narrow lab. */
+	private void paintNarrowSummary(Graphics2D g) {
+		int width = LabPanel.WIDTH - 40;
+		if (!race.finished()) {
+			String says = prints ? "Each run as one picture: time goes down and each number keeps its color. Drag on one to go back and forth."
+					: "Every sort gets the same steps each tick: a compare or a write is one, a swap two. Tap a sort to follow it.";
+			paragraph(g, says, TEXT, PENCIL, 20, 80, width, 0, 16, 2);
+			return;
+		}
+		SortRace.Lane first = race.first();
+		SortRace.Lane last = race.last();
+		String won = Sorts.NAMES[first.algorithm] + " won in " + first.total + " steps.";
+		text(g, won, BOLD, GREEN, 20, 80);
+		String slow = " " + Sorts.NAMES[last.algorithm] + " took " + last.total
+				+ (first.total > 0 ? ", " + Page.number((double) last.total / first.total, 2) + " times as many." : ".");
+		paragraph(g, slow, TEXT, INK, 20, 80, width, width(g, won, BOLD), 16, 2);
+	}
+
 	/**
 	 * The line about the sort being followed (the one clicked last): while it runs, how it works; paused, what its
 	 * last step did and why, so stepping (S, Left) reads as the sort's own reasoning.
@@ -326,6 +359,12 @@ class SortPage extends Page {
 		SortRace.Lane lane = race.lanes[listen];
 		String name = Sorts.NAMES[lane.algorithm] + ": ";
 		String says = !playing && lane.last != null ? lane.last.describe(lane.values) : Sorts.METHODS[lane.algorithm];
+		if (NARROW) {
+			text(g, name, BOLD, INK, 20, 118);
+			String tip = playing && !race.finished() ? " Pause and step to see why." : "";
+			paragraph(g, says + tip, TEXT, INK, 20, 118, LabPanel.WIDTH - 40, width(g, name, BOLD), 16, 3);
+			return;
+		}
 		text(g, name, BOLD, INK, 20, 72);
 		int x = 20 + width(g, name, BOLD);
 		String tip = playing && !race.finished() ? "  Pause and step (S) to see why." : "";
