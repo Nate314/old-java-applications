@@ -345,8 +345,8 @@ public final class EarTrainer extends JPanel {
 			paintFeedback(g, x, last.y + last.height + 28);
 			used = last.y + last.height + 64;
 		}
-		// The keyboard fills the bottom: up to 116 px tall, never over the feedback.
-		int top = Math.max(used, getHeight() - 130);
+		// The keyboard fills the bottom: up to 116 px tall (176 px for a narrow tab's two rows), never over the feedback.
+		int top = Math.max(used, getHeight() - (narrow() ? 190 : 130));
 		paintPiano(g, x, top, Math.max(200, getWidth() - x - 18), Math.max(40, getHeight() - 14 - top));
 	}
 
@@ -585,7 +585,7 @@ public final class EarTrainer extends JPanel {
 				colors[clamp(note)] = GOLD;
 			}
 		}
-		Look.paintKeyboard(g, x, y, width, height, colors);
+		Look.paintKeyboard(g, x, y, width, height, narrow(), colors);
 	}
 
 	private static int clamp(int note) {

@@ -37,19 +37,48 @@ final class Look {
 		return pitch == 1 || pitch == 3 || pitch == 6 || pitch == 8 || pitch == 10;
 	}
 
+	/** A narrow keyboard (see {@link #twoRows}) splits at C5: C5 to C7 on top, C3 to B4 under it. */
+	static final int SPLIT = 72;
+	private static final int ROW_GAP = 6;
+
 	/**
-	 * The keyboard from C3 to C7 in the given box. {@code colors[note]} paints a key in that color (a white key's
-	 * color is used as is; give black keys a darker one); null leaves the key plain.
+	 * True when a narrow tab's keyboard is two rows: on a phone held upright four octaves in one row leave keys about
+	 * 12 px wide, too thin for a finger; two rows of two octaves make them twice as wide. Too short a box keeps one row.
 	 */
-	static void paintKeyboard(Graphics2D g, int x, int y, int width, int height, Color[] colors) {
+	static boolean twoRows(boolean narrow, int height) {
+		return narrow && height >= 70;
+	}
+
+	private static int whites(int low, int high) {
 		int whites = 0;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
+		for (int note = low; note <= high; note++) {
 			whites += isBlack(note) ? 0 : 1;
 		}
-		int keyWidth = Math.max(4, width / whites);
-		int left = x + (width - keyWidth * whites) / 2;
+		return whites;
+	}
+
+	/**
+	 * The keyboard from C3 to C7 in the given box. {@code colors[note]} paints a key in that color (a white key's
+	 * color is used as is; give black keys a darker one); null leaves the key plain. A {@code narrow} tab's keyboard
+	 * is two rows (see {@link #twoRows}).
+	 */
+	static void paintKeyboard(Graphics2D g, int x, int y, int width, int height, boolean narrow, Color[] colors) {
+		if (twoRows(narrow, height)) {
+			int row = (height - ROW_GAP) / 2, columns = whites(SPLIT, HIGH_NOTE);
+			paintRow(g, x, y, width, row, SPLIT, HIGH_NOTE, columns, colors);
+			paintRow(g, x, y + row + ROW_GAP, width, row, LOW_NOTE, SPLIT - 1, columns, colors);
+		} else {
+			paintRow(g, x, y, width, height, LOW_NOTE, HIGH_NOTE, whites(LOW_NOTE, HIGH_NOTE), colors);
+		}
+	}
+
+	/** The keys {@code low} to {@code high} (both white) from the left of a row {@code columns} white keys wide. */
+	private static void paintRow(Graphics2D g, int x, int y, int width, int height, int low, int high, int columns,
+			Color[] colors) {
+		int keyWidth = Math.max(4, width / columns);
+		int left = x + (width - keyWidth * columns) / 2;
 		int white = 0;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
+		for (int note = low; note <= high; note++) {
 			if (isBlack(note)) {
 				continue;
 			}
@@ -65,7 +94,7 @@ final class Look {
 		}
 		white = 0;
 		int blackWidth = keyWidth * 3 / 5;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
+		for (int note = low; note <= high; note++) {
 			if (!isBlack(note)) {
 				white++;
 				continue;
@@ -77,20 +106,25 @@ final class Look {
 	}
 
 	/** The key of {@link #paintKeyboard} drawn in the same box under the point ({@code px}, {@code py}), or -1. */
-	static int keyAt(int x, int y, int width, int height, int px, int py) {
+	static int keyAt(int x, int y, int width, int height, boolean narrow, int px, int py) {
+		if (twoRows(narrow, height)) {
+			int row = (height - ROW_GAP) / 2, columns = whites(SPLIT, HIGH_NOTE);
+			int top = rowKeyAt(x, y, width, row, SPLIT, HIGH_NOTE, columns, px, py);
+			return top >= 0 ? top : rowKeyAt(x, y + row + ROW_GAP, width, row, LOW_NOTE, SPLIT - 1, columns, px, py);
+		}
+		return rowKeyAt(x, y, width, height, LOW_NOTE, HIGH_NOTE, whites(LOW_NOTE, HIGH_NOTE), px, py);
+	}
+
+	private static int rowKeyAt(int x, int y, int width, int height, int low, int high, int columns, int px, int py) {
 		if (py < y || py >= y + height) {
 			return -1;
 		}
-		int whites = 0;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
-			whites += isBlack(note) ? 0 : 1;
-		}
-		int keyWidth = Math.max(4, width / whites);
-		int left = x + (width - keyWidth * whites) / 2;
+		int keyWidth = Math.max(4, width / columns);
+		int left = x + (width - keyWidth * columns) / 2;
 		int blackWidth = keyWidth * 3 / 5;
 		int white = 0;
 		int under = -1;
-		for (int note = LOW_NOTE; note <= HIGH_NOTE; note++) {
+		for (int note = low; note <= high; note++) {
 			if (isBlack(note)) {
 				int kx = left + white * keyWidth - blackWidth / 2;
 				if (py < y + height * 3 / 5 && px >= kx && px < kx + blackWidth) {
