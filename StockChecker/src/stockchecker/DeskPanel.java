@@ -96,6 +96,36 @@ final class DeskPanel extends JPanel {
    private double plotLow;
    private double plotSpan;
 
+   /** A trade on its way from its button (or the chart, for an order line) to the stock's row: "+10 CRM". */
+   private static final class Flight {
+      final String symbol;
+      final String label;
+      final boolean buy;
+      final int fromX;
+      final int fromY;
+      int age;
+
+      Flight(String symbol, int shares, int fromX, int fromY) {
+         this.symbol = symbol;
+         this.label = (shares > 0 ? "+" : "-") + Math.abs(shares) + " " + symbol;
+         this.buy = shares > 0;
+         this.fromX = fromX;
+         this.fromY = fromY;
+      }
+   }
+
+   /** Ticks a trade takes to fly to its row (about half a second), then ticks its row glows after it lands. */
+   private static final int FLY = 12;
+   private static final int LAND = 12;
+   /** Ticks a watch row's price stays tinted after it moves. */
+   private static final int FLASH = 9;
+   private final List<Flight> flights = new ArrayList<>();
+   /** The tick of the last market minute, which the prices' flashes fade from. */
+   private int minuteTick = -FLASH;
+   /** The cash and net worth as shown: they roll to the real figures over about a second, so a trade's cost shows. */
+   private double shownCash = Double.NaN;
+   private double shownWorth = Double.NaN;
+
    /**
     * Where the parts of the desk go. Wide (720 x 440): the watch list on the left, the chart card with the trade buttons
     * under it on the right. Narrow (360 x 680, a phone held upright): a two-row header, the chart card across the
@@ -237,6 +267,7 @@ final class DeskPanel extends JPanel {
       if (every > 0 && ticks % every == 0) {
          boolean opening = desk.market.minute == 0;
          boolean closing = desk.tick();
+         minuteTick = ticks;
          announceFills();
          if (closing) {
             bell.ring(3);
@@ -250,11 +281,38 @@ final class DeskPanel extends JPanel {
             ear.minute(stock.path[desk.market.minute], range[0], range[1]);
          }
       }
+      animate();
       String name = summary();
       if (!name.equals(getAccessibleContext().getAccessibleName())) {
          getAccessibleContext().setAccessibleName(name);
       }
       repaint();
+   }
+
+   /** One tick of the trades in flight and the rolling cash and net worth (all at once with reduced motion). */
+   void animate() {
+      boolean still = still();
+      flights.removeIf(flight -> (flight.age = still ? Math.max(flight.age, FLY) + 1 : flight.age + 1) >= FLY + LAND);
+      shownCash = roll(shownCash, desk.portfolio.cash, still);
+      shownWorth = roll(shownWorth, desk.portfolio.worth(desk.market), still);
+   }
+
+   private static double roll(double shown, double real, boolean still) {
+      return still || Double.isNaN(shown) || Math.abs(real - shown) < 0.01 ? real : shown + (real - shown) * 0.3;
+   }
+
+   private static boolean still() {
+      return Boolean.TRUE.equals(java.awt.Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
+   }
+
+   /** The trades still flying or glowing (for LayoutCheck). */
+   int flying() {
+      return flights.size();
+   }
+
+   /** The cash as the header shows it now (for LayoutCheck). */
+   double shownCash() {
+      return Double.isNaN(shownCash) ? desk.portfolio.cash : shownCash;
    }
 
    /** H: plays the picked stock's day so far as notes, or stops the one playing. */
@@ -324,6 +382,10 @@ final class DeskPanel extends JPanel {
    /** Says what the orders the last tick reached did, and rings the bell twice when one traded. */
    private void announceFills() {
       for (Portfolio.Trade fill : desk.fills) {
+         if (fill.shares != 0) {
+            // From the chart's right edge, where the line was reached.
+            flights.add(new Flight(fill.symbol, fill.shares, card.x + card.width - 60, card.y + card.height / 2));
+         }
          String at = Market.clock(fill.minute) + ": your " + fill.symbol + " line ";
          if (fill.shares > 0) {
             say(at + "bought " + fill.shares + " at " + Money.dollars(fill.price) + ".", UP);
@@ -453,7 +515,7 @@ final class DeskPanel extends JPanel {
          + Money.percent(cost, total) + ") on what you paid.";
    }
 
-   private void trade(int count) {
+   void trade(int count) {
       String symbol = symbol();
       if (symbol == null) {
          say("Add a ticker above first.", WARN);
@@ -466,6 +528,11 @@ final class DeskPanel extends JPanel {
       } else {
          say((count > 0 ? "Bought " : "Sold ") + done + " " + symbol + " at " + Money.dollars(price) + ", "
             + Money.dollars(done * price) + (count > 0 ? " in all." : " back."), count > 0 ? UP : DOWN);
+         for (Button button : buttons) {
+            if (button.count == count) {
+               flights.add(new Flight(symbol, count > 0 ? done : -done, (int) button.bounds.getCenterX(), (int) button.bounds.getCenterY()));
+            }
+         }
       }
       // A stock sold off the watch list leaves the desk, so keep the pick in range.
       selected = Math.max(0, Math.min(selected, desk.symbols().size() - 1));
@@ -600,6 +667,30 @@ final class DeskPanel extends JPanel {
       }
       paintButtons(g);
       paintNews(g);
+      paintFlights(g);
+   }
+
+   /** Each trade in flight: a chip with its shares and symbol, arcing from its button to the stock's row. */
+   private void paintFlights(Graphics2D g) {
+      List<String> symbols = desk.symbols();
+      for (Flight flight : flights) {
+         int i = symbols.indexOf(flight.symbol);
+         if (flight.age >= FLY || i < 0 || i >= rows.length || rows[i] == null) {
+            continue;
+         }
+         double t = (double) flight.age / FLY;
+         double p = 1 - Math.pow(1 - t, 3);
+         int toX = rows[i].x + 120;
+         int toY = rows[i].y + rows[i].height / 2;
+         int w = width(g, flight.label, BOLD) + 14;
+         int x = (int) Math.round(flight.fromX + (toX - flight.fromX) * p) - w / 2;
+         int y = (int) Math.round(flight.fromY + (toY - flight.fromY) * p - Math.sin(Math.PI * p) * 40) - 10;
+         g.setColor(flight.buy ? UP : DOWN);
+         g.fillRoundRect(x, y, w, 20, 20, 20);
+         g.setColor(new Color(255, 255, 255, 200));
+         g.drawRoundRect(x, y, w, 20, 20, 20);
+         text(g, flight.label, BOLD, new Color(10, 16, 40), x + 7, y + 15);
+      }
    }
 
    private void paintHeader(Graphics2D g) {
@@ -617,7 +708,7 @@ final class DeskPanel extends JPanel {
       g.fillRoundRect(x, 14, pill, 18, 18, 18);
       text(g, state, SMALL, new Color(10, 16, 40), x + 7, 27);
 
-      double worth = desk.portfolio.worth(market);
+      double worth = Double.isNaN(shownWorth) ? desk.portfolio.worth(market) : shownWorth;
       double opening = desk.portfolio.openingWorth();
       String value = Money.dollars(worth);
       int valueX = width - 14 - width(g, value, BIG);
@@ -626,19 +717,22 @@ final class DeskPanel extends JPanel {
       int rank = desk.rank(false);
       String place = ordinal(rank) + " of " + (desk.rivals.size() + 1);
       String today = Money.change(worth - opening) + " today";
-      String cash = "Cash " + Money.dollars(desk.portfolio.cash);
+      double cashNow = shownCash();
+      String cash = "Cash " + Money.dollars(cashNow);
+      // While the cash rolls after a trade: red as it is spent, green as a sale pays.
+      Color cashColor = cashNow > desk.portfolio.cash ? DOWN : cashNow < desk.portfolio.cash ? UP : MUTED;
       int right = width - 14 - width(g, today, SMALL);
       if (narrow) {
          // Under the net worth, beside the speed buttons: the place and today's change, then the cash.
          text(g, today, SMALL, worth >= opening ? UP : DOWN, right, 49);
          text(g, place, BOLD, rank == 1 ? UP : WARN, right - 10 - width(g, place, BOLD), 49);
-         text(g, cash, SMALL, MUTED, width - 14 - width(g, cash, SMALL), 64);
+         text(g, cash, SMALL, cashColor, width - 14 - width(g, cash, SMALL), 64);
          return;
       }
       text(g, place, BOLD, rank == 1 ? UP : WARN, valueX - 12 - width(g, place, BOLD), 37);
       text(g, today, SMALL, worth >= opening ? UP : DOWN, right, 17);
       cash += "   ";
-      text(g, cash, SMALL, MUTED, right - width(g, cash, SMALL), 17);
+      text(g, cash, SMALL, cashColor, right - width(g, cash, SMALL), 17);
    }
 
    private void paintWatch(Graphics2D g) {
@@ -672,7 +766,24 @@ final class DeskPanel extends JPanel {
          int top = row.y + Math.min(17, row.height / 2 + 4);
          text(g, symbol, TITLE, TEXT, row.x + 12, top);
          String price1 = Money.dollars(price);
-         text(g, price1, BOLD, TEXT, row.x + 160 - width(g, price1, BOLD), top);
+         int priceW = width(g, price1, BOLD);
+         // A price that moved this minute lights up green or red for a moment, like a live board.
+         int fade = FLASH - (ticks - minuteTick);
+         int minute = desk.market.minute;
+         if (fade > 0 && minute > 0 && !price1.equals(Money.dollars(stock.path[minute - 1]))) {
+            g.setColor(withAlpha(price > stock.path[minute - 1] ? UP : DOWN, 110 * fade / FLASH));
+            g.fillRoundRect(row.x + 156 - priceW, top - 13, priceW + 8, 17, 8, 8);
+         }
+         text(g, price1, BOLD, TEXT, row.x + 160 - priceW, top);
+         // A trade that has just landed in this row: the row glows in the trade's color.
+         for (Flight flight : flights) {
+            if (flight.symbol.equals(symbol) && flight.age >= FLY) {
+               g.setColor(withAlpha(flight.buy ? UP : DOWN, 230 * (FLY + LAND - flight.age) / LAND));
+               g.setStroke(new BasicStroke(2f));
+               g.drawRoundRect(row.x, row.y, row.width, row.height, 10, 10);
+               g.setStroke(new BasicStroke(1f));
+            }
+         }
          if (row.height >= 30) {
             int held = desk.portfolio.shares(symbol);
             String note = held > 0 ? held + " held" : "";
@@ -750,6 +861,13 @@ final class DeskPanel extends JPanel {
       g.setStroke(new BasicStroke(1f));
       int dot = big ? 8 : 5;
       g.fillOval(xOf.applyAsInt(now) - dot / 2, yOf.applyAsInt(stock.path[now]) - dot / 2, dot, dot);
+      if (big && desk.speed != Desk.PAUSED && !desk.market.closed() && !still()) {
+         // While the market runs, a ring keeps spreading from the price now, once a second.
+         int beat = ticks % 25;
+         int r = dot / 2 + beat / 2;
+         g.setColor(withAlpha(line, 170 * (25 - beat) / 25));
+         g.drawOval(xOf.applyAsInt(now) - r, yOf.applyAsInt(stock.path[now]) - r, r * 2, r * 2);
+      }
 
       if (big) {
          marks.clear();
