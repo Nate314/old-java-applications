@@ -79,6 +79,25 @@ try {
                             $bytes = $packed.ToArray()
                             $response.Headers['Content-Encoding'] = 'gzip'
                         }
+                    } else {
+                        # A Range request gets just that part (206), as from GitHub Pages and nginx: a video asks for its clip so.
+                        $response.Headers['Accept-Ranges'] = 'bytes'
+                        if ($status -eq 200 -and $request.Headers['Range'] -match '^bytes=(\d*)-(\d*)$' -and ($Matches[1] -or $Matches[2])) {
+                            $size = $bytes.Length
+                            $start = if ($Matches[1]) { [long]$Matches[1] } else { [Math]::Max(0, $size - [long]$Matches[2]) }
+                            $end = if ($Matches[1] -and $Matches[2]) { [Math]::Min([long]$Matches[2], $size - 1) } else { $size - 1 }
+                            if ($start -gt $end) {
+                                $response.StatusCode = 416
+                                $response.Headers['Content-Range'] = "bytes */$size"
+                                $bytes = [byte[]]::new(0)
+                            } else {
+                                $response.StatusCode = 206
+                                $response.Headers['Content-Range'] = "bytes $start-$end/$size"
+                                $part = [byte[]]::new($end - $start + 1)
+                                [Array]::Copy($bytes, $start, $part, 0, $part.Length)
+                                $bytes = $part
+                            }
+                        }
                     }
                     $response.ContentLength64 = $bytes.Length
                     if ($request.HttpMethod -ne 'HEAD') { $response.OutputStream.Write($bytes, 0, $bytes.Length) }
