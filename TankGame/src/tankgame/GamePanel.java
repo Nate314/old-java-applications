@@ -20,7 +20,7 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
- * Runs the battle on a Swing timer and paints the battlefield (grass and dirt that keeps the round's track marks and
+ * Runs the battle on a Swing timer and paints the battlefield (its ground, see Terrain, which keeps the round's track marks and
  * blast scorches, and concrete walls), the supply crates, the tanks, the shells, the sparks and smoke, the score bar
  * with each tank's powers, and the banners.
  */
@@ -29,7 +29,6 @@ public class GamePanel extends JPanel
 {
     private static final int   TICK_MILLIS = 16;
     private static final int   SLOW_FRAMES = 66;
-    private static final Color FIELD       = new Color(106, 122, 72);
     /** The ground is drawn this many times finer than the field, so it stays sharp when the page zooms the window. */
     private static final int   GROUND_SCALE = 2;
     private static final Color CONCRETE    = new Color(150, 146, 138);
@@ -47,6 +46,7 @@ public class GamePanel extends JPanel
     /** The round's ground, with every track mark and scorch so far; made again for each battlefield. */
     private BufferedImage      ground;
     private Arena              groundArena;
+    private Terrain            terrain     = Terrain.MEADOW;
     /** Each tank's x, y and rotation when its tracks last marked the ground. */
     private final double[][]   lastPose    = new double[2][];
     private int                ticks;
@@ -65,7 +65,7 @@ public class GamePanel extends JPanel
     public GamePanel(Battle battle)
     {
         this.battle = battle;
-        this.setBackground(FIELD);
+        this.setBackground(Terrain.MEADOW.base);
         // A click (or a tap, on a touch screen) on a button does what it says: 1 player or 2 players, or a setting
         // (crates, sound, battlefield, watch) like its key. While building it lays or lifts walls. Anywhere else it plays red with
         // the pointer (PointerControls), or starts a match against the computer, like Q.
@@ -354,10 +354,11 @@ public class GamePanel extends JPanel
         repaint();
     }
 
-    /** Lays fresh ground for the battlefield: grass with patches of dirt, tufts and pebbles. */
+    /** Lays fresh ground for the battlefield, in its own terrain (Terrain). */
     private void makeGround()
     {
         groundArena = battle.arena();
+        terrain = Terrain.of(groundArena);
         lastPose[0] = lastPose[1] = null;
         int width = getWidth();
         int height = getHeight();
@@ -365,34 +366,7 @@ public class GamePanel extends JPanel
         Graphics2D g = ground.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.scale(GROUND_SCALE, GROUND_SCALE);
-        g.setColor(FIELD);
-        g.fillRect(0, 0, width, height);
-        Random random = new Random(groundArena.name().hashCode());
-        Color[] patches = { new Color(136, 150, 88, 34), new Color(84, 100, 56, 34), new Color(132, 112, 78, 40) };
-        for (int i = 0; i < width * height / 330; i++)
-        {
-            int size = 8 + random.nextInt(34);
-            g.setColor(patches[random.nextInt(patches.length)]);
-            g.fillOval(random.nextInt(width + 20) - 20, random.nextInt(height + 20) - 20, size, size * 3 / 4);
-        }
-        Color[] blades = { new Color(64, 86, 40, 170), new Color(150, 168, 96, 150) };
-        for (int i = 0; i < width * height / 900; i++)
-        {
-            int x = random.nextInt(width);
-            int y = random.nextInt(height);
-            g.setColor(blades[random.nextInt(blades.length)]);
-            for (int b = -1; b <= 1; b++) g.drawLine(x, y, x + b * 2 + random.nextInt(2), y - 3 - random.nextInt(3));
-        }
-        for (int i = 0; i < width * height / 4500; i++)
-        {
-            int x = random.nextInt(width);
-            int y = random.nextInt(height);
-            int size = 3 + random.nextInt(4);
-            g.setColor(new Color(60, 56, 48, 120));
-            g.fillOval(x + 1, y + 1, size, size - 1);
-            g.setColor(new Color(160, 154, 142));
-            g.fillOval(x, y, size, size - 1);
-        }
+        terrain.lay(g, width, height, new Random(groundArena.name().hashCode()));
         g.dispose();
     }
 
@@ -410,11 +384,12 @@ public class GamePanel extends JPanel
         t.rotate(Math.toRadians(tank.rotation() - 90));
         for (int top : new int[] { -Tank.SIZE + 2, Tank.SIZE - 20 })
         {
-            t.setColor(new Color(52, 44, 30, 26));
+            Color c = terrain.track;
+            t.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 26));
             t.fillRect(-Tank.SIZE + 2, top, 6, 18);
             if (ticks % 2 == 0)
             {
-                t.setColor(new Color(40, 34, 24, 36));
+                t.setColor(new Color(c.getRed() * 3 / 4, c.getGreen() * 3 / 4, c.getBlue() * 3 / 4, 36));
                 t.fillRect(-Tank.SIZE + 3, top + 1, 2, 16);
             }
         }
@@ -471,8 +446,8 @@ public class GamePanel extends JPanel
         int shakeY = (int) Math.round((shakeRandom.nextDouble() * 2 - 1) * shake);
         if (shake > 0)
         {
-            // The strip the shaken ground uncovers is grass too, also in pictures of the canvas (replay, photo).
-            g.setColor(FIELD);
+            // The strip the shaken ground uncovers is the same ground, also in pictures of the canvas (replay, photo).
+            g.setColor(terrain.base);
             g.fillRect(0, 0, getWidth(), getHeight());
         }
         g.translate(shakeX, shakeY);
@@ -627,6 +602,7 @@ public class GamePanel extends JPanel
                 boolean go = battle.phaseTicks() > Battle.ROUND_START_TICKS - 25;
                 panel(g, new Line[] { new Line(go ? "FIGHT!" : "ROUND " + battle.round(), BIG, go ? Color.YELLOW : TEXT),
                                 new Line(battle.arena().name(), MEDIUM, TEXT),
+                                new Line(Terrain.of(battle.arena()).where, SMALL, DIM),
                                 new Line(battle.redWins() + " - " + battle.greenWins(), SMALL, DIM),
                                 new Line(battle.fieldBlocked() ? BLOCKED_NOTE : "", SMALL, Color.YELLOW) });
                 break;
@@ -681,11 +657,12 @@ public class GamePanel extends JPanel
      */
     private void menu(Graphics2D g, Line[] lines, boolean ready)
     {
-        Rectangle box = panel(g, lines, 6, 380, ready ? 56 : 0);
+        // Top and bottom margins kept tight so a box with the record line still clears the tanks' top tracks.
+        Rectangle box = panel(g, lines, 2, 380, ready ? 52 : 0);
         if (!ready) return;
         int gap = 10;
         int bw = (box.width - gap * 3) / 2;
-        int by = box.y + box.height - 54;
+        int by = box.y + box.height - 50;
         play(g, new Rectangle(box.x + gap, by, bw, 44), "1 player", "vs the computer: Q", battle.red(),
                         () -> battle.startMatch(true));
         play(g, new Rectangle(box.x + gap * 2 + bw, by, bw, 44), "2 players", "one keyboard: M", battle.green(),
