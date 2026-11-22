@@ -34,6 +34,7 @@ export const H = {
   photo: false,                     // the app's page says it runs (Photo shows)
   pop: { shown: false, on: false, synced: false },   // Pop out, whether the app is out, and whether that has been asked
   filter: 'all',
+  query: '',                        // the words typed into the gallery's filter field
   pad: { called: false, has: false, shown: false, drawn: false },   // the docked controller (called: set for an app; drawn: put in its box once)
   fresh: null as string | null,     // the stamp just collected
   resetAsk: false,                  // Reset asks once more

@@ -20,7 +20,7 @@ import { WhatsNew } from './WhatsNew';
 import { bannerText } from './takeaway';
 import { TakeItWithYou } from './TakeItWithYou';
 import { cardBlur, cardEnter, cardFocus, cardLeave, clipBroken, clipPlaying } from './clips';
-import { inFilter, playedRank, useRecordLines } from './yours';
+import { FILTERS, inFilter, matches, onView, playedRank, useRecordLines } from './yours';
 
 const page = (id: string) => id + '/index.html';
 const THEN_HINT = 'As first restored in 2026: the recovered code with light bug fixes, before the later reworks.';
@@ -201,7 +201,7 @@ function Gallery() {
         return (
           <li key={a.id} data-app={a.id} data-clip={a.clip && !c.broken[a.id] ? '' : undefined} data-then={a.then ? '' : undefined}
               data-origin={a.origin} data-cat={a.cat} data-min-width={a.minWidth} data-min-height={a.minHeight}
-              className={cls || undefined} hidden={!inFilter(a, H.filter)}
+              className={cls || undefined} hidden={!onView(a)}
               onMouseEnter={() => cardEnter(a.id)} onMouseLeave={() => cardLeave(a.id)} onFocus={e => cardFocus(e, a.id)} onBlur={e => cardBlur(e, a.id)}>
             <img className="tone" src={webp(a.shot)} alt="" loading="lazy" />
             <a className="thumb" href={page(a.id)} onClick={e => P.cardClick(e, a)}>
@@ -257,23 +257,45 @@ function Arcade() {
   );
 }
 
-/** The gallery under its filters and Find; a filter or a preview clip draws only this (drawPart). */
+/** The gallery under its filters and Find; a filter, a typed word or a preview clip draws only this (drawPart). */
 function Apps() {
   usePart('gallery');
   if (H.filter === 'yours' && !stampCount()) H.filter = 'all';   // the passport was reset, here or on another page
+  const q = H.query.trim(), shown = APPS.filter(onView), everywhere = q ? APPS.filter(a => matches(a, q)).length : 0;
   return (
     <>
       <div className="filters" role="group" aria-label="Filter apps">
-        {[['all', 'All'], ['game', 'Games'], ['music', 'Music'], ['toy', 'Toys'], ['tool', 'Tools'], ...(stampCount() ? [['yours', 'Yours']] : [])].map(([f, label], i) => [
+        {FILTERS.filter(([f]) => f !== 'yours' || stampCount()).map(([f, label], i) => [
           i ? ' ' : null,
-          <button key={f} type="button" data-filter={f} aria-pressed={H.filter === f} onClick={() => P.filterClick(f)}>{label}</button>,
+          <button key={f} type="button" data-filter={f} aria-pressed={H.filter === f} onClick={() => P.filterClick(f)}>
+            {label}{q && <span className="count">{' ' + APPS.filter(a => inFilter(a, f) && matches(a, q)).length}</span>}
+          </button>,
         ])}
       </div>
-      <button type="button" className="find-bar" data-find="" aria-keyshortcuts="Control+K /">
+      {/* Typing filters the cards at once and Enter plays the first one; Find (boot.js, find.js) searches the whole site. */}
+      <div className="find-bar" role="search">
         <span className="glass" aria-hidden="true">⌕</span>
-        <span className="text">Find an app, something to do, or any Java source file</span>
-        <kbd>{FIND_KEY}</kbd>
-      </button>
+        <input type="search" className="text" id="gallery-filter" value={H.query} autoComplete="off" spellCheck={false}
+          aria-label="Filter the apps" aria-describedby="gallery-filter-said" placeholder="Type to filter the apps: a name, or something to do"
+          onChange={e => P.queryInput(e.target.value)} onKeyDown={e => P.queryKey(e, shown[0])} />
+        <span className="said" id="gallery-filter-said" role="status">
+          {q ? (shown.length ? (shown.length === 1 ? '1 app' : shown.length + ' apps') + ' · Enter plays ' + shown[0].name : 'No app') : ''}
+        </span>
+        <button type="button" className="find-all" data-find="" aria-keyshortcuts="Control+K /" title="Find: apps, things to do here, and every Java source file"
+          onClick={() => P.findWith(q)}>
+          Search all <kbd>{FIND_KEY}</kbd>
+        </button>
+      </div>
+      {q && !shown.length && (
+        <p className="no-match">
+          {'No app here has “' + q + '”. '}
+          {everywhere > 0 && <button type="button" className="btn" onClick={() => P.filterClick('all')}>{'Show all ' + everywhere}</button>}
+          {' '}
+          <button type="button" className="btn" onClick={() => P.queryInput('')}>Clear</button>
+          {' '}
+          <button type="button" className="btn primary" onClick={() => document.querySelector<HTMLButtonElement>('.find-all')!.click()}>Search the whole site and its source</button>
+        </p>
+      )}
       <Gallery />
     </>
   );

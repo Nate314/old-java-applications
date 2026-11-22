@@ -2,7 +2,7 @@
 // the app on load, so a link can point straight at one. Ctrl/Shift/middle clicks still open the full page.
 // Also the passport, Arcade mode, Fit and the tour, which all drive the player. What they show is in H (model.ts);
 // Home.tsx draws it, and its controls call the functions here.
-import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, SyntheticEvent } from 'react';
 import { APPS, type App } from '../../shared/catalog';
 import { byId } from '../../shared/dom';
 import { linkState, linkedApp } from '../../shared/link-state';
@@ -227,6 +227,25 @@ export function bigClick() {
 export function filterClick(f: string) {
   H.filter = f;
   drawPart('gallery');
+}
+
+// The gallery's filter field: the cards follow each key, Enter plays the first one left, Esc clears it.
+export function queryInput(q: string) {
+  H.query = q;
+  drawPart('gallery');
+}
+export function queryKey(e: ReactKeyboardEvent, first: App | undefined) {
+  if (e.key === 'Enter' && first && H.query.trim()) { e.preventDefault(); choose(first); }
+  else if (e.key === 'Escape' && H.query) { e.preventDefault(); queryInput(''); }
+}
+/** Search all (find.ts opens Find on its click) starts from the words typed in the filter field. */
+export function findWith(q: string) {
+  if (!q) return;
+  const since = Date.now(), wait = setInterval(() => {
+    const input = document.querySelector<HTMLInputElement>('.shim-find-input');
+    if (input || Date.now() - since > 3000) clearInterval(wait);
+    if (input && !input.value) { input.value = q; input.dispatchEvent(new Event('input', { bubbles: true })); }
+  }, 30);
 }
 
 // The keyboard games get a controller docked under the screen (the runtime builds it). Its presses go into
