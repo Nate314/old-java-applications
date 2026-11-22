@@ -90,13 +90,6 @@ final class Lesson {
 
    /** True if the side to move can win a small board at once. */
    static boolean givesBoard(GameState state) {
-      for (int move : state.legalMoves()) {
-         GameState next = state.copy();
-         next.play(move / 9, move % 9);
-         if (next.boardResults[move / 9] != null && !GameState.DRAW.equals(next.boardResults[move / 9])) {
-            return true;
-         }
-      }
-      return false;
+      return state.boardWinningMoves().length > 0;
    }
 }

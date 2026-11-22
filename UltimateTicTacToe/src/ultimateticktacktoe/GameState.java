@@ -50,6 +50,20 @@ public final class GameState {
       return Arrays.copyOf(moves, count);
    }
 
+   /** The moves that win a small board for the side to move, as board * 9 + cell (a pointed-at move warns of these). */
+   public int[] boardWinningMoves() {
+      int[] moves = this.legalMoves();
+      int count = 0;
+      for (int move : moves) {
+         GameState next = this.copy();
+         next.play(move / 9, move % 9);
+         if (next.boardResults[move / 9] != null && !DRAW.equals(next.boardResults[move / 9])) {
+            moves[count++] = move;
+         }
+      }
+      return Arrays.copyOf(moves, count);
+   }
+
    public boolean canPlay(int board, int cell) {
       return this.winner == null
          && this.boardResults[board] == null
