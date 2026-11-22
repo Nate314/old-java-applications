@@ -5,12 +5,13 @@ import { useState, type FormEvent } from 'react';
 import { LOST_APPS, named, score, type LostApp } from './match';
 import { Spotlight, lastPlayed } from './Spotlight';
 import { PlayHere } from '../../shared/PlayHere';
+import { webp } from '../../shared/catalog';
 
 function Card({ root, app, best }: { root: string; app: LostApp; best: boolean }) {
   return (
     <li>
       <a className={'card' + (best ? ' best' : '')} href={root + app.id + '/index.html'}>
-        <img src={root + app.shot} alt="" loading="lazy" />
+        <img src={root + webp(app.shot)} alt="" loading="lazy" />
         <div className="body">
           {best && <em className="tag">Closest</em>}
           <strong>{app.name}</strong>

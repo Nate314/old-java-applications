@@ -1,6 +1,6 @@
 // The story (story.html): HISTORY.md told with the real code and the apps; its live panels are in panels.tsx.
 import './story.css';
-import { APPS } from '../../shared/catalog';
+import { APPS, webp } from '../../shared/catalog';
 import { ChainShow, EraPanel, PickLink, RenamePanel, StoryTop, Tape } from './panels';
 import { ShareStory } from './ShareStory';
 import { StoryPlay } from './StoryPlay';
@@ -29,7 +29,9 @@ function Apps20() {
           <h3 key={key}>{title + ' (' + mine.length + ')'}</h3>,
           ...mine.map(a => (
             <a key={a.id} href={a.id + '/index.html'}>
-              <img src={a.shot} alt="" loading="lazy" />
+              <img src={webp(a.shot, true)} srcSet={webp(a.shot, true) + ' 240w, ' + webp(a.shot) + ' 480w'}
+                // Two columns of tiles below 410 px, three to 535 px, then 140 px at most (story.css .apps20).
+                sizes="(max-width: 409px) calc(50vw - 34px), (max-width: 535px) calc(33vw - 30px), 140px" alt="" loading="lazy" />
               <b>{a.name}</b>
               <span className="from">{from}</span>
             </a>

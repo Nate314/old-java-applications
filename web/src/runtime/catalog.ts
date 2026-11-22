@@ -27,7 +27,8 @@ export function catalog() {
           clip: !!a.clip,
           name: a.name,
           hint: a.hint,
-          shot: root() + a.shot
+          // The WebP copy (web/shots.ps1), a third to a fifth of the PNG's bytes: Find, toasts, cards and menus show it small.
+          shot: root() + a.shot.replace(/\.png$/, '.webp')
         };
       });
     }).catch(function (e) {
