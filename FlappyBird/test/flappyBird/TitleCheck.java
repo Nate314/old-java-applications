@@ -1,6 +1,6 @@
 package flappyBird;
 
-/** Checks the title screen's card: under the bird and above the ground at any shape of window, and where clicks land. */
+/** Checks the title screen's card and the game over screen's buttons at any shape of window, and where clicks land. */
 public final class TitleCheck {
    public static void main(String[] args) {
       int[][] sizes = {{1440, 810}, {960, 600}, {300, 520}, {600, 600}, {1600, 400}};
@@ -24,6 +24,33 @@ public final class TitleCheck {
          assert card.hit(width / 2, card.y - 1) == TitleCard.NONE : at + "above the card flaps";
          assert card.hit(width / 2, card.promptY) == TitleCard.NONE : at + "the prompt flaps";
          assert card.hit(card.x, middle) == TitleCard.NONE : at + "the card's rim flaps";
+
+         // The game over screen's buttons, at the scoreboard's unit and width: in a row inside it, Fly again the widest.
+         int u = Math.max(8, Math.min(height / 24, width / 17));
+         int boardW = Math.min(width * 23 / 25, u * 15);
+         int boardX = (width - boardW) / 2;
+         for (boolean rewind : new boolean[]{true, false}) {
+            int[][] row = GamePanel.overButtons(boardX, 100, boardW, u, rewind);
+            int[] title = row[GamePanel.TITLE_BUTTON];
+            int[] again = row[GamePanel.AGAIN_BUTTON];
+            assert (row[GamePanel.REWIND_BUTTON] != null) == rewind : at + "rewind only with a tape";
+            assert title[0] == boardX && again[0] + again[2] == boardX + boardW : at + "the row spans the scoreboard";
+            int right = title[0] + title[2];
+            for (int[] b : row) {
+               if (b != null && b != title) {
+                  assert b[0] > right : at + "buttons do not overlap";
+                  right = b[0] + b[2];
+                  assert again[2] >= b[2] : at + "Fly again is the widest";
+               }
+            }
+            for (int i = 0; i < row.length; i++) {
+               if (row[i] != null) {
+                  assert GamePanel.overHit(row, row[i][0] + 1, row[i][1] + row[i][3] / 2) == i : at + "button " + i + " is hit";
+               }
+            }
+            assert GamePanel.overHit(row, title[0] + title[2] + 1, title[1] + 1) == -1 : at + "the gap is no button";
+            assert GamePanel.overHit(row, width / 2, title[1] - 1) == -1 : at + "above the row is no button";
+         }
       }
       System.out.println("TitleCheck passed");
    }
