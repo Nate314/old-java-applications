@@ -48,7 +48,6 @@ public final class CircleCreatorWindow extends JFrame {
    private static final int DRAW_BELOW_HEIGHT = 423;
    /** About how many frames building a shape takes, whatever its window count. */
    private static final int BUILD_FRAMES = 45;
-   private static final int SCATTER_FRAMES = 50;
    /** Frames for one shape to turn into another, and for the drawing to follow the pen. */
    private static final int MORPH_FRAMES = 40;
    private static final int DRAW_FRAMES = 10;
@@ -143,7 +142,10 @@ public final class CircleCreatorWindow extends JFrame {
    /** True while the Clock turns into the next second: no messages, nothing saved, windows stay in place. */
    private boolean ticking;
    private int built;
-   private int scatterFrame;
+   private Tumble tumble;
+   /** Tumble frames run so far, and when the tumble began (nanoTime ms, so Slow-mo slows it). */
+   private int tumbleFrames;
+   private long tumbleStart;
    private boolean settingUp = true;
 
    /** sent: the shape of a friend's link, shown instead of the saved one, or null. */
@@ -569,7 +571,7 @@ public final class CircleCreatorWindow extends JFrame {
       if (this.settingUp) {
          return;
       }
-      if (this.scatterTimer.isRunning() || this.slices.isEmpty()) {
+      if (this.slices.isEmpty()) {
          this.build();
          return;
       }
@@ -678,7 +680,10 @@ public final class CircleCreatorWindow extends JFrame {
       return colors;
    }
 
-   /** Sends every window of the shape flying out from its middle and falling, then closes them. */
+   /**
+    * Knocks the shape apart: every window flies out from the middle, tumbles to the floor of the screen and,
+    * after a moment in a heap, jumps back to its place (see Tumble). Picking a shape meanwhile builds it from the heap.
+    */
    private void scatter() {
       if (this.scatterTimer.isRunning() || this.slices.isEmpty()) {
          return;
@@ -687,40 +692,38 @@ public final class CircleCreatorWindow extends JFrame {
       this.stopAll();
       this.pending.clear();
       this.pendingColors.clear();
-      double centerX = 0;
-      double centerY = 0;
+      List<Rectangle> home = new ArrayList<>();
       for (CircleSliceWindow slice : this.slices) {
-         centerX += slice.x + slice.getWidth() / 2.0;
-         centerY += slice.y + slice.getHeight() / 2.0;
+         home.add(slice.getBounds());
       }
-      centerX /= this.slices.size();
-      centerY /= this.slices.size();
-      for (CircleSliceWindow slice : this.slices) {
-         double dx = slice.x + slice.getWidth() / 2.0 - centerX;
-         double dy = slice.y + slice.getHeight() / 2.0 - centerY;
-         slice.velocityX = dx * 0.08 + (this.random.nextDouble() - 0.5) * 8.0;
-         slice.velocityY = dy * 0.08 - 6.0 - this.random.nextDouble() * 6.0;
-      }
-      this.scatterFrame = 0;
-      this.movedX = 0;
-      this.movedY = 0;
-      this.status.setText("Scattered! Pick a shape or press Build it.");
+      Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+      this.tumble = new Tumble(home, screen.width, screen.height, this.random);
+      this.tumbleFrames = 0;
+      this.tumbleStart = System.nanoTime() / 1_000_000;
+      this.status.setText("Scattered! Watch it pull itself back together.");
       this.scatterTimer.start();
    }
 
-   /** One frame of scattering: moves each window along its path, with gravity. */
+   /**
+    * The shape tumbling apart or gathering back into place, timed by the clock: a slow screen (many real windows
+    * on the desktop) runs several of the tumble's frames per redraw rather than tumbling in slow motion.
+    */
    private void scatterStep() {
-      this.scatterFrame++;
-      if (this.scatterFrame > SCATTER_FRAMES) {
-         this.scatterTimer.stop();
-         this.clear();
-         return;
+      long due = (System.nanoTime() / 1_000_000 - this.tumbleStart) / FRAME_MILLIS;
+      boolean home = false;
+      for (int i = 0; i < 8 && this.tumbleFrames < due && !home; i++, this.tumbleFrames++) {
+         home = this.tumble.step();
       }
-      for (CircleSliceWindow slice : this.slices) {
-         slice.velocityY += 0.9;
-         slice.x += slice.velocityX;
-         slice.y += slice.velocityY;
-         slice.setLocation((int)slice.x, (int)slice.y);
+      for (int i = 0; i < this.slices.size(); i++) {
+         CircleSliceWindow slice = this.slices.get(i);
+         slice.x = this.tumble.x[i];
+         slice.y = this.tumble.y[i];
+         slice.setLocation((int)Math.round(slice.x), (int)Math.round(slice.y));
+      }
+      if (home) {
+         this.scatterTimer.stop();
+         this.tumble = null;
+         this.showBuilt();
       }
    }
 
@@ -871,6 +874,7 @@ public final class CircleCreatorWindow extends JFrame {
       this.endJelly();
       this.buildTimer.stop();
       this.scatterTimer.stop();
+      this.tumble = null;
       this.morphTimer.stop();
       if (this.morph != null) {
          this.morph.finish();
