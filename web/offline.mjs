@@ -9,8 +9,9 @@
 // Offline means no network for the page AND the service worker (each gets Network.emulateNetworkConditions), with
 // Chrome's HTTP cache cleared first, so answers can only come from the worker's cache. A page step fails on an
 // uncaught error, a console error, a failed or 4xx/5xx request, the worker's "Offline" page, no window after Play or
-// a one-color canvas. Not failures: a missing preview clip and Find's source lists (neither is saved offline), and in
-// flow 1 a picture the page never showed online (a note).
+// a one-color canvas. Not failures: a preview clip a page asks for but never played online, Find's source lists (not
+// saved offline), and in flow 1 a picture the page never showed online (a note). Clip steps play preview clips in a
+// <video> and seek near their end (a Range request): in flow 1 one clip played online, in flows 2 and 3 every clip.
 // Sound is off (--mute-audio, __shimSynth.noteOn stubbed, new AudioContexts suspended), the clipboard and
 // alert/confirm/prompt are stubbed, Chrome's profile and the copy live under -ProfileRoot and are deleted
 // afterwards, and the server and Chrome are stopped by PID. Prints PASS or FAIL per step, exits 1 on any FAIL.
@@ -215,17 +216,36 @@ try {
   }
   async function check(name, fn) { const t0 = Date.now(); let why; try { why = await fn(); } catch (e) { why = e.message; } return report(name, why, t0); }
   const home = { ready: '#player-frame' };
+  // A preview clip loads, plays and seeks to its last second (a Range request past what it loaded first).
+  const CLIPS = JSON.parse(readFileSync(join(site, 'apps.json'), 'utf8')).filter(a => a.clip).map(a => a.id);
+  const clip = id => `new Promise(function (done) {
+    var v = document.createElement('video'), t = setTimeout(function () { done('timed out, readyState ' + v.readyState); }, 15000);
+    var end = function (why) { clearTimeout(t); v.removeAttribute('src'); v.load(); done(why); };
+    v.muted = true; v.preload = 'auto';
+    v.onerror = function () { end('error ' + (v.error && v.error.code)); };
+    v.onloadeddata = function () { v.onloadeddata = null; v.onseeked = function () { end(v.readyState >= 2 ? '' : 'seeked, readyState ' + v.readyState); }; v.currentTime = Math.max(0, v.duration - 1); };
+    v.src = ${JSON.stringify(BASE + 'clips/')} + ${JSON.stringify(id)} + '.mp4';
+  })`;
+  async function clips(name, ids) {
+    await check(name, async () => {
+      const bad = [];
+      for (const id of ids) { const why = await js(clip(id)); if (why) bad.push(id + ': ' + why); }
+      return bad.length ? (ids.length - bad.length) + ' of ' + ids.length + ' clips played; ' + bad.slice(0, 3).join(' | ') : '';
+    });
+  }
 
   // ---- flow 1: first visit, then offline ----
   console.log('== first visit, then offline');
   await page('home (online)', 'index.html', home);
   await check('service worker controls the home page', async () => await until('!!navigator.serviceWorker.controller', 15000) ? '' : 'no controller after 15 s');
+  await clips('preview clip plays (online)', ['Minesweeper']);
   await page('story (online)', 'story.html', { ready: 'main' });
   await page('play.html?app=Minesweeper (online)', 'play.html?app=Minesweeper', { app: true, click: '#poster-play', frame: '#frame' });
   await page('Clock (online)', 'Clock/index.html', { app: true });
   await sleep(1500);   // the last page settles into the cache
   await setOffline(true);
   await page('home (offline)', 'index.html', { ...home, firstVisit: true });
+  await clips('preview clip played online plays (offline)', ['Minesweeper']);
   await page('story (offline)', 'story.html', { ready: 'main', firstVisit: true });
   await page('play.html?app=Minesweeper (offline)', 'play.html?app=Minesweeper', { app: true, click: '#poster-play', frame: '#frame', firstVisit: true });
   await page('Clock (offline)', 'Clock/index.html', { app: true, firstVisit: true });
@@ -237,6 +257,7 @@ try {
   async function savedOffline(label, build) {
     await setOffline(true);
     await page('home ' + label, 'index.html', { ...home, build });
+    await clips('every preview clip plays ' + label, CLIPS);
     await page('story ' + label, 'story.html', { ready: 'main' });
     for (const a of SAVED) await page(a + ' ' + label, a + '/index.html', { app: true, build });
     for (const a of THEN) await page(a + ' Then ' + label, a + '/then.html', { app: true, build });
@@ -262,6 +283,7 @@ try {
     if (!await until("![].some.call(document.querySelectorAll('button'), function (b) { return /Saving/.test(b.textContent); })", 300000)) return 'still saving after 300 s';
     await sleep(500);
     const text = await js("[].slice.call(document.querySelectorAll('p,div')).map(function(e){return e.textContent}).filter(function(t){return /saved on this device|Could not save/.test(t)}).sort(function(a,b){return a.length-b.length})[0]||''");
+    console.log('     ' + text);
     return /^All \d+ apps saved/.test(text) ? '' : 'panel says: ' + (text || 'nothing');
   });
   await savedOffline('(saved, offline)', false);

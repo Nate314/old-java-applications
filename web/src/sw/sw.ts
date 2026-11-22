@@ -11,6 +11,7 @@
 // A page is kept only together with everything it names (scripts, stylesheets, program, data files), and a new build
 // stages fresh copies of every kept page in NEXT while installing, swapped in on activating: so offline a page always
 // runs whole, as the newest build that finished saving it, never an old program against a new runtime.
+// Preview clips are kept whole the first time one plays (or by Save all) and cut to the asked range offline.
 // Built by vite/pages.ts into the site root as sw.js (a service worker's scope is its own folder and below).
 import { CACHE, cacheKey, isProgram, pageNames } from './offline-files';
 declare const self: ServiceWorkerGlobalScope;
@@ -24,6 +25,8 @@ const built = () => BUILT.map(f => new URL(f, sw.registration.scope).href);
 // the names serve.ps1 and nginx.conf send as immutable
 const fixedName = (url: URL) => /^\/assets\/.+-[A-Za-z0-9_-]{8}\.(js|css)$/.test(url.pathname) || (isProgram(url) && /^\?v=/.test(url.search));
 const isPage = (url: string) => /(\.html|\/)$/.test(new URL(url).pathname);
+// preview clips (clips/<App>.mp4): kept whole, answered offline in the ranges a video asks for (ranged)
+const isClip = (url: URL) => /\.(mp4|webm)$/.test(url.pathname);
 // the desktop jars are not kept
 const kept = (url: URL) => url.origin === self.location.origin && !/\/downloads\/[^/]+\.jar$/.test(url.pathname);
 
@@ -93,9 +96,19 @@ function settle(cache: Cache): Promise<unknown> {
     return cache.put(page, p.response);
   })));
 }
+/** A preview clip's first answer to the video's "bytes=0-" (206 from GitHub Pages and nginx) holds the whole file: kept as it. */
+function wholeFile(response: Response): Response {
+  const range = /^bytes 0-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
+  if (response.status !== 206 || !range || +range[1] + 1 !== +range[2]) return response;
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Range');
+  return new Response(response.body, { status: 200, headers });
+}
 /** Keeps a good answer: a page waits in unsettled until everything it needs is kept, anything else goes in at once. */
 function keep(k: string, response: Response, page: boolean): Promise<unknown> {
-  if (response.status !== 200 || response.type !== 'basic') return Promise.resolve();
+  if (response.type !== 'basic') return Promise.resolve();
+  response = wholeFile(response);
+  if (response.status !== 200) return Promise.resolve();
   return caches.open(CACHE).then(cache => (page
     ? response.clone().text().then(html => { unsettled.set(k, { response, needs: needs(response.url || k, html) }); })
     : cache.put(k, response)).then(() => settle(cache)));
@@ -109,13 +122,27 @@ sw.addEventListener('message', e => {
   if (!Array.isArray(urls)) return;
   e.waitUntil(Promise.all(urls.filter((u): u is string => typeof u === 'string').map(u => {
     const url = new URL(u, sw.registration.scope);
-    if (!kept(url) || /\.(mp4|webm)$/.test(url.pathname)) return undefined;   // preview clips stream in ranges: not kept
+    if (!kept(url) || isClip(url)) return undefined;   // a clip loaded before the worker came is not fetched again (it is kept next time it plays)
     const k = cacheKey(url.href), page = isPage(url.href);
     return caches.match(k).then(hit => hit || fetch(url.href, page ? { cache: 'no-cache' } : undefined).then(r => keep(k, r, page))).catch(() => undefined);
   })));
 });
 
 // ---- answering ----
+/** A kept clip cut to the request's Range: a video asks for its file in ranges (seeking, looping) and needs a 206. */
+function ranged(request: Request, whole: Response): Promise<Response> {
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') || '');
+  if (!range || !(range[1] || range[2])) return Promise.resolve(whole);
+  return whole.arrayBuffer().then(body => {
+    const size = body.byteLength;
+    const start = range[1] ? +range[1] : Math.max(0, size - +range[2]);   // "bytes=-500" is the last 500
+    const end = range[1] && range[2] ? Math.min(+range[2], size - 1) : size - 1;
+    if (start > end) return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
+    return new Response(body.slice(start, end + 1), { status: 206, headers: {
+      'Content-Type': whole.headers.get('Content-Type') || 'video/mp4', 'Content-Range': 'bytes ' + start + '-' + end + '/' + size,
+      'Content-Length': String(end - start + 1), 'Accept-Ranges': 'bytes' } });
+  });
+}
 function offlinePage(): Response {
   const home = new URL('./index.html', sw.registration.scope).href;
   return new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -139,7 +166,7 @@ sw.addEventListener('fetch', e => {
     e.waitUntil(keep(k, response.clone(), page));
     return response;
   }).catch(error => caches.match(k).then(hit => {
-    if (hit) return hit;
+    if (hit) return isClip(url) ? ranged(request, hit) : hit;
     if (request.mode === 'navigate') return offlinePage();
     throw error;
   }))));

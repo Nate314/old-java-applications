@@ -10,7 +10,7 @@
 // and their Then pages load from their head, sharing assets/react.js with the pages. Its head script
 // (src/runtime/early.ts, the skin before first paint) is inlined in those pages where <EarlyScript /> stands.
 // It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages,
-// assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline, and the
+// assets/files.json, every file the build wrote besides the HTML (and the preview clips), for the home page's Save all for offline, and the
 // service worker (src/sw/sw.ts) as sw.js, a plain script at the site root. What the runtime adds to a page once it is
 // needed (src/runtime/lazy) is imported, so Vite writes it as chunks of its own.
 // Built names carry a hash of their content (vite.config.ts). public/shim.css (and the forced-colors.css it imports) is
@@ -156,7 +156,9 @@ export function pages(): Plugin {
       const files = [...new Set(Object.keys(bundle).concat(Object.keys(skins)))].filter(name => name.startsWith('assets/')).sort();
       // sw.js lists this build's files, so it changes with every build (the browser then installs it) and knows which to keep.
       this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts', false, { BUILT: JSON.stringify(files) }) });
-      this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files) + '\n' });
+      // Save all keeps the preview clips too (about 3 MB), so the gallery, play.html and title screens move offline.
+      const clips = APPS.filter(a => a.clip).map(a => 'clips/' + a.id + '.mp4');
+      this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files.concat(clips)) + '\n' });
       for (const r of ROUTES.filter(x => x.anyDepth)) {
         const chunk = Object.values(bundle).find((c): c is OutputChunk => c.type === 'chunk' && c.isEntry && c.name === inputName(r));
         if (!chunk) throw new Error('No bundle for ' + r.entry);
