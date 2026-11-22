@@ -7,7 +7,7 @@ import { APPS, type App } from '../../shared/catalog';
 import { byId } from '../../shared/dom';
 import { linkState, linkedApp } from '../../shared/link-state';
 import { readJson, store } from '../../shared/stored';
-import { H, draw, drawPart, indexOfApp } from './model';
+import { FIRST, H, draw, drawPart, indexOfApp } from './model';
 import { TOUR } from './tour';
 
 const MIN_WIDTH = 900;
@@ -487,5 +487,24 @@ export function initPlayer(): void {
   if (start) play(start, false, !!hash[2]);
   else if (hash[1] === 'tour') {   // #tour: the tour, from where it was left
     tourGo(tourResume(), false);
-  } else { mark(appById('Minesweeper') as App); fit(); demo = true; reel(); }   // the page's own frame: Minesweeper, watched
+  } else { mark(appById('Minesweeper') as App); fit(); demo = true; calmStart(); }   // the page's own frame: Minesweeper, watched
+}
+
+// The page's own demo boots its app only once the page has loaded and the browser is idle, and the player is in
+// view (or the visitor presses on its screen): booting it at once kept a phone's CPU busy through the page's own
+// first work and taps. Picking an app first (play) makes a new frame, and the demo never loads.
+function calmStart() {
+  const scr = screen();
+  let go = false;
+  const start = () => {
+    if (go) return;
+    go = true;
+    seen.disconnect();
+    if (H.frame.key === 0 && demo) { H.frame = { ...H.frame, src: FIRST.id + '/index.html?embed&watch' }; draw(); }
+    reel();
+  };
+  const seen = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) start(); });
+  const idle = () => 'requestIdleCallback' in window ? requestIdleCallback(() => seen.observe(scr), { timeout: 2000 }) : setTimeout(() => seen.observe(scr), 300);
+  if (document.readyState === 'complete') idle(); else window.addEventListener('load', idle, { once: true });
+  scr.addEventListener('pointerdown', start, { once: true });
 }
