@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -74,6 +75,15 @@ final class DesktopShortcuts {
       this.screen.settings.places.clear();
       this.screen.saveSettings();
       this.placeAll();
+   }
+
+   /** The part of the desktop the icons cover (their cells' bounds), which new windows keep clear of when they can. */
+   Rectangle area() {
+      Rectangle area = null;
+      for (Shortcut shortcut : this.shortcuts) {
+         area = area == null ? shortcut.getBounds() : area.union(shortcut.getBounds());
+      }
+      return area;
    }
 
    /** Adds an icon for each new picture and drops those of deleted ones; the rest just repaint their thumbnails. */

@@ -66,19 +66,35 @@ final class TaskList {
             this.windows.add(frame);
             // Borderless windows (ScreenSaver, CircleSpawner's slices) are not app windows a taskbar would list.
             if (!frame.isUndecorated()) {
-               place(frame, desktop);
+               if (unplaced(frame, desktop)) {
+                  this.place(frame);
+               }
                this.added(new Task(frame, this.launchingName, this.launchingIcon));
             }
          }
       }, AWTEvent.WINDOW_EVENT_MASK);
    }
 
-   /** Most apps open their window in the top-left corner, over the desktop icons; a window manager centers them. */
-   private static void place(Frame frame, Main desktop) {
-      if (frame.getX() == 0 && frame.getY() == 0) {
-         int room = desktop.getHeight() - desktop.launcherWindow.getHeight();
-         frame.setLocation(Math.max(0, (desktop.getWidth() - frame.getWidth()) / 2), Math.max(0, (room - frame.getHeight()) / 2));
+   /**
+    * Most apps open their window in the top-left corner (over the desktop icons) or the middle of the screen (over the
+    * window opened before it); a window manager finds them a place. A window an app put anywhere else stays there.
+    */
+   private static boolean unplaced(Frame frame, Main desktop) {
+      int x = frame.getX();
+      int y = frame.getY();
+      return x == 0 && y == 0 || Math.abs(x - (desktop.getWidth() - frame.getWidth()) / 2) <= 1 && Math.abs(y - (desktop.getHeight() - frame.getHeight()) / 2) <= 1;
+   }
+
+   /** Moves a new window to the spot on the desktop that hides the least of the open windows and the icons. */
+   private void place(Component window) {
+      List<Rectangle> open = new ArrayList<>();
+      for (Task task : this.showing()) {
+         if (task.window != window && task.window.isVisible()) {
+            open.add(task.window.getBounds());
+         }
       }
+      Rectangle room = new Rectangle(0, 0, this.desktop.getWidth(), this.desktop.getHeight() - this.desktop.launcherWindow.getHeight());
+      window.setLocation(Placement.spot(window.getWidth(), window.getHeight(), room, open, this.desktop.shortcuts.area()));
    }
 
    /** Frames opened from now on belong to this app (apps open their frames on threads of their own, later). */
@@ -88,7 +104,11 @@ final class TaskList {
       this.launchingFrom = from;
    }
 
+   /** An internal window (Clock, Paint), placed like any other new window; desktop is null only in the self-check. */
    void add(JInternalFrame frame, String name, Image icon) {
+      if (this.desktop != null) {
+         this.place(frame);
+      }
       this.windows.add(frame);
       this.added(new Task(frame, name, icon));
    }
@@ -154,17 +174,6 @@ final class TaskList {
       }
       this.windows.clear();
       return were;
-   }
-
-   /** How many windows of the app are showing. */
-   int countNamed(String name) {
-      int count = 0;
-      for (Task task : this.showing()) {
-         if (task.name.equals(name)) {
-            count++;
-         }
-      }
-      return count;
    }
 
    /** The windows showing now or minimized, in the order they opened. Closed ones are forgotten. */

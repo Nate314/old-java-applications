@@ -34,10 +34,6 @@ final class PaintWindow {
       int width = measured ? 2 * size.width - inner.width : size.width + 12;
       int height = measured ? 2 * size.height - inner.height : size.height + 36;
       frame[0].setSize(width, height);
-      int room = screen.getHeight() - screen.launcherWindow.getHeight();
-      // Each further Paint window opens a little lower and to the right, so it does not hide the one before.
-      int offset = 24 * (tasks.countNamed(Launcher.PAINT) % 6);
-      frame[0].setPosition(Math.max(0, (screen.getWidth() - width) / 2 + offset), Math.max(0, (room - height) / 2 + offset));
       tasks.add(frame[0], Launcher.PAINT, icon);
       frame[0].moveToFront();
       try {
