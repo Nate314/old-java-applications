@@ -69,8 +69,14 @@ function open(apps?: CatalogApp[]): Opened {
   return { ui: ui!, screen: screen!, close: () => { document.removeEventListener('keydown', press, true); close(); } };
 }
 
-/** The card the page's HTML painted before the runtime ran (src/pages/app/AppPage.tsx, EarlyTitle). */
-const dropEarly = () => document.getElementById('shim-title-early')?.remove();
+/** The card the page's HTML painted before the runtime ran (src/pages/app/AppPage.tsx, EarlyTitle). The live card takes
+ *  its pictures, already in, rather than asking for them again: pictures are no-cache, and two more <img>s for one
+ *  file cost two more requests (and a second whole download). */
+function dropEarly() {
+  const card = document.getElementById('shim-title-early'), slot = document.querySelector('.shim-title-pic');
+  if (card && slot) slot.append(...card.querySelectorAll('.shim-title-art img'));
+  card?.remove();
+}
 
 /**
  * The live card waits unseen under the early one (shim.css) until the band is up and has its height (start.ts stages
@@ -211,7 +217,7 @@ function launchPicture(screen: HTMLElement): HTMLElement | null {
     document.documentElement.getAttribute('data-skin') === 'arcade') return null;
   const pic = screen.querySelector<HTMLElement>('.shim-title-clip.on') || screen.querySelector<HTMLImageElement>('.shim-title-art img[src]:not(.shim-title-tone)');
   if (!pic) return null;
-  const r = (pic instanceof HTMLImageElement && !pic.naturalWidth ? pic.parentElement! : pic).getBoundingClientRect();
+  const r = (pic instanceof HTMLImageElement && !pic.naturalWidth ? pic.closest('.shim-title-art')! : pic).getBoundingClientRect();
   return r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight ? pic : null;
 }
 
@@ -271,6 +277,24 @@ function TitleScreen({ apps, onGo, onMount }: {
   const [forgotten, setForgotten] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [saver, setSaver] = useState(saverOn);
+  // The page's early card has the pictures: they move into this slot when it goes (dropEarly), instead of new <img>s.
+  const [adopt] = useState(() => !!document.querySelector('#shim-title-early .shim-title-art img'));
+  const slot = useRef<HTMLSpanElement>(null);
+  // A layout effect: open() may drop the early card straight after mounting this one.
+  useLayoutEffect(() => {
+    if (!adopt) return;
+    const took = () => {
+      const img = slot.current!.querySelector<HTMLImageElement>('img:not(.shim-title-tone)');
+      if (!img) return;
+      seen.disconnect();
+      if (img.complete && img.naturalWidth) setShown(true);
+      else img.addEventListener('load', () => setShown(true), { once: true });
+    };
+    const seen = new MutationObserver(took);
+    seen.observe(slot.current!, { childList: true });
+    took();
+    return () => seen.disconnect();
+  }, []);
 
   useLayoutEffect(() => {
     onMount({
@@ -321,8 +345,10 @@ function TitleScreen({ apps, onGo, onMount }: {
           {/* Shown as it arrives: today's picture has its room from the start on a phone (shim.css), so nothing moves.
               The phone poster lays a blurred copy of it behind, so the panel glows in the app's own colours. The
               catalog's shot is already the WebP. */}
-          {app && !then && <img className="shim-title-tone" alt="" src={app.shot} />}
-          <img alt="" fetchPriority="high" src={app && !then ? app.shot : undefined} onLoad={() => setShown(true)} />
+          {adopt ? <span className="shim-title-pic" ref={slot} /> : <>
+            {app && !then && <img className="shim-title-tone" alt="" src={app.shot} />}
+            <img alt="" fetchPriority="high" src={app && !then ? app.shot : undefined} onLoad={() => setShown(true)} />
+          </>}
           {app && app.clip && !then && <Attract id={id} go={ready && shown} />}
           {app && then && (
             // then.html: the quirks its README still listed when it was first restored, where today's page shows its picture.

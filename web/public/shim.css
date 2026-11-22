@@ -6051,6 +6051,11 @@ html[data-saver] * {
   from { opacity: 0; }
 }
 
+/* The live title card's room for the early card's pictures (title-screen.tsx dropEarly): no box of its own. */
+.shim-title-pic {
+  display: contents;
+}
+
 /* Only the phone poster below shows it. */
 .shim-title-tone {
   display: none;
