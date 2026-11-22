@@ -68,6 +68,17 @@ final class Music {
       return live;
    }
 
+   /** Runs r with no note ringing and without letting go of the ones sounding: the next saver, previewing in its corner, is quiet. */
+   static void quietly(Runnable r) {
+      boolean was = live;
+      live = false;
+      try {
+         r.run();
+      } finally {
+         live = was;
+      }
+   }
+
    /** Advances the music's own clock by real (not sped up) milliseconds and lets go of notes that rang long enough. */
    static void tick(double millis) {
       clock += millis / 1000;
