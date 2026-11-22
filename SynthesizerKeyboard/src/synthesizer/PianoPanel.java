@@ -494,7 +494,11 @@ public final class PianoPanel extends JPanel {
       g.setFont(font);
       FontMetrics metrics = g.getFontMetrics();
       if (this.trail.isEmpty()) {
-         String invite = width < 520 ? "Play a key: your notes rise here" : "Play a key, or Z X C V B N M: your notes rise here";
+         // The longest invite that fits: sliding across the keys plays each one (a glissando).
+         String invite = "Play a key, or slide across them: your notes rise here";
+         if (metrics.stringWidth(invite) > width - 12) {
+            invite = "Play or slide across the keys";
+         }
          g.setColor(RISE_TEXT);
          g.drawString(invite, (width - metrics.stringWidth(invite)) / 2, (top + metrics.getAscent()) / 2);
       }
