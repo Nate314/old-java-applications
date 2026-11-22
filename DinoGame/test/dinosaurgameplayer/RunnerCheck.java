@@ -185,7 +185,7 @@ public final class RunnerCheck {
       // From the first moment of dusk no color the game draws has blue 83, so the original bot is blind at night
       // and a fading sky never makes it jump.
       java.awt.Color[] colors = { RunnerPanel.INK, RunnerPanel.PAPER, RunnerPanel.MUTED, new java.awt.Color(0xD6D6D6),
-         new java.awt.Color(0xBDBDBD), new java.awt.Color(0xEBEBEB) };
+         new java.awt.Color(0xBDBDBD), new java.awt.Color(0xEBEBEB), Land.FAR, Land.SHADE, Land.NEAR };
       for (java.awt.Color c : colors) {
          for (int i = 1; i <= 1000; i++) {
             assert !ObstacleDetector.isObstacle(Sky.tint(c, i / 1000.0).getRGB() & 0xFFFFFF) : c + " at " + i;
@@ -485,6 +485,7 @@ public final class RunnerCheck {
       coachChecks();
       guideChecks();
       padChecks();
+      landChecks();
       System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore()
          + ", ear player average " + earTotal / 40 + ", " + lateTotal / 40 + " when up to 2 steps late)");
       System.exit(0);
@@ -697,6 +698,39 @@ public final class RunnerCheck {
     * The thumb pads (a phone held upright): only when asked for, under the game; a press on RUN starts the run, DUCK ducks
     * until let go, JUMP jumps, the lit mark fills its pad, a crash's pad says RUN AGAIN, and in two players they are P1 and P2.
     */
+   /** The land behind a run: drawn, never ink, and the mesas slide an eighth as far as the ground. */
+   private static void landChecks() {
+      BufferedImage a = landAt(0);
+      BufferedImage b = landAt(800);
+      int far = 0;
+      int near = 0;
+      int same = 0;
+      int row = Runner.GROUND - 30;
+      for (int x = 0; x < Runner.WIDTH; x++) {
+         for (int y = 0; y < Runner.GROUND; y++) {
+            int c = a.getRGB(x, y);
+            assert !ObstacleDetector.isObstacle(c & 0xFFFFFF) : "land the bot would see at " + x + "," + y;
+            far += c == Land.FAR.getRGB() ? 1 : 0;
+            near += c == Land.NEAR.getRGB() ? 1 : 0;
+         }
+         if (x >= 100) {
+            same += a.getRGB(x, row) == b.getRGB(x - 100, row) ? 1 : 0;
+         }
+      }
+      assert far > 2000 && near > 2000 : "mesas " + far + ", dunes " + near;
+      assert same == Runner.WIDTH - 100 : "800 along the ground is 100 for the mesas, " + same;
+   }
+
+   private static BufferedImage landAt(double distance) {
+      BufferedImage img = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = img.createGraphics();
+      g.setColor(RunnerPanel.PAPER);
+      g.fillRect(0, 0, Runner.WIDTH, RunnerPanel.HEIGHT);
+      Land.paint(g, distance, 0);
+      g.dispose();
+      return img;
+   }
+
    private static void padChecks() throws Exception {
       assert panel(1, null).getPreferredSize().height == RunnerPanel.HEIGHT : "no pads unless asked for";
       File file = File.createTempFile("dinogame", ".txt");
