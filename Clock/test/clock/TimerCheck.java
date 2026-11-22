@@ -147,6 +147,19 @@ public class TimerCheck {
             "a flap starts standing and ends lying down");
       check(FlipFace.fold(250, 500) > 0 && FlipFace.fold(400, 500) < 0, "a flap falls faster as it goes (edge on after half its time)");
 
+      // The LED face's seven segments: a (top) to g (middle) as bits 0 to 6, each figure its own shape.
+      int[] litCounts = {6, 2, 5, 5, 4, 5, 6, 3, 7, 6};
+      java.util.Set<Integer> shapes = new java.util.HashSet<>();
+      for (int figure = 0; figure < 10; figure++) {
+         int lit = DigitalFace.segments((char)('0' + figure));
+         check(Integer.bitCount(lit) == litCounts[figure] && lit < 0x80, figure + " lights " + litCounts[figure] + " segments");
+         shapes.add(lit);
+      }
+      check(shapes.size() == 10, "every figure has its own shape");
+      check(DigitalFace.segments('1') == 0x06 && DigitalFace.segments('7') == 0x07 && (DigitalFace.segments('0') & 0x40) == 0,
+            "1 is the right side, 7 adds the top, 0 has no middle bar");
+      check(DigitalFace.segments('-') == 0x40 && DigitalFace.segments(' ') == 0, "a dash is the middle bar, a blank lights nothing");
+
       // The analog dial: an hour tick at 12, bare face between the minute ticks, the hours' numbers, the knob's circle clear.
       java.awt.image.BufferedImage dial = new java.awt.image.BufferedImage(400, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
       java.awt.Graphics2D dialInk = dial.createGraphics();

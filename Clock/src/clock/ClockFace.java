@@ -20,6 +20,7 @@ final class ClockFace implements Tab {
    private static final Color UNSET = new Color(205, 205, 205);
    private final Main clock;
    private final FlipFace flip = new FlipFace();
+   private final DigitalFace digital = new DigitalFace();
    private Rectangle chimesBox;
    private Rectangle alarmBox;
    /** The analog face's middle and the alarm knob, for dragging it; knobRadius is 0 on the digital face. */
@@ -112,22 +113,8 @@ final class ClockFace implements Tab {
          this.flip.paint(g2, new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight), this.clock,
                alarm.isOn() ? this.alarmWhen(alarm, now) : null, now);
       } else {
-         area = new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight); // clear of the buttons
-         g2.setColor(Ui.INK);
-         String[] lines = this.clock.timeText.split("\\n");
-         Font font = new Font(Ui.DIGITS, Font.BOLD, 100);
-         g2.setFont(font);
-
-         // Shrink until the widest line fits across and all lines fit down.
-         while (font.getSize() > 1 && (widestLine(g2, lines) > area.width - 20 || font.getSize() * lines.length > area.height - 10)) {
-            font = new Font(Ui.DIGITS, Font.BOLD, font.getSize() - 1);
-            g2.setFont(font);
-         }
-
-         int top = area.y + (area.height - font.getSize() * lines.length) / 2;
-         for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            g2.drawString(lines[lineIndex], area.x + 10, top + font.getSize() + lineIndex * font.getSize());
-         }
+         this.digital.paint(g2, new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight), this.clock,
+               alarm.isOn() ? this.alarmWhen(alarm, now) : null, now);
       }
       g2.translate(-shake, 0);
       Ui.button(g2, this.chimesBox, this.clock.state.chimes ? "Chimes on" : "Chimes off", this.clock.state.chimes);
@@ -216,14 +203,6 @@ final class ClockFace implements Tab {
          ys[i] = (int)Math.round(centerY + along[i] * dy + across[i] * dx);
       }
       g2.fillPolygon(xs, ys, 4);
-   }
-
-   private static int widestLine(Graphics2D g2, String[] lines) {
-      int widest = 0;
-      for (String line : lines) {
-         widest = Math.max(widest, g2.getFontMetrics().stringWidth(line));
-      }
-      return widest;
    }
 
    private boolean rightPressed;
