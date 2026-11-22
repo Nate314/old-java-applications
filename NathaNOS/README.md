@@ -5,6 +5,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 ## Controls / usage
 
 - **Desktop icons**: one per `assets/*.jar`, on a grid of cells from the top-left corner, in alphabetical order down the columns. Click selects an icon, double-click opens the app. Clicking the empty desktop clears the selection and closes the menus.
+- **Icon cards**: a single click (or tap) on an icon also opens a card beside it with the icon, the app's name, a line on what it is ("Minesweeper where every board can be solved without a guess.") and an **Open** button, so a visitor who does not know an app by its name, or a finger that taps only once, can still start it. The card opens to the right of the icon, or to its left near the right edge, or under or over it on a screen too narrow for either. A picture from Paint gets a card that opens it in Paint, and a jar added by hand is named by its file. Clicking the desktop, another icon, MENU or the clock, dragging the icon, or a double-click closes it.
 - **Moving icons**: drag an icon (press and move it at least 5 pixels) and it follows the pointer above every window, while a faint outline marks the cell it came from. Let go and it lands in the cell under its middle; an icon already there trades places with it. From then on every icon keeps its cell, so the gap a moved icon leaves stays a gap, as on a real desktop. Until the first move (and after Arrange icons by name) the icons fill the cells in alphabetical order.
 - **Desktop menu**: right-click the empty desktop (or long-press it on a touch screen) for:
   - **Wallpaper**: Original photo (`assets/background.jpg`, the only background NathaNOS had), Night sky (stars, a crescent moon and hills), Sunset hills, Deep ocean (light rays and bubbles) and Aurora. Each row shows a small preview, and the current one is ticked. The painted ones are drawn in Java2D, once per screen size.
@@ -40,7 +41,7 @@ A full-screen fake desktop. It draws a background image with a custom cursor, a 
 `~/.nathanos.txt` (in `user.home`) keeps the wallpaper (`wallpaper=sunset`, or `wallpaper=picture:Picture 1` for a picture from Paint) and, once an icon has been moved by hand, every icon's cell (`icon=Minesweeper,2,0`: column 2, row 0, counted from 0). A missing file, an unknown wallpaper or a damaged line leaves the defaults (the original photo, icons in alphabetical order). A saved place off the grid of a smaller screen, or taken by another icon, is dropped and that icon fills a free cell instead, as does an app new to the desktop. In the browser NathaNOS keeps its own saves, so this is saved there too.
 - The shipped `assets/` has one jar, `Clock.jar`, an older Clock build, kept for the Then version. `./run.ps1 old NathaNOS` puts today's build of every app in its place, Clock included (see Running), and so does the site.
 
-The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines, then Restart and the shut down screen, then the calendar on the clock, then drawn icons for the eight apps that still showed initials.
+The original NathaNOS had only the taskbar: one button per jar, sharing its width, and a start menu with the logo and Shut Down. The icons, the app list in the start menu, the window buttons, the clock and the window placement were added later, then moving icons, the desktop menu and the painted wallpapers, then Paint, then minimizing, Show desktop and the window outlines, then Restart and the shut down screen, then the calendar on the clock, then drawn icons for the eight apps that still showed initials, then the cards that say what each icon is.
 
 ## Code layout
 
@@ -51,6 +52,7 @@ The original NathaNOS had only the taskbar: one button per jar, sharing its widt
 - `src/main/PaintPanel.java`: Paint itself: the tools, palette and buttons, the drawing on the picture (lines, shapes, fill, spray), Undo, and saving after each stroke.
 - `src/main/Picture.java`: a picture's pixels, drawn as runs of one color at any size, its thumbnail, and its text form.
 - `src/main/Pictures.java`: the saved pictures in `~/.nathanos-pictures.txt`, telling the desktop icons and the wallpaper when they change.
+- `src/main/IconTip.java`: the card a click on an icon opens beside it, with each app's line and the Open button.
 - `src/main/DesktopMenu.java`: the right-click desktop menu with the wallpaper previews and Arrange icons by name.
 - `src/main/Wallpaper.java`: the five wallpapers; paints the four scenes into an image the size of the screen.
 - `src/main/DesktopSettings.java`: reads and writes `~/.nathanos.txt`.
@@ -78,9 +80,12 @@ java -ea -cp ../out/check/NathaNOS main.ZoomCheck
 java -ea -cp ../out/check/NathaNOS main.PowerCheck
 java -ea -cp ../out/check/NathaNOS main.CalendarCheck
 java -ea -cp ../out/check/NathaNOS main.TaskListCheck
+java -ea -cp ../out/check/NathaNOS main.IconTipCheck
 ```
 
 `test/main/ZoomCheck.java` checks that the outlines start on the icon (or window), land exactly on the window (or button) and slow down as they land. `test/main/PowerCheck.java` checks the Restart and Shut Down timeline: the fade to black, the logo shown only on Restart and only on black, the fade back to the desktop, and the steps shown at once with reduced motion. `test/main/CalendarCheck.java` checks the calendar's date sums: day numbers read back to their dates over about 4,400 years, known weekdays, leap years (2000 and 2024 but not 2100), months rolling into the next year, the grid starting on the Sunday before the 1st, and the lines a picked day and today give.
+
+`test/main/IconTipCheck.java` checks where an icon's card opens (right of the icon, left of it at the right edge, under or over it on a narrow screen, always above the taskbar), that every app's line fits the card's three lines with no word lost, that icon labels still stop at two lines, and that a jar added by hand is named by its file.
 
 `test/main/TaskListCheck.java` checks that a closed window leaves the taskbar and the list Restart and Shut Down close, and that nothing in NathaNOS keeps it in memory after that (it is freed by the garbage collector), while the windows still open stay listed and are still closed by Restart.
 

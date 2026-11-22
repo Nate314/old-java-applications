@@ -7,6 +7,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.RenderingHints;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Draws an app's icon: its assets/<name>.png, or a colored tile with its initials when it has none. */
 final class AppIcon {
@@ -74,6 +76,23 @@ final class AppIcon {
          cut = cut.substring(0, cut.length() - 1);
       }
       return cut + "...";
+   }
+
+   /** Up to max lines of words, the last cut with "..." if the rest does not fit. */
+   static List<String> wrap(String text, FontMetrics metrics, int width, int max) {
+      List<String> lines = new ArrayList<>();
+      String line = "";
+      for (String word : text.split(" ")) {
+         String candidate = line.isEmpty() ? word : line + " " + word;
+         if (line.isEmpty() || metrics.stringWidth(candidate) <= width || lines.size() == max - 1) {
+            line = candidate;
+         } else {
+            lines.add(fit(line, metrics, width));
+            line = word;
+         }
+      }
+      lines.add(fit(line, metrics, width));
+      return lines;
    }
 
    static void smooth(Graphics g) {

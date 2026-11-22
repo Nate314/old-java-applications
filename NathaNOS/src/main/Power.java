@@ -100,6 +100,7 @@ final class Power extends JInternalFrame {
       this.still = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
       this.screen.startMenu.hideMenu();
       this.screen.desktopMenu.hideMenu();
+      this.screen.iconTip.hideTip();
       this.screen.calendar.hideMenu();
       int w = this.screen.desktopPane.getWidth();
       int h = this.screen.desktopPane.getHeight();
