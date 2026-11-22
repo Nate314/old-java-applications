@@ -6,7 +6,8 @@
 # biggest canvas is one flat color. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
 # back without its title screen. On the story and the lost page it also opens an app from a link far down the page in
-# the play sheet (PlayHere.tsx), checks it as above, closes the sheet and checks the link is where it was. Exits 1
+# the play sheet (PlayHere.tsx), checks it as above, closes the sheet each way a visitor can (Back, Esc, a click
+# around it, its close button; Forward and the link open it again) and checks the link is where it was. Exits 1
 # when any page fails.
 # Sound is off (--mute-audio, __shimSynth.noteOn stubbed, new AudioContexts suspended), the clipboard and
 # alert/confirm/prompt are stubbed, Chrome's profile is a throwaway folder under -ProfileRoot, and the server and
@@ -152,13 +153,28 @@ function Test-Exit($wait) {
     if (-not (& $wait "!document.querySelector('.shim-exit, .shim-title-play') && $Up" 30000)) { return 'exit: Run again did not bring the app back without its title screen' }
 }
 
-# The play sheet's close button, on a page with an app playing in it; returns why it failed, or nothing.
+# Every way out of the play sheet, on a page with an app playing in it: Back (then Forward opens it again), Esc from
+# its bar, a click on the page around it, and its close button, each reopened from the link (or Forward) in between.
+# Each must close the sheet and its app, take #play= off the address and leave the link where it was. Returns why it
+# failed, or nothing.
 function Test-SheetClose($wait) {
     if (-not (Invoke-Js 'scrollY > 0')) { return 'sheet: the link was not below the fold, so the scroll was not tested' }
-    Invoke-Js "document.querySelector('.play-here-bar .btn.primary').click()" | Out-Null
-    if (-not (& $wait "!document.querySelector('.play-here[open], .play-here iframe')" 5000)) { return 'sheet: did not close, or left its app running' }
-    $moved = Invoke-Js 'Math.round(window.__smokeLink.getBoundingClientRect().top - window.__smokeTop)'
-    if ($moved) { return "sheet: the page moved $moved px under it" }
+    $open = "!!document.querySelector('.play-here[open] iframe') && /^#play=/.test(location.hash)"
+    $ways = [ordered]@{
+        'Back' = { Invoke-Js 'history.back()' | Out-Null }
+        'Esc' = { Invoke-Js "document.querySelector('.play-here-bar .btn.primary').focus()" | Out-Null; Send-Key Escape }
+        'a click around it' = { Send-Click 4 300 }   # the window is 960 wide, the sheet at most 100vw - 32px
+        'its close button' = { Invoke-Js "document.querySelector('.play-here-bar .btn.primary').click()" | Out-Null }
+    }
+    $reopen = @{ 'Back' = 'history.forward()'; 'Esc' = 'window.__smokeLink.click()'; 'a click around it' = 'window.__smokeLink.click()' }
+    foreach ($way in $ways.Keys) {
+        if (-not (& $wait $open 5000)) { return "sheet: not open with #play= in the address before $way" }
+        & $ways[$way]
+        if (-not (& $wait "!document.querySelector('.play-here[open], .play-here iframe') && !location.hash" 5000)) { return "sheet: $way did not close it, left its app running or left #play= in the address" }
+        $moved = Invoke-Js 'Math.round(window.__smokeLink.getBoundingClientRect().top - window.__smokeTop)'
+        if ($moved) { return "sheet: the page moved $moved px under it ($way)" }
+        if ($reopen[$way]) { Invoke-Js $reopen[$way] | Out-Null }
+    }
 }
 
 $total = [Diagnostics.Stopwatch]::StartNew()
