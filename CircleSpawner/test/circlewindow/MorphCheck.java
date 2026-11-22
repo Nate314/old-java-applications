@@ -115,6 +115,19 @@ public class MorphCheck {
          }
       }
       check(same > 20 && stayed == same, "a tick keeps " + stayed + " of the " + same + " windows that did not change");
+      // Size track: its ends are the smallest and largest sizes, past them it stays there, and a knob drawn at a
+      // size reads back as that size.
+      check(SizeSlider.valueAt(0, 150, 400) == SizeSlider.MIN, "left end is the smallest size");
+      check(SizeSlider.valueAt(150, 150, 400) == 400 && SizeSlider.valueAt(999, 150, 400) == 400, "right end is the largest");
+      check(SizeSlider.valueAt(-50, 150, 400) == SizeSlider.MIN, "left of the track stays at the smallest");
+      for (int size = SizeSlider.MIN; size <= 400; size += 13) {
+         int back = SizeSlider.valueAt(SizeSlider.xOf(size, 150, 400), 150, 400);
+         check(Math.abs(back - size) <= 3, "the knob at " + size + " reads back as " + back);
+      }
+      // Color buttons: each strip runs from its colors' start to their end.
+      check(CircleCreatorWindow.shade("Blue", 0).equals(CircleCreatorWindow.shade("Blue", 1)), "blue is one color");
+      check(!CircleCreatorWindow.shade("Rainbow", 0).equals(CircleCreatorWindow.shade("Rainbow", 1)), "the rainbow changes");
+
       System.out.println("MorphCheck: all checks passed");
    }
 

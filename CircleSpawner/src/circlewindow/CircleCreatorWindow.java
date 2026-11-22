@@ -18,7 +18,6 @@ import java.util.function.Consumer;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -41,11 +40,11 @@ public final class CircleCreatorWindow extends JFrame {
    private static final String SUNSET = "Sunset";
    static final String[] COLOR_NAMES = {RAINBOW, BLUE, SUNSET};
    private static final int WIDTH = 380;
-   private static final int HEIGHT = 165;
+   private static final int HEIGHT = 203;
    /** The window with the drawing pad beside its controls, or (on a narrow screen) under them. */
    private static final int DRAW_WIDTH = 620;
    private static final int DRAW_HEIGHT = 290;
-   private static final int DRAW_BELOW_HEIGHT = 423;
+   private static final int DRAW_BELOW_HEIGHT = 461;
    /** About how many frames building a shape takes, whatever its window count. */
    private static final int BUILD_FRAMES = 45;
    /** Frames for one shape to turn into another, and for the drawing to follow the pen. */
@@ -69,7 +68,15 @@ public final class CircleCreatorWindow extends JFrame {
    private static final int ICON_WIDTH = 30;
    private static final int ICON_HEIGHT = 24;
    private final JTextField sizeField = new JTextField("200", 4);
-   private final JComboBox<String> colorBox = new JComboBox<>(COLOR_NAMES);
+   /** The colors chosen (one of COLOR_NAMES), each a button showing a strip of its colors. */
+   private String scheme = RAINBOW;
+   private final JButton[] colorButtons = new JButton[COLOR_NAMES.length];
+   private static final int SWATCH_WIDTH = 34;
+   private static final int SWATCH_HEIGHT = 16;
+   private final SizeSlider sizeSlider = new SizeSlider(this::shade, size -> {
+      this.sizeField.setText(String.valueOf(size));
+      this.show(DRAW_FRAMES);   // quick, like the pad, so the shape keeps up with the drag
+   });
    private final JTextField wordField = new JTextField("HELLO", 8);
    private final JButton createButton = new JButton("Build it");
    private final JButton spinButton = new JButton("Spin");
@@ -159,7 +166,10 @@ public final class CircleCreatorWindow extends JFrame {
       if (Arrays.asList(Shapes.ALL).contains(opening)) {
          this.chosenShape = opening;
       }
-      this.colorBox.setSelectedItem(sent != null ? sent.colors : this.saved.get("colors", RAINBOW));
+      String colors = sent != null ? sent.colors : this.saved.get("colors", RAINBOW);
+      if (Arrays.asList(COLOR_NAMES).contains(colors)) {
+         this.scheme = colors;
+      }
       this.sizeField.setText(this.saved.get("size", "200"));
       this.wordField.setText(sent != null && sent.word != null ? sent.word : this.saved.get("word", "HELLO"));
       String drawing = sent != null && sent.drawing != null ? sent.drawing : this.saved.get("drawing", "");
@@ -181,12 +191,30 @@ public final class CircleCreatorWindow extends JFrame {
          this.shapeButtons[i] = button;
          shapeRow.add(button);
       }
+      // The colors are buttons too, each a strip of its colors, so all three show at a glance.
       JPanel optionRow = new JPanel();
-      optionRow.add(this.colorBox);
-      optionRow.add(new JLabel("Size"));
-      optionRow.add(this.sizeField);
+      for (int i = 0; i < COLOR_NAMES.length; i++) {
+         String name = COLOR_NAMES[i];
+         JButton button = new JButton();
+         button.setPreferredSize(new Dimension(SWATCH_WIDTH + 10, SWATCH_HEIGHT + 8));
+         button.addActionListener(event -> {
+            this.scheme = name;
+            this.show(MORPH_FRAMES);
+         });
+         this.colorButtons[i] = button;
+         optionRow.add(button);
+      }
       optionRow.add(new JLabel("Word"));
       optionRow.add(this.wordField);
+      JPanel sizeRow = new JPanel();
+      JLabel sizeLabel = new JLabel("Size");
+      sizeLabel.setLabelFor(this.sizeField);
+      sizeRow.add(sizeLabel);
+      sizeRow.add(this.sizeSlider);
+      sizeRow.add(this.sizeField);
+      JPanel options = new JPanel(new BorderLayout());
+      options.add(optionRow, BorderLayout.NORTH);
+      options.add(sizeRow, BorderLayout.SOUTH);
       JPanel actionRow = new JPanel();
       actionRow.add(this.createButton);
       actionRow.add(this.spinButton);
@@ -195,7 +223,7 @@ public final class CircleCreatorWindow extends JFrame {
       JPanel statusRow = new JPanel();
       statusRow.add(this.status);
       JPanel lower = new JPanel(new BorderLayout());
-      lower.add(optionRow, BorderLayout.NORTH);
+      lower.add(options, BorderLayout.NORTH);
       lower.add(actionRow, BorderLayout.CENTER);
       lower.add(statusRow, BorderLayout.SOUTH);
       JPanel panel = new JPanel(new BorderLayout());
@@ -235,7 +263,6 @@ public final class CircleCreatorWindow extends JFrame {
       this.showMirror();
       this.showFrame();
 
-      this.colorBox.addActionListener(event -> this.show(MORPH_FRAMES));
       this.sizeField.addActionListener(event -> this.show(MORPH_FRAMES));
       // Enter in the word field builds the word, whatever shape was showing, and the word follows every edit.
       this.wordField.addActionListener(event -> this.pick(Shapes.WORD));
@@ -331,7 +358,7 @@ public final class CircleCreatorWindow extends JFrame {
          this.status.setText("Type a word to send");
          return;
       }
-      String code = Link.code(shape, String.valueOf(this.colorBox.getSelectedItem()), this.wordField.getText(),
+      String code = Link.code(shape, this.scheme, this.wordField.getText(),
          this.pad.text());
       String text = this.page == null ? code : this.page + "?shape=" + code;
       try {
@@ -450,9 +477,7 @@ public final class CircleCreatorWindow extends JFrame {
          Graphics g = image.getGraphics();
          for (int j = 0; j < fitted.size(); j++) {
             Color c = colors.get(j);
-            // Faint by greying, not by transparency: the circle's slices overlap and would add up to full color.
-            g.setColor(on ? c : new Color((2 * c.getRed() + 3 * 128) / 5, (2 * c.getGreen() + 3 * 128) / 5,
-               (2 * c.getBlue() + 3 * 128) / 5));
+            g.setColor(on ? c : faint(c));
             Rectangle r = fitted.get(j);
             g.fillRect(r.x, r.y, r.width, r.height);
          }
@@ -464,6 +489,30 @@ public final class CircleCreatorWindow extends JFrame {
          this.shapeButtons[i].setIcon(new ImageIcon(image));
          this.shapeButtons[i].setToolTipText(on ? shape + " (showing)" : shape);
       }
+      for (int i = 0; i < COLOR_NAMES.length; i++) {
+         String name = COLOR_NAMES[i];
+         boolean on = name.equals(this.scheme);
+         BufferedImage image = new BufferedImage(SWATCH_WIDTH, SWATCH_HEIGHT, BufferedImage.TYPE_INT_ARGB);
+         Graphics g = image.getGraphics();
+         for (int x = 0; x < SWATCH_WIDTH; x++) {
+            Color c = shade(name, x / (double)(SWATCH_WIDTH - 1));
+            g.setColor(on ? c : faint(c));
+            g.fillRect(x, 0, 1, SWATCH_HEIGHT - 4);
+         }
+         if (on) {
+            g.setColor(shade(name, 0.5));
+            g.fillRect(SWATCH_WIDTH / 4, SWATCH_HEIGHT - 2, SWATCH_WIDTH / 2, 2);
+         }
+         g.dispose();
+         this.colorButtons[i].setIcon(new ImageIcon(image));
+         this.colorButtons[i].setToolTipText(name + " colors" + (on ? " (showing)" : ""));
+      }
+      this.sizeSlider.repaint();   // its track is in the chosen colors
+   }
+
+   /** Greyed, not see-through: the circle's slices overlap and would add up to full color. */
+   private static Color faint(Color c) {
+      return new Color((2 * c.getRed() + 3 * 128) / 5, (2 * c.getGreen() + 3 * 128) / 5, (2 * c.getBlue() + 3 * 128) / 5);
    }
 
    private void showMirror() {
@@ -501,6 +550,7 @@ public final class CircleCreatorWindow extends JFrame {
       } catch (NumberFormatException e) {
          size = -1;
       }
+      this.sizeSlider.show(size, maxSize);
       boolean draw = this.drawing();
       if (draw && size > maxSize) {
          // The pad makes this window taller: a drawing shrinks to the room left rather than refusing.
@@ -539,7 +589,7 @@ public final class CircleCreatorWindow extends JFrame {
          return;
       }
       this.saved.put("shape", this.chosenShape);
-      this.saved.put("colors", String.valueOf(this.colorBox.getSelectedItem()));
+      this.saved.put("colors", this.scheme);
       this.saved.put("size", this.sizeField.getText().trim());
       this.saved.put("word", this.wordField.getText());
       this.saved.put("drawing", this.pad.text());
@@ -659,7 +709,7 @@ public final class CircleCreatorWindow extends JFrame {
       if (pieces.isEmpty()) {
          return Arrays.asList();
       }
-      String scheme = String.valueOf(this.colorBox.getSelectedItem());
+      String scheme = this.scheme;
       Rectangle area = new Rectangle(pieces.get(0));
       for (Rectangle r : pieces) {
          area.add(r);
@@ -669,15 +719,24 @@ public final class CircleCreatorWindow extends JFrame {
       for (int i = 0; i < pieces.size(); i++) {
          Rectangle r = pieces.get(i);
          float t = byOrder ? i / (float)pieces.size() : (r.x + r.width / 2f - area.x) / Math.max(1, area.width);
-         if (RAINBOW.equals(scheme)) {
-            colors.add(Color.getHSBColor(0.85f * t, 0.75f, 1.0f));
-         } else if (SUNSET.equals(scheme)) {
-            colors.add(new Color(255, (int)(210 - 170 * t), (int)(60 + 90 * t)));
-         } else {
-            colors.add(new Color(0, 0, 255));
-         }
+         colors.add(shade(scheme, t));
       }
       return colors;
+   }
+
+   /** The chosen colors at t, from 0 (the left, or the circle's first slice) to 1. */
+   private Color shade(double t) {
+      return shade(this.scheme, t);
+   }
+
+   static Color shade(String scheme, double t) {
+      if (RAINBOW.equals(scheme)) {
+         return Color.getHSBColor(0.85f * (float)t, 0.75f, 1.0f);
+      }
+      if (SUNSET.equals(scheme)) {
+         return new Color(255, (int)(210 - 170 * t), (int)(60 + 90 * t));
+      }
+      return new Color(0, 0, 255);
    }
 
    /**
