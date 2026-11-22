@@ -21,6 +21,7 @@ public final class LessonCheck {
       checkChords();
       checkBacking();
       checkSoundButton();
+      checkFinder();
       System.out.println("LessonCheck: all checks passed");
    }
 
@@ -261,5 +262,50 @@ public final class LessonCheck {
       }
       assert Tune.load(file) == null : "a broken tune is skipped";
       file.delete();
+   }
+
+   private static void checkFinder() {
+      Song mary = Song.ALL[0];
+      Song ode = Song.ALL[2];
+      // Mary's first five, after some noodling, in C: found, and her lesson carries on at the sixth note.
+      SongFinder finder = play("C C C E D C D");
+      assert finder.song() == null : "four notes of Mary are not enough";
+      finder.add(4);
+      assert finder.song() == mary && finder.notes() == 5 && finder.inKey() : "E D C D E is Mary in C";
+      finder.add(4);
+      assert finder.song() == mary && finder.notes() == 6 : "each right note extends the match";
+      Lesson lesson = new Lesson(mary, finder.notes());
+      assert lesson.position() == 6 && lesson.expectedKey() == mary.key(6) && lesson.misses() == 0 : "the lesson carries on";
+      finder.add(11);
+      assert finder.song() == null : "a wrong note loses the song";
+      // Ode to Joy two steps up is found, but not in its key.
+      finder = play("F# F# G A A");
+      assert finder.song() == ode && !finder.inKey() : "Ode to Joy in D is still Ode to Joy";
+      // Twinkle in G folds round the one octave: G G D D E.
+      finder = play("G G D D E");
+      assert finder.song() == Song.ALL[1] && !finder.inKey() : "Twinkle in G";
+      // One key over and over, or two, is no song; Jingle Bells needs its third note.
+      finder = play("E E E E E E E G");
+      assert finder.song() == null : "E E E E E E E G is not yet Jingle Bells";
+      finder.add(0);
+      assert finder.song() == Song.ALL[4] && finder.inKey() : "E x7 G C is Jingle Bells";
+      // A whole song played leaves no note to carry on with, so it is not offered.
+      finder = new SongFinder(Song.ALL);
+      for (int note = 0; note < mary.length(); note++) {
+         finder.add(mary.key(note));
+         assert finder.song() == null || finder.notes() < finder.song().length() : "always a note left";
+      }
+      assert finder.song() == null : "Mary played to the end is not offered again";
+      finder.clear();
+      assert finder.song() == null && !finder.inKey();
+   }
+
+   private static SongFinder play(String notes) {
+      SongFinder finder = new SongFinder(Song.ALL);
+      Song song = new Song("X", "x", "x", notes);
+      for (int note = 0; note < song.length(); note++) {
+         finder.add(song.key(note));
+      }
+      return finder;
    }
 }
