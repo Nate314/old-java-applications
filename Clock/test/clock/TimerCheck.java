@@ -49,8 +49,17 @@ public class TimerCheck {
       check(watch.elapsed(105_000) == 10_000, "stopped time does not count");
       check(watch.lapTime(0) == 3000 && watch.lapTime(1) == 1000 && watch.lapTime(2) == 6000, "lap times");
       check(watch.extremeLap(false) == 1 && watch.extremeLap(true) == 2, "fastest and slowest laps");
+      check(watch.bestLap() == 1 && watch.pace(105_500) == 500 - 1000, "the lap under way races the best lap");
+      watch.lap(108_000);
+      check(watch.pace(108_000) == -1000 && watch.pace(110_000) == 1000, "ahead of the best lap, then behind it");
+      Stopwatch one = new Stopwatch();
+      check(one.bestLap() == -1, "no best lap before a lap");
+      one.toggle(1);
+      one.lap(5001);
+      check(one.bestLap() == 0 && one.pace(7001) == -3000, "a single lap is the best one");
+      check(Ui.seconds(1204).equals("1.20 s") && Ui.seconds(61_000).equals("1:01.00"), "gaps between laps");
       watch.reset();
-      check(watch.lapCount() == 3, "no reset while running");
+      check(watch.lapCount() == 4, "no reset while running");
       watch.toggle(106_000);
       watch.reset();
       check(watch.lapCount() == 0 && watch.elapsed(200_000) == 0, "reset once stopped");
@@ -180,6 +189,21 @@ public class TimerCheck {
          check(!inked(dial, knobX - 13, knobY - 13, knobX + 13, knobY + 13), "the alarm knob at " + hour + " o'clock is clear of the numbers");
       }
 
+      // The stopwatch dial: a 10 s best lap and 15 s into the next, which began at 10 s on the dial. The band is green
+      // for the 10 s the best lap took, red for the 5 s lost since, and the rest of the rim is bare.
+      Stopwatch race = new Stopwatch();
+      race.toggle(1);
+      race.lap(10_001);
+      java.awt.image.BufferedImage watchFace = new java.awt.image.BufferedImage(400, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D watchInk = watchFace.createGraphics();
+      StopwatchView.paintRing(watchInk, new java.awt.Rectangle(10, 10, 380, 380), race, 25_001);
+      watchInk.dispose();
+      check(rim(watchFace, 15) == StopwatchView.AHEAD.getRGB() && rim(watchFace, 19) == StopwatchView.AHEAD.getRGB(), "the lap band is green while ahead of the best lap");
+      check(rim(watchFace, 22.5) == Ui.WEDGE.getRGB(), "and red for the time lost since");
+      check(rim(watchFace, 40) == Ui.FACE.getRGB() && rim(watchFace, 5) == Ui.FACE.getRGB(), "the rest of the rim is bare");
+      check(watchFace.getRGB(200 + (int)(190 * 0.95 * Math.sin(Math.PI * 2 / 3)), 200 - (int)(190 * 0.95 * Math.cos(Math.PI * 2 / 3))) == Ui.FASTEST.getRGB(),
+            "a green mark stands where the best lap would have ended");
+
       // The Westminster quarters: one change at quarter past, two at half past, three at quarter to, four and the hour.
       int[] quarterPast = Westminster.steps(9, 1);
       check(Arrays.equals(quarterPast, new int[]{68, 66, 64, 59, Westminster.REST, Westminster.HUSH}), "quarter past rings the first change");
@@ -245,6 +269,12 @@ public class TimerCheck {
    }
 
    /** Whether any pixel in the box is not the white face. */
+   /** The stopwatch dial's color in its lap band at {@code second} on the rim (centre 200, 200, radius 190). */
+   private static int rim(java.awt.image.BufferedImage face, double second) {
+      double angle = second * Math.PI / 30;
+      return face.getRGB(200 + (int)Math.round(190 * 0.945 * Math.sin(angle)), 200 - (int)Math.round(190 * 0.945 * Math.cos(angle)));
+   }
+
    private static boolean inked(java.awt.image.BufferedImage image, int left, int top, int right, int bottom) {
       for (int x = left; x <= right; x++) {
          for (int y = top; y <= bottom; y++) {
