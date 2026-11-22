@@ -230,7 +230,11 @@ function gamepadDriver() {
         if (eat[n]) { if (!now[n]) delete eat[n]; return; }
         if (now[n] === !!was[n]) return;
         if (now[n] && play) {
-          if (!play.disabled) play.click();
+          // Before ready it counts as an early press (title-screen.tsx): Starting…, and the app starts once its files are in.
+          var early = document.getElementById('shim-title-early');
+          if (early) early.click();
+          else if (!play.disabled) play.click();
+          else if (window.oldjavaPress) window.oldjavaPress();
           eat[n] = true;
           return;
         }
@@ -252,8 +256,10 @@ export function setPadLight(v: typeof padLight) { padLight = v; }
 
 // Polls the controllers on a top-level page. LB / RB and Back are the page's; the rest drives the app, here
 // or in the home page's player.
+var polled = false;
 export function gamepads(isApp: boolean) {
-  if (!navigator.getGamepads) return;
+  if (!navigator.getGamepads || polled) return;
+  polled = true;   // start.ts calls it as the early title opens, and again at DOMContentLoaded
   var drive = isApp ? gamepadDriver() : null;
   if (embedded) {
     if (window.parent === window) return;

@@ -42,7 +42,7 @@ function stage(isApp: boolean) {
 
 export function init() {
   if (document.body && document.body.hasAttribute('data-app')) catalog().then(function () {
-    requestAnimationFrame(function () { setTimeout(function () { stage(true); fitBand(); }); });   // fitted at once, as at load
+    requestAnimationFrame(function () { setTimeout(function () { stage(true); fitBand(); gamepads(true); }); });   // fitted at once, as at load
   }, function () { /* DOMContentLoaded does it */ });
   document.addEventListener('DOMContentLoaded', function () {
     var body = document.body;
