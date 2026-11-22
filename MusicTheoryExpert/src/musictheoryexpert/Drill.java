@@ -11,54 +11,48 @@ import musictheoryexpert.Notes.MusicalTerms;
 public enum Drill {
 	MAJOR_MINOR("Major or minor", "Is this chord major or minor?", 520, "Major", "Minor") {
 		@Override
-		Question ask(Random random) {
-			int answer = random.nextInt(2);
-			return triad(answer, randomRoot(random), TRIADS[answer]);
+		Question build(int answer, int root) {
+			return triad(answer, root, TRIADS[answer]);
 		}
 	},
 	CHORD_QUALITY("Chord qualities", "Which kind of chord is this?", 520, "Major", "Minor", "Diminished", "Augmented") {
 		@Override
-		Question ask(Random random) {
-			int answer = random.nextInt(4);
-			return triad(answer, randomRoot(random), TRIADS[answer]);
+		Question build(int answer, int root) {
+			return triad(answer, root, TRIADS[answer]);
 		}
 	},
 	BIG_INTERVALS("Five intervals", "How far apart are the two notes?", 640, "Major 2nd", "Major 3rd", "Perfect 4th",
 			"Perfect 5th", "Octave") {
 		@Override
-		Question ask(Random random) {
-			int answer = random.nextInt(5);
-			return interval(answer, randomRoot(random), BIG_INTERVAL_STEPS[answer]);
+		Question build(int answer, int root) {
+			return interval(answer, root, BIG_INTERVAL_STEPS[answer]);
 		}
 	},
 	ALL_INTERVALS("All intervals", "Name the interval between the two notes.", 640, "Minor 2nd", "Major 2nd",
 			"Minor 3rd", "Major 3rd", "Perfect 4th", "Tritone", "Perfect 5th", "Minor 6th", "Major 6th", "Minor 7th",
 			"Major 7th", "Octave") {
 		@Override
-		Question ask(Random random) {
-			int answer = random.nextInt(12);
-			return interval(answer, randomRoot(random), answer + 1);
+		Question build(int answer, int root) {
+			return interval(answer, root, answer + 1);
 		}
 	},
 	SCALES("Scales", "Which scale is this?", 360, "Major", "Natural minor", "Harmonic minor", "Melodic minor") {
 		@Override
-		Question ask(Random random) {
-			int answer = random.nextInt(4);
-			int[] scale = Notes.getScale(randomKey(random), SCALE_TYPES[answer]);
+		Question build(int answer, int root) {
+			int[] scale = Notes.getScale(keyName(root), SCALE_TYPES[answer]);
 			int[][] steps = new int[scale.length + 1][];
 			for (int i = 0; i < scale.length; i++) {
 				steps[i] = new int[] { scale[i] };
 			}
 			steps[scale.length] = new int[] { scale[0] + 12 };
-			return new Question(answer, steps);
+			return new Question(answer, root, steps);
 		}
 	},
 	CHORDS_IN_KEY("Chords in a key", "Home chord first. Which chord comes next?", 900, "I", "ii", "IV", "V", "vi") {
 		@Override
-		Question ask(Random random) {
-			int answer = random.nextInt(5);
-			int[] scale = Notes.getScale(randomKey(random), MusicalTerms.MAJOR);
-			return new Question(answer, new int[][] { Notes.getTriadByRomanNumeral(scale, 1),
+		Question build(int answer, int root) {
+			int[] scale = Notes.getScale(keyName(root), MusicalTerms.MAJOR);
+			return new Question(answer, root, new int[][] { Notes.getTriadByRomanNumeral(scale, 1),
 					Notes.getTriadByRomanNumeral(scale, DEGREES[answer]) });
 		}
 	};
@@ -84,8 +78,19 @@ public enum Drill {
 		this.choices = choices;
 	}
 
-	/** A new question for this drill. */
-	abstract Question ask(Random random);
+	/** What answer {@code answer} sounds like from {@code root} (a MIDI note; C4 to B4 names the key of a key drill). */
+	abstract Question build(int answer, int root);
+
+	/** A new question for this drill: a random answer from a random root. */
+	Question ask(Random random) {
+		int answer = random.nextInt(choiceCount());
+		return build(answer, this == SCALES || this == CHORDS_IN_KEY ? 60 + random.nextInt(12) : randomRoot(random));
+	}
+
+	/** The same question as {@code question} had it been answer {@code answer}, from the same note, to compare by ear. */
+	public Question as(Question question, int answer) {
+		return build(answer, question.root);
+	}
 
 	public String title() {
 		return title;
@@ -112,30 +117,33 @@ public enum Drill {
 		return 55 + random.nextInt(12);
 	}
 
-	static String randomKey(Random random) {
-		return Notes.notesSharpBias[random.nextInt(12)];
+	/** The key a root from C4 (60) to B4 names, such as "Fs". */
+	static String keyName(int root) {
+		return Notes.notesSharpBias[root - 60];
 	}
 
 	/** The three notes one at a time, then together. */
 	static Question triad(int answer, int root, int[] intervals) {
 		int third = root + intervals[0];
 		int fifth = root + intervals[1];
-		return new Question(answer, new int[][] { { root }, { third }, { fifth }, { root, third, fifth } });
+		return new Question(answer, root, new int[][] { { root }, { third }, { fifth }, { root, third, fifth } });
 	}
 
 	/** The two notes one after the other, then together. */
 	static Question interval(int answer, int low, int halfSteps) {
 		int high = low + halfSteps;
-		return new Question(answer, new int[][] { { low }, { high }, { low, high } });
+		return new Question(answer, low, new int[][] { { low }, { high }, { low, high } });
 	}
 
 	/** What a question plays (steps of notes sounding together) and the index of the right choice. */
 	public static final class Question {
 		private final int answer;
+		private final int root;
 		private final int[][] steps;
 
-		Question(int answer, int[][] steps) {
+		Question(int answer, int root, int[][] steps) {
 			this.answer = answer;
+			this.root = root;
 			this.steps = steps;
 		}
 

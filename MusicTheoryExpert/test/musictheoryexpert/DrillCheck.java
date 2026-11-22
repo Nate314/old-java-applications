@@ -25,6 +25,17 @@ public class DrillCheck {
 					}
 				}
 				checkSound(drill, answer, steps);
+				// Every other answer, heard from the same note to compare, sounds as that answer and starts there.
+				check(Arrays.deepEquals(drill.as(question, answer).steps(), steps), drill + " as itself is the question");
+				int other = (answer + 1 + random.nextInt(drill.choiceCount() - 1)) % drill.choiceCount();
+				int[][] compared = drill.as(question, other).steps();
+				checkSound(drill, other, compared);
+				check(compared[0][0] == steps[0][0], drill + " compared from the same note");
+				for (int[] step : compared) {
+					for (int note : step) {
+						check(note >= 48 && note <= 96, drill + " compared note " + note + " is on the keyboard");
+					}
+				}
 			}
 			for (int choice = 0; choice < asked.length; choice++) {
 				check(asked[choice], drill + " asks " + drill.choice(choice));
