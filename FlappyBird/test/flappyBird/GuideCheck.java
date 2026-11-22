@@ -43,6 +43,23 @@ public final class GuideCheck {
 
       // The ground counts too.
       assert Guide.crashes(Guide.path(bird, false, 600, 6, none, bird.position.collisionY + Bird.HEIGHT + 20)) : "the ground is a crash";
+      // A pair's opening leaves room for the flap on any window: a flap's rise, measured in bird heights (the
+      // physics scale with the bird), fits 2.5 times in an upright phone's gap; a wide window keeps two pipe widths.
+      bird.recall(before);
+      bird.flap();
+      float start = bird.position.collisionY;
+      float top = start;
+      for (int i = 0; i < 200; i++) {
+         bird.update();
+         top = Math.min(top, bird.position.collisionY);
+      }
+      bird.recall(before);
+      float rise = (start - top) / Bird.HEIGHT;
+      assert rise > 1.5F && rise < 2.0F : "a flap rises about 1.75 bird heights, was " + rise;
+      int phoneBird = 525 / 12;
+      assert Pipes.gapHeight(300 / 8, phoneBird) >= 2.5F * rise * phoneBird : "an upright phone's gap fits the flap";
+      assert Pipes.gapHeight(675 / 8, 405 / 12) == 2 * (675 / 8) : "a wide window's gap is two pipe widths, as before";
+      assert Pipes.gapHeight(1440 / 8, 810 / 12) == 2 * (1440 / 8) : "a desktop window's gap is unchanged";
       System.out.println("GuideCheck passed");
    }
 }
