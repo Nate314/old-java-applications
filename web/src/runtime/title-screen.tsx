@@ -95,7 +95,7 @@ export function titleScreen(files: string[]) {
     if (!started || leaving) return;
     if (e && e.type === 'keydown') {
       if ((e as KeyboardEvent).key === 'Tab' || (e as KeyboardEvent).key === 'Shift' || (e as KeyboardEvent).key === 'Control' || (e as KeyboardEvent).key === 'Alt' || (e as KeyboardEvent).key === 'Meta') return;
-      if ((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-title-clip-pause, .shim-find')) return;   // keys for those panels
+      if ((e.target as Element).closest && (e.target as Element).closest('.shim-toolbar, .shim-drawer, .shim-share, .shim-source, .shim-title-forget, .shim-title-story, .shim-title-more, .shim-title-clip-pause, .shim-find')) return;   // keys for those panels
       e.preventDefault();
       e.stopPropagation();
       // Its release must not reach the app either: it never saw the press.
@@ -140,6 +140,14 @@ export function titleScreen(files: string[]) {
     // Straight on, as if Play were pressed (now, or once the files are in).
     skip: function () { if (started) go(); else skipping = true; }
   };
+}
+
+const TAP = matchMedia('(pointer: coarse)').matches;   // a phone or tablet: no keys to press
+
+/** What the title's More line folds away, named in its summary. */
+function moreParts(app: CatalogApp, then: boolean) {
+  return ['the source', app.then && (then ? 'today’s version' : 'the first version'), !then && 'the desktop jar', !then && 'its story']
+    .filter(Boolean).join(', ');
 }
 
 /** The title screen itself; titleScreen above runs it. */
@@ -202,7 +210,7 @@ function TitleScreen({ apps, onGo, onMount }: {
     setStarting(false);
   }
   function onClick(e: MouseEvent) {
-    if (!(e.target as Element).closest('a, .shim-title-forget, .shim-title-story')) onGo(e.nativeEvent);
+    if (!(e.target as Element).closest('a, .shim-title-forget, .shim-title-story, .shim-title-more')) onGo(e.nativeEvent);
   }
   return (
     <div className={'shim-title' + (app && then ? ' then' : '') + (ready ? ' ready' : '') + (listed ? '' : ' unlisted') + (leaving ? ' leaving' : '')}
@@ -233,7 +241,7 @@ function TitleScreen({ apps, onGo, onMount }: {
           <h1>{app ? app.name : document.title}</h1>
           {/* Play right under the name, ahead of the hint and the record lines, so a phone shows it without scrolling. */}
           <button type="button" className="shim-title-play" disabled={!ready}>{ready ? '▶ Play' : starting ? 'Starting…' : 'Loading…'}</button>
-          <span className="shim-title-press">or press any key</span>
+          <span className="shim-title-press">{TAP ? 'or tap anywhere' : 'or press any key'}</span>
           <p className="shim-title-hint">
             {app ? (then
               ? (app.origin === 'original' ? 'The author’s own source as it was found' : 'The code as it came out of the old jar') +
@@ -254,25 +262,30 @@ function TitleScreen({ apps, onGo, onMount }: {
             {saver ? 'Also this site’s screen saver, after ' + saverMinutes() + ' minutes away. ' : 'This site’s screen saver is off. '}
             <button type="button" className="shim-title-forget" onClick={() => { setSaverOn(!saverOn()); setSaver(saverOn()); }}>{saver ? 'Turn off' : 'Turn on'}</button>
           </p>
-          <a className="shim-title-source" href="#source" data-sound="none">{then ? 'Read the source as first restored' : 'Read the source'}</a>
           {/* The games that play themselves: a look before playing (see watch). */}
           <a className="shim-title-watch" href="?watch" hidden={!WATCH[id] || then}>Watch the computer play it first</a>
-          {/* Then and now: the other version of the app, once the catalog says it has one. */}
-          <a className="shim-title-era" href={eraPage(!then)} hidden={!(app && app.then)}>
-            {then ? 'Play today’s version' : 'Play it as first restored, before the reworks'}
-          </a>
-          {/* Both versions at once, with what changed in between (src/pages/compare); not inside another page's frame. */}
-          <a className="shim-title-era" href={root() + 'compare.html?app=' + id} hidden={!(app && app.then) || embedded}>
-            Compare then and now side by side
-          </a>
-          {/* The app for the desktop, today's version only (the jars are built from today's sources). */}
-          <p className="shim-title-jar" hidden={then}>
-            <JarLink id={id} className="shim-title-jar-link">{'Download ' + id + '.jar'}</JarLink>
-            {' for the desktop, ' + JAR_JAVA + '.'}
-            {JAR_KEYS[id] && <strong className="shim-title-jar-keys">{' ' + JAR_KEYS[id]}</strong>}
-          </p>
-          {/* Until news.js answers, its line's room is kept (today's page only), so the meter and log below stay put. */}
-          {Story ? <Story id={id} /> : <details className="shim-title-story" hidden={then} aria-hidden="true" />}
+          {/* The rest is for after, or instead of, playing: folded under one line, so Play, the hint and the stamp are
+              what the card shows first. */}
+          <details className="shim-title-more" hidden={!app}>
+            <summary>{'More: ' + (app ? moreParts(app, then) : '')}</summary>
+            <a className="shim-title-source" href="#source" data-sound="none">{then ? 'Read the source as first restored' : 'Read the source'}</a>
+            {/* Then and now: the other version of the app, once the catalog says it has one. */}
+            <a className="shim-title-era" href={eraPage(!then)} hidden={!(app && app.then)}>
+              {then ? 'Play today’s version' : 'Play it as first restored, before the reworks'}
+            </a>
+            {/* Both versions at once, with what changed in between (src/pages/compare); not inside another page's frame. */}
+            <a className="shim-title-era" href={root() + 'compare.html?app=' + id} hidden={!(app && app.then) || embedded}>
+              Compare then and now side by side
+            </a>
+            {/* The app for the desktop, today's version only (the jars are built from today's sources). */}
+            <p className="shim-title-jar" hidden={then}>
+              <JarLink id={id} className="shim-title-jar-link">{'Download ' + id + '.jar'}</JarLink>
+              {' for the desktop, ' + JAR_JAVA + '.'}
+              {JAR_KEYS[id] && <strong className="shim-title-jar-keys">{' ' + JAR_KEYS[id]}</strong>}
+            </p>
+            {/* Until news.js answers, its line's room is kept (today's page only), so an open More box does not grow under the pointer. */}
+            {Story ? <Story id={id} /> : <details className="shim-title-story" hidden={then} aria-hidden="true" />}
+          </details>
         </div>
         <span className="shim-meter shim-title-meter" style={{ '--p': String(done) } as CSSProperties} />
         {/* tabIndex -1: Chrome puts a scroller in the tab order, and this one is hidden from screen readers. Newest first in
