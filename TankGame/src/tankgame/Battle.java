@@ -45,6 +45,8 @@ public class Battle
     public static final int  DROP_GAP_RANDOM    = 240;
     /** How long the name of a power just taken shows over the tank. */
     public static final int  NOTICE_TICKS       = 90;
+    /** After a pause the match counts down this long (3, 2, 1) before anything moves again. */
+    public static final int  RESUME_TICKS       = 90;
     /** Crates land at least this far below the top, clear of the score bar. */
     private static final int DROP_TOP           = 80;
     private final Tank       red;
@@ -98,6 +100,11 @@ public class Battle
     private Supply.Power     noticePower;
     private Tank             noticeTank;
     private int              noticeTicks;
+    /** A match on hold (P, the pause button, or the window losing the keyboard), and why. */
+    private boolean          paused;
+    private boolean          pausedAway;
+    /** Ticks left of the countdown after a pause. */
+    private int              resumeTicks;
 
     public Battle(Tank red, Tank green, ComputerControls computer, Record record)
     {
@@ -260,6 +267,15 @@ public class Battle
 
     public void tick(int width, int height)
     {
+        if (held())
+        {
+            // Everything holds still. A fire key goes on from a pause; presses during the countdown are dropped.
+            boolean fired = redKeys.fire() | greenKeys.fire();
+            if (paused && fired) resume();
+            else if (!paused) resumeTicks--;
+            sounds.engines(false, false, false, false);
+            return;
+        }
         scorches.clear();
         shake = shake < 0.3 ? 0 : shake * 0.8;
         placeArena(width, height);
@@ -523,6 +539,56 @@ public class Battle
     public boolean watching()
     {
         return watching;
+    }
+
+    /**
+     * Puts a match on hold (only between the round's start and its end, not on the title, the builder or the match-over
+     * screen); away says the window lost the keyboard, rather than a press of P or the pause button.
+     */
+    public void pause(boolean away)
+    {
+        if (paused || (phase != Phase.ROUND_START && phase != Phase.FIGHT && phase != Phase.ROUND_OVER)) return;
+        paused = true;
+        pausedAway = away;
+        resumeTicks = 0;
+    }
+
+    /** Ends a pause with a countdown, so both players have their hands back on the keys before anything moves. */
+    public void resume()
+    {
+        if (!paused) return;
+        paused = false;
+        resumeTicks = RESUME_TICKS;
+    }
+
+    /** P: pause, or go on. */
+    public void togglePause()
+    {
+        if (paused) resume();
+        else pause(false);
+    }
+
+    public boolean paused()
+    {
+        return paused;
+    }
+
+    /** Whether the pause came from the window losing the keyboard. */
+    public boolean pausedAway()
+    {
+        return pausedAway;
+    }
+
+    /** Ticks left of the countdown after a pause; 0 when none. */
+    public int resumeTicks()
+    {
+        return resumeTicks;
+    }
+
+    /** Paused or counting down: nothing on the field moves. */
+    public boolean held()
+    {
+        return paused || resumeTicks > 0;
     }
 
     /** Supply drops (X): on or off, saved with the record. Turning them off takes away the crate on the field. */

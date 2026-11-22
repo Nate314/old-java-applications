@@ -84,6 +84,13 @@ public class GamePanel extends JPanel
                         repaint();
                         return;
                     }
+                // Paused: a tap anywhere goes on. Counting down: the field takes no orders yet.
+                if (battle.paused()) battle.resume();
+                if (battle.held())
+                {
+                    repaint();
+                    return;
+                }
                 if (building())
                 {
                     int[] cell = cellAt(e.getX(), e.getY());
@@ -324,6 +331,14 @@ public class GamePanel extends JPanel
     /** Moves everything one step on the Swing event thread, so speed does not depend on the paint rate. */
     private void tick()
     {
+        if (battle.held())
+        {
+            // The battle and its slow motion hold still; only the air goes on, so the field is not a stuck picture.
+            battle.tick(getWidth(), getHeight());
+            if (weather != null) weather.tick(getWidth(), getHeight());
+            repaint();
+            return;
+        }
         if (slowFrames > 0)
         {
             // The blast that destroys a tank plays at a third of the speed, then a half, then full speed again.
@@ -477,11 +492,68 @@ public class GamePanel extends JPanel
             scoreBar(g, battle.green(), battle.greenWins(), true);
             notice(g);
         }
-        banner(g);
+        // A pause card or countdown takes the round banner's place in the middle.
+        if (!battle.held()) banner(g);
         if (building()) builder(g);
         // On the title card and match-over screen the Watch button says so instead.
         if (battle.watching() && battle.phase() != Battle.Phase.TITLE && battle.phase() != Battle.Phase.MATCH_OVER)
             watchNote(g);
+        if (battle.paused()) pauseCard(g);
+        else if (battle.held()) countdown(g);
+        else if (inMatch()) pauseButton(g);
+    }
+
+    private boolean inMatch()
+    {
+        Battle.Phase p = battle.phase();
+        return p == Battle.Phase.ROUND_START || p == Battle.Phase.FIGHT || p == Battle.Phase.ROUND_OVER;
+    }
+
+    private static final Font COUNT = new Font(Font.SANS_SERIF, Font.BOLD, 80);
+
+    /** A small round button between the score bars: the way to pause where there is no P key (a phone). */
+    private void pauseButton(Graphics2D g)
+    {
+        Rectangle b = new Rectangle(getWidth() / 2 - 17, 14, 34, 34);
+        g.setColor(SHADE);
+        g.fillOval(b.x, b.y, b.width, b.height);
+        g.setColor(DIM);
+        g.setStroke(new BasicStroke(1.5f));
+        g.drawOval(b.x, b.y, b.width, b.height);
+        g.setStroke(new BasicStroke(1f));
+        g.setColor(TEXT);
+        g.fillRect(b.x + 12, b.y + 10, 4, 14);
+        g.fillRect(b.x + 19, b.y + 10, 4, 14);
+        // A little bigger than it looks, for a finger.
+        taps.put(new Rectangle(b.x - 6, b.y - 6, b.width + 12, b.height + 12), () -> battle.pause(false));
+    }
+
+    /**
+     * The match on hold: the field dimmed under a box with the round, the battlefield and the score, a Go on button,
+     * and each player's keys under their tank again, so a player coming back knows where their hands go.
+     */
+    private void pauseCard(Graphics2D g)
+    {
+        g.setColor(new Color(0, 0, 25, 110));
+        g.fillRect(0, 0, getWidth(), getHeight());
+        Tank red = battle.red();
+        Tank green = battle.green();
+        Rectangle box = panel(g, new Line[] { new Line("PAUSED", BIG, TEXT),
+                        new Line(battle.pausedAway() ? "The match waited while you were away." : "The match is waiting for you.",
+                                        SMALL, DIM),
+                        new Line("Round " + battle.round() + ": " + battle.arena().name(), SMALL, DIM),
+                        new Line(red.name() + " " + battle.redWins() + " - " + battle.greenWins() + " " + green.name(), MEDIUM,
+                                        Color.YELLOW) }, 2, 300, 52);
+        Rectangle go = new Rectangle(box.x + 10, box.y + box.height - 50, box.width - 20, 44);
+        play(g, go, "Go on", getWidth() >= 440 ? "P, Q or M, or a click" : "P, Q or M, or a tap", red, battle::resume);
+        if (!battle.watching()) controls(g, battle.vsComputer() ? null : "green's keys");
+    }
+
+    /** After a pause: 3, 2, 1 over the still field, then the match moves again. */
+    private void countdown(Graphics2D g)
+    {
+        int left = (battle.resumeTicks() * 3 + Battle.RESUME_TICKS - 1) / Battle.RESUME_TICKS;
+        outlined(g, String.valueOf(left), COUNT, Color.YELLOW, getWidth() / 2.0, getHeight() / 2 + 28, 255);
     }
 
     /** A tank's name, its health and the rounds it has won, in the top left (red) or top right (green) corner. */
@@ -597,7 +669,7 @@ public class GamePanel extends JPanel
                                 new Line(battle.fieldBlocked() ? BLOCKED_NOTE : battle.hasField()
                                                 ? "Every round is on your battlefield." : "Each round is a new battlefield.",
                                                 SMALL, battle.fieldBlocked() ? Color.YELLOW : DIM), recordLine() }, true);
-                controls(g);
+                controls(g, "for 2 players");
                 break;
             case ROUND_START:
                 boolean go = battle.phaseTicks() > Battle.ROUND_START_TICKS - 25;
@@ -728,12 +800,15 @@ public class GamePanel extends JPanel
                         ? new Line("Your record vs the computer: " + record, SMALL, Color.YELLOW) : null;
     }
 
-    /** On the title card, each tank's keys under it: red's W A S D and Q (or the pointer), green's arrows and M. */
-    private void controls(Graphics2D g)
+    /**
+     * Each tank's keys under it: red's W A S D and Q (or the pointer), green's arrows and M with its note (none when
+     * the note is null: the computer drives green).
+     */
+    private void controls(Graphics2D g, String greenNote)
     {
         keys(g, battle.red(), new String[] { "W", "A", "S", "D" }, "Q",
                         getWidth() >= 440 ? "or hold to drive, tap to fire" : "or touch the field");
-        keys(g, battle.green(), null, "M", "for 2 players");
+        if (greenNote != null) keys(g, battle.green(), null, "M", greenNote);
     }
 
     /** Four driving keys (letters, or arrows when null) in a T, the fire key beside them and a note under them. */
@@ -741,8 +816,9 @@ public class GamePanel extends JPanel
     {
         int s = 24;
         int step = s + 3;
-        int top = (int) tank.y() + Tank.SIZE + 10;
-        int left = (int) tank.x() - (step * 4 + 8) / 2;
+        // Kept on the field: mid-match (on the pause card) a tank can be at an edge.
+        int top = Math.min((int) tank.y() + Tank.SIZE + 10, getHeight() - step * 2 - 22);
+        int left = Math.max(4, Math.min(getWidth() - step * 4 - 12, (int) tank.x() - (step * 4 + 8) / 2));
         int[][] at = { { left + step, top }, { left, top + step }, { left + step, top + step },
                         { left + step * 2, top + step } };
         for (int i = 0; i < at.length; i++) keycap(g, at[i][0], at[i][1], s, letters == null ? null : letters[i], i);
