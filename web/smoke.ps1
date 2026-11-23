@@ -5,7 +5,7 @@
 # apps that have one, without the buttons the app draws itself) and its Then page where it has one. On an app's own
 # page (wide and phone) and its Then page it first checks the early title card from the HTML has the live card's rows in the same places
 # (Test-EarlyTitle). play.html with no app is walked with Tab, checking each stop's accessible name and that it
-# becomes the feature (Test-Guide). On the home page it types into the gallery's filter field (Test-Search) and walks What's new's reel of recently changed apps with Tab, checking each stop's accessible name and that only the focused card plays its clip (Test-Reel). The home page also loads on 400 and 360 px phones, where the poster the HTML paints must hand over to the player's own in place (Test-EarlyPoster). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
+# becomes the feature (Test-Guide). On the home page it checks every gallery card's links and buttons have a role and name even below the window (Test-CardNames), types into the gallery's filter field (Test-Search) and walks What's new's reel of recently changed apps with Tab, checking each stop's accessible name and that only the focused card plays its clip (Test-Reel). The home page also loads on 400 and 360 px phones, where the poster the HTML paints must hand over to the player's own in place (Test-EarlyPoster). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
@@ -133,7 +133,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
     elseif ($Click) { $pressFirst = "(function (b) { if (b) b.click(); return !!b; })(document.querySelector('$Click'))" }
     if (-not $App) {
         if (-not (& $wait "document.readyState === 'complete' && !!document.querySelector('$ready')" 20000)) { $why = "page did not finish loading ($ready)" }
-        else { Start-Sleep -Milliseconds $Settle; if ($Search) { $why = Test-Search $wait } elseif ($Reel) { $why = Test-Reel $wait } elseif ($Phone) { $why = Test-EarlyPoster $wait } }
+        else { Start-Sleep -Milliseconds $Settle; if ($Search) { if (-not ($why = Test-CardNames)) { $why = Test-Search $wait } } elseif ($Reel) { $why = Test-Reel $wait } elseif ($Phone) { $why = Test-EarlyPoster $wait } }
     } elseif ($Guide -and ($why = Test-Guide $wait)) { }
     elseif ($pressFirst -and -not (& $wait $pressFirst 20000)) { $why = "no $Click$Sheet to press" }
     elseif (-not (& $wait (& $in "!!(document.querySelector('.shim-title-play:not([disabled])') || document.querySelector('#desktop > *'))") 30000)) { $why = 'Play never became ready' }
@@ -297,6 +297,22 @@ function Get-FocusName([string]$expr = 'document.activeElement') {
     $o = (Invoke-Cdp 'Runtime.evaluate' @{ expression = $expr }).result.objectId
     $n = @((Invoke-Cdp 'Accessibility.getPartialAXTree' @{ objectId = $o; fetchRelatives = $false }).nodes)[0]
     "$($n.role.value): $("$($n.name.value)".Trim())"
+}
+
+# The home gallery's cards (Home.tsx Apps) as a screen reader finds them from the top of the page, with cards below
+# the window: every link and button on a card has its role and a name in Chrome's accessibility tree, as an on-screen
+# card's do (round 81's content-visibility gave off-screen cards' links role none and no name). Nothing is scrolled to
+# or measured inside the cards, so a skipped card stays skipped. Returns why it failed, or nothing.
+function Test-CardNames {
+    $cards = "document.querySelectorAll('#apps > li:not([hidden])')"
+    $controls = "document.querySelectorAll('#apps > li:not([hidden]) :is(a, button)')"
+    Invoke-Js 'scrollTo(0, 0)' | Out-Null
+    if (-not (Invoke-Js "[].some.call($cards, function (l) { return l.getBoundingClientRect().top > innerHeight; })")) { return 'cards: none below the window, so off-screen cards were not tested' }
+    $bad = @(for ($i = 0; $i -lt (Invoke-Js "$controls.length"); $i++) {
+        $f = Get-FocusName "$controls[$i]"
+        if ($f -notmatch '^(link|button): .') { "$(Invoke-Js "$controls[$i].closest('li').dataset.app") '$f'" }
+    })
+    if ($bad) { return "cards: $($bad.Count) card controls without a role or name: " + (($bad | Group-Object | ForEach-Object { "$($_.Count) x $($_.Name)" }) -join ', ') }
 }
 
 # play.html's channel guide (pages/play/Picker.tsx) by keyboard, with real Tab presses from a fresh page: no unnamed
