@@ -3,7 +3,7 @@
 // them. No CSS import and nothing that needs a browser at import time: the build reads this file in Node.
 import { ShareStory } from './ShareStory';
 
-export const CHAPTERS = [['#originals', 'The originals'], ['#recovery', 'The recovery'], ['#restoration', 'The first restoration'], ['#chain', 'The chain'], ['#numbers', 'In numbers'], ['#continued', 'Continued']];
+export const CHAPTERS = [['#originals', 'The originals'], ['#recovery', 'The recovery'], ['#restoration', 'The first restoration'], ['#chain', 'The chain'], ['#numbers', 'In numbers'], ['#continued', 'Continued'], ['#third', 'Third run']];
 
 /** The bar at the top: the chapters, the one you're in marked (at, once the page has measured it), and how far down you are. */
 export function TopBar({ at }: { at: { chapter: number; read: number } | null }) {
@@ -42,6 +42,7 @@ export function Hero() {
         <li><a href="#chain">The Claude Code chain</a></li>
         <li><a href="#numbers">The run in numbers</a></li>
         <li><a href="#continued">The continued run</a></li>
+        <li><a href="#third">The third run</a></li>
       </ol>
     </header>
   );
