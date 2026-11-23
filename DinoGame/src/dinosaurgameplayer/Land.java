@@ -6,13 +6,13 @@ import java.awt.Graphics2D;
 /**
  * The land behind a run: flat-topped mesas far off and low dunes nearer, each sliding past slower than the ground
  * (the mesas at an eighth of its speed, the dunes at a third), so the run has depth. Worked out from the distance
- * alone, so a replay or a ghost's course shows the same land. Pale grays only: never blue 83, so the bot never sees it.
+ * alone, so a replay or a ghost's course shows the same land. Pale rose and gold only: never blue 83, so the bot never sees it.
  */
 final class Land {
 
-   static final Color FAR = new Color(0xE9E9E9);
-   static final Color SHADE = new Color(0xE0E0E0);
-   static final Color NEAR = new Color(0xDDDDDD);
+   static final Color FAR = new Color(0xF0CDB0);
+   static final Color SHADE = new Color(0xE5B898);
+   static final Color NEAR = new Color(0xEDD3A2);
    private static final double FAR_PACE = 0.125;
    private static final double NEAR_PACE = 0.33;
    private static final int MESA_EVERY = 170;

@@ -44,14 +44,27 @@ final class RunnerPanel extends JPanel {
    private static final Font PAD = new Font(Font.SANS_SERIF, Font.BOLD, 36);
    private static final Font PAD_TEXT = new Font(Font.SANS_SERIF, Font.PLAIN, 19);
 
-   static final Color INK = new Color(0x535353);
-   static final Color PAPER = new Color(0xF7F7F7);
-   private static final Color CLOUD = new Color(0xD6D6D6);
-   static final Color MUTED = new Color(0x6E6E6E);
-   private static final Color STRIP_BG = new Color(0xEBEBEB);
+   /** Words, the score, the ground line and the marks: a dark warm brown. */
+   static final Color INK = new Color(0x4A3728);
+   /** A warm desert sky; under the ground line, sand. */
+   static final Color PAPER = new Color(0xFBEFD9);
+   static final Color SAND = new Color(0xF1DDB6);
+   static final Color CLOUD = new Color(0xE6CFAE);
+   static final Color SUN = new Color(0xFFE0A3);
+   static final Color MUTED = new Color(0x7A6650);
+   static final Color STRIP_BG = new Color(0xEFDDBF);
+   /** The dinosaur: deep teal, so it never reads as an obstacle. */
+   static final Color DINO = new Color(0x2E6E7E);
+   /**
+    * The obstacles keep blue at exactly 83 (0x53), the one number the original bot knows, whatever their red and
+    * green: sage cacti with a lighter rib, plum birds. Nothing else the game draws has blue 83.
+    */
+   static final Color CACTUS = new Color(0x4E8553);
+   static final Color CACTUS_LIGHT = new Color(0x74A653);
+   static final Color BIRD = new Color(0x8E4F53);
    static final Color MARKER = new Color(255, 0, 0);
    private static final Color BOT_TEXT = new Color(0xC62828);
-   private static final Color DUST = new Color(0xBDBDBD);
+   static final Color DUST = new Color(0xD8BF97);
    /** The moon and the stars, as night shows them (they are not there by day). */
    private static final Color MOON = new Color(0xE6E6E6);
    /** The second player's dinosaur, in a two-player race. */
@@ -811,7 +824,7 @@ final class RunnerPanel extends JPanel {
          Duel d = this.duel;
          boolean together = Math.abs(d.p2.distance() + d.p2.dinoX() - d.p1.distance() - d.p1.dinoX()) < 30;
          this.paintBeside(g, d.p2, v, Sky.tint(P2, dark), "P2", together ? 12 : 0, dark);
-         this.paintBeside(g, d.p1, v, Sky.tint(INK, dark), "P1", 0, dark);
+         this.paintBeside(g, d.p1, v, Sky.tint(DINO, dark), "P1", 0, dark);
          this.paintDuelScore(g, dark);
          this.paintMessage(g, dark);
       } else if (this.picture != null) {
@@ -842,7 +855,7 @@ final class RunnerPanel extends JPanel {
             this.paintGuide(g, dark);
          }
          if (replay == null) {
-            paintDino(g, this.runner, Sky.tint(INK, dark), Sky.tint(PAPER, dark));
+            paintDino(g, this.runner, Sky.tint(DINO, dark), Sky.tint(PAPER, dark));
          }
          this.paintScore(g, dark);
          if (this.bot.isOn()) {
@@ -942,6 +955,9 @@ final class RunnerPanel extends JPanel {
       if (dark > 0) {
          paintNightSky(g, sky, paper, dark);
       }
+      // A low sun behind the mesas, fading into the sky as night falls.
+      g.setColor(Sky.mix(SUN, paper, dark));
+      g.fillOval(574, 92, 64, 64);
       Land.paint(g, runner.distance(), dark);
       g.setColor(Sky.tint(CLOUD, dark));
       double[] clouds = runner.clouds();
@@ -949,10 +965,12 @@ final class RunnerPanel extends JPanel {
          Sprites.draw(g, Sprites.CLOUD, (int) clouds[i], 46 + i % 2 * 24, 2);
       }
 
-      // The ground: a line, with pebbles below it that scroll with the run.
-      Color ink = Sky.tint(INK, dark);
-      g.setColor(ink);
+      // The ground: sand under a line, with pebbles that scroll with the run.
+      g.setColor(Sky.tint(SAND, dark));
+      g.fillRect(0, Runner.GROUND, Runner.WIDTH, STRIP - Runner.GROUND);
+      g.setColor(Sky.tint(INK, dark));
       g.fillRect(0, Runner.GROUND, Runner.WIDTH, 1);
+      g.setColor(Sky.tint(MUTED, dark));
       double d = runner.distance();
       long first = (long) Math.floor(d / 23);
       for (long n = first; n * 23 - d < Runner.WIDTH; n++) {
@@ -964,21 +982,32 @@ final class RunnerPanel extends JPanel {
       }
 
       for (Runner.Obstacle o : obstacles ? runner.obstacles() : new ArrayList<Runner.Obstacle>()) {
-         g.setColor(ink);
-         paintObstacle(g, runner, o, (int) Math.round(o.x));
+         paintObstacle(g, runner, o, (int) Math.round(o.x), dark, 255);
       }
    }
 
-   /** Obstacle o with its left edge at x, in the color set. */
-   private static void paintObstacle(Graphics2D g, Runner runner, Runner.Obstacle o, int x) {
+   /** Obstacle o with its left edge at x, in its own colors as night turns them, at alpha (255 is solid). */
+   private static void paintObstacle(Graphics2D g, Runner runner, Runner.Obstacle o, int x, double dark, int alpha) {
       if (o.kind == Runner.Kind.BIRD) {
+         g.setColor(see(Sky.tint(BIRD, dark), alpha));
          Sprites.draw(g, runner.birdWings(), x, o.top(), 2);
       } else {
+         boolean large = o.kind == Runner.Kind.LARGE_CACTUS;
+         Color body = see(Sky.tint(CACTUS, dark), alpha);
+         Color rib = see(Sky.tint(CACTUS_LIGHT, dark), alpha);
          int unit = o.w / o.size;
          for (int j = 0; j < o.size; j++) {
-            Sprites.cactus(g, x + j * unit, o.top(), o.kind == Runner.Kind.LARGE_CACTUS);
+            g.setColor(body);
+            Sprites.cactus(g, x + j * unit, o.top(), large);
+            g.setColor(rib);
+            Sprites.ribs(g, x + j * unit, o.top(), large);
          }
       }
+   }
+
+   /** c at alpha (255 is c itself). */
+   static Color see(Color c, int alpha) {
+      return alpha >= 255 ? c : new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
    }
 
    /**
@@ -1050,7 +1079,8 @@ final class RunnerPanel extends JPanel {
       FontMetrics fm = g.getFontMetrics();
       int y = Runner.GROUND + 3;
       Color ink = Sky.tint(INK, dark);
-      Color seeThrough = new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 70);
+      Color dino = Sky.tint(DINO, dark);
+      Color seeThrough = see(dino, 70);
       if (fix != null) {
          g.setColor(Sky.tint(MUTED, dark));
          g.drawString("SLOW REPLAY: HOW TO GET PAST IT", 14, 24 + (this.racing ? 16 : 0) + (this.ears != Ears.Mode.OFF ? 16 : 0));
@@ -1065,11 +1095,10 @@ final class RunnerPanel extends JPanel {
          boolean lit = fix == null || fix.steps() >= c.step;
          if (fix == null) {
             // The obstacle you hit, see-through, where it was when the press should have come.
-            g.setColor(seeThrough);
-            paintObstacle(g, this.runner, this.runner.crashedInto(), c.markX);
+            paintObstacle(g, this.runner, this.runner.crashedInto(), c.markX, dark, 70);
          }
          if (fix != null) {
-            g.setColor(Sky.tint(PAPER, dark));
+            g.setColor(Sky.tint(SAND, dark));
             g.fillRect(c.markX - 7, y - 1, 15, 10);   // clear of the pebbles, as on your first runs
          }
          g.setColor(ink);
@@ -1091,7 +1120,7 @@ final class RunnerPanel extends JPanel {
          Runner you = this.replayYou.runner();
          boolean apart = you.state() == Runner.State.CRASHED || you.dinoTop() != fix.dinoTop() || you.isDucking() != fix.isDucking();
          this.paintBeside(g, you, fix, seeThrough, apart ? "you" : null, 0, dark);
-         paintDino(g, fix, ink, Sky.tint(PAPER, dark));
+         paintDino(g, fix, dino, Sky.tint(PAPER, dark));
          if (apart) {
             // Above the fix's dinosaur, lifted clear of yours when yours is just above it.
             boolean near = Math.abs(you.distance() - fix.distance()) < 60 && Math.abs(you.dinoTop() - fix.dinoTop()) < 14;
@@ -1132,7 +1161,7 @@ final class RunnerPanel extends JPanel {
       int y = Runner.GROUND + 3;
       int[] xs = { x - 5, x, x + 5 };
       int[] ys = { y + 8, y, y + 8 };
-      g.setColor(Sky.tint(PAPER, dark));
+      g.setColor(Sky.tint(SAND, dark));
       g.fillRect(x - 7, y - 1, 15, 10);   // clear of the pebbles
       g.setFont(TINY);
       String label = guide[0] == Ears.DUCK ? "duck" : "jump";
@@ -1162,7 +1191,7 @@ final class RunnerPanel extends JPanel {
     */
    private void paintGhost(Graphics2D g, double dark) {
       Runner r = this.ghost.runner();
-      Color ink = Sky.tint(INK, dark);
+      Color ink = Sky.tint(DINO, dark);
       boolean apart = Math.round(this.ghostOffset()) != 0 || r.state() == Runner.State.CRASHED || r.dinoTop() != this.runner.dinoTop();
       this.paintBeside(g, r, this.runner, new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 80), apart ? "ghost" : null, 0, dark);
    }
@@ -1195,7 +1224,7 @@ final class RunnerPanel extends JPanel {
       int x = Runner.WIDTH - 14 - fm.stringWidth(two);
       g.setColor(Sky.tint(P2, dark));
       g.drawString(two, x, 24);
-      g.setColor(Sky.tint(INK, dark));
+      g.setColor(Sky.tint(DINO, dark));
       g.drawString(one, x - fm.stringWidth(one), 24);
       g.setColor(Sky.tint(MUTED, dark));
       g.drawString("WINS " + this.duel.wins(1) + " - " + this.duel.wins(2), 14, 24);

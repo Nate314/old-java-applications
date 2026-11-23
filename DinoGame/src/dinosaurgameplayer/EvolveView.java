@@ -47,7 +47,7 @@ final class EvolveView {
             }
          }
       }
-      RunnerPanel.paintDino(g, lead.runner, RunnerPanel.INK);
+      RunnerPanel.paintDino(g, lead.runner, RunnerPanel.DINO);
       paintLead(g, lead);
       paintBadge(g, ev, speed);
       paintScore(g, ev, lead);

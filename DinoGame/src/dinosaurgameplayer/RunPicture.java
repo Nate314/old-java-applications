@@ -156,7 +156,7 @@ final class RunPicture {
       int w = Math.max(1, o[1] / this.shrink);
       int top = ground - o[3] / this.shrink;
       int tall = Math.max(1, (o[3] - o[2]) / this.shrink);
-      g.setColor(RunnerPanel.INK);
+      g.setColor(o[4] == 1 ? RunnerPanel.BIRD : RunnerPanel.CACTUS);
       if (o[4] == 1) {
          g.fillOval(p[0], top, w, tall);
       } else {
