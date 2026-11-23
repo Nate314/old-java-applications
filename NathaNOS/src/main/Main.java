@@ -9,6 +9,7 @@ import javax.swing.JDesktopPane;
 import javax.swing.JFrame;
 import javax.swing.JLayeredPane;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 public class Main extends JFrame {
    /** The original wallpaper photo, scaled to the screen. */
@@ -18,7 +19,7 @@ public class Main extends JFrame {
       @Override
       protected void paintComponent(Graphics g) {
          super.paintComponent(g);
-         Main.this.wallpaper.paint(g, this.getWidth(), this.getHeight(), Main.this.photo, this);
+         Main.this.wallpaper.paint(g, this.getWidth(), this.getHeight(), Main.this.photo, this, Main.this.seconds);
       }
    };
    public LauncherWindow launcherWindow;
@@ -32,6 +33,8 @@ public class Main extends JFrame {
    DesktopSettings settings = new DesktopSettings();
    Pictures pictures;
    Wallpaper wallpaper = Wallpaper.byId(Wallpaper.DEFAULT);
+   /** How far the painted wallpapers have moved; it holds still with reduced motion. */
+   double seconds;
 
    public Main(Boolean visibility) {
       this.setUndecorated(true);
@@ -73,6 +76,16 @@ public class Main extends JFrame {
       this.desktopPane.add(this.zoom, JLayeredPane.DRAG_LAYER);
       // Above everything, even the outlines and a dragged icon.
       this.desktopPane.add(this.power, Integer.valueOf(JLayeredPane.DRAG_LAYER + 100));
+      // About 12 frames a second for a moving wallpaper; the photo and Paint pictures never repaint for it.
+      long[] last = {System.nanoTime()};
+      new Timer(80, e -> {
+         long now = System.nanoTime();
+         if (this.wallpaper.moves() && !Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+            this.seconds += Math.min(0.5, (now - last[0]) / 1e9);
+            this.desktopPane.repaint();
+         }
+         last[0] = now;
+      }).start();
       // The window was shown before the desktop was added, so lay it out now; and since it never takes focus,
       // raise it once, or it opens behind the window that started it.
       this.revalidate();
