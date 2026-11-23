@@ -217,7 +217,13 @@ export function pages(): Plugin {
       // sw.js lists this build's files, so it changes with every build (the browser then installs it) and knows which to keep.
       // It lists the pages too, so offline it tells a page not saved yet from a mistyped address (which gets the lost page).
       const pages = ROUTES.filter(r => !r.anyDepth).map(r => r.file).concat(APPS.map(a => a.id + '/index.html'), APPS.filter(a => a.then).map(a => a.id + '/then.html'));
-      this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts', false, { BUILT: JSON.stringify(files), PAGES: JSON.stringify(pages) }) });
+      // What the worker fetches on installing: the parts pages load later (Find, the skin maker, What's new...) and the
+      // lost page's code (its loader names no files), with what they import. A page's own files are kept with the page,
+      // so a first visit no longer also downloads every other page's code (Save all, files.json below, still takes all).
+      const later = Object.values(bundle).filter((c): c is OutputChunk => c.type === 'chunk' &&
+        (c.isDynamicEntry || ROUTES.some(r => r.anyDepth && c.isEntry && c.name === inputName(r))));
+      const installed = files.filter(name => name in skins || later.some(c => c.fileName === name || importsOf(bundle, c).includes(name) || cssOf(bundle, c).includes(name)));
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts', false, { BUILT: JSON.stringify(installed), PAGES: JSON.stringify(pages) }) });
       // Save all keeps the preview clips too (about 3 MB), so the gallery, play.html and title screens move offline.
       const clips = APPS.filter(a => a.clip).map(a => 'clips/' + a.id + '.mp4');
       this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files.concat(clips)) + '\n' });
