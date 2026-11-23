@@ -14,6 +14,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,6 +40,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    static Color PAPER_EDGE;
    /** The darker stripes of the page edges under the book. */
    private static Color EDGE_SHADE;
+   /** The gilt page edges of the blocks under the pages, in two stripes. */
+   private static Color GILT;
+   private static Color GILT_SHADE;
    /** The shadow toward the fold between two pages. */
    private static Color SPINE;
    static Color INK;
@@ -79,6 +83,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       PAPER = new Color(night ? 0x241d16 : 0xfbf5e6);
       PAPER_EDGE = new Color(night ? 0x3b3127 : 0xe3d5b5);
       EDGE_SHADE = new Color(night ? 0x2c241c : 0xcdbd98);
+      GILT = new Color(night ? 0x5e4b2a : 0xdcbc6c);
+      GILT_SHADE = new Color(night ? 0x4a3b22 : 0xb8954a);
       SPINE = night ? new Color(0, 0, 0) : new Color(120, 90, 50);
       INK = new Color(night ? 0xe9dcc3 : 0x2b2118);
       RUBRIC = new Color(night ? 0xe07a6c : 0x9e2a2b);
@@ -1274,6 +1280,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       int n = tabs(s.height);
       java.awt.Point at = this.edgePoint();
       int pointed = at == null ? -1 : bookAtEdge(at.y - s.y, s.height);
+      int[] stack = this.stack();
       g.setFont(TAB);
       FontMetrics fm = g.getFontMetrics();
       for (int t = 0; t < n; t++) {
@@ -1282,8 +1289,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          boolean left = last < this.shelf.book;
          int y = s.y + t * s.height / n + 1;
          int h = s.y + (t + 1) * s.height / n - 1 - y;
-         // Tucked 4 px under the page, so the page edges cover the tab's inner end.
-         int x = left ? book.x - TAB_W : book.x + book.width - 4;
+         // Tucked 4 px under the page block, whose edges cover the tab's inner end.
+         int x = left ? book.x - TAB_W - (stack[0] - 3) : book.x + book.width - 4 + (stack[1] - 3);
          boolean open = this.shelf.book >= first && this.shelf.book <= last;
          boolean over = pointed >= first && pointed <= last;
          g.setColor(over ? GOLD : open ? RUBRIC : t % 2 == 0 ? PAPER_EDGE : EDGE_SHADE);
@@ -1292,7 +1299,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          int k = Character.isDigit(id.charAt(0)) ? 2 : 1;
          String label = id.substring(0, k) + id.substring(k).toLowerCase();
          g.setColor(over ? TAB_INK_OVER : open ? ON_RUBRIC : INK);
-         // Centered on what shows past the page edges (they stand 3 px out from the page).
+         // Centered on what shows past the page block.
          int lx = (left ? x : x + 7) + (TAB_W - 3 - fm.stringWidth(label)) / 2;
          g.drawString(label, lx, y + (h + fm.getAscent() - fm.getDescent()) / 2);
       }
@@ -1376,14 +1383,82 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       this.paintBar(g, w, h);
    }
 
+   // ---- The book's depth: the pages bow into the spine over gilt-edged blocks as thick as the Bible either side ----
+
+   /** The most leaves a page block shows (one stands for the cover's edge), and how far the pages sag at the spine. */
+   static final int STACK = 8;
+   static final int SAG = 6;
+
+   /** Leaves in the left and the right page block at a chapter (ordinal 0 to 1,188): thin before Genesis, thick before Revelation. */
+   static int[] stack(int ordinal) {
+      int left = 1 + Math.round((STACK - 1) * Math.max(0, Math.min(Books.TOTAL - 1, ordinal)) / (float) (Books.TOTAL - 1));
+      return new int[]{left, STACK + 1 - left};
+   }
+
+   /** How far a page's top and foot dip at x, curving into the fold over the zone beside it (none without a fold). */
+   static double sag(double x, int fold, int zone) {
+      double d = Math.abs(x - fold);
+      if (zone <= 0 || d >= zone) {
+         return 0;
+      }
+      double t = 1 - d / zone;
+      return SAG * t * t;
+   }
+
+   /** A page's outline, widened by left and right and lowered by down (a leaf further down the block), bowing into the fold. */
+   static Path2D leaf(Rectangle s, int left, int right, double down, int fold, int zone) {
+      Path2D p = new Path2D.Double();
+      double x0 = s.x - left;
+      double x1 = s.x + s.width + right;
+      p.moveTo(x0, s.y + down + sag(x0, fold, zone));
+      for (double x = x0; x < x1; ) {
+         x = Math.min(x1, x + 2);
+         p.lineTo(x, s.y + down + sag(x, fold, zone));
+      }
+      for (double x = x1; x > x0; ) {
+         p.lineTo(x, s.y + s.height + down + sag(x, fold, zone));
+         x = Math.max(x0, x - 2);
+      }
+      p.lineTo(x0, s.y + s.height + down + sag(x0, fold, zone));
+      p.closePath();
+      return p;
+   }
+
+   /** The leaves either side of the open place, by its chapter. */
+   private int[] stack() {
+      return stack(Books.ordinal(this.shelf.book, this.shelf.chapter));
+   }
+
    private void paintPaper(Graphics2D g, Rectangle book, Rectangle[] sheets) {
-      // Page edges under the book, like the stack of paper in a thick book.
-      for (int i = 3; i >= 1; i--) {
-         g.setColor(i % 2 == 0 ? PAPER_EDGE : EDGE_SHADE);
-         g.fillRoundRect(book.x - i, book.y + i, book.width + 2 * i, book.height, 6, 6);
+      int[] stack = this.stack();
+      boolean two = sheets.length == 2;
+      int fold = two ? sheets[1].x : Integer.MIN_VALUE;
+      int zone = two ? Math.min(140, book.width / 6) : 0;
+      // A soft shadow on the desk under the book.
+      for (int i = 4; i >= 1; i--) {
+         g.setColor(new Color(0, 0, 0, 34));
+         g.fillRoundRect(book.x - stack[0] + i, book.y + i * 2, book.width + stack[0] + stack[1], book.height + SAG, 10, 10);
+      }
+      // The page blocks: a leaf edge per step, gilt as on a printed Bible, the outermost first.
+      for (int i = STACK; i >= 1; i--) {
+         g.setColor(i % 2 == 0 ? GILT : GILT_SHADE);
+         int left = Math.min(i, stack[0]);
+         int right = Math.min(i, stack[1]);
+         if (two) {
+            if (i <= stack[0]) {
+               g.fill(leaf(sheets[0], left, 0, i / 2.0, fold, zone));
+            }
+            if (i <= stack[1]) {
+               g.fill(leaf(sheets[1], 0, right, i / 2.0, fold, zone));
+            }
+         } else {
+            g.fill(leaf(book, left, right, i / 2.0, fold, zone));
+         }
       }
       g.setColor(PAPER);
-      g.fillRect(book.x, book.y, book.width, book.height);
+      for (Rectangle sheet : sheets) {
+         g.fill(leaf(sheet, 0, 0, 0, fold, zone));
+      }
       if (this.shelf.night) {
          // A reading lamp: warm light pooling over each page, brightest in the middle (ovals, as the browser has no gradients).
          for (Rectangle sheet : sheets) {
@@ -1395,17 +1470,22 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             }
          }
       }
-      if (sheets.length == 2) {
-         // The spine: shading that deepens toward the fold.
-         int fold = sheets[1].x;
+      // The outer edges curl down a little to the blocks.
+      for (int i = 0; i < 8; i++) {
+         g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), (8 - i) * 4));
+         g.fillRect(book.x + i, book.y, 1, book.height);
+         g.fillRect(book.x + book.width - 1 - i, book.y, 1, book.height);
+      }
+      if (two) {
+         // The spine: shading that deepens toward the fold, following the pages' bow.
          for (int i = 0; i < 26; i++) {
             int a = (26 - i) * 3;
             g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), a / 2));
-            g.fillRect(fold - i - 1, book.y, 1, book.height);
-            g.fillRect(fold + i, book.y, 1, book.height);
+            g.fillRect(fold - i - 1, (int) Math.round(book.y + sag(fold - i - 1, fold, zone)), 1, book.height);
+            g.fillRect(fold + i, (int) Math.round(book.y + sag(fold + i, fold, zone)), 1, book.height);
          }
          g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), 110));
-         g.drawLine(fold, book.y, fold, book.y + book.height - 1);
+         g.drawLine(fold, book.y + SAG, fold, book.y + SAG + book.height - 1);
       }
    }
 
