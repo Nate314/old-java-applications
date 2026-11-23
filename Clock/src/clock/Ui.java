@@ -4,6 +4,7 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.util.Date;
@@ -21,6 +22,12 @@ final class Ui {
    static final Color FAINT = new Color(0, 110, 120);
    static final String DIGITS = "Times New Roman";
    static final String LABELS = "SansSerif";
+
+   /** The rim's chrome, lit from the top left, and the soft shadow a dial or hand casts down and to the right. */
+   static final Color CHROME_LIGHT = new Color(252, 253, 255);
+   static final Color CHROME_DARK = new Color(64, 74, 88);
+   static final Color SHADOW = new Color(0, 40, 50, 64);
+   private static final Color FACE_LOW = new Color(222, 229, 234);
 
    private Ui() {
    }
@@ -82,6 +89,41 @@ final class Ui {
          ys[ys.length - 1 - i] = cy - (int) Math.round(inner * Math.cos(angle));
       }
       g.fillPolygon(xs, ys, xs.length);
+   }
+
+   /**
+    * A dial's face as an object on the window: its shadow cast down and to the right, then the face, white shading to
+    * pale grey at the bottom as a domed dial catches the light.
+    */
+   static void face(Graphics2D g, int cx, int cy, int r) {
+      int drop = Math.max(2, r / 22);
+      g.setColor(SHADOW);
+      g.fillOval(cx - r + drop / 2, cy - r + drop, 2 * r, 2 * r);
+      g.setPaint(new GradientPaint(cx, cy - r / 3, FACE, cx, cy + r, FACE_LOW));
+      g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+      g.setColor(FACE);
+   }
+
+   /** The dial's rim: a chrome ring {@code width} wide centred on radius {@code r}, with a shaded lip inside it. */
+   static void rim(Graphics2D g, int cx, int cy, int r, int width) {
+      g.setStroke(new BasicStroke(width));
+      g.setPaint(new GradientPaint(cx - r, cy - r, CHROME_LIGHT, cx + r / 2, cy + r, CHROME_DARK));
+      g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+      int lip = r - width / 2;
+      g.setStroke(new BasicStroke(Math.max(1f, width / 4f)));
+      g.setPaint(new GradientPaint(cx - r, cy - r, CHROME_DARK, cx + r / 2, cy + r, CHROME_LIGHT));
+      g.drawOval(cx - lip, cy - lip, 2 * lip, 2 * lip);
+      int edge = r + width / 2;
+      g.setColor(INK);
+      g.setStroke(new BasicStroke(1f));
+      g.drawOval(cx - edge, cy - edge, 2 * edge, 2 * edge);
+   }
+
+   /** The glass over a dial: a glint across its upper half, fading out towards the middle. */
+   static void glass(Graphics2D g, int cx, int cy, int r) {
+      g.setPaint(new GradientPaint(cx, cy - r, new Color(255, 255, 255, 120), cx, cy - r / 8, new Color(255, 255, 255, 0)));
+      g.fillOval(cx - r * 4 / 5, cy - r * 23 / 25, r * 8 / 5, r * 4 / 5);
+      g.setColor(INK);
    }
 
    /** Splits {@code box} across into {@code count} equal parts with {@code gap} pixels between them. */

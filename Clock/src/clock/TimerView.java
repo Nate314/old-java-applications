@@ -108,8 +108,7 @@ final class TimerView implements Tab {
       this.centerY = box.y + box.height / 2;
       int r = this.radius;
       int stroke = Math.max(2, r / 30);
-      g.setColor(Ui.FACE);
-      g.fillOval(this.centerX - r, this.centerY - r, 2 * r, 2 * r);
+      Ui.face(g, this.centerX, this.centerY, r);
 
       // The wedge: from 12 o'clock clockwise, one degree per ten seconds left in this hour; whole hours after it
       // shade the rest of the dial, so the wedge shrinks back to 12 and then shows the next hour full.
@@ -154,9 +153,7 @@ final class TimerView implements Tab {
          g.setColor(minute > 0 && minute < fraction * 60 ? Ui.FACE : Ui.INK);
          Ui.center(g, String.valueOf(minute), numbers, new Rectangle(x - numberSize, y - numberSize / 2, 2 * numberSize, numberSize));
       }
-      g.setColor(Ui.INK);
-      g.setStroke(new BasicStroke(stroke));
-      g.drawOval(this.centerX - r, this.centerY - r, 2 * r, 2 * r);
+      Ui.rim(g, this.centerX, this.centerY, r, stroke * 2);
 
       // The knob at the wedge's edge, to drag, and the hub.
       double edge = fraction * 2 * Math.PI;
@@ -171,6 +168,7 @@ final class TimerView implements Tab {
       g.setColor(Ui.INK);
       int hub = Math.max(4, r / 14);
       g.fillOval(this.centerX - hub, this.centerY - hub, 2 * hub, 2 * hub);
+      Ui.glass(g, this.centerX, this.centerY, r);
 
       // How many more hours wait after this one, in a pill under the middle.
       if (hours > 0) {

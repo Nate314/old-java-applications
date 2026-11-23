@@ -210,7 +210,17 @@ public class TimerCheck {
       watchInk.dispose();
       check(rim(watchFace, 15) == StopwatchView.AHEAD.getRGB() && rim(watchFace, 19) == StopwatchView.AHEAD.getRGB(), "the lap band is green while ahead of the best lap");
       check(rim(watchFace, 22.5) == Ui.WEDGE.getRGB(), "and red for the time lost since");
-      check(rim(watchFace, 40) == Ui.FACE.getRGB() && rim(watchFace, 5) == Ui.FACE.getRGB(), "the rest of the rim is bare");
+      check(bare(rim(watchFace, 40)) && bare(rim(watchFace, 5)), "the rest of the rim is bare");
+      // The dials are objects on the window: a chrome rim lit from the top left, and a shadow cast down and to the right.
+      check(brightness(watchFace.getRGB(200 - (int)(190 * 0.7071), 200 - (int)(190 * 0.7071))) > brightness(watchFace.getRGB(200 + (int)(190 * 0.7071), 200 + (int)(190 * 0.7071))) + 200,
+            "the rim is lit at the top left and dark at the bottom right");
+      java.awt.image.BufferedImage lit = new java.awt.image.BufferedImage(100, 100, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D litInk = lit.createGraphics();
+      litInk.setColor(Ui.BACKGROUND);
+      litInk.fillRect(0, 0, 100, 100);
+      Ui.face(litInk, 50, 50, 40);
+      litInk.dispose();
+      check(lit.getRGB(51, 91) != Ui.BACKGROUND.getRGB() && lit.getRGB(50, 8) == Ui.BACKGROUND.getRGB(), "the dial casts its shadow below it, not above");
       check(watchFace.getRGB(200 + (int)(190 * 0.95 * Math.sin(Math.PI * 2 / 3)), 200 - (int)(190 * 0.95 * Math.cos(Math.PI * 2 / 3))) == Ui.FASTEST.getRGB(),
             "a green mark stands where the best lap would have ended");
 
@@ -283,6 +293,16 @@ public class TimerCheck {
    private static int rim(java.awt.image.BufferedImage face, double second) {
       double angle = second * Math.PI / 30;
       return face.getRGB(200 + (int)Math.round(190 * 0.945 * Math.sin(angle)), 200 - (int)Math.round(190 * 0.945 * Math.cos(angle)));
+   }
+
+   /** Whether a dial pixel is its bare face: white, or the pale grey the face shades to. */
+   private static boolean bare(int rgb) {
+      int r = rgb >> 16 & 255, g = rgb >> 8 & 255, b = rgb & 255;
+      return Math.min(r, Math.min(g, b)) >= 200 && Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b)) < 30;
+   }
+
+   private static int brightness(int rgb) {
+      return (rgb >> 16 & 255) + (rgb >> 8 & 255) + (rgb & 255);
    }
 
    private static boolean inked(java.awt.image.BufferedImage image, int left, int top, int right, int bottom) {
