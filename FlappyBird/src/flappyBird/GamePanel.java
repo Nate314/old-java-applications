@@ -107,7 +107,6 @@ public final class GamePanel extends JPanel implements KeyListener {
    public GamePanel(int stepsPerSecond) {
       this.stepsPerSecond = stepsPerSecond;
       this.rewind = new Rewind((int)Math.ceil(stepsPerSecond * REWIND_SECONDS));
-      this.images.add(image("bg.jpg").getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT, 4));
       this.images.add(image("ground.jpg").getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8, 4));
       this.images.add(image("topPipe.png").getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
       this.images.add(image("bottomPipe.png").getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
@@ -421,12 +420,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
       g2.translate(shakeX, shakeY);
 
-      for (Position tile : this.background.layers.get(0)) {
-         g2.drawImage(this.background.backgroundImage, (int)tile.x, (int)tile.y, null);
-         if (this.debugMode) {
-            g2.drawRect((int)tile.x, (int)tile.y, this.background.backgroundImage.getWidth(null), this.background.backgroundImage.getHeight(null));
-         }
-      }
+      this.background.paintBack(g2);
       Sky.paintSky(g2, this.skyPhase, Main.FRAME_WIDTH, Main.FRAME_HEIGHT, Background.groundY, calm());
 
       for (int pipeIndex = 0; pipeIndex < this.pipes.positions.size(); pipeIndex++) {
@@ -440,11 +434,9 @@ public final class GamePanel extends JPanel implements KeyListener {
          }
       }
 
-      for (Position tile : this.background.layers.get(1)) {
-         g2.drawImage(this.background.groundImage, (int)tile.x, (int)tile.y, null);
-         if (this.debugMode) {
-            g2.drawRect(0, Main.FRAME_HEIGHT * 7 / 8, Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8);
-         }
+      this.background.paintGround(g2);
+      if (this.debugMode) {
+         g2.drawRect(0, Background.groundY, Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8);
       }
       Sky.paintDim(g2, this.skyPhase, Main.FRAME_WIDTH, Main.FRAME_HEIGHT);
 
@@ -1201,9 +1193,9 @@ public final class GamePanel extends JPanel implements KeyListener {
       if (this.course.date != DailyCourse.today()) {
          this.course = DailyCourse.load(DailyCourse.FILE, DailyCourse.today());
       }
-      this.background = new Background(this.images.get(0), this.images.get(1));
-      this.pipes = new Pipes(this.images.get(2), this.images.get(3), this.daily ? this.course.pipeRandom() : new Random());
-      this.bird = new Bird(this.images.get(4));
+      this.background = new Background(this.images.get(0));
+      this.pipes = new Pipes(this.images.get(1), this.images.get(2), this.daily ? this.course.pipeRandom() : new Random());
+      this.bird = new Bird(this.images.get(3));
       this.bird.position.set(new Position(this.bird.position.collisionX, (float)(Main.FRAME_HEIGHT / 3)));
       this.collided = false;
       this.contact = null;
