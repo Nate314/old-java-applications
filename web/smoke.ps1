@@ -9,7 +9,7 @@
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
-# back without its title screen. On the story and the lost page it also opens an app from a link far down the page in
+# back without its title screen. On the story (twice: plain, and with a chapter in its address) and the lost page it also opens an app from a link far down the page in
 # the play sheet (PlayHere.tsx), checks it as above, closes the sheet each way a visitor can (Back, Esc, a click
 # around it, its close button; Forward and the link open it again) and checks the link is where it was. Exits 1
 # when any page fails.
@@ -129,7 +129,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
     $in = { param($expr) if ($Frame) { "(function (document) { return $expr; })(document.querySelector('$Frame').contentDocument)" } else { $expr } }
     $wait = { param($expr, [int]$ms) for ($i = 0; $i -lt $ms / 200; $i++) { Start-Sleep -Milliseconds 200; try { if (Invoke-Js $expr) { return $true } } catch { } }; $false }
     # The sheet's link is scrolled to the middle of the window and clicked; its place in the window is kept for the close.
-    if ($Sheet) { $Frame = '.play-here[open] iframe'; $pressFirst = "(function (l) { var b = l[l.length - 1]; if (b) { b.scrollIntoView({ block: 'center', behavior: 'instant' }); window.__smokeLink = b; window.__smokeTop = b.getBoundingClientRect().top; b.click(); } return !!b; })(document.querySelectorAll('$Sheet'))" }
+    if ($Sheet) { $Frame = '.play-here[open] iframe'; $pressFirst = "(function (l) { var b = l[l.length - 1]; if (b) { b.scrollIntoView({ block: 'center', behavior: 'instant' }); window.__smokeLink = b; window.__smokeTop = b.getBoundingClientRect().top; window.__smokeHash = location.hash; b.click(); } return !!b; })(document.querySelectorAll('$Sheet'))" }
     elseif ($Click) { $pressFirst = "(function (b) { if (b) b.click(); return !!b; })(document.querySelector('$Click'))" }
     if (-not $App) {
         if (-not (& $wait "document.readyState === 'complete' && !!document.querySelector('$ready')" 20000)) { $why = "page did not finish loading ($ready)" }
@@ -182,6 +182,8 @@ $pages = @(
     @{ name = 'lost page (missing path)'; path = 'no-such-page'; ready = '#lost'; Missing = $true }
     @{ name = 'compare.html'; path = 'compare.html'; ready = 'main.compare .panes' }
     @{ name = 'story play sheet'; path = 'story.html'; App = $true; Sheet = '#apps20 a' }
+    # A chapter in the address: going back to it must not scroll the page to that chapter (round 83's PlayHere fix).
+    @{ name = 'story play sheet at #continued'; path = 'story.html#continued'; App = $true; Sheet = '#apps20 a' }
     @{ name = 'lost page play sheet'; path = 'no-such-page'; App = $true; Sheet = '#cards a.card'; Missing = $true }
 )
 foreach ($app in $Apps) {
@@ -393,7 +395,7 @@ function Test-Touch([string]$app) {
 
 # Every way out of the play sheet, on a page with an app playing in it: Back (then Forward opens it again), Esc from
 # its bar, a click on the page around it, and its close button, each reopened from the link (or Forward) in between.
-# Each must close the sheet and its app, take #play= off the address and leave the link where it was. Returns why it
+# Each must close the sheet and its app, put the address back as it was (a chapter hash too) and leave the link where it was. Returns why it
 # failed, or nothing.
 function Test-SheetClose($wait) {
     if (-not (Invoke-Js 'scrollY > 0')) { return 'sheet: the link was not below the fold, so the scroll was not tested' }
@@ -408,7 +410,7 @@ function Test-SheetClose($wait) {
     foreach ($way in $ways.Keys) {
         if (-not (& $wait $open 5000)) { return "sheet: not open with #play= in the address before $way" }
         & $ways[$way]
-        if (-not (& $wait "!document.querySelector('.play-here[open], .play-here iframe') && !location.hash" 5000)) { return "sheet: $way did not close it, left its app running or left #play= in the address" }
+        if (-not (& $wait "!document.querySelector('.play-here[open], .play-here iframe') && location.hash === window.__smokeHash" 5000)) { return "sheet: $way did not close it, left its app running or did not put the address back" }
         $moved = Invoke-Js 'Math.round(window.__smokeLink.getBoundingClientRect().top - window.__smokeTop)'
         if ($moved) { return "sheet: the page moved $moved px under it ($way)" }
         if ($reopen[$way]) { Invoke-Js $reopen[$way] | Out-Null }
