@@ -10,6 +10,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -138,6 +139,8 @@ public final class Board extends JPanel {
 		addMouseListener(mouse);
 		addMouseMotionListener(mouse);
 		computerTurn.setRepeats(false);
+		// The cut-off side shows in its answer's colour for a moment before the line zooms in on what is left.
+		slide.setInitialDelay(300);
 		start(records.suggested());
 	}
 
@@ -854,11 +857,15 @@ public final class Board extends JPanel {
 		repaint();
 	}
 
-	/** The still possible number under {@code x} on the zoomed line. */
+	/** The still possible number under {@code x} on the zoomed line, as it is drawn now (mid-zoom too). */
 	private int numberAt(int x) {
-		long count = (long) high() - low() + 1;
-		long offset = (long) (x - zoom.x) * count / zoom.width;
-		return (int) Math.max(low(), Math.min(high(), low() + offset));
+		return numberOn(x, zoom, shownLow - 1, shownHigh, low(), high());
+	}
+
+	/** The number under {@code x} on {@code line} showing {@code from} to {@code to} (number n covers n - 1 to n), kept within {@code low} to {@code high}. */
+	static int numberOn(int x, Rectangle line, double from, double to, int low, int high) {
+		long number = (long) Math.floor(from + (x - line.x) * (to - from) / line.width) + 1;
+		return (int) Math.max(low, Math.min(high, number));
 	}
 
 	// ---- drawing ----
@@ -1216,48 +1223,73 @@ public final class Board extends JPanel {
 			return;
 		}
 		int low = low(), high = high();
-		long count = (long) high - low + 1;
+		// The line shows what the top line's lit part shows: after a guess it zooms in, and the cut-off side slides away in the colour of the answer that cut it.
+		double from = shownLow - 1, to = shownHigh, count = to - from;
+		int latest = guesses().isEmpty() ? 0 : guesses().get(guesses().size() - 1);
 		g.setFont(new Font("SansSerif", Font.BOLD, 12));
 		FontMetrics metrics = g.getFontMetrics();
+		Shape clip = g.getClip();
+		g.clipRect(line.x, line.y, line.width, line.height);
 		if (count <= line.width / 4) {
 			// Few enough to draw one cell per number.
 			boolean labels = metrics.stringWidth(Level.commas(high)) + 4 <= line.width / count;
-			for (long i = 0; i < count; i++) {
-				int number = (int) (low + i);
-				int x0 = xOn(line, i, 0, count), x1 = xOn(line, i + 1, 0, count);
-				g.setColor(cellColor(number));
+			for (int number = Math.max(1, (int) Math.floor(from) + 1); number <= Math.min(max(), (int) Math.ceil(to)); number++) {
+				int x0 = xOn(line, number - 1, from, to), x1 = xOn(line, number, from, to);
+				boolean cut = number < low || number > high;
+				g.setColor(cut ? cutColor(number, latest) : cellColor(number));
 				g.fillRoundRect(x0 + 1, line.y + 3, x1 - x0 - 2, line.height - 6, 6, 6);
 				if (labels) {
 					String label = Level.commas(number);
-					g.setColor(number == shown() || isOver() ? BACKGROUND : TEXT);
+					g.setColor(cut ? SOFT : number == shown() || isOver() ? BACKGROUND : TEXT);
 					g.drawString(label, (x0 + x1 - metrics.stringWidth(label)) / 2, line.y + 23);
 				}
 			}
 		} else {
+			int x0 = xOn(line, low - 1, from, to), x1 = xOn(line, high, from, to);
+			if (x0 > line.x || x1 < line.x + line.width) {
+				g.setColor(cutColor(low - 1, 0));
+				g.fillRect(line.x, line.y + 3, x0 - line.x, line.height - 6);
+				g.setColor(cutColor(high + 1, 0));
+				g.fillRect(x1, line.y + 3, line.x + line.width - x1, line.height - 6);
+				if (latest > 0) {
+					int blade = xOn(line, latest - 0.5, from, to);
+					g.setColor(cutColor(latest, latest));
+					g.fillRect(blade - 2, line.y + 1, 4, line.height - 2);
+				}
+			}
 			g.setColor(POSSIBLE_DARK);
-			g.fillRoundRect(line.x + 1, line.y + 3, line.width - 2, line.height - 6, 6, 6);
+			g.fillRoundRect(x0 + 1, line.y + 3, x1 - x0 - 2, line.height - 6, 6, 6);
 			// Ticks every tenth of what is left.
 			g.setColor(POSSIBLE);
 			for (int i = 1; i < 10; i++) {
-				int x = line.x + line.width * i / 10;
+				int x = x0 + (x1 - x0) * i / 10;
 				g.fillRect(x, line.y + (i == 5 ? 6 : 12), 1, line.height - (i == 5 ? 12 : 24));
 			}
 			if (shown() > 0) {
-				int x0 = xOn(line, shown() - low, 0, count), x1 = xOn(line, shown() - low + 1, 0, count);
+				int s0 = xOn(line, shown() - 1, from, to), s1 = xOn(line, shown(), from, to);
 				g.setColor(GOLD);
-				g.fillRect(x0, line.y + 3, Math.max(2, x1 - x0), line.height - 6);
+				g.fillRect(s0, line.y + 3, Math.max(2, s1 - s0), line.height - 6);
 			}
 		}
+		g.setClip(clip);
 		if (isPicking() && !reader.isOver()) {
 			int guess = reader.guess();
-			int x = xOn(line, guess - low + 0.5, 0, count);
+			int x = xOn(line, guess - 0.5, from, to);
 			g.setColor(GOLD);
 			g.fillPolygon(new int[] { x - 6, x + 6, x }, new int[] { line.y - 9, line.y - 9, line.y }, 3);
 		}
-		paintZoomEnds(g, low == high ? "" : Level.commas(low), low == high ? "" : Level.commas(high));
+		// The end numbers count along with the zoom.
+		paintZoomEnds(g, low == high ? "" : Level.commas((int) Math.max(1, Math.round(shownLow))), low == high ? "" : Level.commas((int) Math.min(max(), Math.round(shownHigh))));
 		if (shown() > 0) {
-			paintBubble(g, shown(), xOn(line, shown() - low + 0.5, 0, count), zoom);
+			paintBubble(g, shown(), xOn(line, shown() - 0.5, from, to), zoom);
 		}
+	}
+
+	/** A number just ruled out, sliding off the zoomed line: blue below what is left, red above, and the guess that cut it lit. */
+	private Color cutColor(int number, int latest) {
+		Color side = number < low() ? LOW : HIGH;
+		return number == latest ? side : new Color((side.getRed() + 2 * RULED_OUT.getRed()) / 3, (side.getGreen() + 2 * RULED_OUT.getGreen()) / 3,
+				(side.getBlue() + 2 * RULED_OUT.getBlue()) / 3);
 	}
 
 	private Color cellColor(int number) {
