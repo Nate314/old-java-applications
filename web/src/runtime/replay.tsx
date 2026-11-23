@@ -55,6 +55,8 @@ const REPLAY_SHARE = 0.1;  // of the page's time, at most, spent drawing them
 
 const REPLAY_MAX = 1280;   // the clip's longest side, in pixels
 
+const REPLAY_MIN = 640;    // the clip's longest side at least, in pixels, where the windows are small
+
 const REPLAY_PAD = 16;     // desk around the windows, in page pixels
 
 const REPLAY_SLICE = 6;    // ms of drawing per frame at most (one element may run over): a slow phone drew big apps in 0.1-0.5 s at once
@@ -248,11 +250,15 @@ export function drawDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement,
   return step.value;
 }
 
-// The clip's size for windows of that size: up to twice as big (small windows make small videos), at most
-// REPLAY_MAX on the longest side, in even pixels (which video encoders want). Clip mode's size is fixed.
+// The clip's size for windows of that size: the pixels the screen gives them (the shim's canvases are drawn at
+// that density), at least REPLAY_MIN on the longest side (small windows make small videos) and at most twice as
+// big or REPLAY_MAX, in even pixels (which video encoders want). Clip mode's size is fixed. Recording past the
+// screen's pixels only fed the encoder upscaled copies: on a 1x screen Flappy Bird's window was encoded at 3.3
+// times its pixels, a fifth of Chrome's time while playing (headless), for nothing a viewer could see.
 function clipSize(box: number[]) {
   if (clipMode) return CLIP_SIZE.slice();
-  var s = Math.min(2, REPLAY_MAX / Math.max(box[0], box[1]));
+  var m = Math.max(box[0], box[1]), screen = window.__shimRender || window.devicePixelRatio || 1;
+  var s = Math.min(2, REPLAY_MAX / m, Math.max(screen, REPLAY_MIN / m));
   return [2 * Math.round(box[0] * s / 2), 2 * Math.round(box[1] * s / 2)];
 }
 
