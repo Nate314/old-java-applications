@@ -39,7 +39,7 @@ function Invoke-Js([string]$expression, [switch]$Await) {
 }
 
 function Send-Key([string]$name) {
-    $named = @{ Space = @(' ', 'Space', 32); Enter = @("`r", 'Enter', 13); Escape = @('', 'Escape', 27)
+    $named = @{ Space = @(' ', 'Space', 32); Enter = @("`r", 'Enter', 13); Escape = @('', 'Escape', 27); Tab = @('', 'Tab', 9)
         ArrowLeft = @('', 'ArrowLeft', 37); ArrowUp = @('', 'ArrowUp', 38); ArrowRight = @('', 'ArrowRight', 39); ArrowDown = @('', 'ArrowDown', 40) }
     if ($named.ContainsKey($name)) { $text, $code, $vk = $named[$name]; $key = if ($text -eq ' ') { ' ' } else { $name } }
     else {
@@ -116,6 +116,9 @@ function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chr
     # http.server with a longer listen queue: its default of 5 refused some of a page's bursts of requests on Windows.
     # A miss answers the site's 404.html with status 404, as GitHub Pages and nginx.conf do (the smoke test's lost page).
     $py = 'import sys, functools, http.server as h; h.ThreadingHTTPServer.request_queue_size = 128; R = h.SimpleHTTPRequestHandler; o = R.send_error; R.send_error = lambda s, c, *a, **k: o(s, c, *a, **k) if c != 404 else (lambda b: (s.send_response(404), s.send_header(''Content-Type'', ''text/html; charset=utf-8''), s.send_header(''Content-Length'', str(len(b))), s.end_headers(), s.command != ''HEAD'' and s.wfile.write(b)))(open(sys.argv[2] + ''/404.html'', ''rb'').read()); h.test(functools.partial(h.SimpleHTTPRequestHandler, directory=sys.argv[2]), h.ThreadingHTTPServer, port=int(sys.argv[1]), bind=''127.0.0.1'')'
+    # A server left on the port would answer instead of this site's and the run would test the wrong build.
+    $probe = New-Object Net.Sockets.TcpClient
+    try { $probe.Connect('127.0.0.1', $Port); throw "Port $Port already answers (a server left running?). Stop it by its PID or pass another -Port." } catch [Net.Sockets.SocketException] { } finally { $probe.Dispose() }
     $server = Start-Process python -ArgumentList "-c `"$py`" $Port `"$site`"" -PassThru -WindowStyle Hidden
     $profileDir = Join-Path $ProfileRoot ("oldjava-$name-$Port-" + [IO.Path]::GetRandomFileName().Substring(0, 8))
     $browser = Start-Process $Chrome -PassThru -ArgumentList '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio',
