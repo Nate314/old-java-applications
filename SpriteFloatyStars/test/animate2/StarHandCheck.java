@@ -32,10 +32,14 @@ public class StarHandCheck {
 
       // A click bursts the nearby stars outward and leaves far ones alone.
       StarField field = field(0);
-      double[] near = position(field, 0);
+      int inner = 0; // a star clear of the edges, so it is not wrapped round to the other side
+      while (field.centerX(inner) < 100 || field.centerX(inner) > W - 100 || field.centerY(inner) < 100 || field.centerY(inner) > H - 100) {
+         inner++;
+      }
+      double[] near = position(field, inner);
       field.burst(near[0] + 30, near[1], StarField.BURST);
       run(field, 0.05);
-      double[] after = position(field, 0);
+      double[] after = position(field, inner);
       check(after[0] < near[0] - 2, "burst pushes a near star away");
       // A release after a long hold flings harder than a plain click.
       field.startPull(400, 300);
