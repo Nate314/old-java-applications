@@ -124,15 +124,21 @@ final class ShortcutBoard extends JPanel {
    private final List<StepPill> pills = new ArrayList<>();
    /** The step whose screen the little monitor shows (pointed at), or -1 for the whole plan. */
    private int peek = -1;
+   /** While the list is empty, ready-made lists stand where its frames go; the one pointed at shows on the monitor. */
+   private final Consumer<List<Step>> onReady;
+   private final List<ReadyList> readies = new ArrayList<>();
+   private ReadyList.Recipe hint;
 
    /**
     * onPick runs when a key is clicked; onPress when one is double-clicked (pick it and press it). count: the field
     * for how many times, placed after the picked shortcut's keys so the head reads "Win + E x 10". onRemove: a step's
-    * x was clicked, with its place on the list.
+    * x was clicked, with its place on the list. onReady: a ready list was picked, its steps to list.
     */
-   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress, IntConsumer onRemove, boolean pocket, JComponent count) {
+   ShortcutBoard(Consumer<Shortcut> onPick, Consumer<Shortcut> onPress, IntConsumer onRemove, Consumer<List<Step>> onReady,
+      boolean pocket, JComponent count) {
       this.pocket = pocket;
       this.onRemove = onRemove;
+      this.onReady = onReady;
       this.count = count;
       this.add(count);   // first, so it has the keyboard when the window opens
       this.layout = pocket ? POCKET : LAYOUT;
@@ -200,6 +206,17 @@ final class ShortcutBoard extends JPanel {
          this.add(pill);
          this.pills.add(pill);
       }
+      for (ReadyList card : this.readies) {
+         this.remove(card);
+      }
+      this.readies.clear();
+      this.hint = null;
+      for (int i = 0; this.shown.isEmpty() && i < ReadyList.RECIPES.length; i++) {   // each card two frames wide
+         ReadyList card = new ReadyList(ReadyList.RECIPES[i], this::hint, recipe -> this.onReady.accept(recipe.steps));
+         card.setBounds(this.frame(2 * i).union(this.frame(2 * i + 1)));
+         this.add(card);
+         this.readies.add(card);
+      }
       this.revalidate();
       this.repaint();
    }
@@ -226,6 +243,14 @@ final class ShortcutBoard extends JPanel {
       this.peek = this.running || i >= this.shown.size() ? -1 : i;
       if (this.peek != was) {
          this.light();
+         this.repaint();
+      }
+   }
+
+   /** Show on the little monitor the screen a ready list leaves, or the plan again (null). */
+   private void hint(ReadyList.Recipe recipe) {
+      if (this.hint != recipe) {
+         this.hint = recipe;
          this.repaint();
       }
    }
@@ -263,6 +288,10 @@ final class ShortcutBoard extends JPanel {
       }
       this.count.setVisible(false);   // the head shows the step being pressed, and its count, in its place
       this.peek = -1;
+      this.hint = null;
+      for (ReadyList card : this.readies) {
+         card.setEnabled(false);
+      }
       for (StepPill pill : this.pills) {
          pill.setEnabled(false);
          pill.repaint();   // its x goes
@@ -300,6 +329,9 @@ final class ShortcutBoard extends JPanel {
       this.release.stop();
       for (KeyCap cap : this.caps.values()) {
          cap.setPushed(false);
+      }
+      for (ReadyList card : this.readies) {
+         card.setEnabled(true);
       }
       for (StepPill pill : this.pills) {
          pill.setEnabled(true);
@@ -435,12 +467,12 @@ final class ShortcutBoard extends JPanel {
       g.drawString("STEPS", x, y + 14);
       g.setFont(new Font("SansSerif", Font.PLAIN, 12));
       int n = this.shown.size();
-      String says = n == 0 ? (this.pocket ? "Add step: a list to press in order." : "Add step lists the picked key; DO IT!!! then presses the list in order.")
+      String says = n == 0 ? (this.pocket ? "Add step, or start from a ready list:" : "Add step lists the picked key, or start from a ready list; DO IT!!! presses it in order.")
          : n + " of " + WindowsEWindow.MAX_STEPS + (this.pocket ? ", each with the screen after it" : ", each frame the screen after it: point at one to see it bigger");
       g.drawString(says, x + 48, y + 14);
       for (int i = 0; i < WindowsEWindow.MAX_STEPS; i++) {
          java.awt.Rectangle r = this.frame(i);
-         if (i >= n) {   // room for more
+         if (i >= n && n > 0) {   // room for more (an empty list has its ready lists there)
             g.setColor(new Color(222, 226, 234));
             g.drawRoundRect(r.x, r.y, r.width - 1, r.height - 1, 12, 12);
          } else if (i < n - 1 && (i + 1) % this.cols != 0) {
@@ -457,8 +489,9 @@ final class ShortcutBoard extends JPanel {
 
    /** Beside the keyboard, a little monitor showing what the presses do, and under it the same in words. */
    private void paintMonitor(Graphics2D g) {
+      boolean hinted = this.hint != null && !this.running;
       Screen screen = this.peek >= 0 ? Screen.after(this.shown.subList(0, this.peek + 1))
-         : this.live != null ? this.live : this.after;
+         : hinted ? this.hint.after : this.live != null ? this.live : this.after;
       int x = this.monitorX;
       int y = this.head;
       int mw = this.monitorW;
@@ -481,6 +514,7 @@ final class ShortcutBoard extends JPanel {
       }
 
       String label = this.peek >= 0 ? "AFTER STEP " + (this.peek + 1) + " OF " + this.shown.size()
+         : hinted ? "READY LIST: " + this.hint.name.toUpperCase()
          : this.running ? (this.dry ? "PREVIEW, NO KEYS PRESSED" : "PRESSING")
          : this.live != null ? (this.dry ? "PREVIEW" : "WHAT IT DID") : "AFTER DO IT!!!";
       g.setColor(this.running ? KeyCap.ACCENT : MUTED);
