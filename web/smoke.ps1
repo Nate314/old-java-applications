@@ -218,7 +218,7 @@ $EarlyRows = @'
   try {
     await Promise.all([].map.call(early.querySelectorAll('img'), function (i) { return i.decode().catch(function () {}); }));
     var rows = ['.shim-title-card', '.shim-title-art', '.shim-title-art ul', '.shim-title-cat', 'h1', '.shim-title-play', '.shim-title-press', '.shim-title-hint',
-      '.shim-title-stamp', '.shim-title-saver', '.shim-title-watch', '.shim-title-more'], bad = [];
+      '.shim-title-stamp', '.shim-title-saver', '.shim-title-watch', '.shim-title-now', '.shim-title-more'], bad = [];
     rows.forEach(function (s) {
       var e = early.querySelector(s), l = live.querySelector(s);
       if (!e) return;
