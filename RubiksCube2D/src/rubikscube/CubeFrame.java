@@ -209,6 +209,11 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.cube.watcher = this.view;
       this.view.canTurn = () -> !this.busy();
       this.view.across = wide ? 6.6 : 0;
+      this.view.onNext = () -> {
+         if (this.nextButton.isEnabled()) {
+            this.startLevel(this.level + 1);
+         }
+      };
       this.setTitle("Rubik's Cube");
       this.setLocationRelativeTo(null);
       this.setDefaultCloseOperation(3);
@@ -525,6 +530,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
             previous[0] = move;
             this.markSquare(move[0], Integer.parseInt(move[2]));
             this.cube.refresh();
+            this.showStrip();
             if (++ticks[0] < 20 * this.par + 50) {
                return;
             }
@@ -736,6 +742,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.undoButton.setEnabled(idle && !this.userMoves.isEmpty());
       this.hintButton.setEnabled(idle && (this.history.depth() > 0 || this.painted));
       this.solveButton.setEnabled(idle && (this.history.depth() > 0 || this.painted));
+      this.showStrip();
       boolean playerSolved = this.solvedMillis != 0L && moves > 0;
       if (playerSolved && !this.freePlay && !this.usedHint) {
          this.setTitle("Rubik's Cube: level " + this.level + " solved in " + moves + (moves == 1 ? " move!" : " moves!"));
@@ -743,6 +750,25 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.setTitle("Rubik's Cube: solved in " + moves + (moves == 1 ? " move!" : " moves!"));
       } else {
          this.setTitle("Rubik's Cube: " + (this.painting ? "painting your cube" : this.painted ? "your cube" : this.onCube != null ? this.onCube.name : this.freePlay ? "free play" : "level " + this.level) + ", " + moves + (moves == 1 ? " move" : " moves"));
+      }
+   }
+
+   /**
+    * The round strip under the 3D cube, on a level only: its mix filling the pips, then the moves made against par
+    * and the stars a solve now would win, then Next once the player has solved it. None after Solve.
+    */
+   private void showStrip() {
+      int moves = this.userMoves.size();
+      if (this.freePlay || this.painted || this.painting || this.onCube != null || this.complete && this.solvedMillis == 0L) {
+         this.view.strip(null, 0, 0, -1, false);
+      } else if (this.playback != null && !this.complete) {
+         this.view.strip("Watch the mix", this.par, this.history.depth(), -1, false);
+      } else if (this.complete) {
+         boolean next = this.level < LevelRecords.LEVELS && this.level < this.records.unlocked();
+         this.view.strip(next ? "Next: level " + (this.level + 1) : "Solved", this.par, moves,
+               LevelRecords.starsFor(this.par, moves, this.usedHint), next);
+      } else {
+         this.view.strip("Your turn", this.par, moves, LevelRecords.starsFor(this.par, moves, this.usedHint), false);
       }
    }
 

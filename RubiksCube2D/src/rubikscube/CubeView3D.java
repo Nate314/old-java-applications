@@ -117,6 +117,25 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private static final Color GOLD_EDGE = new Color(150, 96, 0);
    private static final Color STAR_EMPTY = new Color(40, 50, 80, 60);
    /**
+    * The round strip at the foot of the view (a level only): the mix filling its pips one per move, then a pip for
+    * each move made against par with the stars still in reach, then Next once solved. A null label for none.
+    */
+   private String stripLabel = null;
+   private int stripPar = 0;
+   private int stripDone = 0;
+   private int stripStars = -1;
+   private boolean stripNext = false;
+   private long stripChanged = 0L;
+   /** The strip and its Next button as last drawn {x, y, w, h}, or null. */
+   private int[] stripBox = null;
+   private int[] stripButton = null;
+   /** Next pressed on the strip. */
+   Runnable onNext = () -> { };
+   private static final Color INK = new Color(30, 40, 70);
+   private static final Color OVER = new Color(196, 110, 0);
+   private static final Color FAR_OVER = new Color(190, 40, 40);
+   private static final Color NEXT = new Color(36, 92, 200);
+   /**
     * The turn arrow: a curved arrow round the layer that is turning, its head riding with the layer, which stays a
     * moment after the turn and fades, so a mix or a Solve can be followed turn by turn.
     */
@@ -276,6 +295,38 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       return this.cheerStart != 0L;
    }
 
+   /**
+    * Sets the round strip: {@code label} (null hides it), the level's par, the moves done (mixed, or made by the
+    * player), the stars still in reach (-1 to show none) and whether it is a Next button.
+    */
+   void strip(String label, int par, int done, int stars, boolean next) {
+      if (done != this.stripDone || !java.util.Objects.equals(label, this.stripLabel)) {
+         this.stripChanged = System.currentTimeMillis();
+      }
+      boolean same = java.util.Objects.equals(label, this.stripLabel) && par == this.stripPar && done == this.stripDone
+            && stars == this.stripStars && next == this.stripNext;
+      this.stripLabel = label;
+      this.stripPar = par;
+      this.stripDone = done;
+      this.stripStars = stars;
+      this.stripNext = next;
+      if (!same) {
+         this.wake();
+      }
+   }
+
+   String stripLabel() {
+      return this.stripLabel;
+   }
+
+   int[] stripButton() {
+      return this.stripButton;
+   }
+
+   int[] stripBox() {
+      return this.stripBox;
+   }
+
    /** Shows or hides the mirrors of the hidden sides. */
    void setMirrors(boolean on) {
       this.mirrors = on;
@@ -400,6 +451,9 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.arcTurn = System.currentTimeMillis() - this.arcEnd >= ARC_FADE ? null : this.arcTurn;
          busy = true;
       }
+      if (System.currentTimeMillis() - this.stripChanged < STRIP_POP) {
+         busy = true;
+      }
       double dy = this.targetYaw - this.yaw;
       double dp = this.targetPitch - this.pitch;
       if (Math.abs(dy) > 0.002 || Math.abs(dp) > 0.002) {
@@ -483,6 +537,10 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.wake();
       } else if (this.pressSticker >= 0 && !this.dragged) {
          this.onSelect.accept(CubeGeometry.FACE_COLORS[this.pressSticker / 9], this.pressSticker % 9 + 1);
+      } else if (!this.dragged && this.stripNext && this.stripButton != null && this.pressX >= this.stripButton[0]
+            && this.pressX < this.stripButton[0] + this.stripButton[2] && this.pressY >= this.stripButton[1]
+            && this.pressY < this.stripButton[1] + this.stripButton[3]) {
+         this.onNext.run();
       } else if (!this.dragged) {
          // A click on a mirror turns its side round to the front.
          for (int[] mirror : this.mirrorHits) {
@@ -586,14 +644,19 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    double across = 0;
 
    private double scale() {
-      double scale = Math.min(this.getWidth(), this.getHeight()) / 5.6;
+      double scale = Math.min(this.getWidth(), this.stage()) / 5.6;
       return this.across > 0 ? Math.min(scale, this.getWidth() / this.across) : scale;
    }
 
    /** View coordinates to the panel, in perspective. */
    private double[] screen(double[] v) {
       double k = this.scale() * CAMERA / (CAMERA - v[2]);
-      return new double[]{this.getWidth() / 2.0 + v[0] * k, this.getHeight() / 2.0 - v[1] * k};
+      return new double[]{this.getWidth() / 2.0 + v[0] * k, this.stage() / 2.0 - v[1] * k};
+   }
+
+   /** The view's height above the round strip's room at its foot, kept free whether it shows or not (so the cube never jumps). */
+   private double stage() {
+      return this.getHeight() - STRIP_ROOM;
    }
 
    /** How squarely sticker s faces the viewer once the cube has turned to where it is going (1 head on). */
@@ -672,8 +735,91 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       if (demo) {
          this.drawFinger(g);
       }
+      this.drawStrip(g);
       if (this.cheerStart != 0L) {
          this.drawCheer(g);
+      }
+   }
+
+   /** How long the newest pip of the strip takes to pop in. */
+   private static final int STRIP_POP = 260;
+   private static final int STRIP_ROOM = 32;
+
+   /**
+    * The round strip: a pill at the foot of the view with the label (or the Next button), a pip per move up to par
+    * (past it a +n in amber, red once 2 stars are out of reach too) and the stars a solve now would win.
+    */
+   private void drawStrip(Graphics2D g) {
+      this.stripButton = null;
+      this.stripBox = null;
+      if (this.stripLabel == null) {
+         return;
+      }
+      int h = STRIP_ROOM - 6;
+      g.setFont(new java.awt.Font("Dialog", java.awt.Font.BOLD, 13));
+      java.awt.FontMetrics metrics = g.getFontMetrics();
+      int labelW = metrics.stringWidth(this.stripLabel) + (this.stripNext ? 34 : 0);
+      int over = Math.max(0, this.stripDone - this.stripPar);
+      String extra = over > 0 ? "+" + over : "";
+      int extraW = over > 0 ? metrics.stringWidth(extra) + 6 : 0;
+      int starsW = this.stripStars >= 0 ? 52 : 0;
+      int par = Math.max(1, this.stripPar);
+      int room = this.getWidth() - 24 - 24 - labelW - 10 - extraW - starsW;
+      int pip = Math.max(5, Math.min(14, room / par));
+      int w = 12 + labelW + 10 + pip * par + extraW + starsW + 12;
+      int x = (this.getWidth() - w) / 2;
+      int y = this.getHeight() - h - 4;
+      this.stripBox = new int[]{x, y, w, h};
+      g.setColor(withAlpha(Color.WHITE, 225));
+      g.fillRoundRect(x, y, w, h, h, h);
+      g.setColor(withAlpha(INK, 70));
+      g.drawRoundRect(x, y, w, h, h, h);
+      int left = x + 12;
+      int base = y + (h + metrics.getAscent() - metrics.getDescent()) / 2;
+      if (this.stripNext) {
+         // The Next button: a filled pill of its own at the strip's left, its arrow drawn (no font has to have it).
+         this.stripButton = new int[]{x + 3, y + 3, labelW + 6, h - 6};
+         g.setColor(NEXT);
+         g.fillRoundRect(x + 3, y + 3, labelW + 6, h - 6, h - 6, h - 6);
+         g.setColor(Color.WHITE);
+         g.drawString(this.stripLabel, left + 4, base);
+         int ax = left + labelW - 22;
+         int cy = y + h / 2;
+         g.fillPolygon(new int[]{ax, ax + 9, ax}, new int[]{cy - 6, cy, cy + 6}, 3);
+      } else {
+         g.setColor(INK);
+         g.drawString(this.stripLabel, left, base);
+      }
+      left += labelW + 10;
+      long age = System.currentTimeMillis() - this.stripChanged;
+      int cy = y + h / 2;
+      for (int i = 0; i < par; i++) {
+         boolean filled = i < this.stripDone;
+         // The newest pip grows past its size and settles, so each move lands on the strip.
+         double pop = filled && i == this.stripDone - 1 && age < STRIP_POP ? 1 + 0.6 * (1 - age / (double) STRIP_POP) : 1;
+         double d = Math.max(3, pip - 4) * pop;
+         int px = (int) Math.round(left + i * pip + pip / 2.0 - d / 2);
+         int py = (int) Math.round(cy - d / 2);
+         if (filled) {
+            g.setColor(INK);
+            g.fillOval(px, py, (int) Math.round(d), (int) Math.round(d));
+         } else {
+            g.setColor(withAlpha(INK, 110));
+            g.drawOval(px, py, (int) Math.round(d), (int) Math.round(d));
+         }
+      }
+      left += pip * par;
+      if (over > 0) {
+         g.setColor(this.stripDone > 2 * this.stripPar + 2 ? FAR_OVER : OVER);
+         g.drawString(extra, left + 4, base);
+         left += extraW;
+      }
+      for (int i = 0; i < 3 && this.stripStars >= 0; i++) {
+         int[][] star = starAt(left + 10 + i * 15, cy, 7);
+         g.setColor(i < this.stripStars ? GOLD : STAR_EMPTY);
+         g.fillPolygon(star[0], star[1], 10);
+         g.setColor(i < this.stripStars ? GOLD_EDGE : withAlpha(ARROW_EDGE, 90));
+         g.drawPolygon(star[0], star[1], 10);
       }
    }
 
@@ -688,7 +834,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       int plateW = (int) Math.max(stars ? r * 7.4 : 0, metrics.stringWidth(this.cheerText) + r);
       int plateH = (int) ((stars ? r * 2.6 : 0) + metrics.getHeight() + r * 0.6);
       int cx = this.getWidth() / 2;
-      int top = this.getHeight() / 2 - plateH / 2;
+      int top = (int) this.stage() / 2 - plateH / 2;
       g.setColor(withAlpha(Color.WHITE, (int) (215 * fade)));
       g.fillRoundRect(cx - plateW / 2, top, plateW, plateH, (int) r, (int) r);
       g.setColor(withAlpha(new Color(40, 50, 80), (int) (70 * fade)));
@@ -862,7 +1008,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          right = Math.max(right, x);
       }
       double middle = this.getWidth() / 2.0 + (left + right) / 2 * size;
-      double floor = this.getHeight() / 2.0 + size * 2.45;
+      double floor = this.stage() / 2.0 + size * 2.45;
       for (int ring = 0; ring < 5; ring++) {
          double w = (right - left) * size * (1.2 - ring * 0.17);
          double h = size * (0.75 - ring * 0.12);
@@ -913,7 +1059,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.mirrorHits.clear();
       this.mirrorsGliding = false;
       double width = this.getWidth();
-      double height = this.getHeight();
+      double height = this.stage();
       for (int face = 0; face < 6; face++) {
          int[] n = CubeGeometry.NORMAL[face * 9];
          double[] v = this.view(new double[]{n[0], n[1], n[2]});

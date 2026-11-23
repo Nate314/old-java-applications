@@ -19,6 +19,7 @@ Level n starts from a solved cube and mixes it with n moves while you watch (eac
 - **Click a square**: select that face and square. The selected square shrinks inside a black ring (in 3D, inside a white ring).
 - **W / A / S / D** (or the on-screen `w` `a` `s` `d` buttons): turn the row, column or ring through the selected square. Nothing happens until a square is selected. Moves are ignored while a mix or Solve is playing.
 - **Levels** (bottom right): the level, its par (the number of mixing moves), your moves and time, and your best on that level. Solving at par or better wins 3 stars, within twice par plus 2 wins 2, otherwise 1. Using a hint caps the level at 1 star. Solving a level unlocks the next one; the total of stars out of 60 is shown under the buttons. The moment a level is solved, the 3D cube takes a slow lap while the stars won pop in one after another on a plate over it, with "Level 3 solved!" under them; free play shows "Solved!" alone. It fades after about 4 seconds, and a press on the cube or the next move ends it at once. With reduced motion the cube stays still and the stars show at once.
+- **The round strip** (3D cube, levels only): a pill at the foot of the cube tells the level's round as it goes. While the mix plays it says "Watch the mix" and fills a pip for each mixing move; then it says "Your turn" and fills a pip for each move you make, with the stars a solve now would win beside them: three while you are within par, past par a +1, +2 in amber and two stars, and once past twice par plus 2 the count turns red and one star is left (a Hint caps them at one). Undo takes a pip back off. Once you solve the level it becomes a blue **Next: level 4** button (click it, or N) that starts the next level's mix, or says Solved on the last level or one not yet unlocked past. It is not shown after Solve, in free play, Patterns, My cube or the Timer. The cube keeps the strip's room free under it whether or not it shows, so it never jumps.
 - **Prev** (P) / **Next** (N): play the level before or after (Next only up to the highest unlocked level). **Retry** (R): mix the same level again.
 - **Undo** (Z): turns your last move back and takes it off the count.
 - **Teach me** (top left, or T): coaches you through solving the cube from where it is, the way people learn to (see Teach me below). Click it again (**Stop teaching**) to go back to the message and help.
@@ -162,6 +163,13 @@ java -ea -Djava.awt.headless=true -cp ../out/check/RubiksCube2D rubikscube.DragC
 ```
 javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
 java -ea -Djava.awt.headless=true -cp ../out/check/RubiksCube2D rubikscube.MirrorCheck
+```
+
+`test/rubikscube/StripCheck.java` checks the round strip: on the desktop, phone and wide layouts it shows Your turn after a mix, inside the view and clear of the cube; it fills a pip per mixing move with no stars yet, starts at three stars and no moves, counts a move past par (two stars) and Undo takes it off; a solve at par turns it into Next: level 2 with three stars, and a click on that button starts level 2's mix; 6 moves on par 2 leave two stars and 7 one; Solve takes it away. It needs a display (it makes the window without showing it) and writes level records to `~`, so give it a scratch home. From `RubiksCube2D/`:
+
+```
+javac -d ../out/check/RubiksCube2D src/rubikscube/*.java test/rubikscube/*.java
+java -ea -Duser.home=../out/check/RubiksCube2D/home -cp ../out/check/RubiksCube2D rubikscube.StripCheck
 ```
 
 `test/rubikscube/LayoutCheck.java` checks the phone layout: on screens 360 to 599 px wide the window is as wide as the screen and fits its height, and in both views every control lies inside the window, clear of the others and below the cube; the desktop window is still 550x700 with its buttons where they were. It checks the wide layout too: on landscape screens from 760x700 to 1920x739 the window fits the screen, the cube takes its height at the left and every control lies inside the window, clear of the others and of the cube; a 1366x768 screen keeps the desktop window. It needs a display (it makes the window without showing it). From `RubiksCube2D/`:
