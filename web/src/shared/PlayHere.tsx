@@ -26,6 +26,10 @@ export function PlayHere({ root = '', back }: { root?: string; back: string }) {
   const full = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
+    // The page's scroll while the sheet is open (scroll anchoring may move it): closing to an entry whose address names
+    // a chapter (#continued) would otherwise jump to that chapter's top, since the page's entry restores manually.
+    let keepY = scrollY, up = false;   // up: this page has shown the sheet since its last close
+    const onScroll = () => { if (dialog.current?.open) keepY = scrollY; };
     /** Show a, on a new history entry, or on the sheet's own one when it is already open (an exit screen's pick). */
     function open(a: App) {
       const url = location.pathname + location.search + '#play=' + a.id;
@@ -34,15 +38,22 @@ export function PlayHere({ root = '', back }: { root?: string; back: string }) {
         // The page's own entry keeps its scroll on the way back: the page can grow under the sheet (scroll anchoring
         // keeps it still), so the scroll saved at the push would move it. The sheet's entry restores as usual.
         history.scrollRestoration = 'manual';
+        keepY = scrollY;
         history.pushState({ [KEY]: a.id }, '', url);
         history.scrollRestoration = 'auto';
       }
+      up = true;
       setApp(a);
     }
     function onPop() {
       const a = byId(playing());
-      if (a) return setApp(a);
+      if (a) { up = true; return setApp(a); }
       if (dialog.current!.open) dialog.current!.close();
+      // back from the sheet's entry (Back, or the close button's history.back): Chrome scrolls to the page's chapter
+      // after popstate, before hashchange, so put the page back where it was then
+      const y = keepY;
+      if (up && location.hash) addEventListener('hashchange', () => scrollTo(scrollX, y), { once: true });
+      up = false;
       history.scrollRestoration = 'auto';   // Chrome has already chosen this traversal's mode by the time popstate runs
     }
     function onClick(e: MouseEvent) {
@@ -64,7 +75,7 @@ export function PlayHere({ root = '', back }: { root?: string; back: string }) {
       else if (typeof e.data.oldjavaShare === 'string' || e.data.oldjavaClip) full.current?.focus();
     }
     const reopen = byId(playing());   // a reload, or a page come back to from Full page
-    if (reopen) setApp(reopen);
+    if (reopen) { up = true; setApp(reopen); }
     else {
       const linked = byId(MARK.exec(location.hash)?.[1]);   // a link to the sheet: the page goes under it
       if (linked) { history.replaceState(history.state, '', location.pathname + location.search); open(linked); }
@@ -72,7 +83,8 @@ export function PlayHere({ root = '', back }: { root?: string; back: string }) {
     document.addEventListener('click', onClick);
     addEventListener('message', onMessage);
     addEventListener('popstate', onPop);
-    return () => { document.removeEventListener('click', onClick); removeEventListener('message', onMessage); removeEventListener('popstate', onPop); };
+    addEventListener('scroll', onScroll);
+    return () => { document.removeEventListener('click', onClick); removeEventListener('message', onMessage); removeEventListener('popstate', onPop); removeEventListener('scroll', onScroll); };
   }, []);
 
   function fit() {
