@@ -11,17 +11,27 @@
 // A page is kept only together with everything it names (scripts, stylesheets, program, data files), and a new build
 // stages fresh copies of every kept page in NEXT while installing, swapped in on activating: so offline a page always
 // runs whole, as the newest build that finished saving it, never an old program against a new runtime.
+// Offline, an address that is none of the site's pages (PAGES, a mistyped link) gets the lost page (404.html, kept on
+// installing), so its search and short links still lead to the saved apps; a real page not saved yet gets offlinePage.
 // Preview clips are kept whole the first time one plays (or by Save all) and cut to the asked range offline.
 // Built by vite/pages.ts into the site root as sw.js (a service worker's scope is its own folder and below).
 import { CACHE, cacheKey, isProgram, pageNames } from './offline-files';
 declare const self: ServiceWorkerGlobalScope;
 declare const BUILT: string[];   // this build's assets/ files, relative to the site root
+declare const PAGES: string[];   // this build's pages, relative to the site root (App/index.html, story.html, ...)
 const sw = self;
 
 const NEXT = 'oldjava-next';  // a new build's copies of the kept pages, while it installs
 
 const assets = () => new URL('assets/', sw.registration.scope).href;
-const built = () => BUILT.map(f => new URL(f, sw.registration.scope).href);
+const atRoot = (f: string) => new URL(f, sw.registration.scope).href;
+// 404.html, and apps.json that its loader asks for to find the site root (HEAD, answered offline below)
+const built = () => BUILT.concat('404.html', 'apps.json').map(atRoot);
+/** One of the site's pages (a folder means its index.html), not a mistyped address. */
+function known(url: URL): boolean {
+  const path = url.pathname.slice(new URL(sw.registration.scope).pathname.length);
+  return PAGES.includes(/(^|\/)$/.test(path) ? path + 'index.html' : path);
+}
 // the names serve.ps1 and nginx.conf send as immutable
 const fixedName = (url: URL) => /^\/assets\/.+-[A-Za-z0-9_-]{8}\.(js|css)$/.test(url.pathname) || (isProgram(url) && /^\?v=/.test(url.search));
 const isPage = (url: string) => /(\.html|\/)$/.test(new URL(url).pathname);
@@ -161,9 +171,20 @@ function offlinePage(): Response {
     '<a href="' + home + '" target="_top" style="color:#ff2bd6;font-weight:700">Back to all apps</a></div></body>',
     { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
+/** The lost page for an address the site doesn't have, with the 404 status it has online. */
+function lostPage(): Promise<Response> {
+  return caches.match(atRoot('404.html')).then(hit => hit ? new Response(hit.body, { status: 404, headers: hit.headers }) : offlinePage());
+}
 sw.addEventListener('fetch', e => {
   const request = e.request;
   const url = new URL(request.url);
+  // The lost page's loader finds the site root with HEAD requests for apps.json: offline, a kept copy's headers
+  // answer, and a folder with none is not the root (a 404, as online, rather than a failed request in the console).
+  if (request.method === 'HEAD' && kept(url)) {
+    e.respondWith(fetch(request).catch(() => caches.match(cacheKey(request.url))
+      .then(hit => new Response(null, hit ? { status: hit.status, headers: hit.headers } : { status: 404 }))));
+    return;
+  }
   if (request.method !== 'GET' || !kept(url)) return;
   const k = cacheKey(request.url);
   // A page is always checked with the server: one the HTTP cache kept (GitHub Pages lets it keep any file 10 minutes)
@@ -174,7 +195,7 @@ sw.addEventListener('fetch', e => {
     return response;
   }).catch(error => caches.match(k).then(hit => {
     if (hit) return isClip(url) ? ranged(request, hit) : hit;
-    if (request.mode === 'navigate') return offlinePage();
+    if (request.mode === 'navigate') return known(url) ? offlinePage() : lostPage();
     throw error;
   }))));
 });
