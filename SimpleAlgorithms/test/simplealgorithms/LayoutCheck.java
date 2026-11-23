@@ -71,6 +71,16 @@ public class LayoutCheck {
 				}
 			}
 		}
+		// Sine & cosine: a new term pulls the red curve over in a few ticks, fitting all the way, then the page rests.
+		show(lab, 3);
+		TaylorPage taylor = (TaylorPage) pages[3];
+		key(lab, '+');
+		int ticks = 0;
+		while (taylor.tick()) {
+			fits(lab, "Sine & cosine, tick " + ++ticks + " of a new term");
+		}
+		// The lab's own timer ticks the page too, so this loop sees only some of the ticks.
+		check(ticks >= 1 && ticks <= 12, "Sine & cosine: a new term plays for a few ticks, not " + ticks);
 		// Square root: drag a side out to each end of its reach and let go; the picture stays inside the lab.
 		show(lab, 2);
 		RootPage root = (RootPage) pages[2];
