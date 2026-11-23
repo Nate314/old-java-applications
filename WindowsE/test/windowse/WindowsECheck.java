@@ -57,6 +57,7 @@ public class WindowsECheck {
       motionChecks();
       boardChecks();
       sendChecks();
+      readyChecks();
       pillChecks();
       System.out.println("WindowsECheck: all checks passed");
       System.exit(0);
@@ -85,7 +86,7 @@ public class WindowsECheck {
    static void boardChecks() {
       for (boolean pocket : new boolean[] {false, true}) {
          javax.swing.JTextField field = new javax.swing.JTextField();
-         ShortcutBoard board = new ShortcutBoard(s -> { }, s -> { }, i -> { }, pocket, field);
+         ShortcutBoard board = new ShortcutBoard(s -> { }, s -> { }, i -> { }, l -> { }, pocket, field);
          java.awt.Dimension size = board.getPreferredSize();
          java.util.Set<Shortcut> seen = java.util.EnumSet.noneOf(Shortcut.class);
          List<java.awt.Rectangle> placed = new ArrayList<>();
@@ -257,6 +258,65 @@ public class WindowsECheck {
          check("8 apart".equals(got[3]), "eight steps, eight frames on the board" + where + ": " + got[3]);
          check(keys.log.isEmpty(), "editing the list presses nothing" + where);
       }
+   }
+
+   /**
+    * The ready lists: each a real list leaving its own screen; with a display, an empty list shows them on the board
+    * (clear of each other), a click lists its steps, and the cards give way to the frames, pressing nothing.
+    */
+   static void readyChecks() throws Exception {
+      java.util.Set<String> screens = new java.util.HashSet<>();
+      for (ReadyList.Recipe r : ReadyList.RECIPES) {
+         check(r.steps != null && !r.steps.isEmpty() && r.steps.size() <= WindowsEWindow.MAX_STEPS, r.name + " is a list");
+         check(screens.add(r.after.summary()), r.name + " leaves a screen of its own: " + r.after.summary());
+      }
+      check(ReadyList.RECIPES[0].keys().equals("E, Left, E, Right"), "keys as the frames write them: " + ReadyList.RECIPES[0].keys());
+      if (java.awt.GraphicsEnvironment.isHeadless()) {
+         return;
+      }
+      for (boolean pocket : new boolean[] {false, true}) {
+         Recorder keys = new Recorder();
+         List<String> copied = new ArrayList<>();
+         String[] got = new String[3];
+         SwingUtilities.invokeAndWait(() -> {
+            WindowsEWindow w = new WindowsEWindow(keys, copied::add, null, null, pocket);
+            List<ReadyList> cards = cards(w);
+            int width = cards.isEmpty() ? 0 : cards.get(0).getParent().getPreferredSize().width;
+            boolean apart = true;
+            for (int i = 0; i < cards.size(); i++) {
+               java.awt.Rectangle r = cards.get(i).getBounds();
+               apart &= r.x >= 0 && r.x + r.width <= width && r.width >= 140;
+               for (int j = 0; j < i; j++) {
+                  apart &= !r.intersects(cards.get(j).getBounds());
+               }
+            }
+            got[0] = cards.size() + (apart ? " apart" : " overlapping, off the board or narrow");
+            cards.get(2).doClick();
+            button(w, "Send").doClick();
+            got[1] = pills(w).size() + " frames, " + cards(w).size() + " cards";
+            button(w, "Clear").doClick();
+            got[2] = String.valueOf(cards(w).size());
+            w.dispose();
+         });
+         String where = " (pocket " + pocket + ")";
+         check(("" + ReadyList.RECIPES.length + " apart").equals(got[0]), "an empty list shows the ready lists" + where + ": " + got[0]);
+         check(copied.equals(Collections.singletonList("Ex4-Tab")), "a ready list's click lists its steps" + where + ": " + copied);
+         check("2 frames, 0 cards".equals(got[1]), "its steps take the cards' place" + where + ": " + got[1]);
+         check(String.valueOf(ReadyList.RECIPES.length).equals(got[2]), "Clear brings the ready lists back" + where + ": " + got[2]);
+         check(keys.log.isEmpty(), "a ready list presses nothing" + where);
+      }
+   }
+
+   private static List<ReadyList> cards(java.awt.Container in) {
+      List<ReadyList> found = new ArrayList<>();
+      for (java.awt.Component c : in.getComponents()) {
+         if (c instanceof ReadyList) {
+            found.add((ReadyList) c);
+         } else if (c instanceof java.awt.Container) {
+            found.addAll(cards((java.awt.Container) c));
+         }
+      }
+      return found;
    }
 
    private static List<StepPill> pills(java.awt.Container in) {

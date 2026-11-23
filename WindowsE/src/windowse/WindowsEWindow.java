@@ -70,7 +70,7 @@ public final class WindowsEWindow extends JFrame {
       this.keys = keys;
       this.copy = copy;
       this.page = page;
-      this.board = new ShortcutBoard(this::pick, this::pickAndPress, this::removeStep, pocket, this.countField);
+      this.board = new ShortcutBoard(this::pick, this::pickAndPress, this::removeStep, this::setSteps, pocket, this.countField);
       this.setTitle(TITLE);
       this.setDefaultCloseOperation(3);
       this.setResizable(false);
