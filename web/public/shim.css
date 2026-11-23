@@ -4078,6 +4078,83 @@ html[data-saver] * {
   color: #1f2937;
 }
 
+/* then.html: a postcard of today's version under the hint (runtime/now-postcard.tsx), opening the two side by side. */
+.shim-title-now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--desk);
+  color: inherit;
+  text-decoration: none;
+}
+
+.shim-title-now-pic {
+  flex: none;
+  width: 92px;
+  padding: 4px 4px 12px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.3);
+  rotate: -4deg;
+  transition: rotate 0.2s ease-out, scale 0.2s ease-out;
+}
+
+.shim-title-now-pic img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #e5e7eb;
+}
+
+.shim-title-now:hover .shim-title-now-pic,
+.shim-title-now:focus-visible .shim-title-now-pic {
+  rotate: 0deg;
+  scale: 1.06;
+}
+
+.shim-title-now-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.shim-title-now-text strong {
+  font-size: 15px;
+  color: var(--accent);
+}
+
+.shim-title-now-text strong::after {
+  content: " \2192";
+}
+
+.shim-title-now-text span {
+  opacity: 0.8;
+}
+
+:root[data-skin="arcade"] .shim-title-now {
+  border-color: #ff2bd6;
+}
+
+/* Classic: on a white field, like the quirks beside it (its desk is a blue the text would sit on). */
+:root[data-skin="classic"] .shim-title-now {
+  background: var(--field-bg);
+  color: #1f2937;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-title-now-pic {
+    transition: none;
+  }
+}
+
 /* ---- game controllers (boot.js, gamepadDriver) ---- */
 /* The controller's pointer: an arrow with a ring, drawn over everything and never in the way of a click. */
 .shim-gp-cursor {

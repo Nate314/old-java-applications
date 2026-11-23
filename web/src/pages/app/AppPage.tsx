@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { APPS, webp, type App } from '../../shared/catalog';
 import { NO_QUIRKS, WATCH, moreParts, quirkItems, thenHint } from '../../runtime/title-card';
+import { NowPostcard } from '../../runtime/now-postcard';
 import { EarlyScript, RuntimeScript } from '../../shared/EarlyScript';
 import { SITE, ShareTags } from '../../shared/ShareTags';
 
@@ -158,6 +159,7 @@ function EarlyTitle({ app, quirks }: { app: App; quirks?: string[][] }) {
           <button type="button" className="shim-title-play" disabled>▶ Play</button>
           <span className="shim-title-press">or press any key</span>
           <p className="shim-title-hint">{then ? thenHint(app) : app.hint}</p>
+          {then && <NowPostcard pic={'../' + webp(app.shot, true)} href={'../compare.html?app=' + app.id} />}
           <p className="shim-title-stamp" style={{ visibility: 'hidden' }}>{'New: playing it adds stamp 1 of ' + APPS.length + ' to your passport'}</p>
           {app.id === 'ScreenSaver' && !then && <p className="shim-title-saver" style={{ visibility: 'hidden' }}>Also this site’s screen saver, after 3 minutes away. Turn off</p>}
           {WATCH[app.id] && !then && <a className="shim-title-watch" href="?watch">Watch the computer play it first</a>}

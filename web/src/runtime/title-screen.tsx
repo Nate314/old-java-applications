@@ -13,6 +13,7 @@ import { openLayer } from './ui/layer';
 import { JarLink, Quirk } from './ui/cards';
 import { Attract } from './title-attract';
 import { moreParts, thenHint } from './title-card';
+import { NowPostcard } from './now-postcard';
 
 /** A line of the boot log: [label, value, class]. */
 export type LogLine = [string, string, string];
@@ -374,6 +375,7 @@ function TitleScreen({ apps, onGo, onMount }: {
           <p className="shim-title-hint">
             {app ? (then ? thenHint(app) : app.hint) : ''}
           </p>
+          {app && then && !embedded && <NowPostcard pic={app.pic} href={root() + 'compare.html?app=' + id} />}
           <p className={'shim-title-stamp' + (was ? ' played' : '')}>
             {app ? (was
               ? '✓ In your passport since ' + new Date(played[app.id]).toLocaleDateString()
@@ -400,7 +402,7 @@ function TitleScreen({ apps, onGo, onMount }: {
               {then ? 'Play today’s version' : 'Play it as first restored, before the reworks'}
             </a>
             {/* Both versions at once, with what changed in between (src/pages/compare); not inside another page's frame. */}
-            <a className="shim-title-era" href={root() + 'compare.html?app=' + id} hidden={!(app && app.then) || embedded}>
+            <a className="shim-title-era" href={root() + 'compare.html?app=' + id} hidden={!(app && app.then) || embedded || then}>
               Compare then and now side by side
             </a>
             {/* The app for the desktop, today's version only (the jars are built from today's sources). */}
