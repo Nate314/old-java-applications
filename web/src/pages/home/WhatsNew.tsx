@@ -9,6 +9,7 @@ import { webp } from '../../shared/catalog';
 import { H, type NewsItem } from './model';
 import { MANY, allClick, day, openApp } from './news';
 import { store, stored } from '../../shared/stored';
+import { NewsReel } from './NewsReel';
 
 const GAP = 10 * 60 * 1000;   // changes further apart than this are separate updates
 const SHOWN = 6;              // headline changes before Show all
@@ -142,6 +143,7 @@ export function WhatsNew({ off }: { off: string }) {
           </button>
         </div>
       </div>
+      <NewsReel items={items} />
       <ol className="releases" id="news-list">{all.slice(0, shown).map(u => <Release key={u.n} u={u} />)}</ol>
     </section>
   );
