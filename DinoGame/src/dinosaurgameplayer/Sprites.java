@@ -128,6 +128,17 @@ final class Sprites {
    private static final int[][] SMALL_CACTUS = { { 7, 0, 4, 1 }, { 6, 1, 6, 34 }, { 1, 6, 3, 10 }, { 13, 3, 3, 13 }, { 1, 12, 15, 4 } };
    private static final int[][] LARGE_CACTUS = { { 10, 0, 6, 2 }, { 9, 2, 8, 48 }, { 1, 12, 4, 18 }, { 20, 8, 4, 22 }, { 1, 26, 23, 4 } };
 
+   /** A lighter rib down the trunk and each arm, inside the cactus's own shape (so the bot sees the same cactus). */
+   private static final int[][] SMALL_RIBS = { { 7, 2, 2, 32 }, { 1, 7, 1, 7 }, { 13, 4, 1, 8 } };
+   private static final int[][] LARGE_RIBS = { { 10, 3, 2, 46 }, { 1, 13, 1, 12 }, { 20, 9, 1, 16 } };
+
+   /** The ribs of the cactus drawn at (x, y), in the current color. */
+   static void ribs(Graphics2D g, int x, int y, boolean large) {
+      for (int[] r : large ? LARGE_RIBS : SMALL_RIBS) {
+         g.fillRect(x + r[0], y + r[1], r[2], r[3]);
+      }
+   }
+
    /** One cactus, 17 x 35 or (large) 25 x 50, with its top left at (x, y), in the current color. */
    static void cactus(Graphics2D g, int x, int y, boolean large) {
       for (int[] r : large ? LARGE_CACTUS : SMALL_CACTUS) {

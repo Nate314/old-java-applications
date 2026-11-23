@@ -184,15 +184,20 @@ public final class RunnerCheck {
 
       // From the first moment of dusk no color the game draws has blue 83, so the original bot is blind at night
       // and a fading sky never makes it jump.
-      java.awt.Color[] colors = { RunnerPanel.INK, RunnerPanel.PAPER, RunnerPanel.MUTED, new java.awt.Color(0xD6D6D6),
-         new java.awt.Color(0xBDBDBD), new java.awt.Color(0xEBEBEB), Land.FAR, Land.SHADE, Land.NEAR };
+      java.awt.Color[] colors = { RunnerPanel.INK, RunnerPanel.PAPER, RunnerPanel.MUTED, RunnerPanel.CLOUD,
+         RunnerPanel.DUST, RunnerPanel.STRIP_BG, RunnerPanel.SAND, RunnerPanel.SUN, RunnerPanel.DINO, Land.FAR, Land.SHADE, Land.NEAR,
+         RunnerPanel.CACTUS, RunnerPanel.CACTUS_LIGHT, RunnerPanel.BIRD };
       for (java.awt.Color c : colors) {
          for (int i = 1; i <= 1000; i++) {
             assert !ObstacleDetector.isObstacle(Sky.tint(c, i / 1000.0).getRGB() & 0xFFFFFF) : c + " at " + i;
             assert !ObstacleDetector.isObstacle(Sky.mix(Sky.tint(RunnerPanel.PAPER, i / 1000.0), new java.awt.Color(0xE6E6E6), i / 1000.0).getRGB() & 0xFFFFFF);
          }
       }
-      assert ObstacleDetector.isObstacle(Sky.tint(RunnerPanel.INK, 0).getRGB() & 0xFFFFFF) : "by day the bot sees";
+      // By day the bot sees every obstacle color, and nothing else the game draws.
+      for (java.awt.Color c : colors) {
+         boolean obstacle = c == RunnerPanel.CACTUS || c == RunnerPanel.CACTUS_LIGHT || c == RunnerPanel.BIRD;
+         assert ObstacleDetector.isObstacle(Sky.tint(c, 0).getRGB() & 0xFFFFFF) == obstacle : "by day " + c;
+      }
       // Drawn: a course with birds under a whole night, dusk to dawn, shows the bot no obstacle anywhere it can look,
       // though the same frames by day are full of them.
       Evolution.Dino nightRun = new Evolution.Dino(Brain.decode("144,146,65,117,120,299"), 1);
@@ -892,7 +897,7 @@ public final class RunnerCheck {
       return r.score();
    }
 
-   /** Ink-colored pixels the panel draws on screen ahead of the dinosaur, between the score and the ground. */
+   /** Obstacle-colored (blue 83) pixels the panel draws on screen ahead of the dinosaur, between the score and the ground. */
    private static int inkInField(RunnerPanel p) {
       BufferedImage img = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
       Graphics2D g = img.createGraphics();
@@ -901,7 +906,7 @@ public final class RunnerCheck {
       int n = 0;
       for (int y = 50; y < Runner.GROUND; y++) {
          for (int x = Runner.DINO_X + Runner.DUCK_W + 8; x < Runner.WIDTH; x++) {
-            n += (img.getRGB(x, y) & 0xFFFFFF) == (RunnerPanel.INK.getRGB() & 0xFFFFFF) ? 1 : 0;
+            n += ObstacleDetector.isObstacle(img.getRGB(x, y) & 0xFFFFFF) ? 1 : 0;
          }
       }
       return n;
