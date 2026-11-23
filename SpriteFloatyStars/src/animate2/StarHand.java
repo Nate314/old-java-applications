@@ -9,6 +9,8 @@ import java.awt.event.MouseEvent;
  */
 final class StarHand extends MouseAdapter {
    private final StarField field;
+   /** The press landed on one of the buttons along the bottom: its drag and release are not the stars'. */
+   private boolean onDock;
 
    StarHand(StarField field) {
       this.field = field;
@@ -22,6 +24,12 @@ final class StarHand extends MouseAdapter {
 
    @Override
    public void mousePressed(MouseEvent e) {
+      int key = this.field.dockKeyAt(e.getX(), e.getY());
+      this.onDock = key >= 0;
+      if (this.onDock) {
+         this.field.key(key);
+         return;
+      }
       Orbits orbits = this.orbits();
       if (orbits != null && e.getButton() == MouseEvent.BUTTON3) {
          orbits.removeAt(e.getX(), e.getY());
@@ -35,6 +43,10 @@ final class StarHand extends MouseAdapter {
 
    @Override
    public void mouseReleased(MouseEvent e) {
+      if (this.onDock) {
+         this.onDock = false;
+         return;
+      }
       Orbits orbits = this.orbits();
       if (orbits != null && orbits.holding()) {
          orbits.dragTo(e.getX(), e.getY());
@@ -48,7 +60,7 @@ final class StarHand extends MouseAdapter {
    public void mouseDragged(MouseEvent e) {
       this.field.pointer(e.getX(), e.getY(), true);
       Orbits orbits = this.orbits();
-      if (orbits != null) {
+      if (orbits != null && !this.onDock) {
          orbits.dragTo(e.getX(), e.getY());
       }
    }
