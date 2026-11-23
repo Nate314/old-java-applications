@@ -15,6 +15,25 @@
   <build>
     <plugins>
       <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>app-sources</id>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>${repo.dir}/StockChecker/src</source>
+                <source>${repo.dir}/SynthesizerKeyboard/src</source>
+                <source>${repo.dir}/UltimateTicTacToe/src</source>
+                <source>${repo.dir}/GroupCreator/src</source>
+                <source>${repo.dir}/MusicTheoryExpert/src</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <groupId>org.teavm</groupId>
         <artifactId>teavm-maven-plugin</artifactId>
         <executions>

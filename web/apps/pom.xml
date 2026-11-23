@@ -9,62 +9,14 @@
     <version>1.0-SNAPSHOT</version>
   </parent>
   <artifactId>apps</artifactId>
-  <name>Apps: classes, data files and sources for the viewer</name>
+  <packaging>pom</packaging>
+  <name>Apps: data files and sources for the viewer</name>
 
-  <!-- The apps' classes, which web/apps-js compiles to each app's classes.js. -->
-
-  <!-- The shim must stay first: TeaVM tries class substitution rules in classpath order. -->
-  <dependencies>
-    <dependency>
-      <groupId>io.github.nate314.oldjava</groupId>
-      <artifactId>shim</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.teavm</groupId>
-      <artifactId>teavm-classlib</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.teavm</groupId>
-      <artifactId>teavm-jso-apis</artifactId>
-    </dependency>
-  </dependencies>
+  <!-- The apps' data files and their sources for the source viewer. Their classes are compiled by the
+       web/apps-js parts, each for its own apps. -->
 
   <build>
     <plugins>
-      <!-- Compile the untouched app sources straight from the repo. Their package names do not clash. -->
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>build-helper-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>app-sources</id>
-            <goals><goal>add-source</goal></goals>
-            <configuration>
-              <sources>
-                <source>${repo.dir}/BibleDownloader/src</source>
-                <source>${repo.dir}/CircleSpawner/src</source>
-                <source>${repo.dir}/Clock/src</source>
-                <source>${repo.dir}/DinoGame/src</source>
-                <source>${repo.dir}/FlappyBird/src</source>
-                <source>${repo.dir}/Minesweeper/src</source>
-                <source>${repo.dir}/RubiksCube2D/src</source>
-                <source>${repo.dir}/ScreenSaver/src</source>
-                <source>${repo.dir}/SpriteFloatyStars/src</source>
-                <source>${repo.dir}/StockChecker/src</source>
-                <source>${repo.dir}/SynthesizerKeyboard/src</source>
-                <source>${repo.dir}/UltimateTicTacToe/src</source>
-                <source>${repo.dir}/GroupCreator/src</source>
-                <source>${repo.dir}/MusicTheoryExpert/src</source>
-                <source>${repo.dir}/NumberGuess/src</source>
-                <source>${repo.dir}/SimpleAlgorithms/src</source>
-                <source>${repo.dir}/TankGame/src</source>
-                <source>${repo.dir}/Windows/src</source>
-                <source>${repo.dir}/WindowsE/src</source>
-              </sources>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-resources-plugin</artifactId>
