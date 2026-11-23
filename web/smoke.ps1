@@ -302,16 +302,21 @@ function Get-FocusName([string]$expr = 'document.activeElement') {
 # The home gallery's cards (Home.tsx Apps) as a screen reader finds them from the top of the page, with cards below
 # the window: every link and button on a card has its role and a name in Chrome's accessibility tree, as an on-screen
 # card's do (round 81's content-visibility gave off-screen cards' links role none and no name). Nothing is scrolled to
-# or measured inside the cards, so a skipped card stays skipped. Returns why it failed, or nothing.
+# or measured inside the cards, so a skipped card stays skipped. Cards draw themselves one by one from 1 s after
+# render (offscreen.css), so it reads again for up to 10 s before failing. Returns why it failed, or nothing.
 function Test-CardNames {
     $cards = "document.querySelectorAll('#apps > li:not([hidden])')"
     $controls = "document.querySelectorAll('#apps > li:not([hidden]) :is(a, button)')"
     Invoke-Js 'scrollTo(0, 0)' | Out-Null
     if (-not (Invoke-Js "[].some.call($cards, function (l) { return l.getBoundingClientRect().top > innerHeight; })")) { return 'cards: none below the window, so off-screen cards were not tested' }
-    $bad = @(for ($i = 0; $i -lt (Invoke-Js "$controls.length"); $i++) {
-        $f = Get-FocusName "$controls[$i]"
-        if ($f -notmatch '^(link|button): .') { "$(Invoke-Js "$controls[$i].closest('li').dataset.app") '$f'" }
-    })
+    $until = (Get-Date).AddSeconds(10)
+    do {
+        $bad = @(for ($i = 0; $i -lt (Invoke-Js "$controls.length"); $i++) {
+            $f = Get-FocusName "$controls[$i]"
+            if ($f -notmatch '^(link|button): .') { "$(Invoke-Js "$controls[$i].closest('li').dataset.app") '$f'" }
+        })
+        if ($bad) { Start-Sleep -Milliseconds 500 }
+    } while ($bad -and (Get-Date) -lt $until)
     if ($bad) { return "cards: $($bad.Count) card controls without a role or name: " + (($bad | Group-Object | ForEach-Object { "$($_.Count) x $($_.Name)" }) -join ', ') }
 }
 
