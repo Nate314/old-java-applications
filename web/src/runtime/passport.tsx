@@ -29,7 +29,17 @@ const passportListeners: ((fresh: string | null) => void)[] = [];
 
 function passportChanged(id: string | null) { passportListeners.forEach(function (fn) { fn(id); }); }
 
-// A new stamp: a toast with the count and an app not played yet; the last one gets confetti.
+// The home page's player shows this app: its stamp lands on the player's screen (pages/home/StampLanding.tsx),
+// so a toast in the corner as well was a second message about the same stamp.
+function landsInPlayer(id: string) {
+  try {
+    var f = document.getElementById('player-frame') as HTMLIFrameElement | null;
+    return !!f && !!f.contentDocument && f.contentDocument.body.getAttribute('data-app') === id;
+  } catch (e) { return false; }   // not loaded yet, or not ours
+}
+
+// A new stamp: a toast with the count and an app not played yet; the last one gets confetti. A stamp that lands on
+// the home player keeps its sound and gives the toast up, except the last one, whose toast offers Share it.
 export function stampToast(id: string) {
   catalog().then(function (apps: CatalogApp[]) {
     var app = apps[indexOf(apps, id)];
@@ -40,6 +50,7 @@ export function stampToast(id: string) {
     playSound(done ? 'complete' : 'stamp');
     if (done) { confetti(); homeDoc(); }   // its Share it shows the arcade's description
     if (news) { stampNews(app, count, apps.length, next); return; }
+    if (!done && landsInPlayer(id)) return;
     floatToast(app.pic, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
       done ? 'You have played all ' + apps.length + ' apps.' : count + ' of ' + apps.length + ' apps played.',
       <Meter p={count / apps.length} />, function (close) {
