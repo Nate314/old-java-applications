@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import './home.css';
 import './gallery-cards.css';
 import './first-screen.css';
+import './offscreen.css';
 import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
 import { FIRST, H, draw, useHomeDraw, usePart } from './model';
