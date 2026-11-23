@@ -43,6 +43,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private final SongRecords records = SongRecords.load(new File(System.getProperty("user.home"), ".synthesizer-songs.txt"));
    private final PianoPanel piano = new PianoPanel();
    private final LessonBar bar = new LessonBar(this.records);
+   private final RangeStrip range = new RangeStrip();
    private final File tuneFile = new File(System.getProperty("user.home"), ".synthesizer-tune.txt");
    /** The address of the page this runs on, for tune links; null on the desktop, which sends the code alone. */
    private final String page;
@@ -131,7 +132,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       int screenWidth = (int)Toolkit.getDefaultToolkit().getScreenSize().getWidth();
       int screenHeight = (int)Toolkit.getDefaultToolkit().getScreenSize().getHeight();
       // The space over the keys (falling notes in a lesson, your notes rising outside one) has room of its own.
-      this.setSize(screenWidth * 3 / 4, Math.max(screenHeight / 2, 340) + PianoPanel.FALL);
+      this.setSize(screenWidth * 3 / 4, Math.max(screenHeight / 2, 340) + PianoPanel.FALL + RangeStrip.HEIGHT);
       this.setDefaultCloseOperation(3);
       this.addKeyListener(this);
       this.getContentPane().setLayout(new BorderLayout());
@@ -139,6 +140,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       top.setFocusable(false);
       top.add(this.bar, BorderLayout.NORTH);
       top.add(this.loopView, BorderLayout.CENTER);
+      top.add(this.range, BorderLayout.SOUTH);
       this.getContentPane().add(top, BorderLayout.NORTH);
       this.getContentPane().add(this.piano, BorderLayout.CENTER);
       this.loopView.addMouseListener(new MouseAdapter() {
@@ -179,6 +181,26 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
             this.held = -1;
          }
       };
+      MouseAdapter reach = new MouseAdapter() {
+         /** Whether the press began on the small keys, so a drag slides the frame (a press on an arrow steps once). */
+         private boolean sliding;
+
+         @Override
+         public void mousePressed(MouseEvent event) {
+            int arrow = KeyboardWindow.this.range.arrowAt(event.getX());
+            this.sliding = arrow == 0;
+            KeyboardWindow.this.setOctave(arrow != 0 ? KeyboardWindow.this.octaveShift + arrow : KeyboardWindow.this.range.shiftAt(event.getX()));
+         }
+
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            if (this.sliding) {
+               KeyboardWindow.this.setOctave(KeyboardWindow.this.range.shiftAt(event.getX()));
+            }
+         }
+      };
+      this.range.addMouseListener(reach);
+      this.range.addMouseMotionListener(reach);
       this.piano.addMouseListener(keys);
       this.piano.addMouseMotionListener(keys);
       this.bar.addMouseListener(new MouseAdapter() {
@@ -398,6 +420,29 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       return -1;
    }
 
+   /** Moves the keys to octave shift {@code shift} (clamped to the strip's reach); held notes keep their pitch. */
+   private void setOctave(int shift) {
+      this.octaveShift = Math.max(RangeStrip.LOWEST, Math.min(RangeStrip.HIGHEST, shift));
+      this.range.setShift(this.octaveShift);
+      this.piano.setOctave(4 + this.octaveShift);
+      this.updateTitle();
+   }
+
+   /** Lights on the range strip the notes the keys are sounding. */
+   private void showHeld() {
+      int count = 0;
+      for (int[][] held : this.heldNotes.values()) {
+         count += held[1].length;
+      }
+      int[] notes = new int[count];
+      for (int[][] held : this.heldNotes.values()) {
+         for (int note : held[1]) {
+            notes[--count] = note;
+         }
+      }
+      this.range.setHeld(notes);
+   }
+
    private int midiNote(int key) {
       return 60 + key + 12 * this.octaveShift;
    }
@@ -451,6 +496,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.piano.setPressed(keys[tone], true);
       }
       this.heldNotes.put(holder, new int[][]{keys, notes});
+      this.showHeld();
       if (this.chords) {
          this.bar.setChords(true, Chord.name(key));
       }
@@ -564,6 +610,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (held == null) {
          return;
       }
+      this.showHeld();
       for (int note : held[1]) {
          // Overlapping chords share notes: a note stops with the last key holding it (Listen's note stops at its time).
          if (!this.holdsNote(note) && (this.listenKey < 0 || note != this.listenMidi)) {
@@ -777,10 +824,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.toggleChords();
       } else if (keyCode == KeyEvent.VK_A) {
          this.toggleBacking();
-      } else if (keyCode == KeyEvent.VK_LEFT && this.octaveShift > -5) {
-         this.octaveShift--;
-      } else if (keyCode == KeyEvent.VK_RIGHT && this.octaveShift < 4) {
-         this.octaveShift++;
+      } else if (keyCode == KeyEvent.VK_LEFT || keyCode == KeyEvent.VK_RIGHT) {
+         this.setOctave(this.octaveShift + (keyCode == KeyEvent.VK_LEFT ? -1 : 1));
       } else if (keyCode == KeyEvent.VK_UP) {
          this.setInstrument(Math.min(MAX_INSTRUMENT, this.instrument + 1));
       } else if (keyCode == KeyEvent.VK_DOWN) {
