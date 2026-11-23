@@ -127,6 +127,8 @@ public final class GameFrame extends JFrame {
    private Logic.Deduction lossHint;
    /** Mines undone this game; like a hint, one sets no best time. */
    private int undone;
+   /** The count on a number with more flags around it than that (ringed in red), or null when there is none. */
+   private String overFlagged;
 
    public GameFrame(SoundPlayer soundPlayer) {
       this(soundPlayer, null, null, null, false, false);
@@ -384,6 +386,7 @@ public final class GameFrame extends JFrame {
             this.revealNoteDirection = 1;
          }
       }
+      this.settleNumbers();
 
       if (MineFieldGenerator.isWon(this.grid, this.revealed)) {
          this.finish();
@@ -502,6 +505,7 @@ public final class GameFrame extends JFrame {
       this.startMillis += System.currentTimeMillis() - this.finishMillis; // the time spent looking at the loss is not counted
       this.clock.start();
       this.updateStatus();
+      this.settleNumbers();
       this.refreshOdds();
       if (this.lossHint != null) {
          this.showDeduction(this.lossHint, "Undone. These glowing tiles were safe to open.");
@@ -528,8 +532,26 @@ public final class GameFrame extends JFrame {
          if (flag && !this.watching) {
             this.bestTimes.learned(Coach.FLAG);
          }
+         this.settleNumbers();
          this.clearHint();
          this.updateStatus();
+      }
+   }
+
+   /** Every revealed number shows how it stands by its flags: settled ones fade into the sand, over-flagged ones go red. */
+   private void settleNumbers() {
+      this.overFlagged = null;
+      if (this.grid == null) {
+         return;
+      }
+      for (int r = 0; r < this.rows; r++) {
+         for (int c = 0; c < this.columns; c++) {
+            int standing = MineFieldGenerator.standing(this.grid, this.revealed, this.flagged, r, c);
+            this.tiles[r][c].setStanding(standing);
+            if (standing == MineFieldGenerator.OVER && this.overFlagged == null) {
+               this.overFlagged = this.grid[r][c];
+            }
+         }
       }
    }
 
@@ -838,6 +860,9 @@ public final class GameFrame extends JFrame {
       String board = this.bestTimes.noGuess() ? "No guess: logic alone clears every board." : "Random boards: some need a lucky guess.";
       if (this.showOdds) {
          this.refreshOdds();
+      } else if (this.overFlagged != null && !this.watching) {
+         this.setHintLines("Too many flags: the red " + this.overFlagged + " has more flags than " + (this.overFlagged.equals("1") ? "its 1 mine." : "its " + this.overFlagged + " mines."),
+            "One of its flags is wrong: right click (or long press) to take it off.");
       } else if (this.grid == null && !this.watching) {
          this.setHintLines("Click any tile to start: the first is always safe.", board);
       } else if (!this.coach()) {
@@ -851,7 +876,7 @@ public final class GameFrame extends JFrame {
     */
    private boolean coach() {
       int lesson = this.bestTimes.lessons();
-      if (lesson == Coach.DONE || this.grid == null || this.gameOver || this.watching || this.showOdds) {
+      if (lesson == Coach.DONE || this.grid == null || this.gameOver || this.watching || this.showOdds || this.overFlagged != null) {
          return false;
       }
       Coach step = lesson == Coach.FLAG ? Coach.flag(this.view()) : Coach.chord(this.grid, this.revealed, this.flagged, this.view());

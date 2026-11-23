@@ -56,6 +56,11 @@ public final class MineTile extends JButton implements MouseListener {
    private static final int BURST_MS = 260;
    private static final int PULSE_MS = 320;
    private static final int BLOOM_MS = 420;
+   /** A number whose mines are all flagged, with nothing else hidden around it, sinks into the sand over this long. */
+   private static final int SETTLE_MS = 360;
+   /** How far a settled number fades toward the sand, and how small it gets. */
+   private static final double SETTLE_FADE = 0.72;
+   private static final double SETTLE_SCALE = 0.78;
    /** A won field grows back as flat meadow (unlike the raised grass of a hidden tile), some tiles with a flower. */
    private static final Color MEADOW_LIGHT = new Color(170, 214, 112);
    private static final Color MEADOW_DARK = new Color(158, 204, 100);
@@ -95,6 +100,9 @@ public final class MineTile extends JButton implements MouseListener {
    private long pulseStart;
    /** When a won field's meadow starts growing on this tile (0: never). */
    private long bloomStart;
+   /** How this number stands by its flags ({@link MineFieldGenerator#standing}), and when it began to settle. */
+   private int standing = MineFieldGenerator.OPEN;
+   private long settleStart;
 
    public MineTile(GameFrame game, int row, int column) {
       this.game = game;
@@ -202,7 +210,28 @@ public final class MineTile extends JButton implements MouseListener {
    }
 
    private void describeValue() {
-      this.describe(this.value.trim().isEmpty() ? "clear" : this.value.equals("1") ? "1 mine near" : this.value + " mines near");
+      this.describe((this.value.trim().isEmpty() ? "clear" : this.value.equals("1") ? "1 mine near" : this.value + " mines near")
+         + (this.standing == MineFieldGenerator.DONE ? ", all flagged" : this.standing == MineFieldGenerator.OVER ? ", too many flags" : ""));
+   }
+
+   /**
+    * A revealed number's standing by its flags: settled (it fades into the sand, after its grass has popped off),
+    * over-flagged (ringed in red), or open.
+    */
+   void setStanding(int standing) {
+      if (this.standing == standing || this.shown != SHOW_VALUE) {
+         return;
+      }
+      this.standing = standing;
+      this.settleStart = 0;
+      if (standing == MineFieldGenerator.DONE) {
+         long now = System.currentTimeMillis();
+         this.settleStart = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))
+            ? now - SETTLE_MS : Math.max(now, this.animStart + this.animMs);
+         this.game.animating(this);
+      }
+      this.describeValue();
+      this.repaint();
    }
 
    /** Shows a mine after {@code delayMs}: the one that was hit on red, the others on sand. A flagged mine keeps its flag. */
@@ -292,7 +321,7 @@ public final class MineTile extends JButton implements MouseListener {
    /** True while an animation still has frames to draw. */
    boolean isAnimating(long now) {
       return this.animStart != 0 && now < this.animStart + this.animMs || this.pulseStart != 0 && now < this.pulseStart + PULSE_MS
-         || this.bloomStart != 0 && now < this.bloomStart + BLOOM_MS;
+         || this.bloomStart != 0 && now < this.bloomStart + BLOOM_MS || this.settleStart != 0 && now < this.settleStart + SETTLE_MS;
    }
 
    // ---- drawing ----
@@ -329,7 +358,7 @@ public final class MineTile extends JButton implements MouseListener {
       } else {
          this.paintSand(g, s, dark);
          if (this.shown == SHOW_VALUE) {
-            this.paintNumber(g, s);
+            this.paintNumber(g, s, now);
          } else {
             if (this.shown == SHOW_HIT) {
                g.setColor(withAlpha(HIT, (int) (255 * Math.min(1, t * 2))));
@@ -523,17 +552,34 @@ public final class MineTile extends JButton implements MouseListener {
       g.drawLine(0, h - 1, w - 1, h - 1);
    }
 
-   private void paintNumber(Graphics2D g, int s) {
+   /**
+    * The number in its color. Settled ({@link MineFieldGenerator#DONE}) it sinks into the sand, smaller and faded, so
+    * the numbers still to work on stand out; over-flagged it sits in a red ring, since a flag around it is wrong.
+    */
+   private void paintNumber(Graphics2D g, int s, long now) {
       String text = this.value.trim();
       if (text.isEmpty()) {
          return;
       }
+      int w = this.getWidth();
+      int h = this.getHeight();
+      if (this.standing == MineFieldGenerator.OVER) {
+         int inset = Math.max(2, s / 10);
+         int arc = Math.max(6, s / 3);
+         g.setColor(withAlpha(HIT, 40));
+         g.fillRoundRect(inset, inset, w - 2 * inset, h - 2 * inset, arc, arc);
+         g.setColor(HIT);
+         g.setStroke(new BasicStroke(Math.max(2f, s / 14f)));
+         g.drawRoundRect(inset, inset, w - 2 * inset - 1, h - 2 * inset - 1, arc, arc);
+      }
+      double settled = this.standing != MineFieldGenerator.DONE || now < this.settleStart ? 0 : ease(Math.min(1, (now - this.settleStart) / (double) SETTLE_MS));
       int n = Math.max(1, Math.min(8, Integer.parseInt(text)));
-      g.setFont(new Font("Dialog", Font.BOLD, Math.max(9, (int) (s * 0.62))));
+      g.setFont(new Font("Dialog", Font.BOLD, Math.max(9, (int) (s * 0.62 * (1 - (1 - SETTLE_SCALE) * settled)))));
       FontMetrics fm = g.getFontMetrics();
-      int x = (this.getWidth() - fm.stringWidth(text)) / 2;
-      int y = (this.getHeight() + fm.getAscent() - fm.getDescent()) / 2;
-      g.setColor(NUMBER[n - 1]);
+      int x = (w - fm.stringWidth(text)) / 2;
+      int y = (h + fm.getAscent() - fm.getDescent()) / 2;
+      boolean dark = (this.row + this.column) % 2 == 1;
+      g.setColor(settled == 0 ? NUMBER[n - 1] : mix(NUMBER[n - 1], dark ? SAND_DARK : SAND_LIGHT, SETTLE_FADE * settled));
       g.drawString(text, x, y);
    }
 

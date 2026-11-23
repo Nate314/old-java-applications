@@ -227,6 +227,25 @@ public class MineFieldCheck {
       Coach next = Coach.chord(grid, new boolean[3][3], new boolean[3][3], new int[][]{{h, 2, 1}, {1, f, 1}, {1, h, h}});
       check(next.mines && next.number == 1 && next.cells.size() == 1 && next.cells.get(0) == 0, "next flag on the way: " + next.number + " " + next.cells);
       check(Coach.flag(new int[][]{{h, 2, 1}, {1, f, 1}, {1, h, h}}).number == 1, "a flag counts toward a number but is not pointed at again");
+      checkStanding(grid);
+   }
+
+   /** Settled numbers fade and over-flagged ones warn: which is which, on the coach's 3x3 board. */
+   private static void checkStanding(String[][] grid) {
+      boolean[][] revealed = new boolean[3][3];
+      boolean[][] flagged = new boolean[3][3];
+      revealed[0][2] = true; // a 1 touching (0,1), (1,1), (1,2)
+      check(MineFieldGenerator.standing(grid, revealed, flagged, 0, 2) == MineFieldGenerator.OPEN, "a 1 with nothing flagged is open");
+      flagged[1][1] = true;
+      check(MineFieldGenerator.standing(grid, revealed, flagged, 0, 2) == MineFieldGenerator.OPEN, "its mine flagged but tiles still hidden: open");
+      revealed[0][1] = revealed[1][2] = true;
+      check(MineFieldGenerator.standing(grid, revealed, flagged, 0, 2) == MineFieldGenerator.DONE, "mine flagged, rest open: done");
+      check(MineFieldGenerator.standing(grid, revealed, flagged, 0, 1) == MineFieldGenerator.OPEN, "the 2 still has (0,0) hidden");
+      flagged[1][0] = true; // wrong: (1,0) is a 2, but the 1 at (0,2) does not touch it
+      flagged[0][0] = true;
+      check(MineFieldGenerator.standing(grid, revealed, flagged, 0, 1) == MineFieldGenerator.OVER, "a 2 with three flags is over");
+      check(MineFieldGenerator.standing(grid, revealed, flagged, 1, 1) == MineFieldGenerator.OPEN, "a mine has no standing");
+      check(MineFieldGenerator.standing(grid, new boolean[3][3], flagged, 0, 2) == MineFieldGenerator.OPEN, "a hidden tile has no standing");
    }
 
    private static void checkChord() {
