@@ -15,6 +15,7 @@ import { MoreButton, MoreMenu, useMore } from './PlayerMore';
 import { Records } from './Records';
 import { HeroWall } from './HeroWall';
 import { Passport, played } from './Stamp';
+import { StampLanding } from './StampLanding';
 import * as P from './player';
 import { badge, stampCount, tabClick, tabKey, tabShown } from './tabs';
 import { WhatsNew } from './WhatsNew';
@@ -154,6 +155,7 @@ function Player() {
         {/* The app's picture while its page loads, so the screen is never blank; it fades as the app starts. Sized like the frame, so the app lands near its size. */}
         {!H.then && <img key={'poster' + H.frame.key} className="poster" data-gone={H.poster ? undefined : ''} src={webp((a || FIRST).shot)} alt="" fetchPriority="high"
           style={frameBox} />}
+        <StampLanding />
       </div>
       {/* The controller, docked under the screen: the runtime draws it in here (oldjavaPad.render). */}
       <div className={'docked' + (H.pad.drawn ? ' shim-pad' : '')} id="player-pad" aria-label={H.pad.drawn ? 'Controller' : undefined} hidden={!H.pad.shown}

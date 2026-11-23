@@ -34,7 +34,8 @@ export function badge(id: string): { text: string; isNew: boolean } {
 // takes the panel until the visitor picks a tab.
 function sync() {
   let on = H.tab;
-  if (H.news.view && !chosenByVisitor && (H.news.view.fresh || !stored(KEY) && !stampCount())) on = 'news';   // a first visit: what changed, not an empty passport
+  if (H.fresh && !chosenByVisitor) on = 'passport';   // a stamp collected on this visit: the passport it landed on
+  else if (H.news.view && !chosenByVisitor && (H.news.view.fresh || !stored(KEY) && !stampCount())) on = 'news';   // a first visit: what changed, not an empty passport
   if (!on || !tabShown(on)) {
     const want = stored(KEY) || 'passport';
     on = TABS.indexOf(want) >= 0 && tabShown(want) ? want : visible()[0];
