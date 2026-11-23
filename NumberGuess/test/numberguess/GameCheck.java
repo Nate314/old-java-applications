@@ -46,6 +46,13 @@ public class GameCheck {
 		int[] chips = { 44, 44, 44, 44, 44, 44, 44 };
 		check(Board.firstChip(chips, 0, 150, 3) == 0 && Board.firstChip(chips, 0, 150, 2) == 1 && Board.firstChip(chips, 0, 150, 1) == 4, "latest chips stay");
 		check(Board.firstChip(new int[0], 0, 150, 1) == 0, "no chips");
+		// The zoomed line: settled on 21-49, each of the 29 numbers owns its slice; mid-zoom (still showing 1-100) a click lands on what is left.
+		java.awt.Rectangle line = new java.awt.Rectangle(20, 0, 290, 36);
+		for (int n = 21; n <= 49; n++) {
+			check(Board.numberOn(20 + (n - 21) * 10, line, 20, 49, 21, 49) == n && Board.numberOn(29 + (n - 21) * 10, line, 20, 49, 21, 49) == n, "zoomed line slice " + n);
+		}
+		check(Board.numberOn(20, line, 0, 100, 21, 49) == 21 && Board.numberOn(309, line, 0, 100, 21, 49) == 49
+				&& Board.numberOn(20 + 29 * 29 / 10 + 1, line, 0, 100, 21, 49) == 30, "mid-zoom clicks stay in what is left");
 
 		Game game = new Game(Level.HUNDRED, 40);
 		check(game.guess(0) == Game.Verdict.OUT_OF_RANGE && game.guess(101) == Game.Verdict.OUT_OF_RANGE, "out of range");
