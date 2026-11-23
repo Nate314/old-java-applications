@@ -61,6 +61,8 @@
                     </java>
                   </sequential>
                 </macrodef>
+                <!-- Side by side (each check is its own JVM): every module waits for the shim, so these sit on the build's longest path. -->
+                <parallel failonany="true">
                 <check class="web.teavm.DragsCheck"/>
                 <check class="web.shim.java.awt.GeometryCheck"/>
                 <check class="web.shim.javax.swing.LayerCheck"/>
@@ -68,6 +70,7 @@
                 <check class="web.shim.javax.swing.NearLabelCheck"/>
                 <check class="web.shim.java.awt.geom.TransformCheck"/>
                 <check class="web.shim.java.awt.web.ClipShapeCheck"/>
+                </parallel>
               </target>
             </configuration>
           </execution>

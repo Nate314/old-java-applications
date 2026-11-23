@@ -57,8 +57,11 @@ const kept = readdirSync(join(repo, 'NathaNOS/assets')).filter(f => f.endsWith('
 const jarsOf = pom => [...new Set([...all(read(pom), /<appjar app="(\w+)"/g), ...kept])];
 const desktop = jarsOf('web/nathanos/pom.xml');
 sameSet(desktop, all(now, /assets\/(\w+)\.jar/g), 'NathaNOS jars, web/nathanos/pom.xml vs AppPage.tsx BODY');
-sameSet(jarsOf('web/then-nathanos/pom.xml'), all(then, /assets\/(\w+)\.jar/g),
-  'NathaNOS Then jars, web/then-nathanos/pom.xml vs AppPage.tsx THEN_BODY');
+// The Then page runs the apps then-nathanos compiles, with the jars web/nathanos writes (both pages share NathaNOS/assets).
+const thenApps = all(read('web/then-nathanos/pom.xml'), /<source>\$\{then\.src\}\/(\w+)\/src<\/source>/g).filter(a => a !== 'NathaNOS');
+sameSet([...new Set([...thenApps, ...kept])], all(then, /assets\/(\w+)\.jar/g),
+  'NathaNOS Then jars, web/then-nathanos/pom.xml sources vs AppPage.tsx THEN_BODY');
+for (const a of thenApps) expect(desktop.includes(a), `${a}: NathaNOS Then runs it, but web/nathanos/pom.xml writes no ${a}.jar`);
 for (const f of all(now, /assets\/(\w+\.(?!jar)\w+)/g)) {
   expect(existsSync(join(repo, 'NathaNOS/assets', f)), `NathaNOS: AppPage.tsx names assets/${f}, not in NathaNOS/assets`);
 }

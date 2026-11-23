@@ -13,8 +13,9 @@
   <name>Apps compiled to JavaScript</name>
 
   <!-- TeaVM compiles one program at a time, so the programs are split over the parts below, which -T1C
-       (web/.mvn/maven.config) builds side by side. Each part compiles from the app classes (web/apps), already built
-       by javac; a part adds only its TeaVM executions. Keep the parts about equal in compile time. -->
+       (web/.mvn/maven.config) builds side by side. Each part runs javac on its own apps' sources (app-sources in the
+       part) and then their TeaVM executions, so a part starts right after the shim instead of waiting for one javac
+       of all 19 apps (web/apps, which now only copies data files and sources). Keep the parts about equal in time. -->
   <modules>
     <module>part1</module>
     <module>part2</module>
@@ -35,11 +36,6 @@
       <artifactId>shim</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.github.nate314.oldjava</groupId>
-      <artifactId>apps</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>org.teavm</groupId>
       <artifactId>teavm-classlib</artifactId>
     </dependency>
@@ -48,4 +44,21 @@
       <artifactId>teavm-jso-apis</artifactId>
     </dependency>
   </dependencies>
+  <!-- A pom-packaged part binds no javac by itself; this runs it on the sources its app-sources adds, into the part's
+       target/classes, which TeaVM reads after the dependencies (so the shim's classes still come first). -->
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>part-classes</id>
+            <phase>compile</phase>
+            <goals><goal>compile</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>
