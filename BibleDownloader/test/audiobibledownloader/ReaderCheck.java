@@ -412,6 +412,7 @@ public class ReaderCheck {
       check(ReaderPanel.commas(1189).equals("1,189") && ReaderPanel.commas(42).equals("42"), "commas");
       pageTurns();
       thumbIndex();
+      bookDepth();
       System.out.println("ReaderCheck: all checks passed");
    }
 
@@ -435,6 +436,33 @@ public class ReaderCheck {
          check(ReaderPanel.bookAtEdge(0, strip) == 0 && ReaderPanel.bookAtEdge(strip - 1, strip) == 65, "Genesis at the top, Revelation at the foot: " + strip);
          check(ReaderPanel.bookAtEdge(-5, strip) == 0 && ReaderPanel.bookAtEdge(strip + 5, strip) == 65, "past the ends: " + strip);
       }
+   }
+
+   /** The page blocks: as thick as the Bible either side of the place, and the pages bowing into the fold. */
+   private static void bookDepth() {
+      int[] genesis = ReaderPanel.stack(0);
+      int[] revelation = ReaderPanel.stack(Books.TOTAL - 1);
+      check(genesis[0] == 1 && genesis[1] == ReaderPanel.STACK, "Genesis 1: a thin left block, a full right one");
+      check(revelation[0] == ReaderPanel.STACK && revelation[1] == 1, "Revelation 22: a full left block, a thin right one");
+      int left = 0;
+      for (int o = 0; o < Books.TOTAL; o++) {
+         int[] s = ReaderPanel.stack(o);
+         check(s[0] >= left && s[0] >= 1 && s[1] >= 1 && s[0] + s[1] == ReaderPanel.STACK + 1, "blocks grow left as you read on: " + o);
+         left = s[0];
+      }
+      int[] luke = ReaderPanel.stack(Books.ordinal(Books.find("LUK"), 1));
+      check(luke[0] > luke[1], "Luke 1, past the Old Testament: more on the left " + luke[0] + "/" + luke[1]);
+      check(ReaderPanel.sag(100, 100, 50) == ReaderPanel.SAG && ReaderPanel.sag(150, 100, 50) == 0 && ReaderPanel.sag(40, 100, 50) == 0,
+         "pages dip most at the fold, not past the zone");
+      check(ReaderPanel.sag(80, 100, 50) == ReaderPanel.sag(120, 100, 50) && ReaderPanel.sag(80, 100, 50) < ReaderPanel.sag(90, 100, 50),
+         "the dip is even both sides and deepens toward the fold");
+      check(ReaderPanel.sag(100, Integer.MIN_VALUE, 0) == 0, "no dip on one page");
+      // A leaf's outline stays within its page widened and lowered by its step and the dip.
+      Rectangle sheet = new Rectangle(10, 20, 200, 300);
+      java.awt.geom.Rectangle2D box = ReaderPanel.leaf(sheet, 3, 0, 1.5, 210, 40).getBounds2D();
+      check(box.getMinX() == 7 && box.getMaxX() == 210 && box.getMinY() == 21.5 && box.getMaxY() == 321.5 + ReaderPanel.SAG, "a leaf's outline: " + box);
+      check(ReaderPanel.leaf(sheet, 0, 0, 0, 210, 40).contains(110, 170) && !ReaderPanel.leaf(sheet, 0, 0, 0, 210, 40).contains(209, 22),
+         "the page holds its middle and dips at the fold's top");
    }
 
    /** A page turn shows the old pages at its start, the new ones at its end, and the leaf over the spine between. */
