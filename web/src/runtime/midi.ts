@@ -1,6 +1,9 @@
+import { real } from './slow-mo';
+
 export let audio: AudioContext | null;
 let appGain: GainNode | null;
 let appMuted: boolean;
+let hushed = false;
 
 interface Voice { osc: OscillatorNode; gain: GainNode; ch: number }
 
@@ -25,7 +28,7 @@ export function ctx() {
     if (!AC) return null;
     audio = new AC();
   }
-  if (audio.state === 'suspended') audio.resume();
+  if (audio.state === 'suspended' && !hushed) audio.resume();
   return audio;
 }
 
@@ -39,15 +42,37 @@ function release(v: Voice, at: number) {
 export function appOut(a: AudioContext) {
   if (!appGain) {
     appGain = a.createGain();
-    appGain.gain.value = appMuted ? 0 : 1;
+    appGain.gain.value = appMuted || hushed ? 0 : 1;
     appGain.connect(a.destination);
   }
   return appGain;
 }
 
+/** Glides the app's voices to their level: silent while the computer plays or the page is held, else full. */
+function level(secs: number) {
+  if (!audio || !appGain) return;
+  var g = appGain.gain, t = audio.currentTime;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(appMuted || hushed ? 0 : 1, t + secs);
+}
+
 export function setAppMuted(on: boolean) {
   appMuted = on;
-  if (appGain) appGain.gain.value = on ? 0 : 1;
+  level(0.005);
+}
+
+/** A held page's sound waits with it (hidden-hold.ts): a note playing when the visitor switched away (whose note
+ *  off sits in a held timer) droned on unseen. Now the app's voices fade out and the audio stops where it is, and
+ *  once the page shows again it carries on from there and fades back in. */
+export function hush(on: boolean) {
+  if (on === hushed) return;
+  hushed = on;
+  var a = audio;
+  if (!a) return;
+  if (!on && a.state === 'suspended') a.resume();
+  level(on ? 0.08 : 0.15);
+  if (on) real.setTimeout(function () { if (hushed) a!.suspend(); }, 100);
 }
 
 export function init() {
