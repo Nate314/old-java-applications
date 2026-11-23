@@ -1,11 +1,16 @@
-/* Off the first screen, the gallery's cards skip their styles, layout and painting until they come near the screen
-   (content-visibility: auto; find in page, Tab and links into them still work). The page's module lays the whole page
-   out once as it renders it (Home.tsx's layout effects read sizes), and on a throttled phone that one layout was ~0.9 s
-   of a 1.6 s task. The sizes are the usual card heights, kept until each is first drawn and then remembered (auto), so
-   the scroll bar barely moves when they come in. Your arcade's tab panels are left out: while skipped, Chrome's
-   accessibility tree gives their lists and buttons no role or name (smoke's What's new reel check caught it).
-   shortcut: a skipped card's link reads the same way (role none) until drawn; drop this rule if screen readers miss them. */
-ul.apps > li { content-visibility: auto; contain-intrinsic-size: auto 240px auto 520px; }
+/* Off the first screen, the gallery's cards skip their styles, layout and painting while the page's module first
+   renders (content-visibility: auto). That module lays the whole page out once (Home.tsx's layout effects read sizes),
+   and on a throttled phone that one layout was ~0.9 s of a 1.6 s task. The sizes are the usual card heights.
+   While skipped, Chrome's accessibility tree gives a card's links role none and no name, so screen readers would miss
+   off-screen cards. So each card stops skipping by itself shortly after: a zero-length animation ends on visible, one
+   card every 80 ms from 1 s after the cards are styled, so each card's layout is its own short piece of work, not one
+   long task. Browsers without sibling-index() drop the delay line and draw every card at once (no skip, nothing hidden).
+   Your arcade's tab panels are left out for the same accessibility reason (smoke's What's new reel check caught it). */
+ul.apps > li {
+  content-visibility: auto; contain-intrinsic-size: auto 240px auto 520px;
+  animation: drawn 0s forwards; animation-delay: calc(1s + sibling-index() * 80ms);
+}
+@keyframes drawn { to { content-visibility: visible; } }
 @media (max-width: 640px) {
   ul.apps > li { contain-intrinsic-size: auto 160px auto 234px; }
 }
