@@ -8,6 +8,7 @@ import { APPS, webp, type App } from '../../shared/catalog';
 import { H } from './model';
 import * as P from './player';
 import { stampCount } from './tabs';
+import { passportPicture } from './passport-picture';
 import './passport.css';
 
 export const played = (a: App) => window.oldjavaPassport.has(a.id);
@@ -144,7 +145,7 @@ export function Passport({ off }: { off: string }) {
           <button className="btn primary" type="button" id="passport-new" hidden={left === 0} onClick={P.passportNew}>Play one you haven't</button>
           {' '}
           <button className="btn" type="button" id="passport-share" data-sound="none" title="Share the arcade, with your stamp count"
-            onClick={e => window.oldjavaShare.open(null, e.currentTarget)}>
+            onClick={e => window.oldjavaShare.open(null, e.currentTarget, passportPicture)}>
             ↗ Share
           </button>
           {' '}

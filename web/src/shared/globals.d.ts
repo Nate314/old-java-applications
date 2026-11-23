@@ -59,7 +59,7 @@ interface OldjavaPad {
   /** Builds the app's controller in el; returns the function that lights a button. */
   render(el: HTMLElement, id: string, send: (type: string, key: string) => void): (which: number, down: boolean) => void;
 }
-interface OldjavaShare { open(id: string | null, opener: Element): void }
+interface OldjavaShare { open(id: string | null, opener: Element, picture?: () => Promise<Blob>): void }
 interface OldjavaZoom { fit(): boolean; set(on: boolean): void; onChange(fn: () => void): void }
 interface OldjavaSkin { get(): string; set(skin: string): void }
 interface OldjavaSaver { showing(): boolean }
