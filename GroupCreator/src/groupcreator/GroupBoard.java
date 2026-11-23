@@ -722,21 +722,25 @@ public class GroupBoard extends JPanel {
    }
 
    /**
-    * How much to enlarge a w x h board while presenting: the groups as much as lets the cards keep their full size
-    * (see {@link #fullColumns}), the wheel (or the empty deck) as much as its 760 x 390 view fits. Never less than 1
-    * or more than 4.
+    * How much to enlarge a w x h board while presenting: the groups by what draws the names largest, the enlargement
+    * times the row the cards then grow to (see {@link #tallest}), the wheel (or the empty deck) as much as its 760 x
+    * 390 view fits. Never less than 1 or more than 4.
     */
    static double presentScale(int w, int h, int count, int longest, boolean wheel) {
       if (wheel || count == 0) {
          return Math.max(1, Math.min(4, Math.min(w / (double) WIDTH, h / (double) (HEIGHT - BAR))));
       }
-      for (int step = 80; step > 20; step--) {
+      double best = 1;
+      double largest = 0;
+      for (int step = 80; step >= 20; step--) {
          double s = step / 20.0;
-         if (fullColumns((int) (w / s), (int) (h / s) - HEADER - 12, count, longest) > 0) {
-            return s;
+         int row = tallest((int) (w / s), (int) (h / s) - HEADER - 12, count, longest)[1];
+         if (row >= 22 && s * row > largest) {
+            largest = s * row;
+            best = s;
          }
       }
-      return 1;
+      return best;
    }
 
    /** A minute more or less on the work time (and on its length, which the class keeps). */
@@ -929,7 +933,11 @@ public class GroupBoard extends JPanel {
       } else {
          dots = new Rectangle[0];
       }
-      int rowHeight = rowHeight(cards);
+      int rowHeight = cardRow;
+      int band = cardBand;
+      double zoom = cardZoom();
+      Font title = zoomed(BOLD, zoom);
+      Font small = zoomed(SMALL, zoom);
       chips = new Rectangle[groups.size()][];
       for (int c = 0; c < groups.size(); c++) {
          Rectangle card = cards[c];
@@ -940,23 +948,24 @@ public class GroupBoard extends JPanel {
          g.fillRoundRect(card.x, card.y, card.width, card.height, 14, 14);
          Color color = CARD_COLORS[c % CARD_COLORS.length];
          g.setColor(color);
-         g.fillRoundRect(card.x, card.y, card.width, 26, 14, 14);
-         g.fillRect(card.x, card.y + 14, card.width, 12);
-         text(g, "Group " + (c + 1), BOLD, Color.WHITE, card.x + 10, card.y + 18);
+         g.fillRoundRect(card.x, card.y, card.width, band, 14, 14);
+         g.fillRect(card.x, card.y + 14, card.width, band - 14);
+         int baseline = card.y + band / 2 + (int) Math.round(5 * zoom);
+         text(g, "Group " + (c + 1), title, Color.WHITE, card.x + 10, baseline);
          if (work.running()) {
             // The work time left, as a strip along the bottom of the card's band that runs down.
             int track = card.width - 20;
             g.setColor(new Color(255, 255, 255, 70));
-            g.fillRect(card.x + 10, card.y + 22, track, 2);
+            g.fillRect(card.x + 10, card.y + band - 4, track, 2);
             g.setColor(new Color(255, 255, 255, 230));
-            g.fillRect(card.x + 10, card.y + 22, Math.round(track * (1 - work.gone(System.currentTimeMillis()))), 2);
+            g.fillRect(card.x + 10, card.y + band - 4, Math.round(track * (1 - work.gone(System.currentTimeMillis()))), 2);
          }
          String size = groups.get(c).size() + (groups.get(c).size() == 1 ? " name" : " names");
-         if (card.width >= 30 + width(g, "Group " + (c + 1), BOLD) + width(g, size, SMALL)) {
-            text(g, size, SMALL, Color.WHITE, card.x + card.width - 10 - width(g, size, SMALL), card.y + 18);
+         if (card.width >= 30 + width(g, "Group " + (c + 1), title) + width(g, size, small)) {
+            text(g, size, small, Color.WHITE, card.x + card.width - 10 - width(g, size, small), baseline);
          }
          for (int k = 0; k < groups.get(c).size(); k++) {
-            chips[c][k] = new Rectangle(card.x + 8, card.y + 32 + k * rowHeight, card.width - 16, rowHeight - 3);
+            chips[c][k] = new Rectangle(card.x + 8, card.y + band + 6 + k * rowHeight, card.width - 16, rowHeight - 3);
             g.setColor(new Color(244, 242, 236));
             Rectangle slot = chips[c][k];
             g.fillRoundRect(slot.x, slot.y, slot.width, slot.height, 8, 8);
@@ -1010,7 +1019,7 @@ public class GroupBoard extends JPanel {
          int role = roles ? Roles.of(k, groups.get(c).size()) : -1;
          paintChip(g, groups.get(c).get(k), role, landed && role >= 0 && hadRole(c, k), timerClock, x, y, slot.width, slot.height,
             landed ? metAgain(c, k) : false,
-            c == pickedGroup && k == pickedIndex || dropOn, c == hoverGroup && k == hoverIndex);
+            c == pickedGroup && k == pickedIndex || dropOn, c == hoverGroup && k == hoverIndex, zoom);
          if (landed && clashes(c, k)) {
             // Kept apart from someone in this group: a red ring.
             g.setColor(ERROR);
@@ -1024,7 +1033,7 @@ public class GroupBoard extends JPanel {
          Rectangle held = held();
          g.setColor(new Color(0, 0, 0, 45));
          g.fillRoundRect(held.x + 3, held.y + 2, held.width, held.height, 8, 8);
-         paintChip(g, groups.get(dragGroup).get(dragIndex), -1, false, null, held.x - 3, held.y - 8, held.width, held.height, false, true, true);
+         paintChip(g, groups.get(dragGroup).get(dragIndex), -1, false, null, held.x - 3, held.y - 8, held.width, held.height, false, true, true, zoom);
       }
       return summary();
    }
@@ -1160,19 +1169,26 @@ public class GroupBoard extends JPanel {
     */
    private void paintChip(Graphics2D g, String name, int role, boolean hadRole, String timerClock, int x, int y, int width, int height,
          boolean again, boolean picked, boolean hover) {
+      paintChip(g, name, role, hadRole, timerClock, x, y, width, height, again, picked, hover, 1);
+   }
+
+   /** The same, with its text, badge and tag enlarged {@code zoom} times (on cards grown to fill the board). */
+   private void paintChip(Graphics2D g, String name, int role, boolean hadRole, String timerClock, int x, int y, int width, int height,
+         boolean again, boolean picked, boolean hover, double zoom) {
       g.setColor(picked ? PICKED : again ? AGAIN_FILL : Color.WHITE);
       g.fillRoundRect(x, y, width, height, 8, 8);
       g.setColor(picked ? AGAIN : hover ? INK : new Color(205, 200, 190));
       g.setStroke(new BasicStroke(hover || picked ? 1.6f : 1f));
       g.drawRoundRect(x, y, width, height, 8, 8);
       g.setStroke(new BasicStroke(1f));
-      Font font = height >= 16 ? TEXT : SMALL;
-      int baseline = y + height / 2 + (height >= 16 ? 5 : 4);
+      Font font = height >= 16 ? zoomed(TEXT, zoom) : SMALL;
+      Font small = zoomed(SMALL, zoom);
+      int baseline = y + height / 2 + (int) Math.round((height >= 16 ? 5 : 4) * zoom);
       int room = width - 16 - (again ? 14 : 0);
       int nameX = x + 8;
       if (height >= 14 && width >= 70) {
          // The person's badge leads the name.
-         int d = Math.min(22, height - 5);
+         int d = Math.min((int) Math.round(22 * zoom), height - 5);
          Badge.paint(g, name, classOrder, x + 3, y + (height - d) / 2, d, false);
          nameX = x + 3 + d + 4;
          room = x + width - 6 - (again ? 14 : 0) - nameX;
@@ -1181,11 +1197,11 @@ public class GroupBoard extends JPanel {
          // The role's tag at the right; only its first letter when the name would be squeezed.
          boolean timing = role == 2 && timerClock != null;
          String tag = timing ? "Timer " + timerClock : Roles.NAMES[role];
-         if (room - width(g, tag, SMALL) - 16 < Math.min(60, width(g, name, font))) {
+         if (room - width(g, tag, small) - 16 < Math.min(60 * zoom, width(g, name, font))) {
             tag = timing ? timerClock : tag.substring(0, 1);
          }
-         int tagWidth = width(g, tag, SMALL) + 10;
-         int tagHeight = Math.min(16, height - 4);
+         int tagWidth = width(g, tag, small) + (int) Math.round(10 * zoom);
+         int tagHeight = Math.min((int) Math.round(16 * zoom), height - 4);
          int tagX = nameX + room - tagWidth;
          int tagY = y + (height - tagHeight) / 2;
          g.setColor(ROLE_COLORS[role]);
@@ -1196,12 +1212,12 @@ public class GroupBoard extends JPanel {
             g.drawRoundRect(tagX, tagY, tagWidth, tagHeight, tagHeight, tagHeight);
             g.setStroke(new BasicStroke(1f));
          }
-         centered(g, tag, SMALL, INK, tagX + tagWidth / 2, tagY + tagHeight / 2 + 4);
+         centered(g, tag, small, INK, tagX + tagWidth / 2, tagY + tagHeight / 2 + (int) Math.round(4 * zoom));
          room -= tagWidth + 6;
       }
       text(g, fit(g, name, font, room), font, INK, nameX, baseline);
       if (again) {
-         int dot = Math.min(8, height - 6);
+         int dot = Math.min((int) Math.round(8 * zoom), height - 6);
          g.setColor(AGAIN);
          g.fillOval(x + width - 8 - dot, y + (height - dot) / 2, dot, dot);
       }
@@ -1533,23 +1549,27 @@ public class GroupBoard extends JPanel {
       centered(g, "No groups yet", BOLD, MUTED, cx - 80 + 80, cy + 10);
    }
 
-   /** One card per group, in as few rows as fit, centered on the board, as wide as fits (at most 230 px). */
+   /**
+    * One card per group, centered on the board, in the columns that make the names tallest: the cards grow to fill
+    * the board (a name's row from 22 up to {@link #MAX_ROW} px, each px of growth needing 6 px more card width), so a
+    * class reads from across the room. When even 22 px rows do not fit, as many columns as fit with shorter rows.
+    */
    private Rectangle[] layoutCards(int w, int top, int height) {
       int count = groups.size();
-      int longest = 0;
-      for (List<String> group : groups) {
-         longest = Math.max(longest, group.size());
-      }
-      int columns = fullColumns(w, height, count, longest);
-      int row = 22;
-      if (columns < 0) {
+      int longest = largest();
+      int[] best = tallest(w, height, count, longest);
+      int columns = best[0];
+      int row = best[1];
+      if (row < 22) {
          // Too many to fit at full size: as many columns as fit, with shorter rows.
          columns = Math.max(1, Math.min(count, (w - GAP) / (100 + GAP)));
          int rows = (count + columns - 1) / columns;
          row = Math.max(12, Math.min(22, ((height - (rows - 1) * GAP) / rows - 38) / Math.max(1, longest)));
       }
-      int cardWidth = Math.min(230, (w - 2 * GAP - (columns - 1) * GAP) / columns);
-      int cardHeight = 38 + longest * row;
+      cardRow = row;
+      cardBand = Math.max(26, row + 4);
+      int cardWidth = Math.min(230 + (row - 22) * 8, (w - 2 * GAP - (columns - 1) * GAP) / columns);
+      int cardHeight = cardBand + 12 + longest * row;
       int rows = (count + columns - 1) / columns;
       int y = top + Math.max(0, (height - rows * cardHeight - (rows - 1) * GAP) / 2);
       Rectangle[] cards = new Rectangle[count];
@@ -1561,6 +1581,27 @@ public class GroupBoard extends JPanel {
          }
       }
       return cards;
+   }
+
+   /**
+    * The columns whose cards give the names the tallest rows on a w x height board, and that row's height, as
+    * {columns, row}; a row under 22 means no full-size cards fit.
+    */
+   static int[] tallest(int w, int height, int count, int longest) {
+      int columns = -1;
+      int row = 0;
+      for (int c = 1; c <= count; c++) {
+         int rows = (count + c - 1) / c;
+         int cardWidth = (w - 2 * GAP - (c - 1) * GAP) / c;
+         int byWidth = cardWidth < 110 ? 0 : 22 + (cardWidth - 110) / 6;
+         int byHeight = ((height - (rows - 1) * GAP) / rows - 16) / (longest + 1);
+         int fits = Math.min(MAX_ROW, Math.min(byWidth, byHeight));
+         if (fits > row) {
+            row = fits;
+            columns = c;
+         }
+      }
+      return new int[] {columns, row};
    }
 
    /** The columns of the fewest rows whose cards are at least 110 px wide and fit at full height, or -1 when none do. */
@@ -1575,12 +1616,19 @@ public class GroupBoard extends JPanel {
       return -1;
    }
 
-   private int rowHeight(Rectangle[] cards) {
-      int longest = 0;
-      for (List<String> group : groups) {
-         longest = Math.max(longest, group.size());
-      }
-      return cards.length == 0 || longest == 0 ? 22 : (cards[0].height - 38) / longest;
+   /** The longest name row the cards may grow to. */
+   private static final int MAX_ROW = 40;
+   /** A name's row and the colored band's height on the cards laid out last. */
+   private int cardRow = 22;
+   private int cardBand = 26;
+
+   /** How much the cards' text is enlarged for rows of the last layout (1 at 22 px). */
+   private double cardZoom() {
+      return Math.max(1, cardRow / 22.0);
+   }
+
+   private static Font zoomed(Font font, double zoom) {
+      return zoom == 1 ? font : font.deriveFont((float) Math.round(font.getSize() * zoom));
    }
 
    /** The partner chart: a cell for every pair of names, darker the more rounds they shared. */
