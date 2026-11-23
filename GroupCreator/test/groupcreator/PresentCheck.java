@@ -42,6 +42,21 @@ public class PresentCheck {
       paint(board);
       key(board, KeyEvent.CHAR_UNDEFINED, KeyEvent.VK_ESCAPE);
       check(calls.size() == 2 && !calls.get(1), "Esc goes back");
+
+      // Out of Present, the six pairs' cards grow to fill the window's board: taller names, all on the board, none overlapping.
+      paint(board);
+      List<java.awt.Rectangle> all = new ArrayList<>();
+      for (int c = 0; c < 6; c++) {
+         for (int k = 0; k < 2; k++) {
+            java.awt.Rectangle chip = board.chipBounds(c, k);
+            check(chip.height > 30, "the names grow past their 19 px rows: " + chip);
+            check(chip.x >= 0 && chip.y >= 50 && chip.getMaxX() <= 760 && chip.getMaxY() <= 510 - 50, "on the board: " + chip);
+            for (java.awt.Rectangle other : all) {
+               check(!chip.intersects(other), "no two names overlap: " + chip + " " + other);
+            }
+            all.add(chip);
+         }
+      }
       key(board, 'f', KeyEvent.VK_F);
       paint(board);
       // The Back button sits at the header's right, drawn twice the size: at about (720, 50) on the board.
