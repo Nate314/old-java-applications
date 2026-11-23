@@ -51,6 +51,21 @@ public class GameStateCheck {
       game.xTurn = false;
       check(game.boardWinningMoves().length == 0, "none for the other side");
 
+      // Game points (the lines drawn across the big grid): two boards of a line won, the third open.
+      game = new GameState();
+      game.boardResults[0] = game.boardResults[4] = "X";
+      game.boardResults[2] = game.boardResults[5] = "O";
+      game.boardResults[6] = GameState.DRAW;
+      check("X".equals(game.threat(new int[]{0, 4, 8})), "X's diagonal threat");
+      check("O".equals(game.threat(new int[]{2, 5, 8})), "O's column threat");
+      check(game.threat(new int[]{0, 3, 6}) == null, "a drawn board blocks the line");
+      check(game.threat(new int[]{0, 1, 2}) == null, "one board each is no threat");
+      check(game.gamePoint(8, "X") && game.gamePoint(8, "O"), "board 8 is a game point for both");
+      check(!game.gamePoint(3, "X") && !game.gamePoint(3, "O"), "board 3: its lines are blocked");
+      check(!game.gamePoint(0, "X"), "a won board is no game point");
+      game.winner = "X";
+      check(game.threat(new int[]{0, 4, 8}) == null && !game.gamePoint(8, "X"), "no game points once the game is over");
+
       // Copies are independent, and legal moves follow the active board.
       game = new GameState();
       game.play(4, 0);

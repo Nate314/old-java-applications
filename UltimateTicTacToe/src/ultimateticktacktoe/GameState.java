@@ -5,7 +5,7 @@ import java.util.Arrays;
 /** The rules of Ultimate Tic-Tac-Toe, independent of the UI. */
 public final class GameState {
    public static final String DRAW = "draw";
-   private static final int[][] LINES = {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {0, 3, 6}, {1, 4, 7}, {2, 5, 8}, {0, 4, 8}, {2, 4, 6}};
+   static final int[][] LINES = {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {0, 3, 6}, {1, 4, 7}, {2, 5, 8}, {0, 4, 8}, {2, 4, 6}};
    /** marks[board][cell] is "", "X" or "O". */
    public final String[][] marks = new String[9][9];
    /** boardResults[board] is null while open, else "X", "O" or DRAW. */
@@ -62,6 +62,37 @@ public final class GameState {
          }
       }
       return Arrays.copyOf(moves, count);
+   }
+
+   /** "X" or "O" when that side has won two boards of the line and its third is still open (one board from winning the game), else null. */
+   public String threat(int[] line) {
+      if (this.winner != null) {
+         return null;
+      }
+      int open = 0;
+      int x = 0;
+      int o = 0;
+      for (int board : line) {
+         String result = this.boardResults[board];
+         if (result == null) {
+            open++;
+         } else if ("X".equals(result)) {
+            x++;
+         } else if ("O".equals(result)) {
+            o++;
+         }
+      }
+      return open != 1 ? null : x == 2 ? "X" : o == 2 ? "O" : null;
+   }
+
+   /** True if winning this open board would win {@code side} the game. */
+   public boolean gamePoint(int board, String side) {
+      for (int[] line : LINES) {
+         if ((line[0] == board || line[1] == board || line[2] == board) && side.equals(this.threat(line)) && this.boardResults[board] == null) {
+            return true;
+         }
+      }
+      return false;
    }
 
    public boolean canPlay(int board, int cell) {

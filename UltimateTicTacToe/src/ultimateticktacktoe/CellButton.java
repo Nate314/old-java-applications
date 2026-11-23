@@ -271,6 +271,7 @@ public final class CellButton extends JButton implements ActionListener {
          }
       }
       g.translate(bx, by);
+      this.paintGameLines(g, now);
       this.paintTrail(g, now, w, h);
 
       if (this.game.cursorMove() == this.move()) {
@@ -279,6 +280,78 @@ public final class CellButton extends JButton implements ActionListener {
          g.setStroke(new BasicStroke(2f));
          g.drawRoundRect(pad / 2 + 1, pad / 2 + 1, w - pad - 2, h - pad - 2, arc, arc);
       }
+   }
+
+   /**
+    * This cell's slice of the big grid's own lines, in the grid's coordinates. A side one board from winning the game
+    * (two boards of a line won, the third open) gets a band in its color from its two boards to the edge of the third,
+    * and a faint big mark of its own over that board; they fade in as the second board's big mark lands. The game's
+    * win is struck through its three boards in gold, drawn in as the gold rings in.
+    */
+   private void paintGameLines(Graphics2D g, long now) {
+      GameState state = this.game.state;
+      SmallBoard[] boards = this.game.boards;
+      int size = boards[0].getWidth();
+      int gx = this.getParent().getX() + this.getX();
+      int gy = this.getParent().getY() + this.getY();
+      g.translate(-gx, -gy);
+      for (int[] line : GameState.LINES) {
+         String side = state.threat(line);
+         if (side == null) {
+            continue;
+         }
+         double t = 1;
+         int open = 0;
+         for (int at = 0; at < 3; at++) {
+            if (state.boardResults[line[at]] == null) {
+               open = at;
+            } else {
+               long wonAt = this.game.boardWonAt[line[at]];
+               t = Math.min(t, wonAt == 0 ? 1 : progress(now, wonAt + LINE_MS, BIG_MARK_MS));
+            }
+         }
+         if (t <= 0) {
+            continue;
+         }
+         Color color = "X".equals(side) ? X_COLOR : O_COLOR;
+         int target = line[open];
+         g.setColor(withAlpha(color, (int) (120 * t)));
+         g.setStroke(new BasicStroke(Math.max(3f, size / 14f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+         if (open == 1) {   // the open board between the two: a band from each up to its edge
+            this.band(g, boards[line[0]], boards[target], boards[line[0]]);
+            this.band(g, boards[line[2]], boards[target], boards[line[2]]);
+         } else {   // the open board at an end: one band from the far board, through the near one, to its edge
+            this.band(g, boards[line[2 - open]], boards[target], boards[line[1]]);
+         }
+         SmallBoard over = boards[target];
+         paintMark(g, side, over.getX() + size / 2.0, over.getY() + size / 2.0, size * 0.32, Math.max(3f, size / 11f), 1, (int) (60 * t));
+      }
+      int[] won = state.winner == null || GameState.DRAW.equals(state.winner) ? null : GameState.winningLine(state.boardResults);
+      if (won != null) {
+         double e = ease(progress(now, this.game.gameWonAt, GAME_OVER_MS));
+         double x1 = center(boards[won[0]].getX(), size);
+         double y1 = center(boards[won[0]].getY(), size);
+         double x2 = center(boards[won[2]].getX(), size);
+         double y2 = center(boards[won[2]].getY(), size);
+         double dx = (x2 - x1) * 0.2;
+         double dy = (y2 - y1) * 0.2;
+         g.setColor(withAlpha(GOLD, 235));
+         g.setStroke(new BasicStroke(Math.max(4f, size / 10f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+         line(g, x1 - dx, y1 - dy, x1 - dx + (x2 - x1 + 2 * dx) * e, y1 - dy + (y2 - y1 + 2 * dy) * e);
+      }
+      g.translate(gx, gy);
+   }
+
+   /** A band from the middle of board {@code from} to the edge of board {@code to}, on the side facing its neighbor {@code toward}. */
+   private void band(Graphics2D g, SmallBoard from, SmallBoard to, SmallBoard toward) {
+      int size = from.getWidth();
+      double tx = center(to.getX(), size);
+      double ty = center(to.getY(), size);
+      line(g, center(from.getX(), size), center(from.getY(), size), tx + (center(toward.getX(), size) - tx) * 0.5, ty + (center(toward.getY(), size) - ty) * 0.5);
+   }
+
+   private static double center(int corner, int size) {
+      return corner + size / 2.0;
    }
 
    /**
