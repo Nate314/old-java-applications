@@ -1,8 +1,8 @@
 // An offline check of the built site in headless Chrome over the DevTools protocol, with Node's built-ins only (no
 // npm packages). It serves the site with serve.ps1 (the same headers a visitor gets) and walks four flows:
-//   0. the story, compare.html, then play.html (with an app and with none), each as the first page of a visit (no worker yet), then offline: each loads again;
+//   0. the story, compare.html, then play.html (with an app and with none) and the lost page, each as the first page of a visit (no worker yet), then offline: each loads again;
 //   1. first visit, then offline: home, story, play.html, an app page and compare.html, visited once online, each load again with
-//      no connection;
+//      no connection; a mistyped address offline gets the lost page, a page not saved yet the worker's Offline page;
 //   2. Save all for offline, then offline: several app pages, Then pages, and Find on the home page;
 //   3. a second build arrives: a copy of the site under -ProfileRoot with one tiny change (boot.js marked 'B', every
 //      hashed script and stylesheet renamed, every program marked 'B' and restamped), served in its place; a home page
@@ -191,7 +191,8 @@ try {
   // One page step: loads path, waits for `ready` (a selector) or, for an app, presses Play (after `click`, in
   // `frame` when the app is in play.html's player) and checks its window and paint.
   // firstVisit: a picture the page never showed online (below the fold, lazy) is not kept, so its miss is a note.
-  async function page(name, path, { ready, app, click, frame, build, firstVisit } = {}) {
+  // lost: the lost page at a mistyped address, whose own answer and root probes are 404s.
+  async function page(name, path, { ready, app, click, frame, build, firstVisit, lost } = {}) {
     const t0 = Date.now();
     await send('Page.navigate', { url: 'about:blank' }, S);
     await sleep(150);
@@ -216,7 +217,7 @@ try {
       if (r.b !== 'B' || (app && r.p !== 'B') || stale.length) why = 'mixed builds: runtime ' + r.b + ', program ' + (r.p || 'A') + (stale.length ? ', old files ' + stale.slice(0, 3).join(' ') : '');
     }
     await sleep(100);
-    const errs = keep(errors), unseen = firstVisit ? errs.filter(picture) : [], hard = errs.filter(e => !unseen.includes(e));
+    const errs = keep(errors).filter(e => !lost || !/^HTTP 404 /.test(e)), unseen = firstVisit ? errs.filter(picture) : [], hard = errs.filter(e => !unseen.includes(e));
     if (hard.length) why = [why, ...hard.slice(0, 4)].filter(Boolean).join(' | ');
     return report(name, why, t0, unseen.length ? unseen.length + ' pictures not seen online, not kept' : '');
   }
@@ -248,8 +249,9 @@ try {
   // each, so flow 1 starts with no worker again ----
   console.log('== story or compare.html first, then offline');
   const PLAY = { app: true, click: '#poster-play', frame: '#frame' };
+  const LOST = { ready: '#chips .chip', lost: true }, TYPO = 'qqzzx/xxkvq';   // a nested address no short link matches
   for (const [label, path, opts] of [['story', 'story.html', { ready: 'main' }], ['compare.html?app=Minesweeper', 'compare.html?app=Minesweeper', COMPARE],
-    ['play.html?app=Minesweeper', 'play.html?app=Minesweeper', PLAY], ['play.html (no app, picker)', 'play.html', { ready: '#oops:not([hidden]) .pick button' }]]) {
+    ['play.html?app=Minesweeper', 'play.html?app=Minesweeper', PLAY], ['play.html (no app, picker)', 'play.html', { ready: '#oops:not([hidden]) .pick button' }], ['lost page', TYPO, LOST]]) {
     await page(label + ' first (online)', path, opts);
     await check('service worker controls ' + label, async () => await until('!!navigator.serviceWorker.controller', 15000) ? '' : 'no controller after 15 s');
     await sleep(1500);
@@ -278,6 +280,12 @@ try {
   await page('Clock (offline)', 'Clock/index.html', { app: true, firstVisit: true });
   await page('compare.html?app=Minesweeper (offline)', 'compare.html?app=Minesweeper', { ...COMPARE, firstVisit: true });
   await check("compare.html's Then frame shows its poster (offline)", comparePoster);
+  // never visited: a mistyped address gets the lost page (kept on installing), a real page not saved yet the Offline page
+  await page('mistyped address (offline): lost page', 'zzqv/' + TYPO, { ...LOST, firstVisit: true });
+  await check('a page not saved yet (offline): Offline page', async () => {
+    await send('Page.navigate', { url: BASE + 'TankGame/then.html' }, S);
+    return await until("document.title==='Offline'", 10000) ? '' : 'title ' + await js('document.title');
+  });
   await setOffline(false);
 
   // Find on the page in view: Ctrl K, "tank", a TankGame result.

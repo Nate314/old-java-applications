@@ -215,7 +215,9 @@ export function pages(): Plugin {
       for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: await withEarly(paintedEarly(named(thenPage(app, thenReadme(app.id))))) });
       const files = [...new Set(Object.keys(bundle).concat(Object.keys(skins)))].filter(name => name.startsWith('assets/')).sort();
       // sw.js lists this build's files, so it changes with every build (the browser then installs it) and knows which to keep.
-      this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts', false, { BUILT: JSON.stringify(files) }) });
+      // It lists the pages too, so offline it tells a page not saved yet from a mistyped address (which gets the lost page).
+      const pages = ROUTES.filter(r => !r.anyDepth).map(r => r.file).concat(APPS.map(a => a.id + '/index.html'), APPS.filter(a => a.then).map(a => a.id + '/then.html'));
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts', false, { BUILT: JSON.stringify(files), PAGES: JSON.stringify(pages) }) });
       // Save all keeps the preview clips too (about 3 MB), so the gallery, play.html and title screens move offline.
       const clips = APPS.filter(a => a.clip).map(a => 'clips/' + a.id + '.mp4');
       this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files.concat(clips)) + '\n' });

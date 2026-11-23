@@ -1,5 +1,5 @@
 // Page side of offline: registers the service worker (sw.js at the site root) and has it keep this page. boot.js
-// calls it (runtime/install.tsx keepOffline), and so do the pages that don't load boot.js (the story, compare.html, play.html),
+// calls it (runtime/install.tsx keepOffline), and so do the pages that don't load boot.js (the story, compare.html, play.html, the lost page),
 // so a visit that starts on one of them still plays offline later. Imports only keep-pictures.ts.
 import { keepPictures } from './keep-pictures';
 
@@ -13,12 +13,12 @@ export function registerWorker(siteRoot: string, controlledAtLoad: boolean) {
   keepPictures();
 }
 
-/** For a page at the site root without boot.js: registers once the page has loaded, so installing the worker (it
- * fetches the whole build) doesn't compete with the page's own files on a slow phone. */
-export function registerAfterLoad() {
+/** For a page without boot.js (root: the site root as the page finds it, '' at the root): registers once the page has
+ * loaded, so installing the worker (it fetches the whole build) doesn't compete with the page's own files on a slow phone. */
+export function registerAfterLoad(root = '') {
   const controlled = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
-  if (document.readyState === 'complete') registerWorker('', controlled);
-  else addEventListener('load', () => registerWorker('', controlled), { once: true });
+  if (document.readyState === 'complete') registerWorker(root, controlled);
+  else addEventListener('load', () => registerWorker(root, controlled), { once: true });
 }
 
 /** This page loaded before the worker saw it, so once the worker controls it, it is told what to keep (sw.ts message). */
