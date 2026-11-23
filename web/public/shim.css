@@ -5966,11 +5966,15 @@ html[data-saver] * {
   position: relative;
 }
 
+/* Its box is only as tall as the clip it shows (its own aspect, centred where contain would put it), so it paints the
+   same pixels; a full-panel box counted as the page's largest paint once the clip started (phone LCP ~3-6 s). */
 .shim-title-clip {
   position: absolute;
   inset: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 100%;
+  margin: auto 0;
   object-fit: contain;
   opacity: 0;
   transition: opacity 0.6s ease-out;
@@ -6103,7 +6107,8 @@ html[data-saver] * {
   }
 
   .shim-title:not(.then) .shim-title-clip {
-    height: calc(100% - 64px);
+    bottom: 64px;
+    max-height: calc(100% - 64px);
   }
 
   .shim-title:not(.then) .shim-title-art img:not(.shim-title-tone) {
