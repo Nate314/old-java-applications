@@ -64,15 +64,19 @@ export function setAppMuted(on: boolean) {
 
 /** A held page's sound waits with it (hidden-hold.ts): a note playing when the visitor switched away (whose note
  *  off sits in a held timer) droned on unseen. Now the app's voices fade out and the audio stops where it is, and
- *  once the page shows again it carries on from there and fades back in. */
-export function hush(on: boolean) {
+ *  once the page shows again it carries on from there and fades back in. An app whose clock is not held (`keep`
+ *  false: a synth, a music drill) runs on while hidden, so its notes are let go instead: each fades out as if its
+ *  key came up, notes asked for while hidden stay silent, and the page comes back to quiet, not to a stuck note. */
+export function hush(on: boolean, keep: boolean) {
   if (on === hushed) return;
   hushed = on;
   var a = audio;
   if (!a) return;
   if (!on && a.state === 'suspended') a.resume();
   level(on ? 0.08 : 0.15);
-  if (on) real.setTimeout(function () { if (hushed) a!.suspend(); }, 100);
+  if (on && !keep) Object.keys(voices).forEach(function (k) { window.__shimSynth.noteOff(voices[k].ch, +k.split(':')[1]); });
+  // a let-go voice needs its 0.2 s release to finish before the audio stops, or its tail would wait for the return
+  if (on) real.setTimeout(function () { if (hushed) a!.suspend(); }, keep ? 100 : 250);
 }
 
 export function init() {
@@ -85,7 +89,7 @@ export function init() {
   window.__shimSynth = {
     noteOn: function (ch, note, vel, program, cents) {
       var a = ctx();
-      if (!a) return;
+      if (!a || hushed) return;   // nobody can hear it, and its note off may come late or never
       var key = ch + ':' + note;
       if (voices[key]) release(voices[key], a.currentTime);
       var osc = a.createOscillator();
