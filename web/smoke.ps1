@@ -5,7 +5,7 @@
 # apps that have one, without the buttons the app draws itself) and its Then page where it has one. On an app's own
 # page (wide and phone) and its Then page it first checks the early title card from the HTML has the live card's rows in the same places
 # (Test-EarlyTitle). play.html with no app is walked with Tab, checking each stop's accessible name and that it
-# becomes the feature (Test-Guide). On the home page it types into the gallery's filter field (Test-Search). The home page also loads on 400 and 360 px phones, where the poster the HTML paints must hand over to the player's own in place (Test-EarlyPoster). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
+# becomes the feature (Test-Guide). On the home page it types into the gallery's filter field (Test-Search) and walks What's new's reel of recently changed apps with Tab, checking each stop's accessible name and that only the focused card plays its clip (Test-Reel). The home page also loads on 400 and 360 px phones, where the poster the HTML paints must hand over to the player's own in place (Test-EarlyPoster). On an app it presses Play and waits for the app to paint. It prints one PASS or FAIL line per page with its
 # time. A page fails on an uncaught error, a console error, a failed or 4xx/5xx request, no window, an app whose
 # biggest canvas is one flat color, or more controls without an accessible name than it is known to have. On each app's own page it then closes the app's windows (frontmost first) until the
 # exit screen shows, checks it (Run again focused, other apps offered) and presses Run again, which must bring the app
@@ -112,8 +112,8 @@ $KnownUnnamed = @{}
 # answer 404 (the lost page); -Sheet is the page's app links: the last one opens the app in the play sheet (see the top);
 # -Phone <width> loads it in a phone screen that wide and 800 tall with a finger for a pointer, so apps that pick a
 # narrow layout at start are checked in it too, and checks an app's touch extras (Test-Touch), the home page's early
-# poster (Test-EarlyPoster); -Guide walks play.html's channel guide by keyboard and plays its last app (Test-Guide).
-function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [int]$Phone, [switch]$Search, [switch]$Guide) {
+# poster (Test-EarlyPoster); -Reel walks What's new's reel by keyboard (Test-Reel); -Guide walks play.html's channel guide by keyboard and plays its last app (Test-Guide).
+function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [string]$Click, [string]$Frame, [switch]$Missing, [switch]$Exit, [string]$Sheet, [int]$Phone, [switch]$Search, [switch]$Reel, [switch]$Guide) {
     $t = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Cdp 'Page.navigate' @{ url = 'about:blank' } | Out-Null
     Invoke-Js '1' | Out-Null   # reads the last page's late events, then forgets them
@@ -133,7 +133,7 @@ function Test-Page([string]$name, [string]$path, [string]$ready, [switch]$App, [
     elseif ($Click) { $pressFirst = "(function (b) { if (b) b.click(); return !!b; })(document.querySelector('$Click'))" }
     if (-not $App) {
         if (-not (& $wait "document.readyState === 'complete' && !!document.querySelector('$ready')" 20000)) { $why = "page did not finish loading ($ready)" }
-        else { Start-Sleep -Milliseconds $Settle; if ($Search) { $why = Test-Search $wait } elseif ($Phone) { $why = Test-EarlyPoster $wait } }
+        else { Start-Sleep -Milliseconds $Settle; if ($Search) { $why = Test-Search $wait } elseif ($Reel) { $why = Test-Reel $wait } elseif ($Phone) { $why = Test-EarlyPoster $wait } }
     } elseif ($Guide -and ($why = Test-Guide $wait)) { }
     elseif ($pressFirst -and -not (& $wait $pressFirst 20000)) { $why = "no $Click$Sheet to press" }
     elseif (-not (& $wait (& $in "!!(document.querySelector('.shim-title-play:not([disabled])') || document.querySelector('#desktop > *'))") 30000)) { $why = 'Play never became ready' }
@@ -174,6 +174,7 @@ $pages = @(
     @{ name = 'home page at 400 px'; path = 'index.html'; ready = '#player-frame'; Phone = 400 }
     @{ name = 'home page at 360 px'; path = 'index.html'; ready = '#player-frame'; Phone = 360 }
     @{ name = 'home page'; path = 'index.html'; ready = '#player-frame'; Search = $true }
+    @{ name = "home What's new reel"; path = 'index.html'; ready = '#player-frame'; Reel = $true }
     @{ name = 'story'; path = 'story.html'; ready = 'main' }
     # No ?app=: the channel guide of every app, walked with Tab (Test-Guide); Enter on its last tile plays that app right there.
     @{ name = 'play.html (no app, picker)'; path = 'play.html'; App = $true; Guide = $true; Frame = '#frame' }
@@ -290,9 +291,10 @@ function Test-Search($wait) {
     if (-not (& $wait "location.hash === '#$first' && document.getElementById('player-frame').src.indexOf('/$first/') >= 0" 5000)) { return "search: Enter did not play $first in the home player" }
 }
 
-# The role and name Chrome's accessibility tree gives the focused element, as "role: name" (what a screen reader says).
-function Get-FocusName {
-    $o = (Invoke-Cdp 'Runtime.evaluate' @{ expression = 'document.activeElement' }).result.objectId
+# The role and name Chrome's accessibility tree gives the focused element (or the element $expr names), as
+# "role: name" (what a screen reader says).
+function Get-FocusName([string]$expr = 'document.activeElement') {
+    $o = (Invoke-Cdp 'Runtime.evaluate' @{ expression = $expr }).result.objectId
     $n = @((Invoke-Cdp 'Accessibility.getPartialAXTree' @{ objectId = $o; fetchRelatives = $false }).nodes)[0]
     "$($n.role.value): $("$($n.name.value)".Trim())"
 }
@@ -316,6 +318,39 @@ function Test-Guide($wait) {
         if (($s = Invoke-Js $feature) -ne "$n|Play $n|1|true") { return "guide: focusing the $n tile shows '$s' (h1|Play|aria-current count|its own), expected '$n|Play $n|1|true'" }
     }
     Send-Key Enter
+}
+
+# The home page's What's new reel (pages/home/NewsReel.tsx) by keyboard, with real Tab presses: the What's new tab
+# shows it, the list is named, it has 1 to 8 cards of different apps, and Tab from the tab goes through the panel's
+# head into the reel, where each stop is the next card's Play button named "Play <app>" for that card's app. The card
+# with focus is the only one playing a clip, and plays its own when its app has one. Enter on the last card's Play
+# plays that app in the home player. Returns why it failed, or nothing.
+function Test-Reel($wait) {
+    $byId = @{}; Get-Content -Raw (Join-Path $Site 'apps.json') | ConvertFrom-Json | ForEach-Object { $byId[$_.id] = $_ }
+    if (-not (& $wait "!!document.getElementById('tab-news') && !document.getElementById('tab-news').hidden" 10000)) { return "reel: no What's new tab" }
+    Invoke-Js "document.getElementById('tab-news').click()" | Out-Null
+    $reel = "document.querySelectorAll('#news .news-reel > li')"
+    if (-not (& $wait "$reel.length > 0 && !!document.getElementById('news').getClientRects().length" 10000)) { return "reel: What's new shows no reel" }
+    $ids = @(Invoke-Js "[].map.call($reel, function (l) { return l.dataset.app; })")
+    if ($ids.Count -gt 8 -or @($ids | Select-Object -Unique).Count -ne $ids.Count -or @($ids | Where-Object { -not $byId[$_] })) { return "reel: cards for $($ids -join ', '), expected 1 to 8 different apps from apps.json" }
+    if (($f = Get-FocusName "document.querySelector('#news .news-reel')") -ne 'list: Apps changed most recently') { return "reel: the list is '$f', not 'list: Apps changed most recently'" }
+    Invoke-Js "document.getElementById('tab-news').focus()" | Out-Null
+    $inReel = "!!document.activeElement.closest('#news .news-reel')"
+    for ($i = 0; $i -lt 4 -and -not (Invoke-Js $inReel); $i++) {
+        Send-Key Tab
+        if (-not (Invoke-Js "!!document.activeElement.closest('#news')")) { return "reel: Tab stop $($i + 1) after the What's new tab is '$(Get-FocusName)', outside the panel" }
+    }
+    $clips = "(function (l) { return [].map.call(document.querySelectorAll('#news .news-reel video'), function (v) { return v.closest('li') === l ? 'own' : v.closest('li').dataset.app; }).join(','); })(document.activeElement.closest('li'))"
+    for ($i = 0; $i -lt $ids.Count; $i++) {
+        if ($i) { Send-Key Tab }
+        $a = $byId[$ids[$i]]
+        if (($f = Get-FocusName) -ne "button: Play $($a.name)") { return "reel: stop $($i + 1) in the reel is '$f', expected 'button: Play $($a.name)'" }
+        $want = if ($a.clip) { 'own' } else { '' }
+        if (-not (& $wait "$clips === '$want'" 2000)) { return "reel: with $($a.id)'s card focused the clips playing are '$(Invoke-Js $clips)', expected '$want'" }
+    }
+    $last = $ids[-1]
+    Send-Key Enter
+    if (-not (& $wait "location.hash === '#$last' && document.getElementById('player-frame').src.indexOf('/$last/') >= 0" 5000)) { return "reel: Enter on Play $last did not play it in the home player" }
 }
 
 # Controller buttons an app draws itself on a 400 px screen, so its touch controller must leave them out (ownBelow in
