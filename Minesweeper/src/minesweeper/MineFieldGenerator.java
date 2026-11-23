@@ -133,6 +133,34 @@ public final class MineFieldGenerator {
       return result;
    }
 
+   /** How a revealed number stands by the flags around it (see {@link #standing}). */
+   public static final int OPEN = 0;
+   public static final int DONE = 1;
+   public static final int OVER = 2;
+
+   /**
+    * {@link #DONE} once a revealed number has as many flags as its count and nothing else hidden around it (then every
+    * flag is right: its mines must be among them), {@link #OVER} with more flags than its count (one is wrong), else
+    * {@link #OPEN}, as for blanks and tiles not revealed.
+    */
+   public static int standing(String[][] grid, boolean[][] revealed, boolean[][] flagged, int row, int column) {
+      String value = grid[row][column];
+      if (!revealed[row][column] || " ".equals(value) || isMine(grid, row, column)) {
+         return OPEN;
+      }
+      int flags = 0;
+      int hidden = 0;
+      for (int[] n : neighbors(grid.length, grid[0].length, row, column)) {
+         if (flagged[n[0]][n[1]]) {
+            flags++;
+         } else if (!revealed[n[0]][n[1]]) {
+            hidden++;
+         }
+      }
+      int count = Integer.parseInt(value);
+      return flags > count ? OVER : flags == count && hidden == 0 ? DONE : OPEN;
+   }
+
    /** True when every non-mine cell is revealed. */
    public static boolean isWon(String[][] grid, boolean[][] revealed) {
       for (int row = 0; row < grid.length; row++) {
