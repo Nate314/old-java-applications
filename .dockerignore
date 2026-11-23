@@ -5,3 +5,4 @@ out
 web/target
 web/*/target
 **/node_modules
+web/*/*/target
