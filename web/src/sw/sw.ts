@@ -7,7 +7,7 @@
 // page share one entry; an app's program keeps its build's stamp (classes.js?v=<hash>, vite/stamp-programs.mjs),
 // so a page only ever gets the program it names, never another build's (cacheKey, offline-files.ts).
 // The built scripts and stylesheets (assets/<name>-<hash>.js and .css) and stamped programs never change under their
-// name, so they answer from the cache first. This build's (BUILT, filled in by the build) go in on installing.
+// name, so they answer from the cache first. The ones pages load later (BUILT, filled in by the build) go in on installing.
 // A page is kept only together with everything it names (scripts, stylesheets, program, data files), and a new build
 // stages fresh copies of every kept page in NEXT while installing, swapped in on activating: so offline a page always
 // runs whole, as the newest build that finished saving it, never an old program against a new runtime.
@@ -17,7 +17,7 @@
 // Built by vite/pages.ts into the site root as sw.js (a service worker's scope is its own folder and below).
 import { CACHE, cacheKey, isProgram, pageNames } from './offline-files';
 declare const self: ServiceWorkerGlobalScope;
-declare const BUILT: string[];   // this build's assets/ files, relative to the site root
+declare const BUILT: string[];   // this build's assets/ files that pages load later, and the lost page's, relative to the site root (vite/pages.ts)
 declare const PAGES: string[];   // this build's pages, relative to the site root (App/index.html, story.html, ...)
 const sw = self;
 
@@ -50,7 +50,7 @@ function fetchOk(url: string): Promise<Response> {
 }
 
 // ---- install: stage this build in NEXT ----
-// This build's scripts and stylesheets (about 210 KB gzipped) and a fresh copy of every page kept so far, with what
+// The scripts and stylesheets pages load later (Find, the skin maker...) and the lost page's (about 165 KB gzipped) and a fresh copy of every page kept so far, with what
 // it needs that is not kept yet (a changed program, a new data file), go in NEXT before it takes over. Data files
 // keep their names across builds, so a kept copy is reused. If anything fails to load, this build waits and the one
 // already installed keeps answering from its own whole copies.
