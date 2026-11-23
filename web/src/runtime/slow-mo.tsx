@@ -24,7 +24,7 @@ let rate = 1, realAt = 0, warpAt = 0, warping = false, held = false;
 /** What came due while held (timers by 't' + id, frames by 'f' + id), to run once the hold lifts. */
 const due = new Map<string, () => void>();
 /** The clock and timers as they were before any warp, for site code that must keep real time. */
-export const real = { now: performance.now.bind(performance), setInterval: setInterval.bind(window) };
+export const real = { now: performance.now.bind(performance), setInterval: setInterval.bind(window), setTimeout: setTimeout.bind(window) };
 const realNow = real.now;
 /** The page's time now, in performance.now terms: real time at the rates it has run at since warping began. */
 function warpNow() { return held ? warpAt : warpAt + (realNow() - realAt) * rate; }

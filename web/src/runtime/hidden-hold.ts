@@ -2,6 +2,7 @@ import { appId } from './catalog';
 import { embedded } from './skin';
 import { APPS, hold, real } from './slow-mo';
 import { popped } from './pop-out';
+import { hush } from './midi';
 
 // ---- An app in a frame nobody can see waits where it is ----
 // compare.html on a phone shows one pane at a time, so an embedded app can sit in a frame that is display: none (or
@@ -27,7 +28,11 @@ export function unseen(): boolean {
 
 export function init() {
   if (APPS.indexOf(appId() || '') < 0) return;
-  function check() { hold(!popped && (document.hidden || unseen())); }
+  function check() {
+    var on = !popped && (document.hidden || unseen());
+    hold(on);
+    hush(on);   // its sound too
+  }
   check();   // wraps the timers now, before the app's main sets any
   document.addEventListener('visibilitychange', check);
   if (!embedded || window.parent === window) return;

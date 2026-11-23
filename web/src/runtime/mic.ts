@@ -93,6 +93,6 @@ export function init() {
   };
   // Browsers only start audio after a user gesture.
   ['pointerdown', 'keydown'].forEach(function (type) {
-    document.addEventListener(type, function () { if (audio && audio.state === 'suspended') audio.resume(); }, true);
+    document.addEventListener(type, function () { if (audio) ctx(); }, true);   // ctx() resumes it, unless held
   });
 }
