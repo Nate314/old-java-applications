@@ -20,7 +20,27 @@ public final class LessonCheck {
       checkTunes();
       checkChords();
       checkBacking();
+      checkSoundButton();
+      checkFinder();
+      checkRange();
       System.out.println("LessonCheck: all checks passed");
+   }
+
+   /** The range strip: the arrows at its ends, a press on the small keys centres the octave frame there, clamped to the reach. */
+   private static void checkRange() {
+      RangeStrip range = new RangeStrip();
+      range.setSize(40 + 710 + 40, RangeStrip.HEIGHT);
+      // The small keys run from x = 40, 10 px per white key: C4 (white 35) to C5 (white 42) is the unshifted frame.
+      assert range.arrowAt(10) == -1 && range.arrowAt(780) == 1 && range.arrowAt(400) == 0 : "arrows at the ends";
+      assert range.shiftAt(40 + 390) == 0 : "a press on G4 frames C4 to C5";
+      assert range.shiftAt(40 + 460) == 1 && range.shiftAt(40 + 320) == -1 : "a press an octave up or down moves the frame an octave";
+      assert range.shiftAt(0) == RangeStrip.LOWEST && range.shiftAt(790) == RangeStrip.HIGHEST : "the frame stops at the reach's ends";
+      assert RangeStrip.name(0).equals("C4") && RangeStrip.name(RangeStrip.LOWEST).equals("C-1") && RangeStrip.name(RangeStrip.HIGHEST).equals("C8");
+      range.setHeld(new int[]{-3, 60, 127});
+      java.awt.image.BufferedImage strip = paint(range);
+      assert (strip.getRGB(388, 14) & 0xffffff) == 0xffc43c : "the gold frame's left side sits at C4";
+      assert (strip.getRGB(394, 22) & 0xffffff) == 0x6e96f0 : "a held middle C is lit on the strip";
+      assert brightness(strip, 384, 22) < brightness(strip, 404, 22) : "keys outside the frame are dimmer";
    }
 
    private static void checkBacking() {
@@ -50,6 +70,28 @@ public final class LessonCheck {
       assert Backing.chords(sharp)[0] == 6 : "F# A# C# F# is F#, got " + Backing.chords(sharp)[0];
       int[] notes = Backing.notes(7, 60);
       assert java.util.Arrays.equals(notes, new int[]{43, 55, 59, 62}) : "G: a low G, then G B D an octave below the keys";
+   }
+
+   private static void checkSoundButton() {
+      assert LoopView.sound(0).equals("Piano") && LoopView.sound(33).equals("Bass 2") && LoopView.sound(120).equals("Effects")
+         : "sounds read as their family, numbered after the first";
+      LessonBar bar = new LessonBar(SongRecords.load(new File("no-such-records.txt")));
+      bar.setSize(900, LessonBar.HEIGHT);
+      // Wide: the sound button sits left of Chords (100) and Sing along (132), 124 wide, its left arrow on its first 26 px.
+      int left = 900 - 10 - 132 - 6 - 100 - 6 - 124;
+      assert bar.soundAt(left + 5, 20) == -1 && bar.soundAt(left + 60, 20) == 1 && bar.soundAt(left + 120, 20) == 1;
+      assert bar.soundAt(left - 2, 20) == 0 && bar.soundAt(left + 126, 20) == 0 && bar.soundAt(left + 60, 40) == 0 : "off the button";
+      assert !bar.chordsAt(left + 120, 20) && bar.chordsAt(left + 130, 20) : "the sound button ends where Chords begins";
+      // Narrow: a 34 px note that steps forward.
+      bar.setSize(400, LessonBar.HEIGHT);
+      int narrow = 400 - 10 - 34 - 6 - 34 - 6 - 34;
+      assert bar.soundAt(narrow + 2, 20) == 1 && bar.soundAt(narrow + 33, 20) == 1 && bar.soundAt(narrow + 35, 20) == 0;
+      // A headline too long for the room left of the buttons is cut short to fit.
+      java.awt.FontMetrics metrics = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB)
+         .getGraphics().getFontMetrics(new java.awt.Font("SansSerif", java.awt.Font.BOLD, 16));
+      String cut = LessonBar.fit(metrics, "Listening: Twinkle Twinkle Little Star", 150);
+      assert cut.endsWith("..") && metrics.stringWidth(cut) <= 150 : cut;
+      assert LessonBar.fit(metrics, "Free play", 150).equals("Free play");
    }
 
    private static void checkChords() {
@@ -93,11 +135,15 @@ public final class LessonCheck {
       assert row.start(1) == 1.5 && row.start(4) == 4.5 : "Row Row: dotted and half beats";
    }
 
-   /** The falling notes take the top of the piano during a lesson, and the keys stay where they are drawn. */
+   /** The falling (lesson) or rising (free play) notes take the top of the piano, and the keys stay where they are drawn. */
    private static void checkFall() {
       PianoPanel piano = new PianoPanel();
       piano.setSize(802, 300);
-      assert piano.keyAt(50, 10) == 0 && piano.keyAt(50, 299) == 0 : "no lesson: the keys fill the panel";
+      assert piano.keyAt(50, 10) == -1 && piano.keyAt(50, 120) == 0 : "free play: the keys sit below the rising notes";
+      checkRise(piano);
+      piano.setRising(false);
+      assert piano.keyAt(50, 10) == 0 && piano.keyAt(50, 299) == 0 : "the looper: the keys fill the panel";
+      piano.setRising(true);
       piano.setSong(Song.ALL[0]);
       assert piano.keyAt(50, 10) == -1 && piano.keyAt(50, 119) == -1 : "the falling notes are not keys";
       assert piano.keyAt(50, 120) == 0 && piano.keyAt(50, 299) == 0 && piano.keyAt(100, 130) == 1 : "the keys moved below them";
@@ -106,7 +152,8 @@ public final class LessonCheck {
       piano.play(2, 0);
       assert piano.shownBeat() == 3 : "Listen moves on to the end of the note it plays";
       piano.setSong(null);
-      assert piano.keyAt(50, 10) == 0 : "free play gives the keys their room back";
+      assert piano.keyAt(50, 120) == 0 : "free play keeps the keys where the lesson had them";
+      piano.setRising(false);
       // A key's front edge shows below its face, and a press pushes the face down over most of it.
       int edge = 300 - 2 - PianoPanel.lip(300) / 2;
       int upFront = brightness(paint(piano), 10, edge);
@@ -117,7 +164,25 @@ public final class LessonCheck {
       piano.setPressed(0, false);
    }
 
-   private static java.awt.image.BufferedImage paint(PianoPanel piano) {
+   /** A note played outside a lesson grows from its key while held, then rises at the falling notes' scale. */
+   private static void checkRise(PianoPanel piano) {
+      long[] note = {4, 1000, 0};
+      // 120 px show 4.5 beats of 420 ms: about 0.0635 px per ms.
+      assert piano.risen(note, 1840) == 0 && piano.barHeight(note, 1840) == 53 : "held two beats: a two-beat bar on the key";
+      note[2] = 1840;
+      assert piano.risen(note, 2260) == 27 && piano.barHeight(note, 2260) == 53 : "released: it rises a beat's height per beat";
+      assert piano.barHeight(new long[]{4, 1000, 1001}, 1001) == 4 : "a tap still shows";
+      int rest = brightness(paint(piano), 140, 118);
+      piano.setPressed(2, true);
+      assert brightness(paint(piano), 140, 118) > rest + 100 : "a held key's bar starts on its lane";
+      piano.setPressed(2, false);
+      piano.setFound(true);
+      int rgb = paint(piano).getRGB(140, 118);
+      assert ((rgb >> 16) & 255) > 200 && (rgb & 255) < 120 : "a known song's notes rise in gold";
+      piano.setFound(false);
+   }
+
+   private static java.awt.image.BufferedImage paint(javax.swing.JComponent piano) {
       java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(piano.getWidth(), piano.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
       piano.paint(image.getGraphics());
       return image;
@@ -238,5 +303,50 @@ public final class LessonCheck {
       }
       assert Tune.load(file) == null : "a broken tune is skipped";
       file.delete();
+   }
+
+   private static void checkFinder() {
+      Song mary = Song.ALL[0];
+      Song ode = Song.ALL[2];
+      // Mary's first five, after some noodling, in C: found, and her lesson carries on at the sixth note.
+      SongFinder finder = play("C C C E D C D");
+      assert finder.song() == null : "four notes of Mary are not enough";
+      finder.add(4);
+      assert finder.song() == mary && finder.notes() == 5 && finder.inKey() : "E D C D E is Mary in C";
+      finder.add(4);
+      assert finder.song() == mary && finder.notes() == 6 : "each right note extends the match";
+      Lesson lesson = new Lesson(mary, finder.notes());
+      assert lesson.position() == 6 && lesson.expectedKey() == mary.key(6) && lesson.misses() == 0 : "the lesson carries on";
+      finder.add(11);
+      assert finder.song() == null : "a wrong note loses the song";
+      // Ode to Joy two steps up is found, but not in its key.
+      finder = play("F# F# G A A");
+      assert finder.song() == ode && !finder.inKey() : "Ode to Joy in D is still Ode to Joy";
+      // Twinkle in G folds round the one octave: G G D D E.
+      finder = play("G G D D E");
+      assert finder.song() == Song.ALL[1] && !finder.inKey() : "Twinkle in G";
+      // One key over and over, or two, is no song; Jingle Bells needs its third note.
+      finder = play("E E E E E E E G");
+      assert finder.song() == null : "E E E E E E E G is not yet Jingle Bells";
+      finder.add(0);
+      assert finder.song() == Song.ALL[4] && finder.inKey() : "E x7 G C is Jingle Bells";
+      // A whole song played leaves no note to carry on with, so it is not offered.
+      finder = new SongFinder(Song.ALL);
+      for (int note = 0; note < mary.length(); note++) {
+         finder.add(mary.key(note));
+         assert finder.song() == null || finder.notes() < finder.song().length() : "always a note left";
+      }
+      assert finder.song() == null : "Mary played to the end is not offered again";
+      finder.clear();
+      assert finder.song() == null && !finder.inKey();
+   }
+
+   private static SongFinder play(String notes) {
+      SongFinder finder = new SongFinder(Song.ALL);
+      Song song = new Song("X", "x", "x", notes);
+      for (int note = 0; note < song.length(); note++) {
+         finder.add(song.key(note));
+      }
+      return finder;
    }
 }

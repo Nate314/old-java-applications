@@ -96,7 +96,6 @@ final class Launcher {
    private void createNewWindow(JFrame window, String name, Image iconImage) {
       GenericAppFrame appWindow = new GenericAppFrame(window.getTitle(), window.getContentPane(), false, iconImage, this.screen);
       appWindow.setSize(window.getWidth(), window.getHeight());
-      appWindow.setPosition(this.screen.getWidth() / 2 - window.getWidth() / 2, this.screen.getHeight() / 2 - window.getHeight() / 2);
       this.screen.desktopPane.add(appWindow);
       // The app's own frame was only a hidden donor for its content pane.
       window.dispose();

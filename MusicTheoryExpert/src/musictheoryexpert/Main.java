@@ -1,7 +1,9 @@
 package musictheoryexpert;
 
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.KeyboardFocusManager;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.io.File;
 
@@ -42,7 +44,14 @@ public class Main extends JFrame {
 		if (friend != null) {
 			tpane.setSelectedIndex(1);
 		}
-		this.setSize(780, 600);
+		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+		if (screen.width < Look.NARROW) {
+			// A phone held upright (in the browser): as wide and tall as the screen, so the tabs stack their parts
+			// at full size instead of the whole window being shrunk to half.
+			this.setSize(Math.max(340, screen.width), Math.max(640, screen.height));
+		} else {
+			this.setSize(780, 600);
+		}
 		// Keys reach the showing tab whichever component has the focus.
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(event -> this.isActive() && dispatch(event));
 		this.setVisible(visibility);

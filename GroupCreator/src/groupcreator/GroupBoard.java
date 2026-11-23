@@ -8,13 +8,16 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import javax.swing.JPanel;
@@ -22,8 +25,8 @@ import javax.swing.Timer;
 
 /**
  * The board under the inputs. In Groups it deals the newest round onto one card per group, marks the people who were
- * together before, labels each member's role, and swaps two names of different groups when they are clicked one after
- * the other. Partner chart shows, for every pair in the class, how many rounds put them in one group. Pick someone
+ * together before, labels each member's role, and swaps two names when one is dragged onto the other (or two names of
+ * different groups are clicked one after the other). Partner chart shows, for every pair in the class, how many rounds put them in one group. Pick someone
  * spins a wheel of the class that lands on someone who has not had a turn yet. Roll call marks who is away today and which names are kept apart.
  * Its buttons run along the bottom, and change with the view.
  */
@@ -79,6 +82,12 @@ public class GroupBoard extends JPanel {
 
       /** The names typed in the names field now (the wheel follows the field, not only the saved rounds). */
       List<String> classNames();
+
+      /** The min and max typed now, or null when they are not whole numbers (the board previews round 1 with them). */
+      int[] sizes();
+
+      /** A size was picked on the board before round 1: put min and max in their fields. */
+      void setSizes(int min, int max);
 
       /** The wheel picked someone, or a pick was put back or forgotten: save the class. */
       void picksChanged();
@@ -146,6 +155,16 @@ public class GroupBoard extends JPanel {
    /** How much the board is enlarged while presenting (mouse positions are divided by it). */
    private double scale = 1;
    private final Rectangle presentButton = new Rectangle();
+   /** A board narrower than this (a phone held upright) wraps the header's line, the button bar, and stacks Pick someone and Roll call. */
+   private static final int NARROW = 560;
+   private boolean narrow;
+   /** The header's and the button bar's heights in the last paint: taller on a narrow board. */
+   private int headerHeight = HEADER;
+   private int barHeight = BAR;
+   /** The bar's buttons were wrapped onto rows (and drawn without their key letters); its padding. */
+   private boolean barWrapped;
+   private boolean barKeys = true;
+   private int barPad = 12;
 
    // Roll call: the name tiles, the keep-apart list beside them, and the keyboard's place among the tiles.
    private boolean keepApart;
@@ -159,6 +178,14 @@ public class GroupBoard extends JPanel {
    private boolean keyboard;
 
    private List<List<String>> groups = Collections.emptyList();
+   /** Before round 1: where each name of the class sits on the board, and the Deal round 1 button. */
+   private final Map<String, Rectangle> pile = new HashMap<>();
+   private final Rectangle dealButton = new Rectangle();
+   /** Before round 1: the size chips under the pile ({min, max} each) and where they were drawn. */
+   private List<int[]> sizeChoices = Collections.emptyList();
+   private Rectangle[] sizeChips = new Rectangle[0];
+   /** Where round 1's names fly from: their places in the class before the deal (null for later rounds). */
+   private Map<String, Rectangle> dealFrom;
    /** Looking back: the number of the earlier round shown, or 0 while the newest is shown. */
    private int shownRound;
    /** The round the newest round's groups were taken from by Use again, or 0. */
@@ -183,6 +210,17 @@ public class GroupBoard extends JPanel {
    private int hoverIndex = -1;
    private int mouseX = -1;
    private int mouseY = -1;
+   /** A name pressed on a card: its group and place, where it was pressed, and whether it is being dragged yet. */
+   private int dragGroup = -1;
+   private int dragIndex = -1;
+   private int pressX;
+   private int pressY;
+   private boolean dragging;
+   /** The name pressed was already picked: a press and release without a drag lets it go. */
+   private boolean pressedPicked;
+   /** After a swap (or a drop on no name): where names were drawn, so they glide into their places. */
+   private final Map<String, Rectangle> glideFrom = new HashMap<>();
+   private long glideStart;
 
    public GroupBoard(PartnerHistory history, PickBag picks, ClassRules rules, Actions actions) {
       this.history = history;
@@ -281,7 +319,7 @@ public class GroupBoard extends JPanel {
          repaint();
       });
       dealTimer = new Timer(16, event -> {
-         if (!dealing()) {
+         if (!dealing() && !gliding()) {
             ((Timer) event.getSource()).stop();
          }
          repaint();
@@ -300,6 +338,22 @@ public class GroupBoard extends JPanel {
          public void mouseMoved(MouseEvent event) {
             mouseX = (int) (event.getX() / scale);
             mouseY = (int) (event.getY() / scale);
+            repaint();
+         }
+
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            mouseX = (int) (event.getX() / scale);
+            mouseY = (int) (event.getY() / scale);
+            if (dragGroup >= 0 && Math.abs(mouseX - pressX) + Math.abs(mouseY - pressY) > 5) {
+               dragging = true;
+            }
+            repaint();
+         }
+
+         @Override
+         public void mouseReleased(MouseEvent event) {
+            release((int) (event.getX() / scale), (int) (event.getY() / scale));
             repaint();
          }
 
@@ -337,7 +391,12 @@ public class GroupBoard extends JPanel {
       message = null;
       clearArmed = false;
       unpick();
+      glideFrom.clear();
       if (deal && !groups.isEmpty()) {
+         chart = false;
+      }
+      // With reduced motion on, the names are in their groups at once.
+      if (deal && !groups.isEmpty() && !reducedMotion()) {
          int count = 0;
          for (List<String> group : groups) {
             count += group.size();
@@ -345,7 +404,7 @@ public class GroupBoard extends JPanel {
          // A big class is dealt faster, so the whole deal takes about two seconds at most.
          dealStep = Math.max(8, Math.min(45, 1700 / Math.max(1, count)));
          dealStart = System.currentTimeMillis();
-         chart = false;
+         dealFrom = history.size() == 1 && !pile.isEmpty() ? new HashMap<>(pile) : null;
          dealTimer.start();
       } else {
          dealStart = 0;
@@ -393,10 +452,106 @@ public class GroupBoard extends JPanel {
    private void unpick() {
       pickedGroup = -1;
       pickedIndex = -1;
+      dragGroup = -1;
+      dragIndex = -1;
+      dragging = false;
+   }
+
+   private boolean gliding() {
+      return !glideFrom.isEmpty() && System.currentTimeMillis() - glideStart < FLY_MS;
+   }
+
+   /** Where the name held in a drag is drawn: under the pointer, as far from it as where it was pressed. */
+   private Rectangle held() {
+      Rectangle slot = chips[dragGroup][dragIndex];
+      return new Rectangle(slot.x + mouseX - pressX, slot.y + mouseY - pressY, slot.width, slot.height);
+   }
+
+   /** The group and place of the name at (x, y) on the cards, or null. */
+   private int[] chipAt(int x, int y) {
+      for (int g = 0; g < chips.length; g++) {
+         for (int k = 0; k < chips[g].length; k++) {
+            if (chips[g][k] != null && chips[g][k].contains(x, y)) {
+               return new int[] {g, k};
+            }
+         }
+      }
+      return null;
+   }
+
+   /** The name under the pointer that the dragged name would swap with (not itself), or null. */
+   private int[] dropTarget() {
+      int[] at = chipAt(mouseX, mouseY);
+      return at == null || (at[0] == dragGroup && at[1] == dragIndex) ? null : at;
+   }
+
+   /** The end of a press on a name: a drag swaps it with the name it was dropped on; a click on a picked name lets it go. */
+   private void release(int x, int y) {
+      if (dragGroup < 0 || dragGroup >= chips.length || dragIndex >= chips[dragGroup].length) {
+         dragGroup = -1;
+         dragging = false;
+         return;
+      }
+      if (!dragging) {
+         dragGroup = -1;
+         if (pressedPicked) {
+            unpick();
+         }
+         return;
+      }
+      mouseX = x;
+      mouseY = y;
+      int[] target = dropTarget();
+      Rectangle held = held();
+      String name = groups.get(dragGroup).get(dragIndex);
+      if (target != null) {
+         swap(dragGroup, dragIndex, held, target[0], target[1]);
+      } else {
+         unpick();
+         glide(name, held);   // dropped on no name: it slides back to its place
+      }
+   }
+
+   /** Name k of group c trades places (and roles) with name k2 of group c2; both glide over from where they were drawn. */
+   private void swap(int c, int k, Rectangle from, int c2, int k2) {
+      List<List<String>> swapped = PartnerHistory.copy(groups);
+      String a = swapped.get(c).get(k);
+      String b = swapped.get(c2).get(k2);
+      swapped.get(c).set(k, b);
+      swapped.get(c2).set(k2, a);
+      Rectangle other = chips[c2][k2];
+      unpick();
+      actions.edited(swapped);
+      glide(a, from);
+      glide(b, other);
+   }
+
+   /** The name slides from where it is drawn now into its place (at once with reduced motion on). */
+   private void glide(String name, Rectangle from) {
+      if (reducedMotion()) {
+         return;
+      }
+      glideFrom.put(name, new Rectangle(from));
+      glideStart = System.currentTimeMillis();
+      dealTimer.start();
+   }
+
+   /** The site's reduced-motion setting (null, so false, on the desktop). */
+   private static boolean reducedMotion() {
+      return Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
    }
 
    private List<Button> buttons() {
       return picking ? pickButtons : rollCall ? rollButtons : shownRound > 0 ? backButtons : groupButtons;
+   }
+
+   /** Where the bar's buttons were laid out in the last paint (for NarrowCheck). */
+   Rectangle[] barBounds() {
+      List<Rectangle> bounds = new ArrayList<>();
+      for (Button button : buttons()) {
+         bounds.add(button.bounds);
+      }
+      return bounds.toArray(new Rectangle[0]);
    }
 
    /** Picks someone who has not had a turn yet, and spins the wheel to them. */
@@ -411,6 +566,9 @@ public class GroupBoard extends JPanel {
          return;
       }
       wheel.spin(pool, name);
+      if (reducedMotion()) {
+         wheel.finish();   // lands on the name at once
+      }
       actions.picksChanged();
    }
 
@@ -423,7 +581,7 @@ public class GroupBoard extends JPanel {
          present(!presenting);
          return;
       }
-      if (!presenting && y >= getHeight() - BAR) {
+      if (!presenting && y >= getHeight() - barHeight) {
          for (Button button : buttons()) {
             if (button.enabled && button.bounds.contains(x, y)) {
                if (button != clear) {
@@ -462,34 +620,40 @@ public class GroupBoard extends JPanel {
             return;
          }
       }
-      if (shownRound > 0) {
-         return;   // an earlier round is only looked at; Use again deals it as a new round
-      }
-      for (int g = 0; g < chips.length; g++) {
-         for (int k = 0; k < chips[g].length; k++) {
-            if (chips[g][k] != null && chips[g][k].contains(x, y)) {
-               pick(g, k);
+      if (groups.isEmpty()) {
+         for (int i = 0; i < sizeChips.length; i++) {
+            if (sizeChips[i].contains(x, y)) {
+               actions.setSizes(sizeChoices.get(i)[0], sizeChoices.get(i)[1]);
                return;
             }
          }
       }
-      unpick();
-   }
-
-   /** The first click picks a name; a click on a name of another group swaps the two. */
-   private void pick(int g, int k) {
-      if (pickedGroup < 0 || pickedGroup == g) {
-         boolean same = pickedGroup == g && pickedIndex == k;
-         pickedGroup = same ? -1 : g;
-         pickedIndex = same ? -1 : k;
+      if (groups.isEmpty() && (dealButton.contains(x, y) || pileContains(x, y))) {
+         actions.newRound();
          return;
       }
-      List<List<String>> swapped = PartnerHistory.copy(groups);
-      String a = swapped.get(pickedGroup).get(pickedIndex);
-      swapped.get(pickedGroup).set(pickedIndex, swapped.get(g).get(k));
-      swapped.get(g).set(k, a);
-      unpick();
-      actions.edited(swapped);
+      if (shownRound > 0) {
+         return;   // an earlier round is only looked at; Use again deals it as a new round
+      }
+      int[] at = chipAt(x, y);
+      if (at == null) {
+         unpick();
+         return;
+      }
+      if (pickedGroup >= 0 && pickedGroup != at[0]) {
+         // The second click: a name of another group swaps with the picked one.
+         swap(pickedGroup, pickedIndex, chips[pickedGroup][pickedIndex], at[0], at[1]);
+         return;
+      }
+      // The first click picks a name (a second click on it lets go), and holding it starts a drag.
+      pressedPicked = pickedGroup == at[0] && pickedIndex == at[1];
+      pickedGroup = at[0];
+      pickedIndex = at[1];
+      dragGroup = at[0];
+      dragIndex = at[1];
+      pressX = x;
+      pressY = y;
+      dragging = false;
    }
 
    private void key(KeyEvent event) {
@@ -522,6 +686,15 @@ public class GroupBoard extends JPanel {
       if (key == ' ') {
          key = picking ? 's' : 'n';
       }
+      // Before round 1, 2 to 6 pick that size's chip.
+      if (!picking && !chart && !rollCall && groups.isEmpty()) {
+         for (int[] choice : sizeChoices) {
+            if (key == (char) ('0' + choice[0])) {
+               actions.setSizes(choice[0], choice[1]);
+               return;
+            }
+         }
+      }
       for (Button button : buttons()) {
          if (button.key == key && button.enabled) {
             if (button != clear) {
@@ -549,21 +722,25 @@ public class GroupBoard extends JPanel {
    }
 
    /**
-    * How much to enlarge a w x h board while presenting: the groups as much as lets the cards keep their full size
-    * (see {@link #fullColumns}), the wheel (or the empty deck) as much as its 760 x 390 view fits. Never less than 1
-    * or more than 4.
+    * How much to enlarge a w x h board while presenting: the groups by what draws the names largest, the enlargement
+    * times the row the cards then grow to (see {@link #tallest}), the wheel (or the empty deck) as much as its 760 x
+    * 390 view fits. Never less than 1 or more than 4.
     */
    static double presentScale(int w, int h, int count, int longest, boolean wheel) {
       if (wheel || count == 0) {
          return Math.max(1, Math.min(4, Math.min(w / (double) WIDTH, h / (double) (HEIGHT - BAR))));
       }
-      for (int step = 80; step > 20; step--) {
+      double best = 1;
+      double largest = 0;
+      for (int step = 80; step >= 20; step--) {
          double s = step / 20.0;
-         if (fullColumns((int) (w / s), (int) (h / s) - HEADER - 12, count, longest) > 0) {
-            return s;
+         int row = tallest((int) (w / s), (int) (h / s) - HEADER - 12, count, longest)[1];
+         if (row >= 22 && s * row > largest) {
+            largest = s * row;
+            best = s;
          }
       }
-      return 1;
+      return best;
    }
 
    /** A minute more or less on the work time (and on its length, which the class keeps). */
@@ -605,7 +782,6 @@ public class GroupBoard extends JPanel {
          w = (int) (w / scale);
          h = (int) (h / scale);
       }
-      int bottom = presenting ? h : h - BAR;
       reshuffle.enabled = !history.isEmpty();
       clear.enabled = !history.isEmpty();
       earlier.enabled = shownRound > 1;
@@ -613,6 +789,7 @@ public class GroupBoard extends JPanel {
       rolesButton.on = roles;
       clear.label = clearArmed ? "Sure? Press again" : "Clear history";
       List<String> present = rules.present(actions.classNames());
+      classOrder = distinct(actions.classNames());
       spin.enabled = !wheel.spinning() && !present.isEmpty();
       putBack.enabled = !wheel.spinning() && !picks.picked(present).isEmpty();
       keepApartButton.label = keepApart ? "Keep apart: on" : "Keep apart";
@@ -620,6 +797,11 @@ public class GroupBoard extends JPanel {
       long now = System.currentTimeMillis();
       workButton.on = work.running();
       workButton.label = work.up(now) ? "Time's up" : work.running() ? "Stop timer" : "Work " + work.minutes + " min";
+      // Laid out once every label above is set.
+      narrow = w < NARROW;
+      headerHeight = narrow ? HEADER + 24 : HEADER;
+      barHeight = presenting ? 0 : layoutBar(g, w, h);
+      int bottom = h - barHeight;
       String[] header;
       if (picking) {
          header = paintPick(g, w, bottom);
@@ -660,7 +842,26 @@ public class GroupBoard extends JPanel {
       int room = right - 16;
       text(g, fit(g, header[0], TITLE, room), TITLE, INK, 16, 22);
       Color color = header[2].equals("fresh") ? FRESH : header[2].equals("again") ? AGAIN : header[2].equals("error") ? ERROR : MUTED;
-      text(g, fit(g, header[1], TEXT, room), TEXT, color, 16, 41);
+      if (!narrow) {
+         text(g, fit(g, header[1], TEXT, room), TEXT, color, 16, 41);
+         return;
+      }
+      // Narrow: the line runs under the buttons, across the board, on two lines.
+      String line = header[1];
+      int full = w - 32;
+      if (width(g, line, TEXT) > full) {
+         int cut = line.length();
+         while (cut > 0 && (line.charAt(cut - 1) != ' ' || width(g, line.substring(0, cut - 1), TEXT) > full)) {
+            cut--;
+         }
+         if (cut > 0) {
+            text(g, line.substring(0, cut - 1), TEXT, color, 16, 52);
+            line = line.substring(cut);
+            text(g, fit(g, line, TEXT, full), TEXT, color, 16, 69);
+            return;
+         }
+      }
+      text(g, fit(g, line, TEXT, full), TEXT, color, 16, 52);
    }
 
    /** The Present (or, while presenting, Back) button, ending at x = right. Returns its left edge. */
@@ -722,17 +923,21 @@ public class GroupBoard extends JPanel {
       if (groups.isEmpty()) {
          chips = new Rectangle[0][];
          dots = new Rectangle[0];
-         paintEmptyDeck(g, w, bottom);
-         return new String[] {"Group Creator", "Type the class above, then Make groups (or N) deals round 1. Later rounds mix in new partners and new roles.", ""};
+         return paintClass(g, w, bottom);
       }
+      pile.clear();
       boolean timeline = history.size() >= 2 && !presenting;
-      Rectangle[] cards = layoutCards(w, HEADER + 6, bottom - HEADER - 12 - (timeline ? TIMELINE : 0));
+      Rectangle[] cards = layoutCards(w, headerHeight + 6, bottom - headerHeight - 12 - (timeline ? TIMELINE : 0));
       if (timeline) {
          paintTimeline(g, w, bottom - TIMELINE / 2 - 4);
       } else {
          dots = new Rectangle[0];
       }
-      int rowHeight = rowHeight(cards);
+      int rowHeight = cardRow;
+      int band = cardBand;
+      double zoom = cardZoom();
+      Font title = zoomed(BOLD, zoom);
+      Font small = zoomed(SMALL, zoom);
       chips = new Rectangle[groups.size()][];
       for (int c = 0; c < groups.size(); c++) {
          Rectangle card = cards[c];
@@ -743,23 +948,24 @@ public class GroupBoard extends JPanel {
          g.fillRoundRect(card.x, card.y, card.width, card.height, 14, 14);
          Color color = CARD_COLORS[c % CARD_COLORS.length];
          g.setColor(color);
-         g.fillRoundRect(card.x, card.y, card.width, 26, 14, 14);
-         g.fillRect(card.x, card.y + 14, card.width, 12);
-         text(g, "Group " + (c + 1), BOLD, Color.WHITE, card.x + 10, card.y + 18);
+         g.fillRoundRect(card.x, card.y, card.width, band, 14, 14);
+         g.fillRect(card.x, card.y + 14, card.width, band - 14);
+         int baseline = card.y + band / 2 + (int) Math.round(5 * zoom);
+         text(g, "Group " + (c + 1), title, Color.WHITE, card.x + 10, baseline);
          if (work.running()) {
             // The work time left, as a strip along the bottom of the card's band that runs down.
             int track = card.width - 20;
             g.setColor(new Color(255, 255, 255, 70));
-            g.fillRect(card.x + 10, card.y + 22, track, 2);
+            g.fillRect(card.x + 10, card.y + band - 4, track, 2);
             g.setColor(new Color(255, 255, 255, 230));
-            g.fillRect(card.x + 10, card.y + 22, Math.round(track * (1 - work.gone(System.currentTimeMillis()))), 2);
+            g.fillRect(card.x + 10, card.y + band - 4, Math.round(track * (1 - work.gone(System.currentTimeMillis()))), 2);
          }
          String size = groups.get(c).size() + (groups.get(c).size() == 1 ? " name" : " names");
-         if (card.width >= 30 + width(g, "Group " + (c + 1), BOLD) + width(g, size, SMALL)) {
-            text(g, size, SMALL, Color.WHITE, card.x + card.width - 10 - width(g, size, SMALL), card.y + 18);
+         if (card.width >= 30 + width(g, "Group " + (c + 1), title) + width(g, size, small)) {
+            text(g, size, small, Color.WHITE, card.x + card.width - 10 - width(g, size, small), baseline);
          }
          for (int k = 0; k < groups.get(c).size(); k++) {
-            chips[c][k] = new Rectangle(card.x + 8, card.y + 32 + k * rowHeight, card.width - 16, rowHeight - 3);
+            chips[c][k] = new Rectangle(card.x + 8, card.y + band + 6 + k * rowHeight, card.width - 16, rowHeight - 3);
             g.setColor(new Color(244, 242, 236));
             Rectangle slot = chips[c][k];
             g.fillRoundRect(slot.x, slot.y, slot.width, slot.height, 8, 8);
@@ -770,28 +976,50 @@ public class GroupBoard extends JPanel {
       long elapsed = dealStart > 0 ? System.currentTimeMillis() - dealStart : Long.MAX_VALUE / 2;
       List<int[]> order = dealOrder();
       String timerClock = work.running() ? WorkTimer.clock(work.left(System.currentTimeMillis())) : null;
+      double glided = glideFrom.isEmpty() ? 1 : Math.min(1, (System.currentTimeMillis() - glideStart) / (double) FLY_MS);
+      if (glided >= 1) {
+         glideFrom.clear();
+      }
+      int[] target = dragging ? dropTarget() : null;
       hoverGroup = -1;
       hoverIndex = -1;
       for (int i = 0; i < order.size(); i++) {
          int c = order.get(i)[0];
          int k = order.get(i)[1];
          double t = Math.min(1, (elapsed - (double) i * dealStep) / FLY_MS);
+         Rectangle from = dealFrom == null ? null : dealFrom.get(groups.get(c).get(k));
          if (t <= 0) {
+            if (from != null) {
+               // Round 1's names wait in the pile until their turn to fly.
+               paintChip(g, groups.get(c).get(k), -1, false, null, from.x, from.y, from.width, from.height, false, false, false);
+            }
             continue;
          }
          double ease = 1 - (1 - t) * (1 - t) * (1 - t);
          Rectangle slot = chips[c][k];
-         int x = (int) Math.round(w / 2.0 - slot.width / 2.0 + (slot.x - (w / 2.0 - slot.width / 2.0)) * ease);
-         int y = (int) Math.round(HEADER - 20 + (slot.y - (HEADER - 20)) * ease);
+         double fromX = from == null ? w / 2.0 - slot.width / 2.0 : from.x;
+         double fromY = from == null ? headerHeight - 20 : from.y;
+         int x = (int) Math.round(fromX + (slot.x - fromX) * ease);
+         int y = (int) Math.round(fromY + (slot.y - fromY) * ease);
          boolean landed = t >= 1;
+         Rectangle glide = landed ? glideFrom.get(groups.get(c).get(k)) : null;
+         if (glide != null) {
+            double slide = 1 - Math.pow(1 - glided, 3);
+            x = (int) Math.round(glide.x + (slot.x - glide.x) * slide);
+            y = (int) Math.round(glide.y + (slot.y - glide.y) * slide);
+         }
          if (landed && slot.contains(mouseX, mouseY) && !dealing()) {
             hoverGroup = c;
             hoverIndex = k;
          }
+         if (dragging && c == dragGroup && k == dragIndex) {
+            continue;   // drawn last, under the pointer
+         }
+         boolean dropOn = target != null && target[0] == c && target[1] == k;
          int role = roles ? Roles.of(k, groups.get(c).size()) : -1;
          paintChip(g, groups.get(c).get(k), role, landed && role >= 0 && hadRole(c, k), timerClock, x, y, slot.width, slot.height,
             landed ? metAgain(c, k) : false,
-            c == pickedGroup && k == pickedIndex, c == hoverGroup && k == hoverIndex);
+            c == pickedGroup && k == pickedIndex || dropOn, c == hoverGroup && k == hoverIndex, zoom);
          if (landed && clashes(c, k)) {
             // Kept apart from someone in this group: a red ring.
             g.setColor(ERROR);
@@ -799,6 +1027,13 @@ public class GroupBoard extends JPanel {
             g.drawRoundRect(x, y, slot.width, slot.height, 8, 8);
             g.setStroke(new BasicStroke(1f));
          }
+      }
+      if (dragging) {
+         // The held name, lifted off the card under the pointer, so the tinted name it would land on shows under it.
+         Rectangle held = held();
+         g.setColor(new Color(0, 0, 0, 45));
+         g.fillRoundRect(held.x + 3, held.y + 2, held.width, held.height, 8, 8);
+         paintChip(g, groups.get(dragGroup).get(dragIndex), -1, false, null, held.x - 3, held.y - 8, held.width, held.height, false, true, true, zoom);
       }
       return summary();
    }
@@ -821,17 +1056,24 @@ public class GroupBoard extends JPanel {
          }
       }
       int everyone = toGo.size() + done.size();
-      int top = HEADER + 4;
+      int top = headerHeight + 4;
       int height = bottom - top - 6;
       int size = Math.min(height, w * 56 / 100);
-      wheel.paint(g, pool, GAP, top, size, height);
-
       int left = GAP + size + 20;
+      int cardTop = top + 14;
+      if (narrow) {
+         // The wheel on top, the card under it.
+         size = Math.max(120, Math.min(w - 2 * GAP, height - 170));
+         wheel.paint(g, pool, (w - size) / 2, top, size, size);
+         left = 16;
+         cardTop = top + size + 4;
+      } else {
+         wheel.paint(g, pool, GAP, top, size, height);
+      }
       int width = w - left - 16;
       String landed = wheel.landedOn();
       String under = wheel.underPointer();
       // The result card.
-      int cardTop = top + 14;
       int cardHeight = 112;
       g.setColor(new Color(0, 0, 0, 30));
       g.fillRoundRect(left + 2, cardTop + 3, width, cardHeight, 14, 14);
@@ -845,10 +1087,11 @@ public class GroupBoard extends JPanel {
       text(g, label, BOLD, Color.WHITE, left + 12, cardTop + 18);
       Font big = new Font("SansSerif", Font.BOLD, 30);
       if (landed != null) {
-         text(g, fit(g, landed, big, width - 24), big, INK, left + 12, cardTop + 70);
+         Badge.paint(g, landed, classOrder, left + 12, cardTop + 36, 44, false);
+         text(g, fit(g, landed, big, width - 80), big, INK, left + 66, cardTop + 70);
          String group = groupOf(landed);
          if (group != null) {
-            text(g, group, SMALL, MUTED, left + 12, cardTop + 94);
+            text(g, group, SMALL, MUTED, left + 66, cardTop + 94);
          }
       } else if (wheel.spinning() && under != null) {
          text(g, fit(g, under, big, width - 24), big, MUTED, left + 12, cardTop + 70);
@@ -926,25 +1169,40 @@ public class GroupBoard extends JPanel {
     */
    private void paintChip(Graphics2D g, String name, int role, boolean hadRole, String timerClock, int x, int y, int width, int height,
          boolean again, boolean picked, boolean hover) {
+      paintChip(g, name, role, hadRole, timerClock, x, y, width, height, again, picked, hover, 1);
+   }
+
+   /** The same, with its text, badge and tag enlarged {@code zoom} times (on cards grown to fill the board). */
+   private void paintChip(Graphics2D g, String name, int role, boolean hadRole, String timerClock, int x, int y, int width, int height,
+         boolean again, boolean picked, boolean hover, double zoom) {
       g.setColor(picked ? PICKED : again ? AGAIN_FILL : Color.WHITE);
       g.fillRoundRect(x, y, width, height, 8, 8);
       g.setColor(picked ? AGAIN : hover ? INK : new Color(205, 200, 190));
       g.setStroke(new BasicStroke(hover || picked ? 1.6f : 1f));
       g.drawRoundRect(x, y, width, height, 8, 8);
       g.setStroke(new BasicStroke(1f));
-      Font font = height >= 16 ? TEXT : SMALL;
-      int baseline = y + height / 2 + (height >= 16 ? 5 : 4);
+      Font font = height >= 16 ? zoomed(TEXT, zoom) : SMALL;
+      Font small = zoomed(SMALL, zoom);
+      int baseline = y + height / 2 + (int) Math.round((height >= 16 ? 5 : 4) * zoom);
       int room = width - 16 - (again ? 14 : 0);
+      int nameX = x + 8;
+      if (height >= 14 && width >= 70) {
+         // The person's badge leads the name.
+         int d = Math.min((int) Math.round(22 * zoom), height - 5);
+         Badge.paint(g, name, classOrder, x + 3, y + (height - d) / 2, d, false);
+         nameX = x + 3 + d + 4;
+         room = x + width - 6 - (again ? 14 : 0) - nameX;
+      }
       if (role >= 0 && height >= 12) {
          // The role's tag at the right; only its first letter when the name would be squeezed.
          boolean timing = role == 2 && timerClock != null;
          String tag = timing ? "Timer " + timerClock : Roles.NAMES[role];
-         if (room - width(g, tag, SMALL) - 16 < Math.min(60, width(g, name, font))) {
+         if (room - width(g, tag, small) - 16 < Math.min(60 * zoom, width(g, name, font))) {
             tag = timing ? timerClock : tag.substring(0, 1);
          }
-         int tagWidth = width(g, tag, SMALL) + 10;
-         int tagHeight = Math.min(16, height - 4);
-         int tagX = x + 8 + room - tagWidth;
+         int tagWidth = width(g, tag, small) + (int) Math.round(10 * zoom);
+         int tagHeight = Math.min((int) Math.round(16 * zoom), height - 4);
+         int tagX = nameX + room - tagWidth;
          int tagY = y + (height - tagHeight) / 2;
          g.setColor(ROLE_COLORS[role]);
          g.fillRoundRect(tagX, tagY, tagWidth, tagHeight, tagHeight, tagHeight);
@@ -954,12 +1212,12 @@ public class GroupBoard extends JPanel {
             g.drawRoundRect(tagX, tagY, tagWidth, tagHeight, tagHeight, tagHeight);
             g.setStroke(new BasicStroke(1f));
          }
-         centered(g, tag, SMALL, INK, tagX + tagWidth / 2, tagY + tagHeight / 2 + 4);
+         centered(g, tag, small, INK, tagX + tagWidth / 2, tagY + tagHeight / 2 + (int) Math.round(4 * zoom));
          room -= tagWidth + 6;
       }
-      text(g, fit(g, name, font, room), font, INK, x + 8, baseline);
+      text(g, fit(g, name, font, room), font, INK, nameX, baseline);
       if (again) {
-         int dot = Math.min(8, height - 6);
+         int dot = Math.min((int) Math.round(8 * zoom), height - 6);
          g.setColor(AGAIN);
          g.fillOval(x + width - 8 - dot, y + (height - dot) / 2, dot, dot);
       }
@@ -996,9 +1254,12 @@ public class GroupBoard extends JPanel {
       }
       String title = "Round " + round + (shownRound > 0 ? " of " + history.size() : "") + ": " + count + (count == 1 ? " name" : " names") + " in " + groups.size()
          + (groups.size() == 1 ? " group" : " groups");
+      if (dragging) {
+         return new String[] {title, dragLine(), ""};
+      }
       if (pickedGroup >= 0) {
          return new String[] {title, groups.get(pickedGroup).get(pickedIndex)
-            + " is picked: click a name in another group to swap them (Esc cancels).", ""};
+            + " is picked: click a name in another group to swap them, or drag it onto any name (Esc cancels).", ""};
       }
       if (hoverGroup >= 0) {
          return new String[] {title, describe(hoverGroup, hoverIndex), metAgain(hoverGroup, hoverIndex) ? "again" : "fresh"};
@@ -1037,6 +1298,40 @@ public class GroupBoard extends JPanel {
          ? "1 pair was together before (" + pair[0] + " and " + pair[1] + "), the fewest repeats found."
          : repeats.size() + " pairs were together before (marked), the fewest repeats found.";
       return new String[] {title, detail, "again"};
+   }
+
+   /** The header's line while a name is dragged: what dropping it here would do. */
+   String dragLine() {
+      String name = groups.get(dragGroup).get(dragIndex);
+      int[] target = dropTarget();
+      if (target == null) {
+         return "Drop " + name + " on a name to swap them" + (roles && groups.get(dragGroup).size() > 1
+            ? ", or on someone in Group " + (dragGroup + 1) + " to trade roles." : ".");
+      }
+      String other = groups.get(target[0]).get(target[1]);
+      if (target[0] != dragGroup) {
+         return "Drop to swap " + name + " into Group " + (target[0] + 1) + " and " + other + " into Group " + (dragGroup + 1) + ".";
+      }
+      int mine = Roles.of(dragIndex, groups.get(dragGroup).size());
+      int theirs = Roles.of(target[1], groups.get(dragGroup).size());
+      if (!roles || mine == theirs) {
+         return "Drop to trade places with " + other + ".";
+      }
+      return "Drop to trade roles: " + name + " becomes " + role(theirs) + ", " + other + " " + role(mine) + ".";
+   }
+
+   private static String role(int role) {
+      return role < 0 ? "no role" : Roles.NAMES[role];
+   }
+
+   /** Where name k of group c was drawn in the last paint (for DragCheck). */
+   Rectangle chipBounds(int c, int k) {
+      return chips[c][k];
+   }
+
+   /** Where size chip i was drawn in the last paint, or null (for DragCheck). */
+   Rectangle sizeChipBounds(int i) {
+      return i < sizeChips.length ? sizeChips[i] : null;
    }
 
    /** Who name k of group c meets again, and who is new to them. */
@@ -1108,10 +1403,138 @@ public class GroupBoard extends JPanel {
       return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
    }
 
+   /**
+    * Before round 1: the class waits on the board, one chip per name here (each a little off the grid, like a pile of
+    * name cards), with what Make groups will deal and a Deal round 1 button under it. The names then fly from here
+    * into their groups. With no names typed, an empty stack of cards.
+    */
+   private String[] paintClass(Graphics2D g, int w, int bottom) {
+      chips = new Rectangle[0][];
+      dots = new Rectangle[0];
+      pile.clear();
+      List<String> here = distinct(rules.present(actions.classNames()));
+      int away = distinct(actions.classNames()).size() - here.size();
+      sizeChoices = GroupMaker.sizeChoices(here.size());
+      sizeChips = new Rectangle[0];
+      if (here.isEmpty()) {
+         dealButton.setBounds(0, 0, 0, 0);
+         paintEmptyDeck(g, w, bottom);
+         return new String[] {"Group Creator", away > 0 ? "Everyone is marked away. Mark who is here in Roll call (A)."
+            : "Type the class above, names separated by commas, then Make groups (N) deals round 1.", away > 0 ? "error" : ""};
+      }
+      String plan;
+      boolean ok = true;
+      int[] sizes = actions.sizes();
+      try {
+         if (sizes == null) {
+            throw new IllegalArgumentException("min and max must be whole numbers.");
+         }
+         plan = "Make groups deals " + GroupMaker.plan(here.size(), sizes[0], sizes[1]) + ".";
+      } catch (IllegalArgumentException ex) {
+         plan = ex.getMessage() + (sizeChoices.isEmpty() ? " Change min or max above." : " Pick a size below, or change min or max above.");
+         ok = false;
+      }
+      // Under the pile, a row of size chips (when there are some to pick from), then the button.
+      int sizesHeight = sizeChoices.isEmpty() ? 0 : 52;
+      // The pile: as many columns of chips as fit, rows squeezed to fit the board.
+      int top = headerHeight + 14;
+      int buttonTop = bottom - 56 - sizesHeight;
+      int chipWidth = Math.min(130, Math.max(70, (w - 48) / Math.max(1, Math.min(6, here.size())) - 8));
+      int columns = Math.max(1, Math.min(here.size(), (w - 48) / (chipWidth + 8)));
+      // Chips fill their row, so a badge leaves room for the name.
+      chipWidth = Math.max(chipWidth, Math.min(130, (w - 48) / columns - 8));
+      int rows = (here.size() + columns - 1) / columns;
+      int rowHeight = Math.max(14, Math.min(34, (buttonTop - 12 - top) / rows));
+      int chipHeight = Math.min(26, rowHeight - 6);
+      int left = (w - columns * (chipWidth + 8) + 8) / 2;
+      // The pile and the button, as one block in the middle of the board.
+      int y0 = Math.max(top, (headerHeight + bottom - rows * rowHeight - 52 - sizesHeight) / 2);
+      buttonTop = y0 + rows * rowHeight + 12;
+      paintSizes(g, w, buttonTop, sizes, here.size());
+      buttonTop += sizesHeight;
+      boolean hover = groups.isEmpty() && ok && (dealButton.contains(mouseX, mouseY) || pileContains(mouseX, mouseY));
+      for (int i = 0; i < here.size(); i++) {
+         String name = here.get(i);
+         // A steady nudge per name, so the pile looks laid down by hand but does not jiggle between paints.
+         int jitter = name.hashCode();
+         int x = left + (i % columns) * (chipWidth + 8) + Math.floorMod(jitter, 7) - 3;
+         int y = y0 + (i / columns) * rowHeight + Math.floorMod(jitter >> 4, 5) - 2;
+         Rectangle chip = new Rectangle(x, y, chipWidth, chipHeight);
+         pile.put(name, chip);
+         g.setColor(new Color(0, 0, 0, 22));
+         g.fillRoundRect(x + 1, y + 2, chipWidth, chipHeight, 8, 8);
+         paintChip(g, name, -1, false, null, x, y, chipWidth, chipHeight, false, false, hover);
+      }
+      // The Deal round 1 button, in the first card's color.
+      String label = "Deal round 1";
+      int bw = width(g, label, TITLE) + 70;
+      dealButton.setBounds((w - bw) / 2, buttonTop, bw, 40);
+      g.setColor(new Color(0, 0, 0, 40));
+      g.fillRoundRect(dealButton.x + 2, dealButton.y + 3, bw, 40, 20, 20);
+      g.setColor(!ok ? new Color(180, 176, 168) : hover ? CARD_COLORS[0].darker() : CARD_COLORS[0]);
+      g.fillRoundRect(dealButton.x, dealButton.y, bw, 40, 20, 20);
+      centered(g, label, TITLE, Color.WHITE, dealButton.x + bw / 2 - 10, dealButton.y + 26);
+      text(g, "N", SMALL, new Color(255, 255, 255, 190), dealButton.x + bw - 26, dealButton.y + 25);
+      if (!ok) {
+         dealButton.setBounds(0, 0, 0, 0);
+      }
+      String title = "Your class: " + here.size() + (here.size() == 1 ? " name" : " names") + (away > 0 ? " here, " + away + " away" : "");
+      return new String[] {title, plan + (ok ? " Later rounds mix in new partners and new roles." : ""), ok ? "" : "error"};
+   }
+
+   /** The class as typed, each name once: the order that gives each person their badge's color. */
+   private List<String> classOrder = new ArrayList<>();
+
+   private static final String[] SIZE_NAMES = {"", "", "Pairs", "Threes", "Fours", "Fives", "Sixes"};
+
+   /**
+    * The size chips, one per {@link GroupMaker#sizeChoices} entry, centered at {@code y}: the size's name, how many
+    * groups it makes, and the one matching min and max now filled in. A click (or its digit) puts it in min and max.
+    */
+   private void paintSizes(Graphics2D g, int w, int y, int[] sizes, int count) {
+      int n = sizeChoices.size();
+      if (n == 0) {
+         return;
+      }
+      int chipWidth = Math.min(118, (w - 32 - (n - 1) * 8) / n);
+      int left = (w - n * chipWidth - (n - 1) * 8) / 2;
+      sizeChips = new Rectangle[n];
+      for (int i = 0; i < n; i++) {
+         int[] choice = sizeChoices.get(i);
+         Rectangle chip = new Rectangle(left + i * (chipWidth + 8), y, chipWidth, 40);
+         sizeChips[i] = chip;
+         boolean on = sizes != null && sizes[0] == choice[0] && sizes[1] == choice[1];
+         boolean hover = chip.contains(mouseX, mouseY);
+         g.setColor(new Color(0, 0, 0, 22));
+         g.fillRoundRect(chip.x + 1, chip.y + 2, chip.width, chip.height, 12, 12);
+         g.setColor(on ? INK : Color.WHITE);
+         g.fillRoundRect(chip.x, chip.y, chip.width, chip.height, 12, 12);
+         g.setColor(hover ? CARD_COLORS[0] : on ? INK : new Color(205, 198, 186));
+         g.drawRoundRect(chip.x, chip.y, chip.width - 1, chip.height - 1, 12, 12);
+         Color ink = on ? Color.WHITE : INK;
+         int cx = chip.x + chip.width / 2;
+         centered(g, fit(g, SIZE_NAMES[choice[0]], BOLD, chipWidth - 8), BOLD, ink, cx, chip.y + 18);
+         String groups = GroupMaker.groupCount(count, choice[0], choice[1]);
+         if (width(g, groups, SMALL) > chipWidth - 8) {
+            groups = groups.replace(" groups", "");   // "5 to 6" on a narrow chip
+         }
+         centered(g, fit(g, groups, SMALL, chipWidth - 8), SMALL, on ? new Color(255, 255, 255, 200) : MUTED, cx, chip.y + 33);
+      }
+   }
+
+   private boolean pileContains(int x, int y) {
+      for (Rectangle chip : pile.values()) {
+         if (chip.contains(x, y)) {
+            return true;
+         }
+      }
+      return false;
+   }
+
    /** A small stack of blank cards, before the first round. */
    private void paintEmptyDeck(Graphics2D g, int w, int bottom) {
       int cx = w / 2;
-      int cy = (HEADER + bottom) / 2;
+      int cy = (headerHeight + bottom) / 2;
       for (int i = 3; i >= 0; i--) {
          int x = cx - 80 + i * 10;
          int y = cy - 55 - i * 6;
@@ -1126,23 +1549,27 @@ public class GroupBoard extends JPanel {
       centered(g, "No groups yet", BOLD, MUTED, cx - 80 + 80, cy + 10);
    }
 
-   /** One card per group, in as few rows as fit, centered on the board, as wide as fits (at most 230 px). */
+   /**
+    * One card per group, centered on the board, in the columns that make the names tallest: the cards grow to fill
+    * the board (a name's row from 22 up to {@link #MAX_ROW} px, each px of growth needing 6 px more card width), so a
+    * class reads from across the room. When even 22 px rows do not fit, as many columns as fit with shorter rows.
+    */
    private Rectangle[] layoutCards(int w, int top, int height) {
       int count = groups.size();
-      int longest = 0;
-      for (List<String> group : groups) {
-         longest = Math.max(longest, group.size());
-      }
-      int columns = fullColumns(w, height, count, longest);
-      int row = 22;
-      if (columns < 0) {
+      int longest = largest();
+      int[] best = tallest(w, height, count, longest);
+      int columns = best[0];
+      int row = best[1];
+      if (row < 22) {
          // Too many to fit at full size: as many columns as fit, with shorter rows.
          columns = Math.max(1, Math.min(count, (w - GAP) / (100 + GAP)));
          int rows = (count + columns - 1) / columns;
          row = Math.max(12, Math.min(22, ((height - (rows - 1) * GAP) / rows - 38) / Math.max(1, longest)));
       }
-      int cardWidth = Math.min(230, (w - 2 * GAP - (columns - 1) * GAP) / columns);
-      int cardHeight = 38 + longest * row;
+      cardRow = row;
+      cardBand = Math.max(26, row + 4);
+      int cardWidth = Math.min(230 + (row - 22) * 8, (w - 2 * GAP - (columns - 1) * GAP) / columns);
+      int cardHeight = cardBand + 12 + longest * row;
       int rows = (count + columns - 1) / columns;
       int y = top + Math.max(0, (height - rows * cardHeight - (rows - 1) * GAP) / 2);
       Rectangle[] cards = new Rectangle[count];
@@ -1154,6 +1581,27 @@ public class GroupBoard extends JPanel {
          }
       }
       return cards;
+   }
+
+   /**
+    * The columns whose cards give the names the tallest rows on a w x height board, and that row's height, as
+    * {columns, row}; a row under 22 means no full-size cards fit.
+    */
+   static int[] tallest(int w, int height, int count, int longest) {
+      int columns = -1;
+      int row = 0;
+      for (int c = 1; c <= count; c++) {
+         int rows = (count + c - 1) / c;
+         int cardWidth = (w - 2 * GAP - (c - 1) * GAP) / c;
+         int byWidth = cardWidth < 110 ? 0 : 22 + (cardWidth - 110) / 6;
+         int byHeight = ((height - (rows - 1) * GAP) / rows - 16) / (longest + 1);
+         int fits = Math.min(MAX_ROW, Math.min(byWidth, byHeight));
+         if (fits > row) {
+            row = fits;
+            columns = c;
+         }
+      }
+      return new int[] {columns, row};
    }
 
    /** The columns of the fewest rows whose cards are at least 110 px wide and fit at full height, or -1 when none do. */
@@ -1168,12 +1616,19 @@ public class GroupBoard extends JPanel {
       return -1;
    }
 
-   private int rowHeight(Rectangle[] cards) {
-      int longest = 0;
-      for (List<String> group : groups) {
-         longest = Math.max(longest, group.size());
-      }
-      return cards.length == 0 || longest == 0 ? 22 : (cards[0].height - 38) / longest;
+   /** The longest name row the cards may grow to. */
+   private static final int MAX_ROW = 40;
+   /** A name's row and the colored band's height on the cards laid out last. */
+   private int cardRow = 22;
+   private int cardBand = 26;
+
+   /** How much the cards' text is enlarged for rows of the last layout (1 at 22 px). */
+   private double cardZoom() {
+      return Math.max(1, cardRow / 22.0);
+   }
+
+   private static Font zoomed(Font font, double zoom) {
+      return zoom == 1 ? font : font.deriveFont((float) Math.round(font.getSize() * zoom));
    }
 
    /** The partner chart: a cell for every pair of names, darker the more rounds they shared. */
@@ -1187,7 +1642,7 @@ public class GroupBoard extends JPanel {
       }
       int n = people.size();
       if (n < 2 || history.isEmpty()) {
-         centered(g, "The chart fills in as you make rounds.", BOLD, MUTED, w / 2, (HEADER + bottom) / 2);
+         centered(g, "The chart fills in as you make rounds.", BOLD, MUTED, w / 2, (headerHeight + bottom) / 2);
          return new String[] {"Partner chart", "Who has been in a group with whom, over every round so far.", ""};
       }
       int labelWidth = 0;
@@ -1196,7 +1651,7 @@ public class GroupBoard extends JPanel {
       }
       labelWidth = Math.min(labelWidth, 130) + 26;
       int metWidth = 70;
-      int top = HEADER + 22;
+      int top = headerHeight + 22;
       int cell = Math.max(6, Math.min(26, Math.min((w - 32 - labelWidth - metWidth) / n, (bottom - top - 8) / n)));
       int left = (w - labelWidth - n * cell - metWidth) / 2 + labelWidth;
 
@@ -1288,10 +1743,8 @@ public class GroupBoard extends JPanel {
          Math.round(from.getBlue() + (to.getBlue() - from.getBlue()) * amount));
    }
 
-   private void paintBar(Graphics2D g, int w, int h) {
-      int top = h - BAR;
-      g.setColor(new Color(222, 214, 198));
-      g.fillRect(0, top, w, BAR);
+   /** Places the bar's buttons along the bottom of a w x h board, and returns the bar's height. */
+   private int layoutBar(Graphics2D g, int w, int h) {
       int gap = 8;
       List<Button> buttons = buttons();
       // Narrower padding, then gaps, then no key letters, when the buttons would not fit (the Groups bar's eight).
@@ -1310,25 +1763,76 @@ public class GroupBoard extends JPanel {
          keys = false;
          total = barWidth(g, buttons, pad, gap, keys);
       }
-      int x = (w - total) / 2;
+      barPad = pad;
+      barKeys = keys;
+      barWrapped = total > w - 16;
+      if (!barWrapped) {
+         int x = (w - total) / 2;
+         for (Button button : buttons) {
+            int bw = buttonWidth(g, button, pad, keys);
+            button.bounds.setBounds(x, h - BAR + 10, bw, 30);
+            x += bw + gap;
+         }
+         return BAR;
+      }
+      // Still too wide (a phone): rows of buttons, each row stretched across the board.
+      gap = 6;
+      List<List<Button>> rows = new ArrayList<>();
+      List<Button> row = new ArrayList<>();
+      int used = 0;
       for (Button button : buttons) {
-         int bw = buttonWidth(g, button, pad, keys);
-         button.bounds.setBounds(x, top + 10, bw, 30);
+         int bw = buttonWidth(g, button, pad, false);
+         if (!row.isEmpty() && used + gap + bw > w - 16) {
+            rows.add(row);
+            row = new ArrayList<>();
+            used = 0;
+         }
+         used += (row.isEmpty() ? 0 : gap) + bw;
+         row.add(button);
+      }
+      rows.add(row);
+      int height = 10 + rows.size() * 36 + 4;
+      int y = h - height + 10;
+      for (List<Button> line : rows) {
+         int natural = barWidth(g, line, pad, gap, false);
+         int extra = (w - 16 - natural) / line.size();
+         int x = 8;
+         for (Button button : line) {
+            int bw = buttonWidth(g, button, pad, false) + extra;
+            button.bounds.setBounds(x, y, bw, 30);
+            x += bw + gap;
+         }
+         y += 36;
+      }
+      return height;
+   }
+
+   private void paintBar(Graphics2D g, int w, int h) {
+      int top = h - barHeight;
+      g.setColor(new Color(222, 214, 198));
+      g.fillRect(0, top, w, barHeight);
+      for (Button button : buttons()) {
+         Rectangle b = button.bounds;
+         int x = b.x;
+         int bw = b.width;
          boolean hover = button.enabled && button.bounds.contains(mouseX, mouseY);
          boolean armed = button == clear && clearArmed;
          g.setColor(armed ? ERROR : button.on ? PICKED : hover ? new Color(255, 250, 238) : Color.WHITE);
-         g.fillRoundRect(x, top + 10, bw, 30, 14, 14);
+         g.fillRoundRect(x, b.y, bw, 30, 14, 14);
          g.setColor(button.enabled ? INK : new Color(180, 176, 168));
          g.setStroke(new BasicStroke(hover ? 2f : 1.2f));
-         g.drawRoundRect(x, top + 10, bw, 30, 14, 14);
+         g.drawRoundRect(x, b.y, bw, 30, 14, 14);
          g.setStroke(new BasicStroke(1f));
          Color ink = armed ? Color.WHITE : button.enabled ? INK : new Color(170, 166, 158);
-         text(g, button.label, BOLD, ink, x + pad, top + 30);
-         if (keys) {
-            String key = keyName(button);
-            text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - pad - width(g, key, SMALL), top + 30);
+         if (barWrapped) {
+            centered(g, button.label, BOLD, ink, x + bw / 2, b.y + 20);
+         } else {
+            text(g, button.label, BOLD, ink, x + barPad, b.y + 20);
          }
-         x += bw + gap;
+         if (barKeys) {
+            String key = keyName(button);
+            text(g, key, SMALL, armed ? Color.WHITE : MUTED, x + bw - barPad - width(g, key, SMALL), b.y + 20);
+         }
       }
    }
 
@@ -1482,9 +1986,15 @@ public class GroupBoard extends JPanel {
          linkFrom = null;
       }
       int side = 232;
-      int top = HEADER + 8;
+      int top = headerHeight + 8;
       int areaWidth = w - side - 3 * GAP;
       int areaHeight = bottom - top - 8;
+      // Narrow: the keep-apart card under the tiles, across the board.
+      int rulesHeight = Math.min(150, areaHeight * 2 / 5);
+      if (narrow) {
+         areaWidth = w - 2 * GAP;
+         areaHeight -= rulesHeight + GAP;
+      }
       tiles = new Rectangle[n];
       String hovered = null;
       if (n == 0) {
@@ -1523,7 +2033,11 @@ public class GroupBoard extends JPanel {
             }
          }
       }
-      paintRules(g, people, w - side - GAP, top, side, bottom - top - 8);
+      if (narrow) {
+         paintRules(g, people, GAP, bottom - 8 - rulesHeight, w - 2 * GAP, rulesHeight);
+      } else {
+         paintRules(g, people, w - side - GAP, top, side, bottom - top - 8);
+      }
 
       int away = rules.awayCount(people);
       int pairs = rules.rules(people).size();
@@ -1588,15 +2102,22 @@ public class GroupBoard extends JPanel {
       int room = t.width - 22 - (count > 0 ? 22 : 0);
       boolean twoLines = t.height >= 34;
       int nameY = twoLines ? t.y + t.height / 2 - 2 : t.y + t.height / 2 + 5;
-      text(g, fit(g, name, BOLD, room), BOLD, away ? MUTED : INK, t.x + 14, nameY);
+      int nameX = t.x + 14;
+      if (t.height >= 18 && t.width >= 90) {
+         int d = Math.min(30, t.height - 8);
+         Badge.paint(g, name, people, nameX, t.y + (t.height - d) / 2, d, away);
+         room -= d + 6;
+         nameX += d + 6;
+      }
+      text(g, fit(g, name, BOLD, room), BOLD, away ? MUTED : INK, nameX, nameY);
       if (twoLines) {
          String status = away ? "Away today" : linked ? "Kept apart" : "Here";
-         text(g, status, SMALL, linked ? ERROR : away ? MUTED : FRESH, t.x + 14, nameY + 15);
+         text(g, status, SMALL, linked ? ERROR : away ? MUTED : FRESH, nameX, nameY + 15);
       }
       if (away) {
          // A line through the name.
          g.setColor(MUTED);
-         g.drawLine(t.x + 12, nameY - 4, t.x + 16 + Math.min(room, width(g, name, BOLD)), nameY - 4);
+         g.drawLine(nameX - 2, nameY - 4, nameX + 2 + Math.min(room, width(g, name, BOLD)), nameY - 4);
       }
       if (count > 0) {
          // A red badge: how many names this one is kept apart from.
@@ -1625,7 +2146,10 @@ public class GroupBoard extends JPanel {
       ruleRows = new Rectangle[ruleList.size()];
       int rowY = y + 34;
       if (ruleList.isEmpty()) {
-         String[] lines = {"Names that should never", "share a group: turn on", "Keep apart (K), then click", "two names. The mix keeps", "them apart whenever the", "group sizes allow."};
+         String[] lines = width >= 300
+            // The wide card under the tiles on a phone.
+            ? new String[] {"Names that should never share a group:", "turn on Keep apart (K), then click two", "names. The mix keeps them apart", "whenever the group sizes allow."}
+            : new String[] {"Names that should never", "share a group: turn on", "Keep apart (K), then click", "two names. The mix keeps", "them apart whenever the", "group sizes allow."};
          for (String line : lines) {
             text(g, line, TEXT, MUTED, x + 12, rowY + 12);
             rowY += 18;

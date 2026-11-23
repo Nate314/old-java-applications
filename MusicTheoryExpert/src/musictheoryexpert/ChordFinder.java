@@ -400,10 +400,12 @@ public final class ChordFinder extends JPanel {
 		keysLine = card.y + card.height + 20;
 		trailLine = keysLine + 26;
 		int gap = 6;
-		addButton = new Rectangle(x, trailLine + 8, 96, 40);
+		// Narrow (a phone held upright), Add sits at the end of the heading and the chords take the whole row.
+		boolean narrow = width < NARROW;
+		addButton = narrow ? new Rectangle(x + w - 96, trailLine - 21, 96, 28) : new Rectangle(x, trailLine + 8, 96, 40);
 		slots.clear();
 		removers.clear();
-		int slotLeft = addButton.x + addButton.width + 10;
+		int slotLeft = narrow ? x : addButton.x + addButton.width + 10;
 		int sw = (x + w - slotLeft - gap * (TRAIL_SIZE - 1)) / TRAIL_SIZE;
 		for (int i = 0; i < TRAIL_SIZE; i++) {
 			Rectangle slot = new Rectangle(slotLeft + i * (sw + gap), trailLine + 8, sw, 40);
@@ -412,23 +414,37 @@ public final class ChordFinder extends JPanel {
 		}
 		fitButtons.clear();
 		int fitTop = trailLine + 54;
-		int fw = Math.min(150, (w - 170 - gap * 2) / 3);
+		// Narrow, the keys go on a row of their own under their line.
+		int fw = narrow ? (w - gap * 2) / 3 : Math.min(150, (w - 170 - gap * 2) / 3);
 		for (int i = 0; i < fits.size(); i++) {
-			fitButtons.add(new Rectangle(x + w - (3 - i) * fw - (2 - i) * gap, fitTop, fw, 26));
+			fitButtons.add(new Rectangle(x + w - (3 - i) * fw - (2 - i) * gap, narrow ? fitTop + 26 : fitTop, fw, 26));
 		}
-		buildLine = fitTop + 26 + 22;
+		buildLine = fitTop + (narrow ? 26 : 0) + 26 + 22;
 		rootButtons.clear();
-		int label = 52;
-		int rw = (w - label - gap * 11) / 12;
-		for (int i = 0; i < 12; i++) {
-			rootButtons.add(new Rectangle(x + label + i * (rw + gap), buildLine - 16, rw, 24));
-		}
 		qualityButtons.clear();
-		int qw = (w - label - gap * (BUILD_QUALITIES.length - 1)) / BUILD_QUALITIES.length;
-		for (int i = 0; i < BUILD_QUALITIES.length; i++) {
-			qualityButtons.add(new Rectangle(x + label + i * (qw + gap), buildLine + 14, qw, 24));
+		int keysTop;
+		if (narrow) {
+			// Roots in two rows of six and types in three rows of five, under the Build heading.
+			int rw = (w - gap * 5) / 6, qw = (w - gap * 4) / 5;
+			for (int i = 0; i < 12; i++) {
+				rootButtons.add(new Rectangle(x + i % 6 * (rw + gap), buildLine + 8 + i / 6 * 30, rw, 26));
+			}
+			for (int i = 0; i < BUILD_QUALITIES.length; i++) {
+				qualityButtons.add(new Rectangle(x + i % 5 * (qw + gap), buildLine + 74 + i / 5 * 30, qw, 26));
+			}
+			keysTop = buildLine + 74 + 3 * 30 + 6;
+		} else {
+			int label = 52;
+			int rw = (w - label - gap * 11) / 12;
+			for (int i = 0; i < 12; i++) {
+				rootButtons.add(new Rectangle(x + label + i * (rw + gap), buildLine - 16, rw, 24));
+			}
+			int qw = (w - label - gap * (BUILD_QUALITIES.length - 1)) / BUILD_QUALITIES.length;
+			for (int i = 0; i < BUILD_QUALITIES.length; i++) {
+				qualityButtons.add(new Rectangle(x + label + i * (qw + gap), buildLine + 14, qw, 24));
+			}
+			keysTop = buildLine + 48;
 		}
-		int keysTop = buildLine + 48;
 		keyboard = new Rectangle(x, keysTop, w, Math.max(50, height - 8 - keysTop));
 	}
 
@@ -440,7 +456,7 @@ public final class ChordFinder extends JPanel {
 				return spot;
 			}
 		} else {
-			int note = Look.keyAt(keyboard.x, keyboard.y, keyboard.width, keyboard.height, x, y);
+			int note = Look.keyAt(keyboard.x, keyboard.y, keyboard.width, keyboard.height, getWidth() < NARROW, x, y);
 			if (note >= 0) {
 				return note;
 			}
@@ -494,12 +510,19 @@ public final class ChordFinder extends JPanel {
 		g.fillRect(0, 0, getWidth(), HEADER);
 		g.setColor(TEXT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 22));
-		g.drawString("Chord finder", 18, 31);
 		int titleEnd = 18 + g.getFontMetrics().stringWidth("Chord finder") + 16;
-		g.setColor(SOFT);
-		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-		String hint = "Type A W S E D F T G Y H U J K like a piano (C" + (typedBase / 12 - 1) + " up), Z / X: octave";
-		g.drawString(Look.fit(g, hint, instrumentButton.x - titleEnd - 10), titleEnd, 29);
+		// Narrow, the tab already names it; the hint is for a computer keyboard.
+		if (getWidth() >= NARROW) {
+			g.drawString("Chord finder", 18, 31);
+			g.setColor(SOFT);
+			g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+			String hint = "Type A W S E D F T G Y H U J K like a piano (C" + (typedBase / 12 - 1) + " up), Z / X: octave";
+			g.drawString(Look.fit(g, hint, instrumentButton.x - titleEnd - 10), titleEnd, 29);
+		} else {
+			g.setColor(SOFT);
+			g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+			g.drawString(Look.fit(g, "Tap keys below", instrumentButton.x - 26), 16, 29);
+		}
 		paintButton(g, instrumentButton, guitar ? "Piano (I)" : "Guitar (I)", false);
 		paintButton(g, demoButton, "Original demo", false);
 	}
@@ -732,7 +755,8 @@ public final class ChordFinder extends JPanel {
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 		String help = trail.isEmpty() ? "Add chords from a song you know (Enter), and see which key it is in."
 				: "Click one to hear it again. Backspace takes the last one off.";
-		g.drawString(Look.fit(g, help, card.width - 100), card.x + 96, trailLine);
+		boolean narrow = getWidth() < NARROW;
+		g.drawString(Look.fit(g, help, narrow ? addButton.x - card.x - 104 : card.width - 100), card.x + 96, trailLine);
 		paintButton(g, addButton, "Add (Enter)", true);
 		for (int i = 0; i < slots.size(); i++) {
 			Rectangle s = slots.get(i);
@@ -765,8 +789,8 @@ public final class ChordFinder extends JPanel {
 		g.setFont(new Font("SansSerif", Font.PLAIN, 13));
 		String fitLine = trail.isEmpty() ? "" : fits.isEmpty() ? "No major or minor key holds these chords."
 				: "Click a key to write these in the Songwriter:";
-		int fitLeft = fitButtons.isEmpty() ? card.x + card.width : fitButtons.get(0).x;
-		g.drawString(Look.fit(g, fitLine, fitLeft - card.x - 8), card.x, fitTop + 18);
+		int fitLeft = fitButtons.isEmpty() || narrow ? card.x + card.width : fitButtons.get(0).x;
+		g.drawString(Look.fit(g, fitLine, fitLeft - card.x - 8), card.x, fitTop + (narrow ? 16 : 18));
 		for (int i = 0; i < fitButtons.size(); i++) {
 			KeyFit fit = fits.get(i);
 			Rectangle b = fitButtons.get(i);
@@ -779,8 +803,12 @@ public final class ChordFinder extends JPanel {
 	private void paintBuild(Graphics2D g) {
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 13));
-		g.drawString("Build", card.x, buildLine);
-		g.drawString("type", card.x, buildLine + 30);
+		if (getWidth() < NARROW) {
+			g.drawString("Build a chord: a root, then a type", card.x, buildLine);
+		} else {
+			g.drawString("Build", card.x, buildLine);
+			g.drawString("type", card.x, buildLine + 30);
+		}
 		Reading best = readings.isEmpty() ? null : readings.get(0);
 		for (int i = 0; i < 12; i++) {
 			paintChip(g, rootButtons.get(i), ChordNamer.noteName(i), best != null && best.root == i);
@@ -802,15 +830,19 @@ public final class ChordFinder extends JPanel {
 	/** The keyboard: held notes blue, the notes sounding gold. */
 	private void paintKeyboard(Graphics2D g) {
 		Color[] colors = new Color[HIGH_NOTE + 1];
+		String[] names = new String[HIGH_NOTE + 1];
+		String[] spelled = ChordNamer.spellings(held());
 		for (int note : held) {
 			colors[note] = isBlack(note) ? HELD_BLACK : HELD;
+			names[note] = spelled[note % 12];
 		}
 		if (sounding != null) {
 			for (int note : sounding) {
 				colors[note] = isBlack(note) ? GOLD_BLACK : GOLD;
 			}
 		}
-		Look.paintKeyboard(g, keyboard.x, keyboard.y, keyboard.width, keyboard.height, colors);
+		Look.paintKeyboard(g, keyboard.x, keyboard.y, keyboard.width, keyboard.height, getWidth() < NARROW, colors,
+				names);
 	}
 
 	// ---- the guitar neck, in the keyboard's place: high E on top as a player looking down sees it ----

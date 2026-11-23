@@ -7,20 +7,21 @@
 # player for the four games that have one), throws away what was recorded so far at "rec", and keeps the next
 # -Seconds seconds.
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
-#   ./web/clips.ps1
-#   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8101
-#   ./web/clips.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
+# (-Port, -DebugPort and -ProfileRoot have no defaults: pass your own on every run)
+#   ./web/clips.ps1 -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/clips.ps1 -Apps FlappyBird,ScreenSaver -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/clips.ps1 -Out somewhere/else ...   (to compare before replacing the committed ones)
 # Apps without a recipe (NathaNOS, BibleDownloader, NumberGuess, Windows, WindowsE: nothing moves until the visitor
 # does something) have no clip; their cards keep their still thumbnail. A card plays a clip when its app has
 # "clip": true in web/src/shared/apps.json (its gallery card then has data-clip).
 param(
     [string[]]$Apps,
-    [int]$Port = 8101,
-    [int]$DebugPort = 9301,
+    [int]$Port = $(throw '-Port is required (no default: two runs must never share a port)'),
+    [int]$DebugPort = $(throw '-DebugPort is required (no default: two runs must never share a port)'),
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [int]$Seconds = 6,
     [string]$Out = (Join-Path $PSScriptRoot 'public/clips'),
-    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
+    [string]$ProfileRoot = $(throw '-ProfileRoot is required (no default: keep Chrome profiles in your own scratch folder)')   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 
@@ -29,10 +30,11 @@ $ErrorActionPreference = 'Stop'
 # Flappy Bird has no computer player, so the clip has a small one: every 16 ms it finds the bird (teal) and the next
 # pipe (copper, from the top edge of the game's canvas; the copper ground is below the band searched) and flaps
 # while the bird is below the gap's middle.
-$FlappyPilot = @'
+$FlappyPilot = @"
 js:(function () {
   var c = document.querySelector('#desktop canvas'), g = c.getContext('2d'), last = 0, prev = 0;
-  function flap() { ['keydown', 'keyup'].forEach(function (t) { document.dispatchEvent(new KeyboardEvent(t, { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true })); }); }
+  $Press
+  function flap() { press(' ', 32, document, 'Space'); }
   function pipe(d, i) { return d[i] > d[i + 1] + 40 && d[i + 1] > d[i + 2] + 15 && d[i] > 110; }
   function tick() {
     var W = c.width, H = c.height, x0 = Math.round(W * 0.2), bw = Math.round(W * 0.14), bh = Math.round(H * 0.87);
@@ -62,7 +64,7 @@ js:(function () {
   }
   setInterval(tick, 16); // not requestAnimationFrame: it can run far slower than the game's own timers
 })()
-'@
+"@
 $Recipes = [ordered]@{
     Minesweeper         = @{ Steps = @('wait:800', 'key:O', 'key:W', 'wait:1500', 'rec') }
     FlappyBird          = @{ Steps = @('wait:800', 'key:Space', $FlappyPilot, 'wait:3000', 'rec') }
@@ -74,7 +76,7 @@ $Recipes = [ordered]@{
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Pick 'Mode 6'), (Click '^OK$'), 'wait:3000', $StarsSuns, 'wait:7000', 'rec') }
     TankGame            = @{ Query = 'watch'; Steps = @('wait:3000', 'rec') }
     MusicTheoryExpert   = @{ Steps = @('wait:800', (Click 'Songwriter'), 'wait:500', 'key:Space', 'wait:1200', 'rec') }
-    CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', (Pick 'Heart'), 'wait:1600', (Click '^Spin$')) }
+    CircleSpawner       = @{ Steps = @('wait:2500', 'rec', 'wait:400', "js:document.querySelector('#desktop button[title=Heart]').click()", 'wait:1600', (Click '^Spin$')) }
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:2500', 'rec', 'wait:1200', 'key:F') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:1000', 'key:B', 'key:-', 'key:=', 'rec') }
     GroupCreator        = @{ Steps = @('wait:800', 'rec', (Click 'Make groups'), 'wait:1500', 'key:W', 'wait:1200', 'key:P', 'wait:600', 'key:Space') }

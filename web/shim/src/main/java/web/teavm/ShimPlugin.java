@@ -9,7 +9,10 @@ import org.teavm.model.MethodHolder;
 import org.teavm.model.MethodReference;
 import org.teavm.model.ValueType;
 import org.teavm.model.Variable;
+import org.teavm.model.instructions.EmptyInstruction;
+import org.teavm.model.instructions.ExitInstruction;
 import org.teavm.model.instructions.InvocationType;
+import org.teavm.model.instructions.JumpInstruction;
 import org.teavm.model.instructions.InvokeInstruction;
 import org.teavm.vm.spi.TeaVMHost;
 import org.teavm.vm.spi.TeaVMPlugin;
@@ -20,8 +23,10 @@ import org.teavm.vm.spi.TeaVMPlugin;
  * {@code System.exit(int)} goes to {@code web.rt.Exit.exit} (closes the app's windows on the page), and
  * URL/URLConnection stream opening goes to {@code web.rt.Net} (throws IOException on failed requests), and
  * {@code Class.getResource(String)} goes to {@code web.rt.Net.resource} (null: the page has no class path to look in).
+ * A class whose {@code mouseDragged} has a body also gets the {@code web.rt.Drags} marker (hover-only listeners don't).
  */
 public class ShimPlugin implements TeaVMPlugin, ClassHolderTransformer {
+    private static final String DRAGS = "web.rt.Drags";
     private static final MethodReference SLEEP = new MethodReference("web.rt.Sleep", "sleep", ValueType.LONG, ValueType.VOID);
     private static final MethodReference EXIT = new MethodReference("web.rt.Exit", "exit", ValueType.INTEGER, ValueType.VOID);
     private static final MethodReference OPEN_STREAM = new MethodReference("web.rt.Net", "openStream",
@@ -41,6 +46,9 @@ public class ShimPlugin implements TeaVMPlugin, ClassHolderTransformer {
         String name = cls.getName();
         if (name.startsWith("org.teavm.") || name.startsWith("web.") || name.startsWith("java.") || name.startsWith("javax.")) {
             return;
+        }
+        if (followsDrags(cls)) {
+            cls.getInterfaces().add(DRAGS);
         }
         for (MethodHolder method : cls.getMethods()) {
             if (method.getProgram() == null) {
@@ -80,6 +88,22 @@ public class ShimPlugin implements TeaVMPlugin, ClassHolderTransformer {
                 }
             }
         }
+    }
+
+    /** True when the class declares a one-argument mouseDragged that does more than return. */
+    private static boolean followsDrags(ClassHolder cls) {
+        for (MethodHolder method : cls.getMethods()) {
+            if (method.getName().equals("mouseDragged") && method.parameterCount() == 1 && method.getProgram() != null) {
+                for (BasicBlock block : method.getProgram().getBasicBlocks()) {
+                    for (Instruction insn : block) {
+                        if (!(insn instanceof ExitInstruction || insn instanceof JumpInstruction || insn instanceof EmptyInstruction)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isNet(String className, String simpleName) {

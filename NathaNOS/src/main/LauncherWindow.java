@@ -54,6 +54,7 @@ public class LauncherWindow extends JInternalFrame {
          () -> {
             screen.desktopMenu.hideMenu();
             screen.calendar.hideMenu();
+            screen.iconTip.hideTip();
             screen.startMenu.toggleVisibility();
          }
       );
@@ -182,6 +183,7 @@ public class LauncherWindow extends JInternalFrame {
                if (e.getButton() == MouseEvent.BUTTON1) {
                   LauncherWindow.this.screen.startMenu.hideMenu();
                   LauncherWindow.this.screen.desktopMenu.hideMenu();
+                  LauncherWindow.this.screen.iconTip.hideTip();
                   LauncherWindow.this.screen.calendar.toggleVisibility();
                   TrayClock.this.repaint();
                }

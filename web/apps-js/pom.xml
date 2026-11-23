@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>web</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>apps-js</artifactId>
+  <packaging>pom</packaging>
+  <name>Apps compiled to JavaScript</name>
+
+  <!-- TeaVM compiles one program at a time, so the programs are split over the parts below, which -T1C
+       (web/.mvn/maven.config) builds side by side. Each part runs javac on its own apps' sources (app-sources in the
+       part) and then their TeaVM executions, so a part starts right after the shim instead of waiting for one javac
+       of all 19 apps (web/apps, which now only copies data files and sources). Keep the parts about equal in time. -->
+  <modules>
+    <module>part1</module>
+    <module>part2</module>
+    <module>part3</module>
+    <module>part4</module>
+  </modules>
+
+  <properties>
+    <!-- The parts sit two levels below web/. -->
+    <site.dir>${project.basedir}/../../target/site</site.dir>
+    <repo.dir>${project.basedir}/../../..</repo.dir>
+  </properties>
+
+  <!-- The shim must stay first: TeaVM tries class substitution rules in classpath order. -->
+  <dependencies>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>shim</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-classlib</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-jso-apis</artifactId>
+    </dependency>
+  </dependencies>
+  <!-- A pom-packaged part binds no javac by itself; this runs it on the sources its app-sources adds, into the part's
+       target/classes, which TeaVM reads after the dependencies (so the shim's classes still come first). -->
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>part-classes</id>
+            <phase>compile</phase>
+            <goals><goal>compile</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

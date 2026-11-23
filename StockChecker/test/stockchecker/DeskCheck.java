@@ -67,8 +67,16 @@ public class DeskCheck {
       check(portfolio.buy("NFLX", 1, 100, 7) == 0, "no buying on credit");
       check(portfolio.sell("CRM", 4, 80, 8) == 4, "sell 4");
       check(Math.abs(portfolio.holdings.get("CRM").cost - 6 * 76.37) < 1e-6, "average cost kept after a sale");
+      check(portfolio.heldSince("CRM") == 5 && portfolio.heldSince("TSN") == -1, "held since the first buy, through a part sale");
       check(portfolio.sell("CRM", Integer.MAX_VALUE, 80, 9) == 6 && portfolio.shares("CRM") == 0, "sell all");
       check(portfolio.sell("CRM", 1, 80, 9) == 0, "nothing left to sell");
+      check(portfolio.heldSince("CRM") == -1, "not held once sold out");
+      Portfolio again1 = new Portfolio();
+      again1.buy("CRM", 2, 70, 3);
+      again1.sell("CRM", 2, 71, 4);
+      again1.buy("CRM", 1, 72, 9);
+      again1.buy("CRM", 1, 73, 11);
+      check(again1.heldSince("CRM") == 9, "held since the buy after selling out: " + again1.heldSince("CRM"));
       check(portfolio.trades.size() == 4, "trades logged: " + portfolio.trades.size());
 
       // The desk file carries the day on, mid-day and across a close.
@@ -79,7 +87,13 @@ public class DeskCheck {
       for (int i = 0; i < 100; i++) {
          desk.tick();
       }
+      // The trade buttons' notes ask the desk what a trade would do; it must match what the trade then does.
+      check(desk.canSell("CRM", 1) == 0 && desk.sell("CRM", 1) == 0, "can sell none before holding any");
+      int covers = desk.portfolio.affordable(desk.market.price("CRM"));
+      check(desk.canBuy("CRM", Integer.MAX_VALUE) == covers && desk.canBuy("CRM", 10) == 10, "can buy what the cash covers");
       check(desk.buy("CRM", 10) == 10, "desk buy");
+      check(desk.canSell("CRM", Integer.MAX_VALUE) == 10 && desk.canSell("CRM", 4) == 4, "can sell what is held");
+      check(desk.canBuy("CRM", Integer.MAX_VALUE) == desk.portfolio.affordable(desk.market.price("CRM")), "can buy shrinks with the cash");
       double paid = desk.market.price("CRM");
       desk.setWatch(Arrays.asList("NFLX"));
       check(desk.symbols().equals(Arrays.asList("NFLX", "CRM")), "a held stock stays on the desk: " + desk.symbols());
@@ -96,10 +110,12 @@ public class DeskCheck {
          // run to the closing bell
       }
       check(again.market.closed() && again.buy("CRM", 1) == 0, "no trading after the close");
+      check(again.canBuy("CRM", 1) == 0 && again.canSell("CRM", 1) == 0, "nothing to trade after the close");
       double close = again.market.price("CRM");
       double closingWorth = again.portfolio.worth(again.market);
       again.nextDay();
       check(again.market.day == 2 && again.market.minute == 0, "day 2 opens");
+      check(again.portfolio.heldSince("CRM") == 0, "shares held overnight count from the open");
       check(again.portfolio.closes.size() == 1 && Math.abs(again.portfolio.closes.get(0) - closingWorth) < 0.01, "day 1's close noted");
       check(Math.abs(again.market.stock("CRM").open() / close - 1) < 0.06, "day 2 opens near day 1's close");
       check(again.portfolio.trades.isEmpty(), "trades are per day");
@@ -281,6 +297,16 @@ public class DeskCheck {
                "best trade matches every buy and sell pair on day " + day);
          }
       }
+
+      // The day's charts reach a little past now (the first hour at least), never back, and the whole day by the close.
+      for (int at = 0; at <= Market.CLOSE; at++) {
+         int end = DeskPanel.chartEnd(at);
+         check(end >= Math.min(Market.CLOSE, at + 10) && end >= 60 && end <= Market.CLOSE, "the chart reaches past now at minute " + at);
+         check(at == 0 || end >= DeskPanel.chartEnd(at - 1), "the chart never shrinks at minute " + at);
+      }
+      check(DeskPanel.chartEnd(Market.CLOSE) == Market.CLOSE, "the whole day shows at the close");
+      check(DeskPanel.timeLabel(30).equals("10 AM") && DeskPanel.timeLabel(60).equals("10:30") && DeskPanel.timeLabel(390).equals("4 PM"),
+         "time labels: " + DeskPanel.timeLabel(30) + ", " + DeskPanel.timeLabel(60) + ", " + DeskPanel.timeLabel(390));
 
       System.out.println("DeskCheck passed");
    }

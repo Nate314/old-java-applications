@@ -20,6 +20,7 @@ final class ClockFace implements Tab {
    private static final Color UNSET = new Color(205, 205, 205);
    private final Main clock;
    private final FlipFace flip = new FlipFace();
+   private final DigitalFace digital = new DigitalFace();
    private Rectangle chimesBox;
    private Rectangle alarmBox;
    /** The analog face's middle and the alarm knob, for dragging it; knobRadius is 0 on the digital face. */
@@ -70,8 +71,7 @@ final class ClockFace implements Tab {
          double seconds = this.clock.seconds + this.clock.milliseconds / 1000.0;
          double minutes = this.clock.minutes + seconds / 60.0;
          double hours = this.clock.hours % 12 + minutes / 60.0;
-         g2.setColor(Ui.FACE);
-         g2.fillOval(left, top, diameter, diameter);
+         Ui.face(g2, centerX, centerY, radius);
          // A focus session or break under way shows on the face: a band round the rim from now to when it ends.
          Focus focus = this.clock.state.focus;
          if (focus.isRunning()) {
@@ -90,44 +90,41 @@ final class ClockFace implements Tab {
             g2.drawOval(centerX - ring, centerY - ring, ring * 2, ring * 2);
             g2.setStroke(new BasicStroke((float)margin));
          }
-         g2.setColor(Ui.INK);
-         g2.drawOval(left, top, diameter, diameter);
+         Ui.rim(g2, centerX, centerY, radius, margin * 2);
          paintDial(g2, centerX, centerY, radius, margin);
          this.paintAlarm(g2, alarm, centerX, centerY, radius, margin, now);
-         g2.setColor(Ui.INK);
-         drawHand(g2, centerX, centerY, (Math.PI / 2) - hours * (Math.PI / 6), radius * 0.5, radius * 0.06, Math.max(4, margin * 2.2));
-         drawHand(g2, centerX, centerY, (Math.PI / 2) - minutes * (Math.PI / 30), radius * 0.8, radius * 0.06, Math.max(3, margin * 1.5));
+         // The hands stand off the dial, so each casts a soft shadow down and to the right of it.
+         int shadowX = Math.max(1, margin / 2);
+         int shadowY = Math.max(2, margin);
+         for (int pass = 0; pass < 2; pass++) {
+            int x = centerX + (pass == 0 ? shadowX : 0);
+            int y = centerY + (pass == 0 ? shadowY : 0);
+            g2.setColor(pass == 0 ? Ui.SHADOW : Ui.INK);
+            drawHand(g2, x, y, (Math.PI / 2) - hours * (Math.PI / 6), radius * 0.5, radius * 0.06, Math.max(4, margin * 2.2));
+            drawHand(g2, x, y, (Math.PI / 2) - minutes * (Math.PI / 30), radius * 0.8, radius * 0.06, Math.max(3, margin * 1.5));
+         }
          int cap = Math.max(3, margin * 3 / 2);
          g2.fillOval(centerX - cap, centerY - cap, cap * 2, cap * 2);
          // The second hand: thin, with a short tail behind the middle and a red cap over the others.
-         g2.setColor(Ui.HAND);
          double angle = (Math.PI / 2) - seconds * (Math.PI / 30);
          g2.setStroke(new BasicStroke(Math.max(1.5f, margin * 0.45f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-         g2.drawLine((int)Math.round(centerX - radius * 0.2 * Math.cos(angle)), (int)Math.round(centerY + radius * 0.2 * Math.sin(angle)),
-               (int)Math.round(centerX + radius * 0.9 * Math.cos(angle)), (int)Math.round(centerY - radius * 0.9 * Math.sin(angle)));
+         for (int pass = 0; pass < 2; pass++) {
+            int x = centerX + (pass == 0 ? shadowX * 3 / 2 : 0);
+            int y = centerY + (pass == 0 ? shadowY * 3 / 2 : 0);
+            g2.setColor(pass == 0 ? Ui.SHADOW : Ui.HAND);
+            g2.drawLine((int)Math.round(x - radius * 0.2 * Math.cos(angle)), (int)Math.round(y + radius * 0.2 * Math.sin(angle)),
+                  (int)Math.round(x + radius * 0.9 * Math.cos(angle)), (int)Math.round(y - radius * 0.9 * Math.sin(angle)));
+         }
          g2.setStroke(new BasicStroke((float)margin));
          cap = Math.max(2, margin * 4 / 5);
          g2.fillOval(centerX - cap, centerY - cap, cap * 2, cap * 2);
+         Ui.glass(g2, centerX, centerY, radius);
       } else if (this.clock.state.flip) {
          this.flip.paint(g2, new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight), this.clock,
                alarm.isOn() ? this.alarmWhen(alarm, now) : null, now);
       } else {
-         area = new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight); // clear of the buttons
-         g2.setColor(Ui.INK);
-         String[] lines = this.clock.timeText.split("\\n");
-         Font font = new Font(Ui.DIGITS, Font.BOLD, 100);
-         g2.setFont(font);
-
-         // Shrink until the widest line fits across and all lines fit down.
-         while (font.getSize() > 1 && (widestLine(g2, lines) > area.width - 20 || font.getSize() * lines.length > area.height - 10)) {
-            font = new Font(Ui.DIGITS, Font.BOLD, font.getSize() - 1);
-            g2.setFont(font);
-         }
-
-         int top = area.y + (area.height - font.getSize() * lines.length) / 2;
-         for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            g2.drawString(lines[lineIndex], area.x + 10, top + font.getSize() + lineIndex * font.getSize());
-         }
+         this.digital.paint(g2, new Rectangle(area.x, area.y + boxHeight, area.width, area.height - boxHeight), this.clock,
+               alarm.isOn() ? this.alarmWhen(alarm, now) : null, now);
       }
       g2.translate(-shake, 0);
       Ui.button(g2, this.chimesBox, this.clock.state.chimes ? "Chimes on" : "Chimes off", this.clock.state.chimes);
@@ -216,14 +213,6 @@ final class ClockFace implements Tab {
          ys[i] = (int)Math.round(centerY + along[i] * dy + across[i] * dx);
       }
       g2.fillPolygon(xs, ys, 4);
-   }
-
-   private static int widestLine(Graphics2D g2, String[] lines) {
-      int widest = 0;
-      for (String line : lines) {
-         widest = Math.max(widest, g2.getFontMetrics().stringWidth(line));
-      }
-      return widest;
    }
 
    private boolean rightPressed;

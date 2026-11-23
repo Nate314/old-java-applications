@@ -12,6 +12,8 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 /** Kept in the box, so Backspace always has something to delete: deleting it is how a Backspace shows. */
 const BLANK = ' ';
 const SYMBOL: Record<string, number> = { ' ': 32, ',': 188, '.': 190, '/': 191, ';': 186, '=': 187, '-': 189, '[': 219, '\\': 220, ']': 221, "'": 222, '`': 192 };
+/** What Shift types on a US keyboard, and the key it is on (`?` is Shift + `/`), so `?` and `+` arrive as real keys. */
+const SHIFTED: Record<string, string> = { '!': '1', '@': '2', '#': '3', '$': '4', '%': '5', '^': '6', '&': '7', '*': '8', '(': '9', ')': '0', '_': '-', '+': '=', '{': '[', '}': ']', '|': '\\', ':': ';', '"': "'", '<': ',', '>': '.', '?': '/', '~': '`' };
 
 // A key event the shim cannot tell from a real one (keyCode cannot be set through the constructor).
 // touch-pad.tsx's fireKey (the controller, gamepads, Watch) sends through it too.
@@ -27,8 +29,8 @@ function press(key: string, which: number, shift: boolean) {
 }
 /** Presses the key that types `ch`, as a hardware keyboard reports it. */
 export function typeChar(ch: string) {
-  var up = ch.toUpperCase();
-  press(ch, /^[A-Z0-9]$/.test(up) ? up.charCodeAt(0) : SYMBOL[ch] || 0, ch !== ch.toLowerCase());
+  var base = SHIFTED[ch] || ch, up = base.toUpperCase();
+  press(ch, /^[A-Z0-9]$/.test(up) ? up.charCodeAt(0) : SYMBOL[base] || 0, base !== ch || ch !== ch.toLowerCase());
 }
 /** The keys that turn the box's text `was` into `now`: Backspaces for what went, then what came. */
 export function typeChange(was: string, now: string) {

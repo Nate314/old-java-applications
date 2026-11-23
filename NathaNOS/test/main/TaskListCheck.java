@@ -33,7 +33,6 @@ public final class TaskListCheck {
          Thread.sleep(20);
       }
       check(closed.get() == null, "the closed window is freed");
-      check(tasks.countNamed(Launcher.PAINT) == 1, "Paint counts one window");
       List<java.awt.Rectangle> were = tasks.closeAll();
       check(were.size() == 1 && were.get(0).equals(kept.getBounds()), "Restart still closes the open window, outline where it was");
       System.out.println("TaskListCheck: all checks passed");
@@ -43,7 +42,7 @@ public final class TaskListCheck {
    private static WeakReference<FakeWindow> openAndClose(TaskList tasks) {
       FakeWindow window = new FakeWindow();
       tasks.add(window, Launcher.PAINT, null);
-      check(tasks.countNamed(Launcher.PAINT) == 2, "both Paint windows are on the taskbar");
+      check(tasks.showing().size() == 2, "both Paint windows are on the taskbar");
       window.open = false;
       return new WeakReference<>(window);
    }

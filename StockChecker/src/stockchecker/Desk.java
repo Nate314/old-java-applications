@@ -362,6 +362,16 @@ final class Desk {
       return done;
    }
 
+   /** How many shares buy(symbol, want) would buy now, without buying: what the cash covers, none after the close. */
+   int canBuy(String symbol, int want) {
+      return market.closed() ? 0 : Math.min(want, portfolio.affordable(market.price(symbol)));
+   }
+
+   /** How many shares sell(symbol, want) would sell now, without selling. */
+   int canSell(String symbol, int want) {
+      return market.closed() ? 0 : Math.min(want, portfolio.shares(symbol));
+   }
+
    int sell(String symbol, int want) {
       int done = market.closed() ? 0 : portfolio.sell(symbol, want, market.price(symbol), market.minute);
       if (portfolio.shares(symbol) == 0) {

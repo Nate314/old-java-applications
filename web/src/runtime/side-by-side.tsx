@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import { flushSync } from 'react-dom';
 import { embedded } from './skin';
 import { openClip } from './replay';
-import { appId, catalog, root } from './catalog';
+import { appId, catalog, homeDoc, root } from './catalog';
 import type { CatalogApp } from './catalog';
 import { indexOf } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
@@ -10,6 +10,7 @@ import { openPanel } from './ui/panel';
 import { AppCard } from './ui/cards';
 import { openShare } from './share';
 import { AGAIN_KEY } from './records';
+import { storedJson } from './stored';
 import { playSound } from './sounds';
 import { redrawBar } from './install';
 import { findOff, openFind } from './find';
@@ -53,10 +54,8 @@ const DOCK_WHY: Record<string, string> = {
 };
 
 function dockSaved(): DockSaved | null {
-  try {
-    var d = JSON.parse(localStorage.getItem(DOCK_KEY) || 'null');
-    return d && typeof d.app === 'string' && /^[A-Za-z0-9]+$/.test(d.app) ? d : null;
-  } catch (e) { return null; }
+  var d = storedJson(DOCK_KEY);
+  return typeof d.app === 'string' && /^[A-Za-z0-9]+$/.test(d.app) ? d as DockSaved : null;
 }
 
 function dockSave(d: DockSaved | null) {
@@ -167,7 +166,7 @@ function DockPanel({ app: first, onMount }: { app: CatalogApp; onMount: (show: (
     <aside className={'shim-dock' + (active ? ' shim-dock-active' : '')} aria-label={app.name + ', side by side'} ref={box}>
       <DockEdge />
       <div className="shim-dock-head">
-        <img className="shim-dock-pic" alt="" src={app.shot} />
+        <img className="shim-dock-pic" alt="" src={app.pic} />
         <strong className="shim-dock-name">{app.name}</strong>
         <span className="shim-dock-keys" title="Keys go to this app until you click the other one">Keys here</span>
         <button type="button" className="shim-dock-swap" title="Swap: make this the main app, with the other one beside it" aria-label="Swap" onClick={swap}>
@@ -284,7 +283,7 @@ export function init() {
     if (!dock || e.origin !== location.origin || e.source !== dock.frame.contentWindow || !e.data) return;
     var d = e.data;
     if (typeof d.oldjavaPlay === 'string') dockOpen(d.oldjavaPlay, true);
-    else if (typeof d.oldjavaShare === 'string') openShare(d.oldjavaShare || null, dock.frame);
+    else if (typeof d.oldjavaShare === 'string') { const id = d.oldjavaShare || null, frame = dock.frame; (id ? Promise.resolve() : homeDoc()).then(() => openShare(id, frame)); }
     else if (d.oldjavaClip) openClip(d.oldjavaClip, dock.frame);
     else if (d.oldjavaFind) openFind(dock.frame);
     else if (d.oldjavaSkinMaker) openMaker(dock.frame);

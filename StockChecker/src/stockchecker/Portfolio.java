@@ -46,6 +46,27 @@ final class Portfolio {
       return price <= 0 ? 0 : (int) Math.floor((cash + 1e-9) / price);
    }
 
+   /**
+    * The minute today the shares of {@code symbol} held now started being held (0 when some were held at the open),
+    * or -1 when none are held.
+    */
+   int heldSince(String symbol) {
+      int held = shares(symbol);
+      if (held == 0) {
+         return -1;
+      }
+      for (int t = trades.size() - 1; t >= 0; t--) {
+         Trade trade = trades.get(t);
+         if (trade.symbol.equals(symbol)) {
+            held -= trade.shares;
+            if (held == 0) {
+               return trade.minute;
+            }
+         }
+      }
+      return 0;
+   }
+
    /** Buys up to {@code want} shares, as many as the cash covers. Returns how many were bought. */
    int buy(String symbol, int want, double price, int minute) {
       int count = Math.min(want, affordable(price));

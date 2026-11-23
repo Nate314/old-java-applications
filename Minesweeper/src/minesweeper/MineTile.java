@@ -7,6 +7,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
@@ -33,15 +34,15 @@ public final class MineTile extends JButton implements MouseListener {
 
    static final Color GRASS_LIGHT = new Color(128, 204, 84);
    static final Color GRASS_DARK = new Color(114, 190, 72);
-   private static final Color GRASS_EDGE = new Color(58, 112, 36);
+   static final Color GRASS_EDGE = new Color(58, 112, 36);
    private static final Color GRASS_SHINE = new Color(176, 232, 134);
    private static final Color GRASS_HOVER = new Color(158, 222, 112);
-   private static final Color SAND_LIGHT = new Color(238, 228, 206);
-   private static final Color SAND_DARK = new Color(228, 216, 190);
-   private static final Color SAND_LINE = new Color(214, 199, 170);
-   private static final Color HIT = new Color(229, 57, 53);
+   static final Color SAND_LIGHT = new Color(238, 228, 206);
+   static final Color SAND_DARK = new Color(228, 216, 190);
+   static final Color SAND_LINE = new Color(214, 199, 170);
+   static final Color HIT = new Color(229, 57, 53);
    private static final Color FLAG_RED = new Color(222, 44, 44);
-   private static final Color POLE = new Color(52, 52, 58);
+   static final Color POLE = new Color(52, 52, 58);
    private static final Color MINE = new Color(34, 34, 40);
    private static final Color CURSOR = new Color(20, 60, 160);
    /** Number colors, 1 to 8: the classic blue, green, red, purple, then orange, teal, gray and silver. */
@@ -54,6 +55,17 @@ public final class MineTile extends JButton implements MouseListener {
    private static final int PLANT_MS = 140;
    private static final int BURST_MS = 260;
    private static final int PULSE_MS = 320;
+   private static final int BLOOM_MS = 420;
+   /** A number whose mines are all flagged, with nothing else hidden around it, sinks into the sand over this long. */
+   private static final int SETTLE_MS = 360;
+   /** How far a settled number fades toward the sand, and how small it gets. */
+   private static final double SETTLE_FADE = 0.72;
+   private static final double SETTLE_SCALE = 0.78;
+   /** A won field grows back as flat meadow (unlike the raised grass of a hidden tile), some tiles with a flower. */
+   private static final Color MEADOW_LIGHT = new Color(170, 214, 112);
+   private static final Color MEADOW_DARK = new Color(158, 204, 100);
+   private static final Color[] PETALS = {
+      Color.WHITE, new Color(255, 214, 64), new Color(244, 143, 177), new Color(179, 157, 219)};
 
    private GameFrame game;
    /** The tile's x index: it sits at {@code row * tileWidth}, so this is the column a player sees. */
@@ -86,6 +98,11 @@ public final class MineTile extends JButton implements MouseListener {
    private long animStart;
    private int animMs;
    private long pulseStart;
+   /** When a won field's meadow starts growing on this tile (0: never). */
+   private long bloomStart;
+   /** How this number stands by its flags ({@link MineFieldGenerator#standing}), and when it began to settle. */
+   private int standing = MineFieldGenerator.OPEN;
+   private long settleStart;
 
    public MineTile(GameFrame game, int row, int column) {
       this.game = game;
@@ -189,7 +206,32 @@ public final class MineTile extends JButton implements MouseListener {
       this.value = value;
       this.shown = SHOW_VALUE;
       this.animate(delayMs, POP_MS);
-      this.describe(value.trim().isEmpty() ? "clear" : value.equals("1") ? "1 mine near" : value + " mines near");
+      this.describeValue();
+   }
+
+   private void describeValue() {
+      this.describe((this.value.trim().isEmpty() ? "clear" : this.value.equals("1") ? "1 mine near" : this.value + " mines near")
+         + (this.standing == MineFieldGenerator.DONE ? ", all flagged" : this.standing == MineFieldGenerator.OVER ? ", too many flags" : ""));
+   }
+
+   /**
+    * A revealed number's standing by its flags: settled (it fades into the sand, after its grass has popped off),
+    * over-flagged (ringed in red), or open.
+    */
+   void setStanding(int standing) {
+      if (this.standing == standing || this.shown != SHOW_VALUE) {
+         return;
+      }
+      this.standing = standing;
+      this.settleStart = 0;
+      if (standing == MineFieldGenerator.DONE) {
+         long now = System.currentTimeMillis();
+         this.settleStart = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))
+            ? now - SETTLE_MS : Math.max(now, this.animStart + this.animMs);
+         this.game.animating(this);
+      }
+      this.describeValue();
+      this.repaint();
    }
 
    /** Shows a mine after {@code delayMs}: the one that was hit on red, the others on sand. A flagged mine keeps its flag. */
@@ -219,8 +261,47 @@ public final class MineTile extends JButton implements MouseListener {
       this.describe("flagged mine");
    }
 
+   /**
+    * A lost game is undone: the mines go back under the grass, the one hit with a flag on it, wrong flags come off
+    * (the loss showed them to be wrong) and the guess tags go.
+    */
+   void undoLoss() {
+      this.gamble = -1;
+      if (this.shown == SHOW_VALUE) {
+         this.describeValue();
+      } else if (this.shown != SHOW_HIDDEN) {
+         if (this.shown == SHOW_HIT) {
+            this.mark = FLAG;
+            this.animate(0, PLANT_MS);
+         } else if (this.shown == SHOW_WRONG_FLAG) {
+            this.mark = HIDDEN;
+         }
+         this.shown = SHOW_HIDDEN;
+         this.describe(this.mark == FLAG ? "flag" : this.mark == QUESTION ? "question mark" : "hidden");
+      }
+      this.repaint();
+   }
+
    boolean isFlagged() {
       return this.mark == FLAG;
+   }
+
+   /**
+    * The board is won: this opened tile grows back as meadow after {@code delayMs} (and after its own grass has
+    * popped off), maybe with a flower. With reduced motion it is there at once.
+    */
+   void bloom(int delayMs) {
+      if (this.shown != SHOW_VALUE) {
+         return;
+      }
+      long now = System.currentTimeMillis();
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         this.bloomStart = now - BLOOM_MS;
+         this.repaint();
+         return;
+      }
+      this.bloomStart = Math.max(now + delayMs, this.animStart + this.animMs);
+      this.game.animating(this);
    }
 
    /** A short glow on a hidden tile: the tiles a number would open, when its flags do not add up yet. */
@@ -239,7 +320,8 @@ public final class MineTile extends JButton implements MouseListener {
 
    /** True while an animation still has frames to draw. */
    boolean isAnimating(long now) {
-      return this.animStart != 0 && now < this.animStart + this.animMs || this.pulseStart != 0 && now < this.pulseStart + PULSE_MS;
+      return this.animStart != 0 && now < this.animStart + this.animMs || this.pulseStart != 0 && now < this.pulseStart + PULSE_MS
+         || this.bloomStart != 0 && now < this.bloomStart + BLOOM_MS || this.settleStart != 0 && now < this.settleStart + SETTLE_MS;
    }
 
    // ---- drawing ----
@@ -276,7 +358,7 @@ public final class MineTile extends JButton implements MouseListener {
       } else {
          this.paintSand(g, s, dark);
          if (this.shown == SHOW_VALUE) {
-            this.paintNumber(g, s);
+            this.paintNumber(g, s, now);
          } else {
             if (this.shown == SHOW_HIT) {
                g.setColor(withAlpha(HIT, (int) (255 * Math.min(1, t * 2))));
@@ -286,6 +368,9 @@ public final class MineTile extends JButton implements MouseListener {
          }
          if (t < 1 && this.shown == SHOW_VALUE) { // the grass pops off: shrinks and fades toward the middle
             this.paintGrass(g, s, dark, 1 - ease(t));
+         }
+         if (this.bloomStart != 0 && now >= this.bloomStart) {
+            this.paintMeadow(g, s, dark, Math.min(1, (now - this.bloomStart) / (double) BLOOM_MS));
          }
       }
       this.paintHint(g, s);
@@ -411,6 +496,51 @@ public final class MineTile extends JButton implements MouseListener {
       g.drawString(text, x + 3, y + fm.getAscent());
    }
 
+   /**
+    * A won tile: flat meadow spreading from the middle as {@code b} goes from 0 to 1, then (on about half the tiles,
+    * picked by place so a board always blooms the same) a flower or a tuft of grass pops up.
+    */
+   private void paintMeadow(Graphics2D g, int s, boolean dark, double b) {
+      int w = this.getWidth();
+      int h = this.getHeight();
+      // A round patch that grows into the square: its corners fill in last.
+      double f = ease(Math.min(1, b * 1.6));
+      int pw = (int) Math.ceil(w * f);
+      int ph = (int) Math.ceil(h * f);
+      int arc = (int) Math.round(s * (1 - f));
+      g.setColor(dark ? MEADOW_DARK : MEADOW_LIGHT);
+      g.fillRoundRect((w - pw) / 2, (h - ph) / 2, pw, ph, arc, arc);
+      double grow = overshoot(Math.max(0, b - 0.4) / 0.6);
+      if (b <= 0.4) {
+         return;
+      }
+      int mix = this.row * 73856093 ^ this.column * 19349663;
+      int kind = Math.floorMod(mix ^ mix >>> 13, 8);
+      // Not dead center, so a field of them looks sown rather than tiled.
+      int cx = w / 2 + (kind % 3 - 1) * s / 8;
+      int cy = h / 2 + (kind % 2 == 0 ? -1 : 1) * s / 10;
+      if (kind < PETALS.length) {
+         double pr = s * 0.13 * grow;
+         int pd = (int) Math.round(pr * 1.5);
+         g.setColor(PETALS[kind]);
+         for (int i = 0; i < 5; i++) {
+            double a = Math.PI * 2 * i / 5 - Math.PI / 2;
+            g.fillOval((int) Math.round(cx + Math.cos(a) * pr - pd / 2.0), (int) Math.round(cy + Math.sin(a) * pr - pd / 2.0), pd, pd);
+         }
+         int c = Math.max(2, (int) Math.round(pr * 0.9));
+         g.setColor(kind == 1 ? new Color(230, 120, 20) : new Color(250, 200, 40));
+         g.fillOval(cx - c / 2, cy - c / 2, c, c);
+      } else if (kind < 6) {
+         g.setColor(GRASS_EDGE);
+         g.setStroke(new BasicStroke(Math.max(1.2f, s / 22f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+         int base = cy + (int) (s * 0.14);
+         int tall = (int) (s * 0.24 * grow);
+         for (int i = -1; i <= 1; i++) {
+            g.drawLine(cx + i * s / 14, base, cx + i * s / 7, base - tall + Math.abs(i) * tall / 3);
+         }
+      }
+   }
+
    /** Revealed ground: a flat sand square, with a faint line where it meets the next one. */
    private void paintSand(Graphics2D g, int s, boolean dark) {
       int w = this.getWidth();
@@ -422,25 +552,46 @@ public final class MineTile extends JButton implements MouseListener {
       g.drawLine(0, h - 1, w - 1, h - 1);
    }
 
-   private void paintNumber(Graphics2D g, int s) {
+   /**
+    * The number in its color. Settled ({@link MineFieldGenerator#DONE}) it sinks into the sand, smaller and faded, so
+    * the numbers still to work on stand out; over-flagged it sits in a red ring, since a flag around it is wrong.
+    */
+   private void paintNumber(Graphics2D g, int s, long now) {
       String text = this.value.trim();
       if (text.isEmpty()) {
          return;
       }
+      int w = this.getWidth();
+      int h = this.getHeight();
+      if (this.standing == MineFieldGenerator.OVER) {
+         int inset = Math.max(2, s / 10);
+         int arc = Math.max(6, s / 3);
+         g.setColor(withAlpha(HIT, 40));
+         g.fillRoundRect(inset, inset, w - 2 * inset, h - 2 * inset, arc, arc);
+         g.setColor(HIT);
+         g.setStroke(new BasicStroke(Math.max(2f, s / 14f)));
+         g.drawRoundRect(inset, inset, w - 2 * inset - 1, h - 2 * inset - 1, arc, arc);
+      }
+      double settled = this.standing != MineFieldGenerator.DONE || now < this.settleStart ? 0 : ease(Math.min(1, (now - this.settleStart) / (double) SETTLE_MS));
       int n = Math.max(1, Math.min(8, Integer.parseInt(text)));
-      g.setFont(new Font("Dialog", Font.BOLD, Math.max(9, (int) (s * 0.62))));
+      g.setFont(new Font("Dialog", Font.BOLD, Math.max(9, (int) (s * 0.62 * (1 - (1 - SETTLE_SCALE) * settled)))));
       FontMetrics fm = g.getFontMetrics();
-      int x = (this.getWidth() - fm.stringWidth(text)) / 2;
-      int y = (this.getHeight() + fm.getAscent() - fm.getDescent()) / 2;
-      g.setColor(NUMBER[n - 1]);
+      int x = (w - fm.stringWidth(text)) / 2;
+      int y = (h + fm.getAscent() - fm.getDescent()) / 2;
+      boolean dark = (this.row + this.column) % 2 == 1;
+      g.setColor(settled == 0 ? NUMBER[n - 1] : mix(NUMBER[n - 1], dark ? SAND_DARK : SAND_LIGHT, SETTLE_FADE * settled));
       g.drawString(text, x, y);
    }
 
    /** A flag on a pole, planted (growing from the ground) as {@code t} goes from 0 to 1. */
    private void paintFlag(Graphics2D g, int s, double t) {
+      drawFlag(g, this.getWidth() / 2, this.getHeight() / 2, s, t);
+   }
+
+   /** The flag of {@link #paintFlag} in a square of side {@code s} centered on (cx, cy); the scoreboard draws one too. */
+   static void drawFlag(Graphics2D g, int cx, int cy, int s, double t) {
       double grow = 0.4 + 0.6 * overshoot(t);
-      int cx = this.getWidth() / 2;
-      int ground = (int) (this.getHeight() / 2 + s * 0.30);
+      int ground = (int) (cy + s * 0.30);
       int poleX = (int) (cx - s * 0.10);
       int top = (int) (ground - s * 0.56 * grow);
       int stroke = Math.max(2, s / 16);
@@ -543,7 +694,9 @@ public final class MineTile extends JButton implements MouseListener {
    private void play(boolean reveal) {
       this.game.takeOver();
       if (this.game.gameOver) {
-         this.game.restart();
+         if (this.shown != SHOW_HIT || !this.game.undoMine()) {
+            this.game.restart();
+         }
          return;
       }
 

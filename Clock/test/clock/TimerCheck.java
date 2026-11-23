@@ -26,7 +26,16 @@ public class TimerCheck {
 
       // The dial's limits, and Up and Down by whole minutes.
       timer.set(90 * M, 0);
-      check(timer.length() == Countdown.MAX, "capped at an hour");
+      check(timer.length() == 90 * M, "more than an hour");
+      timer.set(5 * 60 * M, 0);
+      check(timer.length() == Countdown.MAX && Countdown.MAX == 4 * 60 * M, "capped at four hours");
+
+      // Turning the knob: on past 12 winds into the next hour, back past 12 unwinds, and it stops at 0 and 4 hours.
+      check(Countdown.turn(55, 2, false) == 62 && Countdown.turn(62, 58, false) == 58, "past 12 and back");
+      check(Countdown.turn(3, 58, false) == 0 && Countdown.turn(0, 50, false) == 0, "stops at 0 turning back");
+      check(Countdown.turn(239, 5, false) == 240, "stops at four hours");
+      check(Countdown.turn(5, 50, true) == 50 && Countdown.turn(0, 55, true) == 55, "a press sets the minute pointed at");
+      check(Countdown.turn(95, 40, true) == 100 && Countdown.turn(125, 10, true) == 130, "a press stays in its hour");
       timer.set(-5, 0);
       check(timer.length() == 0, "never negative");
       timer.toggle(0);
@@ -49,15 +58,25 @@ public class TimerCheck {
       check(watch.elapsed(105_000) == 10_000, "stopped time does not count");
       check(watch.lapTime(0) == 3000 && watch.lapTime(1) == 1000 && watch.lapTime(2) == 6000, "lap times");
       check(watch.extremeLap(false) == 1 && watch.extremeLap(true) == 2, "fastest and slowest laps");
+      check(watch.bestLap() == 1 && watch.pace(105_500) == 500 - 1000, "the lap under way races the best lap");
+      watch.lap(108_000);
+      check(watch.pace(108_000) == -1000 && watch.pace(110_000) == 1000, "ahead of the best lap, then behind it");
+      Stopwatch one = new Stopwatch();
+      check(one.bestLap() == -1, "no best lap before a lap");
+      one.toggle(1);
+      one.lap(5001);
+      check(one.bestLap() == 0 && one.pace(7001) == -3000, "a single lap is the best one");
+      check(Ui.seconds(1204).equals("1.20 s") && Ui.seconds(61_000).equals("1:01.00"), "gaps between laps");
       watch.reset();
-      check(watch.lapCount() == 3, "no reset while running");
+      check(watch.lapCount() == 4, "no reset while running");
       watch.toggle(106_000);
       watch.reset();
       check(watch.lapCount() == 0 && watch.elapsed(200_000) == 0, "reset once stopped");
 
       // Formats.
       check(Ui.countdown(299_001).equals("5:00") && Ui.countdown(299_000).equals("4:59"), "countdown rounds up");
-      check(Ui.countdown(Countdown.MAX).equals("60:00"), "a full hour");
+      check(Ui.countdown(60 * M).equals("1:00:00") && Ui.countdown(59 * M).equals("59:00")
+            && Ui.countdown(Countdown.MAX - 1).equals("4:00:00") && Ui.countdown(61 * M + 5000).equals("1:01:05"), "hours");
       check(Ui.stopwatch(7_429).equals("0:07.42"), "stopwatch hundredths");
       check(Ui.stopwatch(3_723_040).equals("1:02:03.04"), "stopwatch hours");
 
@@ -147,6 +166,19 @@ public class TimerCheck {
             "a flap starts standing and ends lying down");
       check(FlipFace.fold(250, 500) > 0 && FlipFace.fold(400, 500) < 0, "a flap falls faster as it goes (edge on after half its time)");
 
+      // The LED face's seven segments: a (top) to g (middle) as bits 0 to 6, each figure its own shape.
+      int[] litCounts = {6, 2, 5, 5, 4, 5, 6, 3, 7, 6};
+      java.util.Set<Integer> shapes = new java.util.HashSet<>();
+      for (int figure = 0; figure < 10; figure++) {
+         int lit = DigitalFace.segments((char)('0' + figure));
+         check(Integer.bitCount(lit) == litCounts[figure] && lit < 0x80, figure + " lights " + litCounts[figure] + " segments");
+         shapes.add(lit);
+      }
+      check(shapes.size() == 10, "every figure has its own shape");
+      check(DigitalFace.segments('1') == 0x06 && DigitalFace.segments('7') == 0x07 && (DigitalFace.segments('0') & 0x40) == 0,
+            "1 is the right side, 7 adds the top, 0 has no middle bar");
+      check(DigitalFace.segments('-') == 0x40 && DigitalFace.segments(' ') == 0, "a dash is the middle bar, a blank lights nothing");
+
       // The analog dial: an hour tick at 12, bare face between the minute ticks, the hours' numbers, the knob's circle clear.
       java.awt.image.BufferedImage dial = new java.awt.image.BufferedImage(400, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
       java.awt.Graphics2D dialInk = dial.createGraphics();
@@ -166,6 +198,31 @@ public class TimerCheck {
          int knobY = 200 - (int)Math.round(190 * 0.62 * Math.cos(knob));
          check(!inked(dial, knobX - 13, knobY - 13, knobX + 13, knobY + 13), "the alarm knob at " + hour + " o'clock is clear of the numbers");
       }
+
+      // The stopwatch dial: a 10 s best lap and 15 s into the next, which began at 10 s on the dial. The band is green
+      // for the 10 s the best lap took, red for the 5 s lost since, and the rest of the rim is bare.
+      Stopwatch race = new Stopwatch();
+      race.toggle(1);
+      race.lap(10_001);
+      java.awt.image.BufferedImage watchFace = new java.awt.image.BufferedImage(400, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D watchInk = watchFace.createGraphics();
+      StopwatchView.paintRing(watchInk, new java.awt.Rectangle(10, 10, 380, 380), race, 25_001);
+      watchInk.dispose();
+      check(rim(watchFace, 15) == StopwatchView.AHEAD.getRGB() && rim(watchFace, 19) == StopwatchView.AHEAD.getRGB(), "the lap band is green while ahead of the best lap");
+      check(rim(watchFace, 22.5) == Ui.WEDGE.getRGB(), "and red for the time lost since");
+      check(bare(rim(watchFace, 40)) && bare(rim(watchFace, 5)), "the rest of the rim is bare");
+      // The dials are objects on the window: a chrome rim lit from the top left, and a shadow cast down and to the right.
+      check(brightness(watchFace.getRGB(200 - (int)(190 * 0.7071), 200 - (int)(190 * 0.7071))) > brightness(watchFace.getRGB(200 + (int)(190 * 0.7071), 200 + (int)(190 * 0.7071))) + 200,
+            "the rim is lit at the top left and dark at the bottom right");
+      java.awt.image.BufferedImage lit = new java.awt.image.BufferedImage(100, 100, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D litInk = lit.createGraphics();
+      litInk.setColor(Ui.BACKGROUND);
+      litInk.fillRect(0, 0, 100, 100);
+      Ui.face(litInk, 50, 50, 40);
+      litInk.dispose();
+      check(lit.getRGB(51, 91) != Ui.BACKGROUND.getRGB() && lit.getRGB(50, 8) == Ui.BACKGROUND.getRGB(), "the dial casts its shadow below it, not above");
+      check(watchFace.getRGB(200 + (int)(190 * 0.95 * Math.sin(Math.PI * 2 / 3)), 200 - (int)(190 * 0.95 * Math.cos(Math.PI * 2 / 3))) == Ui.FASTEST.getRGB(),
+            "a green mark stands where the best lap would have ended");
 
       // The Westminster quarters: one change at quarter past, two at half past, three at quarter to, four and the hour.
       int[] quarterPast = Westminster.steps(9, 1);
@@ -232,6 +289,22 @@ public class TimerCheck {
    }
 
    /** Whether any pixel in the box is not the white face. */
+   /** The stopwatch dial's color in its lap band at {@code second} on the rim (centre 200, 200, radius 190). */
+   private static int rim(java.awt.image.BufferedImage face, double second) {
+      double angle = second * Math.PI / 30;
+      return face.getRGB(200 + (int)Math.round(190 * 0.945 * Math.sin(angle)), 200 - (int)Math.round(190 * 0.945 * Math.cos(angle)));
+   }
+
+   /** Whether a dial pixel is its bare face: white, or the pale grey the face shades to. */
+   private static boolean bare(int rgb) {
+      int r = rgb >> 16 & 255, g = rgb >> 8 & 255, b = rgb & 255;
+      return Math.min(r, Math.min(g, b)) >= 200 && Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b)) < 30;
+   }
+
+   private static int brightness(int rgb) {
+      return (rgb >> 16 & 255) + (rgb >> 8 & 255) + (rgb & 255);
+   }
+
    private static boolean inked(java.awt.image.BufferedImage image, int left, int top, int right, int bottom) {
       for (int x = left; x <= right; x++) {
          for (int y = top; y <= bottom; y++) {

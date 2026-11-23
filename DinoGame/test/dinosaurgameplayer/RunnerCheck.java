@@ -184,15 +184,20 @@ public final class RunnerCheck {
 
       // From the first moment of dusk no color the game draws has blue 83, so the original bot is blind at night
       // and a fading sky never makes it jump.
-      java.awt.Color[] colors = { RunnerPanel.INK, RunnerPanel.PAPER, RunnerPanel.MUTED, new java.awt.Color(0xD6D6D6),
-         new java.awt.Color(0xBDBDBD), new java.awt.Color(0xEBEBEB) };
+      java.awt.Color[] colors = { RunnerPanel.INK, RunnerPanel.PAPER, RunnerPanel.MUTED, RunnerPanel.CLOUD,
+         RunnerPanel.DUST, RunnerPanel.STRIP_BG, RunnerPanel.SAND, RunnerPanel.SUN, RunnerPanel.DINO, Land.FAR, Land.SHADE, Land.NEAR,
+         RunnerPanel.CACTUS, RunnerPanel.CACTUS_LIGHT, RunnerPanel.BIRD };
       for (java.awt.Color c : colors) {
          for (int i = 1; i <= 1000; i++) {
             assert !ObstacleDetector.isObstacle(Sky.tint(c, i / 1000.0).getRGB() & 0xFFFFFF) : c + " at " + i;
             assert !ObstacleDetector.isObstacle(Sky.mix(Sky.tint(RunnerPanel.PAPER, i / 1000.0), new java.awt.Color(0xE6E6E6), i / 1000.0).getRGB() & 0xFFFFFF);
          }
       }
-      assert ObstacleDetector.isObstacle(Sky.tint(RunnerPanel.INK, 0).getRGB() & 0xFFFFFF) : "by day the bot sees";
+      // By day the bot sees every obstacle color, and nothing else the game draws.
+      for (java.awt.Color c : colors) {
+         boolean obstacle = c == RunnerPanel.CACTUS || c == RunnerPanel.CACTUS_LIGHT || c == RunnerPanel.BIRD;
+         assert ObstacleDetector.isObstacle(Sky.tint(c, 0).getRGB() & 0xFFFFFF) == obstacle : "by day " + c;
+      }
       // Drawn: a course with birds under a whole night, dusk to dawn, shows the bot no obstacle anywhere it can look,
       // though the same frames by day are full of them.
       Evolution.Dino nightRun = new Evolution.Dino(Brain.decode("144,146,65,117,120,299"), 1);
@@ -482,6 +487,10 @@ public final class RunnerCheck {
       assert broken.sound && broken.best == 0 && broken.botBest == 7 && broken.markerX == PixelBot.DEFAULT_X;
       file.delete();
 
+      coachChecks();
+      guideChecks();
+      padChecks();
+      landChecks();
       System.out.println("RunnerCheck passed (bot average " + total / 6 + ", evolved record " + ev.championScore()
          + ", ear player average " + earTotal / 40 + ", " + lateTotal / 40 + " when up to 2 steps late)");
       System.exit(0);
@@ -491,6 +500,364 @@ public final class RunnerCheck {
     * A run played by ear alone, from seed: on each beat to act on, jump 1 to late + 1 steps after it and hold as long as
     * the beat rings, or duck at once for as long. Stops at 3,000.
     */
+   /** The coach after a crash: its fix is checked by playing it with the keys, and its lines and marks. */
+   private static void coachChecks() throws Exception {
+      assert Coach.seconds(6).equals("0.10 s") && Coach.seconds(1).equals("0.05 s") && Coach.seconds(60).equals("1.00 s");
+      int late = 0;
+      int early = 0;
+      int ducks = 0;
+      for (long seed = 1; seed <= 30; seed++) {
+         // No key after the start: the first cactus ends it, and the coach says when to jump.
+         Runner r = new Runner(seed);
+         r.press();
+         r.release();
+         stepToCrash(r);
+         int crash = (int) r.steps();
+         Coach c = Coach.of(r);
+         assert c != null && c.fix == Coach.Fix.JUMP && c.line.startsWith("Jump when it reaches the mark") && c.pressX == -1
+            : "seed " + seed + ": " + (c == null ? null : c.line);
+         assert c.markX > r.crashedInto().x && c.markX < Runner.WIDTH && c.step < crash;
+         assert passes(seed, c) : "seed " + seed + ": the coach's jump clears it";
+         // Pressed a moment too late or too soon: it says which, and how much.
+         for (int at : new int[] { crash - 2, crash - 38 }) {
+            Runner p = new Runner(seed);
+            p.press();
+            p.release();
+            while (p.state() == Runner.State.RUNNING) {
+               if (p.steps() == at) {
+                  p.press();
+               } else if (p.steps() == at + 1) {
+                  p.release();
+               }
+               p.step();
+            }
+            Coach pc = Coach.of(p);
+            if (pc != null && pc.line.contains(" late: ")) {
+               late++;
+               assert pc.step < at && pc.pressX >= 0 : pc.line;
+            } else if (pc != null && pc.line.contains(" early: ")) {
+               early++;
+               assert pc.step > at : pc.line;
+            }
+         }
+      }
+      for (long seed = 1; seed <= 80; seed++) {
+         // Never ducking or jumping a bird: a middle bird's coach says duck, and the duck clears it.
+         Runner b = new Runner(seed);
+         b.press();
+         b.release();
+         int held = 0;
+         while (b.state() == Runner.State.RUNNING) {
+            Runner.Obstacle o = b.at(Runner.DINO_X);
+            double ahead = o == null ? 999 : o.x - Runner.DINO_X - Runner.DINO_W;
+            if (o != null && o.kind != Runner.Kind.BIRD && !b.isJumping() && ahead < b.speed() * 5 && ahead > 0) {
+               b.press();
+               held = 14;
+            } else if (held > 0 && --held == 0) {
+               b.release();
+            }
+            b.step();
+         }
+         if (b.crashedInto() != null && b.crashedInto().lift == Runner.BIRD_HEIGHTS[1]) {
+            Coach bc = Coach.of(b);
+            assert bc != null && bc.fix == Coach.Fix.DUCK && bc.line.startsWith("Duck under that bird") : bc == null ? null : bc.line;
+            assert passes(seed, b, bc);
+            ducks++;
+         }
+      }
+      assert late >= 10 && early >= 5 && ducks >= 3 : "late " + late + ", early " + early + ", ducks " + ducks;
+
+      // In the window: the line joins the score, the mark is drawn under the ground, and the bot's crashes get none.
+      RunnerPanel p = panel(11, null);
+      p.runner().press();
+      p.runner().release();
+      run(p);
+      Coach c = p.coach();
+      assert c != null && p.crashLines()[0].endsWith(" " + p.runner().score() + ". " + c.line) : p.crashLines()[0];
+      BufferedImage shot = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D sg = shot.createGraphics();
+      p.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+      for (int i = 0; i < 20; i++) {
+         p.step();   // past the crash shake
+      }
+      p.paint(sg);
+      sg.dispose();
+      assert shot.getRGB(c.markX, Runner.GROUND + 9) == RunnerPanel.INK.getRGB() : "the mark under the ground";
+      // The slow replay: past the shake the fix's run plays at half speed, its mark hollow until the fix presses and lit
+      // from then on, the fix gets past what you hit, and the replay starts over. A touch screen's line names the pad.
+      assert p.replayView() == null : "no replay during the shake";
+      Runner.Obstacle hit = p.runner().crashedInto();
+      double clear = p.runner().distance() + hit.x + hit.w - Runner.DINO_X;
+      boolean hollow = false;
+      boolean lit = false;
+      boolean cleared = false;
+      boolean looped = false;
+      int frames = 0;
+      long last = -1;
+      for (int i = 0; i < 1200 && !looped; i++) {
+         p.step();
+         Runner v = p.replayView();
+         if (v == null) {
+            continue;
+         }
+         looped = last > v.steps();
+         last = v.steps();
+         frames++;
+         cleared |= v.state() == Runner.State.RUNNING && v.distance() >= clear;
+         Graphics2D rg = shot.createGraphics();
+         p.paint(rg);
+         rg.dispose();
+         boolean filled = shot.getRGB(c.markX, Runner.GROUND + 9) == RunnerPanel.INK.getRGB();
+         if (v.steps() < c.step) {
+            hollow |= !filled;
+         } else {
+            lit |= filled;
+         }
+      }
+      assert hollow && lit && cleared && looped : "replay: hollow " + hollow + ", lit " + lit + ", cleared " + cleared + ", looped " + looped;
+      assert Coach.of(p.runner(), true).line.endsWith("tap JUMP.") : Coach.of(p.runner(), true).line;
+      key(p, java.awt.event.KeyEvent.VK_SPACE, true);
+      key(p, java.awt.event.KeyEvent.VK_SPACE, false);
+      assert p.runner().state() == Runner.State.RUNNING && p.replayView() == null : "Space runs again during the replay";
+      stepToCrash(p.runner());
+      System.out.println("replay: " + frames + " steps a loop, the fix clears it");
+      p.setBot(true);
+      for (int i = 0; i < 600 && p.runner().state() != Runner.State.RUNNING; i++) {
+         p.step();
+      }
+      run(p);
+      assert p.coach() == null : "no coach for the bot";
+
+      // Fast enough to run at a crash: a long run of good play, coached.
+      RunnerPanel y = panel(3, null);
+      y.runner().press();
+      runYou(y);
+      long t0 = System.nanoTime();
+      Coach.of(y.runner());
+      long ms = (System.nanoTime() - t0) / 1000000;
+      System.out.println("coach: late " + late + ", early " + early + ", ducks " + ducks + "; after a "
+         + y.runner().steps() + "-step run in " + ms + " ms");
+   }
+
+   /**
+    * The mark that says when to jump or duck: a player who only follows it (tapping when it lights with TAP, holding
+    * while it says HOLD, ducking while it says DUCK) gets well past the first cacti; it is drawn filled when lit; it goes once your best reaches 700,
+    * and never shows for the bot.
+    */
+   private static void guideChecks() throws Exception {
+      int reached = 0;
+      int total = 0;
+      for (long seed = 1; seed <= 10; seed++) {
+         RunnerPanel p = panel(seed, null);
+         Runner r = p.runner();
+         assert p.guiding() && p.guide()[1] == 0 : "the ready screen shows the mark, unlit";
+         r.press();
+         r.release();
+         boolean lit = false;
+         boolean wasLit = false;
+         long pressed = 0;
+         BufferedImage shot = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+         p.setSize(Runner.WIDTH, RunnerPanel.HEIGHT);
+         while (r.state() == Runner.State.RUNNING && r.score() < RunnerPanel.GUIDE_UNTIL) {
+            // As the screen says: tap when it lights with TAP, hold while it says HOLD, duck while it says DUCK.
+            int[] g = p.guide();
+            boolean jump = g[1] == 1 && g[0] == Ears.JUMP;
+            if (jump && !r.isJumping() && !wasLit) {
+               r.press();
+               pressed = r.steps();
+            } else if (!jump || g[2] == 0 && r.steps() - pressed >= 2) {
+               r.release();   // a quick tap
+            }
+            wasLit = g[1] == 1;
+            r.duck(g[1] == 1 && g[0] == Ears.DUCK);
+            if (g[1] == 1 && !lit) {
+               Graphics2D sg = shot.createGraphics();
+               p.paint(sg);
+               sg.dispose();
+               assert shot.getRGB(RunnerPanel.guideX(r, g[0]), Runner.GROUND + 9) == RunnerPanel.INK.getRGB() : "the lit mark is filled";
+               lit = true;
+            }
+            p.step();
+         }
+         total += r.score();
+         reached += r.score() >= RunnerPanel.GUIDE_UNTIL ? 1 : 0;
+         assert lit && r.score() > 150 : "seed " + seed + ": following the mark scored " + r.score();
+      }
+      assert reached >= 8 : "following the mark reached " + RunnerPanel.GUIDE_UNTIL + " on " + reached + " of 10";
+      RunnerPanel fresh = panel(1, null);
+      fresh.setBot(true);
+      assert !fresh.guiding() : "never for the bot";
+      fresh.setBot(false);
+      assert fresh.guiding();
+      File file = File.createTempFile("dinogame", ".txt");
+      file.delete();
+      file.deleteOnExit();
+      Records past = Records.load(file);
+      past.best = RunnerPanel.GUIDE_UNTIL;
+      assert !new RunnerPanel(past, 1).guiding() : "gone once your best reaches the first night";
+      System.out.println("guide: following the mark reached " + RunnerPanel.GUIDE_UNTIL + " on " + reached + " of 10 courses, average "
+         + total / 10);
+   }
+
+   /**
+    * The thumb pads (a phone held upright): only when asked for, under the game; a press on RUN starts the run, DUCK ducks
+    * until let go, JUMP jumps, the lit mark fills its pad, a crash's pad says RUN AGAIN, and in two players they are P1 and P2.
+    */
+   /** The land behind a run: drawn, never ink, and the mesas slide an eighth as far as the ground. */
+   private static void landChecks() {
+      BufferedImage a = landAt(0);
+      BufferedImage b = landAt(800);
+      int far = 0;
+      int near = 0;
+      int same = 0;
+      int row = Runner.GROUND - 30;
+      for (int x = 0; x < Runner.WIDTH; x++) {
+         for (int y = 0; y < Runner.GROUND; y++) {
+            int c = a.getRGB(x, y);
+            assert !ObstacleDetector.isObstacle(c & 0xFFFFFF) : "land the bot would see at " + x + "," + y;
+            far += c == Land.FAR.getRGB() ? 1 : 0;
+            near += c == Land.NEAR.getRGB() ? 1 : 0;
+         }
+         if (x >= 100) {
+            same += a.getRGB(x, row) == b.getRGB(x - 100, row) ? 1 : 0;
+         }
+      }
+      assert far > 2000 && near > 2000 : "mesas " + far + ", dunes " + near;
+      assert same == Runner.WIDTH - 100 : "800 along the ground is 100 for the mesas, " + same;
+   }
+
+   private static BufferedImage landAt(double distance) {
+      BufferedImage img = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = img.createGraphics();
+      g.setColor(RunnerPanel.PAPER);
+      g.fillRect(0, 0, Runner.WIDTH, RunnerPanel.HEIGHT);
+      Land.paint(g, distance, 0);
+      g.dispose();
+      return img;
+   }
+
+   private static void padChecks() throws Exception {
+      assert panel(1, null).getPreferredSize().height == RunnerPanel.HEIGHT : "no pads unless asked for";
+      File file = File.createTempFile("dinogame", ".txt");
+      file.delete();
+      file.deleteOnExit();
+      RunnerPanel p = new RunnerPanel(Records.load(file), 1, Sounds.silent(false), true);
+      int height = RunnerPanel.HEIGHT + RunnerPanel.PADS;
+      assert p.getPreferredSize().height == height;
+      p.setSize(Runner.WIDTH, height);
+      Runner r = p.runner();
+      int padY = RunnerPanel.HEIGHT + RunnerPanel.PADS / 2;
+      int duckX = Runner.WIDTH / 4;
+      int jumpX = Runner.WIDTH * 3 / 4;
+      mouse(p, jumpX, padY, true);
+      assert r.state() == Runner.State.RUNNING : "RUN starts the run";
+      mouse(p, jumpX, padY, false);
+      while (r.isJumping()) {
+         p.step();
+      }
+      mouse(p, duckX, padY, true);
+      p.step();
+      assert r.isDucking() : "DUCK ducks while held";
+      mouse(p, duckX, padY, false);
+      p.step();
+      assert !r.isDucking() : "and lets go";
+      mouse(p, jumpX, padY, true);
+      assert r.isJumping() : "JUMP jumps";
+      mouse(p, jumpX, padY, false);
+      BufferedImage shot = new BufferedImage(Runner.WIDTH, height, BufferedImage.TYPE_INT_RGB);
+      // The lit mark fills the pad it asks for (sampled at the pad's top left, inside its border, clear of its words).
+      boolean litPad = false;
+      for (int i = 0; i < 600 && r.state() == Runner.State.RUNNING && !litPad; i++) {
+         int[] g = p.guide();
+         if (g[1] == 1 && !r.isJumping()) {
+            Graphics2D sg = shot.createGraphics();
+            p.paint(sg);
+            sg.dispose();
+            int x = g[0] == Ears.DUCK ? 30 : Runner.WIDTH / 2 + 24;
+            litPad = shot.getRGB(x, RunnerPanel.HEIGHT + 20) == RunnerPanel.INK.getRGB()
+               && shot.getRGB(g[0] == Ears.DUCK ? Runner.WIDTH / 2 + 24 : 30, RunnerPanel.HEIGHT + 20) == RunnerPanel.PAPER.getRGB();
+         }
+         p.step();
+      }
+      assert litPad : "the lit mark fills its pad, the other stays paper";
+      stepToCrash(r);
+      for (int i = 0; i < 30; i++) {
+         p.step();
+      }
+      mouse(p, jumpX, padY, true);
+      mouse(p, jumpX, padY, false);
+      assert r.state() == Runner.State.RUNNING : "RUN AGAIN runs again";
+      p.togglePlayers();
+      mouse(p, duckX, padY, true);
+      mouse(p, duckX, padY, false);
+      assert p.duel().running() : "either pad starts both players";
+      while (p.duel().p1.isJumping() || p.duel().p2.isJumping()) {
+         p.step();
+      }
+      mouse(p, duckX, padY, true);
+      assert p.duel().p1.isJumping() && !p.duel().p2.isJumping() : "the left pad is P1's jump";
+      mouse(p, duckX, padY, false);
+      System.out.println("pads: run, duck, jump, lit mark, run again and two players");
+   }
+
+   private static void mouse(RunnerPanel p, int x, int y, boolean down) {
+      java.awt.event.MouseEvent e = new java.awt.event.MouseEvent(p, down ? java.awt.event.MouseEvent.MOUSE_PRESSED
+         : java.awt.event.MouseEvent.MOUSE_RELEASED, 0, 0, x, y, 1, false, java.awt.event.MouseEvent.BUTTON1);
+      for (java.awt.event.MouseListener l : p.getMouseListeners()) {
+         if (down) {
+            l.mousePressed(e);
+         } else {
+            l.mouseReleased(e);
+         }
+      }
+   }
+
+   private static void stepToCrash(Runner r) {
+      while (r.state() == Runner.State.RUNNING) {
+         r.step();
+      }
+   }
+
+   /** Plays the start-only run of seed with the coach's jump: it gets past the cactus that ended it. */
+   private static boolean passes(long seed, Coach c) {
+      Runner r = new Runner(seed);
+      r.press();
+      r.release();
+      Runner first = new Runner(seed);
+      first.press();
+      first.release();
+      stepToCrash(first);
+      double clear = first.distance() + first.crashedInto().x + first.crashedInto().w - Runner.DINO_X;
+      while (r.state() == Runner.State.RUNNING && r.distance() < clear) {
+         if (r.steps() == c.step) {
+            r.press();
+         } else if (r.steps() == c.step + c.hold) {
+            r.release();
+         }
+         r.step();
+      }
+      return r.state() == Runner.State.RUNNING;
+   }
+
+   /** Plays crashed's keys up to the coach's duck, then ducks: it gets past the bird. */
+   private static boolean passes(long seed, Runner crashed, Coach c) {
+      double clear = crashed.distance() + crashed.crashedInto().x + crashed.crashedInto().w - Runner.DINO_X;
+      List<Integer> keys = new ArrayList<>();
+      for (int in : crashed.inputs()) {
+         if (in / 4 < c.step) {
+            keys.add(in);
+         }
+      }
+      keys.add(c.step * 4 + Runner.RELEASE);
+      keys.add(c.step * 4 + Runner.DUCK);
+      Ghost g = new Ghost(crashed.course(), 0, keys.stream().mapToInt(Integer::intValue).toArray());
+      g.start();
+      while (g.runner().state() == Runner.State.RUNNING && g.runner().distance() < clear) {
+         g.step();
+      }
+      return g.runner().state() == Runner.State.RUNNING;
+   }
+
    private static int earRun(long seed, int late) {
       Runner r = new Runner(seed);
       r.press();
@@ -530,7 +897,7 @@ public final class RunnerCheck {
       return r.score();
    }
 
-   /** Ink-colored pixels the panel draws on screen ahead of the dinosaur, between the score and the ground. */
+   /** Obstacle-colored (blue 83) pixels the panel draws on screen ahead of the dinosaur, between the score and the ground. */
    private static int inkInField(RunnerPanel p) {
       BufferedImage img = new BufferedImage(Runner.WIDTH, RunnerPanel.HEIGHT, BufferedImage.TYPE_INT_RGB);
       Graphics2D g = img.createGraphics();
@@ -539,7 +906,7 @@ public final class RunnerCheck {
       int n = 0;
       for (int y = 50; y < Runner.GROUND; y++) {
          for (int x = Runner.DINO_X + Runner.DUCK_W + 8; x < Runner.WIDTH; x++) {
-            n += (img.getRGB(x, y) & 0xFFFFFF) == (RunnerPanel.INK.getRGB() & 0xFFFFFF) ? 1 : 0;
+            n += ObstacleDetector.isObstacle(img.getRGB(x, y) & 0xFFFFFF) ? 1 : 0;
          }
       }
       return n;

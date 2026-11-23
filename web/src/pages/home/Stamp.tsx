@@ -8,6 +8,7 @@ import { APPS, webp, type App } from '../../shared/catalog';
 import { H } from './model';
 import * as P from './player';
 import { stampCount } from './tabs';
+import { passportPicture } from './passport-picture';
 import './passport.css';
 
 export const played = (a: App) => window.oldjavaPassport.has(a.id);
@@ -54,8 +55,9 @@ function Edge({ cat, inner }: { cat: App['cat']; inner: boolean }) {
   );
 }
 
-function Stamp({ a, when }: { a: App; when: number }) {
-  const h = hash(a.id), id = 'stamp-' + a.id, round = a.cat === 'game' || a.cat === 'music';
+/** An app's stamp; `prefix` keeps its ids apart from the same stamp drawn elsewhere on the page. */
+export function Stamp({ a, when, prefix = 'stamp-' }: { a: App; when: number; prefix?: string }) {
+  const h = hash(a.id), id = prefix + a.id, round = a.cat === 'game' || a.cat === 'music';
   const style = { '--tilt': ((h % 25) - 12) + 'deg', '--dx': ((h % 7) - 3) + 'px', '--dy': ((h % 5) - 2) + 'px' } as CSSProperties;
   const name = a.name.toUpperCase(), date = when ? stampDate(when) : 'PLAYED';
   if (!when && !window.oldjavaPassport.has(a.id)) return (
@@ -143,7 +145,7 @@ export function Passport({ off }: { off: string }) {
           <button className="btn primary" type="button" id="passport-new" hidden={left === 0} onClick={P.passportNew}>Play one you haven't</button>
           {' '}
           <button className="btn" type="button" id="passport-share" data-sound="none" title="Share the arcade, with your stamp count"
-            onClick={e => window.oldjavaShare.open(null, e.currentTarget)}>
+            onClick={e => window.oldjavaShare.open(null, e.currentTarget, passportPicture)}>
             ↗ Share
           </button>
           {' '}

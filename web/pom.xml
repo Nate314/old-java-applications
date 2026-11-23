@@ -11,11 +11,15 @@
 
   <modules>
     <module>shim</module>
+    <module>pages</module>
     <module>apps</module>
+    <module>apps-js</module>
     <module>nathanos</module>
     <module>then</module>
+    <module>then-js</module>
     <module>then-nathanos</module>
     <module>jars</module>
+    <module>stamps</module>
   </modules>
 
   <properties>
@@ -88,8 +92,50 @@
             <optimizationLevel>ADVANCED</optimizationLevel>
             <targetFileName>classes.js</targetFileName>
           </configuration>
+          <!-- Modules compiling side by side must not share TeaVM's compiler classes: in one class loader, concurrent
+               compiles sometimes wrote a wrong program without any error (round 67's 9.6 KB Minesweeper). Maven shares
+               a plugin's class loader between modules unless its dependencies differ, so this exclusion (of nothing)
+               names the module, giving each one its own. -->
+          <dependencies>
+            <dependency>
+              <groupId>org.teavm</groupId>
+              <artifactId>teavm-core</artifactId>
+              <version>${teavm.version}</version>
+              <exclusions>
+                <exclusion>
+                  <groupId>own-class-loader-for</groupId>
+                  <artifactId>${project.artifactId}</artifactId>
+                </exclusion>
+              </exclusions>
+            </dependency>
+          </dependencies>
         </plugin>
       </plugins>
     </pluginManagement>
+    <plugins>
+      <!-- Runs first (every module waits for its parent) so the parallel TeaVM compiles share no jar (.mvn/JarCacheOff.java). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <inherited>false</inherited>
+        <executions>
+          <execution>
+            <id>jar-cache-off</id>
+            <phase>validate</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <mkdir dir="${project.build.directory}/jar-cache-off"/>
+                <javac srcdir="${project.basedir}/.mvn" includes="JarCacheOff.java" destdir="${project.build.directory}/jar-cache-off"
+                       includeantruntime="false" release="17"/>
+                <taskdef name="jarcacheoff" classname="JarCacheOff" classpath="${project.build.directory}/jar-cache-off"/>
+                <jarcacheoff/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 </project>

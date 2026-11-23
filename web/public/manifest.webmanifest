@@ -14,6 +14,13 @@
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
+  "screenshots": [
+    { "src": "screenshots/home-wide.webp", "sizes": "1280x720", "type": "image/webp", "form_factor": "wide", "label": "The arcade: one app already playing, with the gallery of all 20" },
+    { "src": "screenshots/nathanos-wide.webp", "sizes": "1280x720", "type": "image/webp", "form_factor": "wide", "label": "NathaNOS, a pretend desktop that opens every other app" },
+    { "src": "screenshots/tankgame-wide.webp", "sizes": "1280x720", "type": "image/webp", "form_factor": "wide", "label": "Tank Game, against the computer or a friend on one keyboard" },
+    { "src": "screenshots/home-narrow.webp", "sizes": "824x1784", "type": "image/webp", "form_factor": "narrow", "label": "The arcade on a phone, with the computer playing Minesweeper" },
+    { "src": "screenshots/flappybird-narrow.webp", "sizes": "824x1784", "type": "image/webp", "form_factor": "narrow", "label": "Flappy Bird on a phone, with on-screen buttons" }
+  ],
   "shortcuts": [
     { "name": "Minesweeper", "url": "./index.html#Minesweeper", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Flappy Bird", "url": "./index.html#FlappyBird", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },

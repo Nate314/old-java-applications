@@ -91,6 +91,27 @@ public class LauncherCheck {
       Files.delete(seenFile);
       Files.delete(file);
 
+      // Picture glow: the box's size, rounded (corners clear, middle solid), dimmed below the picture, and the tone
+      // keeps a colorful picture's hue while a gray one stays gray.
+      java.awt.image.BufferedImage red = new java.awt.image.BufferedImage(40, 20, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.Graphics2D rg = red.createGraphics();
+      rg.setColor(new java.awt.Color(230, 40, 30));
+      rg.fillRect(0, 0, 40, 20);
+      rg.setColor(java.awt.Color.GRAY);
+      rg.fillRect(0, 0, 10, 20);   // a gray strip counts for little
+      rg.dispose();
+      java.awt.Color tone = Thumbs.tone(red);
+      check(tone.getRed() > 2 * tone.getGreen() && tone.getRed() > 2 * tone.getBlue() && tone.getRed() < 120, "red tone " + tone);
+      java.awt.image.BufferedImage plain = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      for (int i = 0; i < 64; i++) plain.setRGB(i % 8, i / 8, 0x808080);
+      java.awt.Color gray = Thumbs.tone(plain);
+      check(gray.getRed() == gray.getGreen() && gray.getGreen() == gray.getBlue(), "a gray picture's tone is gray " + gray);
+      java.awt.image.BufferedImage glow = Thumbs.glow(Thumbs.blur(red), tone, 120, 70, 16);
+      check(glow.getWidth() == 120 && glow.getHeight() == 70, "glow fills the box");
+      check((glow.getRGB(0, 0) >>> 24) == 0 && (glow.getRGB(60, 35) >>> 24) == 255, "glow is rounded and solid inside");
+      check((glow.getRGB(100, 35) >> 16 & 255) < 230 && (glow.getRGB(100, 35) >> 16 & 255) > 120, "glow dimmed, still red");
+      for (Catalog.App a : apps) new Thumbs().tone(a);   // every real picture gives a tone
+
       // README view: headings, lists, code and inline marks, with HTML escaped.
       String html = ReadmeView.toHtml("# Title\n\n- **Bold** item with `code`\n- <b>raw</b>\n\n```\nx < y\n```\n| a | b |\n|---|---|\n");
       check(html.contains("<h1") && html.contains("Title</h1>"), "heading");
@@ -227,6 +248,14 @@ public class LauncherCheck {
       check(String.join("|", parts).equals(History.QUIET.pattern()), "the launcher's quiet rule matches news-kind.ts: " + parts);
       check(Runner.homeOption("-Xmx1g", Paths.get("/h o")).endsWith("\"-Duser.home=" + Paths.get("/h o").toAbsolutePath() + "\"")
          && Runner.homeOption(null, Paths.get("/h")).startsWith("\"-D"), "then home option");
+      // A launch's phase from the programs under its PowerShell: building beats a short java (NathaNOS's jar build).
+      check(Runner.phase(List.of(), -1) == Runner.Phase.READY && Runner.phase(List.of("javac"), -1) == Runner.Phase.BUILDING
+         && Runner.phase(List.of("powershell", "jar", "java"), 5000) == Runner.Phase.BUILDING
+         && Runner.phase(List.of("java"), 300) == Runner.Phase.OPENING
+         && Runner.phase(List.of("java"), Runner.OPENING_MILLIS) == Runner.Phase.RUNNING, "launch phases");
+      check(Runner.phase(ProcessHandle.current(), System.currentTimeMillis()) == Runner.Phase.READY, "no children: getting ready");
+      check(LauncherWindow.elapsed(7_400).equals("0:07") && LauncherWindow.elapsed(192_000).equals("3:12")
+         && LauncherWindow.elapsed(3_723_000).equals("1:02:03") && LauncherWindow.elapsed(-5).equals("0:00"), "running clock");
       // The unpacker refuses entries that would land outside its folder.
       Path unpack = Files.createTempDirectory("launcher-then");
       java.io.ByteArrayOutputStream zipBytes = new java.io.ByteArrayOutputStream();
@@ -246,6 +275,17 @@ public class LauncherCheck {
       // The art the Then copy swaps in is the art web/art.ps1 renders, so the two lists cannot drift apart.
       String artScript = new String(Files.readAllBytes(root.resolve("web/art.ps1")), StandardCharsets.UTF_8);
       for (String art : ThenCopy.ART) check(artScript.contains("Out = '" + art + "'"), art + " is rendered by web/art.ps1");
+
+      // Card pitch: the hint wrapped at words into at most two lines that fit, the last cut with "..." when more is left.
+      java.awt.FontMetrics fm = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB)
+         .createGraphics().getFontMetrics(Ui.font(java.awt.Font.PLAIN, 12f));
+      for (Catalog.App a : apps) {
+         List<String> two = LauncherWindow.lines(fm, a.hint, 160, 2);
+         check(two.size() == 2 && two.stream().allMatch(l -> fm.stringWidth(l) <= 160) && two.get(1).endsWith("...")
+            && a.hint.startsWith(two.get(0)), a.id + " card pitch is two lines that fit, from the start of its hint");
+      }
+      check(LauncherWindow.lines(fm, "Short hint.", 160, 2).equals(List.of("Short hint.")), "a short pitch is one line, uncut");
+      check(LauncherWindow.lines(fm, "Unbreakablewordthatiswayfartoolongforacard rest", 60, 2).size() <= 2, "a long word is cut, not looped on");
 
       // Start menu: every app but the two that press real keys gets a shortcut with its own file name, which runs
       // run.ps1 by its full path; the icon file is one 256 px PNG; Remove deletes the shortcuts, icons and folder.
@@ -276,12 +316,49 @@ public class LauncherCheck {
       Files.delete(menu.resolve("icons"));
       Files.delete(menu);
 
+      // Selection moves: eased out (past halfway at a third of the time), ending exactly where they go.
+      check(Glide.at(0, 100) == 0 && Glide.at(100, 100) == 1 && Glide.at(500, 100) == 1 && Glide.at(-5, 100) == 0, "glide ends");
+      check(Glide.at(33, 100) > 0.5 && Glide.at(50, 100) < 1, "glide eases out: " + Glide.at(33, 100));
+      java.awt.Rectangle ringA = new java.awt.Rectangle(0, 0, 100, 200);
+      java.awt.Rectangle ringB = new java.awt.Rectangle(300, 100, 200, 200);
+      check(Glide.between(ringA, ringB, 0).equals(ringA) && Glide.between(ringA, ringB, 1).equals(ringB)
+         && Glide.between(ringA, ringB, 0.5).equals(new java.awt.Rectangle(150, 50, 150, 200)), "ring between cards");
+      check(Glide.between(java.awt.Color.BLACK, new java.awt.Color(200, 100, 50), 0.5).equals(new java.awt.Color(100, 50, 25)),
+         "tone washes between apps");
+      Thumbs fitThumbs = new Thumbs();
+      java.awt.Rectangle landed = fitThumbs.fit(rubik, 12, 12, 275, 176);
+      java.awt.image.BufferedImage rubikPic = fitThumbs.original(rubik);
+      check(landed.width <= 275 && landed.height <= 176 && (landed.width == 275 || landed.height == 176 || landed.width == rubikPic.getWidth())
+         && landed.x == 12 + (275 - landed.width) / 2 && landed.y == 12 + (176 - landed.height) / 2,
+         "the picture lands where the pane draws it: " + landed);
+
+      // Keycaps: the keys a hint names, not its articles, numbers or dates.
+      check(caps("W A S D and Q drive, arrow keys and M green. P pauses (A turns it off), Win+E, Space.")
+         .equals("[W, A, S, D, Q, arrow keys, M, P, A, Win+E, Space]"), "keys found");
+      check(caps("A dinosaur runner. I like it, from 1 to 100 (4 days ago), 3 things new, A* and Ao5").equals("[]"),
+         "no false keys");
+      check(caps("press 9, (0), I for hindsight, or D for night").equals("[9, 0, I, D]"), "digit and I keys by context");
+      check(caps(find(apps, "TankGame").hint).contains("arrow keys"), "TankGame's hint names its keys");
+      KeyCaps text = new KeyCaps(200);
+      text.setText("Space flaps");
+      int one = text.getPreferredSize().height;
+      text.setText("Space flaps\nZ rewinds");
+      check(text.getPreferredSize().width == 200 && text.getPreferredSize().height == 2 * one, "a line per \\n");
+      text.setText(find(apps, "TankGame").hint);
+      check(text.getPreferredSize().height > 4 * one, "long text wraps at the width");
+
       System.out.println("LauncherCheck: all checks passed");
    }
 
    private static Catalog.App find(List<Catalog.App> apps, String id) {
       for (Catalog.App a : apps) if (a.id.equals(id)) return a;
       throw new AssertionError("no app " + id);
+   }
+
+   private static String caps(String s) {
+      List<String> keys = new java.util.ArrayList<>();
+      for (int[] k : KeyCaps.find(s)) keys.add(s.substring(k[0], k[1]));
+      return keys.toString();
    }
 
    private static void check(boolean ok, String what) {

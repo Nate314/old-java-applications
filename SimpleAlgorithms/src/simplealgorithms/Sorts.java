@@ -19,17 +19,48 @@ final class Sorts {
 	/** How the work grows with n, for random numbers. */
 	static final String[] GROWTH = { "n\u00b2", "n\u00b2", "n\u00b2", "n log n", "n log n", "n log n" };
 	static final String[] ORDERS = { "Random", "Nearly sorted", "Reversed", "Few values" };
+	/** How each sort works, in a line. */
+	static final String[] METHODS = { "swaps neighbors that are out of order; each pass carries the biggest left to the end.",
+			"finds the smallest of the rest and swaps it into the next place.",
+			"takes each number in turn and steps it left past every bigger one.",
+			"sorts each half, then merges them by taking the smaller front number each time.",
+			"takes the last number as the pivot, puts smaller ones before it, then sorts each side.",
+			"makes a heap (each parent bigger than its children), then moves its top to the end, again and again." };
 
-	/** One thing a sort did: compare a and b, swap a and b, or write value b at a. */
+	/**
+	 * One thing a sort did: compare a and b, swap a and b, or write value b at a. Its note says why, in words, with %a
+	 * and %b for the values at a and b after the step, %A and %B for their places (counted from 1) and %c for c.
+	 */
 	static final class Step {
 		final int kind;
 		final int a;
 		final int b;
+		final String note;
+		/** A value the note names that is not in the list (merge sort's left value, kept in its spare array). */
+		final int c;
 
-		Step(int kind, int a, int b) {
+		Step(int kind, int a, int b, String note, int c) {
 			this.kind = kind;
 			this.a = a;
 			this.b = b;
+			this.note = note;
+			this.c = c;
+		}
+
+		/** The note with its values filled in, for the values after this step. */
+		String describe(int[] values) {
+			StringBuilder out = new StringBuilder();
+			for (int i = 0; i < note.length(); i++) {
+				char ch = note.charAt(i);
+				char code = i + 1 < note.length() ? note.charAt(i + 1) : ' ';
+				if (ch != '%' || "abcAB".indexOf(code) < 0) {
+					out.append(ch);
+					continue;
+				}
+				i++;
+				out.append(code == 'a' ? values[a] : code == 'b' ? values[b] : code == 'c' ? c : code == 'A' ? a + 1 : b + 1);
+			}
+			return out.toString();
 		}
 
 		int cost() {
@@ -132,21 +163,22 @@ final class Sorts {
 			v = Arrays.copyOf(values, values.length);
 		}
 
-		/** v[i] > v[j], recorded as a compare. */
-		boolean greater(int i, int j) {
-			steps.add(new Step(COMPARE, i, j));
-			return v[i] > v[j];
+		/** v[i] > v[j], recorded as a compare with the note for its answer. */
+		boolean greater(int i, int j, String ifGreater, String ifNot) {
+			boolean greater = v[i] > v[j];
+			steps.add(new Step(COMPARE, i, j, greater ? ifGreater : ifNot, 0));
+			return greater;
 		}
 
-		void swap(int i, int j) {
-			steps.add(new Step(SWAP, i, j));
+		void swap(int i, int j, String note) {
+			steps.add(new Step(SWAP, i, j, note, 0));
 			int t = v[i];
 			v[i] = v[j];
 			v[j] = t;
 		}
 
-		void write(int i, int value) {
-			steps.add(new Step(WRITE, i, value));
+		void write(int i, int value, String note) {
+			steps.add(new Step(WRITE, i, value, note, 0));
 			v[i] = value;
 		}
 	}
@@ -156,8 +188,9 @@ final class Sorts {
 		for (int end = r.v.length - 1; end > 0; end--) {
 			boolean swapped = false;
 			for (int i = 0; i < end; i++) {
-				if (r.greater(i, i + 1)) {
-					r.swap(i, i + 1);
+				if (r.greater(i, i + 1, "%a is bigger than its right neighbor %b, so they swap.",
+						"%a is not bigger than its right neighbor %b, so they stay.")) {
+					r.swap(i, i + 1, "They swap: %b moves right, toward the end.");
 					swapped = true;
 				}
 			}
@@ -173,12 +206,13 @@ final class Sorts {
 		for (int i = 0; i < n - 1; i++) {
 			int smallest = i;
 			for (int j = i + 1; j < n; j++) {
-				if (r.greater(smallest, j)) {
+				if (r.greater(smallest, j, "%b is smaller than %a, the smallest so far, so %b is the new smallest.",
+						"%b is not smaller than %a, the smallest so far.")) {
 					smallest = j;
 				}
 			}
 			if (smallest != i) {
-				r.swap(i, smallest);
+				r.swap(i, smallest, "The smallest of the rest, %a, swaps into place %A.");
 			}
 		}
 	}
@@ -186,8 +220,9 @@ final class Sorts {
 	/** Takes each value in turn and swaps it left past every bigger one. */
 	private static void insertion(Recorder r) {
 		for (int i = 1; i < r.v.length; i++) {
-			for (int j = i; j > 0 && r.greater(j - 1, j); j--) {
-				r.swap(j - 1, j);
+			for (int j = i; j > 0 && r.greater(j - 1, j, "%a is bigger than %b, so %b steps left past it.",
+					"%a is not bigger than %b, so %b has found its place."); j--) {
+				r.swap(j - 1, j, "%a steps left to place %A.");
 			}
 		}
 	}
@@ -205,17 +240,20 @@ final class Sorts {
 		int j = mid + 1;
 		for (int k = lo; k <= hi; k++) {
 			boolean takeRight;
+			String note = "One half is used up, so %a, next from the other, goes to place %A.";
 			if (i > mid) {
 				takeRight = true;
 			} else if (j > hi) {
 				takeRight = false;
 			} else {
 				// The left value now lives only in the spare array, so the compare shows the place being filled and
-				// the right value it is weighed against.
-				r.steps.add(new Step(COMPARE, k, j));
+				// the right value it is weighed against, and its note names the left value as c.
 				takeRight = spare[i] > spare[j];
+				r.steps.add(new Step(COMPARE, k, j, takeRight ? "%b from the right half is smaller than %c from the left, so %b goes to place %A."
+						: "%c from the left half is not bigger than %b from the right, so %c goes to place %A.", spare[i]));
+				note = "%a goes to place %A.";
 			}
-			r.write(k, takeRight ? spare[j++] : spare[i++]);
+			r.write(k, takeRight ? spare[j++] : spare[i++], note);
 		}
 	}
 
@@ -224,15 +262,16 @@ final class Sorts {
 		while (lo < hi) {
 			int store = lo;
 			for (int i = lo; i < hi; i++) {
-				if (r.greater(hi, i)) {
+				if (r.greater(hi, i, "%b is smaller than the pivot %a, so it joins the small side.",
+						"%b is not smaller than the pivot %a, so it stays on the big side.")) {
 					if (i != store) {
-						r.swap(i, store);
+						r.swap(i, store, "%b swaps to the end of the small side, place %B.");
 					}
 					store++;
 				}
 			}
 			if (store != hi) {
-				r.swap(store, hi);
+				r.swap(store, hi, "The pivot %a swaps to place %A, between the two sides: its final place.");
 			}
 			// Recurse into the smaller side and loop on the bigger, so the stack stays short.
 			if (store - lo < hi - store) {
@@ -252,7 +291,7 @@ final class Sorts {
 			siftDown(r, i, n);
 		}
 		for (int end = n - 1; end > 0; end--) {
-			r.swap(0, end);
+			r.swap(0, end, "The biggest left, %b, moves from the top of the heap to place %B, where it stays.");
 			siftDown(r, 0, end);
 		}
 	}
@@ -263,13 +302,15 @@ final class Sorts {
 			if (child >= size) {
 				return;
 			}
-			if (child + 1 < size && r.greater(child + 1, child)) {
+			if (child + 1 < size && r.greater(child + 1, child, "Of the two children, %a is bigger than %b.",
+					"Of the two children, %a is not bigger than %b.")) {
 				child++;
 			}
-			if (!r.greater(child, i)) {
+			if (!r.greater(child, i, "Child %a is bigger than its parent %b, so they swap.",
+					"Child %a is not bigger than its parent %b, so the heap is in order here.")) {
 				return;
 			}
-			r.swap(i, child);
+			r.swap(i, child, "%a moves up and %b sinks down the heap.");
 			i = child;
 		}
 	}

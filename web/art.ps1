@@ -1,11 +1,13 @@
 # Renders the apps' own art from its SVG sources (each app's art/ folder) to the PNG and JPEG files the Java code
 # loads, with headless Chrome, so a changed drawing can be rendered again the same way. The SVGs are the source;
 # the rendered files are committed next to the code that reads them. Run from the repo root:
-#   ./web/art.ps1
-#   ./web/art.ps1 -Only bird,bible   (by output file name, without the extension)
+# (-ProfileRoot has no default, as in the other harness scripts: pass your own scratch folder on every run)
+#   ./web/art.ps1 -ProfileRoot C:\some\scratch
+#   ./web/art.ps1 -Only bird,bible -ProfileRoot C:\some\scratch   (by output file name, without the extension)
 param(
     [string[]]$Only = @(),
-    [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+    [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    [string]$ProfileRoot = $(throw '-ProfileRoot is required (no default: keep Chrome profiles in your own scratch folder)')   # Chrome's throwaway profile and raw screenshots go here
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -39,7 +41,8 @@ $jobs = @(
     @{ Svg = 'NathaNOS/art/TankGame.svg';                Out = 'NathaNOS/assets/TankGame.png' }
 )
 
-$profileDir = Join-Path ([IO.Path]::GetTempPath()) "oldjava-art-chrome-$PID"
+New-Item -ItemType Directory -Force $ProfileRoot | Out-Null
+$profileDir = Join-Path $ProfileRoot "oldjava-art-chrome-$PID"
 try {
     foreach ($job in $jobs) {
         $name = [IO.Path]::GetFileNameWithoutExtension($job.Out)
@@ -49,7 +52,7 @@ try {
         $text = [IO.File]::ReadAllText($svg)
         if ($text -notmatch '<svg[^>]*\swidth="(\d+)"[^>]*\sheight="(\d+)"') { throw "$($job.Svg) needs width and height attributes" }
         $w = [int]$Matches[1]; $h = [int]$Matches[2]
-        $png = Join-Path ([IO.Path]::GetTempPath()) "oldjava-art-$PID-$name.png"
+        $png = Join-Path $ProfileRoot "oldjava-art-$PID-$name.png"
         $uri = ([Uri]$svg).AbsoluteUri
         & $Chrome --headless --disable-gpu --hide-scrollbars "--user-data-dir=$profileDir" `
             --default-background-color=00000000 --force-device-scale-factor=1 "--window-size=$w,$h" "--screenshot=$png" $uri 2>$null | Out-Null

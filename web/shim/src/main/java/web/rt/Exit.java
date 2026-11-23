@@ -3,6 +3,7 @@ package web.rt;
 /** App calls to {@code System.exit(int)} are redirected here at compile time (see {@code web.teavm.ShimPlugin}). */
 public final class Exit {
     private static boolean exited;
+    private static boolean closing;
     /** Closes every window; set by the desktop (this class cannot name shim types, see web/README.md). */
     public static Runnable onExit;
 
@@ -17,13 +18,19 @@ public final class Exit {
     }
 
     public static void exit(int status) {
-        if (!exited) {
-            exited = true;
+        if (!closing) {
+            closing = true;
             System.out.println("System.exit(" + status + ")");
-            if (onExit != null) {
-                onExit.run();
+            // Windows close before exited is set: a window's dispose may still repaint (SynthesizerKeyboard's does),
+            // and the page hears of the exit even if one throws.
+            try {
+                if (onExit != null) {
+                    onExit.run();
+                }
+            } finally {
+                exited = true;
+                Js.notifyExited("The program exited (status " + status + ").");
             }
-            Js.notifyExited("The program exited (status " + status + ").");
         }
         throw new ExitError();
     }

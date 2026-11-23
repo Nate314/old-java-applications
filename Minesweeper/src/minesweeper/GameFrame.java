@@ -22,7 +22,7 @@ import javax.swing.Timer;
 public final class GameFrame extends JFrame {
    private static final File BEST_TIMES_FILE = new File(System.getProperty("user.home", "."), ".minesweeper-best.txt");
    /** Room for the level buttons, the status line and the two hint lines, taken from the board so the window keeps its old size. */
-   private static final int BARS_HEIGHT = 104;
+   private static final int BARS_HEIGHT = 118;
    /** How long dealing a no-guess board may take before a random one is played instead (it takes a few ms). */
    private static final int DEAL_BUDGET_MS = 1500;
    private static final Color SELECTED_LEVEL = MineTile.GRASS_LIGHT;
@@ -31,6 +31,8 @@ public final class GameFrame extends JFrame {
    private static final int RIPPLE_MS = 22;
    /** Mines burst in this many ms per tile of distance from the one hit; a win's flags plant at the same pace. */
    private static final int BURST_STEP_MS = 45;
+   /** A won field grows back as meadow just behind the wave of flags. */
+   private static final int BLOOM_LAG_MS = 120;
    /** Watch: the computer makes a move this often, and starts the next game this long after one ends. */
    private static final int WATCH_STEP_MS = 280;
    private static final int WATCH_NEXT_GAME_MS = 2600;
@@ -72,7 +74,9 @@ public final class GameFrame extends JFrame {
    private int pressOffsetX;
    private int pressOffsetY;
    private boolean dragged;
-   private final JLabel status = new JLabel(" ", SwingConstants.CENTER);
+   /** Mines left, time and best while playing; what happened once a game ends, with what to do next beside it. */
+   private final Scoreboard score = new Scoreboard();
+   private final JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
    private final Timer clock = new Timer(1000, event -> this.updateStatus());
    /** Tiles with an animation running, repainted every frame until they are done. */
    private final List<MineTile> animating = new ArrayList<>();
@@ -118,6 +122,13 @@ public final class GameFrame extends JFrame {
    private final Luck luck = new Luck();
    /** The chance the move being made hits a mine, read just before it (0 when certain, -1 when not known). */
    private double moveRisk = -1;
+   /** The mine the player just hit, and what the board showed instead, so a click on it can undo the loss; null otherwise. */
+   private int[] hit;
+   private Logic.Deduction lossHint;
+   /** Mines undone this game; like a hint, one sets no best time. */
+   private int undone;
+   /** The count on a number with more flags around it than that (ringed in red), or null when there is none. */
+   private String overFlagged;
 
    public GameFrame(SoundPlayer soundPlayer) {
       this(soundPlayer, null, null, null, false, false);
@@ -145,11 +156,13 @@ public final class GameFrame extends JFrame {
       this.setDefaultCloseOperation(3);
       this.addKeyListener(new WindowMoveKeyListener(this));
       this.add(this.levelBar(), BorderLayout.NORTH);
-      this.status.setFont(new Font("Dialog", Font.BOLD, 14));
+      JPanel scoreRow = new JPanel(new BorderLayout());
+      scoreRow.add(this.score, BorderLayout.CENTER);
+      scoreRow.add(this.actions, BorderLayout.EAST);
       JPanel lines = new JPanel(new BorderLayout());
       this.hintAction.setFont(new Font("Dialog", Font.BOLD, 13));
       this.hintReason.setFont(new Font("Dialog", Font.PLAIN, 13));
-      lines.add(this.status, BorderLayout.NORTH);
+      lines.add(scoreRow, BorderLayout.NORTH);
       lines.add(this.hintAction, BorderLayout.CENTER);
       lines.add(this.hintReason, BorderLayout.SOUTH);
       this.add(lines, BorderLayout.SOUTH);
@@ -254,6 +267,7 @@ public final class GameFrame extends JFrame {
       }
       this.reveal(row, column, row, column);
       this.refreshOdds();
+      this.coach();
    }
 
    /**
@@ -270,6 +284,9 @@ public final class GameFrame extends JFrame {
          return;
       }
       this.noteRisk(targets);
+      if (!this.watching) {
+         this.bestTimes.learned(Coach.CHORD);
+      }
       for (int[] cell : targets) {
          if (this.gameOver) {
             return;
@@ -277,6 +294,7 @@ public final class GameFrame extends JFrame {
          this.reveal(cell[0], cell[1], row, column);
       }
       this.refreshOdds();
+      this.coach();
    }
 
    /**
@@ -340,10 +358,12 @@ public final class GameFrame extends JFrame {
          this.finish();
          if (this.watching) {
             this.setTitle("Minesweeper: the computer hit a mine.");
-            this.status.setText("Boom! The computer had to guess. Next game...");
+            this.score.say("Boom! The computer had to guess. Next game...", Scoreboard.LOST);
          } else {
-            this.setTitle("Minesweeper: you hit a mine. Click to play again.");
-            this.status.setText("Boom! Click any tile to play again.");
+            this.hit = new int[]{row, column};
+            this.lossHint = instead;
+            this.setTitle("Minesweeper: you hit a mine. Click the red mine to undo it, or another tile to play again.");
+            this.ended("Boom! You hit a mine.", Scoreboard.LOST);
             if (instead != null) {
                this.showDeduction(instead, "No need to guess: the glowing tiles were safe.");
             } else if (this.moveRisk > 1e-9) {
@@ -366,13 +386,17 @@ public final class GameFrame extends JFrame {
             this.revealNoteDirection = 1;
          }
       }
+      this.settleNumbers();
 
       if (MineFieldGenerator.isWon(this.grid, this.revealed)) {
          this.finish();
          for (int r = 0; r < this.rows; r++) {
             for (int c = 0; c < this.columns; c++) {
+               int delay = BURST_STEP_MS * distance(r, c, row, column);
                if (MineFieldGenerator.isMine(this.grid, r, c)) {
-                  this.tiles[r][c].showFlag(BURST_STEP_MS * distance(r, c, row, column));
+                  this.tiles[r][c].showFlag(delay);
+               } else {
+                  this.tiles[r][c].bloom(delay + BLOOM_LAG_MS);
                }
             }
          }
@@ -383,28 +407,34 @@ public final class GameFrame extends JFrame {
          if (!this.computerPlayed) {
             int guesses = this.luck.guesses();
             String cleared = this.luck.clearedLine();
-            this.setHintLines(this.oddsCounted ? "Cleared with the odds showing." : this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
+            this.setHintLines(this.oddsCounted ? "Cleared with the odds showing." : this.undone > 0 ? "Cleared, with " + (this.undone == 1 ? "a mine" : this.undone + " mines") + " undone."
+               : this.hints > 0 ? "Cleared with " + this.hints + (this.hints == 1 ? " hint." : " hints.")
                : cleared != null ? cleared
                : this.fairBoard ? "Cleared by logic alone, no guesses." : "Cleared without a single guess.",
-               guesses > 0 ? this.luck.winLine() : this.luck.unread > 0 ? this.luck.unreadLine() : this.hints > 0 ? "A game won with hints sets no best time." : " ");
+               guesses > 0 ? this.luck.winLine() : this.luck.unread > 0 ? this.luck.unreadLine()
+               : this.undone > 0 ? "A game with a mine undone sets no best time." : this.hints > 0 ? "A game won with hints sets no best time." : " ");
          }
          if (this.computerPlayed) {
             // Not a best time: the computer played some or all of it.
             String who = this.watching ? "The computer" : "You and the computer";
             this.setTitle("Minesweeper: " + who.toLowerCase() + " cleared it in " + BestTimes.format(time) + ".");
-            this.status.setText(who + " cleared it in " + BestTimes.format(time) + (this.watching ? ". Next game..." : ". Click to play again."));
+            if (this.watching) {
+               this.score.say(who + " cleared it in " + BestTimes.format(time) + ". Next game...", Scoreboard.WON);
+            } else {
+               this.ended(who + " cleared it in " + BestTimes.format(time) + ".", Scoreboard.WON);
+            }
             return;
          }
-         if (this.hints > 0) {
+         if (this.hints > 0 || this.undone > 0) {
             this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
-            this.status.setText("You win in " + BestTimes.format(time) + " with hints. Click to play again.");
+            this.ended("You win in " + BestTimes.format(time) + (this.hints > 0 ? " with hints." : " with a mine undone."), Scoreboard.WON);
             return;
          }
          long before = this.bestTimes.best(this.level);
          boolean record = this.bestTimes.record(this.level, time);
          this.setTitle("Minesweeper: you win in " + BestTimes.format(time) + "! Click to play again.");
-         this.status.setText("You win in " + BestTimes.format(time) + "! "
-            + (!record ? "Best: " + BestTimes.format(before) : before == 0 ? "First " + this.level.label + " win." : "New best!"));
+         this.ended("You win in " + BestTimes.format(time) + "! "
+            + (!record ? "Best: " + BestTimes.format(before) : before == 0 ? "First " + this.level.label + " win." : "New best!"), Scoreboard.WON);
       }
    }
 
@@ -442,10 +472,52 @@ public final class GameFrame extends JFrame {
       this.gameOver = true;
       this.finishMillis = System.currentTimeMillis();
       this.clock.stop();
+      this.unmark();
+      if (!this.computerPlayed && MineFieldGenerator.isWon(this.grid, this.revealed)) {
+         this.bestTimes.learned(Coach.CHORD); // a player who can win needs no lessons
+      }
       for (int i = 0; i < this.luck.guesses(); i++) {
          int cell = this.luck.cells.get(i);
          this.tiles[cell / this.columns][cell % this.columns].setGamble(this.luck.risks.get(i));
       }
+   }
+
+   /**
+    * A click on the red mine (or U) after the player hit it: the move is undone and the game goes on, with a flag on
+    * that mine and the clock running again. False when there is nothing to undo.
+    */
+   boolean undoMine() {
+      if (!this.gameOver || this.hit == null) {
+         return false;
+      }
+      this.flagCount = 0;
+      for (int r = 0; r < this.rows; r++) {
+         for (int c = 0; c < this.columns; c++) {
+            this.tiles[r][c].undoLoss();
+            this.flagged[r][c] = this.tiles[r][c].isFlagged(); // the mine now flagged, the wrong flags gone
+            this.flagCount += this.flagged[r][c] ? 1 : 0;
+         }
+      }
+      this.luck.takeBack(this.moveRisk);
+      this.undone++;
+      this.moves++;
+      this.gameOver = false;
+      this.startMillis += System.currentTimeMillis() - this.finishMillis; // the time spent looking at the loss is not counted
+      this.clock.start();
+      this.updateStatus();
+      this.settleNumbers();
+      this.refreshOdds();
+      if (this.lossHint != null) {
+         this.showDeduction(this.lossHint, "Undone. These glowing tiles were safe to open.");
+      } else if (!this.showOdds) {
+         this.setHintLines("Undone: a flag now marks that mine.", "A game with a mine undone sets no best time.");
+      }
+      this.hit = null;
+      this.lossHint = null;
+      this.actions.removeAll();
+      this.actions.revalidate();
+      this.actions.repaint();
+      return true;
    }
 
    boolean isRevealed(int row, int column) {
@@ -457,8 +529,29 @@ public final class GameFrame extends JFrame {
          this.flagged[row][column] = flag;
          this.flagCount += flag ? 1 : -1;
          this.moves++;
+         if (flag && !this.watching) {
+            this.bestTimes.learned(Coach.FLAG);
+         }
+         this.settleNumbers();
          this.clearHint();
          this.updateStatus();
+      }
+   }
+
+   /** Every revealed number shows how it stands by its flags: settled ones fade into the sand, over-flagged ones go red. */
+   private void settleNumbers() {
+      this.overFlagged = null;
+      if (this.grid == null) {
+         return;
+      }
+      for (int r = 0; r < this.rows; r++) {
+         for (int c = 0; c < this.columns; c++) {
+            int standing = MineFieldGenerator.standing(this.grid, this.revealed, this.flagged, r, c);
+            this.tiles[r][c].setStanding(standing);
+            if (standing == MineFieldGenerator.OVER && this.overFlagged == null) {
+               this.overFlagged = this.grid[r][c];
+            }
+         }
       }
    }
 
@@ -601,6 +694,9 @@ public final class GameFrame extends JFrame {
       } else {
          this.watchTimer.stop();
          this.moveCursor(null);
+         if (this.gameOver && this.actions.getComponentCount() == 0) { // it would have dealt the next game itself
+            this.ended("Your turn: deal the next board.", Scoreboard.PLAIN);
+         }
       }
       this.updateStatus();
    }
@@ -727,7 +823,7 @@ public final class GameFrame extends JFrame {
 
    /** Marks a deduction on the board (its numbers ringed, its tiles glowing or red) with a line saying what and why. */
    private void showDeduction(Logic.Deduction step, String action) {
-      this.clearHint();
+      this.unmark();
       for (int cell : step.numbers) {
          this.markHint(cell, MineTile.HINT_CLUE);
       }
@@ -745,22 +841,55 @@ public final class GameFrame extends JFrame {
 
    /** Takes a hint's marks off the board and puts the tip back. */
    private void clearHint() {
+      this.unmark();
+      this.showTip();
+   }
+
+   private void unmark() {
       for (MineTile tile : this.hinted) {
          tile.setHint(MineTile.HINT_NONE);
       }
       this.hinted.clear();
-      this.showTip();
    }
 
-   /** Between hints: what kind of board this is and where the help is (with Odds on, what the odds say). */
+   /**
+    * Between hints: how to start, a first game's lesson, or what kind of board this is and where the help is (with
+    * Odds on, what the odds say).
+    */
    private void showTip() {
+      String board = this.bestTimes.noGuess() ? "No guess: logic alone clears every board." : "Random boards: some need a lucky guess.";
       if (this.showOdds) {
          this.refreshOdds();
-      } else if (this.bestTimes.noGuess()) {
-         this.setHintLines("No guess: logic alone clears every board.", "Stuck? Hint (H) shows the next step and why.");
-      } else {
-         this.setHintLines("Random boards: some need a lucky guess.", "No guess (G) deals boards logic can clear.");
+      } else if (this.overFlagged != null && !this.watching) {
+         this.setHintLines("Too many flags: the red " + this.overFlagged + " has more flags than " + (this.overFlagged.equals("1") ? "its 1 mine." : "its " + this.overFlagged + " mines."),
+            "One of its flags is wrong: right click (or long press) to take it off.");
+      } else if (this.grid == null && !this.watching) {
+         this.setHintLines("Click any tile to start: the first is always safe.", board);
+      } else if (!this.coach()) {
+         this.setHintLines(board, this.bestTimes.noGuess() ? "Stuck? Hint (H) shows the next step and why." : "No guess (G) deals boards logic can clear.");
       }
+   }
+
+   /**
+    * A first game, until the player has flagged a mine and opened around a number: the lesson they are on, shown on
+    * the board (a gold number and the tiles it settles) with what to do. True when it set the lines.
+    */
+   private boolean coach() {
+      int lesson = this.bestTimes.lessons();
+      if (lesson == Coach.DONE || this.grid == null || this.gameOver || this.watching || this.showOdds || this.overFlagged != null) {
+         return false;
+      }
+      Coach step = lesson == Coach.FLAG ? Coach.flag(this.view()) : Coach.chord(this.grid, this.revealed, this.flagged, this.view());
+      this.unmark();
+      if (step.number >= 0) {
+         this.markHint(step.number, MineTile.HINT_CLUE);
+         this.scrollTo(this.tiles[step.number / this.columns][step.number % this.columns]); // zoomed, the example may be off the view
+      }
+      for (int cell : step.cells) {
+         this.markHint(cell, step.mines ? MineTile.HINT_MINE : MineTile.HINT_SAFE);
+      }
+      this.setHintLines(step.action, step.reason);
+      return true;
    }
 
    private void setHintLines(String action, String reason) {
@@ -797,11 +926,38 @@ public final class GameFrame extends JFrame {
       long best = this.bestTimes.best(this.level);
       if (this.watching) {
          this.setTitle("Minesweeper: the computer is playing");
-         this.status.setText("Computer playing: click to take over");
+         this.score.say("Computer playing: click to take over", Scoreboard.PLAIN);
          return;
       }
       this.setTitle("Minesweeper: " + minesLeft + " mines left");
-      this.status.setText(minesLeft + " mines left    Time " + elapsed / 1000 / 60 + ":" + (elapsed / 1000 % 60 < 10 ? "0" : "")
-         + elapsed / 1000 % 60 + "    Best " + (best == 0 ? "none yet" : BestTimes.format(best)));
+      this.score.counters(minesLeft, elapsed, best);
+   }
+
+   /**
+    * A game the player was in has ended: says what happened and puts what to do next beside it, as buttons a finger
+    * can find (a click on the board still does the same: the red mine undoes, any other tile starts again).
+    */
+   private void ended(String text, int mood) {
+      this.score.say(text, mood);
+      if (this.hit != null) {
+         this.actions.add(this.action("Undo", "Take back the mine and play this board on (U)", this::undoMine));
+         this.actions.add(this.action("New game", "Deal a new board (F2)", this::restart));
+      } else {
+         this.actions.add(this.action("Again", "Deal a new board (F2)", this::restart));
+         if (this.level.ordinal() + 1 < Level.values().length) {
+            Level next = Level.values()[this.level.ordinal() + 1];
+            this.actions.add(this.action("Next: " + next.label, "A bigger board (" + (next.ordinal() + 1) + ")", () -> this.play(next)));
+         }
+      }
+      this.actions.revalidate();
+      this.actions.repaint();
+   }
+
+   private JButton action(String label, String tip, Runnable run) {
+      JButton button = new JButton(label);
+      button.setFocusable(false);
+      button.setToolTipText(tip);
+      button.addActionListener(event -> run.run());
+      return button;
    }
 }

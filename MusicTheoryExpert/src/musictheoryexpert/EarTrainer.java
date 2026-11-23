@@ -26,13 +26,16 @@ import synthesizer.MySynthesizer;
 /**
  * The Ear training tab: a list of drills on the left and the current round on the right. Play sounds the question,
  * the answer buttons (or keys 1 to 9, 0, - and =) name it, and the keyboard at the bottom shows the notes once it is
- * answered. A right answer moves on by itself; a wrong one plays the question again with its notes lit.
+ * answered. A right answer moves on by itself; a wrong one plays the question again with its notes lit, then what the
+ * answer picked would have sounded like from the same note, and every answer can then be heard to compare.
  */
 @SuppressWarnings("serial")
 public final class EarTrainer extends JPanel {
 	private static final String CHOICE_KEYS = "1234567890-=";
 	private static final int[] FANFARE = { 72, 76, 79, 84 };
 	private static final int RIGHT_PAUSE_MILLIS = 1000;
+	/** The gap between the right answer and yours after a wrong answer. */
+	private static final int COMPARE_GAP_MILLIS = 450;
 	private final DrillRecords records;
 	private final StepPlayer player;
 	private final Random random = new Random();
@@ -40,6 +43,8 @@ public final class EarTrainer extends JPanel {
 	/** False until the round's first question is played. */
 	private boolean started;
 	private int chosen = -1;
+	/** The answer whose sound is playing after a wrong answer, or -1. */
+	private int hearing = -1;
 	private int[] sounding;
 	private Timer pause;
 	private boolean newBest;
@@ -100,6 +105,7 @@ public final class EarTrainer extends JPanel {
 		round = new Round(drill, random);
 		started = false;
 		chosen = -1;
+		hearing = -1;
 		newBest = false;
 		opened = null;
 		notice = "";
@@ -122,6 +128,10 @@ public final class EarTrainer extends JPanel {
 	}
 
 	public void answer(int choice) {
+		if (comparing() && choice >= 0 && choice < round.drill().choiceCount()) {
+			hear(choice);
+			return;
+		}
 		if (!started || round.answered() || choice < 0 || choice >= round.drill().choiceCount()) {
 			return;
 		}
@@ -136,9 +146,33 @@ public final class EarTrainer extends JPanel {
 			pause.setRepeats(false);
 			pause.start();
 		} else {
-			// Hear it again, this time with its notes lit.
-			playQuestion();
+			// Hear it again with its notes lit, then yours from the same note, so the difference can be heard.
+			int yours = choice;
+			hearing = round.question().answer();
+			player.play(round.question().steps(), round.drill().stepMillis(), () -> {
+				hearing = -1;
+				pause = new Timer(COMPARE_GAP_MILLIS, event -> hear(yours));
+				pause.setRepeats(false);
+				pause.start();
+				repaint();
+			});
 		}
+		repaint();
+	}
+
+	/** True after a wrong answer, until the next question: every answer can be heard from the question's note. */
+	public boolean comparing() {
+		return started && round.answered() && !round.isOver() && chosen != round.question().answer();
+	}
+
+	/** Plays what answer {@code choice} sounds like from the question's note. */
+	private void hear(int choice) {
+		stopAll();
+		hearing = choice;
+		player.play(round.drill().as(round.question(), choice).steps(), round.drill().stepMillis(), () -> {
+			hearing = -1;
+			repaint();
+		});
 		repaint();
 	}
 
@@ -206,6 +240,7 @@ public final class EarTrainer extends JPanel {
 		stopAll();
 		round.next();
 		chosen = -1;
+		hearing = -1;
 		playQuestion();
 		repaint();
 	}
@@ -241,35 +276,46 @@ public final class EarTrainer extends JPanel {
 
 	// ---- drawing ----
 
+	private boolean narrow() {
+		return getWidth() < NARROW;
+	}
+
 	private int mainX() {
-		return 236;
+		return narrow() ? 14 : 236;
+	}
+
+	/** How far the round sits below where it does on a wide tab: narrow, the drills are a row of chips above it. */
+	private int dy() {
+		return narrow() ? 66 : 0;
 	}
 
 	private int choiceColumns(int count) {
-		return count <= 3 ? count : count == 4 ? 2 : count <= 6 ? 3 : 4;
+		return count <= 3 ? count : count == 4 ? 2 : count <= 6 || narrow() ? 3 : 4;
 	}
 
 	/** Works out where everything goes, so painting and the mouse agree. */
 	private void layOut() {
 		int width = getWidth();
 		drillRows.clear();
-		for (int i = 0; i < Drill.values().length; i++) {
-			drillRows.add(new Rectangle(14, 66 + i * 58, mainX() - 32, 50));
+		int drills = Drill.values().length;
+		int chip = (width - 28 - 6 * (drills - 1)) / drills;
+		for (int i = 0; i < drills; i++) {
+			drillRows.add(narrow() ? new Rectangle(14 + i * (chip + 6), 60, chip, 46) : new Rectangle(14, 66 + i * 58, mainX() - 32, 50));
 		}
-		int x = mainX();
-		int mainWidth = Math.max(200, width - x - 18);
-		playButton = new Rectangle(x, 128, Math.min(mainWidth, 300), 52);
+		int x = mainX(), dy = dy();
+		int mainWidth = Math.max(200, width - x - (narrow() ? 14 : 18));
+		playButton = new Rectangle(x, 128 + dy, Math.min(mainWidth, 300), 52);
 		choiceBoxes.clear();
 		int count = round.drill().choiceCount();
 		int columns = choiceColumns(count);
 		int gap = 10;
 		int boxWidth = (mainWidth - gap * (columns - 1)) / columns;
 		for (int i = 0; i < count; i++) {
-			choiceBoxes.add(new Rectangle(x + (i % columns) * (boxWidth + gap), 200 + (i / columns) * 54, boxWidth, 44));
+			choiceBoxes.add(new Rectangle(x + (i % columns) * (boxWidth + gap), 200 + dy + (i / columns) * 54, boxWidth, 44));
 		}
 		int buttonWidth = Math.min(180, (mainWidth - gap) / 2);
-		againButton = new Rectangle(x, 284, buttonWidth, 46);
-		nextButton = new Rectangle(x + buttonWidth + gap, 284, buttonWidth, 46);
+		againButton = new Rectangle(x, 284 + dy, buttonWidth, 46);
+		nextButton = new Rectangle(x + buttonWidth + gap, 284 + dy, buttonWidth, 46);
 	}
 
 	private Object targetAt(int x, int y) {
@@ -288,7 +334,7 @@ public final class EarTrainer extends JPanel {
 		if (playButton.contains(x, y)) {
 			return playButton;
 		}
-		if (started && !round.answered()) {
+		if (started && !round.answered() || comparing()) {
 			for (Rectangle box : choiceBoxes) {
 				if (box.contains(x, y)) {
 					return box;
@@ -309,24 +355,33 @@ public final class EarTrainer extends JPanel {
 		g.fillRect(0, 0, getWidth(), getHeight());
 		paintHeader(g);
 		paintDrills(g);
-		int x = mainX();
+		int x = mainX(), dy = dy();
+		if (narrow()) {
+			// The chips show only numbers and stars, so the drill's name and best score go over its question.
+			Drill drill = round.drill();
+			int best = records.score(drill);
+			g.setColor(SOFT);
+			g.setFont(new Font("SansSerif", Font.BOLD, 13));
+			g.drawString(Look.fit(g, (drill.ordinal() + 1) + ". " + drill.title() + (best >= 0 ? "   best " + best + "/" + Round.QUESTIONS : ""),
+					getWidth() - x - 14), x, 126);
+		}
 		g.setColor(TEXT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 18));
-		g.drawString(round.drill().prompt(), x, 82);
-		paintProgress(g, x, 106);
+		g.drawString(round.drill().prompt(), x, 82 + dy);
+		paintProgress(g, x, 106 + dy);
 		int used;
 		if (round.isOver()) {
 			paintResult(g, x);
-			used = 380;
+			used = 380 + dy;
 		} else {
 			paintPlayButton(g);
 			paintChoices(g);
 			Rectangle last = choiceBoxes.get(choiceBoxes.size() - 1);
 			paintFeedback(g, x, last.y + last.height + 28);
-			used = last.y + last.height + 64;
+			used = last.y + last.height + (comparing() ? 86 : 64);
 		}
-		// The keyboard fills the bottom: up to 116 px tall, never over the feedback.
-		int top = Math.max(used, getHeight() - 130);
+		// The keyboard fills the bottom: up to 116 px tall (176 px for a narrow tab's two rows), never over the feedback.
+		int top = Math.max(used, getHeight() - (narrow() ? 190 : 130));
 		paintPiano(g, x, top, Math.max(200, getWidth() - x - 18), Math.max(40, getHeight() - 14 - top));
 	}
 
@@ -351,6 +406,10 @@ public final class EarTrainer extends JPanel {
 			boolean selected = drills[i] == round.drill();
 			g.setColor(selected ? SELECTED : row == hover ? CARD_HOVER : CARD);
 			g.fillRoundRect(row.x, row.y, row.width, row.height, 12, 12);
+			if (narrow()) {
+				paintChip(g, row, i, open, selected);
+				continue;
+			}
 			g.setColor(open ? (selected ? GOLD : SOFT) : DIM);
 			g.setFont(new Font("SansSerif", Font.BOLD, 13));
 			g.drawString(String.valueOf(i + 1), row.x + 12, row.y + 30);
@@ -375,6 +434,9 @@ public final class EarTrainer extends JPanel {
 				g.drawString("star on " + (i) + " opens it", row.x + 48, row.y + 41);
 			}
 		}
+		if (narrow()) {
+			return;
+		}
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 		int y = 66 + drills.length * 58 + 12;
@@ -382,11 +444,29 @@ public final class EarTrainer extends JPanel {
 		g.drawString("Space: play   1-9: answer", 16, y + 18);
 	}
 
+	/** A narrow tab's drill: its number and best stars, or a lock. */
+	private void paintChip(Graphics2D g, Rectangle row, int i, boolean open, boolean selected) {
+		g.setColor(open ? (selected ? GOLD : TEXT) : DIM);
+		g.setFont(new Font("SansSerif", Font.BOLD, 15));
+		String number = String.valueOf(i + 1);
+		int cx = row.x + row.width / 2;
+		g.drawString(number, cx - g.getFontMetrics().stringWidth(number) / 2, row.y + 20);
+		if (open) {
+			int stars = records.stars(Drill.values()[i]);
+			for (int s = 0; s < 3; s++) {
+				paintStar(g, cx - 13 + s * 13, row.y + 33, 6, s < stars ? GOLD : DIM);
+			}
+		} else {
+			paintLock(g, cx - 6, row.y + 27);
+		}
+	}
+
 	private void paintProgress(Graphics2D g, int x, int y) {
+		int step = narrow() ? 18 : 22;
 		for (int i = 0; i < Round.QUESTIONS; i++) {
 			int result = round.result(i);
 			Color color = result == Round.RIGHT ? RIGHT : result == Round.WRONG ? WRONG : DIM;
-			int cx = x + 8 + i * 22;
+			int cx = x + 8 + i * step;
 			g.setColor(color);
 			g.fillOval(cx - 7, y - 7, 14, 14);
 			if (i == round.index() && started && !round.isOver()) {
@@ -397,7 +477,7 @@ public final class EarTrainer extends JPanel {
 		g.setFont(new Font("SansSerif", Font.BOLD, 14));
 		String score = "Score " + round.score() + (round.streak() >= 2 ? "   Streak " + round.streak() : "");
 		g.setColor(round.streak() >= 3 ? GOLD : SOFT);
-		g.drawString(score, x + Round.QUESTIONS * 22 + 14, y + 5);
+		g.drawString(score, x + Round.QUESTIONS * step + 14, y + 5);
 	}
 
 	private void paintPlayButton(Graphics2D g) {
@@ -424,6 +504,7 @@ public final class EarTrainer extends JPanel {
 	private void paintChoices(Graphics2D g) {
 		Drill drill = round.drill();
 		boolean answered = round.answered();
+		boolean comparing = comparing();
 		for (int i = 0; i < choiceBoxes.size(); i++) {
 			Rectangle box = choiceBoxes.get(i);
 			Color fill = CARD;
@@ -431,12 +512,17 @@ public final class EarTrainer extends JPanel {
 				fill = RIGHT;
 			} else if (answered && i == chosen) {
 				fill = WRONG;
-			} else if (started && !answered && box == hover) {
+			} else if ((started && !answered || comparing) && box == hover) {
 				fill = CARD_HOVER;
 			}
 			g.setColor(fill);
 			g.fillRoundRect(box.x, box.y, box.width, box.height, 12, 12);
-			boolean live = started && !answered;
+			if (i == hearing) {
+				g.setColor(TEXT);
+				g.drawRoundRect(box.x + 1, box.y + 1, box.width - 3, box.height - 3, 12, 12);
+				g.drawRoundRect(box.x + 2, box.y + 2, box.width - 5, box.height - 5, 10, 10);
+			}
+			boolean live = started && !answered || comparing;
 			g.setColor(live || fill != CARD ? TEXT : SOFT);
 			g.setFont(Look.fitFont(g, drill.choice(i), Font.BOLD, 16, box.width - 36));
 			g.drawString(drill.choice(i), box.x + 14, box.y + 28);
@@ -446,7 +532,13 @@ public final class EarTrainer extends JPanel {
 				g.setColor(new Color(255, 255, 255, 200));
 			}
 			String key = String.valueOf(CHOICE_KEYS.charAt(i));
-			g.drawString(key, box.x + box.width - 12 - g.getFontMetrics().stringWidth(key), box.y + 27);
+			int keyX = box.x + box.width - 12 - g.getFontMetrics().stringWidth(key);
+			g.drawString(key, keyX, box.y + 27);
+			if (comparing) {
+				// A small play mark: this answer can be heard.
+				int cx = keyX - 12, cy = box.y + 23;
+				g.fillPolygon(new int[] { cx - 3, cx + 4, cx - 3 }, new int[] { cy - 5, cy, cy + 5 }, 3);
+			}
 		}
 	}
 
@@ -468,6 +560,23 @@ public final class EarTrainer extends JPanel {
 			color = right ? RIGHT : WRONG;
 			detail = "Notes: " + noteNames(question.steps());
 		}
+		String compare = "";
+		Color compareColor = SOFT;
+		if (comparing() && notice.isEmpty()) {
+			Drill drill = round.drill();
+			if (hearing < 0) {
+				compare = "Pick any answer to hear it from the same note.";
+			} else if (hearing == question.answer()) {
+				compare = "Hearing the right one: " + drill.choice(hearing);
+				compareColor = RIGHT;
+			} else if (hearing == chosen) {
+				compare = "Now yours, from the same note: " + drill.choice(hearing);
+				compareColor = WRONG;
+			} else {
+				compare = "Hearing " + drill.choice(hearing) + ": " + noteNames(drill.as(question, hearing).steps());
+				compareColor = BLUE_HOVER;
+			}
+		}
 		g.setColor(color);
 		g.setFont(Look.fitFont(g, line, Font.BOLD, 16, getWidth() - x - 18));
 		g.drawString(line, x, y);
@@ -476,16 +585,22 @@ public final class EarTrainer extends JPanel {
 			g.setFont(Look.fitFont(g, detail, Font.PLAIN, 14, getWidth() - x - 18));
 			g.drawString(detail, x, y + 22);
 		}
+		if (!compare.isEmpty()) {
+			g.setColor(compareColor);
+			g.setFont(Look.fitFont(g, compare, Font.BOLD, 14, getWidth() - x - 18));
+			g.drawString(compare, x, y + 44);
+		}
 	}
 
 	private void paintResult(Graphics2D g, int x) {
+		int dy = dy();
 		g.setColor(TEXT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 40));
 		String score = round.score() + " / " + Round.QUESTIONS;
-		g.drawString(score, x, 186);
+		g.drawString(score, x, 186 + dy);
 		int starsX = x + g.getFontMetrics().stringWidth(score) + 30;
 		for (int s = 0; s < 3; s++) {
-			paintStar(g, starsX + s * 44, 172, 18, s < round.stars() ? GOLD : DIM);
+			paintStar(g, starsX + s * 44, 172 + dy, 18, s < round.stars() ? GOLD : DIM);
 		}
 		g.setFont(new Font("SansSerif", Font.BOLD, 16));
 		String verdict = round.stars() == 3 ? "Perfect round!" : round.stars() > 0 ? "Drill passed." : "Six right wins a star. Try again!";
@@ -493,16 +608,16 @@ public final class EarTrainer extends JPanel {
 			verdict += "  New best!";
 		}
 		g.setColor(round.stars() > 0 ? GOLD : SOFT);
-		g.drawString(verdict, x, 230);
+		g.drawString(verdict, x, 230 + dy);
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 14));
 		String extra = "Longest streak: " + round.bestStreak();
 		if (opened != null) {
 			extra += ".  Opened: " + opened.title() + ".";
 		}
-		g.drawString(Look.fit(g, extra, getWidth() - x - 18), x, 256);
+		g.drawString(Look.fit(g, extra, getWidth() - x - 18), x, 256 + dy);
 		if (!notice.isEmpty()) {
-			g.drawString(Look.fit(g, notice, getWidth() - x - 18), x, 360);
+			g.drawString(Look.fit(g, notice, getWidth() - x - 18), x, 360 + dy);
 		}
 		paintButton(g, againButton, "Again", "R", hover == againButton ? BLUE_HOVER : BLUE);
 		if (nextDrill() != null) {
@@ -526,24 +641,34 @@ public final class EarTrainer extends JPanel {
 	private void paintPiano(Graphics2D g, int x, int y, int width, int height) {
 		boolean reveal = started && round.answered() && !round.isOver() || round.isOver() && sounding != null;
 		Color[] colors = new Color[Look.HIGH_NOTE + 1];
+		String[] names = new String[Look.HIGH_NOTE + 1];
 		if (reveal && !round.isOver()) {
 			for (int[] step : round.question().steps()) {
 				for (int note : step) {
 					int key = clamp(note);
 					colors[key] = Look.isBlack(key) ? new Color(214, 160, 40) : new Color(255, 226, 150);
+					names[key] = sharpName(key);
 				}
 			}
 		}
 		if (reveal && sounding != null) {
+			// Yours sounds red and any other answer blue, over the right answer's notes, so the difference shows.
+			Color lit = hearing < 0 || hearing == round.question().answer() ? GOLD : hearing == chosen ? WRONG : BLUE;
 			for (int note : sounding) {
-				colors[clamp(note)] = GOLD;
+				colors[clamp(note)] = lit;
+				names[clamp(note)] = sharpName(clamp(note));
 			}
 		}
-		Look.paintKeyboard(g, x, y, width, height, colors);
+		Look.paintKeyboard(g, x, y, width, height, narrow(), colors, names);
 	}
 
 	private static int clamp(int note) {
 		return Math.min(Look.HIGH_NOTE, Math.max(Look.LOW_NOTE, note));
+	}
+
+	/** A note's name with sharps, such as "F#". */
+	private static String sharpName(int note) {
+		return Notes.getNoteName(note, MusicalTerms.SHARP).replace('s', '#');
 	}
 
 	/** The distinct notes of a question in the order they first sound, as names such as "F#4". */
@@ -555,7 +680,7 @@ public final class EarTrainer extends JPanel {
 				if (!seen.contains(note)) {
 					seen.add(note);
 					names.append(names.length() == 0 ? "" : " ")
-							.append(Notes.getNoteName(note, MusicalTerms.SHARP).replace('s', '#')).append(note / 12 - 1);
+							.append(sharpName(note)).append(note / 12 - 1);
 				}
 			}
 		}

@@ -70,9 +70,11 @@
               </target>
             </configuration>
           </execution>
-          <!-- The source viewer's files and a manifest-only jar per app for the taskbar (as web/nathanos did at that
-               commit; the jars match today's, so both pages share NathaNOS/assets/). The page, NathaNOS/then.html,
-               is written by the site's build (web/src/pages/app/AppPage.tsx). -->
+          <!-- The source viewer's files. The taskbar's manifest-only jars (one per app, as web/nathanos wrote them at
+               that commit) are the ones web/nathanos writes into NathaNOS/assets/ for today's NathaNOS: the 14 apps' Main-Class
+               names have not changed, so both pages share them and this module writes none, which lets it build
+               side by side with web/nathanos instead of after it. The page, NathaNOS/then.html, is written by the
+               site's build (web/src/pages/app/AppPage.tsx). -->
           <execution>
             <id>then-files</id>
             <phase>process-resources</phase>
@@ -89,29 +91,6 @@
                   <globmapper from="${then.src}/NathaNOS/*" to="*" handledirsep="true"/>
                 </pathconvert>
                 <echo file="${site.dir}/NathaNOS/then-source/files.txt" message="${then.files}${line.separator}"/>
-                <macrodef name="appjar">
-                  <attribute name="app"/>
-                  <attribute name="main"/>
-                  <sequential>
-                    <jar destfile="${site.dir}/NathaNOS/assets/@{app}.jar" whenmanifestonly="create">
-                      <manifest><attribute name="Main-Class" value="@{main}"/></manifest>
-                    </jar>
-                  </sequential>
-                </macrodef>
-                <appjar app="CircleSpawner" main="circlewindow.Main"/>
-                <appjar app="FlappyBird" main="flappyBird.Main"/>
-                <appjar app="Minesweeper" main="minesweeper.Main"/>
-                <appjar app="RubiksCube2D" main="rubikscube.Main"/>
-                <appjar app="ScreenSaver" main="screensaver.Main"/>
-                <appjar app="SpriteFloatyStars" main="animate2.Animate2Main"/>
-                <appjar app="StockChecker" main="stockchecker.Main"/>
-                <appjar app="SynthesizerKeyboard" main="synthesizer.Main"/>
-                <appjar app="UltimateTicTacToe" main="ultimateticktacktoe.Main"/>
-                <appjar app="GroupCreator" main="groupcreator.Main"/>
-                <appjar app="MusicTheoryExpert" main="musictheoryexpert.Main"/>
-                <appjar app="NumberGuess" main="numberguess.Main"/>
-                <appjar app="SimpleAlgorithms" main="simplealgorithms.Main"/>
-                <appjar app="TankGame" main="tankgame.Main"/>
               </target>
             </configuration>
           </execution>

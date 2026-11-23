@@ -6,7 +6,9 @@ import web.rt.Js;
 import web.rt.Keys;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.TComponent;
 import web.shim.java.awt.TContainer;
@@ -29,7 +31,13 @@ public final class TDesktop {
     private static TWindow active;
     private static int zCounter = 10;
 
+    // Keys pressed and not let go yet, by key code; the page's focus (false only after the browser window blurred).
+    private static final Map<Integer, TKeyEvent> held = new LinkedHashMap<>();
+    private static boolean pageFocused = true;
+
     private static TComponent pressTarget;
+    private static int pressButton;
+    private static JSObject lastPointer; // the latest press or move, where a release the browser never sent is placed
     private static TComponent hoverTarget;
     private static TComponent dragWindow;
     private static int dragStartX;
@@ -130,13 +138,32 @@ public final class TDesktop {
         });
     }
 
+    /**
+     * As on the desktop, closing or hiding the active window activates the one used before it (windows is kept in
+     * order of use), which lights up and takes the keyboard back: its focus owner, or the window itself.
+     */
     public static void hide(TWindow w) {
-        if (active == w) {
-            active = null;
-            for (TWindow other : windows) {
-                if (other != w && other.isVisible()) {
-                    active = other;
-                }
+        if (active != w) {
+            return;
+        }
+        active = null;
+        TWindow.repaintFocus(w.focusOwner());
+        for (int i = windows.size() - 1; i >= 0; i--) {
+            TWindow next = windows.get(i);
+            if (next != w && next.isVisible() && next.getFocusableWindowState()) {
+                activate(next);
+                Edt.post(() -> {
+                    if (active != next || !next.isVisible() || !Js.pageFocusFree(next.element())) {
+                        return; // another window came up meanwhile, or the visitor's focus is elsewhere on the page
+                    }
+                    TComponent owner = next.focusOwner();
+                    if (owner != null && owner.isShowing()) {
+                        next.setFocusOwner(owner);
+                    } else {
+                        Js.focusWindow(next.element());
+                    }
+                });
+                return;
             }
         }
     }
@@ -154,7 +181,21 @@ public final class TDesktop {
     }
 
     public static void activate(TWindow w) {
+        if (!w.getFocusableWindowState() && active != null && active != w && active.isVisible()
+                && active.getFocusableWindowState()) {
+            restack(w); // as in Swing, a window that cannot take focus comes up without taking the keyboard
+            return;
+        }
+        if (active != w) { // the focus box moves with the active window
+            if (active != null) {
+                TWindow.repaintFocus(active.focusOwner());
+            }
+            TWindow.repaintFocus(w.focusOwner());
+        }
         active = w;
+        if (windows.remove(w)) {
+            windows.add(w); // the most recently used last, for hide
+        }
         restack(w);
         for (TWindow other : windows) {
             Js.toggleClass(other.element(), "active", other == w);
@@ -207,6 +248,9 @@ public final class TDesktop {
         });
         Js.listen(doc, "mousemove", e -> {
             if (!afterTouch()) {
+                if (Js.buttons(e) == 0 && touchId == NO_TOUCH && (pressTarget != null || dragWindow != null)) {
+                    letGo(e); // the button came up where the page never heard it (outside the window, over a frame)
+                }
                 onMove(e, Js.target(e));
             }
         });
@@ -227,14 +271,25 @@ public final class TDesktop {
             }
         });
         Js.listen(doc, "focusin", TDesktop::onFocusIn);
+        Js.listen(doc, "focusout", TDesktop::repaintUnfocusable);
         Js.listen(doc, "keydown", e -> onKey(e, TKeyEvent.KEY_PRESSED));
         Js.listen(doc, "keyup", e -> onKey(e, TKeyEvent.KEY_RELEASED));
+        JSObject view = Js.viewOf(doc);
+        Js.listen(view, "blur", e -> pageFocus(false));
+        Js.listen(view, "focus", e -> pageFocus(true));
+        // A phone switching apps, a locked screen, a hidden tab: often no blur comes, but the visitor is gone all the same.
+        Js.listen(doc, "visibilitychange", e -> {
+            if (Js.isShimDoc(doc)) { // the page's own document no longer counts while the app is popped out
+                pageFocus(Js.shownAndFocused(doc));
+            }
+        });
         // boot.js changed window.__shimRender (the desktop was zoomed up or back): paint everything again on
         // canvases of the new resolution.
         Js.listen(doc, "shimrender", e -> Edt.post(TRepaint::repaintAll));
     }
 
     private static void onPress(JSObject e, JSObject node) {
+        lastPointer = e;
         TComponent c = lookup(node);
         if (c == null || Js.targetIsWindowControl(e)) {
             return;
@@ -268,6 +323,7 @@ public final class TDesktop {
             Js.takeKeys(e); // but a press here still brings the keys back from a frame beside (Side by side)
         }
         pressTarget = mouseTarget(c, false);
+        pressButton = Math.max(Js.button(e), 0) + 1;
         post(pressTarget, TMouseEvent.MOUSE_PRESSED, e);
     }
 
@@ -289,6 +345,7 @@ public final class TDesktop {
     }
 
     private static void onMove(JSObject e, JSObject node) {
+        lastPointer = e;
         if (dragWindow != null) {
             double scale = Js.desktopScale();
             dragWindow.setLocation(dragStartX + (int) ((Js.clientX(e) - dragMouseX) / scale),
@@ -405,6 +462,21 @@ public final class TDesktop {
         post(target, TMouseEvent.MOUSE_CLICKED, touchDown, 3);
     }
 
+    /**
+     * Lets go of whatever the mouse or a finger holds (a press, a title-bar drag, a long press on its way) without a
+     * click, at e's place: the browser sent, or will send, the real release somewhere the page cannot hear it.
+     */
+    private static void letGo(JSObject e) {
+        dragWindow = null;
+        endLongPress();
+        touchId = NO_TOUCH;
+        TComponent target = pressTarget;
+        pressTarget = null;
+        if (target != null && e != null) {
+            post(target, TMouseEvent.MOUSE_RELEASED, e, pressButton);
+        }
+    }
+
     private static void setHover(TComponent target, JSObject e) {
         if (target == hoverTarget) {
             return;
@@ -504,11 +576,80 @@ public final class TDesktop {
         // (Minesweeper's arrows) sends the next key, pressed before the move ran, to the new focus owner.
         Edt.post(() -> {
             TComponent source = focusOwnerOf(w);
-            dispatchKey(new TKeyEvent(source, id, when, mods, vk, pressed));
+            TKeyEvent event = new TKeyEvent(source, id, when, mods, vk, pressed);
+            if (id == TKeyEvent.KEY_PRESSED) {
+                held.put(vk, event);
+            } else {
+                held.remove(vk);
+            }
+            dispatchKey(event);
             if (typed != 0) {
                 dispatchKey(new TKeyEvent(source, TKeyEvent.KEY_TYPED, when, mods, 0, typed));
             }
         });
+    }
+
+    /**
+     * The browser window (the tab, the app's frame on another page, Pop out's window) lost or got back the keyboard,
+     * or the page was hidden (another phone app, a locked screen, another tab) or shown again.
+     * As when Swing's window is deactivated, the focus owner loses the focus for a while (hasFocus() is false, its
+     * focus box goes, focus listeners hear a temporary FOCUS_LOST), and every key still held is let go: the browser
+     * sends its keyup elsewhere, so a held arrow, note or Space would otherwise stay down. A held mouse button or
+     * finger is let go the same way (a held piano key, a Dino jump, a window dragged by its title bar).
+     */
+    private static void pageFocus(boolean on) {
+        if (pageFocused == on) {
+            return;
+        }
+        pageFocused = on;
+        if (!on) {
+            letGo(lastPointer);
+            Edt.post(() -> { // after the presses already posted
+                long when = System.currentTimeMillis();
+                List<TKeyEvent> keys = new ArrayList<>(held.values());
+                held.clear();
+                for (TKeyEvent k : keys) {
+                    dispatchKey(new TKeyEvent((TComponent) k.getSource(), TKeyEvent.KEY_RELEASED, when, 0,
+                            k.getKeyCode(), k.getKeyChar()));
+                }
+                // Heard even when the page is back before this runs (a held clock, hidden-hold.ts), as Swing's
+                // listeners hear a deactivated window's temporary FOCUS_LOST however soon it comes back.
+                TKeyboardFocusManager.getCurrentKeyboardFocusManager().focusMovedTo(null);
+            });
+        }
+        if (active != null) {
+            TWindow.repaintFocus(active.focusOwner());
+        }
+    }
+
+    /** False while the browser window is blurred: a window's focus owner has no focus meanwhile. */
+    public static boolean pageFocused() {
+        return pageFocused;
+    }
+
+    private static boolean focusSweepPosted;
+
+    /** Posted once per burst of focus changes: the focus listeners hear where the focus ended up (FocusListener). */
+    public static void focusMayHaveMoved() {
+        if (focusSweepPosted) {
+            return;
+        }
+        focusSweepPosted = true;
+        Edt.post(() -> {
+            focusSweepPosted = false;
+            TKeyboardFocusManager.getCurrentKeyboardFocusManager().focusMovedTo(focusedComponent());
+        });
+    }
+
+    /** The component whose hasFocus() is true, most recently used window first; null when none has it. */
+    private static TComponent focusedComponent() {
+        for (int i = windows.size() - 1; i >= 0; i--) {
+            TComponent owner = windows.get(i).focusOwner();
+            if (owner != null && owner.hasFocus()) {
+                return owner;
+            }
+        }
+        return null;
     }
 
     private static TComponent focusOwnerOf(TWindow w) {
@@ -520,15 +661,25 @@ public final class TDesktop {
 
     /** Keyboard focus the browser moved onto an app's button or field (its own Tab, a screen reader) is Swing's too. */
     private static void onFocusIn(JSObject e) {
+        repaintUnfocusable(e);
         TComponent c = lookup(Js.target(e));
         TWindow w = c != null ? c.windowAncestor() : null;
-        if (w == null || !c.acceptsFocus() || !c.isEnabled() || w.focusOwner() == c) {
+        if (w == null || !c.tabStop() || !c.isEnabled() || w.focusOwner() == c) {
             return;
         }
         if (w != active && w.getFocusableWindowState()) {
             activate(w);
         }
         w.setFocusOwnerQuietly(c);
+    }
+
+    /** The keyboard came into or left a window that cannot take focus: its focus owner shows or drops its focus box. */
+    private static void repaintUnfocusable(JSObject e) {
+        TComponent c = lookup(Js.target(e));
+        TWindow w = c != null ? c.windowAncestor() : null;
+        if (w != null && !w.getFocusableWindowState()) {
+            TWindow.repaintFocus(w.focusOwner());
+        }
     }
 
     /** Rows of components closer than this are one row, as in Swing's LayoutFocusTraversalPolicy. */
@@ -581,7 +732,7 @@ public final class TDesktop {
         if (!c.isVisible()) {
             return;
         }
-        if (!(c instanceof TWindow) && c.acceptsFocus() && c.isEnabled()) {
+        if (!(c instanceof TWindow) && c.tabStop() && c.isEnabled()) {
             found.add(c);
         }
         if (c instanceof TContainer) {

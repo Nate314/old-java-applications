@@ -239,10 +239,13 @@ export function whenShown(fn: () => void) {
   else fn();
 }
 
+/** Starts fitting an app page's band, once: as soon as start.ts puts it up, else at DOMContentLoaded. */
+export function fitBand() {
+  var band = document.querySelector('.shim-toolbar');
+  if (!bar && band && document.body.hasAttribute('data-app')) start(band);
+}
+
 export function init() {
   // After the toolbar and what the other parts do with the page at load (Side by side opening, the skin offer).
-  if (!embedded) document.addEventListener('DOMContentLoaded', function () {
-    var band = document.querySelector('.shim-toolbar');
-    if (band && document.body.hasAttribute('data-app')) start(band);
-  });
+  if (!embedded) document.addEventListener('DOMContentLoaded', fitBand);
 }

@@ -9,12 +9,12 @@
     <version>1.0-SNAPSHOT</version>
   </parent>
   <artifactId>then</artifactId>
-  <name>The apps as first restored, compiled to JavaScript</name>
+  <name>The apps as first restored: classes and sources for the viewer</name>
 
   <!--
     Then and now (web/README.md): every app page with a "then" version can also run the app as it was first
     restored, before the chain of reworks: the sources at commit ${then.commit}, read from the repo's git history
-    with git archive, so no copy of them is kept in the tree. Each app gets <App>/then.js and <App>/then-source/
+    with git archive, so no copy of them is kept in the tree. Each app gets <App>/then.js (compiled by web/then-js) and <App>/then-source/
     for the source viewer; its page, site/<App>/then.html, is written by the site's build (web/src/pages/app).
 
     The package names clash with today's sources, so this is its own module.
@@ -139,151 +139,6 @@
                 <source>${then.src}/Windows/src</source>
                 <source>${then.src}/WindowsE/src</source>
               </sources>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.teavm</groupId>
-        <artifactId>teavm-maven-plugin</artifactId>
-        <configuration>
-          <targetFileName>then.js</targetFileName>
-        </configuration>
-        <executions>
-          <execution>
-            <id>CircleSpawner</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>circlewindow.Main</mainClass>
-              <targetDirectory>${site.dir}/CircleSpawner</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>Clock</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>clock.Main</mainClass>
-              <targetDirectory>${site.dir}/Clock</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>FlappyBird</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>flappyBird.Main</mainClass>
-              <targetDirectory>${site.dir}/FlappyBird</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>GroupCreator</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>groupcreator.Main</mainClass>
-              <targetDirectory>${site.dir}/GroupCreator</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>Minesweeper</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>minesweeper.Main</mainClass>
-              <targetDirectory>${site.dir}/Minesweeper</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>MusicTheoryExpert</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>musictheoryexpert.Main</mainClass>
-              <targetDirectory>${site.dir}/MusicTheoryExpert</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>NumberGuess</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>numberguess.Main</mainClass>
-              <targetDirectory>${site.dir}/NumberGuess</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>RubiksCube2D</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>rubikscube.Main</mainClass>
-              <targetDirectory>${site.dir}/RubiksCube2D</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>ScreenSaver</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>screensaver.Main</mainClass>
-              <targetDirectory>${site.dir}/ScreenSaver</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>SimpleAlgorithms</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>simplealgorithms.Main</mainClass>
-              <targetDirectory>${site.dir}/SimpleAlgorithms</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>SpriteFloatyStars</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>animate2.Animate2Main</mainClass>
-              <targetDirectory>${site.dir}/SpriteFloatyStars</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>StockChecker</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>stockchecker.Main</mainClass>
-              <targetDirectory>${site.dir}/StockChecker</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>SynthesizerKeyboard</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>synthesizer.Main</mainClass>
-              <targetDirectory>${site.dir}/SynthesizerKeyboard</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>TankGame</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>tankgame.Main</mainClass>
-              <targetDirectory>${site.dir}/TankGame</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>UltimateTicTacToe</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>ultimateticktacktoe.Main</mainClass>
-              <targetDirectory>${site.dir}/UltimateTicTacToe</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>Windows</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>test.Test</mainClass>
-              <targetDirectory>${site.dir}/Windows</targetDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>WindowsE</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <mainClass>windowse.WindowsEMain</mainClass>
-              <targetDirectory>${site.dir}/WindowsE</targetDirectory>
             </configuration>
           </execution>
         </executions>

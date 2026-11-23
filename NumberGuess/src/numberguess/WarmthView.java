@@ -18,6 +18,8 @@ final class WarmthView {
 	private Rectangle line = new Rectangle();
 	/** The number under the pointer, or 0. */
 	private int hover;
+	/** The number in the text field, or 0. */
+	private int typed;
 
 	static Color color(Warmth.Read read) {
 		switch (read) {
@@ -65,6 +67,11 @@ final class WarmthView {
 		return changed;
 	}
 
+	/** Follows the text field. */
+	void type(int number) {
+		typed = number;
+	}
+
 	int hoverNumber() {
 		return hover;
 	}
@@ -78,6 +85,8 @@ final class WarmthView {
 		if (warm.isOver()) {
 			hover = 0; // the pointer may not have moved since the last guess
 		}
+		// The pointer wins over the text field; any number can be guessed here, even a ruled-out one.
+		int shown = hover > 0 || warm.isOver() || typed > Warmth.MAX ? hover : typed;
 		paintMeter(g, warm, area.x);
 		List<Integer> guesses = warm.guesses();
 		List<Warmth.Read> reads = warm.reads();
@@ -85,7 +94,7 @@ final class WarmthView {
 		g.fillRoundRect(line.x - 2, line.y - 2, line.width + 4, line.height + 4, 8, 8);
 		for (int n = 1; n <= Warmth.MAX; n++) {
 			int index = guesses.lastIndexOf(n);
-			Color color = n == hover ? Board.GOLD
+			Color color = n == shown ? Board.GOLD
 					: warm.isOver() && n == warm.number() ? Board.RIGHT
 							: index >= 0 ? color(reads.get(index)) : warm.isPossible(n) ? Board.POSSIBLE_DARK : Board.RULED_OUT;
 			g.setColor(color);
@@ -98,7 +107,9 @@ final class WarmthView {
 		int below = line.y + line.height + 15;
 		g.drawString("1", line.x, below);
 		g.drawString("100", line.x + line.width - small.stringWidth("100"), below);
-		String middle = warm.isOver() ? "" : "Click any number, even a ruled-out one";
+		String note = hover > 0 || warm.isOver() ? null : Board.typedNote(typed, "guesses", 1, Warmth.MAX, Warmth.MAX);
+		String middle = warm.isOver() ? "" : note != null ? note : "Click any number, even a ruled-out one";
+		g.setColor(note != null && shown == 0 ? Board.WARN : Board.SOFT);
 		g.drawString(middle, line.x + (line.width - small.stringWidth(middle)) / 2, below);
 		int count = guesses.size();
 		if (count >= 2 && !warm.isFound()) {
@@ -107,8 +118,8 @@ final class WarmthView {
 		for (int i = Math.max(0, count - 2); i < count; i++) {
 			paintPin(g, guesses.get(i), color(reads.get(i)), i == count - 1);
 		}
-		if (hover > 0) {
-			Board.paintBubble(g, hover, (xOf(hover) + xOf(hover + 1)) / 2, line);
+		if (shown > 0) {
+			Board.paintBubble(g, shown, (xOf(shown) + xOf(shown + 1)) / 2, line);
 		}
 		paintChips(g, guesses, reads, area);
 	}
@@ -167,9 +178,13 @@ final class WarmthView {
 		g.setFont(new Font("SansSerif", Font.BOLD, 12));
 		FontMetrics metrics = g.getFontMetrics();
 		int x = area.x, y = CHIPS_Y, height = 22;
-		for (int i = 0; i < guesses.size(); i++) {
+		int[] widths = new int[guesses.size()];
+		for (int i = 0; i < widths.length; i++) {
+			widths[i] = metrics.stringWidth(guesses.get(i) + " " + word(reads.get(i))) + 16;
+		}
+		for (int i = Board.firstChip(widths, area.x, area.x + area.width, (area.y + area.height + 12 - CHIPS_Y + 6) / (height + 6)); i < guesses.size(); i++) {
 			String label = guesses.get(i) + " " + word(reads.get(i));
-			int width = metrics.stringWidth(label) + 16;
+			int width = widths[i];
 			if (x + width > area.x + area.width) {
 				x = area.x;
 				y += height + 6;

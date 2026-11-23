@@ -64,13 +64,60 @@ try {
                 if ($file) {
                     $type = $types[[IO.Path]::GetExtension($file).ToLowerInvariant()]
                     $response.ContentType = if ($type) { $type } else { 'application/octet-stream' }
-                    $response.Headers['Cache-Control'] = 'no-cache'
-                    $bytes = [IO.File]::ReadAllBytes($file)
+                    # Hashed names (web/vite.config.ts) and stamped programs (classes.js?v=) never change: kept a year.
+                    $fixed = $path -match '^/assets/.+-[A-Za-z0-9_-]{8}\.(js|css)$' -or ($path -match '/(classes|then)\.js$' -and $request.Url.Query -match '^\?v=')
+                    $response.Headers['Cache-Control'] = if ($fixed) { 'public, max-age=31536000, immutable' } else { 'no-cache' }
+                    $text = $type -and $type -notmatch '^(image/(?!svg)|video/|audio/|application/java-archive)'
+                    $gzipped = $text -and $request.Headers['Accept-Encoding'] -match '\bgzip\b'
+                    # Each file names its version (size and time written; the gzipped copy its own), as nginx and GitHub
+                    # Pages do, so a no-cache file the browser already has is checked with a bodiless 304 instead of sent
+                    # whole again. Strong, so the browser also keeps and checks the parts of a clip it asked for in ranges.
+                    $info = [IO.FileInfo]::new($file)
+                    $etag = '"{0:x}-{1:x}{2}"' -f $info.Length, $info.LastWriteTimeUtc.Ticks, $(if ($gzipped) { '-gz' } else { '' })
+                    $response.Headers['ETag'] = $etag
+                    if ($status -eq 200 -and ($request.Headers['If-None-Match'] -split '\s*,\s*') -contains $etag) {
+                        $status = 304
+                        $response.StatusCode = 304
+                    }
+                    $bytes = if ($status -eq 304) { [byte[]]::new(0) } else { [IO.File]::ReadAllBytes($file) }
+                    # Text goes gzipped (about a third of its size), as GitHub Pages sends it: on a slow phone the
+                    # render-blocking scripts and skins arrive in a third of the time. Pictures, clips and jars are already packed.
+                    if ($text) {
+                        $response.Headers['Vary'] = 'Accept-Encoding'
+                        if ($gzipped -and $status -ne 304) {
+                            $packed = [IO.MemoryStream]::new()
+                            $gzip = [IO.Compression.GZipStream]::new($packed, [IO.Compression.CompressionLevel]::Optimal)
+                            $gzip.Write($bytes, 0, $bytes.Length); $gzip.Close()
+                            $bytes = $packed.ToArray()
+                            $response.Headers['Content-Encoding'] = 'gzip'
+                        }
+                    } else {
+                        # A Range request gets just that part (206), as from GitHub Pages and nginx: a video asks for its clip so.
+                        $response.Headers['Accept-Ranges'] = 'bytes'
+                        # If-Range: a part of a clip that changed since the browser kept the rest gets the whole new file.
+                        $ifRange = $request.Headers['If-Range']
+                        if ($status -eq 200 -and (-not $ifRange -or $ifRange -eq $etag) -and $request.Headers['Range'] -match '^bytes=(\d*)-(\d*)$' -and ($Matches[1] -or $Matches[2])) {
+                            $size = $bytes.Length
+                            $start = if ($Matches[1]) { [long]$Matches[1] } else { [Math]::Max(0, $size - [long]$Matches[2]) }
+                            $end = if ($Matches[1] -and $Matches[2]) { [Math]::Min([long]$Matches[2], $size - 1) } else { $size - 1 }
+                            if ($start -gt $end) {
+                                $response.StatusCode = 416
+                                $response.Headers['Content-Range'] = "bytes */$size"
+                                $bytes = [byte[]]::new(0)
+                            } else {
+                                $response.StatusCode = 206
+                                $response.Headers['Content-Range'] = "bytes $start-$end/$size"
+                                $part = [byte[]]::new($end - $start + 1)
+                                [Array]::Copy($bytes, $start, $part, 0, $part.Length)
+                                $bytes = $part
+                            }
+                        }
+                    }
                     $response.ContentLength64 = $bytes.Length
                     if ($request.HttpMethod -ne 'HEAD') { $response.OutputStream.Write($bytes, 0, $bytes.Length) }
                 }
             }
-            if ($status -ne 200) { Write-Host "$status $($request.HttpMethod) $path" }
+            if ($status -notin 200, 304) { Write-Host "$status $($request.HttpMethod) $path" }
         } catch {
             # The browser closed the connection mid-answer (a cancelled load); nothing to do.
         } finally {

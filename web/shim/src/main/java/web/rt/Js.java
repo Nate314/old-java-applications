@@ -60,6 +60,15 @@ public final class Js {
     @JSBody(params = { "el", "name" }, script = "el.removeAttribute(name);")
     public static native void removeAttr(JSObject el, String name);
 
+    /** A painted panel that takes Tab: in the page's Tab order, as an application (keys go to the app, not a screen reader's browse mode). */
+    @JSBody(params = { "el", "on" }, script = "if (on) { el.setAttribute('tabindex', '0'); if (!el.hasAttribute('role')) el.setAttribute('role', 'application'); }"
+            + " else if (el.getAttribute('role') === 'application') { el.removeAttribute('role'); el.removeAttribute('tabindex'); }")
+    public static native void setTabStop(JSObject el, boolean on);
+
+    /** ARIA ignores a name on a plain div, so a named painted panel (StockChecker's desk) becomes a group. */
+    @JSBody(params = { "el" }, script = "if (el.tagName === 'DIV' && !el.hasAttribute('role')) el.setAttribute('role', 'group');")
+    public static native void giveNamedRole(JSObject el);
+
     @JSBody(params = { "el", "on" }, script = "el.disabled = on;")
     public static native void setDisabled(JSObject el, boolean on);
 
@@ -100,7 +109,7 @@ public final class Js {
             + " addEventListener('pointerdown', function () { window.__shimKeyed.on = false; }, true); }"
             + " var _k = el.ownerDocument.activeElement;" // the phone Keyboard's box (phone-keys.tsx) keeps the focus, or the phone's keyboard drops
             + " if (_k && _k.classList.contains('shim-keys-box') && !el.matches('input, textarea')) return;"
-            + " if (el.matches('button, input, select, textarea')) {"
+            + " if (el.matches('button, input, select, textarea, [role=application]')) {"
             // a frame without the keyboard (the home page's player, a docked app) never takes it: el.focus() would pull it in
             + " if (el.ownerDocument.activeElement !== el && el.isConnected && (el.ownerDocument.hasFocus() || !el.ownerDocument.defaultView.frameElement))"
             + " el.focus({preventScroll: true, focusVisible: window.__shimKeyed.on}); return; }"
@@ -108,16 +117,20 @@ public final class Js {
             + " if (_a && _a !== el && _a.closest && _a.closest('.window') && !el.contains(_a) && _a !== el.closest('.window')) _a.blur();")
     public static native void focusComponent(JSObject el);
 
+    /** True when the page has the keyboard and its focus is on el or inside it. */
+    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && el.contains(_d.activeElement);")
+    public static native boolean focusWithin(JSObject el);
+
     /** Gives a window itself the page's keyboard focus (no ring), so a screen reader names it and keys are plainly the app's. */
     @JSBody(params = "el", script = "el.setAttribute('tabindex', '-1'); el.focus({preventScroll: true, focusVisible: false});")
     public static native void focusWindow(JSObject el);
 
     /**
      * True when the page's keyboard focus is free for the app to take: the element's page is focused, nothing on it
-     * has the focus (it is on the body, or on an app window itself), and the screen is not touch-first (a focused field there raises the phone's
+     * but the app has the focus (it is on the body, or in an app window), and the screen is not touch-first (a focused field there raises the phone's
      * keyboard). The home page's player is not focused, so it never grabs the keyboard.
      */
-    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body || _d.activeElement.classList.contains('window'))"
+    @JSBody(params = "el", script = "var _d = el.ownerDocument; return _d.hasFocus() && (!_d.activeElement || _d.activeElement === _d.body || !!_d.activeElement.closest('.window'))"
             + " && !(window.matchMedia && matchMedia('(pointer: coarse)').matches);")
     public static native boolean pageFocusFree(JSObject el);
 
@@ -144,6 +157,17 @@ public final class Js {
 
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb);")
     public static native void listen(JSObject el, String type, EventCallback cb);
+
+    /** Whether doc is where the app's desktop is now (the page's, or Pop out's window's while popped out). */
+    @JSBody(params = "doc", script = "return (window.__shimDoc || document) === doc;")
+    public static native boolean isShimDoc(JSObject doc);
+
+    @JSBody(params = "doc", script = "return !doc.hidden && doc.hasFocus();")
+    public static native boolean shownAndFocused(JSObject doc);
+
+    /** The window a document belongs to: the page's own, or Pop out's Picture-in-Picture window. */
+    @JSBody(params = "doc", script = "return doc.defaultView;")
+    public static native JSObject viewOf(JSObject doc);
 
     /**
      * Pop out (boot.js) moves the page desktop into a Picture-in-Picture window and back. While it is there,
@@ -294,10 +318,11 @@ public final class Js {
 
     /**
      * Notes that something drew on a canvas, for the page's instant replay (boot.js), which redraws the app into
-     * its video only after the app changed, so a still app costs it nothing but a frame a second.
+     * its video only after the app changed, so a still app costs it nothing but a frame a second. It is told which
+     * canvas (the context's), so it draws again only the part of the app that changed.
      */
-    @JSBody(script = "window.__shimPainted = true;")
-    public static native void painted();
+    @JSBody(params = "ctx", script = "window.__shimPainted = ctx.canvas || true;")
+    public static native void painted(JSObject ctx);
 
     @JSBody(params = "canvas", script = "return canvas.getContext('2d');")
     public static native JSObject context2d(JSObject canvas);
@@ -307,17 +332,17 @@ public final class Js {
             "var _r = window.__shimRender || window.devicePixelRatio || 1; var _bw = Math.max(1, Math.round(w * _r)), _bh = Math.max(1, Math.round(h * _r));"
             + "canvas.style.width = w + 'px'; canvas.style.height = h + 'px';"
             + "if (canvas.width === _bw && canvas.height === _bh) return false;"
-            + "canvas.width = _bw; canvas.height = _bh; window.__shimPainted = true; return true;")
+            + "canvas.width = _bw; canvas.height = _bh; window.__shimPainted = canvas; return true;")
     public static native boolean sizeCanvas(JSObject canvas, int w, int h);
 
     @JSBody(params = "canvas", script =
             "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.clearRect(0, 0, canvas.width, canvas.height); _g.restore();"
-            + " window.__shimPainted = true;")
+            + " window.__shimPainted = canvas;")
     public static native void clearCanvas(JSObject canvas);
 
     @JSBody(params = { "canvas", "color" }, script =
             "var _g = canvas.getContext('2d'); _g.save(); _g.setTransform(1, 0, 0, 1, 0, 0); _g.fillStyle = color;"
-            + " _g.fillRect(0, 0, canvas.width, canvas.height); _g.restore(); window.__shimPainted = true;")
+            + " _g.fillRect(0, 0, canvas.width, canvas.height); _g.restore(); window.__shimPainted = canvas;")
     public static native void fillCanvas(JSObject canvas, String color);
 
     @JSBody(params = { "canvas", "w", "h" }, script = "canvas.width = w; canvas.height = h;")
@@ -326,7 +351,7 @@ public final class Js {
     @JSBody(params = { "canvas", "img", "w", "h" }, script =
             "var _g = canvas.getContext('2d'); var _r = window.__shimRender || window.devicePixelRatio || 1; _g.setTransform(_r, 0, 0, _r, 0, 0);"
             + "_g.imageSmoothingQuality = 'high'; _g.drawImage(img, 0, 0, w, h);"
-            + " window.__shimPainted = true;")
+            + " window.__shimPainted = canvas;")
     public static native void drawImageScaled(JSObject canvas, JSObject img, int w, int h);
 
     @JSBody(params = "canvas", script = "return canvas.toDataURL();")

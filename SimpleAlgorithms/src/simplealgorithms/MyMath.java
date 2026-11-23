@@ -18,8 +18,14 @@ public class MyMath {
 	 */
 	public static List<Double> squareRootSteps(double num)
 	{
+		return squareRootSteps(num, 1);
+	}
+
+	/** The same averaging, starting from the guess start instead of 1 (the lab lets the visitor pick it). */
+	public static List<Double> squareRootSteps(double num, double start)
+	{
 		List<Double> steps = new ArrayList<>();
-		double result = 1;
+		double result = start;
 		double dividend = 0;
 		steps.add(result);
 		while(result != dividend && steps.size() < 100)

@@ -54,6 +54,7 @@
 import { init as skin } from './skin';
 import { init as install } from './install';
 import { init as bandNews } from './band-news';
+import { init as stage } from './stage';
 import { init as popOut } from './pop-out';
 import { init as replay } from './replay';
 import { init as photoBooth } from './photo-booth';
@@ -82,13 +83,17 @@ import { init as sideBySide } from './side-by-side';
 import { init as toolbarMore } from './toolbar-more';
 import { init as stageGlow } from './stage-glow';
 import { init as slowMo } from './slow-mo';
+import { init as hiddenHold } from './hidden-hold';
 import { init as keptKeys } from './kept-keys';
 import { init as exitRecap } from './exit-recap';
+import { init as titleScreen } from './title-screen';
+import { init as newBuild } from './new-build';
 
 // In the order boot.js ran them.
 skin();
 install();
 bandNews();
+stage();
 popOut();
 replay();
 photoBooth();
@@ -117,5 +122,8 @@ sideBySide();
 toolbarMore();
 stageGlow();
 slowMo();
+hiddenHold();
 keptKeys();
 exitRecap();
+newBuild();
+titleScreen();   // last: the title screen it may open at once reads what the others set up (the passport, share)

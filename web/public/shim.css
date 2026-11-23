@@ -40,6 +40,7 @@
   --card-bg: #ffffff;
   --card-border: #b8c4d6;
   --accent: #2c5b9a;
+  --accent-ink: #fff; /* text on the accent: white where it reads at 4.5:1, dark where the accent is light */
   color-scheme: light;
 }
 
@@ -73,6 +74,7 @@
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
   --accent: #2563eb;
+  --accent-ink: #fff;
   color-scheme: light;
 }
 
@@ -100,6 +102,7 @@
     --card-bg: #111827;
     --card-border: #1f2937;
     --accent: #60a5fa;
+    --accent-ink: #0b1120;
     color-scheme: dark;
   }
 }
@@ -137,6 +140,7 @@
   --card-bg: #110a22;
   --card-border: #35205c;
   --accent: #ff2bd6;
+  --accent-ink: #07040f;
   color-scheme: dark;
 }
 
@@ -165,6 +169,19 @@
 
 :root[data-full-one] #desktop > .window > .titlebar {
   display: none !important;   /* the shim shows it with an inline style */
+}
+
+/* Embedded in another page (?embed, the home page's player): a finger swiping up or down on the app scrolls that
+   page, as on any web page, so a phone visitor scrolling past it is not caught. Taps, long presses and sideways
+   swipes still work the app, and the parts that follow a drag (TComponent's .drags: Clock's
+   dial, the Rubik's cube, the boards) and the title bars keep the whole finger for the app. */
+:root[data-embed] .window {
+  touch-action: pan-y;
+}
+
+:root[data-embed] .window .drags,
+:root[data-embed] .window .titlebar {
+  touch-action: none;
 }
 
 /* Thumbnail mode (web/shots.ps1 crops the windows out of a flat magenta desktop). */
@@ -402,6 +419,12 @@ canvas.paint.top {
   box-shadow: inset 0 0 0 4px #fff;
 }
 
+/* A painted panel the app made focusable (Tab reaches it): the same ring, drawn inside so the window never clips it. */
+.c[role="application"]:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+
 .button:disabled {
   color: #8e8f91 !important; /* Swing paints disabled text grey even on a button the app gave its own color */
 }
@@ -441,7 +464,7 @@ canvas.paint.top {
   content: "\2713";
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 .button .text {
@@ -595,12 +618,6 @@ canvas.paint.top {
   color: #fff;
   font: 12px system-ui, -apple-system, "Segoe UI", sans-serif;
   backdrop-filter: blur(6px);
-  opacity: 0.6; /* it floats over the app windows */
-}
-
-.shim-toolbar:hover,
-.shim-toolbar:focus-within {
-  opacity: 1;
 }
 
 .shim-toolbar a {
@@ -643,7 +660,7 @@ canvas.paint.top {
   border-radius: 6px;
   border: 1px solid var(--card-border);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   cursor: pointer;
 }
 
@@ -905,6 +922,13 @@ canvas.paint.top {
     width: 96px;
     height: 60px;
   }
+  /* Three lines of each hint, so all three picks fit a phone's exit screen. */
+  .shim-picks .shim-app-text span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
 }
 
 /* Leave out the output panel when the app has windows to show. */
@@ -1053,7 +1077,7 @@ canvas.paint.top {
   padding: 6px 12px;
   border-radius: 8px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -1520,7 +1544,7 @@ canvas.paint.top {
 .shim-title-card {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  grid-template-areas: "art text" "meter meter" "log log";
+  grid-template-areas: "art text";
   gap: 18px 24px;
   width: min(880px, 100%);
   margin: auto;
@@ -1539,7 +1563,7 @@ canvas.paint.top {
   align-items: center;
   justify-content: center;
   min-height: 220px;
-  max-height: 46vh;
+  max-height: 58vh;
   padding: 18px;
   border-radius: 10px;
   background: var(--desk);
@@ -1548,7 +1572,7 @@ canvas.paint.top {
 
 .shim-title-art img {
   max-width: 100%;
-  max-height: calc(46vh - 36px);
+  max-height: calc(58vh - 36px);
   object-fit: contain;
   filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.3));
 }
@@ -1652,16 +1676,25 @@ canvas.paint.top {
   border: 0;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font: 700 18px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
   cursor: pointer;
   box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
 }
 
+/* Before the app is ready Play is already pressable: the press falls through to the card, which starts the app as
+   soon as its files are in (title-screen.tsx). Dimmed only once pressed, while it reads Starting…. */
 .shim-title-play:disabled {
-  cursor: progress;
+  pointer-events: none;
+}
+
+.shim-title.starting .shim-title-play:disabled {
   opacity: 0.55;
   box-shadow: none;
+}
+
+.shim-title.starting {
+  cursor: progress;
 }
 
 .shim-title.ready .shim-title-play {
@@ -1676,35 +1709,55 @@ canvas.paint.top {
 .shim-title-press {
   font-size: 12px;
   opacity: 0.6;
+}
+
+.shim-title.starting .shim-title-press {
   visibility: hidden;
 }
 
-.shim-title.ready .shim-title-press {
-  visibility: visible;
+/* The meter and the boot log are drawn over the foot of the picture, like a cabinet booting, rather than in rows
+   of their own: the card fits a 900x600 window and the picture gets that room. Once Ready the log fades (unless a
+   file failed), so the picture or its clip is all that is left; a click on it still starts the app. */
+.shim-title-meter,
+.shim-title-log {
+  grid-area: art;
+  align-self: end;
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.5s ease-out 0.9s;
 }
 
 .shim-title-meter {
-  grid-area: meter;
+  margin: 0 10px 6px;
+}
+
+.shim-title.ready .shim-title-meter,
+.shim-title.ready .shim-title-log:not(:has(.bad)) {
+  opacity: 0;
 }
 
 .shim-title-log {
-  grid-area: log;
   display: flex;
-  flex-direction: column;
-  height: 7.5em;
-  margin: 0;
+  flex-direction: column-reverse;   /* newest row first in the page (title-screen.tsx), so the box starts scrolled to it */
+  max-height: 6em;   /* four rows */
+  margin: 10px 10px 18px;
+  overflow: hidden;
   padding: 8px 12px;
-  overflow: auto;
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.92);
   color: #cbd5e1;
   font: 12px/1.5 ui-monospace, Consolas, "Courier New", monospace;
-  scrollbar-width: thin;
 }
 
 .shim-title-log .row {
   display: flex;
   gap: 12px;
+}
+
+/* Shown last: fills the space under a short log, so its rows start at the top. */
+.shim-title-log::before {
+  content: "";
+  flex: 1;
 }
 
 .shim-title-log .row > :first-child {
@@ -1769,7 +1822,7 @@ canvas.paint.top {
 @media (max-width: 680px) {
   .shim-title-card {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "art" "text" "meter" "log";
+    grid-template-areas: "art" "text";
     gap: 14px;
     padding: 16px;
   }
@@ -1790,13 +1843,18 @@ canvas.paint.top {
   }
 
   .shim-title-log {
-    height: 4.5em;
+    max-height: 3em;
   }
 }
 
-@media (max-height: 560px) {
-  .shim-title-log {
-    height: 4.5em;
+/* A short window (a 900x600 laptop): a tighter card and hint, so a long hint does not push the card past the fold. */
+@media (max-height: 700px) and (min-width: 681px) {
+  .shim-title-card {
+    padding: 16px;
+  }
+
+  .shim-title-hint {
+    font-size: 14px;
   }
 }
 
@@ -1949,6 +2007,54 @@ canvas.paint.top {
   .shim-title.ready .shim-title-play,
   :root[data-skin="arcade"] .shim-title.ready .shim-title-press {
     animation: none;
+  }
+}
+
+/* The title card's More line (title-screen.tsx): the source, the other version, the jar and the story, folded away
+   until asked for. */
+.shim-title-more {
+  width: 100%;
+  font-size: 13px;
+  cursor: auto;
+}
+
+.shim-title-more[hidden] {
+  display: none;
+}
+
+.shim-title-more > summary {
+  width: fit-content;
+  padding: 4px 0;
+  font-weight: 600;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.shim-title-more > summary:hover,
+.shim-title-more[open] > summary {
+  opacity: 1;
+}
+
+.shim-title-more > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.shim-title-more > :not(summary) {
+  display: block;
+  margin: 8px 0 0;
+}
+
+/* A phone: Play as wide as the card and tall enough for a thumb. */
+@media (max-width: 680px) {
+  .shim-title-play {
+    align-self: stretch;
+    padding: 14px 30px;
+    font-size: 20px;
+  }
+
+  .shim-title-press {
+    align-self: center;
   }
 }
 
@@ -2162,7 +2268,7 @@ canvas.paint.top {
 
 .shim-source-files button[aria-current="true"] {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 .shim-source-view {
@@ -2556,7 +2662,7 @@ a.tk-t:hover {
 .shim-share-way.primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 .shim-share-way:hover {
@@ -2770,6 +2876,12 @@ button.shim-toast-go {
   background: none;   /* boot.js moves it to center the windows, so the desk is painted on the page */
 }
 
+/* An embedded app's own controller (touch-pad.tsx padInFrame) floats at the bottom of its frame: the stage ends
+   above it, as on an app page. */
+:root[data-embed] #desktop {
+  bottom: var(--pad-h, 0px);
+}
+
 /* A desktop scaled down to fit (boot.js centerWindows) would clip its windows at its unscaled size. The
    toolbar and the controller sit above anything dragged past the stage's edges. */
 :root[data-stage] #desktop,
@@ -2892,7 +3004,7 @@ button.shim-toast-go {
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2930,7 +3042,7 @@ button.shim-toast-go {
   border: 0;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font: inherit;
   font-weight: 600;
   text-decoration: none;
@@ -2991,6 +3103,32 @@ button.shim-toast-go {
 
 :root[data-stage] .shim-title {
   padding-top: calc(var(--bar-h, 40px) + 16px);
+}
+
+/* The title card an app page's HTML paints before the runtime has run (AppPage.tsx, EarlyTitle) keeps the room the
+   band will take (one 40 px row; two, about 65 px, under 560 px), so it stays put while the band arrives. */
+#shim-title-early {
+  padding-top: 56px;
+}
+
+@media (max-width: 560px) {
+  #shim-title-early {
+    padding-top: 81px;
+  }
+}
+
+/* A touch screen's band controls are 32 px tall (pointer: coarse, below), so its two rows take about 84 px. */
+@media (max-width: 560px) and (pointer: coarse) {
+  #shim-title-early {
+    padding-top: 100px;
+  }
+}
+
+/* Its boot log keeps its room but shows no empty box; the live title screen under it waits until it takes over
+   (title-screen.tsx). */
+#shim-title-early .shim-title-log,
+#shim-title-early ~ .shim-title {
+  visibility: hidden;
 }
 
 /* Where the source panel docks beside the app (wider pages), the stage ends at its left edge, so the windows
@@ -3072,11 +3210,6 @@ body[data-app="Windows"] #desktop {
 
 body[data-app="Windows"] #desktop > * {
   pointer-events: auto;
-}
-
-/* The Start menu goes over everything, as on Windows (on a narrow page it would be under the key). */
-html:has(.shim-start) body[data-app="Windows"] #desktop {
-  z-index: auto;
 }
 
 .shim-shell > * {
@@ -3945,6 +4078,83 @@ html[data-saver] * {
   color: #1f2937;
 }
 
+/* then.html: a postcard of today's version under the hint (runtime/now-postcard.tsx), opening the two side by side. */
+.shim-title-now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--desk);
+  color: inherit;
+  text-decoration: none;
+}
+
+.shim-title-now-pic {
+  flex: none;
+  width: 92px;
+  padding: 4px 4px 12px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.3);
+  rotate: -4deg;
+  transition: rotate 0.2s ease-out, scale 0.2s ease-out;
+}
+
+.shim-title-now-pic img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #e5e7eb;
+}
+
+.shim-title-now:hover .shim-title-now-pic,
+.shim-title-now:focus-visible .shim-title-now-pic {
+  rotate: 0deg;
+  scale: 1.06;
+}
+
+.shim-title-now-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.shim-title-now-text strong {
+  font-size: 15px;
+  color: var(--accent);
+}
+
+.shim-title-now-text strong::after {
+  content: " \2192";
+}
+
+.shim-title-now-text span {
+  opacity: 0.8;
+}
+
+:root[data-skin="arcade"] .shim-title-now {
+  border-color: #ff2bd6;
+}
+
+/* Classic: on a white field, like the quirks beside it (its desk is a blue the text would sit on). */
+:root[data-skin="classic"] .shim-title-now {
+  background: var(--field-bg);
+  color: #1f2937;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shim-title-now-pic {
+    transition: none;
+  }
+}
+
 /* ---- game controllers (boot.js, gamepadDriver) ---- */
 /* The controller's pointer: an arrow with a ring, drawn over everything and never in the way of a click. */
 .shim-gp-cursor {
@@ -4001,7 +4211,7 @@ html[data-saver] * {
 .shim-toolbar .shim-pop[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 .shim-popped {
@@ -4055,7 +4265,7 @@ html[data-saver] * {
   border-radius: 8px;
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   cursor: pointer;
 }
 
@@ -4612,7 +4822,7 @@ html[data-saver] * {
 .shim-find-item.current .shim-find-tag {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 .shim-find-status {
@@ -4925,7 +5135,7 @@ html[data-saver] * {
   margin-left: auto;
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font-weight: 600;
 }
 
@@ -5069,7 +5279,7 @@ html[data-saver] * {
 
 .shim-embed-choice button[aria-pressed="true"] {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 .shim-embed-choice button:disabled {
@@ -5149,7 +5359,7 @@ html[data-saver] * {
 .shim-toolbar .shim-dock-open[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 @media (max-width: 1100px) {
@@ -5234,7 +5444,7 @@ html[data-saver] * {
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font-size: 11px;
   font-weight: 700;
   visibility: hidden;
@@ -5703,7 +5913,7 @@ html[data-saver] * {
 .shim-toolbar .shim-keys-open[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 /* A finger needs a bigger target than a mouse: on a touch screen the band's controls are at least 32 px across. */
@@ -5719,7 +5929,7 @@ html[data-saver] * {
 .shim-toolbar .shim-slowmo[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 
 /* ---- exit recap (exit-recap.tsx): the run that just ended, at the top of the exit screen ---- */
@@ -5833,11 +6043,15 @@ html[data-saver] * {
   position: relative;
 }
 
+/* Its box is only as tall as the clip it shows (its own aspect, centred where contain would put it), so it paints the
+   same pixels; a full-panel box counted as the page's largest paint once the clip started (phone LCP ~3-6 s). */
 .shim-title-clip {
   position: absolute;
   inset: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 100%;
+  margin: auto 0;
   object-fit: contain;
   opacity: 0;
   transition: opacity 0.6s ease-out;
@@ -5894,4 +6108,159 @@ html[data-saver] * {
   color: #5ff;
   font-family: "Courier New", ui-monospace, monospace;
   text-transform: uppercase;
+}
+
+/* ---- launch: Play opens the title's picture into the app's window (title-screen.tsx launch, a same-page view
+   transition). The picture and the window share the name oldjava-launch and morph; the card fades out around it. ---- */
+:root[data-launch]::view-transition-old(root) {
+  animation: var(--trip-ms) ease both oldjava-launch-out;
+}
+
+:root[data-launch]::view-transition-new(root) {
+  animation: var(--trip-ms) ease both oldjava-launch-in;
+}
+
+::view-transition-group(oldjava-launch) {
+  animation-duration: calc(var(--trip-ms) * 1.3);
+}
+
+@keyframes oldjava-launch-out {
+  to { opacity: 0; }
+}
+
+@keyframes oldjava-launch-in {
+  from { opacity: 0; }
+}
+
+/* The live title card's room for the early card's pictures (title-screen.tsx dropEarly): no box of its own. */
+.shim-title-pic {
+  display: contents;
+}
+
+/* Only the phone poster below shows it. */
+.shim-title-tone {
+  display: none;
+}
+
+/* ---- phone poster: on an upright phone today's title card is a poster. The picture (or its preview clip) runs
+   edge to edge and takes up to half the screen, the app's name sits on its foot like a film title, and Play is right
+   under it in the thumb's reach; the hint and the rest follow below. The text column's parts become the card's
+   own grid rows (display: contents), so the name can share the picture's grid area. Then pages keep their card. ---- */
+@media (max-width: 680px) {
+  .shim-title:not(.then) {
+    padding-right: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+    align-items: flex-start;
+  }
+
+  .shim-title:not(.then) .shim-title-card {
+    justify-items: start;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0 16px 20px;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .shim-title:not(.then) .shim-title-art {
+    position: relative;
+    justify-self: stretch;
+    height: min(75vw + 64px, 52vh);   /* a 4:3 picture across the width, and the name's room */
+    max-height: none;
+    margin: 0 -16px;
+    padding: 12px 12px 76px;   /* the name's room at the foot */
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .shim-title:not(.then) .shim-title-art img {
+    max-height: calc(min(75vw + 64px, 52vh) - 76px);
+  }
+
+  .shim-title:not(.then) .shim-title-clip {
+    bottom: 64px;
+    max-height: calc(100% - 64px);
+  }
+
+  .shim-title:not(.then) .shim-title-art img:not(.shim-title-tone) {
+    position: relative;
+  }
+
+  /* The picture's own colours, blurred, fill the panel round it (title-screen.tsx). */
+  .shim-title:not(.then) .shim-title-art .shim-title-tone {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    object-fit: cover;
+    scale: 1.2;
+    opacity: 0.5;
+    filter: blur(24px) saturate(1.3);
+  }
+
+  /* A scrim at the picture's foot for the name to stand on. */
+  .shim-title:not(.then) .shim-title-art::before {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 96px;
+    z-index: 1;
+    background: linear-gradient(transparent, var(--card-bg) 88%);
+    pointer-events: none;
+  }
+
+  .shim-title:not(.then) .shim-title-text {
+    display: contents;
+  }
+
+  .shim-title:not(.then) .shim-title-cat,
+  .shim-title:not(.then) h1 {
+    grid-area: art;
+    z-index: 2;
+    align-self: end;
+  }
+
+  .shim-title:not(.then) .shim-title-cat {
+    margin-bottom: 52px;
+  }
+
+  .shim-title:not(.then) h1 {
+    margin-bottom: 8px;
+    font-size: clamp(30px, 9vw, 40px);
+  }
+
+  .shim-title:not(.then) .shim-title-play {
+    justify-self: stretch;
+    margin-top: 0;
+  }
+
+  .shim-title:not(.then) .shim-title-press {
+    justify-self: center;
+    margin-top: -8px;
+  }
+
+  /* The boot log moves to the picture's head, clear of the name. */
+  .shim-title:not(.then) .shim-title-meter,
+  .shim-title:not(.then) .shim-title-log {
+    align-self: start;
+  }
+
+  .shim-title:not(.then) .shim-title-meter {
+    margin-top: 6px;
+  }
+
+  .shim-title:not(.then) .shim-title-clip-pause {
+    top: 8px;
+    bottom: auto;
+    z-index: 2;
+  }
 }

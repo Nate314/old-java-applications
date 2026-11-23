@@ -176,19 +176,19 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
       var cat = ({ game: 'Game', music: 'Music', toy: 'Toy', tool: 'Tool' } as Record<string, string>)[app.cat] || '';
       items.push({
         kind: 'app', app: app, title: app.name, sub: app.id === here && !thenHere ? 'Playing now' : app.hint,
-        keys: app.id + ' ' + cat + ' ' + app.hint, pic: app.shot, tag: site.played(app.id) ? 'Played' : 'New',
+        keys: app.id + ' ' + cat + ' ' + app.hint, pic: app.pic, tag: site.played(app.id) ? 'Played' : 'New',
         tagNew: !site.played(app.id), current: app.id === here && !thenHere,
         run: function (full?: boolean) { playApp(app, full); }
       });
       if (app.then) items.push({
         kind: 'then', app: app, name: app.name, title: app.name + ': as it was', sub: 'As first restored in 2026: light bug fixes, before the later reworks',
-        keys: 'then old original recovered restored first 2016 2026 jar version ' + app.id, pic: app.shot, tag: 'Then', boost: -8,
+        keys: 'then old original recovered restored first 2016 2026 jar version ' + app.id, pic: app.pic, tag: 'Then', boost: -8,
         current: app.id === here && thenHere,
         run: function () { go(site.root() + app.id + '/then.html'); }
       });
       if (site.watchable.indexOf(app.id) >= 0) items.push({
         kind: 'watch', app: app, name: app.name, title: 'Watch the computer play ' + app.name, sub: 'It plays itself; click or press a key to take over',
-        keys: 'watch computer bot ai demo plays itself ' + app.id, pic: app.shot, tag: 'Watch', boost: -6,
+        keys: 'watch computer bot ai demo plays itself ' + app.id, pic: app.pic, tag: 'Watch', boost: -6,
         run: function () { go(site.root() + app.id + '/index.html?watch'); }
       });
     });
@@ -399,6 +399,7 @@ function FindBox({ view, home, onSearch, onKey, onClose, onChoose, onHover, onMo
       view.status = n ? n + (n === 1 ? ' result' : ' results') : 'Nothing matches “' + parts.input.value.trim() + '”. Try a game, a skin, or a class name.';
       draw();
       if (!srcItems.length) sourceItems(apps).then(function (s) {
+        if (!s.length) return;   // none could be read (offline): searching again would ask again, forever, never yielding
         srcItems = s;
         if (box && parts.input.value.trim()) search();
       });

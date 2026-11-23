@@ -19,7 +19,9 @@ final class DuelView {
 	private static final Color THEM = new Color(196, 120, 255);
 	private static final Color THEM_DARK = new Color(96, 62, 140);
 
-	private static final int HIDE_Y = 150, HIDE_HEIGHT = 44;
+	/** A shade apart from {@link Board#POSSIBLE_DARK}, for every other row of ten in the hiding grid. */
+	private static final Color HIDE_ODD = new Color(28, 86, 72);
+	private static final int HIDE_Y = 144, CARD_HEIGHT = 42, CELL_MIN = 18, CELL_MAX = 30;
 	private static final int YOUR_LABEL_Y = 135, YOUR_BAR_Y = 147, YOUR_ZOOM_Y = 165, YOUR_ZOOM_HEIGHT = 30;
 	private static final int ITS_LABEL_Y = 230, ITS_BAR_Y = 244, ITS_BAR_HEIGHT = 14;
 	private static final int THINK_MS = 750, FLASH_MS = 600;
@@ -29,9 +31,13 @@ final class DuelView {
 	private long movedAt;
 	/** Where the pointer is, or -1. */
 	private int hoverX = -1, hoverY = -1;
+	/** The number in the text field, or 0. */
+	private int typed;
 	/** Where the clickable line was last drawn. */
 	private Rectangle clickable = new Rectangle();
 	private int clickLow = 1, clickHigh = Duel.MAX;
+	/** Numbers a row when the clickable part is the hiding grid, else 0 (a line). */
+	private int gridColumns;
 
 	DuelView(Runnable repaint) {
 		timer = new Timer(80, event -> {
@@ -70,10 +76,38 @@ final class DuelView {
 		return numberAt(duel, hoverX, hoverY);
 	}
 
+	/** Follows the text field. */
+	void type(int number) {
+		typed = number;
+	}
+
+	/** The number the clickable line marks: the one under the pointer, else the typed one if Enter would use it. */
+	private int shown(Duel duel) {
+		int hover = hoverNumber(duel);
+		boolean usable = duel.isHiding() || duel.isYourTurn();
+		return hover > 0 || !usable || typed < clickLow || typed > clickHigh ? hover : typed;
+	}
+
+	/** The line's middle label: what Enter would do with the typed number, or {@code idle}. */
+	private String note(Duel duel, String verb, String idle) {
+		String note = hoverNumber(duel) > 0 ? null : Board.typedNote(typed, verb, clickLow, clickHigh, Duel.MAX);
+		return note != null ? note : idle;
+	}
+
+	/** Warning orange for a typed number Enter would not count, else the usual soft grey. */
+	private Color noteColor(Duel duel) {
+		return typed > 0 && shown(duel) == 0 && (duel.isHiding() || duel.isYourTurn()) ? Board.WARN : Board.SOFT;
+	}
+
 	/** The number a click at ({@code x}, {@code y}) would hide or guess, or 0. */
 	int numberAt(Duel duel, int x, int y) {
 		if (duel == null || !(duel.isHiding() || duel.isYourTurn()) || !clickable.contains(x, y)) {
 			return 0;
+		}
+		for (int number = 1; gridColumns > 0 && number <= Duel.MAX; number++) {
+			if (cellOf(clickable, gridColumns, number).contains(x, y)) {
+				return number;
+			}
 		}
 		long count = (long) clickHigh - clickLow + 1;
 		long offset = (long) (x - clickable.x) * count / clickable.width;
@@ -93,31 +127,73 @@ final class DuelView {
 	// ---- before the duel ----
 
 	private void paintHiding(Graphics2D g, Duel duel, Records records, Rectangle area) {
-		Rectangle line = new Rectangle(area.x, HIDE_Y, area.width, HIDE_HEIGHT);
-		clickable = line;
+		Rectangle grid = hidingGrid(area);
+		boolean card = grid.y + grid.height + 10 + CARD_HEIGHT <= area.y + area.height - 14;
+		clickable = grid;
+		gridColumns = columns(area);
 		clickLow = 1;
 		clickHigh = Duel.MAX;
-		label(g, "YOUR HIDDEN NUMBER", area.x, HIDE_Y - 12, Board.SOFT);
-		int hover = hoverNumber(duel);
-		paintCells(g, line, 1, Duel.MAX, number -> number == hover ? Board.GOLD : Board.POSSIBLE_DARK);
-		ends(g, line, "1", Integer.toString(Duel.MAX), "Click to hide a number here, or type it");
+		label(g, "YOUR HIDDEN NUMBER", area.x, HIDE_Y - 8, Board.SOFT);
+		String note = note(duel, "hides", "Click one, or type it");
+		g.setColor(noteColor(duel));
+		g.drawString(note, area.x + area.width - g.getFontMetrics().stringWidth(note), HIDE_Y - 8);
+		int hover = shown(duel);
+		g.setFont(new Font("SansSerif", Font.BOLD, 12));
+		FontMetrics metrics = g.getFontMetrics();
+		for (int number = 1; number <= Duel.MAX; number++) {
+			Rectangle cell = cellOf(grid, gridColumns, number);
+			// Each row of ten a shade apart, so the tens are easy to find.
+			boolean odd = (number - 1) / 10 % 2 == 1;
+			g.setColor(number == hover ? Board.GOLD : odd ? HIDE_ODD : Board.POSSIBLE_DARK);
+			g.fillRoundRect(cell.x + 1, cell.y + 1, cell.width - 2, cell.height - 2, 6, 6);
+			String text = Integer.toString(number);
+			g.setColor(number == hover ? Board.BACKGROUND : Board.TEXT);
+			g.drawString(text, cell.x + (cell.width - metrics.stringWidth(text)) / 2, cell.y + (cell.height + metrics.getAscent()) / 2 - 2);
+		}
+		if (!card) {
+			// A short board: the subline above already gives the rules.
+			return;
+		}
 		// The computer's number, face down.
-		int cardX = area.x, cardY = HIDE_Y + HIDE_HEIGHT + 30;
+		int cardX = area.x, cardY = area.y + area.height - 14 - CARD_HEIGHT;
 		g.setColor(THEM_DARK);
-		g.fillRoundRect(cardX, cardY, 44, 54, 10, 10);
+		g.fillRoundRect(cardX, cardY, 36, CARD_HEIGHT, 10, 10);
 		g.setColor(THEM);
-		g.drawRoundRect(cardX, cardY, 43, 53, 10, 10);
-		g.setFont(new Font("SansSerif", Font.BOLD, 28));
-		g.drawString("?", cardX + 22 - g.getFontMetrics().stringWidth("?") / 2, cardY + 38);
+		g.drawRoundRect(cardX, cardY, 35, CARD_HEIGHT - 1, 10, 10);
+		g.setFont(new Font("SansSerif", Font.BOLD, 24));
+		g.drawString("?", cardX + 18 - g.getFontMetrics().stringWidth("?") / 2, cardY + 30);
 		g.setColor(Board.TEXT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 14));
-		g.drawString("The computer has hidden its number.", cardX + 60, cardY + 20);
+		Board.drawFitted(g, "The computer has hidden its number.", cardX + 48, cardY + 17, area.width - 48);
 		g.setColor(Board.SOFT);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-		g.drawString("Each round you both guess. Fewer guesses wins; the same is a draw.", cardX + 60, cardY + 40);
-		if (hover > 0) {
-			Board.paintBubble(g, hover, xOf(line, hover - 0.5, 1, Duel.MAX), line);
+		Board.drawFitted(g, "Each round you both guess. Fewer guesses wins; the same is a draw.", cardX + 48, cardY + 35, area.width - 48);
+	}
+
+	/** Twenty numbers a row on the wide board, ten on a narrow one. */
+	private static int columns(Rectangle area) {
+		return area.width >= 500 ? 20 : 10;
+	}
+
+	/**
+	 * The 1 to 100 grid to hide your number on: rows as tall as fit (up to {@link #CELL_MAX}) above the computer's
+	 * card, or, when that would make them shorter than {@link #CELL_MIN}, in all the room without the card.
+	 */
+	static Rectangle hidingGrid(Rectangle area) {
+		int rows = Duel.MAX / columns(area), bottom = area.y + area.height - 14;
+		int rowHeight = Math.min(CELL_MAX, (bottom - CARD_HEIGHT - 10 - HIDE_Y) / rows);
+		if (rowHeight < CELL_MIN) {
+			rowHeight = Math.min(CELL_MAX, (bottom - HIDE_Y) / rows);
 		}
+		return new Rectangle(area.x, HIDE_Y, area.width, rowHeight * rows);
+	}
+
+	/** Where {@code number} sits in a grid of {@code columns} a row. */
+	static Rectangle cellOf(Rectangle grid, int columns, int number) {
+		int rows = Duel.MAX / columns, column = (number - 1) % columns, row = (number - 1) / columns;
+		int x0 = xOf(grid, column, 0, columns), x1 = xOf(grid, column + 1, 0, columns);
+		int rowHeight = grid.height / rows;
+		return new Rectangle(x0, grid.y + row * rowHeight, x1 - x0, rowHeight);
 	}
 
 	// ---- your lane: finding its number ----
@@ -132,12 +208,13 @@ final class DuelView {
 		paintMarks(g, bar, game.guesses(), game.number(), false, -1);
 		Rectangle zoom = new Rectangle(area.x, YOUR_ZOOM_Y, area.width, YOUR_ZOOM_HEIGHT);
 		clickable = zoom;
+		gridColumns = 0;
 		clickLow = game.low();
 		clickHigh = game.high();
 		g.setColor(Board.POSSIBLE_DARK);
 		g.drawLine(xOf(bar, game.low() - 1, 0, Duel.MAX), bar.y + bar.height + 1, zoom.x, zoom.y - 2);
 		g.drawLine(xOf(bar, game.high(), 0, Duel.MAX), bar.y + bar.height + 1, zoom.x + zoom.width, zoom.y - 2);
-		int hover = hoverNumber(duel);
+		int hover = shown(duel);
 		if (over && !game.isFound()) {
 			g.setColor(Board.CARD);
 			g.fillRoundRect(zoom.x, zoom.y, zoom.width, zoom.height, 8, 8);
@@ -146,9 +223,9 @@ final class DuelView {
 			paintCells(g, zoom, game.low(), game.high(),
 					number -> game.isFound() ? Board.RIGHT : number == hover ? Board.GOLD : Board.POSSIBLE_DARK);
 		}
-		String middle = duel.isYourTurn() ? "Click to guess" : duel.isComputersTurn() ? "Its turn" : "";
+		String middle = duel.isYourTurn() ? note(duel, "guesses", "Click to guess") : duel.isComputersTurn() ? "Its turn" : "";
 		ends(g, zoom, game.low() == game.high() ? "" : Integer.toString(game.low()),
-				game.low() == game.high() ? "" : Integer.toString(game.high()), middle);
+				game.low() == game.high() ? "" : Integer.toString(game.high()), middle, noteColor(duel));
 		if (hover > 0) {
 			Board.paintBubble(g, hover, xOf(zoom, hover - game.low() + 0.5, 0, game.high() - game.low() + 1), zoom);
 		}
@@ -167,7 +244,7 @@ final class DuelView {
 		paintMarks(g, bar, game.guesses(), game.number(), true, flash ? game.getGuesses() - 1 : -1);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 		g.setColor(Board.SOFT);
-		g.drawString(thought(duel), area.x, ITS_BAR_Y + ITS_BAR_HEIGHT + 32);
+		Board.drawFitted(g, thought(duel), area.x, ITS_BAR_Y + ITS_BAR_HEIGHT + 32, area.width);
 	}
 
 	/** What the computer is up to, in its own words. */
@@ -293,12 +370,13 @@ final class DuelView {
 		}
 	}
 
-	private static void ends(Graphics2D g, Rectangle line, String low, String high, String middle) {
+	private static void ends(Graphics2D g, Rectangle line, String low, String high, String middle, Color middleColor) {
 		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
 		g.setColor(Board.SOFT);
 		int y = line.y + line.height + 14;
 		g.drawString(low, line.x, y);
 		g.drawString(high, line.x + line.width - g.getFontMetrics().stringWidth(high), y);
+		g.setColor(middleColor);
 		g.drawString(middle, line.x + (line.width - g.getFontMetrics().stringWidth(middle)) / 2, y);
 	}
 

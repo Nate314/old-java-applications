@@ -13,7 +13,7 @@ export const TOUR: [app: string, tryThis: string][] = ([
   ['ScreenSaver', 'Press N for the next of ten screen savers, 9 for the aquarium (F feeds the fish), and 0 for the maze.'],
   ['MusicTheoryExpert', 'Open the Songwriter tab and click chords on the circle of fifths: it loops them into a song.'],
   ['TankGame', 'The computer is driving both tanks. Press a key to take the red one: W A S D drive, Q fires.'],
-  ['SpriteFloatyStars', 'A thousand stars orbit a sun. Click to place up to four suns and watch them swing between them.'],
+  ['SpriteFloatyStars', 'Hundreds of stars orbit a sun. Click to place up to four suns and watch them swing between them.'],
   ['SimpleAlgorithms', 'Six sorting algorithms race on the same numbers. Click one to hear it work.'],
   ['NumberGuess', 'Type a guess or click the number line: it lights what is still possible. Magic is a card trick that reads your mind.'],
   ['GroupCreator', 'Deal a class into groups, then deal again: the next round gives people partners they have not had yet.'],

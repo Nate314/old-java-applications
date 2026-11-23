@@ -28,7 +28,9 @@ final class MagicView {
 	private static final Color NO = new Color(150, 146, 140);
 	private static final Color SPARK = new Color(255, 214, 90);
 
-	private static final int MAIN_WIDTH = 380, GAP = 16;
+	private static final int MAIN_WIDTH = 380, GAP = 16, ROW_HEIGHT = 70;
+	/** How it works at full size: the column heads, six rows of 22 and the sum. */
+	private static final int HOW_HEIGHT = 50 + 6 * 22 + 30;
 	private static final int DEAL_MS = 260, HOLD_MS = 420, FLIP_MS = HOLD_MS + 520, SPARKS_MS = 1400;
 
 	private final Timer timer;
@@ -75,7 +77,14 @@ final class MagicView {
 	}
 
 	void paint(Graphics2D g, MagicCards cards, Rectangle area) {
-		Rectangle main = new Rectangle(area.x, area.y, MAIN_WIDTH, area.height);
+		// Too narrow for the six cards beside the one asked (a phone held upright): they sit in a row under it.
+		boolean stacked = area.width < MAIN_WIDTH + GAP + 150;
+		Rectangle main = stacked ? new Rectangle(area.x, area.y, area.width, area.height - ROW_HEIGHT - GAP) : new Rectangle(area.x, area.y, MAIN_WIDTH, area.height);
+		// On a short phone How it works needs the whole area; the six cards it lists step aside.
+		boolean howAlone = stacked && explaining && cards.isDone() && main.height < HOW_HEIGHT;
+		if (howAlone) {
+			main = area;
+		}
 		if (!cards.isDone()) {
 			double t = Math.min(1, elapsed() / (double) DEAL_MS);
 			int drop = (int) Math.round(10 * (1 - t) * (1 - t));
@@ -87,7 +96,10 @@ final class MagicView {
 		} else {
 			paintReveal(g, cards.number(), main);
 		}
-		paintStack(g, cards, new Rectangle(main.x + main.width + GAP, area.y, area.width - main.width - GAP, area.height));
+		if (!howAlone) {
+			paintStack(g, cards, stacked ? new Rectangle(area.x, area.y + area.height - ROW_HEIGHT, area.width, ROW_HEIGHT)
+					: new Rectangle(main.x + main.width + GAP, area.y, area.width - main.width - GAP, area.height));
+		}
 	}
 
 	/** Card {@code index} face up: a band in its ink, then its 32 numbers in 4 rows of 8. */
@@ -96,7 +108,7 @@ final class MagicView {
 		List<Integer> numbers = cards.numbers(index);
 		int columns = 8, rows = numbers.size() / columns;
 		int top = r.y + 34, cellWidth = (r.width - 16) / columns, cellHeight = (r.height - 40) / rows;
-		g.setFont(new Font("SansSerif", Font.BOLD, 19));
+		g.setFont(new Font("SansSerif", Font.BOLD, Math.min(19, cellHeight + 1))); // smaller on a short phone's card
 		FontMetrics metrics = g.getFontMetrics();
 		g.setColor(ink(index).darker());
 		for (int i = 0; i < numbers.size(); i++) {
@@ -194,7 +206,7 @@ final class MagicView {
 		g.drawString("Smallest on", cardX, r.y + 42);
 		g.drawString("Your number on it?", answerX, r.y + 42);
 		g.drawString("Bit", digitX - 4, r.y + 42);
-		int rowHeight = 22, top = r.y + 50;
+		int rowHeight = Math.min(22, (r.height - 50 - 30) / MagicCards.CARDS), top = r.y + 50;
 		StringBuilder sum = new StringBuilder();
 		StringBuilder binary = new StringBuilder();
 		for (int row = 0; row < MagicCards.CARDS; row++) {
@@ -241,9 +253,10 @@ final class MagicView {
 	/** The six cards, two by three: answered ones face up with Yes or No, the one being asked ringed in gold. */
 	private void paintStack(Graphics2D g, MagicCards cards, Rectangle r) {
 		int gap = 10;
-		int width = (r.width - gap) / 2, height = (r.height - 2 * gap) / 3;
+		int columns = r.width > 3 * r.height ? MagicCards.CARDS : 2, rows = MagicCards.CARDS / columns;
+		int width = (r.width - gap * (columns - 1)) / columns, height = (r.height - gap * (rows - 1)) / rows;
 		for (int i = 0; i < MagicCards.CARDS; i++) {
-			Rectangle card = new Rectangle(r.x + (i % 2) * (width + gap), r.y + (i / 2) * (height + gap), width, height);
+			Rectangle card = new Rectangle(r.x + (i % columns) * (width + gap), r.y + (i / columns) * (height + gap), width, height);
 			Boolean answer = cards.answer(i);
 			if (i == cards.current()) {
 				paintFace(g, card, ink(i), Integer.toString(i + 1));

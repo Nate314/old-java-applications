@@ -14,6 +14,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,6 +40,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    static Color PAPER_EDGE;
    /** The darker stripes of the page edges under the book. */
    private static Color EDGE_SHADE;
+   /** The gilt page edges of the blocks under the pages, in two stripes. */
+   private static Color GILT;
+   private static Color GILT_SHADE;
    /** The shadow toward the fold between two pages. */
    private static Color SPINE;
    static Color INK;
@@ -64,6 +68,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private static final Color BUTTON_HOVER = new Color(0x654b34);
    private static final Color BUTTON_TEXT = new Color(0xf3e7cf);
    static final Color GOLD = new Color(0xd8b45e);
+   /** A thumb index tab's label on its gold fill, by day and by night. */
+   private static final Color TAB_INK_OVER = new Color(0x2b2118);
+   private static final Font TAB = new Font("SansSerif", Font.BOLD, 9);
 
    static {
       palette(false);
@@ -76,6 +83,8 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       PAPER = new Color(night ? 0x241d16 : 0xfbf5e6);
       PAPER_EDGE = new Color(night ? 0x3b3127 : 0xe3d5b5);
       EDGE_SHADE = new Color(night ? 0x2c241c : 0xcdbd98);
+      GILT = new Color(night ? 0x5e4b2a : 0xdcbc6c);
+      GILT_SHADE = new Color(night ? 0x4a3b22 : 0xb8954a);
       SPINE = night ? new Color(0, 0, 0) : new Color(120, 90, 50);
       INK = new Color(night ? 0xe9dcc3 : 0x2b2118);
       RUBRIC = new Color(night ? 0xe07a6c : 0x9e2a2b);
@@ -98,6 +107,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    /** Below this width the book shows one page at a time. */
    private static final int TWO_PAGE_WIDTH = 700;
    private static final int GLOW_MS = 2400;
+   /** How far a dragged page must be turned to go over when let go. */
+   static final double TURN_OVER = 0.2;
+   /** The leather either side of the book, where the thumb index's tabs stand out from the page edges. */
+   private static final int EDGE = 32;
+   /** How far a thumb index tab stands out from the page edge, and the least height of one. */
+   private static final int TAB_W = 24;
+   static final int TAB_H = 22;
 
    private enum View { READ, BOOKS, CHAPTERS, SAVE, PLAN, LEARN }
 
@@ -169,6 +185,13 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    private long foundAt;
    private final Timer glowTimer;
    private final PageTurn pageTurn = new PageTurn(this);
+   /** Where a press on the open book began (it clicks on release unless it drags), or null. */
+   private java.awt.Point pressedAt;
+   /** The page being dragged over: forward or back, and how far (0 to 1); NaN when none is. */
+   private boolean dragForward;
+   private double dragged = Double.NaN;
+   /** While a dragged page is not yet let go over, the place it turned to is not saved or counted as read. */
+   private boolean trying;
 
    public ReaderPanel(Shelf shelf) {
       this.shelf = shelf;
@@ -194,7 +217,20 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          @Override
          public void mousePressed(MouseEvent e) {
             ReaderPanel.this.requestFocusInWindow();
-            ReaderPanel.this.click(e.getX(), e.getY());
+            ReaderPanel.this.press(e.getX(), e.getY());
+         }
+
+         @Override
+         public void mouseDragged(MouseEvent e) {
+            ReaderPanel.this.drag(e.getX(), e.getY());
+            if (Double.isNaN(ReaderPanel.this.dragged)) {
+               ReaderPanel.this.hover(e.getX(), e.getY());
+            }
+         }
+
+         @Override
+         public void mouseReleased(MouseEvent e) {
+            ReaderPanel.this.release();
          }
 
          @Override
@@ -317,12 +353,22 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    /** Moves through the book, and turns the page over when both the old and the new pages are set. */
    private void turn(boolean forward, Runnable move) {
+      this.turn(forward, move, false);
+   }
+
+   /** As {@link #turn(boolean, Runnable)}; held, the page waits for the finger dragging it instead of turning by itself. */
+   private void turn(boolean forward, Runnable move, boolean held) {
+      this.pageTurn.settle();
       boolean motion = !Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
       String from = this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread;
       BufferedImage before = motion && this.view == View.READ && this.goTo == null && this.chapterShown() && this.getWidth() > 0 ? this.snapshot() : null;
       move.run();
       if (before != null && this.view == View.READ && this.chapterShown() && !from.equals(this.shelf.book + ":" + this.shelf.chapter + ":" + this.spread)) {
-         this.pageTurn.start(forward, before, this.snapshot(), this.sheets());
+         if (held) {
+            this.pageTurn.grab(forward, before, this.snapshot(), this.sheets());
+         } else {
+            this.pageTurn.start(forward, before, this.snapshot(), this.sheets());
+         }
       }
    }
 
@@ -392,7 +438,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
    /** Saves the place; a chapter whose last page is open counts as read. */
    private void placeChanged() {
-      if (this.pages == null) {
+      if (this.pages == null || this.trying) {
          return;
       }
       this.shelf.verse = this.pages.get(this.spread).firstVerse;
@@ -500,6 +546,11 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
          this.closeGoTo();
          return;
       }
+      int tab = this.edgeBook(x, y);
+      if (tab >= 0) {
+         this.openFromTab(tab);
+         return;
+      }
       // Anywhere else on the book: the left half turns back, the right half forward.
       if (this.view == View.READ && y < this.getHeight() - BAR) {
          if (x < this.getWidth() / 2) {
@@ -508,6 +559,82 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             this.next();
          }
       }
+   }
+
+   /** A press on the open book waits to see whether it drags a page; anywhere else it clicks at once. */
+   private void press(int x, int y) {
+      this.pageTurn.settle();
+      if (this.view == View.READ && this.goTo == null && y < this.getHeight() - BAR) {
+         this.pressedAt = new java.awt.Point(x, y);
+      } else {
+         this.click(x, y);
+      }
+   }
+
+   /** Dragging sideways over the book takes hold of a page, which follows the finger until it is let go. */
+   private void drag(int x, int y) {
+      if (this.pressedAt == null) {
+         return;
+      }
+      if (this.edgeBook(this.pressedAt.x, this.pressedAt.y) >= 0) {
+         // Up or down the edge, as a thumb runs down a Bible's tabs: the press follows, and opens the book it is on when let go.
+         Rectangle s = this.strip();
+         this.pressedAt.y = Math.max(s.y, Math.min(s.y + s.height - 1, y));
+         this.repaint();
+         return;
+      }
+      int dx = x - this.pressedAt.x;
+      if (Double.isNaN(this.dragged)) {
+         if (Math.abs(dx) < 12 || Math.abs(dx) <= Math.abs(y - this.pressedAt.y)) {
+            return;
+         }
+         this.dragForward = dx < 0;
+         this.trying = true;
+         // The verse under the finger is not tinted on the page lifted, or on the one beneath.
+         this.hoverVerse = 0;
+         this.turn(this.dragForward, this.dragForward ? this::forward : this::backward, true);
+         if (!this.pageTurn.held()) {
+            // Nothing to hold (reduced motion, or a chapter still to fetch): the page has simply turned.
+            this.trying = false;
+            this.placeChanged();
+            this.pressedAt = null;
+            return;
+         }
+         this.dragged = 0;
+      }
+      // Across the whole book is a whole turn, on one page or two.
+      this.dragged = Math.max(0, Math.min(1, (this.dragForward ? -dx : dx) / (double) this.bookArea().width));
+      this.pageTurn.hold(this.dragged);
+      this.repaint();
+   }
+
+   /** A press that did not drag clicks; a dragged page let go a fifth of the way or more turns over, else falls back. */
+   private void release() {
+      java.awt.Point at = this.pressedAt;
+      this.pressedAt = null;
+      if (at == null) {
+         return;
+      }
+      if (Double.isNaN(this.dragged)) {
+         this.click(at.x, at.y);
+         return;
+      }
+      boolean over = this.dragged >= TURN_OVER;
+      this.dragged = Double.NaN;
+      this.trying = false;
+      if (over) {
+         this.placeChanged();
+      }
+      boolean forward = this.dragForward;
+      this.pageTurn.let(over, () -> {
+         // Back where the press began: the opposite move, without a turn.
+         if (forward) {
+            this.backward();
+         } else {
+            this.forward();
+         }
+         this.repaint();
+      });
    }
 
    private void hover(int x, int y) {
@@ -523,6 +650,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             }
          }
       }
+      onHit |= this.edgeBook(x, y) >= 0;
       this.setCursor(Cursor.getPredefinedCursor(onHit ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
       this.hoverVerse = verse;
       this.repaint();
@@ -1077,7 +1205,120 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
    }
 
    private Rectangle bookArea() {
-      return new Rectangle(20, 16, this.getWidth() - 40, this.getHeight() - BAR - 26);
+      return new Rectangle(EDGE, 16, this.getWidth() - 2 * EDGE, this.getHeight() - BAR - 26);
+   }
+
+   // ---- The thumb index: tabs on the page edges, as cut into a printed Bible ----
+
+   /** How many tabs fit down an edge of the given height (each holds one or more books, in Bible order). */
+   static int tabs(int strip) {
+      return Math.max(1, Math.min(Books.IDS.length, strip / TAB_H));
+   }
+
+   /** The first book of tab t of n. */
+   static int tabFirst(int t, int n) {
+      return t * Books.IDS.length / n;
+   }
+
+   /** The book at dy down an edge of the given height: its tab, then its share of the tab's height. */
+   static int bookAtEdge(int dy, int strip) {
+      int n = tabs(strip);
+      int t = Math.max(0, Math.min(n - 1, dy * n / strip));
+      int first = tabFirst(t, n);
+      int count = tabFirst(t + 1, n) - first;
+      int top = t * strip / n;
+      int height = Math.max(1, (t + 1) * strip / n - top);
+      return first + Math.max(0, Math.min(count - 1, (dy - top) * count / height));
+   }
+
+   /** The index's strip: the height of the book less a little at the top and the foot. */
+   private Rectangle strip() {
+      Rectangle book = this.bookArea();
+      return new Rectangle(book.x, book.y + 6, book.width, book.height - 12);
+   }
+
+   /** The book whose tab is at (x, y) on either edge while reading, or -1. */
+   private int edgeBook(int x, int y) {
+      Rectangle s = this.strip();
+      if (this.view != View.READ || this.goTo != null || x < 0 || y < s.y || y >= s.y + s.height || (x >= s.x && x < s.x + s.width)) {
+         return -1;
+      }
+      return bookAtEdge(y - s.y, s.height);
+   }
+
+   /** Where the pointer points into the index: a press on an edge (dragged up or down it), or the mouse over it; null when neither. */
+   private java.awt.Point edgePoint() {
+      java.awt.Point p = this.pressedAt != null && this.edgeBook(this.pressedAt.x, this.pressedAt.y) >= 0
+         ? this.pressedAt : new java.awt.Point(this.mouseX, this.mouseY);
+      return this.edgeBook(p.x, p.y) >= 0 ? p : null;
+   }
+
+   /** Opens a book from its tab where its reading goes on; the open book's own tab shows its chapters. */
+   private void openFromTab(int book) {
+      // The flag goes with the tap; a mouse brings it back when it moves.
+      this.mouseX = -1;
+      this.mouseY = -1;
+      if (book == this.shelf.book) {
+         this.showChapters(book);
+      } else {
+         this.open(book, this.startChapter(book), false);
+      }
+   }
+
+   /** Where a book's reading goes on: its first chapter not read, or chapter 1 when none or all are read. */
+   private int startChapter(int b) {
+      int first = 1;
+      while (first < Books.CHAPTERS[b] && this.shelf.isRead(b, first)) {
+         first++;
+      }
+      return this.shelf.readCount(b) == Books.CHAPTERS[b] ? 1 : first;
+   }
+
+   /** The tabs: books before the open one stand out on the left edge, the open one and those after on the right. */
+   private void paintThumbIndex(Graphics2D g, Rectangle book) {
+      Rectangle s = this.strip();
+      int n = tabs(s.height);
+      java.awt.Point at = this.edgePoint();
+      int pointed = at == null ? -1 : bookAtEdge(at.y - s.y, s.height);
+      int[] stack = this.stack();
+      g.setFont(TAB);
+      FontMetrics fm = g.getFontMetrics();
+      for (int t = 0; t < n; t++) {
+         int first = tabFirst(t, n);
+         int last = tabFirst(t + 1, n) - 1;
+         boolean left = last < this.shelf.book;
+         int y = s.y + t * s.height / n + 1;
+         int h = s.y + (t + 1) * s.height / n - 1 - y;
+         // Tucked 4 px under the page block, whose edges cover the tab's inner end.
+         int x = left ? book.x - TAB_W - (stack[0] - 3) : book.x + book.width - 4 + (stack[1] - 3);
+         boolean open = this.shelf.book >= first && this.shelf.book <= last;
+         boolean over = pointed >= first && pointed <= last;
+         g.setColor(over ? GOLD : open ? RUBRIC : t % 2 == 0 ? PAPER_EDGE : EDGE_SHADE);
+         g.fillRoundRect(x, y, TAB_W + 4, h, 7, 7);
+         String id = Books.IDS[first];
+         int k = Character.isDigit(id.charAt(0)) ? 2 : 1;
+         String label = id.substring(0, k) + id.substring(k).toLowerCase();
+         g.setColor(over ? TAB_INK_OVER : open ? ON_RUBRIC : INK);
+         // Centered on what shows past the page block.
+         int lx = (left ? x : x + 7) + (TAB_W - 3 - fm.stringWidth(label)) / 2;
+         g.drawString(label, lx, y + (h + fm.getAscent() - fm.getDescent()) / 2);
+      }
+   }
+
+   /** A flag on the page beside the pointed tab, naming the place it opens. */
+   private void paintTabFlag(Graphics2D g, Rectangle book) {
+      java.awt.Point at = this.edgePoint();
+      if (at == null) {
+         return;
+      }
+      Rectangle s = this.strip();
+      int b = bookAtEdge(at.y - s.y, s.height);
+      String label = b == this.shelf.book ? Books.NAMES[b] + ": chapters" : Books.NAMES[b] + " " + this.startChapter(b) + " \u203a";
+      g.setFont(UI);
+      int w = g.getFontMetrics().stringWidth(label) + 24;
+      int y = Math.max(book.y + 4, Math.min(book.y + book.height - 34, at.y - 15));
+      int x = at.x < book.x ? book.x + 6 : book.x + book.width - 6 - w;
+      this.pill(g, new Rectangle(x, y, w, 30), label, BUTTON, BUTTON_TEXT);
    }
 
    private Rectangle[] sheets() {
@@ -1101,6 +1342,9 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
 
       Rectangle book = this.bookArea();
       Rectangle[] sheets = this.sheets();
+      if (this.view == View.READ) {
+         this.paintThumbIndex(g, book);
+      }
       this.paintPaper(g, book, sheets);
       Rectangle[] text = new Rectangle[sheets.length];
       for (int i = 0; i < sheets.length; i++) {
@@ -1132,18 +1376,89 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       }
       if (withTurn) {
          this.pageTurn.paint(g, sheets);
+         if (this.view == View.READ) {
+            this.paintTabFlag(g, book);
+         }
       }
       this.paintBar(g, w, h);
    }
 
+   // ---- The book's depth: the pages bow into the spine over gilt-edged blocks as thick as the Bible either side ----
+
+   /** The most leaves a page block shows (one stands for the cover's edge), and how far the pages sag at the spine. */
+   static final int STACK = 8;
+   static final int SAG = 6;
+
+   /** Leaves in the left and the right page block at a chapter (ordinal 0 to 1,188): thin before Genesis, thick before Revelation. */
+   static int[] stack(int ordinal) {
+      int left = 1 + Math.round((STACK - 1) * Math.max(0, Math.min(Books.TOTAL - 1, ordinal)) / (float) (Books.TOTAL - 1));
+      return new int[]{left, STACK + 1 - left};
+   }
+
+   /** How far a page's top and foot dip at x, curving into the fold over the zone beside it (none without a fold). */
+   static double sag(double x, int fold, int zone) {
+      double d = Math.abs(x - fold);
+      if (zone <= 0 || d >= zone) {
+         return 0;
+      }
+      double t = 1 - d / zone;
+      return SAG * t * t;
+   }
+
+   /** A page's outline, widened by left and right and lowered by down (a leaf further down the block), bowing into the fold. */
+   static Path2D leaf(Rectangle s, int left, int right, double down, int fold, int zone) {
+      Path2D p = new Path2D.Double();
+      double x0 = s.x - left;
+      double x1 = s.x + s.width + right;
+      p.moveTo(x0, s.y + down + sag(x0, fold, zone));
+      for (double x = x0; x < x1; ) {
+         x = Math.min(x1, x + 2);
+         p.lineTo(x, s.y + down + sag(x, fold, zone));
+      }
+      for (double x = x1; x > x0; ) {
+         p.lineTo(x, s.y + s.height + down + sag(x, fold, zone));
+         x = Math.max(x0, x - 2);
+      }
+      p.lineTo(x0, s.y + s.height + down + sag(x0, fold, zone));
+      p.closePath();
+      return p;
+   }
+
+   /** The leaves either side of the open place, by its chapter. */
+   private int[] stack() {
+      return stack(Books.ordinal(this.shelf.book, this.shelf.chapter));
+   }
+
    private void paintPaper(Graphics2D g, Rectangle book, Rectangle[] sheets) {
-      // Page edges under the book, like the stack of paper in a thick book.
-      for (int i = 3; i >= 1; i--) {
-         g.setColor(i % 2 == 0 ? PAPER_EDGE : EDGE_SHADE);
-         g.fillRoundRect(book.x - i, book.y + i, book.width + 2 * i, book.height, 6, 6);
+      int[] stack = this.stack();
+      boolean two = sheets.length == 2;
+      int fold = two ? sheets[1].x : Integer.MIN_VALUE;
+      int zone = two ? Math.min(140, book.width / 6) : 0;
+      // A soft shadow on the desk under the book.
+      for (int i = 4; i >= 1; i--) {
+         g.setColor(new Color(0, 0, 0, 34));
+         g.fillRoundRect(book.x - stack[0] + i, book.y + i * 2, book.width + stack[0] + stack[1], book.height + SAG, 10, 10);
+      }
+      // The page blocks: a leaf edge per step, gilt as on a printed Bible, the outermost first.
+      for (int i = STACK; i >= 1; i--) {
+         g.setColor(i % 2 == 0 ? GILT : GILT_SHADE);
+         int left = Math.min(i, stack[0]);
+         int right = Math.min(i, stack[1]);
+         if (two) {
+            if (i <= stack[0]) {
+               g.fill(leaf(sheets[0], left, 0, i / 2.0, fold, zone));
+            }
+            if (i <= stack[1]) {
+               g.fill(leaf(sheets[1], 0, right, i / 2.0, fold, zone));
+            }
+         } else {
+            g.fill(leaf(book, left, right, i / 2.0, fold, zone));
+         }
       }
       g.setColor(PAPER);
-      g.fillRect(book.x, book.y, book.width, book.height);
+      for (Rectangle sheet : sheets) {
+         g.fill(leaf(sheet, 0, 0, 0, fold, zone));
+      }
       if (this.shelf.night) {
          // A reading lamp: warm light pooling over each page, brightest in the middle (ovals, as the browser has no gradients).
          for (Rectangle sheet : sheets) {
@@ -1155,17 +1470,22 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
             }
          }
       }
-      if (sheets.length == 2) {
-         // The spine: shading that deepens toward the fold.
-         int fold = sheets[1].x;
+      // The outer edges curl down a little to the blocks.
+      for (int i = 0; i < 8; i++) {
+         g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), (8 - i) * 4));
+         g.fillRect(book.x + i, book.y, 1, book.height);
+         g.fillRect(book.x + book.width - 1 - i, book.y, 1, book.height);
+      }
+      if (two) {
+         // The spine: shading that deepens toward the fold, following the pages' bow.
          for (int i = 0; i < 26; i++) {
             int a = (26 - i) * 3;
             g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), a / 2));
-            g.fillRect(fold - i - 1, book.y, 1, book.height);
-            g.fillRect(fold + i, book.y, 1, book.height);
+            g.fillRect(fold - i - 1, (int) Math.round(book.y + sag(fold - i - 1, fold, zone)), 1, book.height);
+            g.fillRect(fold + i, (int) Math.round(book.y + sag(fold + i, fold, zone)), 1, book.height);
          }
          g.setColor(new Color(SPINE.getRed(), SPINE.getGreen(), SPINE.getBlue(), 110));
-         g.drawLine(fold, book.y, fold, book.y + book.height - 1);
+         g.drawLine(fold, book.y + SAG, fold, book.y + SAG + book.height - 1);
       }
    }
 
@@ -1501,11 +1821,7 @@ public class ReaderPanel extends JPanel implements DownloadManager.Progress {
       g.setFont(new Font("Serif", Font.ITALIC, 15));
       g.setColor(MUTED);
       g.drawString(Books.CHAPTERS[b] == 1 ? (read == 1 ? "One chapter, read" : "One chapter") : Books.CHAPTERS[b] + " chapters, " + read + " read", info.x, info.y + 60);
-      int first = 1;
-      while (first < Books.CHAPTERS[b] && this.shelf.isRead(b, first)) {
-         first++;
-      }
-      int start = read == Books.CHAPTERS[b] ? 1 : first;
+      int start = this.startChapter(b);
       g.setFont(UI);
       String go = (read == 0 || read == Books.CHAPTERS[b] ? "Start reading" : "Continue at " + start) + " \u203a";
       Rectangle goButton = new Rectangle(info.x, info.y + 80, g.getFontMetrics().stringWidth(go) + 30, 32);

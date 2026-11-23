@@ -6,7 +6,8 @@ import java.util.List;
 
 /**
  * Sets a chapter as printed pages: a title on a book's first chapter, a large chapter numeral beside the first two
- * lines, small raised verse numbers, and words wrapped to the page width. Pages hold a fixed number of lines.
+ * lines, small raised verse numbers, and words wrapped to the page width and justified, as in a printed Bible (a
+ * paragraph's last line stays ragged), breaking a word with a hyphen ({@link Hyphen}) where a line would set loose. Pages hold a fixed number of lines.
  */
 public final class Layout {
    public static final int WORD = 0;
@@ -19,6 +20,12 @@ public final class Layout {
    public static final int TITLE_LINES = 3;
    /** Lines the chapter numeral spans. */
    public static final int NUMERAL_LINES = 2;
+   /** The word that ends a poem's line (a verse's lines are kept apart by '\n'). */
+   static final String BREAK = "\n";
+   /** How far a verse's second and later lines of poetry stand in, so each verse's first line leads. */
+   static final String STEP = "   ";
+   /** How far a poem's line runs on indented when it is too long for the page. */
+   static final String HANG = "      ";
 
    /** A word, verse number or heading, placed on one line of a page. */
    public static final class Run {
@@ -26,6 +33,7 @@ public final class Layout {
       public final String text;
       public final int x;
       public final int line;
+      /** The text's width, plus any space justification adds after it (so highlights run on to the next word). */
       public final int width;
       /** The verse the run belongs to (0 for headings). */
       public final int verse;
@@ -74,11 +82,16 @@ public final class Layout {
       int indent = numeralWidth + body.stringWidth("  ");
       int space = body.stringWidth(" ");
       int x = indent;
+      int lineStart = page.runs.size();
       page.firstVerse = chapter.verseNumbers[0];
+      int hang = body.stringWidth(HANG);
+      int step = body.stringWidth(STEP);
+      boolean wasPoem = false;
 
       for (int v = 0; v < chapter.verses.length; v++) {
          int verse = chapter.verseNumbers[v];
-         String[] words = chapter.verses[v].isEmpty() ? new String[0] : chapter.verses[v].split(" ");
+         String[] words = words(chapter.lines[v]);
+         boolean poem = chapter.lines[v].indexOf('\n') >= 0;
          // Verse 1 starts beside the chapter numeral, so it needs no number of its own, as in a printed Bible.
          String label = v == 0 && verse == 1 ? null : String.valueOf(verse);
          for (int w = -1; w < words.length; w++) {
@@ -90,8 +103,21 @@ public final class Layout {
             int textWidth = kind == VERSE_NUMBER ? small.stringWidth(text) + 2 : body.stringWidth(text);
             int left = line < indentUntil ? indent : 0;
             // A verse number stays with the first word of its verse.
-            int need = kind == VERSE_NUMBER && words.length > 0 ? textWidth + body.stringWidth(words[0]) : textWidth;
-            if (x > left && x + need > width) {
+            int need = kind == VERSE_NUMBER && words.length > 0 ? textWidth + 1 + body.stringWidth(words[0]) : textWidth;
+            // A poem's line ends where its line ends, and a poem starts and leaves off on lines of its own.
+            boolean newLine = text.equals(BREAK) || (w == (label == null ? 0 : -1) && (poem || wasPoem) && x > left);
+            if (newLine || x > left && x + need > width && (poem || !squeezes(page.runs, lineStart, x + need - width, space))) {
+               if (newLine) {
+                  narrowLast(page.runs, lineStart, width);
+               } else if (!poem) {
+                  String[] parts = kind == WORD ? hyphenate(page.runs, lineStart, text, body, width, x, space) : null;
+                  if (parts != null) {
+                     page.runs.add(new Run(WORD, parts[0], x, line, body.stringWidth(parts[0]), verse));
+                     text = parts[1];
+                     textWidth = body.stringWidth(text);
+                  }
+                  justify(page.runs, lineStart, width);
+               }
                line++;
                x = line < indentUntil ? indent : 0;
                if (line >= lines) {
@@ -102,12 +128,21 @@ public final class Layout {
                   indentUntil = 0;
                   x = 0;
                }
+               lineStart = page.runs.size();
+               if (text.equals(BREAK)) {
+                  x += step;
+                  continue;
+               }
+               // A poem's line too long for the page runs on indented further, as printed Bibles set the Psalms.
+               x += poem && !newLine ? hang : 0;
             }
             page.runs.add(new Run(kind, text, x, line, textWidth, verse));
             page.lastVerse = verse;
             x += textWidth + (kind == VERSE_NUMBER ? 1 : space);
          }
+         wasPoem = poem;
       }
+      narrowLast(page.runs, lineStart, width);
       return pages;
    }
 
@@ -125,7 +160,7 @@ public final class Layout {
       Chapter[] both = {first, second};
       for (int t = 0; t < 2; t++) {
          for (int v = 0; v < both[t].verses.length; v++) {
-            verses.computeIfAbsent(both[t].verseNumbers[v], k -> new String[]{"", ""})[t] = both[t].verses[v];
+            verses.computeIfAbsent(both[t].verseNumbers[v], k -> new String[]{"", ""})[t] = both[t].lines[v];
          }
       }
       int columns = stacked != null ? 1 : 2;
@@ -224,11 +259,13 @@ public final class Layout {
    private static List<Run> wrap(String text, String label, int kind, int verse, int start, int indentUntil, int indent,
          FontMetrics body, FontMetrics small, int width) {
       List<Run> runs = new ArrayList<>();
-      String[] words = text.isEmpty() ? new String[0] : text.split(" ");
+      String[] words = words(text);
       if (words.length == 0) {
          return runs;
       }
+      boolean poem = text.indexOf('\n') >= 0;
       int row = 0;
+      int rowStart = 0;
       int x = start < indentUntil ? indent : 0;
       int space = body.stringWidth(" ");
       for (int w = -1; w < words.length; w++) {
@@ -239,15 +276,95 @@ public final class Layout {
          boolean number = w < 0;
          int tw = number ? small.stringWidth(t) + 2 : body.stringWidth(t);
          int left = start + row < indentUntil ? indent : 0;
-         int need = number ? tw + body.stringWidth(words[0]) : tw;
-         if (x > left && x + need > width) {
+         int need = number ? tw + 1 + body.stringWidth(words[0]) : tw;
+         boolean newLine = t.equals(BREAK);
+         if (newLine || x > left && x + need > width && (poem || !squeezes(runs, rowStart, x + need - width, space))) {
+            if (!poem) {
+               String[] parts = number ? null : hyphenate(runs, rowStart, t, body, width, x, space);
+               if (parts != null) {
+                  runs.add(new Run(kind, parts[0], x, row, body.stringWidth(parts[0]), verse));
+                  t = parts[1];
+                  tw = body.stringWidth(t);
+               }
+               justify(runs, rowStart, width);
+            }
+            rowStart = runs.size();
             row++;
             x = start + row < indentUntil ? indent : 0;
+            x += poem ? body.stringWidth(newLine ? STEP : HANG) : 0;
+            if (newLine) {
+               continue;
+            }
          }
          runs.add(new Run(number ? VERSE_NUMBER : kind, t, x, row, tw, verse));
          x += tw + (number ? 1 : space);
       }
+      narrowLast(runs, rowStart, width);
       return runs;
+   }
+
+   /** A verse's words, with {@link #BREAK} standing between a poem's lines. */
+   static String[] words(String text) {
+      return text.isEmpty() ? new String[0] : text.replace("\n", " " + BREAK + " ").split(" ");
+   }
+
+   /** Whether a word {@code over} pixels too long still goes on the line by narrowing its gaps, by a third of a space at most. */
+   private static boolean squeezes(List<Run> runs, int from, int over, int space) {
+      int gaps = 0;
+      for (int i = from; i < runs.size(); i++) {
+         gaps += runs.get(i).kind == VERSE_NUMBER ? 0 : 1;
+      }
+      return over <= gaps * (space / 3);
+   }
+
+   /** A last line stays ragged, but one a squeezed word ran past the width is narrowed to fit. */
+   private static void narrowLast(List<Run> runs, int from, int width) {
+      Run last = runs.isEmpty() ? null : runs.get(runs.size() - 1);
+      if (last != null && last.x + last.width > width) {
+         justify(runs, from, width);
+      }
+   }
+
+   /**
+    * A word that does not fit at {@code x}, broken with a hyphen when the line would otherwise be spread loosely (its
+    * gaps more than half again as wide as a space), as a printed Bible's narrow columns are: the head that ends the line
+    * and the rest; null to carry the whole word over.
+    */
+   private static String[] hyphenate(List<Run> runs, int from, String word, FontMetrics body, int width, int x, int space) {
+      int gaps = 0;
+      for (int i = from; i < runs.size() - 1; i++) {
+         gaps += runs.get(i).kind == VERSE_NUMBER ? 0 : 1;
+      }
+      Run last = runs.get(runs.size() - 1);
+      int slack = width - last.x - last.width;
+      return slack * 2 > Math.max(gaps, 1) * space ? Hyphen.split(word, body, width - x) : null;
+   }
+
+   /**
+    * Spreads a full line's runs (from {@code from} to the end of the list) so its last word ends at the width, or
+    * narrows its gaps when a squeezed word runs past it. The space goes between words, never between a verse number and its first word, and is added to the width of the run before
+    * it. A loose line is spread all the same, as in a printed book: one left ragged mid-verse reads as a break.
+    */
+   static void justify(List<Run> runs, int from, int width) {
+      int gaps = 0;
+      for (int i = from; i < runs.size() - 1; i++) {
+         gaps += runs.get(i).kind == VERSE_NUMBER ? 0 : 1;
+      }
+      Run last = runs.isEmpty() ? null : runs.get(runs.size() - 1);
+      int slack = last == null ? 0 : width - last.x - last.width;
+      if (gaps == 0 || slack == 0) {
+         return;
+      }
+      int gap = 0;
+      int shift = 0;
+      for (int i = from; i < runs.size(); i++) {
+         Run r = runs.get(i);
+         boolean between = i < runs.size() - 1 && r.kind != VERSE_NUMBER;
+         int extra = between ? slack * (gap + 1) / gaps - slack * gap / gaps : 0;
+         gap += between ? 1 : 0;
+         runs.set(i, new Run(r.kind, r.text, r.x + shift, r.line, r.width + extra, r.verse));
+         shift += extra;
+      }
    }
 
    /** The first page that shows this verse (the last page for a verse past the end). */

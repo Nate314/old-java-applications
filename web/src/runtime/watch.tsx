@@ -1,5 +1,5 @@
 import { embedded } from './skin';
-import { windowsBox } from './band-news';
+import { windowsBox } from './stage';
 import { passport } from './passport';
 import { fireKey, keyOf } from './touch-pad';
 import { appId } from './catalog';
@@ -16,7 +16,8 @@ import { playFrom } from './exit-recap';
 // says so in a line over the stage. The visitor's first click or key (or press on the controller) takes over:
 // the key is pressed again, so the computer stops, before the visitor's own press reaches the app, which makes
 // that press their first move. The passport stamp waits for it too.
-export const WATCH: Record<string, string> = { Minesweeper: 'W', UltimateTicTacToe: 'W', TankGame: 'C', DinoGame: 'B' };
+import { WATCH } from './title-card';
+export { WATCH };
 
 const NOT_TAKING_OVER = '.shim-toolbar, .shim-drawer, .shim-share, .shim-scrim, .shim-overlay, .shim-toast, .shim-source';
 

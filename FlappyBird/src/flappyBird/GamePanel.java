@@ -107,7 +107,6 @@ public final class GamePanel extends JPanel implements KeyListener {
    public GamePanel(int stepsPerSecond) {
       this.stepsPerSecond = stepsPerSecond;
       this.rewind = new Rewind((int)Math.ceil(stepsPerSecond * REWIND_SECONDS));
-      this.images.add(image("bg.jpg").getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT, 4));
       this.images.add(image("ground.jpg").getScaledInstance(Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8, 4));
       this.images.add(image("topPipe.png").getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
       this.images.add(image("bottomPipe.png").getScaledInstance(Pipes.PIPE_WIDTH, Pipes.PIPE_HEIGHT, 4));
@@ -120,12 +119,15 @@ public final class GamePanel extends JPanel implements KeyListener {
             if (event.getButton() != MouseEvent.BUTTON1) {
                return;
             }
-            int[] button = GamePanel.this.rewindButton();
             int x = event.getX();
             int y = event.getY();
-            if (GamePanel.this.state == GAME_OVER && GamePanel.this.settled() && GamePanel.this.rewind.size() > 0
-               && x >= button[0] && x < button[0] + button[2] && y >= button[1] && y < button[1] + button[3]) {
+            int over = GamePanel.this.state == GAME_OVER && GamePanel.this.settled() ? overHit(GamePanel.this.overButtons(), x, y) : -1;
+            if (over == REWIND_BUTTON) {
                GamePanel.this.startRewind();
+            } else if (over == TITLE_BUTTON) {
+               GamePanel.this.reset();
+            } else if (GamePanel.this.state == READY && GamePanel.this.titleCard().hit(x, y) != TitleCard.NONE) {
+               GamePanel.this.choose(GamePanel.this.titleCard().hit(x, y));
             } else {
                GamePanel.this.press();
             }
@@ -134,13 +136,15 @@ public final class GamePanel extends JPanel implements KeyListener {
       new Timer(10, event -> this.tick()).start();
    }
 
-   /** Space, a click or a tap: start, flap, or (once the game over screen has settled) back to the title screen. */
+   /** Space, a click or a tap: start, flap, or (once the game over screen has settled) fly again on the same course. */
    private void press() {
       if (this.state == GAME_OVER) {
-         if (this.settled()) {
-            this.reset();
+         if (!this.settled()) {
+            return;
          }
-      } else if (this.state != DYING && this.state != REWINDING && !this.paused) {
+         this.reset();   // then straight into the new run with this press's flap, no title screen between
+      }
+      if (this.state != DYING && this.state != REWINDING && !this.paused) {
          if (this.state == READY) {
             this.guidedPractice = this.guide && this.highScore >= Guide.UNTIL;
          }
@@ -148,6 +152,35 @@ public final class GamePanel extends JPanel implements KeyListener {
          this.bird.flap();
          this.sounds.flap();
          this.puff(5, new Color(255, 255, 255), Bird.HEIGHT / 10.0F);
+      }
+   }
+
+   /** A click or tap on the title card: a course tile picks that course (the chosen one starts it), the switch turns the guide. */
+   private void choose(int part) {
+      if (part == TitleCard.GUIDE) {
+         this.toggleGuide();
+      } else if (part == TitleCard.TODAY == this.daily) {
+         this.press();
+      } else {
+         this.switchCourse();
+      }
+   }
+
+   /** C on the title screen, or its other course tile: endless pipes or today's course. */
+   private void switchCourse() {
+      this.daily = !this.daily;
+      this.reset();
+   }
+
+   /** G, or the title screen's switch: the flight guide on or off. */
+   private void toggleGuide() {
+      this.guide = !this.guide;
+      this.guideChosen = true;
+      if (this.state != READY) {
+         // Brought back in flight once the best has passed Guide.UNTIL, it makes this run practice, as at the start.
+         this.guidedPractice |= this.guide && this.highScore >= Guide.UNTIL;
+         this.notice = this.guide ? "Flight guide on" : "Flight guide off";
+         this.noticeSteps = (int)this.stepsPerSecond;
       }
    }
 
@@ -387,12 +420,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
       g2.translate(shakeX, shakeY);
 
-      for (Position tile : this.background.layers.get(0)) {
-         g2.drawImage(this.background.backgroundImage, (int)tile.x, (int)tile.y, null);
-         if (this.debugMode) {
-            g2.drawRect((int)tile.x, (int)tile.y, this.background.backgroundImage.getWidth(null), this.background.backgroundImage.getHeight(null));
-         }
-      }
+      this.background.paintBack(g2);
       Sky.paintSky(g2, this.skyPhase, Main.FRAME_WIDTH, Main.FRAME_HEIGHT, Background.groundY, calm());
 
       for (int pipeIndex = 0; pipeIndex < this.pipes.positions.size(); pipeIndex++) {
@@ -406,11 +434,9 @@ public final class GamePanel extends JPanel implements KeyListener {
          }
       }
 
-      for (Position tile : this.background.layers.get(1)) {
-         g2.drawImage(this.background.groundImage, (int)tile.x, (int)tile.y, null);
-         if (this.debugMode) {
-            g2.drawRect(0, Main.FRAME_HEIGHT * 7 / 8, Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8);
-         }
+      this.background.paintGround(g2);
+      if (this.debugMode) {
+         g2.drawRect(0, Background.groundY, Main.FRAME_WIDTH, Main.FRAME_HEIGHT / 8);
       }
       Sky.paintDim(g2, this.skyPhase, Main.FRAME_WIDTH, Main.FRAME_HEIGHT);
 
@@ -471,13 +497,8 @@ public final class GamePanel extends JPanel implements KeyListener {
          g2.drawString(this.notice, noticeX, noticeY);
       }
 
-      String records = "Best " + this.highScore + (this.daily || this.course.bestScore() > 0 ? "     Today " + this.course.bestScore() : "");
       if (this.state == READY) {
-         if (this.daily) {
-            this.drawBanner(g2, "Today's Course", "The same pipes all day. Race your best run's ghost.", "Space, click or tap to flap; C for endless pipes", this.guideLine(), records);
-         } else {
-            this.drawBanner(g2, "Flappy Bird", "Endless: new pipes every run", "Space, click or tap to flap; C for today's course", this.guideLine(), records);
-         }
+         this.drawTitle(g2);
       } else if (this.state == GAME_OVER) {
          // The game over screen rises into place over its first third of a second.
          float rise = Math.max(0.0F, 1.0F - this.stateSteps / (float)(this.stepsPerSecond / 3.0));
@@ -531,10 +552,10 @@ public final class GamePanel extends JPanel implements KeyListener {
    }
 
    private String guideLine() {
-      if (!this.guide) {
-         return "G: flight guide, shows where a flap takes you";
+      if (this.guide && this.highScore >= Guide.UNTIL) {
+         return "Flight guide on: practice, not a record";
       }
-      return this.highScore >= Guide.UNTIL ? "Flight guide on (G): practice, not a record" : "Flight guide on (G turns it off)";
+      return (this.guide ? "Flight guide on" : "Flight guide off") + ": shows where a flap takes you";
    }
 
    /**
@@ -624,32 +645,80 @@ public final class GamePanel extends JPanel implements KeyListener {
       }
    }
 
-   /** The game over screen's rewind button as {x, y, width, height}, under the scoreboard and as wide as it. */
-   private int[] rewindButton() {
-      int[] layout = this.scoreboardLayout();
-      int u = layout[0];
-      return new int[]{layout[1], layout[5], layout[3], u * 2};
+   static final int TITLE_BUTTON = 0;
+   static final int REWIND_BUTTON = 1;
+   static final int AGAIN_BUTTON = 2;
+
+   /**
+    * The game over screen's row of buttons, as wide as the scoreboard at x with width w, each {x, y, width, height}:
+    * Title, Rewind (null with nothing to rewind) and Fly again, the widest.
+    */
+   static int[][] overButtons(int x, int y, int w, int u, boolean rewind) {
+      int gap = u / 2;
+      int h = u * 2;
+      int titleW = (w - gap * 2) * 4 / 22;
+      int rewindW = (w - gap * 2) * 8 / 22;   // Fly again gets the other 10
+      int againX = x + titleW + gap + (rewind ? rewindW + gap : 0);
+      return new int[][]{{x, y, titleW, h}, rewind ? new int[]{x + titleW + gap, y, rewindW, h} : null, {againX, y, x + w - againX, h}};
    }
 
-   private void drawRewindButton(Graphics2D g2) {
-      int[] button = this.rewindButton();
+   /** Which of the buttons a click at (px, py) is on, or -1. */
+   static int overHit(int[][] buttons, int px, int py) {
+      for (int i = 0; i < buttons.length; i++) {
+         int[] b = buttons[i];
+         if (b != null && px >= b[0] && px < b[0] + b[2] && py >= b[1] && py < b[1] + b[3]) {
+            return i;
+         }
+      }
+      return -1;
+   }
+
+   private int[][] overButtons() {
+      int[] layout = this.scoreboardLayout();
+      return overButtons(layout[1], layout[5], layout[3], layout[0], this.rewind.size() > 0);
+   }
+
+   /** A rounded button with a label and an icon: 0 none, 1 rewind (two triangles pointing back), 2 fly (one pointing on). */
+   private static void drawButton(Graphics2D g2, int[] button, Color fill, Color ink, String label, int iconKind) {
       int arc = button[3] / 2;
       g2.setColor(new Color(0, 0, 0, 90));
       g2.fillRoundRect(button[0] + 3, button[1] + 4, button[2], button[3], arc, arc);
-      g2.setColor(new Color(60, 120, 220));
+      g2.setColor(fill);
       g2.fillRoundRect(button[0], button[1], button[2], button[3], arc, arc);
       g2.setColor(new Color(255, 255, 255));
       g2.drawRoundRect(button[0], button[1], button[2], button[3], arc, arc);
-      String label = "Rewind and fly on (Z)";
-      int icon = button[3] / 2;
-      int width = sans(g2, label, button[3] * 9 / 20, button[2] - icon * 3);
-      int left = button[0] + (button[2] - width - icon * 2) / 2;
+      int icon = iconKind == 0 ? 0 : button[3] / 2;
+      int width = sans(g2, label, button[3] * 9 / 20, button[2] - icon * 3 / 2 - button[3] / 3);
+      int left = button[0] + (button[2] - width - icon * 3 / 2) / 2;
       int top = button[1] + (button[3] - icon) / 2;
-      for (int i = 0; i < 2; i++) {
-         int tip = left + i * icon * 3 / 5;
-         g2.fillPolygon(new int[]{tip, tip + icon * 3 / 5, tip + icon * 3 / 5}, new int[]{top + icon / 2, top, top + icon}, 3);
+      g2.setColor(ink);
+      if (iconKind == 1) {
+         for (int i = 0; i < 2; i++) {
+            int tip = left + i * icon * 3 / 5;
+            g2.fillPolygon(new int[]{tip, tip + icon * 3 / 5, tip + icon * 3 / 5}, new int[]{top + icon / 2, top, top + icon}, 3);
+         }
+      } else if (iconKind == 2) {
+         g2.fillPolygon(new int[]{left, left + icon * 4 / 5, left}, new int[]{top, top + icon / 2, top + icon}, 3);
       }
-      g2.drawString(label, left + icon * 2, button[1] + button[3] * 2 / 3);
+      g2.drawString(label, left + icon * 3 / 2, button[1] + button[3] * 2 / 3);
+   }
+
+   /**
+    * Title, Rewind and Fly again under the scoreboard. Fly again is copper like the pipes and glows a little (held
+    * still with reduced motion), since a press anywhere else does the same.
+    */
+   private void drawOverButtons(Graphics2D g2) {
+      int[][] buttons = this.overButtons();
+      int[] again = buttons[AGAIN_BUTTON];
+      float glow = calm() ? 0.5F : 0.5F + 0.5F * (float)Math.sin(this.stateSteps * 2.0 * Math.PI / (this.stepsPerSecond * 1.6));
+      int reach = Math.max(2, again[3] / 6);
+      g2.setColor(new Color(255, 210, 150, Math.round(40 + 80 * glow)));
+      g2.fillRoundRect(again[0] - reach, again[1] - reach, again[2] + reach * 2, again[3] + reach * 2, again[3] / 2 + reach * 2, again[3] / 2 + reach * 2);
+      drawButton(g2, buttons[TITLE_BUTTON], new Color(12, 64, 60, 225), new Color(255, 255, 255), "Title", 0);
+      if (buttons[REWIND_BUTTON] != null) {
+         drawButton(g2, buttons[REWIND_BUTTON], new Color(60, 120, 220), new Color(255, 255, 255), "Rewind", 1);
+      }
+      drawButton(g2, again, new Color(232, 149, 90), new Color(40, 30, 20), "Fly again", 2);
    }
 
    /**
@@ -720,6 +789,15 @@ public final class GamePanel extends JPanel implements KeyListener {
       float squash = this.bird.squash();
       g.scale(1.0 + 0.15 * squash, 1.0 - 0.2 * squash);
       g.drawImage(this.bird.image, -Bird.WIDTH / 2, -Bird.HEIGHT / 2, null);
+      float tilt;
+      if (this.state == READY) {
+         tilt = Wing.hover(this.stateSteps / (this.stepsPerSecond * 0.8), calm());
+      } else if (this.state == DYING || this.state == GAME_OVER) {
+         tilt = Wing.LIMP;
+      } else {
+         tilt = Wing.flight(squash, this.bird.rotation());
+      }
+      Wing.draw(g, tilt);
       g.dispose();
    }
 
@@ -829,7 +907,7 @@ public final class GamePanel extends JPanel implements KeyListener {
     * The game over screen: "Game Over", then a panel of deep teal glass in a copper rim (the bird's and the pipes'
     * colors) with the medal centered on top (or an empty ring with the pipes the first medal needs) and a row of tiles
     * for the score, which counts up, the best and today's best, a beaten one lit in copper and labelled NEW; under it
-    * the medal line, the rewind button and how to go on. With reduced motion the numbers and medal show at once.
+    * the medal line and the Title, Rewind and Fly again buttons. With reduced motion the numbers and medal show at once.
     */
    private void drawScoreboard(Graphics2D g2) {
       int[] layout = this.scoreboardLayout();
@@ -843,20 +921,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       int titleWidth = sans(g2, "Game Over", u * 12 / 5, Main.FRAME_WIDTH * 9 / 10);
       outlined(g2, "Game Over", center - titleWidth / 2, layout[6], new Color(255, 226, 196));
 
-      // The panel: teal glass the sky shows through, in a copper rim with a lighter copper inner line.
-      g2.setColor(new Color(0, 0, 0, 70));
-      g2.fillRoundRect(x + u / 6, y + u / 4, w, h, u * 3 / 2, u * 3 / 2);
-      g2.setColor(new Color(12, 64, 60, 215));
-      g2.fillRoundRect(x, y, w, h, u * 3 / 2, u * 3 / 2);
-      Graphics2D edge = (Graphics2D)g2.create();
-      edge.setStroke(new BasicStroke(Math.max(2.0F, u / 5.0F)));
-      edge.setColor(new Color(196, 106, 53));
-      edge.drawRoundRect(x, y, w, h, u * 3 / 2, u * 3 / 2);
-      edge.setStroke(new BasicStroke(Math.max(1.0F, u / 14.0F)));
-      edge.setColor(new Color(232, 149, 90, 160));
-      int inner = Math.max(3, u / 3);
-      edge.drawRoundRect(x + inner, y + inner, w - inner * 2, h - inner * 2, u, u);
-      edge.dispose();
+      drawGlass(g2, x, y, w, h, u);
 
       // The score counts up once the screen has risen (up to 0.8 s for a long run); the medal and NEW labels follow it.
       int score = this.score();
@@ -905,13 +970,7 @@ public final class GamePanel extends JPanel implements KeyListener {
       for (int tile = 0; tile < tiles; tile++) {
          int tileX = x + u / 2 + tile * (tileW + gap);
          boolean lit = fresh[tile] && pop > 0.0F;
-         g2.setColor(new Color(0, 0, 0, 70));
-         g2.fillRoundRect(tileX, tileY, tileW, tileH, u * 3 / 4, u * 3 / 4);
-         Graphics2D frame = (Graphics2D)g2.create();
-         frame.setStroke(new BasicStroke(Math.max(1.0F, lit ? u / 6.0F * pop : u / 14.0F)));
-         frame.setColor(lit ? new Color(232, 149, 90) : new Color(255, 255, 255, 60));
-         frame.drawRoundRect(tileX, tileY, tileW, tileH, u * 3 / 4, u * 3 / 4);
-         frame.dispose();
+         drawTile(g2, tileX, tileY, tileW, tileH, u, lit ? pop : 0.0F);
          String name = lit ? "NEW " + names[tile] : names[tile];
          int nameWidth = sans(g2, name, u * 13 / 20, tileW - u / 2);
          g2.setColor(lit ? new Color(255, 226, 120) : lightCopper);
@@ -931,14 +990,105 @@ public final class GamePanel extends JPanel implements KeyListener {
       int lineWidth = sans(g2, line, u, Main.FRAME_WIDTH * 19 / 20);
       outlined(g2, line, center - lineWidth / 2, lineY, new Color(255, 255, 255));
 
-      int hintY = layout[5] + u * 3 / 2;
-      if (this.rewind.size() > 0) {
-         this.drawRewindButton(g2);
-         hintY += u * 2;
-      }
-      String hint = "Space, click or tap for the title screen";
+      this.drawOverButtons(g2);
+      int hintY = layout[5] + u * 7 / 2;
+      String hint = this.rewind.size() > 0 ? "Space or a tap flies again, Z rewinds, R for the title" : "Space or a tap flies again, R for the title";
       int hintWidth = sans(g2, hint, u * 4 / 5, Main.FRAME_WIDTH * 19 / 20);
       outlined(g2, hint, center - hintWidth / 2, hintY, new Color(255, 255, 255));
+   }
+
+   /** The game's panel: teal glass the sky shows through (the bird's color), in a copper rim with a lighter copper inner line (the pipes'). */
+   private static void drawGlass(Graphics2D g2, int x, int y, int w, int h, int u) {
+      g2.setColor(new Color(0, 0, 0, 70));
+      g2.fillRoundRect(x + u / 6, y + u / 4, w, h, u * 3 / 2, u * 3 / 2);
+      g2.setColor(new Color(12, 64, 60, 215));
+      g2.fillRoundRect(x, y, w, h, u * 3 / 2, u * 3 / 2);
+      Graphics2D edge = (Graphics2D)g2.create();
+      edge.setStroke(new BasicStroke(Math.max(2.0F, u / 5.0F)));
+      edge.setColor(new Color(196, 106, 53));
+      edge.drawRoundRect(x, y, w, h, u * 3 / 2, u * 3 / 2);
+      edge.setStroke(new BasicStroke(Math.max(1.0F, u / 14.0F)));
+      edge.setColor(new Color(232, 149, 90, 160));
+      int inner = Math.max(3, u / 3);
+      edge.drawRoundRect(x + inner, y + inner, w - inner * 2, h - inner * 2, u, u);
+      edge.dispose();
+   }
+
+   /** A darker tile on the glass, its frame lit in copper as lit goes from 0 to 1. */
+   private static void drawTile(Graphics2D g2, int x, int y, int w, int h, int u, float lit) {
+      g2.setColor(new Color(0, 0, 0, 70));
+      g2.fillRoundRect(x, y, w, h, u * 3 / 4, u * 3 / 4);
+      Graphics2D frame = (Graphics2D)g2.create();
+      frame.setStroke(new BasicStroke(Math.max(1.0F, lit > 0.0F ? u / 6.0F * lit : u / 14.0F)));
+      frame.setColor(lit > 0.0F ? new Color(232, 149, 90) : new Color(255, 255, 255, 60));
+      frame.drawRoundRect(x, y, w, h, u * 3 / 4, u * 3 / 4);
+      frame.dispose();
+   }
+
+   private TitleCard titleCard() {
+      int bob = Bird.HEIGHT / 5;
+      return new TitleCard(Main.FRAME_WIDTH, Main.FRAME_HEIGHT, Main.FRAME_HEIGHT / 3 - bob, Main.FRAME_HEIGHT / 3 + Bird.HEIGHT + bob);
+   }
+
+   /**
+    * The title screen: the name over the hovering bird, then a card of the two courses (the chosen one lit in copper,
+    * with its record) and the flight guide's switch, each a button, and a gently pulsing prompt to flap.
+    */
+   private void drawTitle(Graphics2D g2) {
+      TitleCard card = this.titleCard();
+      int u = card.u;
+      int center = Main.FRAME_WIDTH / 2;
+      Color lightCopper = new Color(255, 199, 154);
+      int titleWidth = sans(g2, "Flappy Bird", u * 12 / 5, Main.FRAME_WIDTH * 9 / 10);
+      outlined(g2, "Flappy Bird", center - titleWidth / 2, card.titleY, new Color(255, 226, 196));
+      drawGlass(g2, card.x, card.y, card.w, card.h, u);
+
+      String[] names = {"ENDLESS", "TODAY'S COURSE"};
+      String[] about = {"New pipes every run", "Same pipes all day"};
+      int today = this.course.bestScore();
+      String[] records = {"Best " + this.highScore, today > 0 ? "Race your ghost: " + today : "Race your ghost"};
+      for (int tile = TitleCard.ENDLESS; tile <= TitleCard.TODAY; tile++) {
+         boolean chosen = tile == TitleCard.TODAY == this.daily;
+         int tileX = card.tileX(tile);
+         int inside = card.tileW - u / 2;
+         drawTile(g2, tileX, card.tileY, card.tileW, card.tileH, u, chosen ? 1.0F : 0.0F);
+         int nameWidth = sans(g2, names[tile], u * 13 / 20, inside);
+         g2.setColor(chosen ? new Color(255, 226, 120) : lightCopper);
+         g2.drawString(names[tile], tileX + (card.tileW - nameWidth) / 2, card.tileY + u);
+         int aboutWidth = sans(g2, about[tile], u * 7 / 10, inside);
+         g2.setColor(new Color(255, 255, 255, chosen ? 255 : 190));
+         g2.drawString(about[tile], tileX + (card.tileW - aboutWidth) / 2, card.tileY + u * 9 / 5);
+         int recordWidth = sans(g2, records[tile], u * 7 / 10, inside);
+         g2.setColor(chosen ? lightCopper : new Color(255, 199, 154, 170));
+         g2.drawString(records[tile], tileX + (card.tileW - recordWidth) / 2, card.tileY + u * 13 / 5);
+      }
+
+      // The guide's switch: a track lit copper with its knob to the right when on, dark with it to the left when off.
+      int chipX = card.tileX(TitleCard.ENDLESS);
+      int chipW = card.w - u;
+      drawTile(g2, chipX, card.chipY, chipW, card.chipH, u, 0.0F);
+      int trackH = card.chipH - u / 2;
+      int trackW = trackH * 9 / 5;
+      int trackX = chipX + u / 2;
+      int trackY = card.chipY + u / 4;
+      g2.setColor(this.guide ? new Color(196, 106, 53) : new Color(255, 255, 255, 50));
+      g2.fillRoundRect(trackX, trackY, trackW, trackH, trackH, trackH);
+      int knob = trackH - Math.max(2, u / 6) * 2;
+      g2.setColor(new Color(255, 255, 255));
+      g2.fillOval(this.guide ? trackX + trackW - trackH + (trackH - knob) / 2 : trackX + (trackH - knob) / 2, trackY + (trackH - knob) / 2, knob, knob);
+      String label = this.guideLine();
+      sans(g2, label, u * 7 / 10, chipW - trackW - u * 3 / 2);
+      g2.setColor(new Color(255, 255, 255, this.guide ? 255 : 200));
+      g2.drawString(label, trackX + trackW + u / 2, card.chipY + card.chipH / 2 + g2.getFont().getSize() * 7 / 20);
+
+      // The prompt breathes a little (held still with reduced motion), so the first thing to do stands out.
+      double breath = calm() ? 0.0 : Math.sin(this.stateSteps * 2.0 * Math.PI / (this.stepsPerSecond * 1.6));
+      String prompt = "Space, click or tap to flap";
+      int promptWidth = sans(g2, prompt, Math.round(u * (1.1F + 0.06F * (float)breath)), Main.FRAME_WIDTH * 19 / 20);
+      outlined(g2, prompt, center - promptWidth / 2, card.promptY, new Color(255, 255, 255));
+      String keys = "C switches the course, G the guide, M the sound";
+      int keysWidth = sans(g2, keys, u * 3 / 5, Main.FRAME_WIDTH * 19 / 20);
+      outlined(g2, keys, center - keysWidth / 2, card.keysY, lightCopper);
    }
 
    /** A medal of diameter d centered at (x, y): a rim, a ring and a star, with a shine. */
@@ -1043,9 +1193,9 @@ public final class GamePanel extends JPanel implements KeyListener {
       if (this.course.date != DailyCourse.today()) {
          this.course = DailyCourse.load(DailyCourse.FILE, DailyCourse.today());
       }
-      this.background = new Background(this.images.get(0), this.images.get(1));
-      this.pipes = new Pipes(this.images.get(2), this.images.get(3), this.daily ? this.course.pipeRandom() : new Random());
-      this.bird = new Bird(this.images.get(4));
+      this.background = new Background(this.images.get(0));
+      this.pipes = new Pipes(this.images.get(1), this.images.get(2), this.daily ? this.course.pipeRandom() : new Random());
+      this.bird = new Bird(this.images.get(3));
       this.bird.position.set(new Position(this.bird.position.collisionX, (float)(Main.FRAME_HEIGHT / 3)));
       this.collided = false;
       this.contact = null;
@@ -1116,22 +1266,14 @@ public final class GamePanel extends JPanel implements KeyListener {
             return;
          case KeyEvent.VK_C:
             if (this.state == READY) {
-               this.daily = !this.daily;
-               this.reset();
+               this.switchCourse();
             }
             return;
          case KeyEvent.VK_G:
             if (this.state == GAME_OVER || this.state == DYING) {
                return;
             }
-            this.guide = !this.guide;
-            this.guideChosen = true;
-            if (this.state != READY) {
-               // Brought back in flight once the best has passed Guide.UNTIL, it makes this run practice, as at the start.
-               this.guidedPractice |= this.guide && this.highScore >= Guide.UNTIL;
-               this.notice = this.guide ? "Flight guide on" : "Flight guide off";
-               this.noticeSteps = (int)this.stepsPerSecond;
-            }
+            this.toggleGuide();
             return;
          case KeyEvent.VK_D:
             this.debugMode = !this.debugMode;

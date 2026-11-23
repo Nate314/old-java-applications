@@ -8,9 +8,12 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import javax.swing.Timer;
 
 public final class StarField extends Component {
@@ -37,6 +40,8 @@ public final class StarField extends Component {
    private static final double FLING_FULL_SECONDS = 1.5;
    private static final double HINT_SECONDS = 9.0;
    private static final double BADGE_SECONDS = 1.6;
+   /** Left alone, the buttons fade to this (of 255) rather than out, so a finger still finds them where they were. */
+   static final int DOCK_GHOST = 70;
    private static final double RING_SECONDS = 0.5;
    /** With trails on, each frame lays this much (of 255) of the sky over the last, so a path fades in about a second. */
    private static final int TRAIL_FADE = 28;
@@ -77,8 +82,18 @@ public final class StarField extends Component {
    private final Orbits orbits = new Orbits(this);
    private final SkyWriting skyWriting;
    private final StarMusic music = new StarMusic();
+   /** Moves the stars while the window is open; null for Star Catcher's sky. */
+   private Timer timer;
    /** What the badge in the top left corner says: the mode's name after a change, or whether the music is on. */
    private String badge;
+   /** The buttons along the bottom (see {@link SkyDock}): only in a stars' window, not on a tile or Star Catcher's sky. */
+   private boolean docked;
+   /** The buttons show from this time (the window opening, the pointer moving, a key) and fade HINT_SECONDS later. */
+   private double dockShownAt;
+   /** The buttons as last drawn: a press finds them where the visitor saw them. */
+   private List<SkyDock.Chip> dockChips = new ArrayList<>();
+   /** Told after a key or a button changes the field, so the window's title can follow the mode. */
+   private Runnable changed;
 
    public StarField(int mode, Dimension size, int starCount, int starSize) {
       this(mode, size, starCount, starSize, true);
@@ -110,10 +125,12 @@ public final class StarField extends Component {
       }
 
       if (animate) {
+         this.dock();
          this.hintShown = true;
          this.showBadge(this.modeBadge());
          new StarHand(this);
-         new Timer(15, event -> this.tick()).start();
+         this.timer = new Timer(15, event -> this.tick());
+         this.timer.start();
       }
    }
 
@@ -188,6 +205,16 @@ public final class StarField extends Component {
    private void showBadge(String text) {
       this.badge = text;
       this.badgeAt = this.clock;
+   }
+
+   /** The window has closed: the stars stop moving and any notes still ringing are let go. */
+   final void stop() {
+      if (this.timer != null) {
+         this.timer.stop();
+      }
+      if (this.music.on()) {
+         this.music.toggle();
+      }
    }
 
    /** S: star music on or off (see {@link StarMusic}). */
@@ -290,11 +317,80 @@ public final class StarField extends Component {
       return this.hintShown && this.clock - this.hintShownAt < HINT_SECONDS;
    }
 
-   /** The pointer is over the field at (x, y), or has left it. */
+   /** The pointer is over the field at (x, y), or has left it. Moving it brings the buttons back. */
    final void pointer(double x, double y, boolean on) {
       this.pointerX = x;
       this.pointerY = y;
       this.pointerOn = on;
+      if (on) {
+         this.dockShownAt = this.clock;
+      }
+   }
+
+   /** Gives the field its buttons along the bottom (a stars' window does this when it opens). */
+   final void dock() {
+      this.docked = true;
+      this.dockShownAt = this.clock;
+   }
+
+   final void onChange(Runnable changed) {
+      this.changed = changed;
+   }
+
+   /** The key of the button drawn under (x, y), or -1. */
+   final int dockKeyAt(int x, int y) {
+      return SkyDock.keyAt(this.dockChips, x, y);
+   }
+
+   final List<SkyDock.Chip> dockChips() {
+      return this.dockChips;
+   }
+
+   /** How strongly the buttons show, 0 to 255: a while after the pointer last moved they fade to a ghost, but not while writing. */
+   final int dockAlpha() {
+      if (!this.docked) {
+         return 0;
+      }
+      return this.mode == SKY_WRITING && this.skyWriting.writing() ? 255 : Math.max(DOCK_GHOST, fade(HINT_SECONDS - (this.clock - this.dockShownAt)));
+   }
+
+   /**
+    * A key pressed in a stars' window, or the button named by it: 1 to 7 (and the number pad), N, Left and Right
+    * change the mode, Up and Down add or take away a star, Space bursts, T, S and H turn trails, music and help on or
+    * off, and in Sky writing Enter starts and keeps a message (while writing, only Enter and Esc are keys here).
+    */
+   final void key(int key) {
+      this.dockShownAt = this.clock;
+      if (this.mode == SKY_WRITING && this.skyWriting.writing()) {
+         if (key == KeyEvent.VK_ENTER || key == KeyEvent.VK_ESCAPE) {
+            this.skyWriting.stopWriting();
+         }
+      } else if (key == KeyEvent.VK_ENTER && this.mode == SKY_WRITING) {
+         this.skyWriting.startWriting();
+      } else if (key == KeyEvent.VK_UP) {
+         this.addStar();
+      } else if (key == KeyEvent.VK_DOWN) {
+         this.removeStar();
+      } else if (key >= KeyEvent.VK_1 && key <= KeyEvent.VK_7) {
+         this.setMode(key - KeyEvent.VK_1);
+      } else if (key >= KeyEvent.VK_NUMPAD1 && key <= KeyEvent.VK_NUMPAD7) {
+         this.setMode(key - KeyEvent.VK_NUMPAD1);
+      } else if (key == KeyEvent.VK_N || key == KeyEvent.VK_RIGHT) {
+         this.setMode(this.mode + 1);
+      } else if (key == KeyEvent.VK_LEFT) {
+         this.setMode(this.mode - 1);
+      } else if (key == KeyEvent.VK_SPACE) {
+         this.burstCenter();
+      } else if (key == KeyEvent.VK_H) {
+         this.toggleHint();
+      } else if (key == KeyEvent.VK_T) {
+         this.toggleTrails();
+      } else if (key == KeyEvent.VK_S) {
+         this.toggleMusic();
+      }
+      if (this.changed != null) {
+         this.changed.run();
+      }
    }
 
    /** Pressed: from now on every star is drawn toward the pointer. */
@@ -608,32 +704,56 @@ public final class StarField extends Component {
          this.tag(g2, this.badge, 14, 14, fade(BADGE_SECONDS - badgeAge));
       }
       boolean writing = this.mode == SKY_WRITING && this.skyWriting.writing();
+      int bottom = this.getHeight();
+      if (this.docked) {
+         g2.setFont(SkyDock.font(this.getWidth()));
+         this.dockChips = SkyDock.layout(g2.getFontMetrics(), this.getWidth(), this.getHeight(), this.mode, this.trails, this.music.on(), writing, this.hintVisible());
+         SkyDock.draw(g2, this.dockChips, this.dockAlpha(), this.pointerX, this.pointerY, this.pointerOn);
+         bottom = SkyDock.top(this.dockChips, bottom);
+      }
       if (this.hintVisible() || writing) {
          int alpha = writing ? 255 : fade(HINT_SECONDS - (this.clock - this.hintShownAt));
          g2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, this.textSize()));
          int lineHeight = g2.getFontMetrics().getHeight() + 10;
+         // The keys are on the buttons below them; the lines say what the pointer does.
          String[] lines = writing
             ? new String[]{"Type your message (up to " + SkyWriting.MAX_LENGTH + " letters). Backspace erases.",
-                           "Enter keeps it."}
+                           "Done (or Enter) keeps it."}
             : this.mode == SKY_WRITING
-            ? new String[]{"Enter: write your own message in the stars.",
-                           "Hold to pull the stars, let go to fling them: they find their letters again.",
-                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help",
-                           "S: star music, a note for each star landing in its letter"}
+            ? new String[]{"Write: your own message in the stars.",
+                           "Hold to pull the stars, let go to fling them: they find their letters again."}
             : this.mode == ORBITS
             ? new String[]{"Click to place a sun (up to " + Orbits.MAX_SUNS + "). Drag a sun to move it.",
-                           "Drag it off the edge to take it away. Hold to pull the stars.",
-                           "1-7 or N: mode   T: trails   Space: burst   H: help",
-                           "S: star music, a note for each star swinging past its sun"}
-            : new String[]{"Hold to pull the stars in, let go to fling them. Click to burst.",
-                           "1-7 or N: mode   T: trails   Space: burst   Up/Down: stars   H: help",
-                           "S: star music, a note for each star meeting an edge"};
-         int top = this.getHeight() - 8 - lines.length * lineHeight;
+                           "Drag it off the edge to take it away. Hold to pull the stars."}
+            : new String[]{"Hold to pull the stars in, let go to fling them. Click to burst."};
+         // A phone-sized window is narrower than a line: wrap each at the window's width, inside its tag.
+         List<String> wrapped = new ArrayList<>();
          for (String line : lines) {
+            wrapped.addAll(wrap(g2.getFontMetrics(), line, this.getWidth() - 44));
+         }
+         int top = bottom - 8 - wrapped.size() * lineHeight;
+         for (String line : wrapped) {
             this.tag(g2, line, 14, top, alpha);
             top += lineHeight;
          }
       }
+   }
+
+   /** {@code text} split at spaces into lines no wider than {@code width} (a word wider than that keeps its own line). */
+   static List<String> wrap(FontMetrics metrics, String text, int width) {
+      List<String> lines = new ArrayList<>();
+      String line = "";
+      for (String word : text.split(" ")) {
+         String longer = line.isEmpty() ? word : line + " " + word;
+         if (!line.isEmpty() && metrics.stringWidth(longer) > width) {
+            lines.add(line);
+            line = word;
+         } else {
+            line = longer;
+         }
+      }
+      lines.add(line);
+      return lines;
    }
 
    /** Text grows with the window, so it stays readable where the browser shows a big window scaled down. */

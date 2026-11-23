@@ -1,17 +1,14 @@
 // The embeddable player (play.html?app=<App>): a poster first, the app only after Play, in a frame scaled to the widget.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { APPS, webp, type App } from '../../shared/catalog';
+import { frameFit } from '../../shared/frame-fit';
 import { linkState } from '../../shared/link-state';
+import { Picker } from './Picker';
 import { Shot } from './Shot';
 import './play.css';
 
 // The same four apps the runtime's WATCH table lets the computer play.
 const WATCHABLE = ['Minesweeper', 'UltimateTicTacToe', 'TankGame', 'DinoGame'];
-// The app's page keeps a viewport of at least 640 x 520 (so a small widget is the app's page scaled down, its
-// notes and windows laid out as usual), or as big as its card asks for (CircleSpawner places its own 380 px
-// window, Rubik's Cube's is 700 px tall), as in the home page's player. The viewport keeps the widget's shape.
-const MIN_W = 640;
-const MIN_H = 520;   // the home page player's height, which leaves the watch line room above the windows
 
 type Shown =
   | { mode: 'oops'; text: string }
@@ -25,7 +22,7 @@ const then = params.has('then');
 function first(): Shown {
   const id = params.get('app');
   const app = APPS.find(a => a.id === id);
-  if (!app) return { mode: 'oops', text: id ? 'There is no app named "' + id + '" here.' : 'Which app? Add ?app= and its name to the address.' };
+  if (!app) return { mode: 'oops', text: (id ? 'There is no app named "' + id + '" here. ' : '') + 'Pick one to play' };
   if (params.has('watch') && WATCHABLE.indexOf(app.id) >= 0 && !(then && app.then)) return { mode: 'stage', app, watch: true };
   return { mode: 'poster', app };
 }
@@ -36,10 +33,10 @@ function page(app: App, watch: boolean) {
 
 export function Play() {
   const [shown, setShown] = useState<Shown>(first);
-  const [size, setSize] = useState<{ w: number; h: number; scale: number } | null>(null);
+  const [size, setSize] = useState<CSSProperties | null>(null);
   const [lit, setLit] = useState(0);   // how many times the Full page link has been pointed at
   const [full, setFull] = useState(false);   // the page fills the screen
-  const main = useRef<HTMLDivElement>(null);
+  const main = useRef<HTMLElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const fullLink = useRef<HTMLAnchorElement>(null);
   const app = shown.mode === 'oops' ? null : shown.app;
@@ -51,9 +48,7 @@ export function Play() {
 
   function fit() {
     if (!app || !main.current) return;
-    const w = main.current.clientWidth;
-    const h = main.current.clientHeight;
-    setSize({ w, h, scale: Math.min(1, w / Math.max(MIN_W, app.minWidth || 0), h / Math.max(MIN_H, app.minHeight || 0)) });
+    setSize(frameFit(app, main.current.clientWidth, main.current.clientHeight));
   }
   function run(a: App, watch: boolean) { setShown({ mode: 'stage', app: a, watch }); }
 
@@ -96,12 +91,12 @@ export function Play() {
   const fsTitle = full ? 'Leave full screen' : 'Fill the screen';
   return (
     <>
-      <div className="main" ref={main}>
+      <main className="main" ref={main}>
         <div className={'poster' + (thenPoster ? ' then' : '')} id="poster" hidden={shown.mode !== 'poster'}>
           <img className="bg" id="poster-bg" alt="" src={poster ? webp(poster.shot) : undefined} />
           {' '}
           {/* The thumbnail and hint show today's app, so the Then poster keeps only a faded backdrop of it. */}
-          <Shot app={poster} still={thenPoster} shown={shown.mode === 'poster'} onPlay={() => run(poster!, false)} />
+          {poster && <Shot app={poster} still={thenPoster} shown={shown.mode === 'poster'} onPlay={() => run(poster!, false)} />}
           <div className="text">
             <p className="kicker" id="poster-kicker">{thenPoster ? 'Then: as first restored' : 'Play in your browser'}</p>
             <h1 id="poster-name">{poster ? poster.name : null}</h1>
@@ -114,16 +109,15 @@ export function Play() {
         <div className="stage" id="stage" hidden={!running}>
           <iframe id="frame" title={running ? running.app.name : 'App'} allow="autoplay; fullscreen; clipboard-write; microphone" ref={frame}
             src={running ? page(running.app, running.watch) : undefined}
-            style={running && size ? {
-              width: Math.round(size.w / size.scale) + 'px', height: Math.round(size.h / size.scale) + 'px',
-              transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined,
-            } : undefined} />
+            style={running && size ? size : undefined} />
         </div>
-        <div className="oops" id="oops" hidden={shown.mode !== 'oops'}>
-          <p id="oops-text">{shown.mode === 'oops' ? shown.text : null}</p>
-          <p><a href="index.html" target="_blank" rel="noopener">See all 20 apps</a></p>
-        </div>
-      </div>
+        {/* No app named (or a wrong name): a channel guide of every app, one tap from playing it right here. */}
+        {shown.mode === 'oops' && <Picker text={shown.text} onPick={a => {
+          params.set('app', a.id);
+          history.replaceState(null, '', '?' + params);   // a reload or a copied address keeps the app
+          run(a, false);
+        }} />}
+      </main>
       <nav className="bar" aria-label="Old Java Applications">
         <a className="brand" href="index.html" target="_blank" rel="noopener" title="Old Java Applications: 20 recovered Java apps you can play in the browser">
           <img src="icons/icon.svg" alt="" />

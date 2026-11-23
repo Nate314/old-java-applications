@@ -1,4 +1,4 @@
-# Shared by web/shots.ps1 and web/clips.ps1 (dot-sourced): serves the built site with Python, starts headless Chrome
+# Shared by web/shots.ps1, clips.ps1, cards.ps1 and smoke.ps1 (dot-sourced): serves the built site with Python, starts headless Chrome
 # with its DevTools port open, and drives one page over the DevTools protocol: load an app page, wait for its app to
 # start, then follow a recipe of steps.
 #
@@ -26,7 +26,7 @@ function Invoke-Cdp([string]$method, [hashtable]$params = @{}) {
     $script:ws.SendAsync([ArraySegment[byte]]::new($bytes), [Net.WebSockets.WebSocketMessageType]::Text, $true, $none).GetAwaiter().GetResult() | Out-Null
     while ($true) {
         $reply = Receive-Message | ConvertFrom-Json
-        if ($reply.id -ne $id) { continue }   # an event
+        if ($reply.id -ne $id) { if ($script:OnEvent) { & $script:OnEvent $reply }; continue }   # an event (smoke.ps1 reads them)
         if ($reply.error) { throw "$method failed: $($reply.error.message)" }
         return $reply.result
     }
@@ -39,7 +39,7 @@ function Invoke-Js([string]$expression, [switch]$Await) {
 }
 
 function Send-Key([string]$name) {
-    $named = @{ Space = @(' ', 'Space', 32); Enter = @("`r", 'Enter', 13); Escape = @('', 'Escape', 27)
+    $named = @{ Space = @(' ', 'Space', 32); Enter = @("`r", 'Enter', 13); Escape = @('', 'Escape', 27); Tab = @('', 'Tab', 9)
         ArrowLeft = @('', 'ArrowLeft', 37); ArrowUp = @('', 'ArrowUp', 38); ArrowRight = @('', 'ArrowRight', 39); ArrowDown = @('', 'ArrowDown', 40) }
     if ($named.ContainsKey($name)) { $text, $code, $vk = $named[$name]; $key = if ($text -eq ' ') { ' ' } else { $name } }
     else {
@@ -65,8 +65,11 @@ function Click([string]$text) { "js:[].slice.call(document.querySelectorAll('#de
 function Pick([string]$option) {
     "js:(function (s) { s.value = '$option'; s.dispatchEvent(new Event('change')); })([].slice.call(document.querySelectorAll('#desktop select')).filter(function (s) { return [].some.call(s.options, function (o) { return o.value === '$option'; }); })[0])"
 }
+# Key events from the page, for keys Send-Key does not name and for held keys: key(type, k, keyCode, t, code) sends one
+# keydown or keyup, press(k, keyCode, t, code) both. t defaults to the focused element at each event, code to ''.
+$Press = "function key(type, k, c, t, code) { (t || document.activeElement || document.body).dispatchEvent(new KeyboardEvent(type, { key: k, code: code, keyCode: c, which: c, bubbles: true })); } function press(k, c, t, code) { key('keydown', k, c, t, code); key('keyup', k, c, t, code); }"
 # Rubik's Cube: makes the turn Teach me asks for next (presses the W/A/S/D key it lit).
-$CoachTurn = "js:(function () { var e = [].slice.call(document.querySelectorAll('#desktop span.text')).filter(function (e) { return /^[wasd]$/.test(e.textContent.trim()) && getComputedStyle(e.parentElement).backgroundColor === 'rgb(80, 220, 80)'; })[0]; if (!e) return; var k = e.textContent.trim(), c = k.toUpperCase().charCodeAt(0); ['keydown', 'keyup'].forEach(function (t) { (document.activeElement || document.body).dispatchEvent(new KeyboardEvent(t, { key: k, code: 'Key' + k.toUpperCase(), keyCode: c, which: c, bubbles: true })); }); })()"
+$CoachTurn = "js:(function () { $Press var e = [].slice.call(document.querySelectorAll('#desktop span.text')).filter(function (e) { return /^[wasd]$/.test(e.textContent.trim()) && getComputedStyle(e.parentElement).backgroundColor === 'rgb(80, 220, 80)'; })[0]; if (!e) return; var k = e.textContent.trim(); press(k, k.toUpperCase().charCodeAt(0), null, 'Key' + k.toUpperCase()); })()"
 # A click at x, y of the page as pointer and mouse events to what is there, for a place only the page can measure.
 # Clicks n times (detail 1 to n, as the shim reads a click's count from its detail; Send-Click's clicks are single).
 $Tap = "function tap(x, y, n) { var t = document.elementFromPoint(x, y), i; for (i = 1; i <= (n || 1); i++) ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) { var o = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: /down/.test(type) ? 1 : 0, detail: i, pointerType: 'mouse', isPrimary: true, pointerId: 1 }; t.dispatchEvent(/^pointer/.test(type) ? new PointerEvent(type, o) : new MouseEvent(type, o)); }); }"
@@ -83,7 +86,7 @@ function Repeat([int]$n, [string[]]$steps) { $out = @(); for ($i = 0; $i -lt $n;
 # SynthesizerKeyboard's looper: clear any old loop (Delete twice), record a melody layer after the count-in, then a
 # bass layer an octave down at the next bar. Keys are held (keydown, then keyup after ms) so notes get their lengths.
 function SynthHold([string]$key, [int]$code, [int]$ms) {
-    "js:(function (t) { function f(type) { t.dispatchEvent(new KeyboardEvent(type, { key: '$key', keyCode: $code, which: $code, bubbles: true })); } f('keydown'); setTimeout(function () { f('keyup'); }, $ms); })(document.activeElement || document.body)"
+    "js:(function (t) { $Press key('keydown', '$key', $code, t); setTimeout(function () { key('keyup', '$key', $code, t); }, $ms); })(document.activeElement || document.body)"
 }
 $SynthLoop = @('wait:800', 'key:O', (SynthHold 'Delete' 46 20), (SynthHold 'Delete' 46 20), 'wait:200', 'key:Space', 'wait:2450') +
     (@(@('z', 90), @('c', 67), @('b', 66), @('c', 67), @('z', 90), @('c', 67), @('b', 66), @(',', 188)) | ForEach-Object { (SynthHold $_[0] $_[1] 450), 'wait:625' }) +
@@ -110,7 +113,13 @@ function Start-Headless([string]$site, [int]$Port, [int]$DebugPort, [string]$Chr
     [string]$ProfileRoot = [IO.Path]::GetTempPath()) {
     if (-not (Test-Path (Join-Path $site 'index.html'))) { throw "No built site in $site. Run: mvn -f web/pom.xml package" }
     if (-not (Test-Path $Chrome)) { throw "Chrome not found at $Chrome. Pass -Chrome <path>." }
-    $server = Start-Process python -ArgumentList '-m', 'http.server', $Port, '--bind', '127.0.0.1', '--directory', $site -PassThru -WindowStyle Hidden
+    # http.server with a longer listen queue: its default of 5 refused some of a page's bursts of requests on Windows.
+    # A miss answers the site's 404.html with status 404, as GitHub Pages and nginx.conf do (the smoke test's lost page).
+    $py = 'import sys, functools, http.server as h; h.ThreadingHTTPServer.request_queue_size = 128; R = h.SimpleHTTPRequestHandler; o = R.send_error; R.send_error = lambda s, c, *a, **k: o(s, c, *a, **k) if c != 404 else (lambda b: (s.send_response(404), s.send_header(''Content-Type'', ''text/html; charset=utf-8''), s.send_header(''Content-Length'', str(len(b))), s.end_headers(), s.command != ''HEAD'' and s.wfile.write(b)))(open(sys.argv[2] + ''/404.html'', ''rb'').read()); h.test(functools.partial(h.SimpleHTTPRequestHandler, directory=sys.argv[2]), h.ThreadingHTTPServer, port=int(sys.argv[1]), bind=''127.0.0.1'')'
+    # A server left on the port would answer instead of this site's and the run would test the wrong build.
+    $probe = New-Object Net.Sockets.TcpClient
+    try { $probe.Connect('127.0.0.1', $Port); throw "Port $Port already answers (a server left running?). Stop it by its PID or pass another -Port." } catch [Net.Sockets.SocketException] { } finally { $probe.Dispose() }
+    $server = Start-Process python -ArgumentList "-c `"$py`" $Port `"$site`"" -PassThru -WindowStyle Hidden
     $profileDir = Join-Path $ProfileRoot ("oldjava-$name-$Port-" + [IO.Path]::GetRandomFileName().Substring(0, 8))
     $browser = Start-Process $Chrome -PassThru -ArgumentList '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio',
         '--autoplay-policy=no-user-gesture-required', "--remote-debugging-port=$DebugPort", "--user-data-dir=$profileDir",

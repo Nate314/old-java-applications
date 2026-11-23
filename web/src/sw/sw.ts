@@ -4,27 +4,162 @@
 // answer is kept in the cache. When the network fails, the cached copy answers instead. Apps played once are
 // therefore kept, and the home page's "Save all for offline" fills the cache with every app in one go.
 // Cache keys leave out the query string, so App/index.html?embed (the home page's player) and the app's own
-// page share one entry.
+// page share one entry; an app's program keeps its build's stamp (classes.js?v=<hash>, vite/stamp-programs.mjs),
+// so a page only ever gets the program it names, never another build's (cacheKey, offline-files.ts).
+// The built scripts and stylesheets (assets/<name>-<hash>.js and .css) and stamped programs never change under their
+// name, so they answer from the cache first. The ones pages load later (BUILT, filled in by the build) go in on installing.
+// A page is kept only together with everything it names (scripts, stylesheets, program, data files), and a new build
+// stages fresh copies of every kept page in NEXT while installing, swapped in on activating: so offline a page always
+// runs whole, as the newest build that finished saving it, never an old program against a new runtime.
+// Offline, an address that is none of the site's pages (PAGES, a mistyped link) gets the lost page (404.html, kept on
+// installing), so its search and short links still lead to the saved apps; a real page not saved yet gets offlinePage.
+// Preview clips are kept whole the first time one plays (or by Save all) and cut to the asked range offline.
 // Built by vite/pages.ts into the site root as sw.js (a service worker's scope is its own folder and below).
-export {};   // a module, so this file's self can be typed as the service worker's
+import { CACHE, cacheKey, isProgram, pageNames } from './offline-files';
 declare const self: ServiceWorkerGlobalScope;
+declare const BUILT: string[];   // this build's assets/ files that pages load later, and the lost page's, relative to the site root (vite/pages.ts)
+declare const PAGES: string[];   // this build's pages, relative to the site root (App/index.html, story.html, ...)
 const sw = self;
 
-const CACHE = 'oldjava-v1';   // the home page's offline panel (index.html) writes to the same cache
+const NEXT = 'oldjava-next';  // a new build's copies of the kept pages, while it installs
 
-sw.addEventListener('install', () => { sw.skipWaiting(); });
-sw.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(names => Promise.all(names.filter(n => n.indexOf('oldjava-') === 0 && n !== CACHE)
-    .map(n => caches.delete(n)))).then(() => sw.clients.claim()));
-});
+const assets = () => new URL('assets/', sw.registration.scope).href;
+const atRoot = (f: string) => new URL(f, sw.registration.scope).href;
+// 404.html, and apps.json that its loader asks for to find the site root (HEAD, answered offline below)
+const built = () => BUILT.concat('404.html', 'apps.json').map(atRoot);
+/** One of the site's pages (a folder means its index.html), not a mistyped address. */
+function known(url: URL): boolean {
+  const path = url.pathname.slice(new URL(sw.registration.scope).pathname.length);
+  return PAGES.includes(/(^|\/)$/.test(path) ? path + 'index.html' : path);
+}
+// the names serve.ps1 and nginx.conf send as immutable
+const fixedName = (url: URL) => /^\/assets\/.+-[A-Za-z0-9_-]{8}\.(js|css)$/.test(url.pathname) || (isProgram(url) && /^\?v=/.test(url.search));
+const isPage = (url: string) => /(\.html|\/)$/.test(new URL(url).pathname);
+// preview clips (clips/<App>.mp4): kept whole, answered offline in the ranges a video asks for (ranged)
+const isClip = (url: URL) => /\.(mp4|webm)$/.test(url.pathname);
+// the desktop jars are not kept
+const kept = (url: URL) => url.origin === self.location.origin && !/\/downloads\/[^/]+\.jar$/.test(url.pathname);
 
-function key(request: Request): string {
-  const url = new URL(request.url);
-  url.search = '';
-  url.hash = '';
-  return url.href;
+/** What a page needs to run: everything it names (offline-files.ts). */
+function needs(page: string, html: string): string[] {
+  const named = pageNames(page, html);
+  return named.code.concat(named.data);
+}
+function fetchOk(url: string): Promise<Response> {
+  return fetch(url).then(r => { if (!r.ok) throw new Error(r.status + ' ' + url); return r; });
 }
 
+// ---- install: stage this build in NEXT ----
+// The scripts and stylesheets pages load later (Find, the skin maker...) and the lost page's (about 165 KB gzipped) and a fresh copy of every page kept so far, with what
+// it needs that is not kept yet (a changed program, a new data file), go in NEXT before it takes over. Data files
+// keep their names across builds, so a kept copy is reused. If anything fails to load, this build waits and the one
+// already installed keeps answering from its own whole copies.
+function restage(saved: Cache, next: Cache, request: Request): Promise<unknown> {
+  return fetch(request.url, { cache: 'no-cache' }).then((response): Promise<unknown> => {
+    if (response.status === 404) return saved.delete(request);   // gone from the site
+    if (!response.ok) throw new Error(response.status + ' ' + request.url);
+    return response.clone().text().then(html => Promise.all(needs(response.url, html).map(f => next.match(f).then((hit): unknown => hit ||
+      saved.match(f).then(kept => kept || fetchOk(f)).then(r => next.put(f, r))))))
+      .then(() => next.put(request, response));
+  });
+}
+function stage(saved: Cache, next: Cache): Promise<unknown> {
+  return next.addAll(built()).then(() => saved.keys())
+    .then(requests => Promise.all(requests.filter(r => isPage(r.url)).map(r => restage(saved, next, r))));
+}
+sw.addEventListener('install', e => {
+  sw.skipWaiting();
+  e.waitUntil(caches.delete(NEXT).then(() => Promise.all([caches.open(CACHE), caches.open(NEXT)])).then(([saved, next]) => stage(saved, next))
+    .catch(error => caches.delete(NEXT).then(() => { throw error; })));   // the next try starts afresh
+});
+
+// ---- activate: swap the staged copies in, then prune (pages' requests wait meanwhile) ----
+function swapIn(saved: Cache, next: Cache): Promise<unknown> {
+  return next.keys().then(staged => Promise.all(staged.map(r => next.match(r).then(hit => hit && saved.put(r, hit)))));
+}
+/** Every other oldjava- cache (NEXT, now swapped in, and any older build's) goes. */
+function dropOtherCaches(): Promise<unknown> {
+  return caches.keys().then(names => Promise.all(names.filter(n => n.indexOf('oldjava-') === 0 && n !== CACHE).map(n => caches.delete(n))));
+}
+/** Where the cache notes the build before this one's files (a cache key only, never fetched). */
+const previousKey = () => new URL('oldjava-previous-build', sw.registration.scope).href;
+/**
+ * Programs and built files that no kept page names any more leave the cache, except the build before this one's:
+ * a tab still open from it (this worker takes it over) loads its Find, skin maker and other parts later, under that
+ * build's names, which the server no longer has. They go when the build after this one arrives.
+ */
+function prune(saved: Cache): Promise<unknown> {
+  return Promise.all([saved.keys(), saved.match(previousKey()).then(r => r ? r.json() as Promise<string[]> : [])])
+    .then(([requests, previous]) => Promise.all(requests.filter(r => isPage(r.url))
+    .map(r => saved.match(r).then(hit => hit ? hit.text().then(html => needs(r.url, html)) : []))).then(named => {
+    const keep = new Set(built().concat(assets() + 'files.json', previous, ...named.flat()));   // files.json keeps its name (Save all reads it)
+    return Promise.all(requests.filter(r => (r.url.indexOf(assets()) === 0 || isProgram(new URL(r.url))) && !keep.has(r.url))
+      .map(r => saved.delete(r)));
+  })).then(() => saved.put(previousKey(), new Response(JSON.stringify(built()))));
+}
+sw.addEventListener('activate', e => {
+  e.waitUntil(Promise.all([caches.open(CACHE), caches.open(NEXT)]).then(([saved, next]) =>
+    swapIn(saved, next).then(dropOtherCaches).then(() => prune(saved)))
+    .then(() => sw.clients.claim()));
+});
+
+// ---- keeping answers from the network ----
+// Pages from the network wait here until everything they need is kept (it comes through this handler as they load).
+const unsettled = new Map<string, { response: Response; needs: string[] }>();
+function settle(cache: Cache): Promise<unknown> {
+  return Promise.all([...unsettled].map(([page, p]) => Promise.all(p.needs.map(f => cache.match(f))).then(hits => {
+    if (!hits.every(Boolean) || unsettled.get(page) !== p) return;
+    unsettled.delete(page);
+    return cache.put(page, p.response);
+  })));
+}
+/** A preview clip's first answer to the video's "bytes=0-" (206 from GitHub Pages and nginx) holds the whole file: kept as it. */
+function wholeFile(response: Response): Response {
+  const range = /^bytes 0-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
+  if (response.status !== 206 || !range || +range[1] + 1 !== +range[2]) return response;
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Range');
+  return new Response(response.body, { status: 200, headers });
+}
+/** Keeps a good answer: a page waits in unsettled until everything it needs is kept, anything else goes in at once. */
+function keep(k: string, response: Response, page: boolean): Promise<unknown> {
+  if (response.type !== 'basic') return Promise.resolve();
+  response = wholeFile(response);
+  if (response.status !== 200) return Promise.resolve();
+  return caches.open(CACHE).then(cache => (page
+    ? response.clone().text().then(html => { unsettled.set(k, { response, needs: needs(response.url || k, html) }); })
+    : cache.put(k, response)).then(() => settle(cache)));
+}
+
+// A page that loaded before this worker controlled it (an app page registers it only once its program loaded, so a
+// first visit from a shared link) sends what it loaded once the worker takes over (install.tsx keepOffline). The
+// copies come from the HTTP cache, so the page then plays offline from its first visit, not its second.
+sw.addEventListener('message', e => {
+  const urls: unknown = e.data && e.data.oldjavaKeep;
+  if (!Array.isArray(urls)) return;
+  e.waitUntil(Promise.all(urls.filter((u): u is string => typeof u === 'string').map(u => {
+    const url = new URL(u, sw.registration.scope);
+    if (!kept(url) || isClip(url)) return undefined;   // a clip loaded before the worker came is not fetched again (it is kept next time it plays)
+    const k = cacheKey(url.href), page = isPage(url.href);
+    return caches.match(k).then(hit => hit || fetch(url.href, page ? { cache: 'no-cache' } : undefined).then(r => keep(k, r, page))).catch(() => undefined);
+  })));
+});
+
+// ---- answering ----
+/** A kept clip cut to the request's Range: a video asks for its file in ranges (seeking, looping) and needs a 206. */
+function ranged(request: Request, whole: Response): Promise<Response> {
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') || '');
+  if (!range || !(range[1] || range[2])) return Promise.resolve(whole);
+  return whole.arrayBuffer().then(body => {
+    const size = body.byteLength;
+    const start = range[1] ? +range[1] : Math.max(0, size - +range[2]);   // "bytes=-500" is the last 500
+    const end = range[1] && range[2] ? Math.min(+range[2], size - 1) : size - 1;
+    if (start > end) return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
+    return new Response(body.slice(start, end + 1), { status: 206, headers: {
+      'Content-Type': whole.headers.get('Content-Type') || 'video/mp4', 'Content-Range': 'bytes ' + start + '-' + end + '/' + size,
+      'Content-Length': String(end - start + 1), 'Accept-Ranges': 'bytes' } });
+  });
+}
 function offlinePage(): Response {
   const home = new URL('./index.html', sw.registration.scope).href;
   return new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -36,20 +171,31 @@ function offlinePage(): Response {
     '<a href="' + home + '" target="_top" style="color:#ff2bd6;font-weight:700">Back to all apps</a></div></body>',
     { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
-
+/** The lost page for an address the site doesn't have, with the 404 status it has online. */
+function lostPage(): Promise<Response> {
+  return caches.match(atRoot('404.html')).then(hit => hit ? new Response(hit.body, { status: 404, headers: hit.headers }) : offlinePage());
+}
 sw.addEventListener('fetch', e => {
   const request = e.request;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
-  if (/\/downloads\/[^/]+\.jar$/.test(new URL(request.url).pathname)) return;   // the desktop jars are not kept
-  e.respondWith(fetch(request).then(response => {
-    if (response.status === 200 && response.type === 'basic') {
-      const copy = response.clone();
-      e.waitUntil(caches.open(CACHE).then(cache => cache.put(key(request), copy)));
-    }
+  const url = new URL(request.url);
+  // The lost page's loader finds the site root with HEAD requests for apps.json: offline, a kept copy's headers
+  // answer, and a folder with none is not the root (a 404, as online, rather than a failed request in the console).
+  if (request.method === 'HEAD' && kept(url)) {
+    e.respondWith(fetch(request).catch(() => caches.match(cacheKey(request.url))
+      .then(hit => new Response(null, hit ? { status: hit.status, headers: hit.headers } : { status: 404 }))));
+    return;
+  }
+  if (request.method !== 'GET' || !kept(url)) return;
+  const k = cacheKey(request.url);
+  // A page is always checked with the server: one the HTTP cache kept (GitHub Pages lets it keep any file 10 minutes)
+  // could name the hashed files of an older build, which this cache no longer has.
+  const page = request.mode === 'navigate' || isPage(request.url);
+  e.respondWith((fixedName(new URL(k)) ? caches.match(k) : Promise.resolve(undefined)).then(hit => hit || fetch(request, page ? { cache: 'no-cache' } : undefined).then(response => {
+    e.waitUntil(keep(k, response.clone(), page));
     return response;
-  }).catch(error => caches.match(key(request)).then(hit => {
-      if (hit) return hit;
-    if (request.mode === 'navigate') return offlinePage();
+  }).catch(error => caches.match(k).then(hit => {
+    if (hit) return isClip(url) ? ranged(request, hit) : hit;
+    if (request.mode === 'navigate') return known(url) ? offlinePage() : lostPage();
     throw error;
-  })));
+  }))));
 });

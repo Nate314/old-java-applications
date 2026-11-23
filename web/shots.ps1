@@ -5,21 +5,22 @@
 # same way after a change. Then the image is cropped to its windows, the remaining magenta is made transparent,
 # and wide shots are scaled down to -MaxWidth. Last, Chrome encodes the home page's lighter copies of it (Save-Webp).
 # Build first (mvn -f web/pom.xml package), then run from the repo root:
-#   ./web/shots.ps1
-#   ./web/shots.ps1 -Apps Minesweeper,Clock -Port 8101
-#   ./web/shots.ps1 -Out somewhere/else   (to compare before replacing the committed ones)
-#   ./web/shots.ps1 -WebpOnly   (only re-encode the .webp copies from the PNGs already in -Out, e.g. after a merge)
+# (-Port, -DebugPort and -ProfileRoot have no defaults: pass your own on every run)
+#   ./web/shots.ps1 -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/shots.ps1 -Apps Minesweeper,Clock -Port 8107 -DebugPort 9307 -ProfileRoot C:\some\scratch
+#   ./web/shots.ps1 -Out somewhere/else ...   (to compare before replacing the committed ones)
+#   ./web/shots.ps1 -WebpOnly ...   (only re-encode the .webp copies from the PNGs already in -Out, e.g. after a merge)
 param(
     [string[]]$Apps,
-    [int]$Port = 8101,
-    [int]$DebugPort = 9302,
+    [int]$Port = $(throw '-Port is required (no default: two runs must never share a port)'),
+    [int]$DebugPort = $(throw '-DebugPort is required (no default: two runs must never share a port)'),
     [string]$Chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     [int]$Width = 960,
     [int]$Height = 600,
     [int]$MaxWidth = 480,
     [string]$Out = (Join-Path $PSScriptRoot 'public/shots'),
     [switch]$WebpOnly,
-    [string]$ProfileRoot = [IO.Path]::GetTempPath()   # where Chrome's throwaway profile folder goes
+    [string]$ProfileRoot = $(throw '-ProfileRoot is required (no default: keep Chrome profiles in your own scratch folder)')   # where Chrome's throwaway profile folder goes
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'cdp.ps1')
@@ -37,7 +38,7 @@ $NathaNOSPicture = "js:(function () { var W = 200, H = 125, p = [], x, y, c, s =
 # A double click there.
 $NathaNOSOpen = "js:(function () { $Tap tap(348, 318, 2); })()"
 # NumberGuess: Page Down opens the Duel tab (from 1-10, where a fresh visitor starts; the locked ranges are passed over).
-$NumberGuessDuel = "js:(function (t) { ['keydown', 'keyup'].forEach(function (type) { t.dispatchEvent(new KeyboardEvent(type, { key: 'PageDown', keyCode: 34, which: 34, bubbles: true })); }); })(document.activeElement || document.body)"
+$NumberGuessDuel = "js:(function (t) { $Press press('PageDown', 34, t); })(document.activeElement || document.body)"
 # Then a click on the middle of the lower line of its lane, which guesses the middle of what is left.
 $NumberGuessMiddle = "js:(function (c) { $Tap var r = c.getBoundingClientRect(); tap(r.left + r.width / 2, r.top + r.height * 180 / 350); })(document.querySelector('#desktop canvas.paint'))"
 $Recipes = [ordered]@{
@@ -49,7 +50,7 @@ $Recipes = [ordered]@{
     ScreenSaver         = @{ Steps = @('wait:1500', 'key:9', 'wait:7000', 'key:F', 'wait:1800') }
     SpriteFloatyStars   = @{ Steps = @('wait:800', (Pick 'Mode 6'), (Click '^OK$'), 'wait:3000', $StarsSuns, 'wait:9000') }
     UltimateTicTacToe   = @{ Steps = @('wait:800', 'key:W', 'wait:7000') }
-    CircleSpawner       = @{ Steps = @('wait:1500', (Pick 'Clock'), 'wait:3000') }
+    CircleSpawner       = @{ Steps = @('wait:1500', "js:document.querySelector('#desktop button[title=Clock]').click()", 'wait:3000') }
     StockChecker        = @{ Steps = @('wait:800', 'key:F', 'wait:4000', 'key:B', 'wait:3000', 'key:-', 'key:=', 'wait:300') }
     SynthesizerKeyboard = @{ Steps = $SynthLoop + @('wait:1300') }
     GroupCreator        = @{ Steps = @('wait:800', (Click 'Make groups'), 'wait:1500', 'key:W', 'wait:2200') }

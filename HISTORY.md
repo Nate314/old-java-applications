@@ -98,6 +98,45 @@ A final pull request on top of #134 adds this section and the story page's chapt
 
 As for the first run, these are the usage numbers Claude Code recorded, not a bill.
 
+## The third run (#138 to #173)
+
+On November 21, 2026 (local time) the chain was asked for 250 more attempts, numbered 251 to 500. They ran in 36 rounds, rounds 50 to 85, with one pull request per round: [#138](https://github.com/Nate314/old-java-applications/pull/138) (round 50, based on master) to [#173](https://github.com/Nate314/old-java-applications/pull/173) (round 85), each based on the round before. A round had seven builders at once (five in round 85, lanes A to E), each committing to a local branch `link<N>` in its own worktree, and an integrator that merged the branches in the main checkout in the order G, F, E, D, A, B, C, ran `npm ci` and the type check, the apps' self-checks, the full build, the smoke test, the offline test and phone vitals, checked every change in Chrome at about 400 px and 900x600 in all three skins, and opened the round's pull request. The run paused after round 50 for review (the 50 minute gap before attempt 258 started), then went on unattended.
+
+Each round's builders had a lane:
+
+- **Lane A, games and toys**: one game or toy app.
+- **Lane B, tools and music**: one tool or music app, or the desktop Launcher.
+- **Lane C, catch-up**: the app with the fewest attempts overall, other than A's and B's, which may also bring its Then page or desktop jar up to date.
+- **Lane D, experience**: the pages visitors land on, the shared page code and the app page's title screen.
+- **Lane E, platform**: performance and modern web platform features, build and serving, every change with before and after numbers.
+- **Lane F, shim and runtime**: root causes fixed in the AWT/Swing shim and the runtime, never in an app.
+- **Lane G, code health**: one behavior-preserving refactor or one test or tooling improvement, merged first, with an entry in the brief's refactor log.
+
+The shared brief gained rules along the way, after something went wrong: use only your own ports (round 54's lane F used ports outside every range and two of its probes collided), and put a second server on your own second port (round 78's lane F served a before build on lane G's port and broke G's smoke run); install the sound stubs before any app can start (round 57's lane B played a few notes through the speakers because it stubbed sound after pressing Play), turn a desktop app's sound off before anything can play (round 64's SimpleAlgorithms builder ran the Sorting race with sound on in a headless render), and wrap `AudioContext` so every new context starts suspended (round 79's lane C stubbed only `resume`, and the site's own Play sound may have sounded once); stop only processes you started, by the PID you recorded (round 76's lane E piped netstat into taskkill and it targeted PID 4, System, which Windows refused); work only in a Chrome tab you created (round 68: one agent's script may have hit another lane's harness); never run `mvn install` (round 58 left a shim jar in `~/.m2`); never run `rm -rf` on a relative path, even for build output (round 50's lane A did, inside its worktree); and builders edit only their own worktree (round 83's lane G left a partial uncommitted edit in the main checkout).
+
+Roughly, the work fell into five groups:
+
+1. **The apps, deeper** (Lanes A, B and C): for example RubiksCube2D's dragged layer following the pointer and DinoGame's crash coach (#138), Minesweeper's first game teaching flagging and chording (#142), ScreenSaver waking to the wall of all ten savers (#147), an LED face and then real-looking dials for the Clock (#152, #173), TankGame's four grounds (#153), StockChecker's live desk (#154) and BibleDownloader as an open book with depth (#171).
+2. **The site** (Lane D): the phone home gallery as a two-column tile grid (#138, the page at 400 px from 11,374 to 4,285 px tall), play.html with no app as a tile picker (#141) and then a channel guide (#167), the story page playing each app in a sheet over the page (#151), a search field in the home gallery (#161), What's new leading with a reel of the latest-changed apps (#168), Records as a trophy shelf (#170), a picture of your own passport to share (#172) and Then pages carrying a postcard of today's version (#173).
+3. **The platform** (Lane E): content-hashed asset names so a new build never mixes with a cached old one (#138), gzip (#139), the home title and lead prerendered (#141, throttled phone LCP from about 3.0 to about 1.3 seconds), Back restoring an app from the back/forward cache (#149, Back from 308-340 to 9-27 ms), parallel Maven modules (#153, a clean build from 178 to about 115 seconds) and split compiles (#154, from about 160 to about 50-66 seconds), the home phone poster painted from the HTML (#165, LCP 2868 to 956 ms) and packed CSS (#166, home FCP 964 to 824 ms).
+4. **The shim and runtime** (Lane F): unfocusable windows keeping off the keyboard (#139), `JTextField` documents (#140), instant replay no longer leaking a media stream (#142), many more Java 2D shapes and transforms (#146, #153, #159, #163), names for every field and key (#150, #156, axe critical issues 13 to 0), held keys released on a browser blur (#166), a hidden page holding its moving apps (#168) and every app quiet when hidden (#171).
+5. **Code health and tests** (Lane G): `web/smoke.ps1` (#138, the home page and 21 apps) grown to 110 pages (#172), `web/checks.ps1` for the apps' self-checks (#139), `web/offline.mjs` (#145), `web/sitediff.mjs` (#147), `web/wiring.mjs` (#155), `web/vitals.mjs` (#162), and refactors such as the stage layout and the exit screen moved into their own files (#144, #148) and per-part compiles (#173, a clean build from 87 to 80 seconds).
+
+### The third run in numbers
+
+A final pull request on top of #173 adds this section and the story page's chapter for it.
+
+![Timeline of the third run: 36 rounds of seven builders (five in the last) and an integrator, with the output tokens of each pull request](web/public/third-timeline.svg)
+
+- **Model**: every agent, and the orchestrator session that started them and read their reports, ran on Claude Opus 5.5 (model id `claude-opus-5-5`) in Claude Code.
+- **Agents**: 286 finished agents: 250 builders (attempts 251 to 500) and 36 round integrators (rounds 50 to 85). The agent making this final pull request is not counted.
+- **Tokens of the 286 agents**, summed once per model response in their transcripts: 9,358,398 output tokens; 36,602 input tokens not served from the prompt cache; 61,811,829 tokens written to the prompt cache; 2,026,076,348 tokens read from the prompt cache. That is 2,097,283,177 in all.
+- **The orchestrator's own tokens**, counted the same way from its session (from the request at 14:37 UTC on November 21 to 08:36 UTC on November 23, before the final pull request), are not in the numbers above: 539,189 output tokens; 2,138 uncached input tokens; 2,067,958 written to and 291,950,015 read from the prompt cache; 294,559,300 in all. With them the whole run comes to 9,897,587 output tokens and 2,391,842,477 tokens in all.
+- **Tool calls**: 21,403 by the 286 agents and 618 by the orchestrator, counted from the transcripts.
+- **Time**: the run went from the first builder's start on November 21, 2026 at 14:43 UTC to the last integrator's finish on November 23 at 08:36 UTC, about 42 hours. The time with no agent running adds up to 113 minutes, with one gap over 10 minutes: the 50 minute pause for review before attempt 258. The agents' own working time adds up to about 108 hours.
+
+As for the first two runs, these are the usage numbers Claude Code recorded, not a bill.
+
 ## Original art
 
 Some of the pictures the apps loaded were not their own. FlappyBird's bird, pipes, sky and ground were the original Flappy Bird game's art, and BibleDownloader's icon was the YouVersion Bible App's icon. NathaNOS's desktop icons included Chrome's dinosaur (for DinoGame), a Windows Minesweeper mine and an unused Windows logo; its mouse pointer was a pointing hand from an icon set; and its other icons (Clock, NumberGuess, StockChecker, SynthesizerKeyboard, UltimateTicTacToe, plus unused calculator, converter and ping pong pictures) were clip art of unknown origin. Dino Game's pixel dinosaur and bird, drawn in its code, were modeled closely on Chrome's.

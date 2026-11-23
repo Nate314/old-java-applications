@@ -49,9 +49,11 @@ function warmFile(url: string): Promise<string | ArrayBuffer | null> {
 
 function warmApp(id: string, then: boolean) {
   var dir = siteRoot + id + '/';
-  warmFile(dir + (then ? 'then.js' : 'classes.js'));
   warmFile(dir + (then ? 'then.html' : 'index.html')).then(function (html) {
     if (typeof html !== 'string') return;
+    // the program as the page names it, with its build's ?v= (web/vite/stamp-programs.mjs), so the page finds it warm
+    var program = /\ssrc="((?:classes|then)\.js[^"]*)"/.exec(html);
+    warmFile(dir + (program ? program[1] : then ? 'then.js' : 'classes.js'));
     var m = /<body[^>]*\sdata-files="([^"]*)"/.exec(html);
     if (m) m[1].split(/\s+/).filter(Boolean).forEach(function (f) { warmFile(dir + f); });
   });

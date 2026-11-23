@@ -19,6 +19,9 @@ final class Morph {
    private final List<Rectangle> to = new ArrayList<>();
    private final List<Color> fromColors = new ArrayList<>();
    private final List<Color> toColors = new ArrayList<>();
+   /** The box each window's light starts and ends stretched over: from its old shape's to the new shape's. */
+   private final List<Rectangle> fromLights = new ArrayList<>();
+   private final List<Rectangle> toLights = new ArrayList<>();
    /** Windows that shrink away and close at the end. */
    private final List<CircleSliceWindow> leaving = new ArrayList<>();
    private final int frames;
@@ -37,6 +40,7 @@ final class Morph {
       for (CircleSliceWindow w : old) {
          oldBounds.add(w.getBounds());
       }
+      Rectangle light = target.isEmpty() ? null : bounds(target);
       int[] source = match(target, oldBounds, inPlace);
       boolean[] used = new boolean[old.size()];
       List<CircleSliceWindow> next = new ArrayList<>();
@@ -49,15 +53,17 @@ final class Morph {
          } else {
             // Splits off: a new window at the old one's place, or out of the middle of the new rectangle.
             w = s >= 0 ? newWindow.apply(oldBounds.get(s), old.get(s).color()) : newWindow.apply(middle(target.get(i)), colors.get(i));
+            w.place(w.getBounds(), w.color(), s >= 0 ? old.get(s).light() : light);
          }
-         this.add(w, target.get(i), colors.get(i));
+         this.add(w, target.get(i), colors.get(i), light);
          next.add(w);
       }
       int[] sink = match(oldBounds, target, inPlace);
       for (int s = 0; s < old.size(); s++) {
          if (!used[s]) {
             CircleSliceWindow w = old.get(s);
-            this.add(w, middle(sink[s] >= 0 ? target.get(sink[s]) : oldBounds.get(s)), w.color());
+            this.add(w, middle(sink[s] >= 0 ? target.get(sink[s]) : oldBounds.get(s)), w.color(),
+               light != null ? light : w.light());
             this.leaving.add(w);
          }
       }
@@ -65,12 +71,14 @@ final class Morph {
       old.addAll(next);
    }
 
-   private void add(CircleSliceWindow w, Rectangle end, Color endColor) {
+   private void add(CircleSliceWindow w, Rectangle end, Color endColor, Rectangle endLight) {
       this.windows.add(w);
       this.from.add(w.getBounds());
       this.to.add(new Rectangle(end));
       this.fromColors.add(w.color());
       this.toColors.add(endColor);
+      this.fromLights.add(w.light());
+      this.toLights.add(new Rectangle(endLight));
    }
 
    /** Moves every window one frame on; true once the shape has arrived (and the leftover windows are closed). */
@@ -83,7 +91,8 @@ final class Morph {
          Rectangle b = this.to.get(i);
          Rectangle r = new Rectangle(mix(a.x, b.x, t), mix(a.y, b.y, t), Math.max(1, mix(a.width, b.width, t)),
             Math.max(1, mix(a.height, b.height, t)));
-         this.windows.get(i).place(r, blend(this.fromColors.get(i), this.toColors.get(i), t));
+         this.windows.get(i).place(r, blend(this.fromColors.get(i), this.toColors.get(i), t),
+            mix(this.fromLights.get(i), this.toLights.get(i), t));
       }
       if (this.frame < this.frames) {
          return false;
@@ -174,6 +183,10 @@ final class Morph {
 
    private static Rectangle middle(Rectangle r) {
       return new Rectangle(r.x + r.width / 2, r.y + r.height / 2, 1, 1);
+   }
+
+   private static Rectangle mix(Rectangle a, Rectangle b, double t) {
+      return new Rectangle(mix(a.x, b.x, t), mix(a.y, b.y, t), mix(a.width, b.width, t), mix(a.height, b.height, t));
    }
 
    private static int mix(int a, int b, double t) {

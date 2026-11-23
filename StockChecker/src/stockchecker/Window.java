@@ -2,6 +2,7 @@ package stockchecker;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Toolkit;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -40,11 +41,13 @@ public class Window extends JFrame {
          stocks = DEFAULT_STOCKS;
       }
       this.desk = Desk.load(new File(System.getProperty("user.home"), ".stockchecker-desk.txt"), split(stocks), firstPrices());
-      this.deskPanel = new DeskPanel(this.desk);
+      // A phone held upright (in the browser): the desk in one column at full size instead of shrunk to half.
+      boolean narrow = Toolkit.getDefaultToolkit().getScreenSize().width < DeskPanel.NARROW;
+      this.deskPanel = new DeskPanel(this.desk, narrow);
 
       JLabel label = new JLabel("Tickers:");
       label.setForeground(Color.WHITE);
-      this.tickers.setColumns(34);
+      this.tickers.setColumns(narrow ? 11 : 34);
       this.tickers.setText(String.join(", ", this.desk.watch()));
       this.tickers.addActionListener(event -> this.applyTickers());
       JButton watch = new JButton("Watch");

@@ -18,10 +18,6 @@ public class GenericAppFrame extends JInternalFrame {
       this.setCursor(screen.getCursor());
    }
 
-   public void setPosition(int x, int y) {
-      this.setLocation(x, y);
-   }
-
    @Override
    public void setSize(int width, int height) {
       this.setBounds(this.getX(), this.getY(), width, height);

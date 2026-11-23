@@ -4,10 +4,14 @@ import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.JSObject;
 import web.shim.java.awt.web.TCanvasGraphics;
+import web.shim.java.awt.web.TDesktop;
+import web.rt.Drags;
 import web.rt.Files;
 import web.rt.Js;
 import web.shim.java.awt.web.TRepaint;
 import web.shim.java.awt.event.TComponentEvent;
+import web.shim.java.awt.event.TFocusEvent;
+import web.shim.java.awt.event.TFocusListener;
 import web.shim.java.awt.event.TKeyEvent;
 import web.shim.java.awt.event.TKeyListener;
 import web.shim.java.awt.event.TMouseEvent;
@@ -34,6 +38,8 @@ public class TComponent implements TImageObserver {
     protected boolean visible = true;
     boolean enabled = true;
     boolean focusable = true;
+    /** The app called setFocusable itself (Swing's isFocusTraversableOverridden). */
+    private boolean focusableSet;
     TColor background;
     TColor foreground;
     TFont font;
@@ -47,6 +53,7 @@ public class TComponent implements TImageObserver {
     private final List<TMouseListener> mouseListeners = new ArrayList<>();
     private final List<TMouseMotionListener> mouseMotionListeners = new ArrayList<>();
     private final List<TKeyListener> keyListeners = new ArrayList<>();
+    private final List<TFocusListener> focusListeners = new ArrayList<>();
 
     private JSObject element;
     private TAccessibleContext accessibleContext;
@@ -96,6 +103,7 @@ public class TComponent implements TImageObserver {
         syncEnabled();
         syncFocusable();
         syncAccessible();
+        syncDrags();
     }
 
     /** Default colors are left to the CSS skin; colors the app sets are applied inline. */
@@ -222,6 +230,7 @@ public class TComponent implements TImageObserver {
     /** Clears earlier paint output, if this component has painted before (the CSS background shows through). */
     protected void clearCanvas() {
         if (canvas != null) {
+            TCanvasGraphics.release(Js.context2d(canvas)); // a clip left on the canvas would keep part of it from clearing
             Js.clearCanvas(canvas);
         }
     }
@@ -606,18 +615,39 @@ public class TComponent implements TImageObserver {
 
     public void setFocusable(boolean b) {
         focusable = b;
+        focusableSet = true;
         syncFocusable();
+        syncAccessible();
     }
 
-    /** A component Swing's Tab would skip is left out of the browser's Tab order too. */
+    /**
+     * A component Swing's Tab would skip is left out of the browser's Tab order too; a painted panel the app made
+     * focusable joins it as an application (keys go to the app, not a screen reader's browse mode).
+     */
     private void syncFocusable() {
         if (element != null) {
+            Js.setTabStop(element, paintedTabStop());
             if (focusable) {
-                Js.removeAttr(element, "tabindex");
+                if (!paintedTabStop()) {
+                    Js.removeAttr(element, "tabindex");
+                }
             } else {
                 Js.setAttr(element, "tabindex", "-1");
             }
         }
+    }
+
+    /**
+     * Whether Tab stops here: a button, field or list, or a painted panel the app called setFocusable(true) on, which
+     * Swing's LayoutFocusTraversalPolicy accepts (NumberGuess's board, Clock's face, GroupCreator's board).
+     */
+    public boolean tabStop() {
+        return acceptsFocus() || paintedTabStop();
+    }
+
+    /** A component that is not a button or field but that the app made focusable itself. */
+    protected final boolean paintedTabStop() {
+        return focusable && focusableSet && !acceptsFocus() && !(this instanceof TWindow);
     }
 
     /** Whether Swing's focus traversal policy would give this component the keyboard focus. */
@@ -637,9 +667,16 @@ public class TComponent implements TImageObserver {
         return true;
     }
 
+    /**
+     * As in Swing, only the active window's focus owner has the focus. A window that cannot take focus (the Windows
+     * key) has it only while the page's keyboard focus is in it (Tab took it there), so it draws no focus box otherwise.
+     */
     public boolean hasFocus() {
         TWindow w = windowAncestor();
-        return w != null && w.focusOwner() == this;
+        if (w == null || w.focusOwner() != this) {
+            return false;
+        }
+        return w.getFocusableWindowState() ? w.isActive() && TDesktop.pageFocused() : w.hasElement() && Js.focusWithin(w.element());
     }
 
     public boolean isFocusOwner() {
@@ -648,7 +685,7 @@ public class TComponent implements TImageObserver {
 
     /**
      * Called when this component becomes the focus owner. Keyboard focus on the page follows: a component drawn as a
-     * button, field or list gets it, so a screen reader and the focus ring follow Swing's focus; any other component
+     * button, field or list, or a panel the app made focusable, gets it, so a screen reader and the focus ring follow Swing's focus; any other component
      * (a painted panel) takes it off the app's buttons, so Space no longer presses the last one clicked.
      */
     protected void focusGained() {
@@ -666,13 +703,33 @@ public class TComponent implements TImageObserver {
         return accessibleContext;
     }
 
-    /** Copies the accessible name and description to the element, where screen readers look for them. */
+    /**
+     * Copies the accessible name and description to the element, where screen readers look for them. A component
+     * the app never named is named by its label (labelId) or by what it shows (fallbackName), as Swing would.
+     */
     public void syncAccessible() {
-        if (element == null || accessibleContext == null) {
+        if (element == null) {
             return;
         }
-        setOrRemove("aria-label", accessibleContext.getAccessibleName());
-        setOrRemove("aria-description", accessibleContext.getAccessibleDescription());
+        String name = accessibleContext == null ? null : accessibleContext.getAccessibleName();
+        boolean named = name != null && !name.isEmpty();
+        String label = named ? null : labelId();
+        setOrRemove("aria-labelledby", label);
+        setOrRemove("aria-label", named ? name : label == null ? fallbackName() : null);
+        if (named) {
+            Js.giveNamedRole(element);
+        }
+        setOrRemove("aria-description", accessibleContext == null ? null : accessibleContext.getAccessibleDescription());
+    }
+
+    /** The element id of a label naming this component, or null. */
+    protected String labelId() {
+        return null;
+    }
+
+    /** A name for a component the app did not name and no label names, or null to leave the element's own text. */
+    protected String fallbackName() {
+        return null;
     }
 
     private void setOrRemove(String attribute, String value) {
@@ -698,11 +755,30 @@ public class TComponent implements TImageObserver {
     public void addMouseMotionListener(TMouseMotionListener l) {
         if (l != null) {
             mouseMotionListeners.add(l);
+            syncDrags();
         }
     }
 
     public void removeMouseMotionListener(TMouseMotionListener l) {
         mouseMotionListeners.remove(l);
+        syncDrags();
+    }
+
+    /** Marks a component that follows drags: in an embedded app a finger there works the app, elsewhere it may scroll the page (shim.css). */
+    private void syncDrags() {
+        if (element != null) {
+            Js.toggleClass(element, "drags", followsDrags());
+        }
+    }
+
+    /** A motion listener whose mouseDragged does something (web.rt.Drags, added by ShimPlugin); hover-only ones let vertical swipes scroll. */
+    private boolean followsDrags() {
+        for (TMouseMotionListener l : mouseMotionListeners) {
+            if (l instanceof Drags) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void addKeyListener(TKeyListener l) {
@@ -713,6 +789,20 @@ public class TComponent implements TImageObserver {
 
     public void removeKeyListener(TKeyListener l) {
         keyListeners.remove(l);
+    }
+
+    public void addFocusListener(TFocusListener l) {
+        if (l != null) {
+            focusListeners.add(l);
+        }
+    }
+
+    public void removeFocusListener(TFocusListener l) {
+        focusListeners.remove(l);
+    }
+
+    public TFocusListener[] getFocusListeners() {
+        return focusListeners.toArray(new TFocusListener[0]);
     }
 
     public boolean hasMouseListeners() {
@@ -737,6 +827,8 @@ public class TComponent implements TImageObserver {
             } else {
                 processMouseEvent((TMouseEvent) e);
             }
+        } else if (e instanceof TFocusEvent) {
+            processFocusEvent((TFocusEvent) e);
         } else if (e instanceof TComponentEvent) {
             processComponentEvent((TComponentEvent) e);
         }
@@ -795,6 +887,16 @@ public class TComponent implements TImageObserver {
     }
 
     protected void processComponentEvent(TComponentEvent e) {
+    }
+
+    protected void processFocusEvent(TFocusEvent e) {
+        for (TFocusListener l : new ArrayList<>(focusListeners)) {
+            if (e.getID() == TFocusEvent.FOCUS_GAINED) {
+                l.focusGained(e);
+            } else {
+                l.focusLost(e);
+            }
+        }
     }
 
     @Override

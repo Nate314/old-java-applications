@@ -3,24 +3,28 @@ package circlewindow;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /**
  * The creator window, top center of the screen. It builds the chosen shape below itself out of borderless
@@ -36,19 +40,20 @@ public final class CircleCreatorWindow extends JFrame {
    private static final String SUNSET = "Sunset";
    static final String[] COLOR_NAMES = {RAINBOW, BLUE, SUNSET};
    private static final int WIDTH = 380;
-   private static final int HEIGHT = 130;
+   private static final int HEIGHT = 203;
    /** The window with the drawing pad beside its controls, or (on a narrow screen) under them. */
    private static final int DRAW_WIDTH = 620;
    private static final int DRAW_HEIGHT = 290;
-   private static final int DRAW_BELOW_HEIGHT = 388;
+   private static final int DRAW_BELOW_HEIGHT = 461;
    /** About how many frames building a shape takes, whatever its window count. */
    private static final int BUILD_FRAMES = 45;
-   private static final int SCATTER_FRAMES = 50;
    /** Frames for one shape to turn into another, and for the drawing to follow the pen. */
    private static final int MORPH_FRAMES = 40;
    private static final int DRAW_FRAMES = 10;
    /** Frames for the Clock to turn into the next second, so it settles well before the one after. */
    private static final int TICK_FRAMES = 24;
+   /** Frames for a word on screen to follow a letter typed or deleted: quick, so it keeps up with typing. */
+   private static final int TYPE_FRAMES = 16;
    private static final int FRAME_MILLIS = 16;
    /** How often the Clock looks at the time. */
    private static final int TICK_MILLIS = 100;
@@ -56,9 +61,22 @@ public final class CircleCreatorWindow extends JFrame {
    private static final int PLAY_MILLIS = 300;
    private static final int PLAY_FRAMES = 9;
 
-   private final JComboBox<String> shapeBox = new JComboBox<>(Shapes.ALL);
+   /** The shape the shape buttons chose: one of Shapes.ALL. */
+   private String chosenShape = Shapes.CIRCLE;
+   private final JButton[] shapeButtons = new JButton[Shapes.ALL.length];
+   /** The size of the picture on each shape button. */
+   private static final int ICON_WIDTH = 30;
+   private static final int ICON_HEIGHT = 24;
    private final JTextField sizeField = new JTextField("200", 4);
-   private final JComboBox<String> colorBox = new JComboBox<>(COLOR_NAMES);
+   /** The colors chosen (one of COLOR_NAMES), each a button showing a strip of its colors. */
+   private String scheme = RAINBOW;
+   private final JButton[] colorButtons = new JButton[COLOR_NAMES.length];
+   private static final int SWATCH_WIDTH = 34;
+   private static final int SWATCH_HEIGHT = 16;
+   private final SizeSlider sizeSlider = new SizeSlider(this::shade, size -> {
+      this.sizeField.setText(String.valueOf(size));
+      this.show(DRAW_FRAMES);   // quick, like the pad, so the shape keeps up with the drag
+   });
    private final JTextField wordField = new JTextField("HELLO", 8);
    private final JButton createButton = new JButton("Build it");
    private final JButton spinButton = new JButton("Spin");
@@ -70,6 +88,8 @@ public final class CircleCreatorWindow extends JFrame {
    private final String page;
    /** True when the app opened on a shape from a friend's link: nothing is saved, so the visitor's own stays. */
    private final boolean fromFriend;
+   /** True until the first shape is laid out: the size in the field is the saved one, perhaps from a roomier screen. */
+   private boolean savedSize = true;
    private final JLabel status = new JLabel(" ");
    private final DrawPad pad = new DrawPad(() -> {
       this.stopPlaying();
@@ -82,6 +102,8 @@ public final class CircleCreatorWindow extends JFrame {
    private final List<CircleSliceWindow> slices = new ArrayList<>();
    private final List<Rectangle> pending = new ArrayList<>();
    private final List<Color> pendingColors = new ArrayList<>();
+   /** The box of the shape being built, which its light is stretched over. */
+   private Rectangle pendingLight;
    private final Random random = new Random();
    private final Timer buildTimer = new Timer(FRAME_MILLIS, event -> this.buildStep());
    private final Timer scatterTimer = new Timer(FRAME_MILLIS, event -> this.scatterStep());
@@ -131,7 +153,10 @@ public final class CircleCreatorWindow extends JFrame {
    /** True while the Clock turns into the next second: no messages, nothing saved, windows stay in place. */
    private boolean ticking;
    private int built;
-   private int scatterFrame;
+   private Tumble tumble;
+   /** Tumble frames run so far, and when the tumble began (nanoTime ms, so Slow-mo slows it). */
+   private int tumbleFrames;
+   private long tumbleStart;
    private boolean settingUp = true;
 
    /** sent: the shape of a friend's link, shown instead of the saved one, or null. */
@@ -141,8 +166,14 @@ public final class CircleCreatorWindow extends JFrame {
       this.fromFriend = sent != null;
       this.setTitle("Circle Creator");
       this.setDefaultCloseOperation(3);
-      this.shapeBox.setSelectedItem(sent != null ? sent.shape : this.saved.get("shape", Shapes.CIRCLE));
-      this.colorBox.setSelectedItem(sent != null ? sent.colors : this.saved.get("colors", RAINBOW));
+      String opening = sent != null ? sent.shape : this.saved.get("shape", Shapes.CIRCLE);
+      if (Arrays.asList(Shapes.ALL).contains(opening)) {
+         this.chosenShape = opening;
+      }
+      String colors = sent != null ? sent.colors : this.saved.get("colors", RAINBOW);
+      if (Arrays.asList(COLOR_NAMES).contains(colors)) {
+         this.scheme = colors;
+      }
       this.sizeField.setText(this.saved.get("size", "200"));
       this.wordField.setText(sent != null && sent.word != null ? sent.word : this.saved.get("word", "HELLO"));
       String drawing = sent != null && sent.drawing != null ? sent.drawing : this.saved.get("drawing", "");
@@ -154,18 +185,55 @@ public final class CircleCreatorWindow extends JFrame {
       this.pad.setMirror(!"0".equals(this.saved.get("mirror", "1")));
       this.onTopBox.setSelected("1".equals(this.saved.get("ontop", "0")));
 
-      JPanel panel = new JPanel();
-      panel.add(this.shapeBox);
-      panel.add(new JLabel("Size"));
-      panel.add(this.sizeField);
-      panel.add(this.colorBox);
-      panel.add(new JLabel("Word"));
-      panel.add(this.wordField);
-      panel.add(this.createButton);
-      panel.add(this.spinButton);
-      panel.add(this.sendButton);
-      panel.add(this.onTopBox);
-      panel.add(this.status);
+      // Every shape is a button showing a little picture of itself, so a first look shows all seven.
+      JPanel shapeRow = new JPanel();
+      for (int i = 0; i < Shapes.ALL.length; i++) {
+         String shape = Shapes.ALL[i];
+         JButton button = new JButton();
+         button.setPreferredSize(new Dimension(ICON_WIDTH + 10, ICON_HEIGHT + 8));
+         button.addActionListener(event -> this.pick(shape));
+         this.shapeButtons[i] = button;
+         shapeRow.add(button);
+      }
+      // The colors are buttons too, each a strip of its colors, so all three show at a glance.
+      JPanel optionRow = new JPanel();
+      for (int i = 0; i < COLOR_NAMES.length; i++) {
+         String name = COLOR_NAMES[i];
+         JButton button = new JButton();
+         button.setPreferredSize(new Dimension(SWATCH_WIDTH + 10, SWATCH_HEIGHT + 8));
+         button.addActionListener(event -> {
+            this.scheme = name;
+            this.show(MORPH_FRAMES);
+         });
+         this.colorButtons[i] = button;
+         optionRow.add(button);
+      }
+      optionRow.add(new JLabel("Word"));
+      optionRow.add(this.wordField);
+      JPanel sizeRow = new JPanel();
+      JLabel sizeLabel = new JLabel("Size");
+      sizeLabel.setLabelFor(this.sizeField);
+      sizeRow.add(sizeLabel);
+      sizeRow.add(this.sizeSlider);
+      sizeRow.add(this.sizeField);
+      JPanel options = new JPanel(new BorderLayout());
+      options.add(optionRow, BorderLayout.NORTH);
+      options.add(sizeRow, BorderLayout.SOUTH);
+      JPanel actionRow = new JPanel();
+      actionRow.add(this.createButton);
+      actionRow.add(this.spinButton);
+      actionRow.add(this.sendButton);
+      actionRow.add(this.onTopBox);
+      JPanel statusRow = new JPanel();
+      statusRow.add(this.status);
+      JPanel lower = new JPanel(new BorderLayout());
+      lower.add(options, BorderLayout.NORTH);
+      lower.add(actionRow, BorderLayout.CENTER);
+      lower.add(statusRow, BorderLayout.SOUTH);
+      JPanel panel = new JPanel(new BorderLayout());
+      panel.add(shapeRow, BorderLayout.NORTH);
+      panel.add(lower, BorderLayout.CENTER);
+      this.showShapes();
 
       JButton clearButton = new JButton("Clear");
       JButton deleteButton = new JButton("Delete");
@@ -193,25 +261,30 @@ public final class CircleCreatorWindow extends JFrame {
       padHolder.add(this.pad);
       this.padPanel.add(padHolder, BorderLayout.CENTER);
       this.padPanel.add(padButtons, BorderLayout.SOUTH);
-      this.add(panel, BorderLayout.CENTER);
+      JPanel controls = new JPanel(new BorderLayout());
+      controls.add(panel, BorderLayout.NORTH);   // a taller window (beside the pad) leaves its room below the status line
+      this.add(controls, BorderLayout.CENTER);
       this.showMirror();
       this.showFrame();
 
-      this.shapeBox.addActionListener(event -> {
-         if (!this.settingUp) {
-            this.fitWindow();
-            this.show(MORPH_FRAMES);
-         }
-      });
-      this.colorBox.addActionListener(event -> this.show(MORPH_FRAMES));
       this.sizeField.addActionListener(event -> this.show(MORPH_FRAMES));
-      this.wordField.addActionListener(event -> {
-         // Enter in the word field builds the word, whatever shape was showing.
-         this.settingUp = true;
-         this.shapeBox.setSelectedItem(Shapes.WORD);
-         this.settingUp = false;
-         this.fitWindow();
-         this.show(MORPH_FRAMES);
+      // Enter in the word field builds the word, whatever shape was showing, and the word follows every edit.
+      this.wordField.addActionListener(event -> this.pick(Shapes.WORD));
+      this.wordField.setToolTipText("Type, and the windows spell it as you go");
+      this.wordField.getDocument().addDocumentListener(new DocumentListener() {
+         @Override
+         public void insertUpdate(DocumentEvent event) {
+            CircleCreatorWindow.this.typed();
+         }
+
+         @Override
+         public void removeUpdate(DocumentEvent event) {
+            CircleCreatorWindow.this.typed();
+         }
+
+         @Override
+         public void changedUpdate(DocumentEvent event) {
+         }
       });
       this.createButton.addActionListener(event -> {
          this.movedX = 0;
@@ -284,12 +357,12 @@ public final class CircleCreatorWindow extends JFrame {
 
    /** The shape chosen, as a link to this page (or a code on the desktop) on the clipboard. */
    private void send() {
-      String shape = String.valueOf(this.shapeBox.getSelectedItem());
+      String shape = this.chosenShape;
       if (Shapes.WORD.equals(shape) && Shapes.cleanWord(this.wordField.getText()).isEmpty()) {
          this.status.setText("Type a word to send");
          return;
       }
-      String code = Link.code(shape, String.valueOf(this.colorBox.getSelectedItem()), this.wordField.getText(),
+      String code = Link.code(shape, this.scheme, this.wordField.getText(),
          this.pad.text());
       String text = this.page == null ? code : this.page + "?shape=" + code;
       try {
@@ -305,7 +378,7 @@ public final class CircleCreatorWindow extends JFrame {
     * done (so a slow screen skips a second rather than never settling).
     */
    private void tick() {
-      if (!Shapes.CLOCK.equals(this.builtShape) || !Shapes.CLOCK.equals(this.shapeBox.getSelectedItem())
+      if (!Shapes.CLOCK.equals(this.builtShape) || !Shapes.CLOCK.equals(this.chosenShape)
             || this.slices.isEmpty() || this.buildTimer.isRunning() || this.scatterTimer.isRunning()
             || this.morphTimer.isRunning() || this.jellyTimer.isRunning() || this.spin != null
             || Shapes.clockText(new Date()).equals(this.shownTime)) {
@@ -317,6 +390,25 @@ public final class CircleCreatorWindow extends JFrame {
       } finally {
          this.ticking = false;
       }
+   }
+
+   /**
+    * The word was edited: a word on screen glides into the new one, its windows pairing by where they are on
+    * screen (as in a Clock tick) so the letters that stay only slide over; any other shape turns into the word.
+    */
+   private void typed() {
+      if (!Shapes.WORD.equals(this.chosenShape) || !Shapes.WORD.equals(this.builtShape) || this.slices.isEmpty()
+            || this.scatterTimer.isRunning()) {
+         this.pick(Shapes.WORD);
+         return;
+      }
+      this.ticking = true;
+      try {
+         this.show(TYPE_FRAMES);
+      } finally {
+         this.ticking = false;
+      }
+      this.remember();
    }
 
    /** Shows another frame of the drawing on the pad and on screen. */
@@ -363,7 +455,68 @@ public final class CircleCreatorWindow extends JFrame {
    }
 
    private boolean drawing() {
-      return Shapes.DRAW.equals(this.shapeBox.getSelectedItem());
+      return Shapes.DRAW.equals(this.chosenShape);
+   }
+
+   /** Chooses a shape: the window fits it (with the pad for Draw) and the shape on screen turns into it. */
+   private void pick(String shape) {
+      this.chosenShape = shape;
+      this.fitWindow();
+      this.show(MORPH_FRAMES);
+   }
+
+   /**
+    * Draws each shape button's picture in the chosen colors: the chosen shape bright with a bar under it, the
+    * others greyed. The Draw button shows the frame on the pad.
+    */
+   private void showShapes() {
+      for (int i = 0; i < Shapes.ALL.length; i++) {
+         String shape = Shapes.ALL[i];
+         boolean on = shape.equals(this.chosenShape);
+         List<Rectangle> pieces = Shapes.build(shape, 120, Shapes.CLOCK.equals(shape) ? "9:30" : "AB",
+            this.pad.cells(), 0, 0, Integer.MAX_VALUE);
+         List<Color> colors = this.colors(pieces, shape);
+         List<Rectangle> fitted = Shapes.fit(pieces, ICON_WIDTH, ICON_HEIGHT - 4);
+         BufferedImage image = new BufferedImage(ICON_WIDTH, ICON_HEIGHT, BufferedImage.TYPE_INT_ARGB);
+         Graphics g = image.getGraphics();
+         for (int j = 0; j < fitted.size(); j++) {
+            Color c = colors.get(j);
+            g.setColor(on ? c : faint(c));
+            Rectangle r = fitted.get(j);
+            g.fillRect(r.x, r.y, r.width, r.height);
+         }
+         if (on) {
+            g.setColor(colors.isEmpty() ? Color.GRAY : colors.get(colors.size() / 2));
+            g.fillRect(ICON_WIDTH / 4, ICON_HEIGHT - 2, ICON_WIDTH / 2, 2);
+         }
+         g.dispose();
+         this.shapeButtons[i].setIcon(new ImageIcon(image));
+         this.shapeButtons[i].setToolTipText(on ? shape + " (showing)" : shape);
+      }
+      for (int i = 0; i < COLOR_NAMES.length; i++) {
+         String name = COLOR_NAMES[i];
+         boolean on = name.equals(this.scheme);
+         BufferedImage image = new BufferedImage(SWATCH_WIDTH, SWATCH_HEIGHT, BufferedImage.TYPE_INT_ARGB);
+         Graphics g = image.getGraphics();
+         for (int x = 0; x < SWATCH_WIDTH; x++) {
+            Color c = shade(name, x / (double)(SWATCH_WIDTH - 1));
+            g.setColor(on ? c : faint(c));
+            g.fillRect(x, 0, 1, SWATCH_HEIGHT - 4);
+         }
+         if (on) {
+            g.setColor(shade(name, 0.5));
+            g.fillRect(SWATCH_WIDTH / 4, SWATCH_HEIGHT - 2, SWATCH_WIDTH / 2, 2);
+         }
+         g.dispose();
+         this.colorButtons[i].setIcon(new ImageIcon(image));
+         this.colorButtons[i].setToolTipText(name + " colors" + (on ? " (showing)" : ""));
+      }
+      this.sizeSlider.repaint();   // its track is in the chosen colors
+   }
+
+   /** Greyed, not see-through: the circle's slices overlap and would add up to full color. */
+   private static Color faint(Color c) {
+      return new Color((2 * c.getRed() + 3 * 128) / 5, (2 * c.getGreen() + 3 * 128) / 5, (2 * c.getBlue() + 3 * 128) / 5);
    }
 
    private void showMirror() {
@@ -391,6 +544,7 @@ public final class CircleCreatorWindow extends JFrame {
     * (and a message) when the size or word will not do. An empty drawing gives no windows.
     */
    private List<Rectangle> target() {
+      this.showShapes();   // the pictures follow the colors and the drawing
       Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
       int top = this.getY() + this.getHeight();
       int maxSize = Math.max(2, Math.min(screen.width, screen.height - top));
@@ -400,6 +554,13 @@ public final class CircleCreatorWindow extends JFrame {
       } catch (NumberFormatException e) {
          size = -1;
       }
+      if (this.savedSize && size > maxSize) {
+         // A size saved on a roomier screen shrinks to this one's room rather than leaving no shape.
+         size = maxSize;
+         this.sizeField.setText(String.valueOf(size));
+      }
+      this.savedSize = false;
+      this.sizeSlider.show(size, maxSize);
       boolean draw = this.drawing();
       if (draw && size > maxSize) {
          // The pad makes this window taller: a drawing shrinks to the room left rather than refusing.
@@ -409,7 +570,7 @@ public final class CircleCreatorWindow extends JFrame {
          this.status.setText("Size: use 2 to " + maxSize);
          return null;
       }
-      String shape = String.valueOf(this.shapeBox.getSelectedItem());
+      String shape = this.chosenShape;
       if (Shapes.WORD.equals(shape) && Shapes.cleanWord(this.wordField.getText()).isEmpty()) {
          this.status.setText("Type a word to build");
          return null;
@@ -437,8 +598,8 @@ public final class CircleCreatorWindow extends JFrame {
       if (this.fromFriend) {
          return;
       }
-      this.saved.put("shape", String.valueOf(this.shapeBox.getSelectedItem()));
-      this.saved.put("colors", String.valueOf(this.colorBox.getSelectedItem()));
+      this.saved.put("shape", this.chosenShape);
+      this.saved.put("colors", this.scheme);
       this.saved.put("size", this.sizeField.getText().trim());
       this.saved.put("word", this.wordField.getText());
       this.saved.put("drawing", this.pad.text());
@@ -457,6 +618,10 @@ public final class CircleCreatorWindow extends JFrame {
       }
       this.pending.addAll(pieces);
       this.pendingColors.addAll(this.colors(pieces, this.builtShape));
+      this.pendingLight = new Rectangle(pieces.get(0));
+      for (Rectangle r : pieces) {
+         this.pendingLight.add(r);
+      }
       this.built = 0;
       this.status.setText("Building...");
       this.buildTimer.start();
@@ -470,7 +635,7 @@ public final class CircleCreatorWindow extends JFrame {
       if (this.settingUp) {
          return;
       }
-      if (this.scatterTimer.isRunning() || this.slices.isEmpty()) {
+      if (this.slices.isEmpty()) {
          this.build();
          return;
       }
@@ -482,7 +647,7 @@ public final class CircleCreatorWindow extends JFrame {
       this.pending.clear();
       this.pendingColors.clear();
       this.morph = new Morph(this.slices, pieces, this.colors(pieces, this.builtShape), frames, this.ticking,
-         (bounds, color) -> new CircleSliceWindow(bounds, color, "", this.onTopBox.isSelected(), this.hand));
+         (bounds, color) -> new CircleSliceWindow(bounds, color, null, "", this.onTopBox.isSelected(), this.hand));
       if (frames > DRAW_FRAMES && !this.ticking) {
          this.status.setText("Changing into " + this.shapeName() + "...");
       }
@@ -545,7 +710,7 @@ public final class CircleCreatorWindow extends JFrame {
       int perFrame = Math.max(1, (this.pending.size() + BUILD_FRAMES - 1) / BUILD_FRAMES);
       for (int i = 0; i < perFrame && this.built < this.pending.size(); i++, this.built++) {
          this.slices.add(new CircleSliceWindow(this.pending.get(this.built), this.pendingColors.get(this.built),
-            String.valueOf(this.built + 1), this.onTop(this.built), this.hand));
+            this.pendingLight, String.valueOf(this.built + 1), this.onTop(this.built), this.hand));
       }
       if (this.built >= this.pending.size()) {
          this.buildTimer.stop();
@@ -558,7 +723,7 @@ public final class CircleCreatorWindow extends JFrame {
       if (pieces.isEmpty()) {
          return Arrays.asList();
       }
-      String scheme = String.valueOf(this.colorBox.getSelectedItem());
+      String scheme = this.scheme;
       Rectangle area = new Rectangle(pieces.get(0));
       for (Rectangle r : pieces) {
          area.add(r);
@@ -568,60 +733,74 @@ public final class CircleCreatorWindow extends JFrame {
       for (int i = 0; i < pieces.size(); i++) {
          Rectangle r = pieces.get(i);
          float t = byOrder ? i / (float)pieces.size() : (r.x + r.width / 2f - area.x) / Math.max(1, area.width);
-         if (RAINBOW.equals(scheme)) {
-            colors.add(Color.getHSBColor(0.85f * t, 0.75f, 1.0f));
-         } else if (SUNSET.equals(scheme)) {
-            colors.add(new Color(255, (int)(210 - 170 * t), (int)(60 + 90 * t)));
-         } else {
-            colors.add(new Color(0, 0, 255));
-         }
+         colors.add(shade(scheme, t));
       }
       return colors;
    }
 
-   /** Sends every window of the shape flying out from its middle and falling, then closes them. */
+   /** The chosen colors at t, from 0 (the left, or the circle's first slice) to 1. */
+   private Color shade(double t) {
+      return shade(this.scheme, t);
+   }
+
+   static Color shade(String scheme, double t) {
+      if (RAINBOW.equals(scheme)) {
+         return Color.getHSBColor(0.85f * (float)t, 0.75f, 1.0f);
+      }
+      if (SUNSET.equals(scheme)) {
+         return new Color(255, (int)(210 - 170 * t), (int)(60 + 90 * t));
+      }
+      return new Color(0, 0, 255);
+   }
+
+   /**
+    * Knocks the shape apart: every window flies out from the middle, tumbles to the floor of the screen and,
+    * after a moment in a heap, jumps back to its place (see Tumble). Picking a shape meanwhile builds it from the heap.
+    */
    private void scatter() {
       if (this.scatterTimer.isRunning() || this.slices.isEmpty()) {
+         return;
+      }
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         this.status.setText("Scatter is off while reduced motion is on.");
          return;
       }
       this.stopPlaying();
       this.stopAll();
       this.pending.clear();
       this.pendingColors.clear();
-      double centerX = 0;
-      double centerY = 0;
+      List<Rectangle> home = new ArrayList<>();
       for (CircleSliceWindow slice : this.slices) {
-         centerX += slice.x + slice.getWidth() / 2.0;
-         centerY += slice.y + slice.getHeight() / 2.0;
+         home.add(slice.getBounds());
       }
-      centerX /= this.slices.size();
-      centerY /= this.slices.size();
-      for (CircleSliceWindow slice : this.slices) {
-         double dx = slice.x + slice.getWidth() / 2.0 - centerX;
-         double dy = slice.y + slice.getHeight() / 2.0 - centerY;
-         slice.velocityX = dx * 0.08 + (this.random.nextDouble() - 0.5) * 8.0;
-         slice.velocityY = dy * 0.08 - 6.0 - this.random.nextDouble() * 6.0;
-      }
-      this.scatterFrame = 0;
-      this.movedX = 0;
-      this.movedY = 0;
-      this.status.setText("Scattered! Pick a shape or press Build it.");
+      Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+      this.tumble = new Tumble(home, screen.width, screen.height, this.random);
+      this.tumbleFrames = 0;
+      this.tumbleStart = System.nanoTime() / 1_000_000;
+      this.status.setText("Scattered! Watch it pull itself back together.");
       this.scatterTimer.start();
    }
 
-   /** One frame of scattering: moves each window along its path, with gravity. */
+   /**
+    * The shape tumbling apart or gathering back into place, timed by the clock: a slow screen (many real windows
+    * on the desktop) runs several of the tumble's frames per redraw rather than tumbling in slow motion.
+    */
    private void scatterStep() {
-      this.scatterFrame++;
-      if (this.scatterFrame > SCATTER_FRAMES) {
-         this.scatterTimer.stop();
-         this.clear();
-         return;
+      long due = (System.nanoTime() / 1_000_000 - this.tumbleStart) / FRAME_MILLIS;
+      boolean home = false;
+      for (int i = 0; i < 8 && this.tumbleFrames < due && !home; i++, this.tumbleFrames++) {
+         home = this.tumble.step();
       }
-      for (CircleSliceWindow slice : this.slices) {
-         slice.velocityY += 0.9;
-         slice.x += slice.velocityX;
-         slice.y += slice.velocityY;
-         slice.setLocation((int)slice.x, (int)slice.y);
+      for (int i = 0; i < this.slices.size(); i++) {
+         CircleSliceWindow slice = this.slices.get(i);
+         slice.x = this.tumble.x[i];
+         slice.y = this.tumble.y[i];
+         slice.setLocation((int)Math.round(slice.x), (int)Math.round(slice.y));
+      }
+      if (home) {
+         this.scatterTimer.stop();
+         this.tumble = null;
+         this.showBuilt();
       }
    }
 
@@ -772,6 +951,7 @@ public final class CircleCreatorWindow extends JFrame {
       this.endJelly();
       this.buildTimer.stop();
       this.scatterTimer.stop();
+      this.tumble = null;
       this.morphTimer.stop();
       if (this.morph != null) {
          this.morph.finish();

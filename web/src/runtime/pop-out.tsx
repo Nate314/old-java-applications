@@ -1,6 +1,6 @@
 import { redrawBar } from './install';
 import { openLayer } from './ui/layer';
-import { windowsBox } from './band-news';
+import { windowsBox } from './stage';
 import { passport } from './passport';
 import { appId } from './catalog';
 import { playSound } from './sounds';

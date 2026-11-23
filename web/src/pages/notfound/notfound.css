@@ -2,11 +2,11 @@
 @import '../../shared/styles/links.css';
 @import '../../shared/styles/kicker.css';
 :root { --bg: #0f172a; --ink: #e5e7eb; --muted: #94a3b8; --card: #111c33; --edge: rgba(148, 163, 184, 0.22);
-        --accent: #3b82f6; --accent-ink: #fff; --glow: none; --radius: 12px; color-scheme: dark; }
+        --accent: #3b82f6; --accent-ink: #0b1120; --glow: none; --radius: 12px; color-scheme: dark; }
 :root[data-skin="classic"] { --bg: #e9edf3; --ink: #1f2937; --muted: #4b5563; --card: #ffffff; --edge: #b8c2d0;
         --accent: #2f5d8a; --accent-ink: #fff; --radius: 0; color-scheme: light; }
 :root[data-skin="arcade"] { --bg: #170a2e; --ink: #e6e0ff; --muted: #b3a6e0; --card: #21103f; --edge: rgba(255, 43, 214, 0.35);
-        --accent: #ff2bd6; --accent-ink: #fff; --glow: 0 0 18px rgba(125, 249, 255, 0.45); }
+        --accent: #ff2bd6; --accent-ink: #07040f; --glow: 0 0 18px rgba(125, 249, 255, 0.45); }
 html { background: var(--bg); }
 body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
        font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }

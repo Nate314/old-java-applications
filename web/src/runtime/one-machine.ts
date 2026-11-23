@@ -60,6 +60,13 @@ function tripName(el: Element) {
   return function () { (el as HTMLElement).style.viewTransitionName = ''; };
 }
 
+// Skipping rejects the transition's ready promise, which nothing else waits on: left alone it logged an AbortError on
+// the page left behind, which the back/forward cache now keeps (replay.tsx's pagehide).
+function skip(vt: ViewTransition) {
+  vt.ready.catch(function () { /* skipped on purpose */ });
+  vt.skipTransition();
+}
+
 export function init() {
   tripClick = { el: null, t: 0 };
   document.addEventListener('click', function (e) {
@@ -72,7 +79,7 @@ export function init() {
     if (!e.viewTransition) return;
     var to = e.activation && e.activation.entry && tripPlace(e.activation.entry.url!);
     var from = tripPlace(location.href);
-    if (embedded || !to || !from) { e.viewTransition.skipTransition(); return; }
+    if (embedded || !to || !from) { skip(e.viewTransition); return; }
     var kind = tripKind(from, to), hero = null;
     // Arcade changes the channel instead; a slide or a sepia fade moves the whole stage.
     if (document.documentElement.getAttribute('data-skin') !== 'arcade' && (kind === 'app' || kind === 'home')) {
@@ -90,7 +97,7 @@ export function init() {
     if (tripUnname) tripUnname();
     tripUnname = null;
     if (!e.viewTransition) return;
-    if (embedded) { e.viewTransition.skipTransition(); return; }
+    if (embedded) { skip(e.viewTransition); return; }
     var trip = null;
     try {
       trip = JSON.parse(sessionStorage.getItem(TRIP_KEY)!);

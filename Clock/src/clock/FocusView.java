@@ -72,17 +72,14 @@ final class FocusView implements Tab {
       int stroke = Math.max(2, r / 40);
       Color color = focus.onBreak() ? BREAK : Ui.WEDGE;
 
-      g.setColor(Ui.FACE);
-      g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+      Ui.face(g, cx, cy, r);
 
       // The band left of the phase, from 12 o'clock clockwise, draining back to 12 as it runs.
       long length = focus.length(focus.phase());
       double fraction = length <= 0 ? 0 : Math.min(1.0, focus.remaining(now) / (double) length);
       g.setColor(color);
       Ui.band(g, cx, cy, r - stroke, r - band, 0, fraction);
-      g.setColor(Ui.INK);
-      g.setStroke(new BasicStroke(stroke));
-      g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+      Ui.rim(g, cx, cy, r, stroke * 2);
       int inner = r - band;
       g.setStroke(new BasicStroke(Math.max(1, stroke / 2)));
       g.drawOval(cx - inner, cy - inner, 2 * inner, 2 * inner);
@@ -114,6 +111,7 @@ final class FocusView implements Tab {
          g.setStroke(new BasicStroke(Math.max(1, dot / 3f)));
          g.drawOval(x - dot, dotY - dot, 2 * dot, 2 * dot);
       }
+      Ui.glass(g, cx, cy, r);
    }
 
    /** Today's total, and a bar per day for the last seven days, today on the right. */

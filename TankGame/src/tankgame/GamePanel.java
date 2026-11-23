@@ -20,19 +20,17 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
- * Runs the battle on a Swing timer and paints the battlefield (grass and dirt that keeps the round's track marks and
- * blast scorches, and concrete walls), the supply crates, the tanks, the shells, the sparks and smoke, the score bar
- * with each tank's powers, and the banners.
+ * Runs the battle on a Swing timer and paints the battlefield (its ground, see Terrain, which keeps the round's track marks and
+ * blast scorches, and walls of the ground's material), what the tracks throw up, the supply crates, the tanks, the shells,
+ * the sparks and smoke, the ground's weather, the score bar with each tank's powers, and the banners.
  */
 @SuppressWarnings("serial")
 public class GamePanel extends JPanel
 {
     private static final int   TICK_MILLIS = 16;
     private static final int   SLOW_FRAMES = 66;
-    private static final Color FIELD       = new Color(106, 122, 72);
     /** The ground is drawn this many times finer than the field, so it stays sharp when the page zooms the window. */
     private static final int   GROUND_SCALE = 2;
-    private static final Color CONCRETE    = new Color(150, 146, 138);
     private static final Color SHADE       = new Color(0, 0, 40, 215);
     private static final Color TEXT        = Color.WHITE;
     private static final Color DIM         = new Color(200, 205, 255);
@@ -47,8 +45,13 @@ public class GamePanel extends JPanel
     /** The round's ground, with every track mark and scorch so far; made again for each battlefield. */
     private BufferedImage      ground;
     private Arena              groundArena;
+    private Terrain            terrain     = Terrain.MEADOW;
     /** Each tank's x, y and rotation when its tracks last marked the ground. */
     private final double[][]   lastPose    = new double[2][];
+    /** Dust, snow and clods the tracks have thrown up (only drawn: the battle never sees them). */
+    private final List<Spark>  kicks       = new ArrayList<>();
+    private final Random       kickRandom  = new Random();
+    private Weather            weather;
     private int                ticks;
     /** Frames left of the slow motion that plays a destroyed tank's blast, and the blasts seen so far. */
     private int                slowFrames;
@@ -65,9 +68,9 @@ public class GamePanel extends JPanel
     public GamePanel(Battle battle)
     {
         this.battle = battle;
-        this.setBackground(FIELD);
-        // A click (or a tap, on a touch screen) on the supply drops line turns them on or off, like X, and so on for
-        // the other tappable lines and buttons. While building it lays or lifts walls. Anywhere else it plays red with
+        this.setBackground(Terrain.MEADOW.base);
+        // A click (or a tap, on a touch screen) on a button does what it says: 1 player or 2 players, or a setting
+        // (crates, sound, battlefield, watch) like its key. While building it lays or lifts walls. Anywhere else it plays red with
         // the pointer (PointerControls), or starts a match against the computer, like Q.
         MouseAdapter mouse = new MouseAdapter()
         {
@@ -81,6 +84,13 @@ public class GamePanel extends JPanel
                         repaint();
                         return;
                     }
+                // Paused: a tap anywhere goes on. Counting down: the field takes no orders yet.
+                if (battle.paused()) battle.resume();
+                if (battle.held())
+                {
+                    repaint();
+                    return;
+                }
                 if (building())
                 {
                     int[] cell = cellAt(e.getX(), e.getY());
@@ -321,6 +331,14 @@ public class GamePanel extends JPanel
     /** Moves everything one step on the Swing event thread, so speed does not depend on the paint rate. */
     private void tick()
     {
+        if (battle.held())
+        {
+            // The battle and its slow motion hold still; only the air goes on, so the field is not a stuck picture.
+            battle.tick(getWidth(), getHeight());
+            if (weather != null) weather.tick(getWidth(), getHeight());
+            repaint();
+            return;
+        }
         if (slowFrames > 0)
         {
             // The blast that destroys a tank plays at a third of the speed, then a half, then full speed again.
@@ -350,14 +368,17 @@ public class GamePanel extends JPanel
             markTracks(g, battle.green(), 1);
             for (double[] scorch : battle.scorches()) scorch(g, scorch[0], scorch[1], scorch[2]);
             g.dispose();
+            kicks.removeIf(kick -> !kick.move());
+            weather.tick(getWidth(), getHeight());
         }
         repaint();
     }
 
-    /** Lays fresh ground for the battlefield: grass with patches of dirt, tufts and pebbles. */
+    /** Lays fresh ground for the battlefield, in its own terrain (Terrain). */
     private void makeGround()
     {
         groundArena = battle.arena();
+        terrain = Terrain.of(groundArena);
         lastPose[0] = lastPose[1] = null;
         int width = getWidth();
         int height = getHeight();
@@ -365,35 +386,10 @@ public class GamePanel extends JPanel
         Graphics2D g = ground.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.scale(GROUND_SCALE, GROUND_SCALE);
-        g.setColor(FIELD);
-        g.fillRect(0, 0, width, height);
-        Random random = new Random(groundArena.name().hashCode());
-        Color[] patches = { new Color(136, 150, 88, 34), new Color(84, 100, 56, 34), new Color(132, 112, 78, 40) };
-        for (int i = 0; i < width * height / 330; i++)
-        {
-            int size = 8 + random.nextInt(34);
-            g.setColor(patches[random.nextInt(patches.length)]);
-            g.fillOval(random.nextInt(width + 20) - 20, random.nextInt(height + 20) - 20, size, size * 3 / 4);
-        }
-        Color[] blades = { new Color(64, 86, 40, 170), new Color(150, 168, 96, 150) };
-        for (int i = 0; i < width * height / 900; i++)
-        {
-            int x = random.nextInt(width);
-            int y = random.nextInt(height);
-            g.setColor(blades[random.nextInt(blades.length)]);
-            for (int b = -1; b <= 1; b++) g.drawLine(x, y, x + b * 2 + random.nextInt(2), y - 3 - random.nextInt(3));
-        }
-        for (int i = 0; i < width * height / 4500; i++)
-        {
-            int x = random.nextInt(width);
-            int y = random.nextInt(height);
-            int size = 3 + random.nextInt(4);
-            g.setColor(new Color(60, 56, 48, 120));
-            g.fillOval(x + 1, y + 1, size, size - 1);
-            g.setColor(new Color(160, 154, 142));
-            g.fillOval(x, y, size, size - 1);
-        }
+        terrain.lay(g, width, height, new Random(groundArena.name().hashCode()));
         g.dispose();
+        kicks.clear();
+        weather = new Weather(terrain, width, height);
     }
 
     /** Presses the back of each track into the ground when the tank has moved or turned since last time. */
@@ -410,15 +406,31 @@ public class GamePanel extends JPanel
         t.rotate(Math.toRadians(tank.rotation() - 90));
         for (int top : new int[] { -Tank.SIZE + 2, Tank.SIZE - 20 })
         {
-            t.setColor(new Color(52, 44, 30, 26));
+            Color c = terrain.track;
+            t.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 26));
             t.fillRect(-Tank.SIZE + 2, top, 6, 18);
             if (ticks % 2 == 0)
             {
-                t.setColor(new Color(40, 34, 24, 36));
+                t.setColor(new Color(c.getRed() * 3 / 4, c.getGreen() * 3 / 4, c.getBlue() * 3 / 4, 36));
                 t.fillRect(-Tank.SIZE + 3, top + 1, 2, 16);
             }
         }
         t.dispose();
+        if (ticks % 2 == 0) kick(pose, last);
+    }
+
+    /** Each track throws up a little of the ground (Terrain.kick) behind it, or ahead of it when backing. */
+    private void kick(double[] pose, double[] last)
+    {
+        double fx = Math.sin(Math.toRadians(pose[2]));
+        double fy = -Math.cos(Math.toRadians(pose[2]));
+        double back = (pose[0] - last[0]) * fx + (pose[1] - last[1]) * fy < 0 ? 1 : -1;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            double x = pose[0] + fx * back * (Tank.SIZE + 2) - fy * side * (Tank.SIZE - 11);
+            double y = pose[1] + fy * back * (Tank.SIZE + 2) + fx * side * (Tank.SIZE - 11);
+            terrain.kick(kicks, x, y, fx * back * 2.5, fy * back * 2.5, kickRandom);
+        }
     }
 
     /** A blackened ring of soot where something blew up, darkest in the middle. */
@@ -430,30 +442,6 @@ public class GamePanel extends JPanel
             g.setColor(new Color(30, 24, 16, 40 + i * 12));
             g.fillOval((int) (x - r), (int) (y - r * 0.85), (int) (2 * r), (int) (1.7 * r));
         }
-    }
-
-    /** A concrete wall with a drop shadow, a lit top and left edge, a shaded bottom and right, and block seams. */
-    private static void wall(Graphics2D g, Arena.Wall wall)
-    {
-        int l = (int) Math.round(wall.left);
-        int t = (int) Math.round(wall.top);
-        int w = (int) Math.round(wall.right - wall.left);
-        int h = (int) Math.round(wall.bottom - wall.top);
-        g.setColor(new Color(0, 0, 0, 80));
-        g.fillRoundRect(l + 6, t + 8, w, h, 6, 6);
-        g.setColor(CONCRETE);
-        g.fillRect(l, t, w, h);
-        g.setColor(Tank.shade(CONCRETE, 1.3));
-        g.fillRect(l, t, w, 4);
-        g.fillRect(l, t, 4, h);
-        g.setColor(Tank.shade(CONCRETE, 0.7));
-        g.fillRect(l, t + h - 4, w, 4);
-        g.fillRect(l + w - 4, t + 4, 4, h - 4);
-        g.setColor(Tank.shade(CONCRETE, 0.78));
-        if (w >= h) for (int x = l + 27; x < l + w - 8; x += 27) g.drawLine(x, t + 4, x, t + h - 5);
-        else for (int y = t + 27; y < t + h - 8; y += 27) g.drawLine(l + 4, y, l + w - 5, y);
-        g.setColor(new Color(60, 56, 50));
-        g.drawRect(l, t, w - 1, h - 1);
     }
 
     @Override
@@ -471,13 +459,14 @@ public class GamePanel extends JPanel
         int shakeY = (int) Math.round((shakeRandom.nextDouble() * 2 - 1) * shake);
         if (shake > 0)
         {
-            // The strip the shaken ground uncovers is grass too, also in pictures of the canvas (replay, photo).
-            g.setColor(FIELD);
+            // The strip the shaken ground uncovers is the same ground, also in pictures of the canvas (replay, photo).
+            g.setColor(terrain.base);
             g.fillRect(0, 0, getWidth(), getHeight());
         }
         g.translate(shakeX, shakeY);
         if (ground != null) g.drawImage(ground, 0, 0, getWidth(), getHeight(), null);
-        for (Arena.Wall wall : battle.arena().walls()) wall(g, wall);
+        for (Arena.Wall wall : battle.arena().walls()) terrain.wall(g, wall);
+        for (Spark kick : kicks) kick.paint(g);
         // A landed crate lies under the tanks; a falling one is above everything on the ground.
         Supply supply = battle.supply();
         if (supply != null && supply.landed()) supply.paint(g, ticks);
@@ -486,26 +475,85 @@ public class GamePanel extends JPanel
         Tank.Sight greenSight = sight(battle.green(), battle.red());
         sightLine(g, battle.red(), redSight);
         sightLine(g, battle.green(), greenSight);
-        if (battle.phase() != Battle.Phase.TITLE)
-        {
-            battle.red().paint(g);
-            battle.green().paint(g);
-        }
+        battle.red().paint(g);
+        battle.green().paint(g);
         onTarget(g, battle.red(), redSight);
         onTarget(g, battle.green(), greenSight);
         if (supply != null && !supply.landed()) supply.paint(g, ticks);
         for (Shell shell : battle.shells()) shell.paint(g);
         for (Spark spark : battle.sparks()) spark.paint(g);
         g.translate(-shakeX, -shakeY);
-        if (battle.phase() != Battle.Phase.TITLE && !building())
+        // The air holds still while the field shakes, and stays clear when the browser asks for less motion.
+        if (weather != null && !calm()) weather.paint(g);
+        // The match-over box shows the score where the score bars would be.
+        if (battle.phase() != Battle.Phase.TITLE && battle.phase() != Battle.Phase.MATCH_OVER && !building())
         {
             scoreBar(g, battle.red(), battle.redWins(), false);
             scoreBar(g, battle.green(), battle.greenWins(), true);
             notice(g);
         }
-        banner(g);
+        // A pause card or countdown takes the round banner's place in the middle.
+        if (!battle.held()) banner(g);
         if (building()) builder(g);
-        if (battle.watching()) watchNote(g);
+        // On the title card and match-over screen the Watch button says so instead.
+        if (battle.watching() && battle.phase() != Battle.Phase.TITLE && battle.phase() != Battle.Phase.MATCH_OVER)
+            watchNote(g);
+        if (battle.paused()) pauseCard(g);
+        else if (battle.held()) countdown(g);
+        else if (inMatch()) pauseButton(g);
+    }
+
+    private boolean inMatch()
+    {
+        Battle.Phase p = battle.phase();
+        return p == Battle.Phase.ROUND_START || p == Battle.Phase.FIGHT || p == Battle.Phase.ROUND_OVER;
+    }
+
+    private static final Font COUNT = new Font(Font.SANS_SERIF, Font.BOLD, 80);
+
+    /** A small round button between the score bars: the way to pause where there is no P key (a phone). */
+    private void pauseButton(Graphics2D g)
+    {
+        Rectangle b = new Rectangle(getWidth() / 2 - 17, 14, 34, 34);
+        g.setColor(SHADE);
+        g.fillOval(b.x, b.y, b.width, b.height);
+        g.setColor(DIM);
+        g.setStroke(new BasicStroke(1.5f));
+        g.drawOval(b.x, b.y, b.width, b.height);
+        g.setStroke(new BasicStroke(1f));
+        g.setColor(TEXT);
+        g.fillRect(b.x + 12, b.y + 10, 4, 14);
+        g.fillRect(b.x + 19, b.y + 10, 4, 14);
+        // A little bigger than it looks, for a finger.
+        taps.put(new Rectangle(b.x - 6, b.y - 6, b.width + 12, b.height + 12), () -> battle.pause(false));
+    }
+
+    /**
+     * The match on hold: the field dimmed under a box with the round, the battlefield and the score, a Go on button,
+     * and each player's keys under their tank again, so a player coming back knows where their hands go.
+     */
+    private void pauseCard(Graphics2D g)
+    {
+        g.setColor(new Color(0, 0, 25, 110));
+        g.fillRect(0, 0, getWidth(), getHeight());
+        Tank red = battle.red();
+        Tank green = battle.green();
+        Rectangle box = panel(g, new Line[] { new Line("PAUSED", BIG, TEXT),
+                        new Line(battle.pausedAway() ? "The match waited while you were away." : "The match is waiting for you.",
+                                        SMALL, DIM),
+                        new Line("Round " + battle.round() + ": " + battle.arena().name(), SMALL, DIM),
+                        new Line(red.name() + " " + battle.redWins() + " - " + battle.greenWins() + " " + green.name(), MEDIUM,
+                                        Color.YELLOW) }, 2, 300, 52);
+        Rectangle go = new Rectangle(box.x + 10, box.y + box.height - 50, box.width - 20, 44);
+        play(g, go, "Go on", getWidth() >= 440 ? "P, Q or M, or a click" : "P, Q or M, or a tap", red, battle::resume);
+        if (!battle.watching()) controls(g, battle.vsComputer() ? null : "green's keys");
+    }
+
+    /** After a pause: 3, 2, 1 over the still field, then the match moves again. */
+    private void countdown(Graphics2D g)
+    {
+        int left = (battle.resumeTicks() * 3 + Battle.RESUME_TICKS - 1) / Battle.RESUME_TICKS;
+        outlined(g, String.valueOf(left), COUNT, Color.YELLOW, getWidth() / 2.0, getHeight() / 2 + 28, 255);
     }
 
     /** A tank's name, its health and the rounds it has won, in the top left (red) or top right (green) corner. */
@@ -616,26 +664,18 @@ public class GamePanel extends JPanel
         switch (battle.phase())
         {
             case TITLE:
-                panel(g, new Line[] { new Line("TANK GAME", BIG, TEXT),
+                menu(g, new Line[] { new Line("TANK GAME", BIG, TEXT),
                                 new Line("Three hits destroy a tank. First to " + Battle.ROUNDS_TO_WIN + " rounds wins.", SMALL, DIM),
-                                new Line("Hide behind walls. Shells bounce once.", SMALL, DIM),
                                 new Line(battle.fieldBlocked() ? BLOCKED_NOTE : battle.hasField()
                                                 ? "Every round is on your battlefield." : "Each round is a new battlefield.",
-                                                SMALL, battle.fieldBlocked() ? Color.YELLOW : DIM),
-                                new Line("Drive over supply crates for powers.", SMALL, DIM),
-                                new Line("Red: W A S D to drive, Q to fire", SMALL, light(red)),
-                                new Line("Or point: hold to drive there, tap to fire there", SMALL, light(red)),
-                                new Line("Green: arrow keys to drive, M to fire", SMALL, light(green)),
-                                new Line("", SMALL, TEXT),
-                                new Line("Press Q or tap to play the computer", MEDIUM, light(red)),
-                                new Line("Press M for two players", MEDIUM, light(green)),
-                                new Line("Press C to watch the computer play itself", SMALL, DIM),
-                                suppliesLine(), soundLine(), fieldLine(), recordLine() });
+                                                SMALL, battle.fieldBlocked() ? Color.YELLOW : DIM), recordLine() }, true);
+                controls(g, "for 2 players");
                 break;
             case ROUND_START:
                 boolean go = battle.phaseTicks() > Battle.ROUND_START_TICKS - 25;
                 panel(g, new Line[] { new Line(go ? "FIGHT!" : "ROUND " + battle.round(), BIG, go ? Color.YELLOW : TEXT),
                                 new Line(battle.arena().name(), MEDIUM, TEXT),
+                                new Line(Terrain.of(battle.arena()).where, SMALL, DIM),
                                 new Line(battle.redWins() + " - " + battle.greenWins(), SMALL, DIM),
                                 new Line(battle.fieldBlocked() ? BLOCKED_NOTE : "", SMALL, Color.YELLOW) });
                 break;
@@ -652,14 +692,8 @@ public class GamePanel extends JPanel
                                 + Math.min(battle.redWins(), battle.greenWins());
                 String title = !battle.vsComputer() || battle.watching() ? winner.name() + " wins the match"
                                 : winner == red ? "You beat the computer!" : "The computer wins";
-                boolean ready = battle.phaseTicks() >= Battle.MATCH_OVER_TICKS;
-                panel(g, new Line[] { new Line(title, MEDIUM, light(winner)), new Line(score, BIG, TEXT),
-                                battle.vsComputer() ? recordLine() : new Line("", SMALL, TEXT),
-                                new Line(ready ? "Press Q or tap to play the computer" : "", SMALL, light(red)),
-                                new Line(ready ? "Press M for two players" : "", SMALL, light(green)),
-                                ready ? suppliesLine() : new Line("", SMALL, TEXT),
-                                ready ? soundLine() : new Line("", SMALL, TEXT),
-                                ready ? fieldLine() : new Line("", SMALL, TEXT) });
+                menu(g, new Line[] { new Line(title, MEDIUM, light(winner)), new Line(score, BIG, TEXT), recordLine() },
+                                battle.phaseTicks() >= Battle.MATCH_OVER_TICKS);
                 break;
             default:
                 break;
@@ -687,60 +721,179 @@ public class GamePanel extends JPanel
         return new Color((c.getRed() + 255) / 2, (c.getGreen() + 255) / 2, (c.getBlue() + 255) / 2);
     }
 
-    private Line suppliesLine()
-    {
-        return new Line(battle.supplies() ? "Supply drops on: tap or press X to turn off"
-                        : "Supply drops off: tap or press X to turn on", SMALL, CRATE, battle::toggleSupplies);
-    }
-
-    private Line soundLine()
-    {
-        return new Line(battle.sound() ? "Sound on: tap or press V to turn off" : "Sound off: tap or press V to turn on",
-                        SMALL, DIM, battle::toggleSound);
-    }
-
     /** Said when the player's battlefield is set aside because this window is too narrow for it (Battle#fieldBlocked). */
     private static final String BLOCKED_NOTE = "Your battlefield has no way through at this size";
 
-    private Line fieldLine()
+    /**
+     * The title card and the match-over screen: the lines in a box along the top with the two ways to play under them,
+     * and the settings along the bottom (each a key and a tap). Until the match-over pause ends only the lines show.
+     */
+    private void menu(Graphics2D g, Line[] lines, boolean ready)
     {
-        return new Line(battle.hasField() ? "Your battlefield: tap or press B to change it"
-                        : "Build your own battlefield: tap or press B", SMALL, CONCRETE_TEXT, battle::toggleBuild);
+        // Top and bottom margins kept tight so a box with the record line still clears the tanks' top tracks.
+        Rectangle box = panel(g, lines, 2, 380, ready ? 52 : 0);
+        if (!ready) return;
+        int gap = 10;
+        int bw = (box.width - gap * 3) / 2;
+        int by = box.y + box.height - 50;
+        play(g, new Rectangle(box.x + gap, by, bw, 44), "1 player", "vs the computer: Q", battle.red(),
+                        () -> battle.startMatch(true));
+        play(g, new Rectangle(box.x + gap * 2 + bw, by, bw, 44), "2 players", "one keyboard: M", battle.green(),
+                        () -> battle.startMatch(false));
+        settings(g);
     }
 
+    /** A big button in a tank's color: what it starts, and its key. */
+    private void play(Graphics2D g, Rectangle b, String label, String sub, Tank tank, Runnable action)
+    {
+        Color c = tank.color();
+        g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 150));
+        g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+        g.setStroke(new BasicStroke(2));
+        g.setColor(light(tank));
+        g.drawRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+        g.setStroke(new BasicStroke(1));
+        centered(g, label, MEDIUM, TEXT, b, b.y + 20);
+        centered(g, sub, SMALL, TEXT, b, b.y + 37);
+        taps.put(b, action);
+    }
+
+    private static void centered(Graphics2D g, String text, Font font, Color color, Rectangle b, int baseline)
+    {
+        g.setFont(font);
+        g.setColor(color);
+        g.drawString(text, b.x + (b.width - g.getFontMetrics().stringWidth(text)) / 2, baseline);
+    }
+
+    /** Crates, sound, your battlefield and watch along the bottom: four in a row, or two by two when narrow. */
+    private void settings(Graphics2D g)
+    {
+        String[] keys = { "X", "V", "B", "C" };
+        String[] labels = { battle.supplies() ? "Crates on" : "Crates off", battle.sound() ? "Sound on" : "Sound off",
+                        battle.hasField() ? "Your field" : "Build a field", battle.watching() ? "Watching" : "Watch" };
+        Color[] colors = { CRATE, DIM, CONCRETE_TEXT, battle.watching() ? Color.YELLOW : DIM };
+        Runnable[] actions = { battle::toggleSupplies, battle::toggleSound, battle::toggleBuild, battle::toggleWatch };
+        int cols = getWidth() >= 440 ? 4 : 2;
+        int gap = 8;
+        int cw = (getWidth() - gap * (cols + 1)) / cols;
+        int top = getHeight() - keys.length / cols * 36 - 4;
+        for (int i = 0; i < keys.length; i++)
+        {
+            Rectangle b = new Rectangle(gap + i % cols * (cw + gap), top + i / cols * 36, cw, 30);
+            g.setColor(SHADE);
+            g.fillRoundRect(b.x, b.y, b.width, b.height, 10, 10);
+            g.setColor(colors[i]);
+            g.drawRoundRect(b.x, b.y, b.width, b.height, 10, 10);
+            keycap(g, b.x + 5, b.y + 4, 22, keys[i], -1);
+            g.setFont(SMALL);
+            g.setColor(colors[i]);
+            g.drawString(labels[i], b.x + 34, b.y + 20);
+            taps.put(b, actions[i]);
+        }
+    }
+
+    /** The record against the computer, or nothing (no line) before the first match against it. */
     private Line recordLine()
     {
         Record record = battle.record();
-        boolean any = record != null && record.wins() + record.losses() > 0;
-        return new Line(any ? "Your record vs the computer: " + record : "", SMALL, Color.YELLOW);
+        return record != null && record.wins() + record.losses() > 0
+                        ? new Line("Your record vs the computer: " + record, SMALL, Color.YELLOW) : null;
     }
 
-    /** Draws the lines centered on a shaded box in the middle of the field; empty lines leave a gap. */
+    /**
+     * Each tank's keys under it: red's W A S D and Q (or the pointer), green's arrows and M with its note (none when
+     * the note is null: the computer drives green).
+     */
+    private void controls(Graphics2D g, String greenNote)
+    {
+        keys(g, battle.red(), new String[] { "W", "A", "S", "D" }, "Q",
+                        getWidth() >= 440 ? "or hold to drive, tap to fire" : "or touch the field");
+        if (greenNote != null) keys(g, battle.green(), null, "M", greenNote);
+    }
+
+    /** Four driving keys (letters, or arrows when null) in a T, the fire key beside them and a note under them. */
+    private void keys(Graphics2D g, Tank tank, String[] letters, String fire, String note)
+    {
+        int s = 24;
+        int step = s + 3;
+        // Kept on the field: mid-match (on the pause card) a tank can be at an edge.
+        int top = Math.min((int) tank.y() + Tank.SIZE + 10, getHeight() - step * 2 - 22);
+        int left = Math.max(4, Math.min(getWidth() - step * 4 - 12, (int) tank.x() - (step * 4 + 8) / 2));
+        int[][] at = { { left + step, top }, { left, top + step }, { left + step, top + step },
+                        { left + step * 2, top + step } };
+        for (int i = 0; i < at.length; i++) keycap(g, at[i][0], at[i][1], s, letters == null ? null : letters[i], i);
+        int fx = left + step * 3 + 8;
+        keycap(g, fx, top + step, s, fire, -1);
+        outlined(g, "fire", CHIP, TEXT, fx + s / 2.0, top + s - 4, 255);
+        outlined(g, note, SMALL, light(tank), tank.x(), top + step * 2 + 16, 255);
+    }
+
+    private static final Font KEY = new Font(Font.SANS_SERIF, Font.BOLD, 13);
+
+    /** A light key with a letter, or an arrow pointing up, left, down or right (arrow 0 to 3) when the text is null. */
+    private static void keycap(Graphics2D g, int x, int y, int s, String text, int arrow)
+    {
+        g.setColor(new Color(0, 0, 0, 100));
+        g.fillRoundRect(x + 1, y + 3, s, s, 7, 7);
+        g.setColor(new Color(236, 232, 222));
+        g.fillRoundRect(x, y, s, s, 7, 7);
+        g.setColor(new Color(40, 40, 52));
+        if (text != null)
+        {
+            g.setFont(KEY);
+            g.drawString(text, x + (s - g.getFontMetrics().stringWidth(text)) / 2, y + s / 2 + 5);
+            return;
+        }
+        int cx = x + s / 2;
+        int cy = y + s / 2;
+        double angle = Math.toRadians(-90 - arrow * 90);
+        int[] xs = new int[3];
+        int[] ys = new int[3];
+        for (int i = 0; i < 3; i++)
+        {
+            double a = angle + i * Math.PI * 2 / 3;
+            xs[i] = cx + (int) Math.round(Math.cos(a) * 6);
+            ys[i] = cy + (int) Math.round(Math.sin(a) * 6);
+        }
+        g.fillPolygon(xs, ys, 3);
+    }
+
+    /** Draws the lines centered on a shaded box in the middle of the field; empty lines leave a gap, null ones none. */
     private void panel(Graphics2D g, Line[] lines)
     {
-        int height = 24;
+        panel(g, lines, -1, 0, 0);
+    }
+
+    /**
+     * Draws the lines centered on a shaded box at least minWidth wide (when the field allows), its top at top or in the
+     * middle of the field when top is negative, with extra room under the lines; returns the box.
+     */
+    private Rectangle panel(Graphics2D g, Line[] lines, int top, int minWidth, int extra)
+    {
+        int height = 24 + extra;
         int width = 0;
         for (Line line : lines)
         {
+            if (line == null) continue;
             height += line.font.getSize() + 10;
             g.setFont(line.font);
             width = Math.max(width, g.getFontMetrics().stringWidth(line.text));
         }
-        width = Math.min(getWidth() - 20, width + 40);
+        width = Math.min(getWidth() - 20, Math.max(minWidth, width + 40));
         int x = (getWidth() - width) / 2;
-        int y = (getHeight() - height) / 2;
+        int y = top < 0 ? (getHeight() - height) / 2 : top;
         g.setColor(SHADE);
         g.fillRoundRect(x, y, width, height, 16, 16);
         int baseline = y + 12;
         for (Line line : lines)
         {
+            if (line == null) continue;
             baseline += line.font.getSize() + 10;
             g.setFont(line.font);
             g.setColor(line.color);
             g.drawString(line.text, (getWidth() - g.getFontMetrics().stringWidth(line.text)) / 2, baseline - 8);
-            if (line.tap != null) taps.put(new Rectangle(x, baseline - 8 - line.font.getSize() - 4, width,
-                            line.font.getSize() + 10), line.tap);
         }
+        return new Rectangle(x, y, width, height);
     }
 
     private static final class Line
@@ -748,20 +901,12 @@ public class GamePanel extends JPanel
         final String text;
         final Font   font;
         final Color  color;
-        /** What a click or tap on the line does, or null. */
-        final Runnable tap;
 
         Line(String text, Font font, Color color)
-        {
-            this(text, font, color, null);
-        }
-
-        Line(String text, Font font, Color color, Runnable tap)
         {
             this.text = text;
             this.font = font;
             this.color = color;
-            this.tap = tap;
         }
     }
 }

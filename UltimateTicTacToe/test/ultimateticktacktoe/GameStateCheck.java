@@ -41,6 +41,31 @@ public class GameStateCheck {
       check("X".equals(game.winner), "X wins the game, got " + game.winner);
       check(!game.canPlay(8, 8), "no moves after the game ends");
 
+      // The moves that win a small board for the side to move (the preview's warning), on the board sent to or anywhere.
+      game = new GameState();
+      game.marks[0][0] = game.marks[0][1] = game.marks[4][3] = game.marks[4][4] = "X";
+      game.activeBoard = 0;
+      check(java.util.Arrays.equals(game.boardWinningMoves(), new int[]{2}), "board-winning move on the board sent to");
+      game.activeBoard = -1;
+      check(java.util.Arrays.equals(game.boardWinningMoves(), new int[]{2, 4 * 9 + 5}), "board-winning moves anywhere");
+      game.xTurn = false;
+      check(game.boardWinningMoves().length == 0, "none for the other side");
+
+      // Game points (the lines drawn across the big grid): two boards of a line won, the third open.
+      game = new GameState();
+      game.boardResults[0] = game.boardResults[4] = "X";
+      game.boardResults[2] = game.boardResults[5] = "O";
+      game.boardResults[6] = GameState.DRAW;
+      check("X".equals(game.threat(new int[]{0, 4, 8})), "X's diagonal threat");
+      check("O".equals(game.threat(new int[]{2, 5, 8})), "O's column threat");
+      check(game.threat(new int[]{0, 3, 6}) == null, "a drawn board blocks the line");
+      check(game.threat(new int[]{0, 1, 2}) == null, "one board each is no threat");
+      check(game.gamePoint(8, "X") && game.gamePoint(8, "O"), "board 8 is a game point for both");
+      check(!game.gamePoint(3, "X") && !game.gamePoint(3, "O"), "board 3: its lines are blocked");
+      check(!game.gamePoint(0, "X"), "a won board is no game point");
+      game.winner = "X";
+      check(game.threat(new int[]{0, 4, 8}) == null && !game.gamePoint(8, "X"), "no game points once the game is over");
+
       // Copies are independent, and legal moves follow the active board.
       game = new GameState();
       game.play(4, 0);
@@ -73,7 +98,14 @@ public class GameStateCheck {
          check(!legal || chances[move] >= 0 && chances[move] <= 1, "hint chances in range for " + move);
       }
       check(think.best() == 2 * 9 + 5 && chances[2 * 9 + 5] > 0.95, "the hint's best is the win, near certain");
+      // Hard thinking on the board: each legal move's share of the search, the pick at 1, nothing for other cells.
+      double[] attention = think.attention();
+      for (int move = 0; move < 81; move++) {
+         check(attention[move] >= 0 && attention[move] <= 1 && (attention[move] == 0 || game.canPlay(move / 9, move % 9)), "attention in range, legal moves only, for " + move);
+      }
+      check(attention[think.best()] == 1, "the most searched move has full attention");
       check(new Computer.Think(new GameState()).best() == -1, "no pick before any search");
+      check(new Computer.Think(new GameState()).attention()[40] == 0, "no attention before any search");
       // A short search of an empty board: doubts are positive where there are chances, and shrink with more search.
       think = new Computer.Think(new GameState());
       think.grow(random, 5);

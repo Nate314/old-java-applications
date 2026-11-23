@@ -31,6 +31,19 @@ public class MorphCheck {
       check(Morph.match(have, Arrays.asList(), false).length == 3 && Morph.match(have, Arrays.asList(), false)[0] == -1, "nothing to match gives -1");
       check(Morph.match(Arrays.asList(), have, false).length == 0, "nothing wanted gives nothing");
 
+      // Button pictures: every shape fits its 30 x 20 box, touching two opposite sides, and an empty one is empty.
+      for (String shape : Shapes.ALL) {
+         List<Rectangle> fitted = Shapes.fit(Shapes.build(shape, 120, "9:30", smileCells(), 0, 0, Integer.MAX_VALUE), 30, 20);
+         Rectangle box = new Rectangle(0, 0, 30, 20);
+         Rectangle area = new Rectangle(fitted.get(0));
+         for (Rectangle r : fitted) {
+            check(box.contains(r), shape + " picture stays in its box: " + r);
+            area.add(r);
+         }
+         check(area.width == 30 || area.height == 20, shape + " picture fills its box one way: " + area);
+      }
+      check(Shapes.fit(Arrays.asList(), 30, 20).isEmpty(), "an empty drawing has an empty picture");
+
       // Drawing: the smile builds a few dozen windows inside the size asked for; an empty pad builds none.
       DrawPad pad = new DrawPad(() -> { });
       pad.smile();
@@ -102,7 +115,35 @@ public class MorphCheck {
          }
       }
       check(same > 20 && stayed == same, "a tick keeps " + stayed + " of the " + same + " windows that did not change");
+      // Size track: its ends are the smallest and largest sizes, past them it stays there, and a knob drawn at a
+      // size reads back as that size.
+      check(SizeSlider.valueAt(0, 150, 400) == SizeSlider.MIN, "left end is the smallest size");
+      check(SizeSlider.valueAt(150, 150, 400) == 400 && SizeSlider.valueAt(999, 150, 400) == 400, "right end is the largest");
+      check(SizeSlider.valueAt(-50, 150, 400) == SizeSlider.MIN, "left of the track stays at the smallest");
+      for (int size = SizeSlider.MIN; size <= 400; size += 13) {
+         int back = SizeSlider.valueAt(SizeSlider.xOf(size, 150, 400), 150, 400);
+         check(Math.abs(back - size) <= 3, "the knob at " + size + " reads back as " + back);
+      }
+      // Size track keys: arrows step a fiftieth (at least 1), pages five steps, Home/End the ends, never past them.
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_RIGHT, 510) == 210, "Right steps up");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_DOWN, 510) == 190, "Down steps down");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_PAGE_UP, 510) == 250, "Page Up takes five steps");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_HOME, 510) == SizeSlider.MIN, "Home is the smallest");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_END, 510) == 510, "End is the largest");
+      check(SizeSlider.stepped(505, java.awt.event.KeyEvent.VK_PAGE_UP, 510) == 510, "never past the largest");
+      check(SizeSlider.stepped(12, java.awt.event.KeyEvent.VK_LEFT, 20) == 11, "a short track still steps by 1");
+      check(SizeSlider.stepped(200, java.awt.event.KeyEvent.VK_A, 510) == 200, "other keys leave it");
+      // Color buttons: each strip runs from its colors' start to their end.
+      check(CircleCreatorWindow.shade("Blue", 0).equals(CircleCreatorWindow.shade("Blue", 1)), "blue is one color");
+      check(!CircleCreatorWindow.shade("Rainbow", 0).equals(CircleCreatorWindow.shade("Rainbow", 1)), "the rainbow changes");
+
       System.out.println("MorphCheck: all checks passed");
+   }
+
+   private static boolean[][] smileCells() {
+      DrawPad pad = new DrawPad(() -> { });
+      pad.smile();
+      return pad.cells();
    }
 
    private static void check(boolean ok, String what) {

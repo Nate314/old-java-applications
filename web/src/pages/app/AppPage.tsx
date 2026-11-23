@@ -5,7 +5,9 @@
 // Keep this file free of CSS imports: the build reads it in Node.
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
-import type { App } from '../../shared/catalog';
+import { APPS, webp, type App } from '../../shared/catalog';
+import { NO_QUIRKS, WATCH, moreParts, quirkItems, thenHint } from '../../runtime/title-card';
+import { NowPostcard } from '../../runtime/now-postcard';
 import { EarlyScript, RuntimeScript } from '../../shared/EarlyScript';
 import { SITE, ShareTags } from '../../shared/ShareTags';
 
@@ -57,6 +59,17 @@ function Preloads({ story }: { story: boolean }) {
   );
 }
 
+/**
+ * The title screen's picture, asked for with the page (and first among its files), so it is in by the time the
+ * runtime opens the title screen. Not in frames (?embed: the home page's player, play.html) or with ?watch, which
+ * open on the app itself. A script, ahead of the stylesheet so it need not wait for it, as a preload tag cannot say "unless".
+ */
+function TitlePicture({ app }: { app: App }) {
+  const href = JSON.stringify('../' + webp(app.shot));
+  return <script dangerouslySetInnerHTML={{ __html: 'if(!/[?&](embed|watch)(=|&|$)/.test(location.search)){var l=document.createElement("link");' +
+    'l.rel="preload";l.as="image";l.fetchPriority="high";l.href=' + href + ';document.head.appendChild(l)}' }} />;
+}
+
 /** The page's head: its name, the link preview tags (with the app's card from web/cards.ps1), skins and programs. */
 function AppHead({ app }: { app: App }) {
   const from = app.origin === 'original' ? 'Built from the original Java source' : 'Recovered from an old Java jar';
@@ -66,6 +79,7 @@ function AppHead({ app }: { app: App }) {
       <meta charSet="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{app.name}</title>
+      <TitlePicture app={app} />
       <meta name="description" content={description} />
       <ShareTags title={app.name + ' | ' + SITE} description={description} url={'../' + app.id + '/index.html'}
         image={'../cards/' + app.id + '.jpg'} alt={app.name + ', running in the browser'} />
@@ -114,22 +128,71 @@ function ThenHead({ app }: { app: App }) {
       <EarlyScript />
       <RuntimeScript src="../assets/boot.js" />
       <Preloads story={false} />
+      {/* The live card's known quirks (then-and-now.tsx quirks), in by the time it takes over from the early one. */}
+      <link rel="preload" href="then-source/README.md" as="fetch" crossOrigin="anonymous" />
       <script defer src="then.js" />
     </>
   );
 }
 
-function page(head: ReactElement, body: Record<string, string>): string {
+/**
+ * Today's title card as it first shows (src/runtime/title-screen.tsx draws the live one): picture, category, name, a
+ * Loading… Play, hint, the Watch link, and the room the stamp and More lines take, so a slow phone paints it with the stylesheets,
+ * not after boot.js and React have run (vite/pages.ts lets the first frame go before boot.js, except on a trip). A
+ * template, so frames and ?watch (which open on the app itself) and Run again never fetch its picture; the script
+ * after it puts it in the page otherwise, before the first frame. The live card replaces it in one frame.
+ */
+function EarlyTitle({ app, quirks }: { app: App; quirks?: string[][] }) {
+  const shot = '../' + webp(app.shot);
+  // A Then page's card (then.html) has its README's known quirks where today's has the picture, and no Watch.
+  const then = !!quirks;
+  const card = renderToStaticMarkup(
+    <div className={'shim-title' + (then ? ' then' : '')} id="shim-title-early" role="dialog" aria-label={then ? app.name + ', as first restored' : app.name} aria-busy="true">
+      <div className="shim-title-card">
+        <div className="shim-title-art">
+          {quirks ? <><h2>Known quirks, from its README then</h2><ul>{(quirks.length ? quirks : [[NO_QUIRKS]]).map((parts, i) =>
+            <li key={i}>{parts.map((p, j) => j % 2 ? <code key={j}>{p}</code> : p)}</li>)}</ul></> : <><img className="shim-title-tone" alt="" src={shot} /><img alt="" src={shot} /></>}
+        </div>
+        <div className="shim-title-text">
+          <span className="shim-title-cat">{then ? 'As first restored' : app.cat[0].toUpperCase() + app.cat.slice(1)}</span>
+          <h1>{app.name}</h1>
+          <button type="button" className="shim-title-play" disabled>▶ Play</button>
+          <span className="shim-title-press">or press any key</span>
+          <p className="shim-title-hint">{then ? thenHint(app) : app.hint}</p>
+          {then && <NowPostcard pic={'../' + webp(app.shot, true)} href={'../compare.html?app=' + app.id} />}
+          <p className="shim-title-stamp" style={{ visibility: 'hidden' }}>{'New: playing it adds stamp 1 of ' + APPS.length + ' to your passport'}</p>
+          {app.id === 'ScreenSaver' && !then && <p className="shim-title-saver" style={{ visibility: 'hidden' }}>Also this site’s screen saver, after 3 minutes away. Turn off</p>}
+          {WATCH[app.id] && !then && <a className="shim-title-watch" href="?watch">Watch the computer play it first</a>}
+          <details className="shim-title-more" style={{ visibility: 'hidden' }} aria-hidden="true"><summary>{'More: ' + moreParts(app, then)}</summary></details>
+        </div>
+        <span className="shim-meter shim-title-meter" />
+        <pre className="shim-title-log" aria-hidden="true" />
+      </div>
+    </div>,
+  ).replace(/^<link rel="preload"[^>]*>/, '');   // React's own preload for the picture: the head already asks for it
+  // A press already counts on it (a click on the card, or a key): it reads Starting…, and the runtime starts the app once
+  // its files are in (title-screen.tsx: oldjavaWanted on arrival, oldjavaPress after).
+  return '<template id="shim-title-early-t">' + card + '</template><script>try{if(!(/[?&](embed|watch)(=|&|$)/.test(location.search)||' +
+    'sessionStorage.getItem("oldjava.again")===' + JSON.stringify(app.id) + ')){' +
+    'document.currentScript.before(document.getElementById("shim-title-early-t").content);' +
+    'var c=document.getElementById("shim-title-early"),b=c.querySelector(".shim-title-play");' +
+    'if(matchMedia("(pointer: coarse)").matches)c.querySelector(".shim-title-press").textContent="or tap anywhere";' +
+    'var w=function(e){if(!c.isConnected||(e.type=="click"?e.target.closest("a"):/^(Tab|Shift|Control|Alt|Meta)$/.test(e.key)||' +
+    '(e.target!=document.body&&!c.contains(e.target))))return;window.oldjavaWanted=1;c.classList.add("starting");b.textContent="Starting…";' +
+    'window.oldjavaPress&&window.oldjavaPress(e)};c.addEventListener("click",w);document.addEventListener("keydown",w,true)}}catch(e){}</script>\n';
+}
+
+function page(head: ReactElement, body: Record<string, string>, inBody = ''): string {
   const attrs = Object.entries(body).map(([name, value]) => ' ' + name + (value ? '="' + value + '"' : '')).join('');
-  return '<!doctype html>\n<html lang="en">\n<head>\n' + renderToStaticMarkup(head) + '\n</head>\n<body' + attrs + '>\n</body>\n</html>\n';
+  return '<!doctype html>\n<html lang="en">\n<head>\n' + renderToStaticMarkup(head) + '\n</head>\n<body' + attrs + '>\n' + inBody + '</body>\n</html>\n';
 }
 
 /** The whole document for one app. */
 export function appPage(app: App): string {
-  return page(<AppHead app={app} />, { 'data-app': app.id, ...BODY[app.id] });
+  return page(<AppHead app={app} />, { 'data-app': app.id, ...BODY[app.id] }, EarlyTitle({ app }));
 }
 
-/** The whole document for an app's Then page. */
-export function thenPage(app: App): string {
-  return page(<ThenHead app={app} />, { 'data-app': app.id, 'data-then': '', ...THEN_BODY[app.id] });
+/** The whole document for an app's Then page; readme is its README as first restored (for the known quirks). */
+export function thenPage(app: App, readme: string): string {
+  return page(<ThenHead app={app} />, { 'data-app': app.id, 'data-then': '', ...THEN_BODY[app.id] }, EarlyTitle({ app, quirks: quirkItems(readme) }));
 }

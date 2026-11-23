@@ -7,6 +7,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
@@ -30,6 +31,9 @@ public final class CatchPanel extends JPanel {
    public static final int WIDTH = 640;
    public static final int HEIGHT = 480;
    private static final int HUD = 46;
+   private static final int NARROW_HUD = 62;
+   /** The upright field is never shorter than this, so the menu's three rows of cards fit. */
+   static final int NARROW_MIN_HEIGHT = 600;
    private static final double INTRO_SECONDS = 1.4;
    private static final double NET_SPEED = 380.0;
 
@@ -43,7 +47,7 @@ public final class CatchPanel extends JPanel {
    private static final Color CARD = new Color(20, 26, 70, 235);
    private static final Color BAD = new Color(255, 90, 90);
 
-   private enum Screen { MENU, INTRO, PLAYING, RESULT }
+   private enum Screen { MENU, INTRO, PLAYING, PAUSED, RESULT }
 
    /** A short-lived ring and label where a click landed. */
    private static final class Effect {
@@ -85,13 +89,19 @@ public final class CatchPanel extends JPanel {
    final Random random = new Random(); // not private: CatchFeelCheck seeds it so its stars land the same every run
    private final List<Effect> effects = new ArrayList<>();
    private final List<Flyer> flyers = new ArrayList<>();
-   private final Rectangle[] nightCards = new Rectangle[Night.values().length];
-   private final Rectangle againButton = new Rectangle();
-   private final Rectangle nextButton = new Rectangle();
-   private final Rectangle menuButton = new Rectangle();
+   // Not private: CatchFeelCheck checks the cards and buttons fit an upright phone.
+   final Rectangle[] nightCards = new Rectangle[Night.values().length];
+   final Rectangle againButton = new Rectangle();
+   final Rectangle nextButton = new Rectangle();
+   final Rectangle menuButton = new Rectangle();
+   /** The pause button at the right of the bar, and the paused card's Resume. */
+   final Rectangle pauseButton = new Rectangle();
+   final Rectangle resumeButton = new Rectangle();
    private final boolean[] arrows = new boolean[4];
    private final Timer timer;
    private Screen screen = Screen.MENU;
+   /** The screen a pause came from (the intro card or the night), so Resume goes back to it. */
+   private Screen pausedFrom = Screen.PLAYING;
    private Night selected;
    CatchGame game;
    /** The clock just before the last black hole, and the seconds since it. */
@@ -100,20 +110,45 @@ public final class CatchPanel extends JPanel {
    private StarField sky;
    private double screenSeconds;
    private double spin;
-   private double netX = WIDTH / 2.0;
-   private double netY = HUD + (HEIGHT - HUD) / 2.0;
+   private double netX;
+   private double netY;
    private boolean netShown;
    private boolean newBest;
    private long lastTick = System.nanoTime();
+   /** The field's size: 640 x 480, or upright on a phone, where the HUD takes two rows and the cards two columns. */
+   private final int w;
+   private final int h;
+   private final boolean narrow;
+   private final int hud;
+   private final int columns;
 
    public CatchPanel(NightRecords records) {
+      this(records, new Dimension(WIDTH, HEIGHT));
+   }
+
+   public CatchPanel(NightRecords records, Dimension size) {
       this.records = records;
       this.selected = records.suggested();
-      this.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+      this.w = size.width;
+      this.h = size.height;
+      this.narrow = this.w < WIDTH;
+      this.hud = this.narrow ? NARROW_HUD : HUD;
+      this.columns = this.narrow ? 2 : 3;
+      this.netX = this.w / 2.0;
+      this.netY = this.hud + (this.h - this.hud) / 2.0;
+      // A 44 px square on a phone, the size a thumb needs; 40 px in the 46 px bar on a wide screen.
+      int pause = this.narrow ? 44 : 40;
+      this.pauseButton.setBounds(this.w - pause - 8, (this.hud - pause) / 2, pause, pause);
+      this.setPreferredSize(new Dimension(this.w, this.h));
       this.setFocusable(true);
-      this.sky = new StarField(this.selected.mode(), new Dimension(WIDTH, HEIGHT - HUD), 90, 5, false);
+      this.sky = new StarField(this.selected.mode(), new Dimension(this.w, this.h - this.hud), 90, 5, false);
       for (int i = 0; i < this.nightCards.length; i++) {
-         this.nightCards[i] = new Rectangle(40 + (i % 3) * 190, 150 + (i / 3) * 130, 180, 118);
+         if (this.narrow) {
+            int cw = (this.w - 36) / 2;
+            this.nightCards[i] = new Rectangle(12 + (i % 2) * (cw + 12), 150 + (i / 2) * 138, cw, 128);
+         } else {
+            this.nightCards[i] = new Rectangle(40 + (i % 3) * 190, 150 + (i / 3) * 130, 180, 118);
+         }
       }
       MouseAdapter mouse = new MouseAdapter() {
          @Override
@@ -126,6 +161,19 @@ public final class CatchPanel extends JPanel {
       this.addMouseListener(mouse);
       this.timer = new Timer(15, event -> this.tick());
       this.timer.start();
+   }
+
+   /**
+    * The field for a screen, inside a window's borders: 640 x 480 as it always was, or on a screen narrower than the
+    * settings window's phone width, the screen's width and as tall as it allows (600 to 760 px).
+    */
+   static Dimension sizeFor(Dimension screen, Insets insets) {
+      if (screen.width >= SettingsFrame.NARROW) {
+         return new Dimension(WIDTH, HEIGHT);
+      }
+      int width = Math.max(320, screen.width - insets.left - insets.right);
+      int height = Math.max(NARROW_MIN_HEIGHT, Math.min(760, screen.height - insets.top - insets.bottom));
+      return new Dimension(width, height);
    }
 
    /** Key handling, shared by the panel and its window so the keys work whichever has focus. */
@@ -163,15 +211,25 @@ public final class CatchPanel extends JPanel {
          if (code == KeyEvent.VK_LEFT || code == KeyEvent.VK_RIGHT) {
             this.select(index + (code == KeyEvent.VK_LEFT ? -1 : 1));
          } else if (code == KeyEvent.VK_UP || code == KeyEvent.VK_DOWN) {
-            this.select(index + (code == KeyEvent.VK_UP ? -3 : 3));
+            this.select(index + (code == KeyEvent.VK_UP ? -this.columns : this.columns));
          } else if (code >= KeyEvent.VK_1 && code < KeyEvent.VK_1 + Night.values().length) {
             this.select(code - KeyEvent.VK_1);
             this.start(this.selected);
          } else if (confirm || code == KeyEvent.VK_N) {
             this.start(this.selected);
          }
+      } else if (this.screen == Screen.PAUSED) {
+         if (confirm || code == KeyEvent.VK_P) {
+            this.resume();
+         } else if (code == KeyEvent.VK_R) {
+            this.start(this.game.night());
+         } else if (toMenu) {
+            this.screen = Screen.MENU;
+         }
       } else if (this.screen == Screen.INTRO || this.screen == Screen.PLAYING) {
-         if (this.arrow(code, true)) {
+         if (code == KeyEvent.VK_P) {
+            this.pause();
+         } else if (this.arrow(code, true)) {
             this.netShown = true;
          } else if (confirm && this.screen == Screen.PLAYING) {
             this.netShown = true;
@@ -193,12 +251,27 @@ public final class CatchPanel extends JPanel {
       this.repaint();
    }
 
+   /** Stops the clock and shows the paused card, with Resume, Again and Nights. */
+   void pause() {
+      if (this.screen == Screen.INTRO || this.screen == Screen.PLAYING) {
+         this.pausedFrom = this.screen;
+         this.screen = Screen.PAUSED;
+         java.util.Arrays.fill(this.arrows, false);
+      }
+   }
+
+   private void resume() {
+      if (this.screen == Screen.PAUSED) {
+         this.screen = this.pausedFrom;
+      }
+   }
+
    /** Moves the menu's choice, skipping nights that are still locked. */
    private void select(int index) {
       if (index >= 0 && index < Night.values().length && this.records.isOpen(Night.values()[index])) {
          this.selected = Night.values()[index];
          // The menu's sky turns to the chosen night's animation mode.
-         this.sky = new StarField(this.selected.mode(), new Dimension(WIDTH, HEIGHT - HUD), 90, 5, false);
+         this.sky = new StarField(this.selected.mode(), new Dimension(this.w, this.h - this.hud), 90, 5, false);
       }
    }
 
@@ -213,8 +286,8 @@ public final class CatchPanel extends JPanel {
 
    void start(Night night) {
       this.selected = night;
-      this.game = new CatchGame(night, WIDTH, HEIGHT - HUD, this.random);
-      this.sky = new StarField(night.mode(), new Dimension(WIDTH, HEIGHT - HUD), 90, 5, false);
+      this.game = new CatchGame(night, this.w, this.h - this.hud, this.random);
+      this.sky = new StarField(night.mode(), new Dimension(this.w, this.h - this.hud), 90, 5, false);
       this.effects.clear();
       this.flyers.clear();
       this.penaltyAge = Double.MAX_VALUE;
@@ -230,8 +303,18 @@ public final class CatchPanel extends JPanel {
                this.start(Night.values()[i]);
             }
          }
+      } else if ((this.screen == Screen.INTRO || this.screen == Screen.PLAYING) && this.pauseButton.contains(x, y)) {
+         this.pause();
       } else if (this.screen == Screen.PLAYING) {
          this.catchAt(x, y);
+      } else if (this.screen == Screen.PAUSED) {
+         if (this.resumeButton.contains(x, y) || this.pauseButton.contains(x, y)) {
+            this.resume();
+         } else if (this.againButton.contains(x, y)) {
+            this.start(this.game.night());
+         } else if (this.menuButton.contains(x, y)) {
+            this.screen = Screen.MENU;
+         }
       } else if (this.screen == Screen.RESULT) {
          if (this.againButton.contains(x, y)) {
             this.start(this.game.night());
@@ -245,12 +328,12 @@ public final class CatchPanel extends JPanel {
    }
 
    void catchAt(double x, double y) {
-      if (y < HUD) {
+      if (y < this.hud) {
          return;
       }
       int comboBefore = this.game.combo();
       double clockBefore = this.game.secondsLeft();
-      CatchGame.Hit hit = this.game.click(x, y - HUD);
+      CatchGame.Hit hit = this.game.click(x, y - this.hud);
       if (hit == CatchGame.Hit.GOLD) {
          int combo = this.game.combo();
          String text = combo >= 3 ? "Combo x" + combo + "  +" + CatchGame.COMBO_BONUS + " s" : "+1";
@@ -284,18 +367,22 @@ public final class CatchPanel extends JPanel {
 
    /** Moves everything on by a number of seconds. */
    void advance(double seconds) {
+      if (this.screen == Screen.PAUSED) {
+         // Everything holds still while paused: the clock, the stars and black holes, the effects and the sky.
+         return;
+      }
       this.spin += seconds;
       this.penaltyAge += seconds;
       this.screenSeconds += seconds;
-      this.sky.advance(seconds * 0.5, WIDTH, HEIGHT - HUD);
+      this.sky.advance(seconds * 0.5, this.w, this.h - this.hud);
       if (this.screen == Screen.INTRO && this.screenSeconds >= INTRO_SECONDS) {
          this.screen = Screen.PLAYING;
       }
       if (this.screen == Screen.INTRO || this.screen == Screen.PLAYING) {
          double dx = (this.arrows[3] ? 1 : 0) - (this.arrows[2] ? 1 : 0);
          double dy = (this.arrows[1] ? 1 : 0) - (this.arrows[0] ? 1 : 0);
-         this.netX = Math.max(0, Math.min(WIDTH, this.netX + dx * NET_SPEED * seconds));
-         this.netY = Math.max(HUD, Math.min(HEIGHT, this.netY + dy * NET_SPEED * seconds));
+         this.netX = Math.max(0, Math.min(this.w, this.netX + dx * NET_SPEED * seconds));
+         this.netY = Math.max(this.hud, Math.min(this.h, this.netY + dy * NET_SPEED * seconds));
       }
       if (this.screen == Screen.PLAYING) {
          this.game.step(seconds);
@@ -323,19 +410,19 @@ public final class CatchPanel extends JPanel {
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
       g.setColor(SKY);
       g.fillRect(0, 0, this.getWidth(), this.getHeight());
-      g.translate(0, HUD);
+      g.translate(0, this.hud);
       this.sky.drawStars(g);
       g.setColor(SKY_SHADE);
-      g.fillRect(0, 0, WIDTH, HEIGHT - HUD);
+      g.fillRect(0, 0, this.w, this.h - this.hud);
       if (this.screen != Screen.MENU) {
          this.drawBodies(g);
          if (this.penaltyAge < 0.3) {
             // A black hole's bite: the field blushes red for a moment.
             g.setColor(new Color(255, 40, 60, (int)(70 * (1.0 - this.penaltyAge / 0.3))));
-            g.fillRect(0, 0, WIDTH, HEIGHT - HUD);
+            g.fillRect(0, 0, this.w, this.h - this.hud);
          }
       }
-      g.translate(0, -HUD);
+      g.translate(0, -this.hud);
       this.drawEffects(g);
       if (this.screen == Screen.MENU) {
          this.drawMenu(g);
@@ -348,6 +435,8 @@ public final class CatchPanel extends JPanel {
       this.drawFlyers(g);
       if (this.screen == Screen.INTRO) {
          this.drawIntro(g);
+      } else if (this.screen == Screen.PAUSED) {
+         this.drawPaused(g);
       } else if (this.screen == Screen.RESULT) {
          this.drawResult(g);
       }
@@ -413,8 +502,8 @@ public final class CatchPanel extends JPanel {
          g.drawOval((int)effect.x - r, (int)effect.y - r, 2 * r, 2 * r);
          g.setStroke(new BasicStroke(1f));
          int width = g.getFontMetrics().stringWidth(effect.text);
-         int textX = Math.max(4, Math.min(WIDTH - width - 4, (int)effect.x - width / 2));
-         g.drawString(effect.text, textX, (int)Math.max(HUD + 16, effect.y - 26 - 24 * t));
+         int textX = Math.max(4, Math.min(this.w - width - 4, (int)effect.x - width / 2));
+         g.drawString(effect.text, textX, (int)Math.max(this.hud + 16, effect.y - 26 - 24 * t));
       }
    }
 
@@ -433,21 +522,25 @@ public final class CatchPanel extends JPanel {
 
    private void drawHud(Graphics2D g) {
       g.setColor(new Color(14, 18, 52));
-      g.fillRect(0, 0, WIDTH, HUD);
+      g.fillRect(0, 0, this.w, this.hud);
       g.setColor(new Color(60, 70, 130));
-      g.drawLine(0, HUD - 1, WIDTH, HUD - 1);
+      g.drawLine(0, this.hud - 1, this.w, this.hud - 1);
       Night night = this.game.night();
       g.setFont(new Font("SansSerif", Font.BOLD, 14));
       g.setColor(TEXT);
-      g.drawString("Night " + night.number() + ": " + night.label(), 12, 20);
-      g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-      g.setColor(DIM);
-      g.drawString("Esc: nights   R: restart", 12, 37);
+      g.drawString("Night " + night.number() + ": " + night.label(), 12, this.narrow ? 22 : 20);
+      if (!this.narrow) {
+         // On a phone the HUD's second row is the catch count, and there are no keys to name.
+         g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+         g.setColor(DIM);
+         g.drawString("P: pause   Esc: nights   R: restart", 12, 37);
+      }
 
       // Catch count: one small star per gold star to catch, lit once its caught star has flown in, popping as it lands.
       int goal = night.goal();
-      int step = Math.min(16, 200 / goal);
-      int left = 200;
+      int step = this.step(goal);
+      int left = this.countLeft();
+      int countY = this.countY();
       for (int i = 0; i < goal; i++) {
          Flyer flyer = this.flyerFor(i);
          boolean lit = i < this.game.caught() && (flyer == null || flyer.age >= FLY);
@@ -457,20 +550,22 @@ public final class CatchPanel extends JPanel {
             r += (int)Math.round(5 * pop);
             g.setColor(new Color(255, 240, 170, (int)(200 * pop)));
             int ring = 9 + (int)(10 * (1.0 - pop));
-            g.drawOval(this.slotX(i) - ring, 23 - ring, 2 * ring, 2 * ring);
+            g.drawOval(this.slotX(i) - ring, countY - ring, 2 * ring, 2 * ring);
          }
-         this.drawStar(g, this.slotX(i), 23, r, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
+         this.drawStar(g, this.slotX(i), countY, r, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
       }
       g.setFont(new Font("SansSerif", Font.BOLD, 13));
       g.setColor(TEXT);
-      g.drawString(this.game.caught() + " / " + goal, left + goal * step + 8, 28);
+      g.drawString(this.game.caught() + " / " + goal, left + goal * step + 8, countY + 5);
 
       // The clock: a bar that empties, red in the last five seconds, with the stars thresholds marked.
-      int barX = 470;
-      int barW = 158;
+      // The bar ends left of the pause button.
+      int barW = this.narrow ? Math.min(140, this.w - 220) : 150;
+      int barX = this.pauseButton.x - 8 - barW;
+      int barY = this.narrow ? 8 : 14;
       double left10 = Math.min(Night.SECONDS, this.game.secondsLeft());
       g.setColor(new Color(40, 46, 96));
-      g.fillRoundRect(barX, 14, barW, 18, 9, 9);
+      g.fillRoundRect(barX, barY, barW, 18, 9, 9);
       g.setColor(left10 <= Night.TWO_STARS ? BAD : left10 <= Night.THREE_STARS ? new Color(255, 170, 60) : new Color(90, 200, 255));
       int fill = (int)(barW * left10 / Night.SECONDS);
       if (this.penaltyAge < DRAIN) {
@@ -479,29 +574,73 @@ public final class CatchPanel extends JPanel {
          int lost = (int)(barW * Math.min(Night.SECONDS, this.penaltyFrom) / Night.SECONDS) - fill;
          Color barColor = g.getColor();
          g.setColor(new Color(255, 70, 80, (int)(230 * (1.0 - t * 0.5))));
-         g.fillRoundRect(barX, 14, fill + (int)(lost * (1.0 - t * t)), 18, 9, 9);
+         g.fillRoundRect(barX, barY, fill + (int)(lost * (1.0 - t * t)), 18, 9, 9);
          g.setColor(barColor);
       }
-      g.fillRoundRect(barX, 14, fill, 18, 9, 9);
+      g.fillRoundRect(barX, barY, fill, 18, 9, 9);
       g.setColor(new Color(255, 255, 255, 120));
       for (double mark : new double[]{Night.THREE_STARS, Night.TWO_STARS}) {
          int mx = barX + (int)(barW * mark / Night.SECONDS);
-         g.drawLine(mx, 12, mx, 34);
+         g.drawLine(mx, barY - 2, mx, barY + 20);
       }
       String clock = String.format("%.1f s", this.game.secondsLeft());
       g.setFont(new Font("SansSerif", Font.BOLD, 12));
       g.setColor(Color.white);
       FontMetrics metrics = g.getFontMetrics();
-      g.drawString(clock, barX + barW - metrics.stringWidth(clock) - 8, 28);
+      g.drawString(clock, barX + barW - metrics.stringWidth(clock) - 8, barY + 14);
       if (this.game.combo() >= 3 && this.screen == Screen.PLAYING) {
          g.setColor(GOLD);
-         g.drawString("Combo x" + this.game.combo(), left + goal * step + 58, 28);
+         String combo = "Combo x" + this.game.combo();
+         // On a phone right of the count, left of the pause button; on a wide screen under the count, clear of the bar.
+         if (this.narrow) {
+            g.drawString(combo, this.pauseButton.x - 8 - metrics.stringWidth(combo), countY + 5);
+         } else {
+            g.drawString(combo, left, 43);
+         }
       }
+      this.drawPauseButton(g);
+   }
+
+   /** Two bars while the night runs, a gold play triangle while paused; none on the result card. */
+   private void drawPauseButton(Graphics2D g) {
+      if (this.screen == Screen.RESULT) {
+         return;
+      }
+      Rectangle b = this.pauseButton;
+      boolean paused = this.screen == Screen.PAUSED;
+      g.setColor(paused ? GOLD : new Color(44, 52, 110));
+      g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+      g.setColor(paused ? GOLD_EDGE : new Color(90, 100, 180));
+      g.drawRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+      int cx = b.x + b.width / 2;
+      int cy = b.y + b.height / 2;
+      if (paused) {
+         g.setColor(new Color(40, 24, 0));
+         g.fillPolygon(new int[]{cx - 6, cx - 6, cx + 9}, new int[]{cy - 9, cy + 9, cy}, 3);
+      } else {
+         g.setColor(TEXT);
+         g.fillRoundRect(cx - 8, cy - 9, 6, 18, 2, 2);
+         g.fillRoundRect(cx + 2, cy - 9, 6, 18, 2, 2);
+      }
+   }
+
+   /** The catch count: where it starts, the height of its middle, and the room each place takes. */
+   private int countLeft() {
+      return this.narrow ? 12 : 200;
+   }
+
+   int countY() {
+      return this.narrow ? 44 : 23;
+   }
+
+   private int step(int goal) {
+      // The count leaves room on its right for "15 / 15" (and on a phone the combo) before the clock bar.
+      return Math.min(16, (this.narrow ? this.w - 190 : 190) / goal);
    }
 
    /** The middle of a place in the catch count. */
    int slotX(int slot) {
-      return 200 + slot * Math.min(16, 200 / this.game.night().goal()) + 7;
+      return this.countLeft() + slot * this.step(this.game.night().goal()) + 7;
    }
 
    private Flyer flyerFor(int slot) {
@@ -518,7 +657,8 @@ public final class CatchPanel extends JPanel {
       double e = t * t * (3 - 2 * t);
       double tx = this.slotX(slot);
       double u = 1 - e;
-      return new double[]{u * u * x + 2 * u * e * x + e * e * tx, u * u * y + 2 * u * e * 23 + e * e * 23};
+      double ty = this.countY();
+      return new double[]{u * u * x + 2 * u * e * x + e * e * tx, u * u * y + 2 * u * e * ty + e * e * ty};
    }
 
    private void drawFlyers(Graphics2D g) {
@@ -538,22 +678,49 @@ public final class CatchPanel extends JPanel {
    }
 
    private void drawCentered(Graphics2D g, String text, int y) {
-      g.drawString(text, (WIDTH - g.getFontMetrics().stringWidth(text)) / 2, y);
+      g.drawString(text, (this.w - g.getFontMetrics().stringWidth(text)) / 2, y);
+   }
+
+   /** Draws text centered (x below 0) or from x, in lines no wider than {@code width}, the first at {@code y}. */
+   private void drawWrapped(Graphics2D g, String text, int x, int y, int width, int lineHeight) {
+      FontMetrics metrics = g.getFontMetrics();
+      String line = "";
+      for (String word : text.split(" ")) {
+         String longer = line.isEmpty() ? word : line + " " + word;
+         if (!line.isEmpty() && metrics.stringWidth(longer) > width) {
+            this.drawLine(g, line, x, y);
+            y += lineHeight;
+            line = word;
+         } else {
+            line = longer;
+         }
+      }
+      this.drawLine(g, line, x, y);
+   }
+
+   private void drawLine(Graphics2D g, String text, int x, int y) {
+      if (x < 0) {
+         this.drawCentered(g, text, y);
+      } else {
+         g.drawString(text, x, y);
+      }
    }
 
    private void drawIntro(Graphics2D g) {
       Night night = this.game.night();
+      int top = this.h / 2 - 70;
+      int width = Math.min(380, this.w - 24);
       g.setColor(CARD);
-      g.fillRoundRect(WIDTH / 2 - 190, 170, 380, 120, 18, 18);
+      g.fillRoundRect((this.w - width) / 2, top, width, 120, 18, 18);
       g.setColor(GOLD);
       g.setFont(new Font("SansSerif", Font.BOLD, 26));
-      this.drawCentered(g, "Night " + night.number() + ": " + night.label(), 212);
+      this.drawCentered(g, "Night " + night.number() + ": " + night.label(), top + 42);
       g.setColor(TEXT);
       g.setFont(new Font("SansSerif", Font.PLAIN, 15));
-      this.drawCentered(g, "Catch " + night.goal() + " gold stars in " + (int)Night.SECONDS + " seconds", 242);
+      this.drawCentered(g, "Catch " + night.goal() + " gold stars in " + (int)Night.SECONDS + " seconds", top + 72);
       g.setColor(DIM);
       g.setFont(new Font("SansSerif", Font.PLAIN, 13));
-      this.drawCentered(g, this.rule(night), 268);
+      this.drawCentered(g, this.rule(night), top + 98);
    }
 
    /** What is new about a night, on its intro card and menu card. */
@@ -567,18 +734,19 @@ public final class CatchPanel extends JPanel {
       if (night.holes() > 0) {
          return "Black holes cost " + (int)CatchGame.HOLE_PENALTY + " seconds";
       }
-      return "Click a star, or aim with the arrows and press Space";
+      return this.narrow ? "Tap a gold star to catch it" : "Click a star, or aim with the arrows and press Space";
    }
 
    private void drawResult(Graphics2D g) {
       Night night = this.game.night();
       boolean caught = this.game.state() == CatchGame.State.CAUGHT;
-      int cardX = WIDTH / 2 - 200;
-      int cardY = 120;
+      int cardW = Math.min(400, this.w - 24);
+      int cardX = (this.w - cardW) / 2;
+      int cardY = this.h / 2 - 120;
       g.setColor(CARD);
-      g.fillRoundRect(cardX, cardY, 400, 250, 20, 20);
+      g.fillRoundRect(cardX, cardY, cardW, 250, 20, 20);
       g.setColor(new Color(90, 100, 180));
-      g.drawRoundRect(cardX, cardY, 400, 250, 20, 20);
+      g.drawRoundRect(cardX, cardY, cardW, 250, 20, 20);
       g.setFont(new Font("SansSerif", Font.BOLD, 26));
       g.setColor(caught ? GOLD : BAD);
       this.drawCentered(g, caught ? "Night caught!" : "The clock ran out", cardY + 44);
@@ -586,7 +754,7 @@ public final class CatchPanel extends JPanel {
       for (int i = 0; i < 3; i++) {
          // The stars pop in one after another.
          boolean lit = i < stars && this.screenSeconds > 0.25 + i * 0.25;
-         this.drawStar(g, WIDTH / 2 - 60 + i * 60, cardY + 95, 24, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
+         this.drawStar(g, this.w / 2 - 60 + i * 60, cardY + 95, 24, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
       }
       g.setFont(new Font("SansSerif", Font.PLAIN, 14));
       g.setColor(TEXT);
@@ -608,7 +776,20 @@ public final class CatchPanel extends JPanel {
       }
       this.drawCentered(g, sub, cardY + 168);
       int buttonY = cardY + 190;
-      if (this.nextNight() != night) {
+      if (this.narrow) {
+         // A phone has no R, N or Esc to name, and the three buttons share the narrower card.
+         boolean next = this.nextNight() != night;
+         int count = next ? 3 : 2;
+         int bw = next ? (cardW - 40 - 20) / 3 : 120;
+         int x = cardX + (cardW - count * bw - (count - 1) * 10) / 2;
+         this.button(g, this.againButton, x, buttonY, bw, "Again", !next);
+         if (next) {
+            this.button(g, this.nextButton, x += bw + 10, buttonY, bw, "Next night", true);
+         } else {
+            this.nextButton.setBounds(0, 0, 0, 0);
+         }
+         this.button(g, this.menuButton, x + bw + 10, buttonY, bw, "Nights", false);
+      } else if (this.nextNight() != night) {
          this.button(g, this.againButton, cardX + 20, buttonY, 110, "Again (R)", false);
          this.button(g, this.nextButton, cardX + 145, buttonY, 110, "Next night (N)", true);
          this.button(g, this.menuButton, cardX + 270, buttonY, 110, "Nights (Esc)", false);
@@ -617,6 +798,37 @@ public final class CatchPanel extends JPanel {
          this.button(g, this.againButton, cardX + 70, buttonY, 120, "Again (R)", true);
          this.button(g, this.menuButton, cardX + 210, buttonY, 120, "Nights (Esc)", false);
       }
+   }
+
+   /** The paused card: what is left of the night, then Resume, Again and Nights. */
+   private void drawPaused(Graphics2D g) {
+      Night night = this.game.night();
+      // The field goes dark, so a pause is no time to study where the stars are.
+      g.setColor(new Color(8, 12, 40, 215));
+      g.fillRect(0, this.hud, this.w, this.h - this.hud);
+      int cardW = Math.min(400, this.w - 24);
+      int cardX = (this.w - cardW) / 2;
+      int cardY = this.h / 2 - 100;
+      g.setColor(CARD);
+      g.fillRoundRect(cardX, cardY, cardW, 190, 20, 20);
+      g.setColor(new Color(90, 100, 180));
+      g.drawRoundRect(cardX, cardY, cardW, 190, 20, 20);
+      g.setFont(new Font("SansSerif", Font.BOLD, 26));
+      g.setColor(GOLD);
+      this.drawCentered(g, "Paused", cardY + 44);
+      g.setFont(new Font("SansSerif", Font.PLAIN, 14));
+      g.setColor(TEXT);
+      int more = night.goal() - this.game.caught();
+      this.drawCentered(g, more + (more == 1 ? " gold star" : " gold stars") + " to go, " + String.format("%.1f", this.game.secondsLeft()) + " s left", cardY + 80);
+      g.setColor(DIM);
+      g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+      this.drawCentered(g, "The clock waits until you resume", cardY + 103);
+      int bw = this.narrow ? (cardW - 40 - 20) / 3 : 110;
+      int x = cardX + (cardW - 3 * bw - 20) / 2;
+      int y = cardY + 130;
+      this.button(g, this.resumeButton, x, y, bw, this.narrow ? "Resume" : "Resume (P)", true);
+      this.button(g, this.againButton, x + bw + 10, y, bw, this.narrow ? "Again" : "Again (R)", false);
+      this.button(g, this.menuButton, x + 2 * (bw + 10), y, bw, this.narrow ? "Nights" : "Nights (Esc)", false);
    }
 
    private void button(Graphics2D g, Rectangle bounds, int x, int y, int width, String label, boolean primary) {
@@ -635,15 +847,26 @@ public final class CatchPanel extends JPanel {
       g.setColor(GOLD);
       g.setFont(new Font("SansSerif", Font.BOLD, 34));
       this.drawCentered(g, "Star Catcher", 62);
-      this.drawStar(g, WIDTH / 2 - 150, 50, 14, this.spin, GOLD, GOLD_EDGE);
-      this.drawStar(g, WIDTH / 2 + 150, 50, 14, -this.spin, GOLD, GOLD_EDGE);
+      int beside = Math.min(150, this.w / 2 - 20);
+      this.drawStar(g, this.w / 2 - beside, 50, 14, this.spin, GOLD, GOLD_EDGE);
+      this.drawStar(g, this.w / 2 + beside, 50, 14, -this.spin, GOLD, GOLD_EDGE);
       g.setColor(TEXT);
       g.setFont(new Font("SansSerif", Font.PLAIN, 15));
-      this.drawCentered(g, "Click the gold stars before the clock runs out. Stay off the black holes.", 96);
-      g.setColor(DIM);
-      g.setFont(new Font("SansSerif", Font.PLAIN, 13));
-      this.drawCentered(g, this.records.totalStars() + " of " + Night.values().length * 3 + " stars    Arrows and Enter pick a night", 124);
-      this.drawCentered(g, "Each night flies over one of the five animation modes (now: Mode " + (this.selected.mode() + 1) + ")", 440);
+      String total = this.records.totalStars() + " of " + Night.values().length * 3 + " stars";
+      String sky = "Each night flies over one of the five animation modes (now: Mode " + (this.selected.mode() + 1) + ")";
+      if (this.narrow) {
+         this.drawWrapped(g, "Tap the gold stars before the clock runs out. Stay off the black holes.", -1, 92, this.w - 32, 19);
+         g.setColor(DIM);
+         g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+         this.drawCentered(g, total, 136);
+         this.drawWrapped(g, sky, -1, this.nightCards[5].y + this.nightCards[5].height + 24, this.w - 32, 16);
+      } else {
+         this.drawCentered(g, "Click the gold stars before the clock runs out. Stay off the black holes.", 96);
+         g.setColor(DIM);
+         g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+         this.drawCentered(g, total + "    Arrows and Enter pick a night", 124);
+         this.drawCentered(g, sky, 440);
+      }
       for (Night night : Night.values()) {
          Rectangle card = this.nightCards[night.ordinal()];
          boolean open = this.records.isOpen(night);
@@ -661,21 +884,33 @@ public final class CatchPanel extends JPanel {
          g.setColor(DIM);
          if (open) {
             g.drawString("Catch " + night.goal() + (night.holes() > 0 ? ", " + night.holes() + (night.holes() == 1 ? " hole" : " holes") : ""), card.x + 14, card.y + 46);
-            g.drawString(this.rule(night).replace("Click a star, or aim with the arrows and press Space", "No black holes"), card.x + 14, card.y + 63);
+            String rule = night.holes() == 0 ? "No black holes" : this.rule(night);
+            if (this.narrow) {
+               this.drawWrapped(g, rule, card.x + 14, card.y + 63, card.width - 24, 15);
+            } else {
+               g.drawString(rule, card.x + 14, card.y + 63);
+            }
          } else {
             this.drawLock(g, card.x + card.width / 2, card.y + 56);
-            g.drawString("Catch night " + night.ordinal() + " to open", card.x + 14, card.y + 104);
+            g.drawString("Catch night " + night.ordinal() + " to open", card.x + 14, card.y + card.height - 14);
          }
          if (open) {
             int stars = this.records.stars(night);
             for (int i = 0; i < 3; i++) {
                boolean lit = i < stars;
-               this.drawStar(g, card.x + 26 + i * 26, card.y + 92, 10, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
+               this.drawStar(g, card.x + 26 + i * (this.narrow ? 22 : 26), card.y + card.height - 26, this.narrow ? 9 : 10, 0, lit ? GOLD : new Color(50, 58, 110), lit ? GOLD_EDGE : new Color(90, 100, 160));
             }
             int best = this.records.bestTenths(night);
             if (best >= 0) {
                g.setColor(DIM);
-               g.drawString(String.format("%.1f s left", best / 10.0), card.x + 108, card.y + 97);
+               String time = String.format("%.1f s left", best / 10.0);
+               if (this.narrow) {
+                  // Right-aligned in the narrower card, so it clears the stars down to a 320 px screen.
+                  g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                  g.drawString(time, card.x + card.width - 10 - g.getFontMetrics().stringWidth(time), card.y + card.height - 21);
+               } else {
+                  g.drawString(time, card.x + 108, card.y + card.height - 21);
+               }
             }
          }
       }

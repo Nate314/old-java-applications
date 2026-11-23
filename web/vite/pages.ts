@@ -10,25 +10,32 @@
 // and their Then pages load from their head, sharing assets/react.js with the pages. Its head script
 // (src/runtime/early.ts, the skin before first paint) is inlined in those pages where <EarlyScript /> stands.
 // It also writes apps.json (src/shared/apps.json, which the pages import) for boot.js on the app pages,
-// assets/files.json, every file the build wrote besides the HTML, for the home page's Save all for offline, and the
+// assets/files.json, every file the build wrote besides the HTML (and the preview clips), for the home page's Save all for offline, and the
 // service worker (src/sw/sw.ts) as sw.js, a plain script at the site root. What the runtime adds to a page once it is
 // needed (src/runtime/lazy) is imported, so Vite writes it as chunks of its own.
+// Built names carry a hash of their content (vite.config.ts). public/shim.css (with the forced-colors.css it imports) is
+// written once more as assets/shim-<hash>.css, which the pages link; the root copy stays for anyone who links it there.
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { build } from 'esbuild';
+import { createElement } from 'react';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
+import { build, transformSync } from 'esbuild';
 import type { Plugin } from 'vite';
 import type { OutputBundle, OutputChunk } from 'rollup';
 import { ROUTES, type Route } from '../src/routes';
 import { loaderScript } from '../src/pages/notfound/loader';
 import { appPage, thenPage } from '../src/pages/app/AppPage';
 import { APPS } from '../src/shared/catalog';
+import { WITH_THEN, pick } from '../src/pages/compare/Intro';
+import { Compare, renderFor } from '../src/pages/compare/Compare';
 
 const root = resolve(__dirname, '..');
 
 /** A classic script bundled from its TypeScript entry into one file. */
-async function script(entry: string, minify = false): Promise<string> {
-  const out = await build({ entryPoints: [resolve(root, entry)], bundle: true, format: 'iife', target: 'es2020', minify, write: false, logLevel: 'error' });
+async function script(entry: string, minify = false, define?: Record<string, string>): Promise<string> {
+  const out = await build({ entryPoints: [resolve(root, entry)], bundle: true, format: 'iife', target: 'es2020', minify, define, write: false, logLevel: 'error' });
   return out.outputFiles[0].text;
 }
 
@@ -42,6 +49,65 @@ async function withEarly(html: string): Promise<string> {
   if (code.length > 16384) throw new Error('src/runtime/early.ts bundles to ' + code.length + ' bytes (limit 16384): does skin.ts import something now?');
   return html.replace('<script data-early=""></script>', () => '<script>' + code + '</script>');
 }
+/**
+ * A stylesheet as it ships: comments and spaces out, every rule as written (no merging or rewriting). Every page waits
+ * for its stylesheets before its first paint, and this is about a third fewer of their bytes (gzipped) on a slow phone.
+ */
+const packed = (css: string) => transformSync(css, { loader: 'css', minifyWhitespace: true }).code;
+const hash = (text: string) => createHash('sha256').update(text).digest('base64url').slice(0, 8);
+/**
+ * public/shim.css as a hashed asset ({ built name: source }), with forced-colors.css written into it under its media
+ * query instead of @import-ed: an import is fetched (even when its query doesn't match) only once shim.css has
+ * arrived, and every page waits for both before its first paint, so it was a round trip more on a slow phone.
+ */
+function skinFiles(): Record<string, string> {
+  const forced = readFileSync(resolve(root, 'public/forced-colors.css'), 'utf8');
+  const line = '@import url("forced-colors.css") (forced-colors: active);';
+  const source = readFileSync(resolve(root, 'public/shim.css'), 'utf8');
+  if (!source.includes(line) || forced.includes('@')) throw new Error('public/shim.css no longer imports forced-colors.css as ' + line + ', or forced-colors.css has an @-rule: update vite/pages.ts');
+  const shim = packed(source.replace(line, () => '@media (forced-colors: active) {\n' + forced + '}'));
+  return { ['assets/shim-' + hash(shim) + '.css']: shim };
+}
+/** A page with the skins' hashed name where it links shim.css (href="shim.css" or "../shim.css"). */
+const withSkins = (html: string) => html.replace(/href="((?:\.\.\/)?)shim\.css"/g, (_, up) => 'href="' + up + Object.keys(skinFiles())[0] + '"');
+
+/** A script that writes the render-blocking tag only on a trip from another page of the site (Painted early, below). */
+const onTrip = (blockingTag: string) => '<script>try{sessionStorage.getItem("oldjava.trip")&&document.write(' +
+  JSON.stringify(blockingTag).replace(/<\//g, '<\\/') + ')}catch(e){}</script>';
+/** An app page or Then page, whose HTML holds its title card (AppPage.tsx, EarlyTitle), paints early as the home page does. */
+const paintedEarly = (html: string) => html.replace(/<script type="module" src="[^"]+" blocking="render"><\/script>/,
+  tag => onTrip(tag) + tag.replace(' blocking="render"', ''));
+
+/**
+ * compare.html with its players and changes as React first renders them for each app (one page serves every ?app=),
+ * written in where #compare-rest stands by a script that picks the asked app's copy: the two play.html frames then
+ * start loading as the page is read, not once React and the page's module have arrived (main.tsx hydrates them).
+ */
+function compareRest(html: string): string {
+  const empty = '<div id="compare-rest" style="display:contents"></div>';
+  if (!html.includes(empty)) throw new Error('compare.html has no empty #compare-rest: update compareRest in vite/pages.ts');
+  const copies: Record<string, string> = {};
+  for (const a of WITH_THEN) {
+    renderFor(a.id);
+    // React's preload of the cover picture would be a node the page never renders (hydration must match exactly).
+    copies[a.id] = renderToString(createElement(Compare)).replace(/^<link rel="preload" as="image" href="[^"]*"\/>/, '');
+    if (copies[a.id].includes('<link')) throw new Error('compare.html: React wrote a <link> into #compare-rest');
+  }
+  const json = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
+  return html.replace(empty, () => '<script>(function(){var m=' + json(copies) + ',a=new URLSearchParams(location.search).get("app");' +
+    'document.write(' + json(empty.replace('></div>', '>')) + '+m[{}.hasOwnProperty.call(m,a)?a:' + json(pick(null).id) + ']+"</div>")})()</script>');
+}
+
+/**
+ * An app's README as first restored, for its Then page's early card: read from git at web/then/pom.xml's then.commit,
+ * as the then module reads the sources it copies to <App>/then-source/ (which may not be written yet: modules build in parallel).
+ */
+function thenReadme(id: string): string {
+  const commit = /<then\.commit>([0-9a-f]{40})<\/then\.commit>/.exec(readFileSync(resolve(root, 'then/pom.xml'), 'utf8'));
+  if (!commit) throw new Error('web/then/pom.xml has no then.commit: update thenReadme in vite/pages.ts');
+  return execFileSync('git', ['show', commit[1] + ':' + id + '/README.md'], { cwd: root, encoding: 'utf8' });
+}
+
 const htmlId = (r: Route) => resolve(root, r.file);
 const inputName = (r: Route) => r.file.replace(/\.html$/, '').replace(/^404$/, 'notfound');
 
@@ -60,6 +126,21 @@ function cssOf(bundle: OutputBundle, chunk: OutputChunk, seen = new Set<string>(
   }
   for (const css of chunk.viteMetadata?.importedCss ?? []) if (!out.includes(css)) out.push(css);
   return out;
+}
+
+/**
+ * A module preload for every chunk a chunk imports, theirs too, so they load beside it instead of after it has
+ * arrived and been read (vite.config.ts turns Vite's own off): one round trip less before first paint on a slow phone.
+ */
+/** A chunk's static imports, theirs after each, once each. */
+function importsOf(bundle: OutputBundle, chunk: OutputChunk, seen = new Set<string>()): string[] {
+  return chunk.imports.filter(name => !seen.has(name) && seen.add(name)).flatMap(name => {
+    const dep = bundle[name];
+    return [name, ...(dep && dep.type === 'chunk' ? importsOf(bundle, dep, seen) : [])];
+  });
+}
+function preloadTags(bundle: OutputBundle, chunk: OutputChunk, up: string): string {
+  return importsOf(bundle, chunk).map(name => '<link rel="modulepreload" href="' + up + name + '">').join('');
 }
 
 export function pages(): Plugin {
@@ -86,25 +167,66 @@ export function pages(): Plugin {
     async load(id) {
       const r = byId.get(id);
       if (!r) return null;
-      return withEarly(document(r, '<script type="module" src="/' + r.entry + '"></script>\n'));
+      const html = document(r, '<script type="module" src="/' + r.entry + '"></script>\n');
+      return withEarly(r.file === 'compare.html' ? compareRest(html) : html);
     },
     // Vite joins a page's module scripts into one entry script; a page that runs the runtime (<RuntimeScript />)
     // keeps it render-blocking, as the runtime's own script is on the app pages.
     transformIndexHtml: {
       order: 'post',
       handler(html, ctx) {
+        html = withSkins(html);
         const r = byId.get(resolve(ctx.filename));
+        const entry = /<script type="module" crossorigin src="([^"]+)"><\/script>/;
+        if (ctx.bundle && ctx.chunk) html = html.replace(entry, tag => tag + preloadTags(ctx.bundle!, ctx.chunk!, './'));
         if (!r || !renderToStaticMarkup(r.head).includes('src="/src/runtime/main.ts"')) return html;
-        return html.replace(/<script type="module" crossorigin src="([^"]+)"><\/script>/, '<script type="module" crossorigin src="$1" blocking="render"></script>');
+        const blocking = (src: string) => '<script type="module" crossorigin src="' + src + '" blocking="render"></script>';
+        if (!r.placeholder) return html.replace(entry, (_, src) => blocking(src));
+        // Painted early: a page whose placeholder already shows its largest text (the home page) paints it while its
+        // scripts load. Only a trip from another page of the site (one-machine.ts's 'oldjava.trip', left by the page
+        // before) still holds the first frame for them, so its pagereveal listener sees the player it animates into.
+        // Written by the parser, the blocking copy runs like the tag it was; the module itself runs once.
+        // Its scripts ask at low priority: at high they shared a slow phone's bandwidth with the render-blocking
+        // stylesheets and held the first paint (throttled phone FCP ~1.2 -> ~0.9 s, round 72).
+        return html.replace(entry, (tag, src) => onTrip(blocking(src)) + tag.replace('<script ', '<script fetchpriority="low" '))
+          .replace(/<link rel="modulepreload" /g, '<link rel="modulepreload" fetchpriority="low" ');
       },
     },
     async generateBundle(_options, bundle) {
+      // First, so the 404 page's inlined styles below are packed too.
+      for (const a of Object.values(bundle)) if (a.type === 'asset' && a.fileName.endsWith('.css')) a.source = packed(String(a.source));
+      const skins = skinFiles();
+      for (const [fileName, source] of Object.entries(skins)) this.emitFile({ type: 'asset', fileName, source });
+      // The app pages are written here, not by Vite, so they get the hashed names of what they load from here too.
+      const chunk = (name: string) => {
+        const c = Object.values(bundle).find((x): x is OutputChunk => x.type === 'chunk' && x.name === name);
+        if (!c) throw new Error('No chunk ' + name);
+        return c.fileName;
+      };
+      // boot.js's own imports (React first) are preloaded beside it: boot.js holds the first frame (blocking="render")
+      // and the title screen no longer waits for classes.js, so asking for React only once boot.js had arrived put a
+      // whole download in front of the first frame (about 0.3 s on a throttled phone, measured in round 55).
+      const boot = bundle[chunk('boot')] as OutputChunk;
+      const named = (html: string) => withSkins(html).replace(/"\.\.\/assets\/boot\.js"[^>]*><\/script>/, tag =>
+        tag.replace('assets/boot.js', chunk('boot')) + preloadTags(bundle, boot, '../'))
+        .replace('"../assets/news.js"', () => '"../' + chunk('news') + '"');
       this.emitFile({ type: 'asset', fileName: 'apps.json', source: readFileSync(resolve(root, 'src/shared/apps.json')) });
-      for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: await withEarly(appPage(app)) });
-      for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: await withEarly(thenPage(app)) });
-      this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts') });
-      const files = Object.keys(bundle).filter(name => name.startsWith('assets/')).sort();
-      this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files) + '\n' });
+      for (const app of APPS) this.emitFile({ type: 'asset', fileName: app.id + '/index.html', source: await withEarly(paintedEarly(named(appPage(app)))) });
+      for (const app of APPS.filter(a => a.then)) this.emitFile({ type: 'asset', fileName: app.id + '/then.html', source: await withEarly(paintedEarly(named(thenPage(app, thenReadme(app.id))))) });
+      const files = [...new Set(Object.keys(bundle).concat(Object.keys(skins)))].filter(name => name.startsWith('assets/')).sort();
+      // sw.js lists this build's files, so it changes with every build (the browser then installs it) and knows which to keep.
+      // It lists the pages too, so offline it tells a page not saved yet from a mistyped address (which gets the lost page).
+      const pages = ROUTES.filter(r => !r.anyDepth).map(r => r.file).concat(APPS.map(a => a.id + '/index.html'), APPS.filter(a => a.then).map(a => a.id + '/then.html'));
+      // What the worker fetches on installing: the parts pages load later (Find, the skin maker, What's new...) and the
+      // lost page's code (its loader names no files), with what they import. A page's own files are kept with the page,
+      // so a first visit no longer also downloads every other page's code (Save all, files.json below, still takes all).
+      const later = Object.values(bundle).filter((c): c is OutputChunk => c.type === 'chunk' &&
+        (c.isDynamicEntry || ROUTES.some(r => r.anyDepth && c.isEntry && c.name === inputName(r))));
+      const installed = files.filter(name => name in skins || later.some(c => c.fileName === name || importsOf(bundle, c).includes(name) || cssOf(bundle, c).includes(name)));
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: await script('src/sw/sw.ts', false, { BUILT: JSON.stringify(installed), PAGES: JSON.stringify(pages) }) });
+      // Save all keeps the preview clips too (about 3 MB), so the gallery, play.html and title screens move offline.
+      const clips = APPS.filter(a => a.clip).map(a => 'clips/' + a.id + '.mp4');
+      this.emitFile({ type: 'asset', fileName: 'assets/files.json', source: JSON.stringify(files.concat(clips)) + '\n' });
       for (const r of ROUTES.filter(x => x.anyDepth)) {
         const chunk = Object.values(bundle).find((c): c is OutputChunk => c.type === 'chunk' && c.isEntry && c.name === inputName(r));
         if (!chunk) throw new Error('No bundle for ' + r.entry);
@@ -112,7 +234,7 @@ export function pages(): Plugin {
           const asset = bundle[name];
           return asset.type === 'asset' ? String(asset.source) : '';
         }).join('\n');
-        const head = '<style>\n' + styles + '</style>\n<script>' + loaderScript(chunk.fileName) + '</script>';
+        const head = '<style>\n' + styles + '</style>\n<script>' + loaderScript(chunk.fileName, importsOf(bundle, chunk)) + '</script>';
         this.emitFile({ type: 'asset', fileName: r.file, source: document(r, '', head) });
       }
     },

@@ -14,7 +14,8 @@ import javax.swing.JPanel;
  * one, and Record; during a song it shows the notes coming up (the computer key and note name, wider for longer
  * notes) with the next one lit; after a song it shows the stars won. While recording it shows the notes so far.
  * The microphone button sits at the top right, and doubles as a tuner while the microphone listens; the chord keys
- * button sits left of it, and names the chord last played while they are on. With the
+ * button sits left of it, and names the chord last played while they are on. Left of that the sound button names the
+ * sound the keys play, with arrows to step through its families. With the
  * looper on, the strip holds the looper's buttons instead, each with its key.
  */
 public final class LessonBar extends JPanel {
@@ -51,6 +52,9 @@ public final class LessonBar extends JPanel {
    private boolean newBest;
    /** The songs in the free play menu, which ends with a Record chip. */
    private Song[] menu = Song.ALL;
+   /** The song free play was heard to be the start of (gold in the menu), or null; and whether picking it carries on. */
+   private Song found;
+   private boolean carryOn;
    /** Whether recording is on, and the notes so far (null before the first). */
    private boolean recording;
    private Song recorded;
@@ -63,6 +67,8 @@ public final class LessonBar extends JPanel {
    /** Whether chord keys are on, and the chord last played (null before the first). */
    private boolean chords;
    private String chordName;
+   /** The General MIDI program the keys play, named on the sound button. */
+   private int sound;
    private static final Color CHORDS_ON = new Color(34, 52, 88);
    /** The looper, while it is on; null otherwise. */
    private Looper looper;
@@ -89,6 +95,13 @@ public final class LessonBar extends JPanel {
       this.lesson = lesson;
       this.listenNote = listenNote;
       this.newBest = newBest;
+      this.repaint();
+   }
+
+   /** Lights {@code song}'s chip in gold as the song just heard (null for none), saying whether it plays on or starts over. */
+   public void setFound(Song song, boolean carryOn) {
+      this.found = song;
+      this.carryOn = carryOn;
       this.repaint();
    }
 
@@ -143,6 +156,32 @@ public final class LessonBar extends JPanel {
       this.chordName = on && name == null && this.chords ? this.chordName : name;
       this.chords = on;
       this.repaint();
+   }
+
+   /** Shows the sound the keys play. */
+   public void setSound(int program) {
+      this.sound = program;
+      this.repaint();
+   }
+
+   /**
+    * Whether a point is on the sound button, and which way it steps: -1 on its left arrow, 1 elsewhere on it (its
+    * right arrow, its name, or the whole button when narrow), 0 off it.
+    */
+   public int soundAt(int x, int y) {
+      int left = this.soundLeft();
+      if (y < MIC_TOP || y >= MIC_TOP + MIC_HEIGHT || x < left || x >= this.chordsLeft() - 6) {
+         return 0;
+      }
+      return this.soundWidth() >= 100 && x < left + 26 ? -1 : 1;
+   }
+
+   private int soundWidth() {
+      return this.getWidth() < 420 ? 34 : 124;
+   }
+
+   private int soundLeft() {
+      return this.chordsLeft() - 6 - this.soundWidth();
    }
 
    /** Whether a point is on the chord keys button. */
@@ -204,6 +243,10 @@ public final class LessonBar extends JPanel {
          } else {
             this.paintNotes(g, this.recorded, this.lastFitting(this.recorded), notes - 1, RECORD);
          }
+      } else if (this.lesson == null && this.found != null) {
+         this.header(g, "That's " + this.found.shortTitle() + "!", NEXT,
+            (java.util.Arrays.asList(this.menu).indexOf(this.found) + 1) + " or click it to " + (this.carryOn ? "play on with the notes lit" : "learn it"));
+         this.paintMenu(g);
       } else if (this.lesson == null) {
          this.header(g, "Free play", TEXT, "Pick a song: click it, or T or 1-" + this.menu.length + "   Space record   O looper   Q chords");
          this.paintMenu(g);
@@ -235,11 +278,13 @@ public final class LessonBar extends JPanel {
          g.fillOval(x, 12, 14, 14);
          x += 20;
       }
+      headline = fit(g.getFontMetrics(), headline, this.soundLeft() - 8 - x);
       g.drawString(headline, x, 24);
       int headlineEnd = x + g.getFontMetrics().stringWidth(headline);
       this.paintMic(g);
       this.paintChords(g);
-      int rightEdge = this.chordsLeft() - MARGIN;
+      this.paintSound(g);
+      int rightEdge = this.soundLeft() - MARGIN;
       String right = this.notice != null ? this.notice : help;
       g.setFont(this.notice != null ? HEADLINE : HELP);
       g.setColor(this.notice != null ? NEXT : SOFT);
@@ -324,6 +369,43 @@ public final class LessonBar extends JPanel {
       g.drawString(this.chords && this.chordName != null ? this.chordName : "Chords", left + 32, MIC_TOP + 17);
    }
 
+   /** The sound button: a note, or the sound's name between arrows when there is room. */
+   private void paintSound(Graphics2D g) {
+      int left = this.soundLeft();
+      int width = this.soundWidth();
+      g.setColor(CHIP);
+      g.fillRoundRect(left, MIC_TOP, width, MIC_HEIGHT, MIC_HEIGHT, MIC_HEIGHT);
+      g.setColor(TEXT);
+      if (width < 100) {
+         // An eighth note: head, stem and flag.
+         g.fillOval(left + 10, MIC_TOP + 13, 9, 7);
+         g.fillRect(left + 17, MIC_TOP + 4, 2, 13);
+         g.drawLine(left + 18, MIC_TOP + 4, left + 23, MIC_TOP + 9);
+         return;
+      }
+      int middle = MIC_TOP + MIC_HEIGHT / 2;
+      g.fillPolygon(new int[]{left + 10, left + 16, left + 16}, new int[]{middle, middle - 5, middle + 5}, 3);
+      int right = left + width - 10;
+      g.fillPolygon(new int[]{right, right - 6, right - 6}, new int[]{middle, middle - 5, middle + 5}, 3);
+      String name = LoopView.sound(this.sound);
+      g.setFont(CHIP_FONT);
+      if (g.getFontMetrics().stringWidth(name) > width - 48) {
+         g.setFont(SMALL_CHIP_FONT);
+      }
+      g.drawString(name, left + (width - g.getFontMetrics().stringWidth(name)) / 2, MIC_TOP + 17);
+   }
+
+   /** {@code text}, cut short with ".." (keeping at least four characters) when it is wider than {@code room}. */
+   static String fit(FontMetrics metrics, String text, int room) {
+      if (metrics.stringWidth(text) <= room) {
+         return text;
+      }
+      while (text.length() > 4 && metrics.stringWidth(text + "..") > room) {
+         text = text.substring(0, text.length() - 1);
+      }
+      return text.trim() + "..";
+   }
+
    private void paintLine(Graphics2D g, String line) {
       g.setFont(HELP);
       g.setColor(SOFT);
@@ -340,24 +422,31 @@ public final class LessonBar extends JPanel {
             continue;
          }
          boolean record = song == this.menu.length;
-         g.setColor(CHIP);
+         boolean found = !record && this.menu[song] == this.found;
+         g.setColor(found ? NEXT : CHIP);
          g.fillRoundRect(x + 2, CHIP_TOP, chipWidth - 4, chipHeight, 10, 10);
          g.setFont(CHIP_FONT);
-         g.setColor(TEXT);
+         g.setColor(found ? BACKGROUND : TEXT);
          // Too narrow for a name: just the number to press.
          String label = record ? (chipWidth < 90 ? "Rec" : "Record")
             : chipWidth < 90 ? String.valueOf(song + 1) : (song + 1) + "  " + this.menu[song].shortTitle();
          FontMetrics metrics = g.getFontMetrics();
-         if (metrics.stringWidth(label) > chipWidth - 12) {
-            while (label.length() > 4 && metrics.stringWidth(label + "..") > chipWidth - 12) {
-               label = label.substring(0, label.length() - 1);
-            }
-            label = label.trim() + "..";
-         }
+         label = fit(metrics, label, chipWidth - 12);
          g.drawString(label, x + (chipWidth - metrics.stringWidth(label)) / 2, CHIP_TOP + 20);
          if (record) {
             g.setColor(RECORD);
             g.fillOval(x + chipWidth / 2 - 7, CHIP_TOP + 31, 14, 14);
+         } else if (found) {
+            // In place of the stars: what a click does with the notes just played.
+            g.setFont(HELP);
+            String action = this.carryOn ? "play on" : "learn it";
+            int actionWidth = g.getFontMetrics().stringWidth(action);
+            int center = x + chipWidth / 2;
+            if (actionWidth <= chipWidth - 8) {
+               g.drawString(action, center - actionWidth / 2, CHIP_TOP + 42);
+            } else {
+               g.fillPolygon(new int[]{center - 4, center - 4, center + 5}, new int[]{CHIP_TOP + 32, CHIP_TOP + 44, CHIP_TOP + 38}, 3);
+            }
          } else if (this.menu[song].id() == null) {
             g.setFont(HELP);
             g.setColor(SOFT);

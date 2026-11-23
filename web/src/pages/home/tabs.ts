@@ -5,14 +5,13 @@
 // The tab chosen last is remembered; fresh news (an app you played has changed) takes the panel once per visit.
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { APPS } from '../../shared/catalog';
-import { H, draw, setBeforeDraw } from './model';
+import { H, draw, drawPart, setBeforeDraw } from './model';
 import { unseenCount } from './WhatsNew';
+import { store, stored } from '../../shared/stored';
 
 const KEY = 'oldjava.arcadeTab';
 export const TABS = ['news', 'passport', 'records', 'takeaway'];
 let chosenByVisitor = false;
-
-function remembered() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 
 /** Whether a tab's panel has anything to show. */
 export function tabShown(id: string) {
@@ -35,9 +34,10 @@ export function badge(id: string): { text: string; isNew: boolean } {
 // takes the panel until the visitor picks a tab.
 function sync() {
   let on = H.tab;
-  if (H.news.view && H.news.view.fresh && !chosenByVisitor) on = 'news';
+  if (H.fresh && !chosenByVisitor) on = 'passport';   // a stamp collected on this visit: the passport it landed on
+  else if (H.news.view && !chosenByVisitor && (H.news.view.fresh || !stored(KEY) && !stampCount())) on = 'news';   // a first visit: what changed, not an empty passport
   if (!on || !tabShown(on)) {
-    const want = remembered() || 'passport';
+    const want = stored(KEY) || 'passport';
     on = TABS.indexOf(want) >= 0 && tabShown(want) ? want : visible()[0];
   }
   H.tab = on;
@@ -45,9 +45,9 @@ function sync() {
 
 export function tabClick(id: string) {
   chosenByVisitor = true;
-  try { localStorage.setItem(KEY, id); } catch (e) { /* not kept */ }
+  store(KEY, id);
   H.tab = id;
-  draw();
+  drawPart('arcade');
 }
 
 export function tabKey(e: ReactKeyboardEvent, id: string) {

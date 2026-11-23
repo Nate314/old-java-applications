@@ -1,5 +1,6 @@
 package dinosaurgameplayer;
 
+import java.awt.Toolkit;
 import java.io.File;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
@@ -20,7 +21,9 @@ public final class Main extends JFrame {
       this.setResizable(false);
       // Read after the window exists, so the browser build has put the saved file back.
       Records records = Records.load(new File(System.getProperty("user.home"), ".dinogame.txt"));
-      RunnerPanel panel = new RunnerPanel(records, System.nanoTime(), Sounds.open(records.sound));
+      // A screen narrower than the game (a phone held upright, in the browser) gets thumb pads under it.
+      boolean pads = Toolkit.getDefaultToolkit().getScreenSize().width < Runner.WIDTH + 24;
+      RunnerPanel panel = new RunnerPanel(records, System.nanoTime(), Sounds.open(records.sound), pads);
       this.add(panel);
       this.pack();
       this.setLocationRelativeTo(null);

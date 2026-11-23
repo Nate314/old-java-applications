@@ -3,7 +3,7 @@
 // (declare global { interface OldjavaSkin { ... } }).
 
 /** An app in boot.js's catalog (read from apps.json). */
-interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: string; then: boolean; shot: string; origin: string; clip?: boolean }
+interface OldjavaCatalogApp { id: string; name: string; hint: string; cat: string; then: boolean; shot: string; pic: string; origin: string; clip?: boolean }
 
 interface OldjavaPassport {
   has(id: string): boolean;
@@ -13,7 +13,7 @@ interface OldjavaPassport {
   onChange(fn: (fresh: string | null) => void): void;
   open: ((id: string) => void) | null;
   catalog(): Promise<OldjavaCatalogApp[]>;
-  unplayed(apps: OldjavaCatalogApp[], current: string | null): OldjavaCatalogApp[];
+  unplayed<T extends { id: string; cat: string }>(apps: T[], current: string | null): T[];
 }
 
 /** An app page's pop out (the player's iframe has one once its page has loaded). */
@@ -59,7 +59,7 @@ interface OldjavaPad {
   /** Builds the app's controller in el; returns the function that lights a button. */
   render(el: HTMLElement, id: string, send: (type: string, key: string) => void): (which: number, down: boolean) => void;
 }
-interface OldjavaShare { open(id: string | null, opener: Element): void }
+interface OldjavaShare { open(id: string | null, opener: Element, picture?: () => Promise<Blob>): void }
 interface OldjavaZoom { fit(): boolean; set(on: boolean): void; onChange(fn: () => void): void }
 interface OldjavaSkin { get(): string; set(skin: string): void }
 interface OldjavaSaver { showing(): boolean }

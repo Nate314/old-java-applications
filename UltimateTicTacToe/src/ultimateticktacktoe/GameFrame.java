@@ -5,6 +5,8 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.FontMetrics;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
@@ -23,6 +25,9 @@ public final class GameFrame extends JFrame {
    private static final File RECORD_FILE = new File(System.getProperty("user.home", "."), ".ultimatetictactoe-record.txt");
    /** Room for the mode buttons, the status line and the record line (or the friend row), taken from the board so the window fits the screen. */
    private static final int BARS_HEIGHT = 96;
+   /** On a wide, short screen the bars go in a column beside the board (at least this wide, at most COLUMN_MAX), which takes their height instead. */
+   private static final int COLUMN_MIN = 300;
+   private static final int COLUMN_MAX = 340;
    /** Space between the buttons of a row. */
    private static final int GAP = 6;
    /** How long the hard computer searches for a move. */
@@ -49,8 +54,15 @@ public final class GameFrame extends JFrame {
    private final JLabel status = new JLabel(" ", SwingConstants.CENTER);
    /** The record against the computer on this level; blank in two-player games. */
    private final JLabel tally = new JLabel(" ", SwingConstants.CENTER);
+   /** The bars' width (the board's, or the column's beside it), which the record line (with the button beside it) must fit in. */
+   private int barsWidth;
    private final Random random = new Random();
    private final Timer computerTimer = new Timer(MOVE_DELAY_MILLIS, event -> this.computerMove());
+   /** Hard and Watch: the computer's search, grown a slice per tick so the board shows where it is looking (and the page never waits long); null when it is not thinking. */
+   private Computer.Think computerThink;
+   private String computerThinkFor;
+   private int computerSpent;
+   private final Timer thinkTimer = new Timer(HINT_TICK_MILLIS, event -> this.computerThinkStep());
    /** Friend by link: the link (or code) to send, or a friend's to open, with Copy, Open and Take back. Shown in place of the record line. */
    private final JPanel friendRow = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
    private final JTextField friendField = new JTextField();
@@ -85,6 +97,8 @@ public final class GameFrame extends JFrame {
    /** The move under the mouse or the keyboard cursor (board * 9 + cell), or -1; and the boards it would send the opponent to. */
    private int previewMove = -1;
    private boolean[] previewTargets;
+   /** Where the opponent could win a small board after the previewed move (board * 9 + cell), or null. */
+   private boolean[] previewDangers;
    /** The cell the arrow keys are on, or -1 once the mouse is used. */
    private int cursorMove = -1;
    /** The game's status line, shown again when a preview's line ends. */
@@ -102,6 +116,8 @@ public final class GameFrame extends JFrame {
    private final Timer reviewTimer = new Timer(30, event -> this.analyseStep());
    private final JPanel modeBar;
    private final ReviewGraph graph;
+   /** Beside the board on a landscape screen: the two sides, who is to move and the boards each has won; null above and below the board. */
+   private FaceOff faceOff;
    /** Review game: next to the record once a game ends, and in place of Open in the friend row. */
    private final JButton reviewButton = new JButton("Review game");
    private final JButton friendReviewButton = new JButton("Review");
@@ -154,9 +170,13 @@ public final class GameFrame extends JFrame {
       this.setResizable(false);
       // 3/4 of the screen height, but no wider than the screen, so the board also fits a narrow (portrait) browser window.
       Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-      int boardArea = Math.min(screen.width - 24, screen.height * 3 / 4 - BARS_HEIGHT);
-      int boardSize = boardArea / 3;
+      int stacked = Math.min(screen.width - 24, screen.height * 3 / 4 - BARS_HEIGHT);
+      // A landscape screen often has room beside the board: the bars move into a column there and the board takes their height.
+      int beside = Math.min(screen.height * 3 / 4, screen.width - 24 - COLUMN_MIN - GAP * 4);
+      boolean column = beside > stacked;
+      int boardSize = Math.max(stacked, beside) / 3;
       int gap = Math.max(4, boardSize / 28);
+      this.barsWidth = column ? Math.min(COLUMN_MAX, screen.width - 24 - GAP * 4 - boardSize * 3) : boardSize * 3;
       JPanel grid = new JPanel();
       grid.setLayout(null);
       grid.setPreferredSize(new Dimension(boardSize * 3, boardSize * 3));
@@ -167,8 +187,8 @@ public final class GameFrame extends JFrame {
       }
 
       // The mode buttons and the review's chart share the top slot; only one shows at a time.
-      this.modeBar = this.modeBar(boardSize * 3);
-      Dimension topSize = new Dimension(boardSize * 3, this.modeBar.getPreferredSize().height);
+      this.modeBar = this.modeBar(this.barsWidth, column);
+      Dimension topSize = new Dimension(this.barsWidth, this.modeBar.getPreferredSize().height);
       this.graph = new ReviewGraph(this, topSize);
       JPanel top = new JPanel(new BorderLayout());
       top.setPreferredSize(topSize);
@@ -177,8 +197,7 @@ public final class GameFrame extends JFrame {
       this.layoutLessonBar();
       top.add(this.lessonBar, BorderLayout.SOUTH);
       this.graph.setVisible(false);
-      this.add(top, BorderLayout.NORTH);
-      JPanel gridHolder = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+      JPanel gridHolder = new JPanel(new FlowLayout(FlowLayout.CENTER, column ? GAP * 2 : 0, 0));
       gridHolder.add(grid);
       this.add(gridHolder, BorderLayout.CENTER);
       JPanel statusLines = new JPanel(new BorderLayout());
@@ -189,21 +208,35 @@ public final class GameFrame extends JFrame {
       statusLines.add(this.status, BorderLayout.NORTH);
       // The record line and the friend row share one slot, as tall as the row, and only one shows at a time.
       JPanel lower = new JPanel(new BorderLayout());
-      this.layoutFriendRow(boardSize * 3);
-      lower.setPreferredSize(new Dimension(boardSize * 3, this.friendRow.getPreferredSize().height));
+      this.layoutFriendRow(this.barsWidth, column);
+      if (!column) {   // in the column the face-off takes up any change in height instead, and the link has a row of its own
+         lower.setPreferredSize(new Dimension(this.barsWidth, this.friendRow.getPreferredSize().height));
+      }
       lower.add(this.tally, BorderLayout.CENTER);
       lower.add(this.friendRow, BorderLayout.SOUTH);
       this.layoutReviewRow();
       lower.add(this.reviewButtonHolder, BorderLayout.EAST);
       lower.add(this.reviewRow, BorderLayout.NORTH);
       statusLines.add(lower, BorderLayout.SOUTH);
-      this.add(statusLines, BorderLayout.SOUTH);
+      // Beside the board, the buttons line up with its top edge and the status lines with its bottom edge.
+      JPanel side = new JPanel(new BorderLayout());
+      if (column) {
+         this.faceOff = new FaceOff(still());
+         side.add(this.faceOff, BorderLayout.CENTER);
+         side.setPreferredSize(new Dimension(this.barsWidth, boardSize * 3));   // the column keeps its width whatever its rows hold
+         side.add(top, BorderLayout.NORTH);
+         side.add(statusLines, BorderLayout.SOUTH);
+         this.add(side, BorderLayout.EAST);
+      } else {
+         this.add(top, BorderLayout.NORTH);
+         this.add(statusLines, BorderLayout.SOUTH);
+      }
       // A friend's link or code from the arguments, unless it is this game before this side answered it (the page reloaded).
       if (code != null && !(this.mode == Mode.FRIEND && this.moves.startsWith(code) && this.moves.length() > code.length())) {
          this.openFriendGame(code);
       }
       // The whole window sits on the boards' dark color.
-      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), this.modeBar, top, gridHolder, grid, statusLines, lower, this.friendRow, this.reviewButtonHolder, this.reviewRow, this.lessonBar}) {
+      for (JPanel panel : new JPanel[]{(JPanel) this.getContentPane(), this.modeBar, top, side, gridHolder, grid, statusLines, lower, this.friendRow, this.reviewButtonHolder, this.reviewRow, this.lessonBar}) {
          panel.setBackground(CellButton.BACKGROUND);
       }
       this.refresh();
@@ -211,9 +244,9 @@ public final class GameFrame extends JFrame {
       this.setVisible(true);
    }
 
-   /** One button per mode; the current one is lit. Short labels where the full ones are wider than the board. */
-   private JPanel modeBar(int width) {
-      JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 4));
+   /** One button per mode; the current one is lit. Short labels where the full ones are wider than the board. In a column, two to a row. */
+   private JPanel modeBar(int width, boolean column) {
+      JPanel bar = new JPanel(column ? new GridLayout(0, 2, GAP, GAP) : new FlowLayout(FlowLayout.CENTER, GAP, 4));
       for (Mode choice : Mode.values()) {
          JButton button = new JButton(choice.label);
          button.setFocusable(false);
@@ -239,11 +272,17 @@ public final class GameFrame extends JFrame {
       if (bar.getPreferredSize().width > width) {
          bar.remove(this.soundButton);   // no room on a short screen: M still works
       }
-      return bar;
+      if (!column) {
+         return bar;
+      }
+      JPanel holder = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 4));
+      bar.setBackground(CellButton.BACKGROUND);
+      holder.add(bar);
+      return holder;
    }
 
    /** The friend row: the field takes what the buttons leave of the board's width. Enter in the field opens it, like Open. */
-   private void layoutFriendRow(int width) {
+   private void layoutFriendRow(int width, boolean column) {
       JButton open = this.openButton;
       for (JButton button : new JButton[]{this.copyButton, open, this.takeBackButton, this.friendReviewButton}) {
          button.setFocusable(false);
@@ -259,12 +298,24 @@ public final class GameFrame extends JFrame {
          this.copyButton.setText("Copy");   // a short board: Take back must stay on the row
       }
       int fieldWidth = Math.max(40, width - others - this.copyButton.getPreferredSize().width - GAP * 5);
+      JPanel buttons = this.friendRow;
+      if (column) {
+         // Beside the board there is height to spare: the link gets the column's whole width, the buttons a row under it.
+         this.copyButton.setText(this.friendPage == null ? "Copy code" : "Copy link");
+         fieldWidth = width - GAP * 2;
+         buttons = new JPanel(new FlowLayout(FlowLayout.CENTER, GAP, 0));
+         buttons.setBackground(CellButton.BACKGROUND);
+         this.friendRow.setLayout(new BorderLayout(0, 4));
+         this.friendRow.add(this.friendField, BorderLayout.NORTH);
+         this.friendRow.add(buttons, BorderLayout.SOUTH);
+      } else {
+         this.friendRow.add(this.friendField);
+      }
       this.friendField.setPreferredSize(new Dimension(fieldWidth, this.copyButton.getPreferredSize().height));
-      this.friendRow.add(this.friendField);
-      this.friendRow.add(this.copyButton);
-      this.friendRow.add(open);
-      this.friendRow.add(this.friendReviewButton);
-      this.friendRow.add(this.takeBackButton);
+      buttons.add(this.copyButton);
+      buttons.add(open);
+      buttons.add(this.friendReviewButton);
+      buttons.add(this.takeBackButton);
       this.friendReviewButton.addActionListener(event -> this.startReview());
    }
 
@@ -322,6 +373,7 @@ public final class GameFrame extends JFrame {
       this.stopReview();
       this.lessonStep = -1;
       this.computerTimer.stop();
+      this.stopThinking();
       this.nextGameTimer.stop();
       this.computerPlayedX = this.watching;
       this.hinted = false;
@@ -534,6 +586,11 @@ public final class GameFrame extends JFrame {
       return this.previewTargets;
    }
 
+   /** True if the opponent could win a small board on that cell after the previewed move. */
+   final boolean previewDanger(int move) {
+      return this.previewDangers != null && this.previewDangers[move];
+   }
+
    /** The cell the arrow keys are on, or -1. */
    final int cursorMove() {
       return this.cursorMove;
@@ -579,6 +636,7 @@ public final class GameFrame extends JFrame {
     */
    private void updatePreview() {
       this.previewTargets = null;
+      this.previewDangers = null;
       String hint = null;
       if (this.previewMove() >= 0) {
          int board = this.previewMove / 9;
@@ -595,6 +653,19 @@ public final class GameFrame extends JFrame {
             // Short enough to fit over a phone-sized board: the line does not wrap.
             String where = after.activeBoard == -1 ? "any open board" : "the " + CellButton.PLACES[after.activeBoard] + (wins ? "" : " board");
             hint = wins ? "Wins the board! They go to " + where + "." : "Sends " + this.opponent() + " to " + where + ".";
+            // The answer it hands them: every square where they would then win a board, and whether that wins the game.
+            int[] replies = after.boardWinningMoves();
+            if (replies.length > 0) {
+               this.previewDangers = new boolean[81];
+               boolean game = false;
+               for (int reply : replies) {
+                  this.previewDangers[reply] = true;
+                  GameState next = after.copy();
+                  next.play(reply / 9, reply % 9);
+                  game |= next.winner != null && !GameState.DRAW.equals(next.winner);
+               }
+               hint = "Careful: " + this.opponent() + (game ? " could win the game!" : " can win there!");
+            }
          }
       }
       this.status.setText(hint != null ? hint : this.statusLine);
@@ -658,11 +729,48 @@ public final class GameFrame extends JFrame {
       if (!this.computerToMove()) {
          return;
       }
-      int move = this.watching ? Computer.hardMove(this.state, this.random, WATCH_THINK_MILLIS)
-         : this.mode == Mode.HARD ? Computer.hardMove(this.state, this.random, HARD_THINK_MILLIS)
-         : Computer.easyMove(this.state, this.random);
+      int win = Computer.winningMove(this.state, this.state.legalMoves());
+      if (win >= 0 || !this.watching && this.mode != Mode.HARD) {
+         this.computerPlays(win >= 0 ? win : Computer.easyMove(this.state, this.random));
+         return;
+      }
+      this.computerThink = new Computer.Think(this.state);
+      this.computerThinkFor = this.moves;
+      this.computerSpent = 0;
+      this.thinkTimer.restart();
+   }
+
+   /** One slice of the computer's search, the board showing where it looks; once its time is up it plays the move it searched most. */
+   private void computerThinkStep() {
+      if (this.computerThink == null || !this.computerToMove() || !this.moves.equals(this.computerThinkFor)) {
+         this.stopThinking();   // the game moved on (a new game, a lesson, a take-over)
+         this.repaintCells();
+         return;
+      }
+      this.computerThink.grow(this.random, HINT_TICK_MILLIS);
+      this.computerSpent += HINT_TICK_MILLIS;
+      if (this.computerSpent < (this.watching ? WATCH_THINK_MILLIS : HARD_THINK_MILLIS)) {
+         this.repaintCells();
+         return;
+      }
+      int move = this.computerThink.best();
+      this.stopThinking();
+      this.computerPlays(move);
+   }
+
+   private void stopThinking() {
+      this.thinkTimer.stop();
+      this.computerThink = null;
+   }
+
+   private void computerPlays(int move) {
       this.play(move / 9, move % 9);
       this.moved();
+   }
+
+   /** While the computer thinks: how much of its search each move has had, the most searched at 1; null otherwise. */
+   final double[] thinking() {
+      return this.computerThink == null ? null : this.computerThink.attention();
    }
 
    /** After any move: count a finished game against the computer, redraw, and hand the turn to the computer if it is O's. */
@@ -704,6 +812,7 @@ public final class GameFrame extends JFrame {
       this.soundButton.getAccessibleContext().setAccessibleName(this.sounds.isOn() ? "Sound on (M)" : "Sound off (M)");
 
       String winner = this.state.winner;
+      this.refreshFaceOff();
       if (this.lessonStep >= 0) {
          this.refreshLesson();
          return;
@@ -725,15 +834,16 @@ public final class GameFrame extends JFrame {
       boolean reviewable = winner != null && !this.watching;
       boolean fresh = winner == null && this.moves.isEmpty() && !this.watching;
       String level = this.mode == Mode.HARD ? "Hard" : "Easy";
-      this.tally.setText(this.watching ? "Games the computer plays X in do not count."
-         : this.hinted && winner == null ? "With hints, this game won't count."
-         : this.mode.vsComputer() ? level + ": " + this.record.describe(this.mode)
-         : " ");
       boolean friend = this.mode == Mode.FRIEND;
       // One button beside the record: Review game at the end, How to play before the first move (unless hints are on), else Hints.
       this.reviewButton.setVisible(reviewable);
       this.learnButton.setVisible(fresh && !this.hints);
       this.hintsButton.setVisible(winner == null && !(fresh && !this.hints));
+      String[] tallies = this.watching ? new String[]{"Games the computer plays X in do not count.", "Computer's games don't count."}
+         : this.hinted && winner == null ? new String[]{"With hints, this game won't count.", "Hints on: won't count."}
+         : this.mode.vsComputer() ? new String[]{level + ": " + this.record.describe(this.mode), level + ": " + this.record.describeShort(this.mode), this.record.describeShort(this.mode)}
+         : new String[]{" "};
+      this.fitTally(tallies, !friend && !this.watching);
       this.hintsButton.setBackground(this.hints ? CellButton.X_COLOR : BUTTON);
       this.hintsButton.setForeground(this.hints ? Color.BLACK : TEXT);
       this.showSlots(false, !friend, friend, !friend && !this.watching);
@@ -742,6 +852,36 @@ public final class GameFrame extends JFrame {
       this.friendField.setText(FriendLink.message(this.friendPage, this.moves));
       this.copyButton.setEnabled(!this.moves.isEmpty());
       this.takeBackButton.setEnabled(this.friendWaiting);
+   }
+
+   /** The face-off beside the board: each side's name as the status line calls it, and the boards each has won. */
+   private void refreshFaceOff() {
+      if (this.faceOff == null) {
+         return;
+      }
+      String mine = this.friendWaiting == this.state.xTurn ? "O" : "X";   // Friend by link: the side this screen plays
+      String xName = this.watching ? "Computer" : this.lessonStep >= 0 || this.mode.vsComputer() ? "You"
+         : this.mode == Mode.FRIEND ? ("X".equals(mine) ? "You" : "Friend") : "Player X";
+      String oName = this.watching || this.lessonStep < 0 && this.mode.vsComputer() ? "Computer" : this.lessonStep >= 0 ? "O"
+         : this.mode == Mode.FRIEND ? ("O".equals(mine) ? "You" : "Friend") : "Player O";
+      String winner = this.state.winner;
+      this.faceOff.show(xName, oName, this.state.boardResults, winner == null ? (this.state.xTurn ? "X" : "O") : null, winner,
+         this.review == null && this.computerToMove());
+   }
+
+   /** Shows the first of the lines (longest first) that fits beside the button on the record line, the full one as its tooltip. */
+   private void fitTally(String[] lines, boolean withButton) {
+      int room = this.barsWidth - (withButton ? this.reviewButtonHolder.getPreferredSize().width : 0) - GAP * 2;
+      FontMetrics metrics = this.tally.getFontMetrics(this.tally.getFont());
+      String fit = lines[lines.length - 1];
+      for (String line : lines) {
+         if (metrics.stringWidth(line) <= room) {
+            fit = line;
+            break;
+         }
+      }
+      this.tally.setText(fit);
+      this.tally.setToolTipText(fit.equals(lines[0]) ? null : lines[0]);
    }
 
    /** Shows the review's chart and row, or the mode buttons with the record line, the friend row and Review game. */

@@ -538,6 +538,10 @@ public final class Songwriter extends JPanel {
 	/** Works out where everything goes, so painting and the mouse agree. */
 	private void layOut() {
 		int width = getWidth(), height = getHeight();
+		if (width < NARROW) {
+			layOutNarrow(width, height);
+			return;
+		}
 		radius = Math.max(90, Math.min(140, Math.min((width - 380) / 2, (height - HEADER - 200) / 2)));
 		circleX = 18 + radius;
 		circleY = HEADER + 14 + radius;
@@ -580,6 +584,51 @@ public final class Songwriter extends JPanel {
 		mineButton = new Rectangle(keepButton.x + keepButton.width + 6, 10, 72, 32);
 	}
 
+	/**
+	 * A phone held upright: the circle in the top corner with the options and Sheet music beside it, then the chords,
+	 * the progression, the controls and the famous progressions across the whole width, and the keyboard at the bottom.
+	 */
+	private void layOutNarrow(int width, int height) {
+		int x = 14, w = width - 28, gap = 6;
+		// Everything under the circle takes about 440 px; the circle gets what is left, within reason.
+		radius = Math.max(66, Math.min(100, Math.min((width - 190) / 2, (height - HEADER - 460) / 2)));
+		circleX = x + radius;
+		circleY = HEADER + 10 + radius;
+		int colX = circleX + radius + 14, colW = width - colX - 12;
+		styleButton = new Rectangle(colX, HEADER + 12, colW, 40);
+		voicingButton = new Rectangle(colX, HEADER + 58, colW, 40);
+		int top = Math.max(circleY + radius, HEADER + 150) + 30;
+		chordButtons.clear();
+		int cw = (w - gap * 6) / 7;
+		for (int i = 0; i < 7; i++) {
+			chordButtons.add(new Rectangle(x + i * (cw + gap), top, cw, 56));
+		}
+		slots.clear();
+		int sw = (w - gap * (Progression.MAX_CHORDS - 1)) / Progression.MAX_CHORDS;
+		for (int i = 0; i < Progression.MAX_CHORDS; i++) {
+			slots.add(new Rectangle(x + i * (sw + gap), top + 84, sw, 56));
+		}
+		int row = top + 152;
+		playButton = new Rectangle(x, row, 88, 40);
+		slower = new Rectangle(x + 96, row, 30, 40);
+		faster = new Rectangle(x + 96 + 30 + 46, row, 30, 40);
+		clearButton = new Rectangle(x + w - 54, row, 54, 40);
+		int melodyX = faster.x + faster.width + 8;
+		melodyButton = new Rectangle(melodyX, row, Math.max(64, clearButton.x - 8 - melodyX), 40);
+		presetButtons.clear();
+		int pw = (w - gap * 2) / 3;
+		for (int i = 0; i < Preset.values().length; i++) {
+			presetButtons.add(new Rectangle(x + (i % 3) * (pw + gap), row + 70 + (i / 3) * 36, pw, 30));
+		}
+		melodyRoll = new Rectangle(x, row + 70, w, 66);
+		keysTop = Math.max(row + 70 + 66 + 34, height - 120);
+		sheetArea = new Rectangle(8, HEADER + 6, width - 16, keysTop - 40 - HEADER);
+		sheetButton = sheet ? new Rectangle(16, sheetArea.y + sheetArea.height - 42, 190, 34) : new Rectangle(colX, HEADER + 104, colW, 34);
+		sendButton = new Rectangle(12, 10, 100, 32);
+		keepButton = new Rectangle(sendButton.x + sendButton.width + 100, 10, 76, 32);
+		mineButton = new Rectangle(keepButton.x + keepButton.width + 6, 10, 72, 32);
+	}
+
 	private int keyboardHeight() {
 		return Math.max(40, getHeight() - 12 - keysTop);
 	}
@@ -587,7 +636,7 @@ public final class Songwriter extends JPanel {
 	/** The on-screen key under the point, or -1. */
 	private int keyAt(int x, int y) {
 		layOut();
-		return Look.keyAt(16, keysTop, getWidth() - 32, keyboardHeight(), x, y);
+		return Look.keyAt(16, keysTop, getWidth() - 32, keyboardHeight(), getWidth() < NARROW, x, y);
 	}
 
 	private Object targetAt(int x, int y) {
@@ -668,12 +717,15 @@ public final class Songwriter extends JPanel {
 	private void paintHeader(Graphics2D g) {
 		g.setColor(CARD);
 		g.fillRect(0, 0, getWidth(), HEADER);
-		g.setColor(TEXT);
-		g.setFont(new Font("SansSerif", Font.BOLD, 22));
-		g.drawString("Songwriter", 18, 34);
-		String key = song.keyName() + "   " + Progression.signature(song.position());
-		g.setFont(new Font("SansSerif", Font.BOLD, 16));
-		g.drawString(key, getWidth() - 18 - g.getFontMetrics().stringWidth(key), 33);
+		// Narrow, the tab names the Songwriter and the circle's middle the key, so the header keeps only its buttons.
+		if (getWidth() >= NARROW) {
+			g.setColor(TEXT);
+			g.setFont(new Font("SansSerif", Font.BOLD, 22));
+			g.drawString("Songwriter", 18, 34);
+			String key = song.keyName() + "   " + Progression.signature(song.position());
+			g.setFont(new Font("SansSerif", Font.BOLD, 16));
+			g.drawString(key, getWidth() - 18 - g.getFontMetrics().stringWidth(key), 33);
+		}
 		Rectangle b = sendButton;
 		g.setColor(hover == b ? BLUE_HOVER : BLUE);
 		g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
@@ -681,7 +733,9 @@ public final class Songwriter extends JPanel {
 		g.setFont(new Font("SansSerif", Font.BOLD, 14));
 		g.drawString("Send song", b.x + 12, b.y + 21);
 		g.setFont(new Font("SansSerif", Font.PLAIN, 11));
-		g.drawString("N", b.x + b.width - 18, b.y + 20);
+		if (b.width > 110) {
+			g.drawString("N", b.x + b.width - 18, b.y + 20);
+		}
 		if (visiting) {
 			g.setColor(GOLD);
 			g.setFont(new Font("SansSerif", Font.BOLD, 13));
@@ -764,7 +818,10 @@ public final class Songwriter extends JPanel {
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 		String mode = song.isMinor() ? "minor" : "major";
 		g.drawString(mode, circleX - g.getFontMetrics().stringWidth(mode) / 2, circleY + 18);
-		// Under it, how to use it.
+		// Under it, how to use it (narrow, the chords take that room).
+		if (getWidth() < NARROW) {
+			return;
+		}
 		g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 		int y = circleY + radius + 22;
 		g.drawString("Click a key, or Left / Right to move a fifth.", 16, y);
@@ -791,10 +848,10 @@ public final class Songwriter extends JPanel {
 	}
 
 	private void paintChordButtons(Graphics2D g) {
-		int x = rightX();
+		int x = chordButtons.get(0).x, heading = chordButtons.get(0).y - 8;
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 13));
-		g.drawString("Chords in " + song.keyName(), x, HEADER + 22);
+		g.drawString("Chords in " + song.keyName(), x, heading);
 		int last = selected > 0 ? song.degree(selected - 1) : selected < 0 && song.size() > 0 ? song.degree(song.size() - 1) : 0;
 		int[] next = Progression.usualNext(last);
 		for (int i = 0; i < 7; i++) {
@@ -831,12 +888,12 @@ public final class Songwriter extends JPanel {
 			g.setFont(new Font("SansSerif", Font.PLAIN, 12));
 			Rectangle end = chordButtons.get(6);
 			String hint = Look.fit(g, "Gold: often comes after " + song.numeral(last), end.x + end.width - x - 170);
-			g.drawString(hint, end.x + end.width - g.getFontMetrics().stringWidth(hint), HEADER + 22);
+			g.drawString(hint, end.x + end.width - g.getFontMetrics().stringWidth(hint), heading);
 		}
 	}
 
 	private void paintSlots(Graphics2D g) {
-		int x = rightX();
+		int x = slots.get(0).x;
 		Rectangle first = slots.get(0);
 		g.setColor(SOFT);
 		g.setFont(new Font("SansSerif", Font.BOLD, 13));
@@ -1022,6 +1079,16 @@ public final class Songwriter extends JPanel {
 	private void paintOption(Graphics2D g, Rectangle b, String label, String value, String key) {
 		g.setColor(hover == b ? CARD_HOVER : CARD);
 		g.fillRoundRect(b.x, b.y, b.width, b.height, 12, 12);
+		if (b.width < 200) {
+			// Too narrow for one line: the label over the value.
+			g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+			g.setColor(SOFT);
+			g.drawString(label, b.x + 10, b.y + 15);
+			g.setFont(new Font("SansSerif", Font.BOLD, 13));
+			g.setColor(TEXT);
+			g.drawString(Look.fit(g, value, b.width - 20), b.x + 10, b.y + 32);
+			return;
+		}
 		g.setFont(new Font("SansSerif", Font.PLAIN, 13));
 		g.setColor(SOFT);
 		g.drawString(label + ":", b.x + 10, b.y + 21);
@@ -1079,7 +1146,7 @@ public final class Songwriter extends JPanel {
 		}
 		g.setColor(color);
 		g.setFont(Look.fitFont(g, line, Font.BOLD, 14, getWidth() - 32));
-		g.drawString(line, 16, y);
+		g.drawString(Look.fit(g, line, getWidth() - 32), 16, y);
 	}
 
 	/**
@@ -1098,15 +1165,19 @@ public final class Songwriter extends JPanel {
 				colors[note] = isBlack(note) ? in ? IN_KEY_BLACK : null : in ? null : OUT_OF_KEY;
 			}
 		}
+		String[] names = new String[HIGH_NOTE + 1];
 		for (int note : sounding) {
 			colors[note] = isBlack(note) ? GOLD_BLACK : GOLD;
+			names[note] = Progression.noteName(note % 12, song.position());
 		}
 		for (int note : soundingBass) {
 			colors[note] = isBlack(note) ? BASS_BLACK : BASS;
+			names[note] = Progression.noteName(note % 12, song.position());
 		}
 		for (int note : player.melodySounding()) {
 			colors[note] = isBlack(note) ? MELODY_BLACK : RIGHT;
+			names[note] = Progression.noteName(note % 12, song.position());
 		}
-		Look.paintKeyboard(g, 16, top, getWidth() - 32, keyboardHeight(), colors);
+		Look.paintKeyboard(g, 16, top, getWidth() - 32, keyboardHeight(), getWidth() < NARROW, colors, names);
 	}
 }

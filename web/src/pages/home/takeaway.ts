@@ -3,9 +3,9 @@
 // Saved cards get an Offline chip, and the panel's cartridge case shows each app saved or not (tap one to save it alone); with no connection the banner says so and unsaved cards step back.
 // What the panel, the chips and the banner show is in H.take; Home.tsx draws it.
 import { APPS, webp } from '../../shared/catalog';
+import { CACHE, pageNames } from '../../sw/offline-files';
 import { H, draw } from './model';
 
-const CACHE = 'oldjava-v1';   // the cache sw.js serves from
 const total = APPS.length;
 const take = H.take;
 
@@ -24,29 +24,42 @@ export function installClick() {
   prompt.userChoice.then(() => { window.oldjavaInstall = null; showInstall(); });
 }
 
-// ---- which files each app needs: its page, classes.js and the files its page preloads (data-files) ----
+// ---- which files each app needs: its page, classes.js and the files its page preloads (data-files), and the same for its Then page ----
 const abs = (path: string) => new URL(path, location.href).href;
-// The pages' own scripts and stylesheets are listed by the build (assets/files.json, see vite/pages.ts).
+// The pages' own scripts and stylesheets (shim.css's hashed copy too) are listed by the build (assets/files.json, see vite/pages.ts).
 function shell(bundle: string[]) {
-  const files = ['./', 'index.html', 'history.txt', 'shim.css', 'forced-colors.css', 'manifest.webmanifest', 'icons/icon.svg',
+  const files = ['./', 'index.html', 'history.txt', 'manifest.webmanifest', 'icons/icon.svg',
                  'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'apps.json', 'assets/files.json'];
   files.push(...bundle);
-  files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg', 'continued-timeline.svg');   // the story page and what it shows
+  files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg', 'continued-timeline.svg', 'third-timeline.svg');   // the story page and what it shows
   files.push('compare.html');   // Then and now side by side (its frames are play.html)
   APPS.forEach(a => files.push(a.shot, webp(a.shot), webp(a.shot, true)));
   return files.map(abs);
 }
+type Page = { page: string; program: string; own: string[] };
+// An app with a Then page (its first restored version, one tap away on its page) is saved with it, and with the
+// README that page reads its known quirks from (then-and-now.tsx).
+function pagesOf(id: string): Page[] {
+  const pages: Page[] = [{ page: 'index.html', program: 'classes.js', own: [] }];
+  if (APPS.find(a => a.id === id)?.then) pages.push({ page: 'then.html', program: 'then.js', own: ['then-source/README.md'] });
+  return pages;
+}
 const lists: Record<string, Promise<string[]>> = {};
+function pageFiles(id: string, { page, program, own }: Page) {
+  const url = abs(id + '/' + page);
+  return fetch(url).then(r => {
+    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+    return r.text();
+  }).then(html => {
+    const named = pageNames(url, html);
+    // the program as the page names it (classes.js?v=<its build's stamp>), the key sw.js keeps it under
+    const stamped = named.code.find(f => new URL(f).pathname === new URL(program, url).pathname) || abs(id + '/' + program);
+    return [stamped].concat(named.data, own.map(f => abs(id + '/' + f)), url);   // the page last, once what it needs is in
+  });
+}
 function filesOf(id: string) {
   if (!lists[id]) {
-    lists[id] = fetch(id + '/index.html').then(r => {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.text();
-    }).then(html => {
-      const body = new DOMParser().parseFromString(html, 'text/html').body;
-      const extra = (body.getAttribute('data-files') || '').split(/\s+/).filter(Boolean);
-      return [id + '/index.html', id + '/classes.js'].concat(extra.map(f => id + '/' + f)).map(abs);
-    });
+    lists[id] = Promise.all(pagesOf(id).map(p => pageFiles(id, p))).then(both => [...new Set(both.flat())]);
     lists[id].catch(() => { delete lists[id]; });
   }
   return lists[id];
@@ -69,7 +82,10 @@ function saveLabel() {
 function check() {
   return caches.open(CACHE).then(cache => Promise.all(APPS.map(a => {
     const id = a.id;
-    return filesOf(id).then(files => Promise.all(files.map(f => cache.match(f))))
+    // an app whose pages are not kept is not saved: no need to fetch them for their file lists (which fails offline)
+    const pages = pagesOf(id).map(p => abs(id + '/' + p.page));
+    return Promise.all(pages.map(p => cache.match(p))).then(hits => hits.every(Boolean)
+      ? filesOf(id).then(files => Promise.all(files.map(f => cache.match(f)))) : [undefined])
       .then(hits => { take.saved[id] = hits.every(Boolean); }, () => { take.saved[id] = false; });
   }))).then(() => {
     take.offline = !navigator.onLine;

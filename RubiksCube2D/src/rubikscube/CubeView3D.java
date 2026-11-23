@@ -2,22 +2,25 @@ package rubikscube;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
  * The cube in 3D: 26 cubies drawn in perspective, whose layers turn on screen as each move is made. Dragging a
- * square turns its row, column or ring the way the drag goes; dragging the background (or the arrow keys) turns the
- * whole cube to look at another side; a click selects a square for W/A/S/D. Moves that come faster than a turn takes
+ * square turns its row, column or ring the way the drag goes, the layer following the pointer until it is let go;
+ * dragging the background (or the arrow keys) turns the whole cube to look at another side; a click selects a square for W/A/S/D. Moves that come faster than a turn takes
  * to show (a long Mix) are skipped to the latest position.
  */
 final class CubeView3D extends JPanel implements Cube.Watcher {
@@ -76,6 +79,75 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
    private int pressY;
    private int pressSticker = -1;
    private boolean dragged = false;
+   private long pressMillis;
+   /** Whether a drag may turn a layer now (the frame takes no moves while a mix plays or a cube is painted). */
+   BooleanSupplier canTurn = () -> true;
+   /**
+    * The layer a drag is turning by hand: it follows the pointer (liveFraction of a quarter turn, below 0 the other
+    * way) and becomes a move when let go past half way or flicked; otherwise it springs back. Null for none.
+    */
+   private CubeGeometry.Turn liveTurn = null;
+   private String liveKey = null;
+   private double liveFraction = 0.0;
+   /** The pointer's travel on screen for a quarter turn of the live layer. */
+   private double[] liveAlong = null;
+   /** How much of a quarter turn a let-go drag had shown, so the move's own turn goes on from there. */
+   private double resumeFrom = 0.0;
+   private int turnsSeen = 0;
+   /** The pointer's travel for a quarter turn, in cube units (a sticker's width is about 0.8). */
+   private static final double QUARTER_TRAVEL = 1.6;
+   /**
+    * Show me how (level 1 until it is first solved): a fingertip drags the square of the move back part way, the
+    * layer following it, and lets it spring back, over and over until the player presses the cube. -1 for none.
+    */
+   private int demoSticker = -1;
+   private CubeGeometry.Turn demoTurn = null;
+   private long demoStart = 0L;
+   private double demoFraction = 0.0;
+   private static final int DEMO_MILLIS = 2600;
+   private static final Color FINGER = new Color(255, 255, 255, 210);
+   private static final Color FINGER_EDGE = new Color(20, 20, 20, 150);
+   /** A solve's moment: the stars won (of 3; -1 for none, in free play) popping in over the cube, with a caption. */
+   private long cheerStart = 0L;
+   private int cheerStars = -1;
+   private String cheerText = "";
+   private boolean cheerStill = false;
+   static final int CHEER_MILLIS = 4200;
+   private static final Color GOLD = new Color(255, 196, 40);
+   private static final Color GOLD_EDGE = new Color(150, 96, 0);
+   private static final Color STAR_EMPTY = new Color(40, 50, 80, 60);
+   /**
+    * The round strip at the foot of the view (a level only): the mix filling its pips one per move, then a pip for
+    * each move made against par with the stars still in reach, then Next once solved. A null label for none.
+    */
+   private String stripLabel = null;
+   private int stripPar = 0;
+   private int stripDone = 0;
+   private int stripStars = -1;
+   private boolean stripNext = false;
+   private long stripChanged = 0L;
+   /** The strip and its Next button as last drawn {x, y, w, h}, or null. */
+   private int[] stripBox = null;
+   private int[] stripButton = null;
+   /** Next pressed on the strip. */
+   Runnable onNext = () -> { };
+   private static final Color INK = new Color(30, 40, 70);
+   private static final Color OVER = new Color(196, 110, 0);
+   private static final Color FAR_OVER = new Color(190, 40, 40);
+   private static final Color NEXT = new Color(36, 92, 200);
+   /**
+    * The turn arrow: a curved arrow round the layer that is turning, its head riding with the layer, which stays a
+    * moment after the turn and fades, so a mix or a Solve can be followed turn by turn.
+    */
+   private CubeGeometry.Turn arcTurn = null;
+   private long arcEnd = 0L;
+   private long lastTurned = 0L;
+   /** No arrow for the newest turn: it came hard on the one before (a long Mix, keys held), or a drag made it. */
+   private boolean quick = false;
+   static final int ARC_FADE = 600;
+   /** How far out from the turning axis the arrow runs: just over the cube's surface (1.5). */
+   private static final double ARC_OVER = 1.53;
+   private static final double ARC_SPAN = Math.PI * 0.5;
 
    CubeView3D(Cube cube, BiConsumer<String, Integer> onSelect, Consumer<String> onTurn) {
       this.cube = cube;
@@ -86,7 +158,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       MouseAdapter mouse = new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent event) {
-            CubeView3D.this.pressed(event.getX(), event.getY());
+            CubeView3D.this.pressed(event.getX(), event.getY(), event.getWhen());
          }
 
          @Override
@@ -96,7 +168,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
          @Override
          public void mouseReleased(MouseEvent event) {
-            CubeView3D.this.released();
+            CubeView3D.this.released(event.getWhen());
          }
       };
       this.addMouseListener(mouse);
@@ -107,6 +179,11 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    @Override
    public void turned(CubeGeometry.Turn turn) {
+      this.turnsSeen++;
+      this.cheerStart = 0L;
+      long now = System.currentTimeMillis();
+      this.quick = now - this.lastTurned < 100;
+      this.lastTurned = now;
       this.pending.add(turn);
       this.pendingAfter.add(this.cubeColors());
       if (this.pending.size() > 6) {
@@ -131,6 +208,8 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       System.arraycopy(this.cubeColors(), 0, this.shown, 0, 54);
       this.turnStart = 0L;
       this.turnAngle = 0.0;
+      this.cheerStart = 0L;
+      this.arcTurn = null;
       this.repaint();
    }
 
@@ -161,11 +240,91 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.repaint();
    }
 
+   /**
+    * Starts the Show me how drag of that move's layer turn, or stops it for a null face. It drags whichever square
+    * makes the same turn and faces the viewer most squarely (a bottom layer by its row on the front, not the bottom
+    * face seen edge on), and turns the cube to show it only when none faces the viewer.
+    */
+   void demo(String faceColor, int cubie, String key) {
+      CubeGeometry.Turn turn = faceColor == null || key == null ? null : CubeGeometry.turnOf(faceColor, key, cubie);
+      this.demoSticker = -1;
+      this.demoTurn = turn;
+      for (int s = 0; turn != null && s < 54; s++) {
+         for (String k : CubeGeometry.KEYS) {
+            CubeGeometry.Turn same = CubeGeometry.turnOf(CubeGeometry.FACE_COLORS[s / 9], k, s % 9 + 1);
+            if (same != null && same.id() == turn.id() && (this.demoSticker < 0 || this.facingOf(s) > this.facingOf(this.demoSticker))) {
+               this.demoSticker = s;
+            }
+         }
+      }
+      this.demoFraction = 0.0;
+      this.demoStart = System.currentTimeMillis();
+      if (this.demoSticker >= 0 && this.facingOf(this.demoSticker) < 0.3) {
+         this.lookAt(CubeGeometry.NORMAL[this.demoSticker]);
+      }
+      this.wake();
+   }
+
+   boolean demoing() {
+      return this.demoSticker >= 0;
+   }
+
    /** Turns the whole cube once round, slowly, so every side of it shows (a pattern just made). */
    void spin() {
       this.spinStart = System.currentTimeMillis();
       this.spinFrom = this.targetYaw;
       this.wake();
+   }
+
+   /**
+    * The cube was solved: a lap of the whole cube while the stars won pop in above it one by one and fade, so the
+    * moment reads at a glance. {@code still} (reduced motion) shows them at once and keeps the cube where it is.
+    */
+   void cheer(int stars, String text, boolean still) {
+      this.cheerStart = System.currentTimeMillis();
+      this.cheerStars = stars;
+      this.cheerText = text;
+      this.cheerStill = still;
+      if (!still) {
+         this.spin();
+      }
+      this.wake();
+   }
+
+   boolean cheering() {
+      return this.cheerStart != 0L;
+   }
+
+   /**
+    * Sets the round strip: {@code label} (null hides it), the level's par, the moves done (mixed, or made by the
+    * player), the stars still in reach (-1 to show none) and whether it is a Next button.
+    */
+   void strip(String label, int par, int done, int stars, boolean next) {
+      if (done != this.stripDone || !java.util.Objects.equals(label, this.stripLabel)) {
+         this.stripChanged = System.currentTimeMillis();
+      }
+      boolean same = java.util.Objects.equals(label, this.stripLabel) && par == this.stripPar && done == this.stripDone
+            && stars == this.stripStars && next == this.stripNext;
+      this.stripLabel = label;
+      this.stripPar = par;
+      this.stripDone = done;
+      this.stripStars = stars;
+      this.stripNext = next;
+      if (!same) {
+         this.wake();
+      }
+   }
+
+   String stripLabel() {
+      return this.stripLabel;
+   }
+
+   int[] stripButton() {
+      return this.stripButton;
+   }
+
+   int[] stripBox() {
+      return this.stripBox;
    }
 
    /** Shows or hides the mirrors of the hidden sides. */
@@ -243,19 +402,38 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       boolean busy = false;
       if (!this.pending.isEmpty()) {
          long now = System.currentTimeMillis();
-         if (this.turnStart == 0L) {
-            this.turnStart = now;
-         }
          // Turns queued behind this one make it quicker.
          double length = TURN_MILLIS / (1.0 + 0.6 * (this.pending.size() - 1));
+         if (this.turnStart == 0L) {
+            // A turn a drag already took part way starts where the drag left it (the inverse of the easing below).
+            double from = this.resumeFrom < 0.5 ? Math.sqrt(this.resumeFrom / 2) : 1 - Math.sqrt((1 - this.resumeFrom) / 2);
+            this.turnStart = now - (long) (from * length);
+            this.resumeFrom = 0.0;
+         }
          double t = Math.min(1.0, (now - this.turnStart) / length);
          this.turnAngle = Math.PI / 2 * (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
          if (t >= 1.0) {
             System.arraycopy(this.pendingAfter.remove(0), 0, this.shown, 0, 54);
-            this.pending.remove(0);
+            this.arcTurn = this.pending.remove(0);
+            this.arcEnd = now;
             this.turnAngle = 0.0;
             this.turnStart = 0L;
          }
+         busy = true;
+      }
+      if (this.liveTurn != null && this.pressSticker < 0) {
+         // A drag let go short of half way: the layer springs back.
+         this.liveFraction *= 0.6;
+         if (Math.abs(this.liveFraction) < 0.01) {
+            this.liveTurn = null;
+         }
+         busy = true;
+      }
+      if (this.demoSticker >= 0) {
+         // A rest, a slow pull to 40% of a quarter turn, a hold, then a spring back (the drag let go short).
+         double t = (System.currentTimeMillis() - this.demoStart) % DEMO_MILLIS / (double) DEMO_MILLIS;
+         double pull = t < 0.2 ? 0 : t < 0.55 ? (t - 0.2) / 0.35 : t < 0.7 ? 1 : t < 0.82 ? 1 - (t - 0.7) / 0.12 : 0;
+         this.demoFraction = 0.4 * pull * pull * (3 - 2 * pull);
          busy = true;
       }
       if (this.spinStart != 0L) {
@@ -263,6 +441,17 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          double eased = t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
          this.yaw = this.targetYaw = this.spinFrom - 2 * Math.PI * eased;
          this.spinStart = t >= 1.0 ? 0L : this.spinStart;
+         busy = true;
+      }
+      if (this.cheerStart != 0L) {
+         this.cheerStart = System.currentTimeMillis() - this.cheerStart >= CHEER_MILLIS ? 0L : this.cheerStart;
+         busy = true;
+      }
+      if (this.arcTurn != null) {
+         this.arcTurn = System.currentTimeMillis() - this.arcEnd >= ARC_FADE ? null : this.arcTurn;
+         busy = true;
+      }
+      if (System.currentTimeMillis() - this.stripChanged < STRIP_POP) {
          busy = true;
       }
       double dy = this.targetYaw - this.yaw;
@@ -283,8 +472,12 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    // ---- the pointer ----
 
-   private void pressed(int x, int y) {
+   private void pressed(int x, int y, long when) {
       this.spinStart = 0L;
+      this.cheerStart = 0L;
+      this.demo(null, 0, null);
+      this.liveTurn = null;
+      this.pressMillis = when;
       this.pressX = x;
       this.pressY = y;
       this.dragged = false;
@@ -302,17 +495,52 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          this.pressY = y;
          this.dragged = true;
          this.repaint();
+      } else if (this.liveTurn != null) {
+         this.liveFraction = Math.max(-1, Math.min(1, (dx * this.liveAlong[0] + dy * this.liveAlong[1])
+               / (this.liveAlong[0] * this.liveAlong[0] + this.liveAlong[1] * this.liveAlong[1])));
+         this.repaint();
       } else if (!this.dragged && dx * dx + dy * dy >= 14 * 14) {
          this.dragged = true;
          String key = this.keyAlong(this.pressSticker, dx, dy);
          this.onSelect.accept(CubeGeometry.FACE_COLORS[this.pressSticker / 9], this.pressSticker % 9 + 1);
-         this.onTurn.accept(key);
+         if (this.pending.isEmpty() && this.canTurn.getAsBoolean()) {
+            this.liveKey = key;
+            this.liveTurn = CubeGeometry.turnOf(CubeGeometry.FACE_COLORS[this.pressSticker / 9], key, this.pressSticker % 9 + 1);
+            this.liveAlong = this.screenAlong(this.pressSticker, key, QUARTER_TRAVEL);
+            this.draggedTo(x, y);
+         } else {
+            // A turn still showing, or no moves taken now: the drag asks for its move at once, as before.
+            this.onTurn.accept(key);
+         }
       }
    }
 
-   private void released() {
-      if (this.pressSticker >= 0 && !this.dragged) {
+   private void released(long when) {
+      if (this.liveTurn != null && this.pressSticker >= 0) {
+         double f = this.liveFraction;
+         boolean flick = when - this.pressMillis < 300 && Math.abs(f) > 0.15;
+         if (Math.abs(f) >= 0.5 || flick) {
+            CubeGeometry.Turn taken = this.liveTurn;
+            this.liveTurn = null;
+            this.resumeFrom = Math.abs(f);
+            int seen = this.turnsSeen;
+            this.onTurn.accept(f > 0 ? this.liveKey : MoveHistory.inverse(this.liveKey));
+            if (this.turnsSeen == seen) {
+               // The move was not taken after all: spring back.
+               this.resumeFrom = 0.0;
+               this.liveTurn = taken;
+            } else {
+               // The player's own hand made it: no arrow needed.
+               this.quick = true;
+            }
+         }
+         this.wake();
+      } else if (this.pressSticker >= 0 && !this.dragged) {
          this.onSelect.accept(CubeGeometry.FACE_COLORS[this.pressSticker / 9], this.pressSticker % 9 + 1);
+      } else if (!this.dragged && this.stripNext && this.stripButton != null && this.pressX >= this.stripButton[0]
+            && this.pressX < this.stripButton[0] + this.stripButton[2] && this.pressY >= this.stripButton[1]
+            && this.pressY < this.stripButton[1] + this.stripButton[3]) {
+         this.onNext.run();
       } else if (!this.dragged) {
          // A click on a mirror turns its side round to the front.
          for (int[] mirror : this.mirrorHits) {
@@ -326,15 +554,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    /** The key whose move carries the sticker most nearly along the screen direction (dx, dy). */
    String keyAlong(int sticker, int dx, int dy) {
-      double[] from = this.screen(this.surface(sticker, 0, null));
       String best = "w";
       double bestCos = -2;
       double length = Math.hypot(dx, dy);
       for (String key : CubeGeometry.KEYS) {
-         int[] along = CubeGeometry.keyDirection(sticker / 9, key);
-         double[] to = this.screen(this.surface(sticker, 0.4, along));
-         double ex = to[0] - from[0];
-         double ey = to[1] - from[1];
+         double[] e = this.screenAlong(sticker, key, 0.4);
+         double ex = e[0];
+         double ey = e[1];
          double cos = (ex * dx + ey * dy) / (Math.hypot(ex, ey) * length + 1e-9);
          if (cos > bestCos) {
             bestCos = cos;
@@ -342,6 +568,13 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          }
       }
       return best;
+   }
+
+   /** Where on screen sticker s moves when carried {@code by} cube units the way {@code key} turns it. */
+   double[] screenAlong(int sticker, String key, double by) {
+      double[] from = this.screen(this.surface(sticker, 0, null));
+      double[] to = this.screen(this.surface(sticker, by, CubeGeometry.keyDirection(sticker / 9, key)));
+      return new double[]{to[0] - from[0], to[1] - from[1]};
    }
 
    /** The topmost sticker drawn under (x, y), or -1. */
@@ -407,14 +640,23 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       return out;
    }
 
+   /** How many cube sizes the view must fit across (0 for no limit): wide leaves the mirrors room beside a tall cube. */
+   double across = 0;
+
    private double scale() {
-      return Math.min(this.getWidth(), this.getHeight()) / 5.6;
+      double scale = Math.min(this.getWidth(), this.stage()) / 5.6;
+      return this.across > 0 ? Math.min(scale, this.getWidth() / this.across) : scale;
    }
 
    /** View coordinates to the panel, in perspective. */
    private double[] screen(double[] v) {
       double k = this.scale() * CAMERA / (CAMERA - v[2]);
-      return new double[]{this.getWidth() / 2.0 + v[0] * k, this.getHeight() / 2.0 - v[1] * k};
+      return new double[]{this.getWidth() / 2.0 + v[0] * k, this.stage() / 2.0 - v[1] * k};
+   }
+
+   /** The view's height above the round strip's room at its foot, kept free whether it shows or not (so the cube never jumps). */
+   private double stage() {
+      return this.getHeight() - STRIP_ROOM;
    }
 
    /** How squarely sticker s faces the viewer once the cube has turned to where it is going (1 head on). */
@@ -452,19 +694,16 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
          g.fillRect(0, band * height / 16, width, height / 16 + 1);
       }
       double size = this.scale();
-      for (int ring = 0; ring < 4; ring++) {
-         g.setColor(new Color(40, 50, 80, 14));
-         int w = (int)(size * (3.6 - ring * 0.5));
-         int h = (int)(size * (0.7 - ring * 0.1));
-         g.fillOval(width / 2 - w / 2, (int)(height / 2.0 + size * 2.45) - h / 2, w, h);
-      }
+      this.drawShadow(g, size);
 
       if (this.mirrors) {
          this.drawMirrors(g);
       }
-      CubeGeometry.Turn turn = this.pending.isEmpty() ? null : this.pending.get(0);
+      boolean demo = this.pending.isEmpty() && this.liveTurn == null && this.demoTurn != null;
+      CubeGeometry.Turn turn = demo ? this.demoTurn : this.pending.isEmpty() ? this.liveTurn : this.pending.get(0);
       int axis = turn == null ? 0 : turn.axis;
-      double angle = turn == null ? 0 : turn.dir * this.turnAngle;
+      double fraction = demo ? this.demoFraction : this.liveFraction;
+      double angle = turn == null ? 0 : turn.dir * (this.pending.isEmpty() ? fraction * Math.PI / 2 : this.turnAngle);
       // The camera in world coordinates, to draw the slabs along the turning axis from far to near.
       double[] camera = this.world(new double[]{0, 0, CAMERA});
       Integer[] slabs = {-1, 0, 1};
@@ -491,7 +730,173 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
             this.drawCubie(g, new int[]{(int) c[1], (int) c[2], (int) c[3]}, c[4] > 0 ? angle : 0, axis);
          }
       }
+      this.drawTurnArrow(g);
       this.drawHint(g);
+      if (demo) {
+         this.drawFinger(g);
+      }
+      this.drawStrip(g);
+      if (this.cheerStart != 0L) {
+         this.drawCheer(g);
+      }
+   }
+
+   /** How long the newest pip of the strip takes to pop in. */
+   private static final int STRIP_POP = 260;
+   private static final int STRIP_ROOM = 32;
+
+   /**
+    * The round strip: a pill at the foot of the view with the label (or the Next button), a pip per move up to par
+    * (past it a +n in amber, red once 2 stars are out of reach too) and the stars a solve now would win.
+    */
+   private void drawStrip(Graphics2D g) {
+      this.stripButton = null;
+      this.stripBox = null;
+      if (this.stripLabel == null) {
+         return;
+      }
+      int h = STRIP_ROOM - 6;
+      g.setFont(new java.awt.Font("Dialog", java.awt.Font.BOLD, 13));
+      java.awt.FontMetrics metrics = g.getFontMetrics();
+      int labelW = metrics.stringWidth(this.stripLabel) + (this.stripNext ? 34 : 0);
+      int over = Math.max(0, this.stripDone - this.stripPar);
+      String extra = over > 0 ? "+" + over : "";
+      int extraW = over > 0 ? metrics.stringWidth(extra) + 6 : 0;
+      int starsW = this.stripStars >= 0 ? 52 : 0;
+      int par = Math.max(1, this.stripPar);
+      int room = this.getWidth() - 24 - 24 - labelW - 10 - extraW - starsW;
+      int pip = Math.max(5, Math.min(14, room / par));
+      int w = 12 + labelW + 10 + pip * par + extraW + starsW + 12;
+      int x = (this.getWidth() - w) / 2;
+      int y = this.getHeight() - h - 4;
+      this.stripBox = new int[]{x, y, w, h};
+      g.setColor(withAlpha(Color.WHITE, 225));
+      g.fillRoundRect(x, y, w, h, h, h);
+      g.setColor(withAlpha(INK, 70));
+      g.drawRoundRect(x, y, w, h, h, h);
+      int left = x + 12;
+      int base = y + (h + metrics.getAscent() - metrics.getDescent()) / 2;
+      if (this.stripNext) {
+         // The Next button: a filled pill of its own at the strip's left, its arrow drawn (no font has to have it).
+         this.stripButton = new int[]{x + 3, y + 3, labelW + 6, h - 6};
+         g.setColor(NEXT);
+         g.fillRoundRect(x + 3, y + 3, labelW + 6, h - 6, h - 6, h - 6);
+         g.setColor(Color.WHITE);
+         g.drawString(this.stripLabel, left + 4, base);
+         int ax = left + labelW - 22;
+         int cy = y + h / 2;
+         g.fillPolygon(new int[]{ax, ax + 9, ax}, new int[]{cy - 6, cy, cy + 6}, 3);
+      } else {
+         g.setColor(INK);
+         g.drawString(this.stripLabel, left, base);
+      }
+      left += labelW + 10;
+      long age = System.currentTimeMillis() - this.stripChanged;
+      int cy = y + h / 2;
+      for (int i = 0; i < par; i++) {
+         boolean filled = i < this.stripDone;
+         // The newest pip grows past its size and settles, so each move lands on the strip.
+         double pop = filled && i == this.stripDone - 1 && age < STRIP_POP ? 1 + 0.6 * (1 - age / (double) STRIP_POP) : 1;
+         double d = Math.max(3, pip - 4) * pop;
+         int px = (int) Math.round(left + i * pip + pip / 2.0 - d / 2);
+         int py = (int) Math.round(cy - d / 2);
+         if (filled) {
+            g.setColor(INK);
+            g.fillOval(px, py, (int) Math.round(d), (int) Math.round(d));
+         } else {
+            g.setColor(withAlpha(INK, 110));
+            g.drawOval(px, py, (int) Math.round(d), (int) Math.round(d));
+         }
+      }
+      left += pip * par;
+      if (over > 0) {
+         g.setColor(this.stripDone > 2 * this.stripPar + 2 ? FAR_OVER : OVER);
+         g.drawString(extra, left + 4, base);
+         left += extraW;
+      }
+      for (int i = 0; i < 3 && this.stripStars >= 0; i++) {
+         int[][] star = starAt(left + 10 + i * 15, cy, 7);
+         g.setColor(i < this.stripStars ? GOLD : STAR_EMPTY);
+         g.fillPolygon(star[0], star[1], 10);
+         g.setColor(i < this.stripStars ? GOLD_EDGE : withAlpha(ARROW_EDGE, 90));
+         g.drawPolygon(star[0], star[1], 10);
+      }
+   }
+
+   /** The solve's stars and caption on a plate over the cube: each star pops in a beat after the last, then all fade. */
+   private void drawCheer(Graphics2D g) {
+      long t = System.currentTimeMillis() - this.cheerStart;
+      double fade = Math.max(0, Math.min(1, (CHEER_MILLIS - t) / 700.0)) * (this.cheerStill ? 1 : Math.min(1, t / 200.0));
+      double r = this.scale() * 0.42;
+      g.setFont(new java.awt.Font("Dialog", java.awt.Font.BOLD, Math.max(14, (int) (r * 0.75))));
+      java.awt.FontMetrics metrics = g.getFontMetrics();
+      boolean stars = this.cheerStars >= 0;
+      int plateW = (int) Math.max(stars ? r * 7.4 : 0, metrics.stringWidth(this.cheerText) + r);
+      int plateH = (int) ((stars ? r * 2.6 : 0) + metrics.getHeight() + r * 0.6);
+      int cx = this.getWidth() / 2;
+      int top = (int) this.stage() / 2 - plateH / 2;
+      g.setColor(withAlpha(Color.WHITE, (int) (215 * fade)));
+      g.fillRoundRect(cx - plateW / 2, top, plateW, plateH, (int) r, (int) r);
+      g.setColor(withAlpha(new Color(40, 50, 80), (int) (70 * fade)));
+      g.drawRoundRect(cx - plateW / 2, top, plateW, plateH, (int) r, (int) r);
+      int cy = (int) (top + r * 0.3 + r * 1.1);
+      for (int i = 0; stars && i < 3; i++) {
+         // Pops in 350 ms apart: grows past full size and settles (none of that when still).
+         double u = this.cheerStill ? 1 : Math.max(0, Math.min(1, (t - 250 - 350 * i) / 300.0));
+         double pop = u < 0.7 ? u / 0.7 * 1.25 : 1.25 - 0.25 * (u - 0.7) / 0.3;
+         if (pop <= 0) {
+            continue;
+         }
+         boolean won = i < this.cheerStars;
+         int[][] star = starAt(cx + (i - 1) * r * 2.3, cy - (i == 1 ? r * 0.2 : 0), r * (won ? pop : Math.min(pop, 1)));
+         g.setColor(withAlpha(won ? GOLD : STAR_EMPTY, (int) ((won ? 255 : 60) * fade)));
+         g.fillPolygon(star[0], star[1], 10);
+         g.setColor(withAlpha(won ? GOLD_EDGE : ARROW_EDGE, (int) ((won ? 255 : 90) * fade)));
+         g.setStroke(new BasicStroke(2f));
+         g.drawPolygon(star[0], star[1], 10);
+      }
+      g.setStroke(new BasicStroke(1f));
+      int ty = (int) (top + plateH - r * 0.3 - metrics.getDescent());
+      g.setColor(withAlpha(new Color(30, 40, 70), (int) (255 * fade)));
+      g.drawString(this.cheerText, cx - metrics.stringWidth(this.cheerText) / 2, ty);
+   }
+
+   /** A five-pointed star of outer radius r, point up: its corners' x and y (the web shim has no Polygon). */
+   private static int[][] starAt(double cx, double cy, double r) {
+      int[][] star = new int[2][10];
+      for (int k = 0; k < 10; k++) {
+         double a = -Math.PI / 2 + k * Math.PI / 5;
+         double d = k % 2 == 0 ? r : r * 0.45;
+         star[0][k] = (int) Math.round(cx + d * Math.cos(a));
+         star[1][k] = (int) Math.round(cy + d * Math.sin(a));
+      }
+      return star;
+   }
+
+   /** The Show me how fingertip: on the square, carried with it while it pulls the layer. */
+   private void drawFinger(Graphics2D g) {
+      if (this.facing(CubeGeometry.NORMAL[this.demoSticker]) <= 0.05) {
+         return;
+      }
+      // Glued to the square as its layer turns, so the finger never slides off the cube.
+      double[] point = new double[3];
+      for (int k = 0; k < 3; k++) {
+         point[k] = CubeGeometry.POS[this.demoSticker][k] + CubeGeometry.NORMAL[this.demoSticker][k] * 0.5;
+      }
+      double[] at = this.screen(this.view(turn(point, this.demoTurn.axis, this.demoTurn.dir * this.demoFraction * Math.PI / 2)));
+      double r = this.scale() * 0.24;
+      // Pressed in (smaller, firmer) while pulling, lifted (larger, lighter) at rest.
+      double press = Math.min(1, this.demoFraction / 0.1);
+      double radius = r * (1.15 - 0.2 * press);
+      int x = (int) Math.round(at[0] - radius);
+      int y = (int) Math.round(at[1] - radius);
+      int d = (int) Math.round(2 * radius);
+      g.setColor(withAlpha(FINGER, (int) (150 + 60 * press)));
+      g.fillOval(x, y, d, d);
+      g.setColor(FINGER_EDGE);
+      g.setStroke(new BasicStroke(2f));
+      g.drawOval(x, y, d, d);
+      g.setStroke(new BasicStroke(1f));
    }
 
    private double[] world(double[] v) {
@@ -541,8 +946,8 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
             if (p[k] == sign) {
                int sticker = CubeGeometry.stickerAt(p, normal);
                boolean ringed = sticker == this.marked || sticker == this.hinted;
-               g.setColor(shade(colorOf(this.shown[sticker]), light));
-               this.fillSquare(g, center, a, b, ringed ? STICKER * 0.62 : STICKER, ringed ? 0.06 : 0.09, axis, angle, null);
+               int[] face = this.fillSquare(null, center, a, b, ringed ? STICKER * 0.62 : STICKER, ringed ? 0.06 : 0.09, axis, angle, null);
+               gloss(g, face, shade(colorOf(this.shown[sticker]), light), n);
                int[] hit = this.fillSquare(null, center, a, b, HALF, 0, axis, angle, null);
                hit[0] = sticker;
                this.hits.add(hit);
@@ -554,6 +959,61 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
                }
             }
          }
+      }
+   }
+
+   /** Halfway between the light (upper left, in front) and the viewer: a face turned this way mirrors the light at you. */
+   private static final double[] GLINT = unit(-0.35, 0.62, 0.70 + 1.0);
+
+   private static double[] unit(double x, double y, double z) {
+      double length = Math.sqrt(x * x + y * y + z * z);
+      return new double[]{x / length, y / length, z / length};
+   }
+
+   /**
+    * A sticker as glossy plastic: brighter toward the light's corner and darker away from it, with a sheen from that
+    * corner that flares into a glint as the face turns to mirror the light at the viewer ({@code n}, its view normal).
+    */
+   private static void gloss(Graphics2D g, int[] poly, Color color, double[] n) {
+      int corners = (poly.length - 1) / 2;
+      int[] xs = new int[corners];
+      int[] ys = new int[corners];
+      int lit = 0;
+      int dark = 0;
+      for (int i = 0; i < corners; i++) {
+         xs[i] = poly[1 + 2 * i];
+         ys[i] = poly[2 + 2 * i];
+         lit = xs[i] + ys[i] < xs[lit] + ys[lit] ? i : lit;
+         dark = xs[i] + ys[i] > xs[dark] + ys[dark] ? i : dark;
+      }
+      g.setPaint(new GradientPaint(xs[lit], ys[lit], shade(color, 1.18), xs[dark], ys[dark], shade(color, 0.8)));
+      g.fillPolygon(xs, ys, corners);
+      double glint = Math.pow(Math.max(0, n[0] * GLINT[0] + n[1] * GLINT[1] + n[2] * GLINT[2]), 24);
+      int alpha = (int) Math.round(60 + 180 * glint);
+      g.setPaint(new GradientPaint(xs[lit], ys[lit], new Color(255, 255, 255, alpha),
+            (xs[lit] + xs[dark]) / 2f, (ys[lit] + ys[dark]) / 2f, new Color(255, 255, 255, 0)));
+      g.fillPolygon(xs, ys, corners);
+   }
+
+   /**
+    * The cube's shadow on the floor under it: as wide as its eight corners dropped straight down, so it breathes
+    * wider as a corner turns toward the viewer and narrower face on, soft at the rim and darker under the middle.
+    */
+   private void drawShadow(Graphics2D g, double size) {
+      double left = 0;
+      double right = 0;
+      for (int i = 0; i < 8; i++) {
+         double x = this.view(new double[]{(i & 1) == 0 ? -1.5 : 1.5, (i & 2) == 0 ? -1.5 : 1.5, (i & 4) == 0 ? -1.5 : 1.5})[0];
+         left = Math.min(left, x);
+         right = Math.max(right, x);
+      }
+      double middle = this.getWidth() / 2.0 + (left + right) / 2 * size;
+      double floor = this.stage() / 2.0 + size * 2.45;
+      for (int ring = 0; ring < 5; ring++) {
+         double w = (right - left) * size * (1.2 - ring * 0.17);
+         double h = size * (0.75 - ring * 0.12);
+         g.setColor(new Color(40, 50, 80, 13 + ring * 3));
+         g.fillOval((int) Math.round(middle - w / 2), (int) Math.round(floor - h / 2), (int) Math.round(w), (int) Math.round(h));
       }
    }
 
@@ -599,7 +1059,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       this.mirrorHits.clear();
       this.mirrorsGliding = false;
       double width = this.getWidth();
-      double height = this.getHeight();
+      double height = this.stage();
       for (int face = 0; face < 6; face++) {
          int[] n = CubeGeometry.NORMAL[face * 9];
          double[] v = this.view(new double[]{n[0], n[1], n[2]});
@@ -677,7 +1137,7 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
 
    /** An arrow across the hinted square, the way its move carries it. */
    private void drawHint(Graphics2D g) {
-      if (this.hinted < 0 || this.hintKey == null || !this.pending.isEmpty()) {
+      if (this.hinted < 0 || this.hintKey == null || !this.pending.isEmpty() || this.liveTurn != null) {
          return;
       }
       int[] along = CubeGeometry.keyDirection(this.hinted / 9, this.hintKey);
@@ -687,28 +1147,91 @@ final class CubeView3D extends JPanel implements Cube.Watcher {
       }
       double[] tail = this.screen(this.surface(this.hinted, -0.5, along));
       double[] tip = this.screen(this.surface(this.hinted, 0.95, along));
-      double dx = tip[0] - tail[0];
-      double dy = tip[1] - tail[1];
+      drawArrow(g, new double[][]{tail, tip}, 255);
+   }
+
+   /**
+    * The turn arrow round the layer turning now (its head riding with the layer), or the one just turned, fading. None
+    * while a drag holds a layer or the turns come too fast to follow.
+    */
+   private void drawTurnArrow(Graphics2D g) {
+      if (this.liveTurn != null) {
+         return;
+      }
+      if (!this.pending.isEmpty()) {
+         if (!this.quick) {
+            drawArrow(g, this.arc(this.pending.get(0), this.turnAngle / (Math.PI / 2)), 255);
+         }
+      } else if (this.arcTurn != null && !this.quick) {
+         double left = 1 - (System.currentTimeMillis() - this.arcEnd) / (double) ARC_FADE;
+         drawArrow(g, this.arc(this.arcTurn, 1), (int) (255 * Math.max(0, Math.min(1, left))));
+      }
+   }
+
+   /**
+    * The turn arrow's points on screen, tail to tip: round the turning layer's axis over the middle of its squares, on
+    * the side most toward the viewer (and a little above), swept the way the layer turns as far as {@code progress} (0 to 1).
+    */
+   double[][] arc(CubeGeometry.Turn turn, double progress) {
+      int a = (turn.axis + 1) % 3;
+      int b = (turn.axis + 2) % 3;
+      double[] unitA = new double[3];
+      double[] unitB = new double[3];
+      unitA[a] = 1;
+      unitB[b] = 1;
+      double[] ea = this.view(unitA);
+      double[] eb = this.view(unitB);
+      double toward = Math.atan2(eb[2] + 0.35 * eb[1], ea[2] + 0.35 * ea[1]);
+      double from = toward - turn.dir * ARC_SPAN / 2;
+      double sweep = turn.dir * ARC_SPAN * Math.max(0.15, Math.min(1, progress));
+      double[][] points = new double[25][];
+      for (int i = 0; i < points.length; i++) {
+         double phi = from + sweep * i / (points.length - 1);
+         // On the layer's squares: out from the axis to just over the cube's surface, round the corners.
+         double out = ARC_OVER / Math.max(Math.abs(Math.cos(phi)), Math.abs(Math.sin(phi)));
+         double[] p = new double[3];
+         p[turn.axis] = turn.layer;
+         p[a] = out * Math.cos(phi);
+         p[b] = out * Math.sin(phi);
+         points[i] = this.screen(this.view(p));
+      }
+      return points;
+   }
+
+   /** A white arrow with a dark rim along the points (tail to tip), {@code alpha} of 255 opaque. */
+   private static void drawArrow(Graphics2D g, double[][] points, int alpha) {
+      double[] tip = points[points.length - 1];
+      double[] before = points[points.length - 2];
+      double dx = tip[0] - before[0];
+      double dy = tip[1] - before[1];
       double length = Math.hypot(dx, dy);
-      if (length < 4) {
+      double whole = 0;
+      for (int i = 1; i < points.length; i++) {
+         whole += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+      }
+      if (length < 0.5 || whole < 4 || alpha <= 0) {
          return;
       }
       double ux = dx / length;
       double uy = dy / length;
-      double head = Math.min(20, length * 0.4);
+      double head = Math.min(20, whole * 0.4);
       int[] xs = {(int) tip[0], (int)(tip[0] - ux * head - uy * head * 0.6), (int)(tip[0] - ux * head + uy * head * 0.6)};
       int[] ys = {(int) tip[1], (int)(tip[1] - uy * head + ux * head * 0.6), (int)(tip[1] - uy * head - ux * head * 0.6)};
-      double neckX = tip[0] - ux * head * 0.8;
-      double neckY = tip[1] - uy * head * 0.8;
-      g.setColor(ARROW_EDGE);
+      Path2D.Double shaft = new Path2D.Double();
+      shaft.moveTo(points[0][0], points[0][1]);
+      for (int i = 1; i < points.length - 1; i++) {
+         shaft.lineTo(points[i][0], points[i][1]);
+      }
+      shaft.lineTo(tip[0] - ux * head * 0.8, tip[1] - uy * head * 0.8);
+      g.setColor(withAlpha(ARROW_EDGE, alpha));
       g.setStroke(new BasicStroke(8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-      g.drawLine((int) tail[0], (int) tail[1], (int) neckX, (int) neckY);
+      g.draw(shaft);
       g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
       g.drawPolygon(xs, ys, 3);
       g.fillPolygon(xs, ys, 3);
-      g.setColor(ARROW);
+      g.setColor(withAlpha(ARROW, alpha));
       g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-      g.drawLine((int) tail[0], (int) tail[1], (int) neckX, (int) neckY);
+      g.draw(shaft);
       g.setStroke(new BasicStroke(1f));
       int[] inner = {(int)(tip[0] - ux * 2.5), xs[1] + (int)(ux * 2 + uy * 1.2), xs[2] + (int)(ux * 2 - uy * 1.2)};
       int[] innerY = {(int)(tip[1] - uy * 2.5), ys[1] + (int)(uy * 2 - ux * 1.2), ys[2] + (int)(uy * 2 + ux * 1.2)};

@@ -1,0 +1,17 @@
+/* The first screen on a laptop: a window up to 860 px tall (1366x768, 1280x720, 900x600) showed the title, a
+   three-line lead and a three-line hint, and the app already playing ran off its bottom edge. Here the words above
+   the player give up their extra lines (the hint opens on a click, as on a phone), so the whole running app is in
+   view when the page opens. Phones have their own pocket layout (home.css, max-width 640px). */
+@media (min-width: 641px) and (max-height: 860px) {
+  main { padding-top: 20px; }
+  h1 { font-size: 26px; }
+  p.lead { margin-bottom: 12px; }
+  p.lead .tech { display: none; }
+  .start { margin: -4px 0 12px; }
+  .player-bar { padding: 8px 14px; }
+  .player-bar .hint { flex-basis: 200px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1;
+                      line-clamp: 1; overflow: hidden; cursor: pointer; }
+  .player-bar .hint.open { display: block; }
+  /* The wall beside the title ends above the player, now that the player starts higher. */
+  main .hero-wall { height: 132px; }   /* (main: hero-wall.css comes later) */
+}

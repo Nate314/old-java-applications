@@ -30,6 +30,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    /** How long the falling notes take to move down to the next note after a right one. */
    private static final int FOLLOW_MILLIS = 160;
    private static final int[] FANFARE = {0, 4, 7, 12};
+   /** What a new sound plays when picked on the sound button: C E G. */
+   private static final int[] PREVIEW = {0, 4, 7};
+   /** The highest sound Up and the sound button reach (the first of the Effects family). */
+   private static final int MAX_INSTRUMENT = 120;
    /** The microphone ignores what it hears until the keyboard's own notes have been silent this long. */
    private static final int ECHO_MILLIS = 500;
    /** The backing's channel, clear of the keys (0), the looper's layers (1 to 4) and the click (9). */
@@ -39,6 +43,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private final SongRecords records = SongRecords.load(new File(System.getProperty("user.home"), ".synthesizer-songs.txt"));
    private final PianoPanel piano = new PianoPanel();
    private final LessonBar bar = new LessonBar(this.records);
+   private final RangeStrip range = new RangeStrip();
    private final File tuneFile = new File(System.getProperty("user.home"), ".synthesizer-tune.txt");
    /** The address of the page this runs on, for tune links; null on the desktop, which sends the code alone. */
    private final String page;
@@ -61,6 +66,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private final Map<Integer, int[][]> heldNotes = new HashMap<>();
    /** Whether each key plays its chord rather than its note. */
    private boolean chords;
+   /** Hears which song free play is the start of, so its lesson can carry on from there. */
+   private final SongFinder finder = new SongFinder(Song.ALL);
    /** The song being played along with, or null in free play. */
    private Lesson lesson;
    private boolean newBest;
@@ -124,7 +131,8 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.page = page;
       int screenWidth = (int)Toolkit.getDefaultToolkit().getScreenSize().getWidth();
       int screenHeight = (int)Toolkit.getDefaultToolkit().getScreenSize().getHeight();
-      this.setSize(screenWidth * 3 / 4, Math.max(screenHeight / 2, 340));
+      // The space over the keys (falling notes in a lesson, your notes rising outside one) has room of its own.
+      this.setSize(screenWidth * 3 / 4, Math.max(screenHeight / 2, 340) + PianoPanel.FALL + RangeStrip.HEIGHT);
       this.setDefaultCloseOperation(3);
       this.addKeyListener(this);
       this.getContentPane().setLayout(new BorderLayout());
@@ -132,6 +140,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       top.setFocusable(false);
       top.add(this.bar, BorderLayout.NORTH);
       top.add(this.loopView, BorderLayout.CENTER);
+      top.add(this.range, BorderLayout.SOUTH);
       this.getContentPane().add(top, BorderLayout.NORTH);
       this.getContentPane().add(this.piano, BorderLayout.CENTER);
       this.loopView.addMouseListener(new MouseAdapter() {
@@ -140,7 +149,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
             KeyboardWindow.this.loopLaneClicked(KeyboardWindow.this.loopView.laneAt(event.getX(), event.getY()));
          }
       });
-      this.piano.addMouseListener(new MouseAdapter() {
+      MouseAdapter keys = new MouseAdapter() {
+         /** The key the mouse (or a finger) holds down, or -1. */
+         private int held = -1;
+
          @Override
          public void mousePressed(MouseEvent event) {
             int key = KeyboardWindow.this.piano.keyAt(event.getX(), event.getY());
@@ -148,20 +160,58 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
                KeyboardWindow.this.toggleBacking();
             } else if (key >= 0) {
                KeyboardWindow.this.press(MOUSE, key);
+               this.held = key;
+            }
+         }
+
+         /** A glissando: sliding a held press onto another key lets the old one go and plays the new one. */
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            int key = KeyboardWindow.this.piano.keyAt(event.getX(), event.getY());
+            if (this.held >= 0 && key >= 0 && key != this.held) {
+               KeyboardWindow.this.release(MOUSE);
+               KeyboardWindow.this.press(MOUSE, key);
+               this.held = key;
             }
          }
 
          @Override
          public void mouseReleased(MouseEvent event) {
             KeyboardWindow.this.release(MOUSE);
+            this.held = -1;
          }
-      });
+      };
+      MouseAdapter reach = new MouseAdapter() {
+         /** Whether the press began on the small keys, so a drag slides the frame (a press on an arrow steps once). */
+         private boolean sliding;
+
+         @Override
+         public void mousePressed(MouseEvent event) {
+            int arrow = KeyboardWindow.this.range.arrowAt(event.getX());
+            this.sliding = arrow == 0;
+            KeyboardWindow.this.setOctave(arrow != 0 ? KeyboardWindow.this.octaveShift + arrow : KeyboardWindow.this.range.shiftAt(event.getX()));
+         }
+
+         @Override
+         public void mouseDragged(MouseEvent event) {
+            if (this.sliding) {
+               KeyboardWindow.this.setOctave(KeyboardWindow.this.range.shiftAt(event.getX()));
+            }
+         }
+      };
+      this.range.addMouseListener(reach);
+      this.range.addMouseMotionListener(reach);
+      this.piano.addMouseListener(keys);
+      this.piano.addMouseMotionListener(keys);
       this.bar.addMouseListener(new MouseAdapter() {
          @Override
          public void mousePressed(MouseEvent event) {
             KeyboardWindow window = KeyboardWindow.this;
             int chip = window.bar.chipAt(event.getX(), event.getY());
-            if (window.bar.micAt(event.getX(), event.getY())) {
+            int step = window.bar.soundAt(event.getX(), event.getY());
+            if (step != 0) {
+               window.stepFamily(step);
+            } else if (window.bar.micAt(event.getX(), event.getY())) {
                window.toggleMic();
             } else if (window.bar.chordsAt(event.getX(), event.getY())) {
                window.toggleChords();
@@ -254,12 +304,12 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       this.startSong(-1);
       this.clearArmed = false;
       this.bar.setLooper(this.looper);
-      this.loopView.setInstrument(this.instrument);
       if (!this.looping) {
-         // The lanes get room of their own, so the keys keep their size.
-         this.setSize(this.getWidth(), this.getHeight() + LoopView.HEIGHT);
+         // The lanes take the rising notes' place and some more room, so the keys keep their size.
+         this.setSize(this.getWidth(), this.getHeight() + LoopView.HEIGHT - PianoPanel.FALL);
       }
       this.looping = true;
+      this.piano.setRising(false);
       this.loopView.setLooper(this.looper);
       this.bar.setNotice(this.looper.loop().layers().isEmpty() ? null : "Your loop is back: P plays it");
    }
@@ -268,9 +318,10 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private void stopLooper() {
       this.looper.stop();
       if (this.looping) {
-         this.setSize(this.getWidth(), this.getHeight() - LoopView.HEIGHT);
+         this.setSize(this.getWidth(), this.getHeight() - LoopView.HEIGHT + PianoPanel.FALL);
       }
       this.looping = false;
+      this.piano.setRising(true);
       this.bar.setLooper(null);
       this.loopView.setLooper(null);
       this.bar.setNotice(null);
@@ -369,12 +420,53 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       return -1;
    }
 
+   /** Moves the keys to octave shift {@code shift} (clamped to the strip's reach); held notes keep their pitch. */
+   private void setOctave(int shift) {
+      this.octaveShift = Math.max(RangeStrip.LOWEST, Math.min(RangeStrip.HIGHEST, shift));
+      this.range.setShift(this.octaveShift);
+      this.piano.setOctave(4 + this.octaveShift);
+      this.updateTitle();
+   }
+
+   /** Lights on the range strip the notes the keys are sounding. */
+   private void showHeld() {
+      int count = 0;
+      for (int[][] held : this.heldNotes.values()) {
+         count += held[1].length;
+      }
+      int[] notes = new int[count];
+      for (int[][] held : this.heldNotes.values()) {
+         for (int note : held[1]) {
+            notes[--count] = note;
+         }
+      }
+      this.range.setHeld(notes);
+   }
+
    private int midiNote(int key) {
       return 60 + key + 12 * this.octaveShift;
    }
 
+   /** The sound button: the first sound of the next or previous family (round from Effects to Piano), heard at once. */
+   private void stepFamily(int step) {
+      int families = MAX_INSTRUMENT / 8 + 1;
+      this.setInstrument(Math.floorMod(this.instrument / 8 + step, families) * 8);
+      for (int tone = 0; tone < PREVIEW.length; tone++) {
+         int note = this.midiNote(PREVIEW[tone]);
+         later(tone * 110, () -> this.midiPlayer.playNote(note, 260));
+      }
+      this.updateTitle();
+   }
+
+   private void setInstrument(int program) {
+      this.instrument = program;
+      this.midiPlayer.setInstrument(program);
+      this.bar.setSound(program);
+      this.loopView.setInstrument(program);
+   }
+
    private void updateTitle() {
-      this.setTitle("Synthesizer: instrument " + this.instrument + ", octave " + (this.octaveShift >= 0 ? "+" : "") + this.octaveShift
+      this.setTitle("Synthesizer: " + LoopView.sound(this.instrument) + ", octave " + (this.octaveShift >= 0 ? "+" : "") + this.octaveShift
          + (this.chords ? ", chord keys" : ""));
    }
 
@@ -404,6 +496,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.piano.setPressed(keys[tone], true);
       }
       this.heldNotes.put(holder, new int[][]{keys, notes});
+      this.showHeld();
       if (this.chords) {
          this.bar.setChords(true, Chord.name(key));
       }
@@ -486,6 +579,11 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (this.listenNote >= 0) {
          this.stopListening();
       }
+      if (this.lesson == null && this.recorder == null && !this.looping) {
+         this.finder.add(key);
+         this.bar.setFound(this.finder.song(), this.finder.inKey());
+         this.piano.setFound(this.finder.song() != null);
+      }
       if (this.lesson != null && !this.lesson.finished()) {
          if (this.lesson.press(key)) {
             this.backChord(this.lesson.position() - 1);
@@ -512,6 +610,7 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
       if (held == null) {
          return;
       }
+      this.showHeld();
       for (int note : held[1]) {
          // Overlapping chords share notes: a note stops with the last key holding it (Listen's note stops at its time).
          if (!this.holdsNote(note) && (this.listenKey < 0 || note != this.listenMidi)) {
@@ -532,14 +631,19 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
    private void startSong(int index) {
       this.stopListening();
       this.bar.setNotice(null);
-      boolean hadLesson = this.lesson != null;
-      this.lesson = index < 0 ? null : new Lesson(this.menu()[index]);
+      Song song = index < 0 ? null : this.menu()[index];
+      // The song just heard in free play, in its own key, carries on after the notes played.
+      int played = song != null && song == this.finder.song() && this.finder.inKey() ? this.finder.notes() : 0;
+      this.finder.clear();
+      this.bar.setFound(null, false);
+      this.piano.setFound(false);
+      this.lesson = song == null ? null : new Lesson(song, played);
       this.stopBacking();
-      this.backingChords = this.lesson == null ? null : Backing.chords(this.lesson.song());
-      this.piano.setSong(this.lesson == null ? null : this.lesson.song());
-      if (hadLesson != (this.lesson != null)) {
-         // The falling notes get room of their own, so the keys keep their size.
-         this.setSize(this.getWidth(), this.getHeight() + (hadLesson ? -PianoPanel.FALL : PianoPanel.FALL));
+      this.backingChords = song == null ? null : Backing.chords(song);
+      this.piano.setSong(song);
+      if (played > 0) {
+         this.piano.follow(played, 0);
+         this.backChord(played - 1);
       }
       this.newBest = false;
       this.refresh();
@@ -720,22 +824,12 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.toggleChords();
       } else if (keyCode == KeyEvent.VK_A) {
          this.toggleBacking();
-      } else if (keyCode == KeyEvent.VK_LEFT && this.octaveShift > -5) {
-         this.octaveShift--;
-      } else if (keyCode == KeyEvent.VK_RIGHT && this.octaveShift < 4) {
-         this.octaveShift++;
+      } else if (keyCode == KeyEvent.VK_LEFT || keyCode == KeyEvent.VK_RIGHT) {
+         this.setOctave(this.octaveShift + (keyCode == KeyEvent.VK_LEFT ? -1 : 1));
       } else if (keyCode == KeyEvent.VK_UP) {
-         if (this.instrument < 120) {
-            this.instrument++;
-         }
-
-         this.midiPlayer.setInstrument(this.instrument);
+         this.setInstrument(Math.min(MAX_INSTRUMENT, this.instrument + 1));
       } else if (keyCode == KeyEvent.VK_DOWN) {
-         if (this.instrument > 0) {
-            this.instrument--;
-         }
-
-         this.midiPlayer.setInstrument(this.instrument);
+         this.setInstrument(Math.max(0, this.instrument - 1));
       } else if (recording || this.looping) {
          // Song keys wait until the recording is stopped or the looper is off; the piano keys below still play.
       } else if (keyCode == KeyEvent.VK_O) {
@@ -752,7 +846,6 @@ public final class KeyboardWindow extends JFrame implements KeyListener {
          this.listen();
       }
       this.updateTitle();
-      this.loopView.setInstrument(this.instrument);
 
       int index = this.keyIndex(keyCode);
       if (index >= 0) {

@@ -3,21 +3,26 @@
 // come from apps.json.
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import './home.css';
+import './gallery-cards.css';
+import './first-screen.css';
+import './offscreen.css';
 import { APPS, webp, type App } from '../../shared/catalog';
 import { linkState } from '../../shared/link-state';
-import { FIRST, H, draw, useHomeDraw } from './model';
+import { FIRST, H, draw, useHomeDraw, usePart } from './model';
 import { TourBox, TourStart } from './TourBox';
+import { ComeBack } from './ComeBack';
 import { MoreButton, MoreMenu, useMore } from './PlayerMore';
 import { Records } from './Records';
 import { HeroWall } from './HeroWall';
 import { Passport, played } from './Stamp';
+import { StampLanding } from './StampLanding';
 import * as P from './player';
 import { badge, stampCount, tabClick, tabKey, tabShown } from './tabs';
 import { WhatsNew } from './WhatsNew';
 import { bannerText } from './takeaway';
 import { TakeItWithYou } from './TakeItWithYou';
 import { cardBlur, cardEnter, cardFocus, cardLeave, clipBroken, clipPlaying } from './clips';
-import { inFilter, playedRank, useRecordLines } from './yours';
+import { FILTERS, inFilter, matches, onView, playedRank, useRecordLines } from './yours';
 
 const page = (id: string) => id + '/index.html';
 const THEN_HINT = 'As first restored in 2026: the recovered code with light bug fixes, before the later reworks.';
@@ -92,12 +97,13 @@ function Player() {
   const zoom = window.oldjavaZoom.fit();
   const arcade = window.oldjavaSkin.get() === 'arcade';
   const size = H.frame.size;
+  const frameBox = size ? { width: size.w + 'px', height: size.h + 'px', transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined } : undefined;
   const [more, setMore, moreAt] = useMore();
   return (
     <section className={'player' + (H.then ? ' then' : '') + (H.big ? ' big' : '')} id="player" aria-label="Now playing">
       <div className="player-bar">
         <span className="live">Live</span>
-        <h3 id="player-name">{a ? a.name : FIRST.name}</h3>
+        <h2 id="player-name">{a ? a.name : FIRST.name}</h2>
         <div className="era" id="player-era" role="group" aria-label="Version" hidden={a ? !a.then : false}
           title="Then: the app as first restored in 2026, the recovered code with light bug fixes, before the later reworks. Now: today's version.">
           <button type="button" id="player-then" aria-pressed={H.then} onClick={P.thenClick}>Then</button>
@@ -145,7 +151,11 @@ function Player() {
           {'Skip past ' + (a ? a.name : FIRST.name) + ' to the app list'}
         </button>
         <iframe key={H.frame.key} id="player-frame" title={H.frame.title} src={H.frame.src} allow="autoplay; clipboard-write; microphone" onLoad={P.frameLoaded}
-          style={size ? { width: size.w + 'px', height: size.h + 'px', transform: size.scale < 1 ? 'scale(' + size.scale + ')' : undefined } : undefined} />
+          style={frameBox} />
+        {/* The app's picture while its page loads, so the screen is never blank; it fades as the app starts. Sized like the frame, so the app lands near its size. */}
+        {!H.then && <img key={'poster' + H.frame.key} className="poster" data-gone={H.poster ? undefined : ''} src={webp((a || FIRST).shot)} alt="" fetchPriority="high"
+          style={frameBox} />}
+        <StampLanding />
       </div>
       {/* The controller, docked under the screen: the runtime draws it in here (oldjavaPad.render). */}
       <div className={'docked' + (H.pad.drawn ? ' shim-pad' : '')} id="player-pad" aria-label={H.pad.drawn ? 'Controller' : undefined} hidden={!H.pad.shown}
@@ -182,6 +192,13 @@ function Tab({ id, label }: { id: string; label: string }) {
 
 const off = (id: string) => (H.tab !== null && H.tab !== id ? ' off' : '');
 
+// Phone tiles show a picture at most ~170 px wide, so phones up to 2.5x take the 240 px copy (~40% of the bytes);
+// the card's blurred tone uses the same source, so each card still downloads one picture.
+const POCKET = '(max-width: 640px) and (max-resolution: 2.5dppx)';
+const CardPic = ({ shot, className, alt }: { shot: string; className?: string; alt: string }) => (
+  <picture><source media={POCKET} srcSet={webp(shot, true)} /><img className={className} src={webp(shot)} alt={alt} loading="lazy" /></picture>
+);
+
 /**
  * The gallery: one card per app, with its passport badge (New / Played), its Offline chip once the cache has been
  * checked, and a preview clip while it is wanted (clips.ts).
@@ -198,10 +215,12 @@ function Gallery() {
         return (
           <li key={a.id} data-app={a.id} data-clip={a.clip && !c.broken[a.id] ? '' : undefined} data-then={a.then ? '' : undefined}
               data-origin={a.origin} data-cat={a.cat} data-min-width={a.minWidth} data-min-height={a.minHeight}
-              className={cls || undefined} hidden={!inFilter(a, H.filter)}
+              className={cls || undefined} hidden={!onView(a)}
               onMouseEnter={() => cardEnter(a.id)} onMouseLeave={() => cardLeave(a.id)} onFocus={e => cardFocus(e, a.id)} onBlur={e => cardBlur(e, a.id)}>
+            <CardPic shot={a.shot} className="tone" alt="" />
             <a className="thumb" href={page(a.id)} onClick={e => P.cardClick(e, a)}>
-              <img src={webp(a.shot)} alt={a.alt} loading="lazy" />
+              <CardPic shot={a.shot} alt={a.alt} />
+              <span className="go" aria-hidden="true" />
               <span className="badge">{played(a) ? 'Played ✓' : 'New'}</span>
               <span className="saved" hidden={!(t.checked && (ok || t.offline))}>{t.checked ? (ok ? 'Offline ✓' : 'Needs a connection') : null}</span>
               {c.wanted[a.id] && (
@@ -228,21 +247,86 @@ function Gallery() {
   );
 }
 
+/** Your arcade: one panel, four tabs (tabs.ts); a tab click draws only this (drawPart). */
+function Arcade() {
+  usePart('arcade');
+  return (
+    <section className="arcade" id="arcade" aria-label="Your arcade">
+      <div className="arcade-tabs" role="tablist" aria-label="Your arcade">
+        <Tab id="news" label="What’s new" />
+        {' '}
+        <Tab id="passport" label="Passport" />
+        {' '}
+        <Tab id="records" label="Records" />
+        {' '}
+        <Tab id="takeaway" label="Take it with you" />
+      </div>
+      <WhatsNew off={off('news')} />
+      <Passport off={off('passport')} />
+      <section className={'records' + off('records')} id="records" role="tabpanel" aria-labelledby="tab-records">
+        <Records onCount={n => { if (H.recordsCount !== n) { H.recordsCount = n; draw(false); } }} />
+      </section>
+      <TakeItWithYou off={off('takeaway')} />
+    </section>
+  );
+}
+
+/** The gallery under its filters and Find; a filter, a typed word or a preview clip draws only this (drawPart). */
+function Apps() {
+  usePart('gallery');
+  if (H.filter === 'yours' && !stampCount()) H.filter = 'all';   // the passport was reset, here or on another page
+  const q = H.query.trim(), shown = APPS.filter(onView), everywhere = q ? APPS.filter(a => matches(a, q)).length : 0;
+  return (
+    <>
+      <div className="filters" role="group" aria-label="Filter apps">
+        {FILTERS.filter(([f]) => f !== 'yours' || stampCount()).map(([f, label], i) => [
+          i ? ' ' : null,
+          <button key={f} type="button" data-filter={f} aria-pressed={H.filter === f} onClick={() => P.filterClick(f)}>
+            {label}{q && <span className="count">{' ' + APPS.filter(a => inFilter(a, f) && matches(a, q)).length}</span>}
+          </button>,
+        ])}
+      </div>
+      {/* Typing filters the cards at once and Enter plays the first one; Find (boot.js, find.js) searches the whole site. */}
+      <div className="find-bar" role="search">
+        <span className="glass" aria-hidden="true">⌕</span>
+        <input type="search" className="text" id="gallery-filter" value={H.query} autoComplete="off" spellCheck={false}
+          aria-label="Filter the apps" aria-describedby="gallery-filter-said" placeholder="Type to filter the apps: a name, or something to do"
+          onChange={e => P.queryInput(e.target.value)} onKeyDown={e => P.queryKey(e, shown[0])} />
+        <span className="said" id="gallery-filter-said" role="status">
+          {q ? (shown.length ? (shown.length === 1 ? '1 app' : shown.length + ' apps') + ' · Enter plays ' + shown[0].name : 'No app') : ''}
+        </span>
+        <button type="button" className="find-all" data-find="" aria-keyshortcuts="Control+K /" title="Find: apps, things to do here, and every Java source file"
+          onClick={() => P.findWith(q)}>
+          Search all <kbd>{FIND_KEY}</kbd>
+        </button>
+      </div>
+      {q && !shown.length && (
+        <p className="no-match">
+          {'No app here has “' + q + '”. '}
+          {everywhere > 0 && <button type="button" className="btn" onClick={() => P.filterClick('all')}>{'Show all ' + everywhere}</button>}
+          {' '}
+          <button type="button" className="btn" onClick={() => P.queryInput('')}>Clear</button>
+          {' '}
+          <button type="button" className="btn primary" onClick={() => document.querySelector<HTMLButtonElement>('.find-all')!.click()}>Search the whole site and its source</button>
+        </p>
+      )}
+      <Gallery />
+    </>
+  );
+}
+
 export function Home() {
   useHomeDraw();
   const t = H.take;
-  if (H.filter === 'yours' && !stampCount()) H.filter = 'all';   // the passport was reset, here or on another page
+  // A first visit (no stamps when the page loaded) shows the 20 apps before Your arcade, whose passport and records
+  // are still empty: on a phone that put the apps about two screens further down. Kept for the visit, so a first
+  // stamp does not move the panel above the gallery while the visitor scrolls.
+  const [newcomer] = useState(() => !stampCount());
+  // The page's <main> and its title and lead are in the HTML (src/routes.tsx), painted before this runs.
   return (
-    <main>
+    <>
       <HeroWall />
-      <h1>Old Java Applications</h1>
-      <p className="lead">
-        <strong>{APPS.length} games, music toys and tools</strong> from old Java jars, running in your browser.
-        {' '}One is already playing below: click it to take over.
-        <span className="tech">
-          {' '}They are Swing and AWT programs compiled to JavaScript with TeaVM, on a small AWT/Swing layer that draws the original windows and widgets.
-        </span>
-      </p>
+      <ComeBack />
       {/* What to do first, in one row: the tour, and the story for those who want to know how. */}
       <div className="start">
         <TourStart />
@@ -250,36 +334,10 @@ export function Home() {
       </div>
       <p className="offline-banner" id="offline-banner" role="status" hidden={!(t.checked && t.offline)}>{t.checked ? bannerText() : null}</p>
       <Player />
-      <section className="arcade" id="arcade" aria-label="Your arcade">
-        <div className="arcade-tabs" role="tablist" aria-label="Your arcade">
-          <Tab id="news" label="What’s new" />
-          {' '}
-          <Tab id="passport" label="Passport" />
-          {' '}
-          <Tab id="records" label="Records" />
-          {' '}
-          <Tab id="takeaway" label="Take it with you" />
-        </div>
-        <WhatsNew off={off('news')} />
-        <Passport off={off('passport')} />
-        <section className={'records' + off('records')} id="records" role="tabpanel" aria-labelledby="tab-records">
-          <Records onCount={n => { if (H.recordsCount !== n) { H.recordsCount = n; draw(false); } }} />
-        </section>
-        <TakeItWithYou off={off('takeaway')} />
-      </section>
+      {!newcomer && <Arcade />}
       <h2>Play in the browser</h2>
-      <div className="filters" role="group" aria-label="Filter apps">
-        {[['all', 'All'], ['game', 'Games'], ['music', 'Music'], ['toy', 'Toys'], ['tool', 'Tools'], ...(stampCount() ? [['yours', 'Yours']] : [])].map(([f, label], i) => [
-          i ? ' ' : null,
-          <button key={f} type="button" data-filter={f} aria-pressed={H.filter === f} onClick={() => P.filterClick(f)}>{label}</button>,
-        ])}
-      </div>
-      <button type="button" className="find-bar" data-find="" aria-keyshortcuts="Control+K /">
-        <span className="glass" aria-hidden="true">⌕</span>
-        <span className="text">Find an app, something to do, or any Java source file</span>
-        <kbd>{FIND_KEY}</kbd>
-      </button>
-      <Gallery />
-    </main>
+      <Apps />
+      {newcomer && <Arcade />}
+    </>
   );
 }

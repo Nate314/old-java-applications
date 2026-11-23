@@ -1,6 +1,6 @@
 package web.shim.java.awt;
 
-public class TColor {
+public class TColor implements TPaint {
     public static final TColor white = new TColor(255, 255, 255);
     public static final TColor WHITE = white;
     public static final TColor lightGray = new TColor(192, 192, 192);

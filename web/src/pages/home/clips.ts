@@ -7,8 +7,8 @@
 // data on touch screens, keep the still thumbnails. Which card plays, and which have their video, is in H.clip.
 import type { FocusEvent as ReactFocusEvent } from 'react';
 import { APPS } from '../../shared/catalog';
-import { H, draw } from './model';
-import { inFilter } from './yours';
+import { H, drawPart } from './model';
+import { onView } from './yours';
 
 const still = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = matchMedia('(hover: hover) and (pointer: fine)');
@@ -20,7 +20,7 @@ let wait = 0;
 export function hasClip(id: string) { return canPlay && !!APPS.find(a => a.id === id)?.clip && !clip.broken[id]; }
 const card = (id: string) => document.querySelector<HTMLLIElement>('#apps li[data-app="' + id + '"]')!;
 const videoOf = (id: string) => card(id).querySelector<HTMLVideoElement>('a.thumb video');
-const shown = (id: string) => inFilter(APPS.find(a => a.id === id)!, H.filter);
+const shown = (id: string) => onView(APPS.find(a => a.id === id)!);
 
 function play(id: string) {
   clearTimeout(wait);
@@ -28,7 +28,7 @@ function play(id: string) {
   if (clip.current) stop(clip.current);
   clip.current = id;
   clip.wanted[id] = true;
-  draw();
+  drawPart('gallery');
   const video = videoOf(id)!;
   try { video.currentTime = 0; } catch (e) { /* not loaded yet */ }
   video.play().catch(() => { if (clip.current === id) stop(id); });
@@ -37,7 +37,7 @@ function stop(id: string) {
   const video = videoOf(id);
   if (video) video.pause();
   if (clip.current === id) { clip.current = null; clip.playing = false; }
-  draw();
+  drawPart('gallery');
 }
 function later(id: string) {
   clearTimeout(wait);
@@ -45,7 +45,7 @@ function later(id: string) {
 }
 
 /** The clip's video has started: the card shows it. */
-export function clipPlaying(id: string) { if (clip.current === id) { clip.playing = true; draw(); } }
+export function clipPlaying(id: string) { if (clip.current === id) { clip.playing = true; drawPart('gallery'); } }
 /** The clip did not load: the card keeps its picture from now on. */
 export function clipBroken(id: string) { clip.broken[id] = true; stop(id); }
 
@@ -77,5 +77,8 @@ export function initClips(): void {
   document.addEventListener('click', e => {
     const target = e.target as Element;
     if (clip.current && target.closest && target.closest('.filters') && !shown(clip.current)) stop(clip.current);
+  });
+  document.addEventListener('input', e => {   // after React's own listener on its root has taken the words in
+    if (clip.current && (e.target as Element).id === 'gallery-filter' && !shown(clip.current)) stop(clip.current);
   });
 }

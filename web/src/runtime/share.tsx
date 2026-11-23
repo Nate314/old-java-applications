@@ -14,7 +14,8 @@ export let shareBox: HTMLElement | null;
 export let SHARED: RegExpExecArray | null;
 export let INVITE: string;
 
-export function openShare(id: string | null, opener?: Element | null) {
+/** picture: the page's own picture to post with the link (the home page's passport), shown in place of the link's card. */
+export function openShare(id: string | null, opener?: Element | null, picture?: () => Promise<Blob>) {
   if (embedded && window.parent !== window) {   // the home page shows it over its player, at full size
     window.parent.postMessage({ oldjavaShare: id || '' }, location.origin);
     return;
@@ -22,7 +23,7 @@ export function openShare(id: string | null, opener?: Element | null) {
   if (shareBox) return;
   // The panel belongs to the page, which a fullscreen player (Big screen) would cover.
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
-  openPanel(shut => <SharePanel id={id} onClose={shut} onPanel={el => { shareBox = el; }} />, opener, () => { shareBox = null; });
+  openPanel(shut => <SharePanel id={id} picture={picture} onClose={shut} onPanel={el => { shareBox = el; }} />, opener, () => { shareBox = null; });
 }
 
 /** What the panel says once the catalog is in: the link, its preview card's text and the message. */
@@ -62,7 +63,7 @@ const WAYS: [string, (m: string, s: ShareText) => string][] = [
  * description of its share tags, both written by web/cards.ps1), a message with the visitor's passport count, the
  * link, and ways to send it. Its body fills in once the catalog is read.
  */
-function SharePanel({ id, onClose, onPanel }: { id: string | null; onClose: () => void; onPanel: (el: HTMLElement) => void }) {
+function SharePanel({ id, picture, onClose, onPanel }: { id: string | null; picture?: () => Promise<Blob>; onClose: () => void; onPanel: (el: HTMLElement) => void }) {
   const panel = useRef<HTMLDivElement>(null);
   const [apps, setApps] = useState<CatalogApp[] | null>(null);
   useOwnKeys(panel, onClose);
@@ -77,13 +78,14 @@ function SharePanel({ id, onClose, onPanel }: { id: string | null; onClose: () =
           <strong>{s ? 'Share ' + s.name : ''}</strong>
           <CloseButton onClick={onClose} />
         </div>
-        <div className="shim-share-body">{s && <ShareBody s={s} apps={apps!} />}</div>
+        <div className="shim-share-body">{s && <ShareBody s={s} apps={apps!} picture={picture} />}</div>
       </div>
     </>
   );
 }
 
-function ShareBody({ s, apps }: { s: ShareText; apps: CatalogApp[] }) {
+function ShareBody({ s, apps, picture }: { s: ShareText; apps: CatalogApp[]; picture?: () => Promise<Blob> }) {
+  const pic = usePicture(picture);
   const [message, setMessage] = useState(s.message);
   const [copied, setCopied] = useState<boolean | null>(null);
   const copy = useRef<HTMLButtonElement>(null);
@@ -112,6 +114,7 @@ function ShareBody({ s, apps }: { s: ShareText; apps: CatalogApp[] }) {
   const m = message.trim();
   return (
     <>
+      {pic !== undefined ? <PictureToPost pic={pic} s={s} message={m} /> : <>
       <p className="shim-share-label">How the link looks when it is posted</p>
       <a className="shim-share-preview" href={s.url} target="_blank" rel="noopener">
         <img src={root() + 'cards/' + (s.app ? s.app.id : 'index') + '.jpg'} alt="" width={1200} height={630} />
@@ -120,7 +123,7 @@ function ShareBody({ s, apps }: { s: ShareText; apps: CatalogApp[] }) {
           <strong>{s.title}</strong>
           <span>{s.description}</span>
         </span>
-      </a>
+      </a></>}
       <label className="shim-share-msg">
         Message
         <textarea rows={3} ref={text} onChange={ev => setMessage(ev.target.value)} />
@@ -146,6 +149,46 @@ function ShareBody({ s, apps }: { s: ShareText; apps: CatalogApp[] }) {
       </div>
       {/* Put it on your site: the body's last child */}
       {apps.length > 0 && <EmbedSection id={s.app ? s.app.id : null} apps={apps} />}
+    </>
+  );
+}
+
+/** The picture, drawn once the panel is open: null while it is drawn, undefined without one or if it could not be drawn (the link's card shows). */
+function usePicture(picture?: () => Promise<Blob>) {
+  const [pic, setPic] = useState<Pic | null | undefined>(picture ? null : undefined);
+  useEffect(() => {
+    if (!picture) return;
+    let url = '', gone = false;
+    picture().then(blob => { if (!gone) setPic({ blob, url: url = URL.createObjectURL(blob) }); }, () => { if (!gone) setPic(undefined); });
+    return () => { gone = true; if (url) URL.revokeObjectURL(url); };
+  }, []);
+  return pic;
+}
+
+const PICTURE_FILE = 'arcade-passport.png';
+type Pic = { blob: Blob; url: string };
+
+/** The page's picture with Save picture, and Share… with the picture where the system share sheet takes files. */
+function PictureToPost({ pic, s, message }: { pic: Pic | null; s: ShareText; message: string }) {
+  const file = pic && window.File ? new File([pic.blob], PICTURE_FILE, { type: 'image/png' }) : null;
+  const canShare = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+  return (
+    <>
+      <p className="shim-share-label">Your passport as a picture, to post with the link</p>
+      <div className="shim-share-preview">
+        {/* Its room is kept while it is drawn, so the panel does not grow under the pointer. */}
+        <img src={pic ? pic.url : undefined} alt={pic ? 'Your arcade passport, with its stamps' : ''} width={1200} height={630} />
+      </div>
+      <div className="shim-share-ways">
+        <a className="shim-share-way primary" href={pic ? pic.url : undefined} download={PICTURE_FILE} data-sound="none" tabIndex={0}
+          onClick={e => { if (!pic) { e.preventDefault(); return; } playSound('saved'); }}>{pic ? 'Save picture' : 'Drawing…'}</a>
+        {canShare && (
+          <button type="button" className="shim-share-way"
+            onClick={() => navigator.share({ files: [file!], title: s.subject, text: message + ' ' + s.url }).catch(function () { /* closed */ })}>
+            {'Share picture…'}
+          </button>
+        )}
+      </div>
     </>
   );
 }

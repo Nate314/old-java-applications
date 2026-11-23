@@ -1,6 +1,7 @@
 package clock;
 
 import java.awt.BasicStroke;
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
@@ -8,10 +9,13 @@ import java.awt.event.KeyEvent;
 
 /**
  * The Timer tab: a 60-minute dial whose red wedge is the time left, set by dragging its knob (or a preset), shrinking
- * back to 12 as it counts down, and a bell when it runs out.
+ * back to 12 as it counts down, and a bell when it runs out. Turning on past 12 winds in whole hours (up to four):
+ * the hours still to come shade the rest of the dial and show as "+2 h" under the middle.
  */
 final class TimerView implements Tab {
-   private static final int[] PRESETS = {1, 3, 5, 10, 25, 60};
+   private static final int[] PRESETS = {3, 5, 10, 25, 60, 120};
+   /** The dial under the wedge while whole hours wait behind it. */
+   private static final Color HOURS = new Color(250, 190, 192);
 
    private final Main clock;
    private Rectangle[] presets;
@@ -41,7 +45,7 @@ final class TimerView implements Tab {
 
    @Override
    public String hint() {
-      return "Drag the dial   Space: start/pause   R: reset   Up/Down: +-1 min";
+      return "Turn past 12 for hours   Space: start/pause   R: reset   Up/Down: +-1 min";
    }
 
    @Override
@@ -88,7 +92,7 @@ final class TimerView implements Tab {
       this.presets = Ui.row(presetRow, PRESETS.length, gap);
       for (int i = 0; i < PRESETS.length; i++) {
          boolean chosen = countdown.length() == PRESETS[i] * Countdown.MINUTE;
-         Ui.button(g, this.presets[i], PRESETS[i] + " min", chosen);
+         Ui.button(g, this.presets[i], PRESETS[i] < 60 ? PRESETS[i] + " min" : PRESETS[i] / 60 + " h", chosen);
       }
 
       this.buttons = Ui.row(buttonRow, 2, gap);
@@ -104,12 +108,17 @@ final class TimerView implements Tab {
       this.centerY = box.y + box.height / 2;
       int r = this.radius;
       int stroke = Math.max(2, r / 30);
-      g.setColor(Ui.FACE);
-      g.fillOval(this.centerX - r, this.centerY - r, 2 * r, 2 * r);
+      Ui.face(g, this.centerX, this.centerY, r);
 
-      // The wedge: from 12 o'clock clockwise, one degree per ten seconds left.
-      double fraction = Math.min(1.0, left / (double) Countdown.MAX);
+      // The wedge: from 12 o'clock clockwise, one degree per ten seconds left in this hour; whole hours after it
+      // shade the rest of the dial, so the wedge shrinks back to 12 and then shows the next hour full.
+      int hours = left <= 0 ? 0 : (int) ((left - 1) / Countdown.HOUR);
+      double fraction = (left - hours * Countdown.HOUR) / (double) Countdown.HOUR;
       int wedge = (int) (r * 0.84);
+      if (hours > 0) {
+         g.setColor(HOURS);
+         g.fillOval(this.centerX - wedge, this.centerY - wedge, 2 * wedge, 2 * wedge);
+      }
       if (fraction > 0) {
          int steps = Math.max(2, (int) Math.ceil(fraction * 180));
          int[] xs = new int[steps + 2];
@@ -144,9 +153,7 @@ final class TimerView implements Tab {
          g.setColor(minute > 0 && minute < fraction * 60 ? Ui.FACE : Ui.INK);
          Ui.center(g, String.valueOf(minute), numbers, new Rectangle(x - numberSize, y - numberSize / 2, 2 * numberSize, numberSize));
       }
-      g.setColor(Ui.INK);
-      g.setStroke(new BasicStroke(stroke));
-      g.drawOval(this.centerX - r, this.centerY - r, 2 * r, 2 * r);
+      Ui.rim(g, this.centerX, this.centerY, r, stroke * 2);
 
       // The knob at the wedge's edge, to drag, and the hub.
       double edge = fraction * 2 * Math.PI;
@@ -161,6 +168,22 @@ final class TimerView implements Tab {
       g.setColor(Ui.INK);
       int hub = Math.max(4, r / 14);
       g.fillOval(this.centerX - hub, this.centerY - hub, 2 * hub, 2 * hub);
+      Ui.glass(g, this.centerX, this.centerY, r);
+
+      // How many more hours wait after this one, in a pill under the middle.
+      if (hours > 0) {
+         String more = "+" + hours + " h";
+         Font font = new Font(Ui.LABELS, Font.BOLD, Math.max(9, r / 7));
+         int width = g.getFontMetrics(font).stringWidth(more) + font.getSize();
+         int height = font.getSize() * 3 / 2;
+         Rectangle pill = new Rectangle(this.centerX - width / 2, this.centerY + r * 30 / 100, width, height);
+         g.setColor(Ui.FACE);
+         g.fillRoundRect(pill.x, pill.y, pill.width, pill.height, height, height);
+         g.setColor(Ui.WEDGE);
+         g.setStroke(new BasicStroke(Math.max(1, stroke / 2)));
+         g.drawRoundRect(pill.x, pill.y, pill.width, pill.height, height, height);
+         Ui.center(g, more, font, pill);
+      }
    }
 
    private static int clamp(int value, int min, int max) {
@@ -199,25 +222,20 @@ final class TimerView implements Tab {
          }
       } else if (this.onDial(x, y)) {
          this.dragging = true;
-         this.dragMinutes = (int) ((countdown.remaining(now) + Countdown.MINUTE / 2) / Countdown.MINUTE);
-         this.drag(x, y, now);
+         this.dragMinutes = Countdown.turn((int) ((countdown.remaining(now) + Countdown.MINUTE / 2) / Countdown.MINUTE),
+               this.minuteAt(x, y), true);
+         countdown.set(this.dragMinutes * Countdown.MINUTE, now);
       }
    }
 
-   /** Turning the knob: snaps to whole minutes, and stops at 0 and at 60 rather than wrapping round past 12. */
+   /** Turning the knob: snaps to whole minutes, winds on into the next hour past 12, and stops at 0 and at the most. */
    @Override
    public void drag(int x, int y, long now) {
       if (!this.dragging) {
          return;
       }
-      int minutes = this.minuteAt(x, y);
-      if (this.dragMinutes >= 45 && minutes < 15) {
-         minutes = 60;
-      } else if (this.dragMinutes <= 15 && minutes > 45) {
-         minutes = 0;
-      }
-      this.dragMinutes = minutes;
-      this.countdown().set(minutes * Countdown.MINUTE, now);
+      this.dragMinutes = Countdown.turn(this.dragMinutes, this.minuteAt(x, y), false);
+      this.countdown().set(this.dragMinutes * Countdown.MINUTE, now);
    }
 
    @Override

@@ -1,8 +1,10 @@
 package rubikscube;
 
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.KeyboardFocusManager;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -111,6 +113,29 @@ public final class CubeFrame extends JFrame implements ActionListener {
    private int frameHeight = 0;
    private int cellWidth = 0;
    private int cellHeight = 0;
+   /** Screens narrower than this (a phone held upright, in the browser) get the phone layout: as wide as the screen, the cube on top, the controls under it. */
+   static final int NARROW = 600;
+   /** Width of the level column on the right of the phone layout. */
+   private static final int COLUMN = 165;
+   /** The phone layout's controls (cube on top, controls under it), on a phone or, beside the cube, when wide. */
+   private boolean compact = false;
+   /**
+    * Landscape screens shorter than this (a laptop's browser) are too short for the 700 px window: the cube fills the
+    * height at the left and the phone layout's controls stand in a column at its right, instead of all being scaled down.
+    */
+   static final int WIDE_BELOW = 740;
+   /** Width of the controls column at the right of the wide layout: the phone layout's controls, as on a 400 px phone. */
+   static final int CONTROLS = 384;
+   /** Where the phone layout's controls start: under the cube on a phone, right of it when wide. */
+   private int controlsLeft = 0;
+   private int controlsTop = 0;
+   /** The 3D cube's width: the window's, less the controls column when wide. */
+   private int viewWidth = 0;
+   /** The 3D cube's height (with the row of buttons over it); the net is drawn in the same place on a phone. */
+   private int viewHeight = 0;
+   /** How far right the net starts: centered on a phone, 0 on the desktop. */
+   private int netX = 0;
+   private int netY = 0;
    protected Cube cube = null;
    private MoveHistory history = null;
    private final LevelRecords records;
@@ -132,17 +157,63 @@ public final class CubeFrame extends JFrame implements ActionListener {
    private long solvedMillis = 0L;
 
    public CubeFrame() {
-      this.setSize(550, 700);
-      this.frameWidth = this.getWidth();
+      this(Toolkit.getDefaultToolkit().getScreenSize());
+   }
+
+   /** Laid out for a screen of this size (LayoutCheck passes phone sizes). */
+   CubeFrame(Dimension screen) {
+      boolean wide = screen.width >= NARROW && screen.height < WIDE_BELOW && screen.width - CONTROLS >= 360;
+      this.compact = screen.width < NARROW || wide;
+      if (wide) {
+         int height = Math.max(480, Math.min(720, screen.height));
+         // The cube's place at most a third wider than tall; the mirrors use the room at its sides.
+         this.setSize(Math.min(screen.width, 16 + CONTROLS + (height - 40) * 4 / 3), height);
+      } else if (this.compact) {
+         // The window takes the screen's width instead of being scaled down, and the cube whatever height is left.
+         int width = Math.max(360, screen.width);
+         this.viewHeight = Math.max(300, Math.min(width, screen.height - 376));
+         // Room under the cube for the controls (334 px) and the title bar and borders (about 40 px on the desktop).
+         this.setSize(width, this.viewHeight + 376);
+      } else {
+         this.setSize(550, 700);
+      }
+      // On a phone the controls are laid out across the content's width (the window's less its borders), not past it.
+      this.frameWidth = this.getWidth() - (this.compact ? 16 : 0);
       this.frameHeight = this.getHeight();
-      this.cellWidth = this.frameWidth / 11;
-      this.cellHeight = this.frameHeight / 14;
+      this.viewWidth = this.frameWidth;
+      if (wide) {
+         this.viewHeight = this.frameHeight - 40;
+         this.viewWidth = this.frameWidth - CONTROLS;
+         this.controlsLeft = this.viewWidth;
+         // The controls (334 px tall) in the middle of the column's height.
+         this.controlsTop = (this.viewHeight - 340) / 2;
+         this.cellWidth = this.cellHeight = Math.min(this.viewWidth / 11, (this.viewHeight - 46) / 12);
+         this.netX = (this.viewWidth - 11 * this.cellWidth) / 2;
+         this.netY = 44 - this.cellHeight;
+      } else if (this.compact) {
+         // Square cells that fit the net (12 rows, starting under the row of buttons) in the cube's place.
+         this.cellWidth = this.cellHeight = Math.min(this.frameWidth / 11, (this.viewHeight - 46) / 12);
+         this.netX = (this.frameWidth - 11 * this.cellWidth) / 2;
+         this.netY = 44 - this.cellHeight;
+         this.controlsTop = this.viewHeight;
+      } else {
+         this.cellWidth = this.frameWidth / 11;
+         this.cellHeight = this.frameHeight / 14;
+         this.viewHeight = 7 * this.cellHeight + 2;
+      }
       this.cube = new Cube(this, this.stickerButtons, this.cellWidth, this.cellHeight);
       this.history = new MoveHistory(this.cube);
       this.records = LevelRecords.load(RECORDS_FILE);
       this.helpNet = this.helpLabel.getText();
       this.view = new CubeView3D(this.cube, this::select, this::applyUserMove);
       this.cube.watcher = this.view;
+      this.view.canTurn = () -> !this.busy();
+      this.view.across = wide ? 6.6 : 0;
+      this.view.onNext = () -> {
+         if (this.nextButton.isEnabled()) {
+            this.startLevel(this.level + 1);
+         }
+      };
       this.setTitle("Rubik's Cube");
       this.setLocationRelativeTo(null);
       this.setDefaultCloseOperation(3);
@@ -166,12 +237,12 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.panel.add(this.mixFields[1]);
       this.mixButton.addActionListener(this);
       this.panel.add(this.mixButton);
-      this.cube.topFace.panel.setBounds(4 * this.cellWidth, this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.frontFace.panel.setBounds(4 * this.cellWidth, 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.rightFace.panel.setBounds(7 * this.cellWidth, 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.bottomFace.panel.setBounds(4 * this.cellWidth, 7 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.backFace.panel.setBounds(4 * this.cellWidth, 10 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
-      this.cube.leftFace.panel.setBounds(this.cellWidth, 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.topFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.frontFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.rightFace.panel.setBounds(this.netX + 7 * this.cellWidth, this.netY + 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.bottomFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + 7 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.backFace.panel.setBounds(this.netX + 4 * this.cellWidth, this.netY + 10 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
+      this.cube.leftFace.panel.setBounds(this.netX + this.cellWidth, this.netY + 4 * this.cellHeight, 3 * this.cellWidth, 3 * this.cellHeight);
       for (Face face : this.cube.faces()) {
          face.panel.setBackground(new Color(0, 0, 0));
          this.panel.add(face.panel);
@@ -204,9 +275,10 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** The level ladder: labels and buttons right of the bottom and back faces, the message and help left of them. */
    private void layoutLevelControls() {
-      int x = (int)(7.2 * this.cellWidth);
-      int y = (int)(7.15 * this.cellHeight);
-      int width = (int)(3.3 * this.cellWidth);
+      // On a phone: the level column at the right under the cube, the message (or card) at the left.
+      int x = this.compact ? this.frameWidth - 6 - COLUMN : (int)(7.2 * this.cellWidth);
+      int y = this.compact ? this.controlsTop + 6 : (int)(7.15 * this.cellHeight);
+      int width = this.compact ? COLUMN : (int)(3.3 * this.cellWidth);
       int half = width / 2 - 3;
       this.levelLabel.setFont(new Font("Dialog", Font.BOLD, 16));
       this.levelLabel.setBounds(x, y, width, 24);
@@ -220,8 +292,8 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.panel.add(buttons[index]);
       }
       this.totalLabel.setBounds(x, y + 196, width, 18);
-      int left = (int)(0.3 * this.cellWidth);
-      int leftWidth = (int)(3.5 * this.cellWidth);
+      int left = this.compact ? this.controlsLeft + 6 : (int)(0.3 * this.cellWidth);
+      int leftWidth = this.compact ? x - 20 - this.controlsLeft : (int)(3.5 * this.cellWidth);
       this.messageLabel.setFont(new Font("Dialog", Font.BOLD, 14));
       this.messageLabel.setBounds(left, y, leftWidth, 90);
       this.helpLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
@@ -246,36 +318,44 @@ public final class CubeFrame extends JFrame implements ActionListener {
          face.panel.setVisible(net);
       }
       this.view.setVisible(!net);
-      this.view.setBounds(0, 0, this.frameWidth, 7 * h + 2);
+      if (net) {
+         this.view.demo(null, 0, null);
+      }
+      this.view.setBounds(0, 0, this.viewWidth, this.viewHeight);
       this.view.reset();
       this.viewButton.setText(net ? "3D cube" : "Flat net");
-      this.viewButton.setBounds(this.frameWidth - 112, 10, 92, 28);
-      this.teachButton.setBounds(12, 10, 116, 28);
-      this.patternButton.setBounds(134, 10, 124, 28);
-      this.paintButton.setBounds(264, 10, 100, 28);
-      this.timerButton.setBounds(368, 10, 68, 28);
-      int keyWidth = (int)(2.75 * w / 3.0);
-      int keyHeight = (int)(2.75 * h / 3.0);
-      int keyX = net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
-      int keyY = net ? (int)(1.75 * h) : (int)(9.0 * h);
+      if (this.compact) {
+         this.layoutTopButtons();
+      } else {
+         this.viewButton.setBounds(this.frameWidth - 112, 10, 92, 28);
+         this.teachButton.setBounds(12, 10, 116, 28);
+         this.patternButton.setBounds(134, 10, 124, 28);
+         this.paintButton.setBounds(264, 10, 100, 28);
+         this.timerButton.setBounds(368, 10, 68, 28);
+      }
+      int keyWidth = this.compact ? 44 : (int)(2.75 * w / 3.0);
+      int keyHeight = this.compact ? 28 : (int)(2.75 * h / 3.0);
+      // On a phone both views keep the keys at the foot of the level column, under Mix.
+      int keyX = this.compact ? this.frameWidth - 6 - COLUMN / 2 - keyWidth / 2 : net ? w + keyWidth : (int)(5.5 * w) - keyWidth / 2;
+      int keyY = this.compact ? this.controlsTop + 6 + 272 : net ? (int)(1.75 * h) : (int)(9.0 * h);
       this.moveButtons[0].setBounds(keyX, keyY, keyWidth, keyHeight);
       for (int index = 1; index < 4; index++) {
          this.moveButtons[index].setBounds(keyX + (index - 2) * keyWidth, keyY + keyHeight, keyWidth, keyHeight);
       }
-      if (net) {
+      if (net && !this.compact) {
          this.mixLabels[0].setBounds((int)(7.5 * w), h, (int)(1.25 * w), h / 2);
          this.mixLabels[1].setBounds((int)(8.75 * w), h, (int)(1.25 * w), h / 2);
          this.mixFields[0].setBounds((int)(7.5 * w), (int)(1.5 * h), (int)(1.25 * w), h / 2);
          this.mixFields[1].setBounds((int)(8.75 * w), (int)(1.5 * h), (int)(1.25 * w), h / 2);
          this.mixButton.setBounds((int)(7.5 * w), 2 * h, (int)(2.5 * w), (int)(1.5 * h));
       } else {
-         int x = (int)(7.2 * w);
-         int y = (int)(11.6 * h);
+         int x = this.compact ? this.frameWidth - 6 - COLUMN : (int)(7.2 * w);
+         int y = this.compact ? this.controlsTop + 6 + 222 : (int)(11.6 * h);
          this.mixLabels[0].setBounds(x, y, 56, 16);
          this.mixLabels[1].setBounds(x + 60, y, 50, 16);
          this.mixFields[0].setBounds(x, y + 18, 56, 26);
          this.mixFields[1].setBounds(x + 60, y + 18, 46, 26);
-         this.mixButton.setBounds(x + 110, y + 18, (int)(3.3 * w) - 110, 26);
+         this.mixButton.setBounds(x + 110, y + 18, (this.compact ? COLUMN : (int)(3.3 * w)) - 110, 26);
       }
       this.helpLabel.setText(net ? this.helpNet : HELP_3D);
       if (this.painting) {
@@ -289,6 +369,20 @@ public final class CubeFrame extends JFrame implements ActionListener {
       }
       this.records.setNetView(net);
       this.panel.repaint();
+   }
+
+   /** The row of buttons over the cube on a phone (or wide): as wide as the cube's place, the longer labels given more room. */
+   private void layoutTopButtons() {
+      JButton[] buttons = {this.teachButton, this.patternButton, this.paintButton, this.timerButton, this.viewButton};
+      double[] share = {1.3, 1.3, 1.0, 0.8, 1.0};
+      double unit = (this.viewWidth - 12 - 4 * (buttons.length - 1)) / 5.4;
+      Font font = new Font("Dialog", Font.BOLD, 11);
+      double x = 6;
+      for (int index = 0; index < buttons.length; index++) {
+         buttons[index].setFont(font);
+         buttons[index].setBounds((int) x, 8, (int) (unit * share[index]), 28);
+         x += unit * share[index] + 4;
+      }
    }
 
    /** V: the other view. */
@@ -388,11 +482,14 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.history.restart();
       this.painted = false;
       int moves = this.userMoves.size();
+      boolean still = Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"));
       if (this.freePlay) {
          this.message("Solved in " + moves + (moves == 1 ? " move!" : " moves!"));
+         this.view.cheer(-1, "Solved!", still);
          return;
       }
       int stars = LevelRecords.starsFor(this.par, moves, this.usedHint);
+      this.view.cheer(stars, "Level " + this.level + " solved!", still);
       int before = this.records.stars(this.level);
       this.records.record(this.level, stars, moves);
       String text = "Level " + this.level + " solved! " + stars(stars);
@@ -433,6 +530,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
             previous[0] = move;
             this.markSquare(move[0], Integer.parseInt(move[2]));
             this.cube.refresh();
+            this.showStrip();
             if (++ticks[0] < 20 * this.par + 50) {
                return;
             }
@@ -443,6 +541,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.message("Your turn:<br>turn it back.");
          this.updateStatus();
          this.coachAgain();
+         this.showMeHow();
       });
       this.playback.start();
       this.updateStatus();
@@ -484,6 +583,25 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.playback.start();
       this.updateStatus();
       this.coachAgain();
+   }
+
+   /**
+    * Level 1, until it has been solved once: a fingertip on the 3D cube shows the drag that turns it back (the layer
+    * follows it part way and springs back) until the player presses the cube. It is not a hint: stars are not capped.
+    * With reduced motion the hint arrow stands still on the square instead.
+    */
+   private void showMeHow() {
+      String[] move = this.history.hint();
+      if (this.level != 1 || this.records.stars(1) > 0 || !this.view.isVisible() || this.coaching || this.patterning || move == null) {
+         return;
+      }
+      int cubie = Integer.parseInt(move[2]);
+      if (Boolean.TRUE.equals(Toolkit.getDefaultToolkit().getDesktopProperty("oldjava.reducedMotion"))) {
+         this.view.hint(move[0], cubie, move[1]);
+      } else {
+         this.view.demo(move[0], cubie, move[1]);
+      }
+      this.message("Your turn: drag the<br>square the way the<br>finger shows.");
    }
 
    /** Hint (H): selects the square of the next move back and lights its key. */
@@ -539,10 +657,12 @@ public final class CubeFrame extends JFrame implements ActionListener {
    }
 
    private void clearHint() {
+      this.view.demo(null, 0, null);
+      // Also the still arrow Show me how leaves under reduced motion, which is not a hint.
+      this.view.hint(null, 0, null);
       if (this.hinted != null) {
          this.keyButton(this.hinted[1]).setBackground(this.keyColor);
          this.hinted = null;
-         this.view.hint(null, 0, null);
       }
    }
 
@@ -622,6 +742,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
       this.undoButton.setEnabled(idle && !this.userMoves.isEmpty());
       this.hintButton.setEnabled(idle && (this.history.depth() > 0 || this.painted));
       this.solveButton.setEnabled(idle && (this.history.depth() > 0 || this.painted));
+      this.showStrip();
       boolean playerSolved = this.solvedMillis != 0L && moves > 0;
       if (playerSolved && !this.freePlay && !this.usedHint) {
          this.setTitle("Rubik's Cube: level " + this.level + " solved in " + moves + (moves == 1 ? " move!" : " moves!"));
@@ -629,6 +750,25 @@ public final class CubeFrame extends JFrame implements ActionListener {
          this.setTitle("Rubik's Cube: solved in " + moves + (moves == 1 ? " move!" : " moves!"));
       } else {
          this.setTitle("Rubik's Cube: " + (this.painting ? "painting your cube" : this.painted ? "your cube" : this.onCube != null ? this.onCube.name : this.freePlay ? "free play" : "level " + this.level) + ", " + moves + (moves == 1 ? " move" : " moves"));
+      }
+   }
+
+   /**
+    * The round strip under the 3D cube, on a level only: its mix filling the pips, then the moves made against par
+    * and the stars a solve now would win, then Next once the player has solved it. None after Solve.
+    */
+   private void showStrip() {
+      int moves = this.userMoves.size();
+      if (this.freePlay || this.painted || this.painting || this.onCube != null || this.complete && this.solvedMillis == 0L) {
+         this.view.strip(null, 0, 0, -1, false);
+      } else if (this.playback != null && !this.complete) {
+         this.view.strip("Watch the mix", this.par, this.history.depth(), -1, false);
+      } else if (this.complete) {
+         boolean next = this.level < LevelRecords.LEVELS && this.level < this.records.unlocked();
+         this.view.strip(next ? "Next: level " + (this.level + 1) : "Solved", this.par, moves,
+               LevelRecords.starsFor(this.par, moves, this.usedHint), next);
+      } else {
+         this.view.strip("Your turn", this.par, moves, LevelRecords.starsFor(this.par, moves, this.usedHint), false);
       }
    }
 
@@ -827,6 +967,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** G: the Patterns card in place of the message and help (closing Teach me), or back. */
    final void togglePatterns() {
+      this.view.demo(null, 0, null);
       this.stopPaint(true);
       this.closeTimer();
       if (this.coaching && !this.patterning) {
@@ -1067,6 +1208,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** C: paint the cube to match a real one (or Cancel). */
    final void togglePaint() {
+      this.view.demo(null, 0, null);
       if (this.painting) {
          this.stopPaint(true);
          this.updateStatus();
@@ -1200,6 +1342,7 @@ public final class CubeFrame extends JFrame implements ActionListener {
 
    /** K: the Timer card for timing solves of a real cube (closing the other cards), or back. */
    final void toggleTimer() {
+      this.view.demo(null, 0, null);
       if (this.timing) {
          this.closeTimer();
          return;

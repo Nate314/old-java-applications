@@ -34,6 +34,16 @@ enum Shortcut {
       this.times = times;
    }
 
+   /** The shortcut whose letter key this is (E, D or R, typed on the real keyboard), or null. */
+   static Shortcut forLetter(int keyCode) {
+      for (Shortcut s : values()) {
+         if (s.legend.length() == 1 && s.keyCode == keyCode) {
+            return s;
+         }
+      }
+      return null;
+   }
+
    /** How it is written: "Win+E", "Win+Tab", "Win+Left", "Win". */
    String combo() {
       switch (this) {

@@ -5,6 +5,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,21 @@ import java.util.List;
  * lists the buttons {@link LabPanel} draws along the bottom.
  */
 abstract class Page {
+	/**
+	 * A phone held upright (in the browser): the lab is 480 px wide and taller, and each page stacks its parts instead
+	 * of the whole window being shrunk to half. Chosen at start; the desktop (and a headless self-check) is wide.
+	 */
+	static final boolean NARROW = narrowScreen();
+
+	private static boolean narrowScreen() {
+		try {
+			// -Dsimplealgorithms.narrow=true shows the phone layout on the desktop.
+			return "true".equals(System.getProperty("simplealgorithms.narrow")) || Toolkit.getDefaultToolkit().getScreenSize().width < 600;
+		} catch (RuntimeException headless) {
+			return false;
+		}
+	}
+
 	static final Color PAPER = new Color(251, 248, 240);
 	static final Color GRID = new Color(214, 226, 240);
 	static final Color INK = new Color(31, 58, 104);
@@ -80,6 +96,11 @@ abstract class Page {
 		return false;
 	}
 
+	/** True while the page follows drags on its area (only then does the panel listen for them). */
+	boolean drags() {
+		return false;
+	}
+
 	/** Called about 30 times a second while the page shows. Returns true if it needs a repaint. */
 	boolean tick() {
 		return false;
@@ -99,6 +120,45 @@ abstract class Page {
 		g.setFont(font);
 		g.setColor(color);
 		g.drawString(text, centerX - g.getFontMetrics().stringWidth(text) / 2, y);
+	}
+
+	/** Splits text into lines no wider than width, at spaces; the first line is indent narrower. */
+	static List<String> wrap(Graphics2D g, String text, Font font, int width, int indent) {
+		List<String> lines = new ArrayList<>();
+		String line = "";
+		for (String word : text.split(" ")) {
+			String longer = line.isEmpty() ? word : line + " " + word;
+			if (!line.isEmpty() && width(g, longer, font) > width - (lines.isEmpty() ? indent : 0)) {
+				lines.add(line);
+				line = word;
+			} else {
+				line = longer;
+			}
+		}
+		if (!line.isEmpty()) {
+			lines.add(line);
+		}
+		return lines;
+	}
+
+	/**
+	 * Draws text wrapped to width from (x, y), at most maxLines lines lineHeight apart (the last one cut short with
+	 * "..."), the first line starting indent further right. Returns the baseline after the last line.
+	 */
+	static int paragraph(Graphics2D g, String text, Font font, Color color, int x, int y, int width, int indent, int lineHeight, int maxLines) {
+		List<String> lines = wrap(g, text, font, width, indent);
+		for (int i = 0; i < lines.size() && i < maxLines; i++) {
+			String line = lines.get(i);
+			if (i == maxLines - 1 && lines.size() > maxLines) {
+				while (!line.isEmpty() && width(g, line + "...", font) > width - (i == 0 ? indent : 0)) {
+					line = line.substring(0, line.length() - 1);
+				}
+				line += "...";
+			}
+			text(g, line, font, color, x + (i == 0 ? indent : 0), y);
+			y += lineHeight;
+		}
+		return y;
 	}
 
 	static int width(Graphics2D g, String text, Font font) {

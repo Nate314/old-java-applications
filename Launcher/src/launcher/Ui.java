@@ -6,6 +6,7 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
@@ -28,6 +29,7 @@ final class Ui {
    static final Color LINE = new Color(0x2e3341);
    static final Color TEXT = new Color(0xe9ebf1);
    static final Color MUTED = new Color(0x9aa1b2);
+   static final Color SOFT = new Color(0xc4c9d6);        // a card's pitch: quieter than its name, clearer than its record
    static final Color ACCENT = new Color(0x4f8cff);
    static final Color GO = new Color(0x34c47c);
    static final Color WARN = new Color(0xffb547);
@@ -94,6 +96,13 @@ final class Ui {
       private final boolean primary;
       private boolean hover;
       private Color fill = ACCENT;
+      // A launch under way: its step of steps (segments along the bottom), the sweep's place (0..1, -1 none),
+      // and whether it is running (steps 0). None while launch is false.
+      private boolean launch;
+      private boolean runningNow;
+      private int step;
+      private int steps;
+      private float sweep = -1;
 
       FlatButton(String text, boolean primary) {
          super(text);
@@ -127,6 +136,24 @@ final class Ui {
          repaint();
       }
 
+      /**
+       * Shows a launch on the (disabled) button: while starting, its fill dimmed with a band of light crossing it
+       * ({@code sweep} of the way, 0..1) over {@code steps} segments lit up to {@code step}; once running, green.
+       */
+      void setLaunch(int step, int steps, float sweep, boolean running) {
+         launch = true;
+         this.step = step;
+         this.steps = steps;
+         this.sweep = sweep;
+         runningNow = running;
+         repaint();
+      }
+
+      void clearLaunch() {
+         launch = false;
+         repaint();
+      }
+
       @Override
       protected void paintComponent(Graphics g) {
          Graphics2D g2 = smooth(g);
@@ -134,12 +161,21 @@ final class Ui {
          int h = getHeight();
          int arc = primary ? 12 : h;
          Color bg;
-         if (!isEnabled()) bg = primary ? LINE : TILE;
+         if (launch) bg = runningNow ? new Color(0x1c4a35) : fill.darker();
+         else if (!isEnabled()) bg = primary ? LINE : TILE;
          else if (primary) bg = hover ? fill.brighter() : fill;
          else if (isSelected()) bg = new Color(0x2f4f86);
          else bg = hover ? TILE_HOVER : TILE;
          g2.setColor(bg);
          g2.fillRoundRect(0, 0, w, h, arc, arc);
+         if (launch && !runningNow) {
+            sweep(g2, new java.awt.geom.RoundRectangle2D.Float(0, 0, w, h, arc, arc), sweep);
+            int sw = (w - 32 - (steps - 1) * 6) / steps;
+            for (int i = 0; i < steps; i++) {
+               g2.setColor(new Color(255, 255, 255, i < step ? 210 : i == step ? 110 : 40));
+               g2.fillRoundRect(16 + i * (sw + 6), h - 8, sw, 3, 3, 3);
+            }
+         }
          if (!primary) {
             g2.setColor(isSelected() ? ACCENT : LINE);
             g2.setStroke(new BasicStroke(1f));
@@ -148,10 +184,26 @@ final class Ui {
          g2.setFont(getFont());
          FontMetrics fm = g2.getFontMetrics();
          String text = getText();
-         g2.setColor(isEnabled() ? TEXT : MUTED);
+         g2.setColor(isEnabled() || launch ? TEXT : MUTED);
          g2.drawString(text, (w - fm.stringWidth(text)) / 2, (h + fm.getAscent() - fm.getDescent()) / 2);
          g2.dispose();
       }
+   }
+
+   /**
+    * A soft band of light {@code t} of the way (0..1) across {@code area}, clipped to it: the launcher's sign that
+    * an app is being built and opened.
+    */
+   static void sweep(Graphics2D g, java.awt.Shape area, float t) {
+      java.awt.Rectangle r = area.getBounds();
+      float band = Math.max(40, r.width / 3f);
+      float x = r.x - band + t * (r.width + band);
+      Graphics2D g2 = (Graphics2D) g.create();
+      g2.clip(area);
+      Color clear = new Color(255, 255, 255, 0);
+      g2.setPaint(new GradientPaint(x, 0, clear, x + band / 2, 0, new Color(255, 255, 255, 70), true));
+      g2.fill(new java.awt.geom.Rectangle2D.Float(x, r.y, band, r.height));
+      g2.dispose();
    }
 
    /** A dark search field with a placeholder. */

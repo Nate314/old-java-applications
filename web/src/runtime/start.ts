@@ -1,34 +1,53 @@
 import { clipMode, embedded } from './skin';
-import { toolbar } from './install';
-import { centerWindows, stageEdge } from './band-news';
+import { keepOffline, toolbar } from './install';
+import { centerWindows, stageEdge } from './stage';
+import { keepScreenFloor } from './screen-floor';
 import { bringBack } from './pop-out';
 import { replay, setReplay, startReplay } from './replay';
 import { setPhotoDesk } from './photo-booth';
 import { passport, stampOnPlay, stampToast } from './passport';
 import { watchApp, watchWanted } from './watch';
 import { saverHost } from './saver';
-import { padInPlayer } from './touch-pad';
+import { padInFrame, padInPlayer } from './touch-pad';
 import { gamepads } from './gamepads';
-import { appId } from './catalog';
+import { appId, catalog } from './catalog';
 import { programFile } from './then-and-now';
-import { exitScreen, howToPlay, sourceFromHash } from './source-viewer';
+import { howToPlay, sourceFromHash } from './source-viewer';
+import { exitScreen } from './exit-screen';
 import { pretendWindows } from './pretend-windows';
 import { AGAIN_KEY, followTitle } from './records';
 import { clockFollows, clockOpen, clockPage } from './clock-follows';
-import { preload, titleScreen } from './title-screen';
+import { titleScreen } from './title-screen';
+import { preload } from './preload';
 import { overlay, runAgain } from './ui/overlay';
 import { showConsole } from './system-out';
 import { playSound } from './sounds';
-import { whenShown } from './toolbar-more';
+import { fitBand, whenShown } from './toolbar-more';
+import { afterPaint } from './after-paint';
 
 
+
+// The stage and its band. On an app page they go up in a task of their own just after the frame that shows the
+// early title screen (it opens once apps.json has answered, title-screen.tsx), not at DOMContentLoaded: that waits
+// for the app's program (classes.js) to arrive and run, so a slow phone showed the title screen without its band,
+// then froze for the band's render and layout on top of the program's own start-up before its next frame. If the
+// program comes first, DOMContentLoaded does it.
+var staged = false;
+function stage(isApp: boolean) {
+  if (staged) return;
+  staged = true;
+  if (isApp && !embedded) document.documentElement.setAttribute('data-stage', '');
+  if (!embedded) toolbar(isApp);
+}
 
 export function init() {
+  if (document.body && document.body.hasAttribute('data-app')) catalog().then(function () {
+    requestAnimationFrame(function () { setTimeout(function () { stage(true); fitBand(); gamepads(true); }); });   // fitted at once, as at load
+  }, function () { /* DOMContentLoaded does it */ });
   document.addEventListener('DOMContentLoaded', function () {
     var body = document.body;
     var isApp = body.hasAttribute('data-app');
-    if (isApp && !embedded) document.documentElement.setAttribute('data-stage', '');
-    if (!embedded) toolbar(isApp);
+    stage(isApp);
     // The player's iframe leaves the toast to the home page around it, which hears the stamp too. An app page
     // shows only its own stamp; the home page shows any.
     if (!embedded) passport.onChange(function (id: string | null) { if (id && (!isApp || id === appId())) stampToast(id); });
@@ -39,13 +58,19 @@ export function init() {
 
     var desktop = document.createElement('div');
     desktop.id = 'desktop';
+    // The app is the page's main content: a screen reader's landmarks jump straight to it, and borderless windows
+    // (NathaNOS's full-screen desktop, a screen saver) are inside a landmark like the titled ones (role=dialog).
+    desktop.setAttribute('role', 'main');
+    desktop.setAttribute('aria-label', document.title);
     body.insertBefore(desktop, body.firstChild);
     // <body data-own-layout> (CircleSpawner): the app places its windows on the screen itself, and recentering
     // them as a group while a shape grows in, one window at a time, would slide the whole group about.
     if (!document.documentElement.hasAttribute('data-shot') && !body.hasAttribute('data-own-layout')) centerWindows(desktop);
+    else if (embedded) keepScreenFloor(desktop);
     if (body.hasAttribute('data-tab-title') && !embedded) followTitle(desktop);
     var saverMode = document.documentElement.hasAttribute('data-saver');
     if (embedded && window.parent !== window && !saverMode) padInPlayer();
+    if (embedded && !saverMode && !clipMode && !document.documentElement.hasAttribute('data-shot')) padInFrame();
     if (body.hasAttribute('data-console')) {
       var out = showConsole();
       if (!embedded) stageEdge(out, '--out-h');
@@ -116,7 +141,10 @@ export function init() {
         window.addEventListener('online', runAgain, { once: true });   // the connection came back: try by itself
         return;
       }
-      if (title) title.ready(start); else whenShown(start);   // no app runs unseen in a prerendered page
+      // Play paints its press (the title screen starts leaving) first, then the app's main runs: on a slow phone
+      // main and its first timer held that paint for 0.4 to 1 s.
+      if (title) title.ready(function () { afterPaint(start); }); else whenShown(start);   // no app runs unseen in a prerendered page
+      keepOffline();   // only now: installing the worker downloads the whole build
     });
   });
 }

@@ -33,15 +33,38 @@ final class RunnerPanel extends JPanel {
    static final int STRIP = 196;
    /** Steps after a crash before Space starts a new run, so a held key does not restart at once. */
    private static final int RESTART_LOCK = 24;
+   /** Until your best reaches this (the first night), runs show the mark that says when to jump or duck. */
+   static final int GUIDE_UNTIL = Sky.NIGHT_EVERY;
+   /** The mark stays lit at least this many steps (a fifth of a second), so a tap's moment can be seen. */
+   private static final int GUIDE_LIT = 12;
+   /** Jumps held up to this many steps are shown as TAP (a short hop clears them best), longer ones as HOLD. */
+   static final int GUIDE_TAP = 7;
+   /** On a screen narrower than the game (a phone held upright): the thumb pads' height, under the strip. */
+   static final int PADS = 190;
+   private static final Font PAD = new Font(Font.SANS_SERIF, Font.BOLD, 36);
+   private static final Font PAD_TEXT = new Font(Font.SANS_SERIF, Font.PLAIN, 19);
 
-   static final Color INK = new Color(0x535353);
-   static final Color PAPER = new Color(0xF7F7F7);
-   private static final Color CLOUD = new Color(0xD6D6D6);
-   static final Color MUTED = new Color(0x6E6E6E);
-   private static final Color STRIP_BG = new Color(0xEBEBEB);
+   /** Words, the score, the ground line and the marks: a dark warm brown. */
+   static final Color INK = new Color(0x4A3728);
+   /** A warm desert sky; under the ground line, sand. */
+   static final Color PAPER = new Color(0xFBEFD9);
+   static final Color SAND = new Color(0xF1DDB6);
+   static final Color CLOUD = new Color(0xE6CFAE);
+   static final Color SUN = new Color(0xFFE0A3);
+   static final Color MUTED = new Color(0x7A6650);
+   static final Color STRIP_BG = new Color(0xEFDDBF);
+   /** The dinosaur: deep teal, so it never reads as an obstacle. */
+   static final Color DINO = new Color(0x2E6E7E);
+   /**
+    * The obstacles keep blue at exactly 83 (0x53), the one number the original bot knows, whatever their red and
+    * green: sage cacti with a lighter rib, plum birds. Nothing else the game draws has blue 83.
+    */
+   static final Color CACTUS = new Color(0x4E8553);
+   static final Color CACTUS_LIGHT = new Color(0x74A653);
+   static final Color BIRD = new Color(0x8E4F53);
    static final Color MARKER = new Color(255, 0, 0);
    private static final Color BOT_TEXT = new Color(0xC62828);
-   private static final Color DUST = new Color(0xBDBDBD);
+   static final Color DUST = new Color(0xD8BF97);
    /** The moon and the stars, as night shows them (they are not there by day). */
    private static final Color MOON = new Color(0xE6E6E6);
    /** The second player's dinosaur, in a two-player race. */
@@ -59,6 +82,11 @@ final class RunnerPanel extends JPanel {
    private static final int FLASH_STEPS = 60;
    private static final int BEST_STEPS = 150;
    private static final int SHAKE_STEPS = 14;
+   /** The slow replay after a coached crash: steps it waits (past the shake), starts before the press and runs past the crash, then rests. */
+   private static final int REPLAY_WAIT = 40;
+   private static final int REPLAY_LEAD = 20;
+   private static final int REPLAY_AFTER = 24;
+   private static final int REPLAY_HOLD = 30;
 
    private final Runner runner;
    private final PixelBot bot = new PixelBot();
@@ -73,6 +101,12 @@ final class RunnerPanel extends JPanel {
    private boolean botEver;
    private boolean humanHelped;
    private String[] crashLines = new String[0];
+   /** After a run of your own crashes: what would have cleared it, or null. */
+   private Coach coach;
+   /** The slow replay of the crash: your run (see-through) and the coach's fix (solid), and its frame, or -1 before it starts. */
+   private Ghost replayYou;
+   private Ghost replayFix;
+   private int replayAt = -1;
    private boolean dragging;
    /** Non-null while bots are evolving instead of the game being played. */
    private Evolution evolution;
@@ -98,19 +132,23 @@ final class RunnerPanel extends JPanel {
    private Ears.Mode ears;
    /** T after a crash: the run just ended, in one picture, shown instead of the game until a key goes on. */
    private RunPicture picture;
+   /** Whether the thumb pads are under the game, and the one a finger holds (Ears.JUMP or Ears.DUCK, else 0). */
+   private final boolean pads;
+   private int padHeld;
 
    /** A quiet panel, for the self-check. */
    RunnerPanel(Records records, long seed) {
-      this(records, seed, Sounds.silent(records.sound));
+      this(records, seed, Sounds.silent(records.sound), false);
    }
 
-   RunnerPanel(Records records, long seed, Sounds sounds) {
+   RunnerPanel(Records records, long seed, Sounds sounds, boolean pads) {
+      this.pads = pads;
       this.runner = new Runner(seed);
       this.records = records;
       this.sounds = sounds;
       this.ears = records.ears;
       this.bot.moveTo(records.markerX, records.markerY);
-      this.setPreferredSize(new Dimension(Runner.WIDTH, HEIGHT));
+      this.setPreferredSize(new Dimension(Runner.WIDTH, HEIGHT + (pads ? PADS : 0)));
       this.setFocusable(true);
       this.addKeyListener(new KeyAdapter() {
          @Override
@@ -160,7 +198,9 @@ final class RunnerPanel extends JPanel {
          @Override
          public void mousePressed(MouseEvent e) {
             RunnerPanel.this.requestFocusInWindow();
-            if (e.getY() >= STRIP) {
+            if (e.getY() >= HEIGHT && RunnerPanel.this.evolution == null && RunnerPanel.this.duel == null) {
+               RunnerPanel.this.padPress(e.getX() < Runner.WIDTH / 2 ? Ears.DUCK : Ears.JUMP);
+            } else if (e.getY() >= STRIP && e.getY() < HEIGHT) {
                RunnerPanel.this.clickStrip(e.getX());
             } else if (RunnerPanel.this.evolution != null) {
                return;
@@ -178,7 +218,9 @@ final class RunnerPanel extends JPanel {
 
          @Override
          public void mouseReleased(MouseEvent e) {
-            if (RunnerPanel.this.dragging) {
+            if (RunnerPanel.this.padHeld != 0) {
+               RunnerPanel.this.padRelease();
+            } else if (RunnerPanel.this.dragging) {
                RunnerPanel.this.dragging = false;
                RunnerPanel.this.saveMarker();
             } else if (RunnerPanel.this.tapped != null) {
@@ -240,6 +282,27 @@ final class RunnerPanel extends JPanel {
          this.humanHelped = true;
       }
       this.runner.duck(down);
+   }
+
+   /** A finger on a thumb pad: DUCK holds Down, JUMP is Space (it starts a run, and runs again after a crash). */
+   void padPress(int need) {
+      this.padHeld = need;
+      if (need == Ears.DUCK) {
+         this.duckKey(true);
+      } else {
+         this.jumpKey(true);
+      }
+      this.repaint();
+   }
+
+   void padRelease() {
+      if (this.padHeld == Ears.DUCK) {
+         this.duckKey(false);
+      } else {
+         this.jumpKey(false);
+      }
+      this.padHeld = 0;
+      this.repaint();
    }
 
    /** In a two-player race: Space, W and S are P1's jump and duck, the up and down arrows P2's. */
@@ -507,8 +570,46 @@ final class RunnerPanel extends JPanel {
          this.crashed();
       } else if (this.runner.state() == Runner.State.RUNNING) {
          this.runStep(wasJumping);
+      } else if (this.runner.state() == Runner.State.CRASHED) {
+         this.replayStep();
       }
       this.seen = this.runner.state();
+   }
+
+   /** Whether the slow replay shows: after your coached crash, past the shake, unless the system asks for reduced motion. */
+   boolean replaying() {
+      return this.coach != null && this.runner.state() == Runner.State.CRASHED && !this.bot.isOn() && this.picture == null
+         && this.runner.idleSteps() >= REPLAY_WAIT && !reducedMotion();
+   }
+
+   /** One step of the slow replay, at half speed: from just before the press to just past the crash, a rest, and again. */
+   private void replayStep() {
+      Coach c = this.coach;
+      if (!this.replaying() || (this.runner.idleSteps() - REPLAY_WAIT) % 2 != 0) {
+         return;
+      }
+      int begin = Math.max(0, Math.min(c.step, c.press >= 0 ? c.press : c.step) - REPLAY_LEAD);
+      int length = (int) this.runner.steps() + REPLAY_AFTER - begin;
+      this.replayAt = (this.replayAt + 1) % (length + REPLAY_HOLD);
+      if (this.replayAt == 0) {
+         // shortcut: each loop plays the run again from its start (a few ms after a long run); keep a copy at begin if that ever shows.
+         this.replayYou = Ghost.of(this.runner);
+         this.replayFix = c.fixed();
+         this.replayYou.start();
+         this.replayFix.start();
+         while (this.replayFix.runner().steps() < begin) {
+            this.replayYou.step();
+            this.replayFix.step();
+         }
+      } else if (this.replayAt <= length) {
+         this.replayYou.step();
+         this.replayFix.step();
+      }
+   }
+
+   /** The fix's run while the slow replay shows, else null. */
+   Runner replayView() {
+      return this.replayFix != null && this.replayAt >= 0 && this.replaying() ? this.replayFix.runner() : null;
    }
 
    /** After a running step: the sky, the dust, the jump blip, the chime every 100 points and a new best. */
@@ -578,6 +679,8 @@ final class RunnerPanel extends JPanel {
 
    private void crashed() {
       int score = this.runner.score();
+      this.coach = null;
+      this.replayAt = -1;
       if (this.botWholeRun && !this.humanHelped) {
          boolean best = score > this.records.botBest;
          if (best) {
@@ -608,7 +711,9 @@ final class RunnerPanel extends JPanel {
             : this.records.botBest == 0 ? "Press B to see how far the original bot gets."
             : score > this.records.botBest ? "You beat the bot's best of " + this.records.botBest + "."
             : "The bot's best is " + this.records.botBest + ". Beat it?";
-         this.crashLines = new String[] { (best && score > 0 ? "New best: " : "You scored ") + score + ".", bot };
+         this.coach = Coach.of(this.runner, this.pads);
+         String you = (best && score > 0 ? "New best: " : "You scored ") + score + ".";
+         this.crashLines = new String[] { this.coach == null ? you : you + " " + this.coach.line, bot };
       }
    }
 
@@ -630,6 +735,76 @@ final class RunnerPanel extends JPanel {
       } else {
          this.paintScene(g2, this.blindfolded());
       }
+      if (this.pads) {
+         this.paintPads(g2, this.darkness());
+      }
+   }
+
+   /** How dark the sky is on screen: never while evolving or showing the whole run. */
+   private double darkness() {
+      return this.evolution != null || this.picture != null ? 0 : this.sky.darkness();
+   }
+
+   /**
+    * The thumb pads under the game: DUCK on the left, JUMP on the right, filled while a finger holds one and, on your
+    * first runs, while the mark under the ground is lit (with its TAP, HOLD or DUCK). In two players each is a player's jump.
+    */
+   private void paintPads(Graphics2D g, double dark) {
+      Color paper = Sky.tint(PAPER, dark);
+      Color ink = Sky.tint(INK, dark);
+      Color muted = Sky.tint(MUTED, dark);
+      g.setColor(Sky.tint(STRIP_BG, dark));
+      g.fillRect(0, HEIGHT, Runner.WIDTH, PADS);
+      if (this.evolution != null) {
+         g.setFont(PAD_TEXT);
+         g.setColor(muted);
+         centered(g, "The bots are racing. Back to the game (E) is just above.", HEIGHT + PADS / 2);
+         return;
+      }
+      Runner.State state = this.runner.state();
+      int[] lit = this.guiding() && state == Runner.State.RUNNING ? this.guide() : null;
+      int w = Runner.WIDTH / 2 - 18;
+      int y = HEIGHT + 6;
+      int h = PADS - 18;
+      for (int need : new int[] { Ears.DUCK, Ears.JUMP }) {
+         int x = need == Ears.DUCK ? 12 : Runner.WIDTH / 2 + 6;
+         String word;
+         String hint;
+         boolean on;
+         if (this.duel != null) {
+            word = need == Ears.DUCK ? "P1 JUMP" : "P2 JUMP";
+            hint = this.duel.running() ? "hold to jump higher" : "tap to start both";
+            on = this.tapped == (need == Ears.DUCK ? this.duel.p1 : this.duel.p2);
+         } else {
+            boolean marked = lit != null && lit[1] == 1 && lit[0] == need;
+            on = this.padHeld == need || marked;
+            if (need == Ears.DUCK) {
+               word = "DUCK";
+               hint = "hold under the middle birds";
+            } else {
+               word = marked ? lit[2] == 1 ? "HOLD" : "TAP" : state == Runner.State.READY ? "RUN"
+                  : state == Runner.State.CRASHED ? "RUN AGAIN" : "JUMP";
+               hint = state == Runner.State.RUNNING ? "hold to jump higher" : "then tap to jump";
+            }
+         }
+         g.setColor(on ? ink : paper);
+         g.fillRoundRect(x, y, w, h, 28, 28);
+         g.setColor(on ? paper : muted);
+         g.setStroke(new BasicStroke(2f));
+         g.drawRoundRect(x, y, w, h, 28, 28);
+         g.setStroke(new BasicStroke(1f));
+         int cx = x + w / 2;
+         // An arrow: up for a jump, down for the duck.
+         int ay = y + 40;
+         int dir = need == Ears.DUCK && this.duel == null ? 1 : -1;
+         g.setColor(on ? paper : ink);
+         g.fillPolygon(new int[] { cx - 18, cx, cx + 18 }, new int[] { ay - dir * 10, ay + dir * 10, ay - dir * 10 }, 3);
+         g.setFont(PAD);
+         g.drawString(word, cx - g.getFontMetrics().stringWidth(word) / 2, y + 98);
+         g.setFont(PAD_TEXT);
+         g.setColor(on ? paper : muted);
+         g.drawString(hint, cx - g.getFontMetrics().stringWidth(hint) / 2, y + 134);
+      }
    }
 
    /** In the browser, when the system asks for reduced motion: the crash does not shake (null on the desktop JDK). */
@@ -638,7 +813,7 @@ final class RunnerPanel extends JPanel {
    }
 
    private void paintScene(Graphics2D g, boolean blind) {
-      double dark = this.evolution != null || this.picture != null ? 0 : this.sky.darkness();
+      double dark = this.darkness();
       if (this.evolution != null) {
          EvolveView.paint(g, this.evolution, SPEEDS[this.speed]);
       } else if (this.duel != null) {
@@ -649,14 +824,17 @@ final class RunnerPanel extends JPanel {
          Duel d = this.duel;
          boolean together = Math.abs(d.p2.distance() + d.p2.dinoX() - d.p1.distance() - d.p1.dinoX()) < 30;
          this.paintBeside(g, d.p2, v, Sky.tint(P2, dark), "P2", together ? 12 : 0, dark);
-         this.paintBeside(g, d.p1, v, Sky.tint(INK, dark), "P1", 0, dark);
+         this.paintBeside(g, d.p1, v, Sky.tint(DINO, dark), "P1", 0, dark);
          this.paintDuelScore(g, dark);
          this.paintMessage(g, dark);
       } else if (this.picture != null) {
          this.picture.paint(g);
       } else {
-         paintWorld(g, this.runner, this.sky, !blind);
-         this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
+         Runner replay = this.replayView();
+         paintWorld(g, replay != null ? replay : this.runner, this.sky, !blind);
+         if (replay == null) {
+            this.dust.paint(g, Sky.tint(DUST, dark), Sky.tint(PAPER, dark));
+         }
          if (this.racing && !this.bot.isOn()) {
             g.setFont(SCORE);
             g.setColor(Sky.tint(MUTED, dark));
@@ -667,10 +845,18 @@ final class RunnerPanel extends JPanel {
             g.setColor(Sky.tint(MUTED, dark));
             g.drawString(this.ears == Ears.Mode.BLINDFOLD ? "BLINDFOLD: LISTEN" : "PLAYING BY EAR", 14, this.racing ? 40 : 24);
          }
-         if (this.ghost != null && !this.bot.isOn()) {
+         if (this.ghost != null && !this.bot.isOn() && replay == null) {
             this.paintGhost(g, dark);
          }
-         paintDino(g, this.runner, Sky.tint(INK, dark), Sky.tint(PAPER, dark));
+         if (this.coach != null && this.runner.state() == Runner.State.CRASHED && !this.bot.isOn()) {
+            this.paintCoach(g, dark, replay);
+         }
+         if (this.guiding()) {
+            this.paintGuide(g, dark);
+         }
+         if (replay == null) {
+            paintDino(g, this.runner, Sky.tint(DINO, dark), Sky.tint(PAPER, dark));
+         }
          this.paintScore(g, dark);
          if (this.bot.isOn()) {
             this.paintBot(g);
@@ -769,16 +955,22 @@ final class RunnerPanel extends JPanel {
       if (dark > 0) {
          paintNightSky(g, sky, paper, dark);
       }
+      // A low sun behind the mesas, fading into the sky as night falls.
+      g.setColor(Sky.mix(SUN, paper, dark));
+      g.fillOval(574, 92, 64, 64);
+      Land.paint(g, runner.distance(), dark);
       g.setColor(Sky.tint(CLOUD, dark));
       double[] clouds = runner.clouds();
       for (int i = 0; i < clouds.length; i++) {
          Sprites.draw(g, Sprites.CLOUD, (int) clouds[i], 46 + i % 2 * 24, 2);
       }
 
-      // The ground: a line, with pebbles below it that scroll with the run.
-      Color ink = Sky.tint(INK, dark);
-      g.setColor(ink);
+      // The ground: sand under a line, with pebbles that scroll with the run.
+      g.setColor(Sky.tint(SAND, dark));
+      g.fillRect(0, Runner.GROUND, Runner.WIDTH, STRIP - Runner.GROUND);
+      g.setColor(Sky.tint(INK, dark));
       g.fillRect(0, Runner.GROUND, Runner.WIDTH, 1);
+      g.setColor(Sky.tint(MUTED, dark));
       double d = runner.distance();
       long first = (long) Math.floor(d / 23);
       for (long n = first; n * 23 - d < Runner.WIDTH; n++) {
@@ -790,17 +982,32 @@ final class RunnerPanel extends JPanel {
       }
 
       for (Runner.Obstacle o : obstacles ? runner.obstacles() : new ArrayList<Runner.Obstacle>()) {
-         int x = (int) Math.round(o.x);
-         g.setColor(ink);
-         if (o.kind == Runner.Kind.BIRD) {
-            Sprites.draw(g, runner.birdWings(), x, o.top(), 2);
-         } else {
-            int unit = o.w / o.size;
-            for (int j = 0; j < o.size; j++) {
-               Sprites.cactus(g, x + j * unit, o.top(), o.kind == Runner.Kind.LARGE_CACTUS);
-            }
+         paintObstacle(g, runner, o, (int) Math.round(o.x), dark, 255);
+      }
+   }
+
+   /** Obstacle o with its left edge at x, in its own colors as night turns them, at alpha (255 is solid). */
+   private static void paintObstacle(Graphics2D g, Runner runner, Runner.Obstacle o, int x, double dark, int alpha) {
+      if (o.kind == Runner.Kind.BIRD) {
+         g.setColor(see(Sky.tint(BIRD, dark), alpha));
+         Sprites.draw(g, runner.birdWings(), x, o.top(), 2);
+      } else {
+         boolean large = o.kind == Runner.Kind.LARGE_CACTUS;
+         Color body = see(Sky.tint(CACTUS, dark), alpha);
+         Color rib = see(Sky.tint(CACTUS_LIGHT, dark), alpha);
+         int unit = o.w / o.size;
+         for (int j = 0; j < o.size; j++) {
+            g.setColor(body);
+            Sprites.cactus(g, x + j * unit, o.top(), large);
+            g.setColor(rib);
+            Sprites.ribs(g, x + j * unit, o.top(), large);
          }
       }
+   }
+
+   /** c at alpha (255 is c itself). */
+   static Color see(Color c, int alpha) {
+      return alpha >= 255 ? c : new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
    }
 
    /**
@@ -860,6 +1067,119 @@ final class RunnerPanel extends JPanel {
       }
    }
 
+   /**
+    * After a crash: the obstacle see-through and a filled mark under the ground where it was when the press that clears
+    * it should have come, and a hollow mark where it was when you pressed. In the slow replay (fix, the fix's run) the
+    * real obstacle comes to the mark instead: it lights with TAP, HOLD or DUCK when the fix presses, the fix's dinosaur
+    * runs solid and yours see-through until it crashes.
+    */
+   private void paintCoach(Graphics2D g, double dark, Runner fix) {
+      Coach c = this.coach;
+      g.setFont(TINY);
+      FontMetrics fm = g.getFontMetrics();
+      int y = Runner.GROUND + 3;
+      Color ink = Sky.tint(INK, dark);
+      Color dino = Sky.tint(DINO, dark);
+      Color seeThrough = see(dino, 70);
+      if (fix != null) {
+         g.setColor(Sky.tint(MUTED, dark));
+         g.drawString("SLOW REPLAY: HOW TO GET PAST IT", 14, 24 + (this.racing ? 16 : 0) + (this.ears != Ears.Mode.OFF ? 16 : 0));
+      }
+      if (c.pressX >= 0 && c.pressX < Runner.WIDTH && (fix == null || fix.steps() >= c.press)) {
+         g.setColor(Sky.tint(MUTED, dark));
+         g.drawPolygon(new int[] { c.pressX - 5, c.pressX, c.pressX + 5 }, new int[] { y + 8, y, y + 8 }, 3);
+         String you = c.fix == Coach.Fix.STAY ? "you jumped" : "you";
+         g.drawString(you, c.pressX - fm.stringWidth(you) / 2, y + 19);
+      }
+      if (c.fix != Coach.Fix.STAY) {
+         boolean lit = fix == null || fix.steps() >= c.step;
+         if (fix == null) {
+            // The obstacle you hit, see-through, where it was when the press should have come.
+            paintObstacle(g, this.runner, this.runner.crashedInto(), c.markX, dark, 70);
+         }
+         if (fix != null) {
+            g.setColor(Sky.tint(SAND, dark));
+            g.fillRect(c.markX - 7, y - 1, 15, 10);   // clear of the pebbles, as on your first runs
+         }
+         g.setColor(ink);
+         int[] xs = { c.markX - 5, c.markX, c.markX + 5 };
+         int[] ys = { y + 8, y, y + 8 };
+         if (lit) {
+            g.fillPolygon(xs, ys, 3);
+         } else {
+            g.drawPolygon(xs, ys, 3);
+         }
+         String here = fix != null && lit ? c.fix == Coach.Fix.DUCK ? "DUCK" : c.hold > GUIDE_TAP ? "HOLD" : "TAP"
+            : c.fix == Coach.Fix.DUCK ? "duck here" : "jump here";
+         // Beside your mark when they are close, so the two labels do not overlap.
+         int lx = Math.abs(c.markX - c.pressX) < 40 && c.pressX >= 0
+            ? c.markX < c.pressX ? c.markX - 4 - fm.stringWidth(here) : c.markX + 8 : c.markX - fm.stringWidth(here) / 2;
+         g.drawString(here, lx, Math.abs(c.markX - c.pressX) < 40 && c.pressX >= 0 ? y + 8 : y + 19);
+      }
+      if (fix != null) {
+         Runner you = this.replayYou.runner();
+         boolean apart = you.state() == Runner.State.CRASHED || you.dinoTop() != fix.dinoTop() || you.isDucking() != fix.isDucking();
+         this.paintBeside(g, you, fix, seeThrough, apart ? "you" : null, 0, dark);
+         paintDino(g, fix, dino, Sky.tint(PAPER, dark));
+         if (apart) {
+            // Above the fix's dinosaur, lifted clear of yours when yours is just above it.
+            boolean near = Math.abs(you.distance() - fix.distance()) < 60 && Math.abs(you.dinoTop() - fix.dinoTop()) < 14;
+            g.setColor(ink);
+            g.drawString("like this", fix.dinoX() + 2, near ? Math.min(fix.dinoTop(), you.dinoTop()) - 16 : fix.dinoTop() - 4);
+         }
+      }
+   }
+
+   /** Whether the mark shows: your own runs (not the bot's, not blindfolded) until your best reaches GUIDE_UNTIL. */
+   boolean guiding() {
+      return this.records.best < GUIDE_UNTIL && !this.bot.isOn() && this.ears != Ears.Mode.BLINDFOLD
+         && this.runner.state() != Runner.State.CRASHED;
+   }
+
+   /**
+    * What the mark says now: { Ears.JUMP or Ears.DUCK for the next cactus or bird to get past, 1 while lit else 0,
+    * 1 when the key should be held rather than tapped }. It lights when the obstacle reaches the mark (Play by ear's beat
+    * to act on) and stays lit as long as the key should be held, but at least GUIDE_LIT steps so a tap's moment is seen.
+    */
+   int[] guide() {
+      Runner r = this.runner;
+      for (Runner.Obstacle o : r.obstacles()) {
+         double t = Ears.stepsToAct(r, o);
+         int hold = Ears.holdSteps(r, o);
+         if (Ears.need(o) != 0 && t > -Math.max(GUIDE_LIT, hold)) {
+            return new int[] { Ears.need(o), t <= 0 ? 1 : 0, Ears.need(o) == Ears.DUCK || hold > GUIDE_TAP ? 1 : 0 };
+         }
+      }
+      return new int[] { Ears.JUMP, 0, 0 };
+   }
+
+   /** The mark under the ground: hollow where the next obstacle should be when you act, filled with TAP, HOLD or DUCK while you should. */
+   private void paintGuide(Graphics2D g, double dark) {
+      int[] guide = this.guide();
+      boolean now = guide[1] == 1;
+      int x = guideX(this.runner, guide[0]);
+      int y = Runner.GROUND + 3;
+      int[] xs = { x - 5, x, x + 5 };
+      int[] ys = { y + 8, y, y + 8 };
+      g.setColor(Sky.tint(SAND, dark));
+      g.fillRect(x - 7, y - 1, 15, 10);   // clear of the pebbles
+      g.setFont(TINY);
+      String label = guide[0] == Ears.DUCK ? "duck" : "jump";
+      if (now) {
+         g.setColor(Sky.tint(INK, dark));
+         g.fillPolygon(xs, ys, 3);
+         label = guide[0] == Ears.DUCK ? "DUCK" : guide[2] == 1 ? "HOLD" : "TAP";
+      } else {
+         g.setColor(Sky.tint(MUTED, dark));
+         g.drawPolygon(xs, ys, 3);
+      }
+      g.drawString(label, x - g.getFontMetrics().stringWidth(label) / 2, y + 19);
+   }
+
+   static int guideX(Runner r, int need) {
+      return (int) Math.round(Ears.markX(r, need));
+   }
+
    /** How far the ghost has run past you (less than 0 once it has crashed and you run on). */
    private double ghostOffset() {
       return this.ghost.runner().distance() - this.runner.distance();
@@ -871,7 +1191,7 @@ final class RunnerPanel extends JPanel {
     */
    private void paintGhost(Graphics2D g, double dark) {
       Runner r = this.ghost.runner();
-      Color ink = Sky.tint(INK, dark);
+      Color ink = Sky.tint(DINO, dark);
       boolean apart = Math.round(this.ghostOffset()) != 0 || r.state() == Runner.State.CRASHED || r.dinoTop() != this.runner.dinoTop();
       this.paintBeside(g, r, this.runner, new Color(ink.getRed(), ink.getGreen(), ink.getBlue(), 80), apart ? "ghost" : null, 0, dark);
    }
@@ -904,7 +1224,7 @@ final class RunnerPanel extends JPanel {
       int x = Runner.WIDTH - 14 - fm.stringWidth(two);
       g.setColor(Sky.tint(P2, dark));
       g.drawString(two, x, 24);
-      g.setColor(Sky.tint(INK, dark));
+      g.setColor(Sky.tint(DINO, dark));
       g.drawString(one, x - fm.stringWidth(one), 24);
       g.setColor(Sky.tint(MUTED, dark));
       g.drawString("WINS " + this.duel.wins(1) + " - " + this.duel.wins(2), 14, 24);
@@ -952,7 +1272,8 @@ final class RunnerPanel extends JPanel {
       if (state == Runner.State.RUNNING || this.duel != null && this.duel.running()) {
          return;
       }
-      String title = state != Runner.State.READY ? "G A M E   O V E R" : this.duel != null ? "Two players: Space, W or ↑ to run" : "Space to run";
+      String title = state != Runner.State.READY ? "G A M E   O V E R" : this.duel != null ? this.pads ? "Two players: tap your pad to run" : "Two players: Space, W or ↑ to run"
+         : this.pads ? "Tap RUN to start" : "Space to run";
       String[] lines = state == Runner.State.READY && this.duel != null
          ? new String[] { "P1 jumps with W or Space and ducks with S. P2 has ↑ and ↓.",
             "One course for both, P2 a step ahead. Or tap your half of the game." }
@@ -963,6 +1284,9 @@ final class RunnerPanel extends JPanel {
          : state == Runner.State.READY && this.racing
          ? new String[] { "Your ghost's course: the run where you scored " + this.records.ghost.score + ".",
             "It runs beside you, jump for jump. Get further and you are the ghost." }
+         : state == Runner.State.READY && this.guiding()
+         ? new String[] { "Jump when a cactus reaches the mark under the ground: a quick tap, or hold on HOLD.",
+            "Or press B and the original bot plays, watching one pixel." }
          : state == Runner.State.READY
          ? new String[] { "Jump the cacti, duck the birds. Night falls every " + Sky.NIGHT_EVERY + ".",
             "Or press B and the original bot plays, watching one pixel." }
@@ -1015,6 +1339,10 @@ final class RunnerPanel extends JPanel {
       if (on != this.bot.isOn()) {
          this.toggleBot();
       }
+   }
+
+   Coach coach() {
+      return this.coach;
    }
 
    String[] crashLines() {

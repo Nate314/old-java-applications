@@ -23,8 +23,9 @@ export const H = {
   current: null as App | null,   // the app the player has
   played: null as App | null,    // the app last started in it (none while the page's own first frame runs)
   then: false,                   // as first restored (<App>/then.html)
-  /** The player's iframe: a new one (key) for each app, so the old app's timers and audio stop with it. */
-  frame: { key: 0, src: FIRST.id + '/index.html?embed&watch', title: FIRST.name, focus: false, size: null as null | { w: number; h: number; scale: number } },
+  /** The player's iframe: a new one (key) for each app, so the old app's timers and audio stop with it. Blank until
+   *  the page's own demo starts (player.ts calmStart). */
+  frame: { key: 0, src: 'about:blank', title: FIRST.name, focus: false, size: null as null | { w: number; h: number; scale: number } },
   screenH: null as number | null,   // the screen's height (none on the big screen, which takes the room it has)
   big: false,                       // the player covers the window (where real fullscreen is not allowed)
   hintOpen: false,                  // the pocket bar's hint, opened to its full length
@@ -32,8 +33,10 @@ export const H = {
   chart: null as string[][] | null, // a controller's buttons, shown in the hint for a while (the runtime's gamepads)
   replay: false,                    // the app's page says it is recording (Replay shows)
   photo: false,                     // the app's page says it runs (Photo shows)
+  poster: false,                    // the app's picture covers its screen while its page loads (until it says it runs)
   pop: { shown: false, on: false, synced: false },   // Pop out, whether the app is out, and whether that has been asked
   filter: 'all',
+  query: '',                        // the words typed into the gallery's filter field
   pad: { called: false, has: false, shown: false, drawn: false },   // the docked controller (called: set for an app; drawn: put in its box once)
   fresh: null as string | null,     // the stamp just collected
   resetAsk: false,                  // Reset asks once more
@@ -58,6 +61,27 @@ let redraw: ((sync: boolean) => void) | null = null, beforeDraw: (() => void) | 
 export function draw(sync = true) {
   if (beforeDraw) beforeDraw();
   if (redraw) redraw(sync);
+}
+/** The page's parts that can be drawn again on their own: Your arcade, and the gallery with its filters. */
+export type Part = 'arcade' | 'gallery';
+const parts: Partial<Record<Part, () => void>> = {};
+/**
+ * Draws only one part again from H, at once: for a change that shows nowhere else (a tab, a filter, a preview clip).
+ * A part skips the player, its rail and the other part (a filter tap on a 4x slowed phone: ~20-27 ms -> ~3 ms).
+ */
+export function drawPart(part: Part) {
+  const r = parts[part];
+  if (!r) return draw();
+  if (beforeDraw) beforeDraw();
+  flushSync(r);
+}
+/** A part's component calls this: it is what drawPart(part) draws. */
+export function usePart(part: Part) {
+  const [, setTick] = useState(0);
+  useLayoutEffect(() => {
+    parts[part] = () => setTick(n => n + 1);
+    return () => { delete parts[part]; };
+  }, []);
 }
 /** What works out the rest of H from the parts the controllers set, before each draw (the tab on view: tabs.ts). */
 export function setBeforeDraw(fn: () => void) { beforeDraw = fn; }

@@ -339,12 +339,57 @@ function Shell({ shell, onMount }: { shell: ShellModel; onMount: (layer: HTMLDiv
 }
 
 function Pic({ app, className }: { app: CatalogApp; className: string }) {
-  return <span className={className}><img src={app.shot} alt="" /></span>;
+  return <span className={className}><img src={app.pic} alt="" /></span>;
+}
+
+/**
+ * The app's always-on-top windows (Windows' on-screen key) stand over the Start menu, so the menu opens in the
+ * biggest space they leave on the layer: above, below, left or right of them. Tapping the key then closes the
+ * menu, as pressing it does on a PC. With no such window, or no space of a usable size, it keeps its place.
+ */
+function makeRoom(menu: HTMLElement) {
+  const s = menu.style, layer = menu.parentElement!.getBoundingClientRect();
+  s.left = s.bottom = s.width = s.height = '';
+  // TDesktop.restack gives always-on-top windows a z-index from 1000000 up.
+  const keys = [...document.querySelectorAll<HTMLElement>('#desktop > .window')]
+    .filter(w => +w.style.zIndex >= 1000000 && w.getClientRects().length).map(w => w.getBoundingClientRect())
+    .filter(k => k.right > layer.left && k.left < layer.right && k.bottom > layer.top && k.top < layer.bottom);
+  if (!keys.length) return;
+  const k = {
+    left: Math.min(...keys.map(r => r.left)), top: Math.min(...keys.map(r => r.top)),
+    right: Math.max(...keys.map(r => r.right)), bottom: Math.max(...keys.map(r => r.bottom)),
+  };
+  const spaces = [
+    { left: layer.left, right: layer.right, top: layer.top, bottom: k.top },
+    { left: layer.left, right: layer.right, top: k.bottom, bottom: layer.bottom },
+    { left: layer.left, right: k.left, top: layer.top, bottom: layer.bottom },
+    { left: k.right, right: layer.right, top: layer.top, bottom: layer.bottom },
+  ].map(r => ({ r, w: Math.min(620, r.right - r.left - 20), h: Math.min(560, r.bottom - r.top - 20) }))
+    .filter(o => o.w >= 240 && o.h >= 200)
+    .sort((a, b) => b.w * b.h - a.w * a.h);
+  if (!spaces.length) return;
+  const { r, w, h } = spaces[0];
+  s.left = (r.left + r.right) / 2 - layer.left + 'px';   // the menu centres itself on left (translateX(-50%))
+  s.bottom = layer.bottom - r.bottom + 10 + 'px';
+  s.width = w + 'px';
+  s.height = h + 'px';
 }
 
 function StartMenu({ shell, query }: { shell: ShellModel; query: string }) {
   const box = useRef<HTMLDivElement>(null);
   useOwnKeys(box, shell.closeMenu);
+  useLayoutEffect(() => {
+    var frame = 0;
+    const fit = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => makeRoom(box.current!)); };
+    makeRoom(box.current!);
+    // The key may show (Windows presses it before its window is up), move, or end a skin's opening animation
+    // (measured mid-way, it looks smaller) while the menu is open.
+    const desktop = document.getElementById('desktop'), watch = new MutationObserver(fit);
+    if (desktop) watch.observe(desktop, { childList: true, attributes: true, attributeFilter: ['style'], subtree: true });
+    desktop?.addEventListener('animationend', fit);
+    addEventListener('resize', fit);
+    return () => { watch.disconnect(); cancelAnimationFrame(frame); desktop?.removeEventListener('animationend', fit); removeEventListener('resize', fit); };
+  }, []);
   const apps = shell.apps, q = query.trim().toLowerCase();
   const hit = (app: CatalogApp) => !q || (app.name + ' ' + app.id + ' ' + app.hint).toLowerCase().indexOf(q) >= 0;
   const hits = apps ? apps.filter(hit) : [];
@@ -363,7 +408,7 @@ function StartMenu({ shell, query }: { shell: ShellModel; query: string }) {
         {apps && apps.map(app => (
           <a key={app.id} className={'shim-tile' + (q && app === hits[0] ? ' first' : '')} {...playProps(app)} title={app.hint} hidden={!hit(app)}>
             <span className="shim-tile-pic">
-              <img src={app.shot} alt="" />
+              <img src={app.pic} alt="" />
               {played[app.id] && <span className="shim-badge played" title="Played">{'✓'}</span>}
             </span>
             <span className="shim-tile-name">{app.name}</span>

@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { news, reducedMotion } from './band-news';
-import { appId, catalog, type CatalogApp } from './catalog';
+import { appId, catalog, homeDoc, type CatalogApp } from './catalog';
 import { indexOf, isThen, pageOf, picks } from './then-and-now';
 import { CloseButton, openLayer, useOwnKeys } from './ui/layer';
 import { openShare } from './share';
 import { playSound } from './sounds';
 import { storedJson } from './stored';
+import { afterPaint } from './after-paint';
 
 declare global {
   interface OldjavaPassport { stamp(id: string): void }
@@ -28,7 +29,17 @@ const passportListeners: ((fresh: string | null) => void)[] = [];
 
 function passportChanged(id: string | null) { passportListeners.forEach(function (fn) { fn(id); }); }
 
-// A new stamp: a toast with the count and an app not played yet; the last one gets confetti.
+// The home page's player shows this app: its stamp lands on the player's screen (pages/home/StampLanding.tsx),
+// so a toast in the corner as well was a second message about the same stamp.
+function landsInPlayer(id: string) {
+  try {
+    var f = document.getElementById('player-frame') as HTMLIFrameElement | null;
+    return !!f && !!f.contentDocument && f.contentDocument.body.getAttribute('data-app') === id;
+  } catch (e) { return false; }   // not loaded yet, or not ours
+}
+
+// A new stamp: a toast with the count and an app not played yet; the last one gets confetti. A stamp that lands on
+// the home player keeps its sound and gives the toast up, except the last one, whose toast offers Share it.
 export function stampToast(id: string) {
   catalog().then(function (apps: CatalogApp[]) {
     var app = apps[indexOf(apps, id)];
@@ -37,14 +48,15 @@ export function stampToast(id: string) {
     var next = passport.unplayed(apps, id)[0];
     var done = count >= apps.length;
     playSound(done ? 'complete' : 'stamp');
-    if (done) confetti();
+    if (done) { confetti(); homeDoc(); }   // its Share it shows the arcade's description
     if (news) { stampNews(app, count, apps.length, next); return; }
-    floatToast(app.shot, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
+    if (!done && landsInPlayer(id)) return;
+    floatToast(app.pic, done ? 'Arcade complete!' : 'Stamp collected: ' + app.name,
       done ? 'You have played all ' + apps.length + ' apps.' : count + ' of ' + apps.length + ' apps played.',
       <Meter p={count / apps.length} />, function (close) {
         return (
           <>
-            {done && <button type="button" className="shim-toast-go" data-sound="none" onClick={() => { close(); openShare(null); }}>{'Share it ›'}</button>}
+            {done && <button type="button" className="shim-toast-go" data-sound="none" onClick={() => { close(); homeDoc().then(() => openShare(null)); }}>{'Share it ›'}</button>}
             {next && toastLink(close, next, 'Try ' + next.name + ' ›')}
           </>
         );
@@ -119,7 +131,7 @@ export function toastLink(close: () => void, app: OldjavaCatalogApp, label: stri
 function stampNews(app: OldjavaCatalogApp, count: number, total: number, next: OldjavaCatalogApp | undefined) {
   var done = count >= total;
   var brag: HTMLButtonElement | null = null;
-  news!.show('stamp', <span className="shim-news-seal"><img src={app.shot} alt="" /></span>, (
+  news!.show('stamp', <span className="shim-news-seal"><img src={app.pic} alt="" /></span>, (
     <>
       <strong>{done ? 'Arcade complete! ' : 'Stamp collected: ' + app.name + ' '}</strong>
       <span>{done ? 'You have played all ' + total + ' apps.' : count + ' of ' + total + ' apps played.'}</span>
@@ -129,7 +141,7 @@ function stampNews(app: OldjavaCatalogApp, count: number, total: number, next: O
     <>
       {done && (
         <button type="button" className="shim-news-go" data-sound="none" ref={b => { brag = b; }}
-          onClick={() => { news!.clear(); openShare(null, brag); }}>{'Share it ›'}</button>
+          onClick={() => { news!.clear(); homeDoc().then(() => openShare(null, brag)); }}>{'Share it ›'}</button>
       )}
       {next && <a className="shim-news-go" href={pageOf(next)}>{'Try ' + next.name + ' ›'}</a>}
     </>
@@ -173,7 +185,7 @@ export function stampOnPlay() {
     if (e.target && (e.target as Element).closest && (e.target as Element).closest(CHROME)) return;
     document.removeEventListener('pointerdown', onInput, true);
     document.removeEventListener('keydown', onInput, true);
-    passport.stamp(id!);
+    afterPaint(function () { passport.stamp(id!); });   // the app answers the first tap before the stamp shows
   }
   document.addEventListener('pointerdown', onInput, true);
   document.addEventListener('keydown', onInput, true);
@@ -219,8 +231,8 @@ export function init() {
     open: null,
     catalog: function () { return catalog(); },
     // Apps not played yet, others of the same category as `id` first (see picks).
-    unplayed: function (apps: CatalogApp[], id: string | null) {
-      return picks(apps, id, apps.length).filter(function (a: CatalogApp) { return !played[a.id]; });
+    unplayed: function <T extends { id: string; cat: string }>(apps: T[], id: string | null) {
+      return picks(apps, id, apps.length).filter(function (a) { return !played[a.id]; });
     }
   };
 }

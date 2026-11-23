@@ -1,8 +1,11 @@
 // The story (story.html): HISTORY.md told with the real code and the apps; its live panels are in panels.tsx.
 import './story.css';
-import { APPS } from '../../shared/catalog';
-import { ChainShow, EraPanel, PickLink, RenamePanel, StoryTop, Tape } from './panels';
+import { APPS, webp } from '../../shared/catalog';
+import { ChainShow, EraPanel, PickLink, RenamePanel, Tape } from './panels';
 import { ShareStory } from './ShareStory';
+import { StoryPlay } from './StoryPlay';
+import { PlayHere } from '../../shared/PlayHere';
+import { Deeper } from './Deeper';
 
 // Where each app came from (HISTORY.md, The recovery).
 const FROM: Record<string, string> = {
@@ -27,7 +30,9 @@ function Apps20() {
           <h3 key={key}>{title + ' (' + mine.length + ')'}</h3>,
           ...mine.map(a => (
             <a key={a.id} href={a.id + '/index.html'}>
-              <img src={a.shot} alt="" loading="lazy" />
+              <img src={webp(a.shot, true)} srcSet={webp(a.shot, true) + ' 240w, ' + webp(a.shot) + ' 480w'}
+                // Two columns of tiles below 410 px, three to 535 px, then 140 px at most (story.css .apps20).
+                sizes="(max-width: 409px) calc(50vw - 34px), (max-width: 535px) calc(33vw - 30px), 140px" alt="" loading="lazy" />
               <b>{a.name}</b>
               <span className="from">{from}</span>
             </a>
@@ -38,31 +43,10 @@ function Apps20() {
   );
 }
 
+/** The chapters and the rest of the page, after the top bar and the hero that story.html comes with (Hero.tsx). */
 export function Story() {
   return (
     <>
-      <StoryTop />
-      <main>
-        <header className="hero">
-          <p className="kicker">The story</p>
-          <h1>Twenty old programs, brought back to play</h1>
-          <p>
-            These Java desktop programs were written more than ten years ago, and for most of them the source code was gone. This is how they were recovered from what was left, fixed up, and put in your browser, with the real code and the apps themselves along the way.
-          </p>
-          <p className="inspired">
-            {"The source of inspiration for this project is the YouTube video "}
-            <a href="https://www.youtube.com/watch?v=DByAR5Su1Yw">I Told Claude to “Make it better” 100 Times (It Went Too Far)</a>
-            {" by Nate Herk | AI Automation."}
-          </p>
-          <ol className="chapters">
-            <li><a href="#originals">The originals (2016 and earlier)</a></li>
-            <li><a href="#recovery">The recovery (October 2026)</a></li>
-            <li><a href="#restoration">The first restoration</a></li>
-            <li><a href="#chain">The Claude Code chain</a></li>
-            <li><a href="#numbers">The run in numbers</a></li>
-            <li><a href="#continued">The continued run</a></li>
-          </ol>
-        </header>
         <section className="chapter" id="originals" aria-labelledby="h-originals">
           <div className="words">
             <p className="kicker">Chapter 1</p>
@@ -251,7 +235,8 @@ export function Story() {
             </ol>
           </div>
           <div className="show">
-            <div className="panel">
+            <Deeper />
+            <div className="panel" style={{ marginTop: "14px" }}>
               <div className="panel-head"><strong>Who worked when</strong><a href="continued-timeline.svg">Full size</a></div>
               <a className="timeline" href="continued-timeline.svg">
                 <img src="continued-timeline.svg" width="1200" height="640" loading="lazy" alt="Timeline from November 15 to 16, 2026: 38 rounds of four builders (two in the last) and an integrator, with the output tokens of each pull request, all on Claude Opus 5.5" />
@@ -275,6 +260,56 @@ export function Story() {
             </p>
           </div>
         </section>
+        <section className="chapter" id="third" aria-labelledby="h-third">
+          <div className="words">
+            <p className="kicker">Chapter 7</p>
+            <h2 id="h-third">The third run</h2>
+            <p>
+              Then came 250 more attempts, numbered 251 to 500. They became pull requests #138 to #173: 36 rounds in which seven agents built at once (five in the last round), each in a lane of its own, and an integrator merged, tested and opened one pull request per round.
+            </p>
+            <p>
+              Three lanes took an app each: a game or toy, a tool or music app, and the app with the fewest attempts. The other four took the pages visitors land on, speed and the platform with before and after numbers, the AWT/Swing shim, and the code's health and tests.
+            </p>
+            <ol className="phases">
+              <li>
+                <b>The apps, deeper</b>
+                a cube layer that follows your drag, a dinosaur that coaches you after a crash, a wall of all ten screen savers, real-looking clock dials and an open Bible with depth.
+              </li>
+              <li>
+                <b>The site and its speed</b>
+                a phone gallery of tiles, a channel guide, gallery search, a reel in What's new, a trophy shelf, a picture of your passport, and phone pages painted straight from the HTML.
+              </li>
+              <li>
+                <b>The shim and the tests</b>
+                more Java 2D shapes, a name for every field and key, apps that go quiet when hidden, and a smoke test grown to 110 pages.
+              </li>
+            </ol>
+          </div>
+          <div className="show">
+            <div className="panel">
+              <div className="panel-head"><strong>Who worked when</strong><a href="third-timeline.svg">Full size</a></div>
+              <a className="timeline" href="third-timeline.svg">
+                <img src="third-timeline.svg" width="1200" height="710" loading="lazy" alt="Timeline from November 21 to 23, 2026: 36 rounds of seven builders (five in the last) and an integrator, with the output tokens of each pull request, all on Claude Opus 5.5" />
+              </a>
+            </div>
+            <div className="panel" style={{ marginTop: "14px" }}>
+              <div className="panel-head"><strong>Tokens</strong><span>from the session's transcripts</span></div>
+              <ul className="usage">
+                <li><span>Agents (250 builders, 36 integrators)</span><b>9,358,398 output</b></li>
+                <li><span>Agents, all tokens incl. cache reads</span><b>2,097,283,177</b></li>
+                <li><span>Orchestrator</span><b>539,189 output</b></li>
+                <li><span>Orchestrator, all tokens incl. cache reads</span><b>294,559,300</b></li>
+                <li><span>Tool calls by the agents</span><b>21,403</b></li>
+                <li><span>From the first attempt to the last</span><b>about 42 hours</b></li>
+              </ul>
+            </div>
+            <p className="caption">
+              {"All on Claude Opus 5.5, November 21 to 23, 2026 (UTC), with a 50 minute pause for review after round 50. The breakdown is in "}
+              <a href="https://github.com/Nate314/old-java-applications/blob/master/HISTORY.md#the-third-run-138-to-173">HISTORY.md</a>
+              .
+            </p>
+          </div>
+        </section>
         <section className="finale" aria-labelledby="h-finale">
           <h2 id="h-finale">Now it's your turn</h2>
           <p>
@@ -290,7 +325,8 @@ export function Story() {
             <ShareStory className="btn" label="Share the story" />
           </div>
         </section>
-      </main>
+        <StoryPlay />
+        <PlayHere back="Back to the story" />
     </>
   );
 }

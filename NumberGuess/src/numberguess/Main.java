@@ -1,6 +1,7 @@
 package numberguess;
 
 import java.awt.BorderLayout;
+import java.awt.Font;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
@@ -11,9 +12,12 @@ import java.io.File;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /**
  * The window: the {@link Board} above, and below it the original text field and SUBMIT button for typing a guess,
@@ -26,6 +30,7 @@ public class Main extends JFrame implements ActionListener {
 	private final JPanel panel = new JPanel();
 	private final JButton button = new JButton("SUBMIT");
 	private final JTextField textField = new JTextField();
+	private final JLabel prompt = new JLabel("Your guess");
 	private final JButton lower = new JButton("Lower");
 	private final JButton correct = new JButton("That's it!");
 	private final JButton higher = new JButton("Higher");
@@ -50,6 +55,7 @@ public class Main extends JFrame implements ActionListener {
 		if (challenge != null) {
 			board.startChallenge(challenge);
 		}
+		panel.add(prompt);
 		panel.add(textField);
 		panel.add(button);
 		panel.add(lower);
@@ -63,7 +69,8 @@ public class Main extends JFrame implements ActionListener {
 		panel.add(send);
 		this.add(board, BorderLayout.CENTER);
 		this.add(panel, BorderLayout.SOUTH);
-		textField.setColumns(10);
+		textField.setColumns(5);
+		dress();
 		button.addActionListener(this);
 		// Enter in the text field submits too.
 		textField.addActionListener(this);
@@ -76,6 +83,23 @@ public class Main extends JFrame implements ActionListener {
 		how.addActionListener(event -> answer(board::explain));
 		again.addActionListener(event -> answer(board::again));
 		send.addActionListener(event -> sendChallenge());
+		// The board marks the typed number as it changes (keys, a paste or a cut), before Enter guesses it.
+		textField.getDocument().addDocumentListener(new DocumentListener() {
+			@Override
+			public void insertUpdate(DocumentEvent event) {
+				board.preview(textField.getText());
+			}
+
+			@Override
+			public void removeUpdate(DocumentEvent event) {
+				board.preview(textField.getText());
+			}
+
+			@Override
+			public void changedUpdate(DocumentEvent event) {
+				board.preview(textField.getText());
+			}
+		});
 		KeyAdapter keys = new KeyAdapter() {
 			@Override
 			public void keyPressed(KeyEvent event) {
@@ -109,12 +133,34 @@ public class Main extends JFrame implements ActionListener {
 		how.setText(board.isExplaining() ? "Hide how" : "How it works");
 		again.setVisible(read);
 		send.setVisible(typing && board.canChallenge());
+		// In Duel the first number hides yours, so the row says so.
+		prompt.setText(board.isHiding() ? "Your number" : "Your guess");
+		button.setText(board.isHiding() ? "HIDE" : "SUBMIT");
+		// Challenge a friend takes the prompt's place, so the row still fits a phone (the field keeps the prompt's name).
+		prompt.setVisible(typing && !send.isVisible());
 		panel.revalidate();
 		panel.repaint();
 		if (!typing) {
 			board.requestFocusInWindow();
 		} else {
 			textField.requestFocusInWindow();
+		}
+	}
+
+	/** Dresses the row under the board in the board's own colors, so window and board read as one game: the main answer of each mode in green. */
+	private void dress() {
+		panel.setBackground(Board.CARD);
+		prompt.setForeground(Board.SOFT);
+		prompt.setFont(new Font("SansSerif", Font.BOLD, 13));
+		prompt.setLabelFor(textField);
+		textField.setFont(new Font("SansSerif", Font.BOLD, 20));
+		textField.setBackground(Board.BACKGROUND);
+		textField.setForeground(Board.TEXT);
+		for (JButton each : new JButton[] { button, lower, correct, higher, fib, yes, no, how, again, send }) {
+			boolean main = each == button || each == correct || each == yes || each == again;
+			each.setBackground(main ? Board.POSSIBLE : Board.SELECTED);
+			each.setForeground(main ? Board.BACKGROUND : Board.TEXT);
+			each.setFont(new Font("SansSerif", Font.BOLD, 12));
 		}
 	}
 

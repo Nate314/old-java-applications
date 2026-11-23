@@ -8,7 +8,7 @@ import javax.swing.Timer;
 
 /** The original screen bot's eye: one screen pixel, checked every millisecond. PixelBot follows the same rule. */
 final class ObstacleDetector implements ActionListener {
-   /** The game in this window draws its dinosaur and obstacles in #535353, and 0x53 is 83. */
+   /** Chrome's game drew its obstacles in #535353, and 0x53 is 83; this window's game keeps its obstacles at blue 83. */
    static final int OBSTACLE_BLUE = 83;
    /** How long a jump holds Space. */
    static final int HOLD_MS = 65;

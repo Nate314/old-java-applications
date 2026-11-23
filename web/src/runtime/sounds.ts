@@ -1,6 +1,7 @@
 import { redrawBar } from './install';
 import { ctx } from './midi';
 import { store, stored } from './stored';
+import { afterPaint } from './after-paint';
 
 declare global {
   interface OldjavaSound { on(): boolean; set(on: boolean): void }
@@ -181,9 +182,10 @@ export function init() {
     var t = e.target && (e.target as Element).closest && (e.target as Element).closest('button, a[href], summary');
     if (!t || t.closest('#desktop, .shim-pad, [data-sound="none"]')) return;
     tapPending = true;
-    setTimeout(function () {
+    // After the click's frame: the page's first sound starts its AudioContext, which held that frame on a slow phone.
+    afterPaint(function () {
       if (tapPending) playSound('tap');
       tapPending = false;
-    }, 0);
+    });
   }, true);
 }

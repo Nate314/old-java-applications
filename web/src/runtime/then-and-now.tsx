@@ -6,6 +6,7 @@ import { CloseButton, useOwnKeys } from './ui/layer';
 import { openPanel } from './ui/panel';
 import { AppCard, PassportLine } from './ui/cards';
 import { fetchOk } from './fetch-ok';
+import { quirkItems } from './title-card';
 
 let drawer: HTMLElement | null;
 
@@ -46,13 +47,7 @@ const quirkLists: Record<string, Promise<string[][]>> = {};
 export function quirks(id?: string | null) {
   id = id || appId()!;
   if (!quirkLists[id]) {
-    quirkLists[id] = fetchOk(root() + id + '/then-source/README.md').then(function (r) { return r.text(); }).then(function (text) {
-      var section = /^## Known quirks[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n?/g, '\n'));
-      if (!section) return [];
-      return section[1].split(/^- /m).slice(1).map(function (item) {
-        return item.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim().split('`');
-      });
-    }).catch(function (e) {
+    quirkLists[id] = fetchOk(root() + id + '/then-source/README.md').then(function (r) { return r.text(); }).then(quirkItems).catch(function (e) {
       console.warn('Could not read the known quirks: ' + e.message);
       return [];
     });
@@ -60,8 +55,7 @@ export function quirks(id?: string | null) {
   return quirkLists[id];
 }
 
-// #6 fixed the quirks the READMEs listed before it, so most then.html pages have none to list.
-export const NO_QUIRKS = 'None left: its README at that commit lists no known quirks.';
+export { NO_QUIRKS } from './title-card';
 
 // Then | Now: two links, the current one marked. Hidden until the catalog says the app has a then.
 export function EraSwitch({ className }: { className: string }) {
@@ -90,22 +84,16 @@ export function indexOf(apps: { id: string }[], id: string | null) {
 export function pageOf(app: { id: string }) { return root() + app.id + '/index.html' + (embedded ? '?embed' : ''); }
 
 // Apps to try after this one (three unless `count` says otherwise): apps not played yet first, then the
-// played ones; within each, others of the same category first, each group shuffled.
-export function picks<T extends OldjavaCatalogApp>(apps: T[], id: string | null, count?: number) {
+// played ones; within each, others of the same category first, in gallery order. Every "what next" on the site
+// (the stamp toast, the exit screen, the band's Next, the home page's Welcome back and passport) asks this, so a
+// visitor is offered the same next app wherever they look.
+export function picks<T extends { id: string; cat: string }>(apps: T[], id: string | null, count?: number) {
   var self = apps[indexOf(apps, id)];
-  function shuffled<T>(list: T[]) {
-    for (var i = list.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var t = list[i]; list[i] = list[j]; list[j] = t;
-    }
-    return list;
-  }
   var result: T[] = [];
   [false, true].forEach(function (wasPlayed) {
     var others = apps.filter(function (a) { return a.id !== id && !!played[a.id] === wasPlayed; });
-    var same = others.filter(function (a) { return self && a.cat === self.cat; });
-    var rest = others.filter(function (a) { return !self || a.cat !== self.cat; });
-    result = result.concat(shuffled(same), shuffled(rest));
+    result = result.concat(others.filter(function (a) { return self && a.cat === self.cat; }),
+      others.filter(function (a) { return !self || a.cat !== self.cat; }));
   });
   return result.slice(0, count || 3);
 }

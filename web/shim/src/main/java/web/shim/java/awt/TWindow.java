@@ -259,7 +259,7 @@ public class TWindow extends TContainer {
     }
 
     public void setFocusOwner(TComponent c) {
-        focusOwner = c;
+        setFocusOwnerQuietly(c);
         if (c != null) {
             c.focusGained();
         }
@@ -267,6 +267,22 @@ public class TWindow extends TContainer {
 
     /** Sets the focus owner without moving the page's keyboard focus (a window's first focus owner, or one the page focused). */
     public void setFocusOwnerQuietly(TComponent c) {
+        TComponent was = focusOwner;
         focusOwner = c;
+        if (was != c) { // as Swing's FOCUS_LOST/GAINED do, so a focus box an app paints follows the keyboard
+            repaintFocus(was);
+            repaintFocus(c);
+        }
+    }
+
+    /**
+     * Repaints a component that may paint a focus box, when its window's focus or activation changed. Posted, since
+     * DOM listeners call this and repaint off the event thread waits for a frame.
+     */
+    public static void repaintFocus(TComponent c) {
+        if (c != null) {
+            Edt.post(c::repaint);
+        }
+        TDesktop.focusMayHaveMoved(); // every change that can move hasFocus() comes through here
     }
 }

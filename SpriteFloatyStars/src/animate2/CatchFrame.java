@@ -1,5 +1,6 @@
 package animate2;
 
+import java.awt.Toolkit;
 import java.io.File;
 import javax.swing.JFrame;
 
@@ -7,16 +8,17 @@ import javax.swing.JFrame;
 @SuppressWarnings("serial")
 public final class CatchFrame extends JFrame {
    private final CatchPanel panel;
-   private final JFrame settings;
+   private final SettingsFrame settings;
 
-   public CatchFrame(JFrame settings) {
+   public CatchFrame(SettingsFrame settings) {
       this.settings = settings;
       this.setTitle("Star Catcher");
       this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
       this.setResizable(false);
       // Read after the window exists, so the browser build has put the saved file back.
       NightRecords records = NightRecords.load(new File(System.getProperty("user.home"), ".spritefloatystars-nights.txt"));
-      this.panel = new CatchPanel(records);
+      // On a phone the game stands upright and fills the screen's width, instead of a 640 x 480 field scaled down.
+      this.panel = new CatchPanel(records, CatchPanel.sizeFor(Toolkit.getDefaultToolkit().getScreenSize(), this.getInsets()));
       this.add(this.panel);
       this.addKeyListener(this.panel.keys());
       this.panel.addKeyListener(this.panel.keys());
@@ -29,6 +31,6 @@ public final class CatchFrame extends JFrame {
    public void dispose() {
       this.panel.stop();
       super.dispose();
-      this.settings.setVisible(true);
+      this.settings.catcherClosed();
    }
 }

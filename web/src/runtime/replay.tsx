@@ -9,7 +9,7 @@ import { openPanel } from './ui/panel';
 import { appOut, audio } from './midi';
 import { playSound } from './sounds';
 import { real } from './slow-mo';
-import { paintWatch } from './painted';
+import { paintWatch, paintedCanvases } from './painted';
 
 /** A recorded clip: its video, how many seconds it holds, and the app it shows. */
 export interface ReplayClip { blob: Blob; seconds: number; app: string }
@@ -19,6 +19,8 @@ export interface Replay { live(): boolean; take(): Promise<ReplayClip | null> }
 interface Recording { chunks: Blob[]; t0: number; rec: MediaRecorder; pausedAt: number }
 /** An element to draw, in stacking order (z, then i). */
 interface Layer { el: Element; cs: CSSStyleDeclaration; z: number; i: number }
+/** What to draw again (rects in page pixels; null: everything), where each drawn element was, and the last drawing's frame. */
+interface Damage { rects: DOMRect[] | null; seen: WeakMap<Element, DOMRect>; frame: string }
 
 export let replay: Replay | null;
 let clipBox: HTMLElement | null;
@@ -36,6 +38,13 @@ let clipBox: HTMLElement | null;
 // between ticks, a menu) costs one frame a second (REPLAY_IDLE), and the encoder has nothing new to encode.
 // Nothing is drawn or recorded while nobody can see the app: its tab is hidden, or the page has scrolled the
 // app out of view (the home page's player, once the visitor scrolls down to the gallery).
+// A drawing is done a few ms per frame (paintDesk, REPLAY_SLICE), so a big app never holds a tap for a whole drawing;
+// when frames come far apart (a window behind others) a frame may draw a tenth of the time since the last one, up to
+// REPLAY_SLICE_MAX, so the clip's newest picture stays fresh there too.
+// Only the part that changed is drawn again (damage): the canvases the shim drew on and the elements that changed,
+// where they are and where they were, over the last picture; an app of many widgets (Minesweeper's 256 tiles)
+// where one tile changed draws that tile, not the board. A whole drawing still comes every REPLAY_WHOLE, and at once
+// when the windows move as one (scrolling, a new size, zoom, Pop out, a skin).
 const REPLAY_SEG = 20000;
 
 const REPLAY_FPS = 30;     // at most; fewer where drawing the windows costs more (REPLAY_SHARE)
@@ -46,7 +55,16 @@ const REPLAY_SHARE = 0.1;  // of the page's time, at most, spent drawing them
 
 const REPLAY_MAX = 1280;   // the clip's longest side, in pixels
 
+const REPLAY_MIN = 640;    // the clip's longest side at least, in pixels, where the windows are small
+
 const REPLAY_PAD = 16;     // desk around the windows, in page pixels
+
+const REPLAY_SLICE = 6;    // ms of drawing per frame at most (one element may run over): a slow phone drew big apps in 0.1-0.5 s at once
+
+const REPLAY_WHOLE = 2000;   // ms: a whole drawing at least this often, for what damage cannot see (CSS animations, overflowing children);
+                             // or 4 times as long as the last one took, so a slow phone mostly draws what changed
+
+const REPLAY_SLICE_MAX = 24;   // ms, when frames come far apart: half a long task, so a tap still never waits long
 
 export function setReplay(v: Replay | null) { replay = v; }
 
@@ -102,11 +120,18 @@ function drawText(g: CanvasRenderingContext2D, node: Text, cs: CSSStyleDeclarati
   }
 }
 
-// Paints el and everything in it into g, at its place on the page (k: the desktop's CSS scale).
-function drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclaration, k: number) {
+// Paints el and everything in it into g, at its place on the page (k: the desktop's CSS scale), pausing
+// (yield) after each element so a big app can be drawn over several frames (paintDesk).
+// With damage, an element that meets none of its rects is left as the last picture had it, and seen keeps where
+// each drawn element was (for the next damage).
+function* drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclaration, k: number, damage?: Damage): Generator<void, void> {
   if (cs.display === 'none' || cs.visibility === 'hidden') return;
   var r = el.getBoundingClientRect();
   if (!r.width || !r.height) return;
+  if (damage) {
+    if (damage.rects && !damage.rects.some(function (d) { return d.left < r.right && r.left < d.right && d.top < r.bottom && r.top < d.bottom; })) return;
+    damage.seen.set(el, r);
+  }
   g.save();
   g.globalAlpha *= +cs.opacity;
   var rad = (parseFloat(cs.borderTopLeftRadius) || 0) * k;
@@ -163,16 +188,19 @@ function drawNode(g: CanvasRenderingContext2D, el: Element, cs: CSSStyleDeclarat
       }
     }
     kids.sort(function (a, b) { return a.z - b.z || a.i - b.i; });
-    kids.forEach(function (c) { if (c.z < 0) drawNode(g, c.el, c.cs, k); });
+    for (var c of kids) if (c.z < 0) yield* drawNode(g, c.el, c.cs, k, damage);
     texts.forEach(function (t) { drawText(g, t, cs, k); });
-    kids.forEach(function (c) { if (c.z >= 0) drawNode(g, c.el, c.cs, k); });
+    for (c of kids) if (c.z >= 0) yield* drawNode(g, c.el, c.cs, k, damage);
   }
   g.restore();
+  yield;
 }
 
 // Draws the app's windows, on the skin's desk, fitted into canvas. Returns the size they and the desk around
-// them have at actual size (unzoomed), or null while there is no window.
-export function drawDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element) {
+// them have at actual size (unzoomed), or null while there is no window. paintDesk does it a slice at a time
+// (each next() draws one element); drawDesk all at once. With damage over the picture already in canvas, only
+// its rects are drawn again, unless the windows' frame changed (then damage.rects is set to null: all of it).
+function* paintDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element, damage?: Damage): Generator<void, number[] | null> {
   var view = desktop.ownerDocument.defaultView!;
   var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, wins: Layer[] = [];
   for (var c = desktop.firstElementChild; c; c = c.nextElementSibling) {
@@ -189,21 +217,48 @@ export function drawDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement,
   var W = canvas.width, H = canvas.height;
   var s = Math.min(W / (x1 - x0), H / (y1 - y0));
   var root = view.getComputedStyle(desktop.ownerDocument.documentElement);
+  var frame = [x0, y0, x1, y1, W, H, view === window].join();
+  if (damage) {
+    if (damage.frame !== frame) damage.rects = null;
+    damage.frame = frame;
+  }
+  var desk = function () { g.setTransform(s, 0, 0, s, (W - (x1 - x0) * s) / 2 - x0 * s, (H - (y1 - y0) * s) / 2 - y0 * s); };
+  g.save();
+  if (damage && damage.rects) {
+    desk();
+    g.beginPath();
+    damage.rects.forEach(function (d) { g.rect(d.left, d.top, d.width, d.height); });
+    g.clip();
+  }
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 1;
   g.fillStyle = cssFill(g, root.getPropertyValue('--desk'), root.getPropertyValue('--desk').trim(), 0, 0, W, H) || '#1e293b';
   g.fillRect(0, 0, W, H);
-  g.setTransform(s, 0, 0, s, (W - (x1 - x0) * s) / 2 - x0 * s, (H - (y1 - y0) * s) / 2 - y0 * s);
+  desk();
   wins.sort(function (a, b) { return a.z - b.z || a.i - b.i; });
-  wins.forEach(function (w) { drawNode(g, w.el, w.cs, k); });
+  try {
+    for (var w of wins) yield* drawNode(g, w.el, w.cs, k, damage);
+  } finally {
+    g.restore();
+  }
   return [(x1 - x0) / k, (y1 - y0) / k];
 }
 
-// The clip's size for windows of that size: up to twice as big (small windows make small videos), at most
-// REPLAY_MAX on the longest side, in even pixels (which video encoders want). Clip mode's size is fixed.
+export function drawDesk(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, desktop: Element) {
+  var it = paintDesk(g, canvas, desktop), step;
+  while (!(step = it.next()).done);
+  return step.value;
+}
+
+// The clip's size for windows of that size: the pixels the screen gives them (the shim's canvases are drawn at
+// that density), at least REPLAY_MIN on the longest side (small windows make small videos) and at most twice as
+// big or REPLAY_MAX, in even pixels (which video encoders want). Clip mode's size is fixed. Recording past the
+// screen's pixels only fed the encoder upscaled copies: on a 1x screen Flappy Bird's window was encoded at 3.3
+// times its pixels, a fifth of Chrome's time while playing (headless), for nothing a viewer could see.
 function clipSize(box: number[]) {
   if (clipMode) return CLIP_SIZE.slice();
-  var s = Math.min(2, REPLAY_MAX / Math.max(box[0], box[1]));
+  var m = Math.max(box[0], box[1]), screen = window.__shimRender || window.devicePixelRatio || 1;
+  var s = Math.min(2, REPLAY_MAX / m, Math.max(screen, REPLAY_MIN / m));
   return [2 * Math.round(box[0] * s / 2), 2 * Math.round(box[1] * s / 2)];
 }
 
@@ -214,12 +269,43 @@ export function startReplay(desktop: Element): Replay | null {
   if (!type) return null;
   var canvas = document.createElement('canvas');
   var g = canvas.getContext('2d')!;
-  var track: MediaStreamTrack | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
+  // Drawn here a slice per frame, then copied to canvas whole, so the recording never shows a half-drawn frame.
+  var back = document.createElement('canvas'), bg = back.getContext('2d')!;
+  var job: Generator<void, number[] | null> | null = null, spent = 0, started = false;
+  var track: MediaStreamTrack | null = null, stream: MediaStream | null = null, tap: MediaStreamAudioDestinationNode | null = null, recs: Recording[] = [], last = 0, cost = 0, moved = 0, changed = true, inView = true;
   var drew = paintWatch();
-  function look() { changed = true; }
+  // What changed since the last drawing began: the canvases the shim drew on, the nodes changed or let go.
+  var painted = paintedCanvases(), touched = new Set<Node>(), whole = -Infinity, wholeTook = 0, began = 0, damage: Damage = { rects: null, seen: new WeakMap(), frame: '' };
+  function look(records: MutationRecord[]) {
+    changed = true;
+    records.forEach(function (m) {
+      touched.add(m.target);
+      m.removedNodes.forEach(function (n) { touched.add(n); });
+    });
+    if (touched.size > 2000) { touched.clear(); whole = -Infinity; }   // long out of sight: drawn whole when back
+  }
   if (window.MutationObserver) {
     new MutationObserver(look).observe(desktop, { subtree: true, childList: true, attributes: true, characterData: true });
-    new MutationObserver(look).observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+    new MutationObserver(function () { changed = true; whole = -Infinity; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+  }
+  // The rects to draw again, where each changed element is now and where the last drawing had it (2 px wider for
+  // smoothed edges), or null for everything.
+  function damaged(t: number) {
+    var rects: DOMRect[] | null = [];
+    if (t - whole >= Math.max(REPLAY_WHOLE, 4 * wholeTook)) rects = null;
+    function add(r: DOMRect | undefined) { if (rects && r && r.width && r.height) rects.push(new DOMRect(r.x - 2, r.y - 2, r.width + 4, r.height + 4)); }
+    function at(n: Node) {
+      var el = n.nodeType === 1 ? n as Element : n.parentElement;
+      if (!el || !rects) return;
+      if (el === desktop) { rects = null; return; }   // a window opened or closed
+      add(damage.seen.get(el));
+      if (el.isConnected) add(el.getBoundingClientRect());
+    }
+    touched.forEach(at);
+    painted.forEach(function (c) { if (desktop.contains(c)) at(c); });
+    touched.clear();
+    painted.clear();
+    return rects;
   }
   // The body, not the desktop: it stays in this page while the desktop is popped out. In the home page's
   // player it is the whole iframe, so this says whether the visitor has scrolled the player away.
@@ -235,8 +321,12 @@ export function startReplay(desktop: Element): Replay | null {
     if (!clipMode && audio && !tap && audio.createMediaStreamDestination) {   // the app's voices, not the site's sounds
       tap = audio.createMediaStreamDestination();
       appOut(audio).connect(tap);
+      stream = null;   // a recording's tracks cannot change under it, so the voices start a stream of their own
     }
-    var stream = new MediaStream([track!].concat(tap ? tap.stream.getAudioTracks() : []));
+    if (!track) return;   // let go of (a new size, or the page put away in the back/forward cache): the next frame makes one
+    // One stream for every recording of this track: a MediaStream lives as long as its tracks run, so a new one
+    // per recording (six a minute) was never freed.
+    if (!stream) stream = new MediaStream([track!].concat(tap ? tap.stream.getAudioTracks() : []));
     var r = { chunks: [], t0: Date.now() } as unknown as Recording;
     try {
       r.rec = new MediaRecorder(stream, { mimeType: type!, videoBitsPerSecond: clipMode ? CLIP_BPS : 5000000 });
@@ -270,7 +360,12 @@ export function startReplay(desktop: Element): Replay | null {
     while (recs.length > 1) recs.shift()!.rec.stop();
     begin();
   }
+  var pressed = false;   // the visitor has pressed or let go since the last frame
+  ['pointerdown', 'pointerup', 'keydown', 'keyup'].forEach(function (type) {
+    document.addEventListener(type, function (e) { if (!(e as KeyboardEvent).repeat) pressed = true; }, { capture: true, passive: true });
+  });
   var on: Window = window;   // the window the next frame was asked of
+  var prev = 0;   // when the last frame came
   function frame() {
     var w = popped && !popped.win.closed ? popped.win : window;
     // A closed pop out window never answers, so the drawing would stop for good once the app is brought back.
@@ -278,41 +373,92 @@ export function startReplay(desktop: Element): Replay | null {
     on = w;
     w.requestAnimationFrame(frame);
     var t = real.now();   // not the frame's time, which a popped out window counts from its own start
+    // 6 ms at 60 fps; at 1.5 fps a 6 ms slice left a big app's drawing seconds old, so the clip lost its last seconds.
+    var budget = Math.min(REPLAY_SLICE_MAX, Math.max(REPLAY_SLICE, (t - prev) * REPLAY_SHARE));
+    prev = t;
+    var answering = pressed;
+    pressed = false;
     if (away()) return;
     if (drew()) changed = true;
-    // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
-    // less often: the app keeps at least nine tenths of the time.
-    if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
-    last = t;
-    changed = false;
-    var t0 = real.now(), box = drawDesk(g, canvas, desktop);
-    cost = 0.8 * cost + 0.2 * (real.now() - t0);
+    // Not in the frame that answers a tap or key: on a slow phone one drawing held that answer for 0.1 to 0.5 s.
+    if (answering) return;
+    if (!job) {
+      // An app of many widgets (Minesweeper's Expert board has 256 tiles) takes several ms to draw, so it is drawn
+      // less often: the app keeps at least nine tenths of the time.
+      if (t - last < (changed ? Math.max(1000 / REPLAY_FPS, cost / REPLAY_SHARE) : REPLAY_IDLE) - 4) return;
+      last = t;
+      changed = false;
+      spent = 0;
+      began = t;
+      damage.rects = damaged(t);
+      if (back.width !== canvas.width || back.height !== canvas.height) { back.width = canvas.width; back.height = canvas.height; damage.rects = null; }
+      // Nothing to draw again: the last picture still holds (it is copied below, so the video keeps a frame a second).
+      job = damage.rects && !damage.rects.length ? null : paintDesk(bg, back, desktop, damage);
+    }
+    if (!job) {
+      if (track) g.drawImage(back, 0, 0);
+      return;
+    }
+    var t0 = real.now(), step;
+    while (!(step = job.next()).done && real.now() - t0 < budget);
+    spent += real.now() - t0;
+    if (!step.done) return;
+    job = null;
+    if (!damage.rects) { whole = t; wholeTook = t - began; }
+    cost = 0.8 * cost + 0.2 * spent;
+    var box = step.value;
     if (!box) return;
     // A recording keeps the size it started with (Chrome's MP4 does not follow a resize), so windows much
     // bigger or smaller than it (a splash before the app's window, Minesweeper's Expert board) are fitted in at
     // first, and after a second at their new size the recording starts over at it.
     var want = clipSize(box);
-    var off = Math.max(Math.abs(want[0] / canvas.width - 1), Math.abs(want[1] / canvas.height - 1));
-    if (track && off < 0.1) { moved = 0; return; }
-    if (track && !moved) moved = t;
-    if (track && t - moved < 1000) return;
-    moved = 0;
-    recs.forEach(function (r) { r.rec.stop(); });
-    recs = [];
-    if (track) track.stop();
-    canvas.width = want[0];
-    canvas.height = want[1];
-    drawDesk(g, canvas, desktop);
-    var first = !track;
+    var fits = Math.max(Math.abs(want[0] / canvas.width - 1), Math.abs(want[1] / canvas.height - 1)) < 0.1;
+    if (track && fits) moved = 0;
+    else if (track && !moved) moved = t;
+    if (!track && fits || track && (fits || t - moved < 1000)) {
+      g.drawImage(back, 0, 0);
+      if (track) return;
+    } else {
+      // Drawn again at the new size before a new recording starts on it.
+      moved = 0;
+      recs.forEach(function (r) { r.rec.stop(); });
+      recs = [];
+      if (track) track.stop();
+      track = null;
+      canvas.width = want[0];
+      canvas.height = want[1];
+      changed = true;
+      last = 0;
+      return;
+    }
     track = canvas.captureStream(REPLAY_FPS).getVideoTracks()[0];
+    stream = null;
     begin();
-    if (!first) return;
+    if (started) return;
+    started = true;
     real.setInterval(rotate, REPLAY_SEG / 2);   // real time: a slowed app's clip still covers 10 to 20 s
     document.documentElement.setAttribute('data-replay', '');
     if (embedded && window.parent !== window) window.parent.postMessage({ oldjavaReplay: true }, location.origin);
   }
   requestAnimationFrame(frame);
   document.addEventListener('visibilitychange', sync);
+  // Leaving the page: Chrome keeps no page with a live media track in its back/forward cache, so Back to an app
+  // reloaded it at its title screen. Its recordings and tracks are let go; once the page is back, the next frame
+  // starts recording again (the clip starts over from there).
+  window.addEventListener('pagehide', function () {
+    recs.forEach(function (r) { r.rec.stop(); });
+    recs = [];
+    if (track) track.stop();
+    track = null;
+    stream = null;
+    if (tap) {
+      tap.stream.getTracks().forEach(function (t) { t.stop(); });
+      if (audio) appOut(audio).disconnect(tap);
+      tap = null;
+    }
+    changed = true;
+    last = 0;
+  });
 
   return {
     live: function () { return recs.length > 0; },

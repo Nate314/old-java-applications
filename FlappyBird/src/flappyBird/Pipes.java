@@ -21,7 +21,7 @@ public final class Pipes {
    private final List<Integer> gapTops = new ArrayList<>();
    /** Pairs made so far: the next pair takes gapTops at this index. */
    private int made = 0;
-   private int gapHeight = 2 * PIPE_WIDTH;
+   private int gapHeight = gapHeight(PIPE_WIDTH, Bird.HEIGHT);
    private int pipeSpacing = (int)((double)Main.FRAME_WIDTH / 3.5);
    private final Random random;
 
@@ -32,6 +32,15 @@ public final class Pipes {
       this.bottomPipeImage = bottomPipeImage;
       this.addPair(Main.FRAME_WIDTH);
       this.scroll();
+   }
+
+   /**
+    * The opening of a pair: two pipe widths, but never less than 4.5 bird heights. A flap rises about 1.75 bird
+    * heights whatever the window, while pipes are as wide as the window allows, so on an upright phone two pipe
+    * widths left barely more than one flap of room; a wide window keeps two pipe widths, as before.
+    */
+   static int gapHeight(int pipeWidth, int birdHeight) {
+      return Math.max(2 * pipeWidth, birdHeight * 9 / 2);
    }
 
    private void addPair(float x) {

@@ -3,6 +3,7 @@ package web.shim.javax.swing;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.JSObject;
+import web.rt.Edt;
 import web.rt.Js;
 import web.shim.java.awt.TColor;
 import web.shim.java.awt.TDimension;
@@ -11,6 +12,9 @@ import web.shim.java.awt.TFontMetrics;
 import web.shim.java.awt.event.TActionEvent;
 import web.shim.java.awt.event.TActionListener;
 import web.shim.java.awt.event.TKeyEvent;
+import web.shim.javax.swing.event.TDocumentEvent;
+import web.shim.javax.swing.event.TDocumentListener;
+import web.shim.javax.swing.text.TDocument;
 
 /** A DOM text input. The DOM holds the text once the element exists; editing is native. */
 public class TJTextField extends TJComponent {
@@ -18,6 +22,26 @@ public class TJTextField extends TJComponent {
     private static final int PAD = 3;
 
     private final List<TActionListener> actionListeners = new ArrayList<>();
+    private final List<TDocumentListener> documentListeners = new ArrayList<>();
+    private final TDocument document = new TDocument() {
+        @Override
+        public int getLength() {
+            return getText().length();
+        }
+
+        @Override
+        public void addDocumentListener(TDocumentListener l) {
+            if (l != null) {
+                documentListeners.add(l);
+            }
+        }
+
+        @Override
+        public void removeDocumentListener(TDocumentListener l) {
+            documentListeners.remove(l);
+        }
+    };
+    /** The text listeners were last told about; the DOM may be ahead of it until its input event. */
     private String text;
     private int columns;
     private boolean editable = true;
@@ -41,6 +65,11 @@ public class TJTextField extends TJComponent {
     }
 
     @Override
+    protected boolean takesNearbyLabel() {
+        return true;
+    }
+
+    @Override
     protected JSObject createElement() {
         JSObject el = Js.create("input");
         Js.setClass(el, "c textfield");
@@ -48,6 +77,14 @@ public class TJTextField extends TJComponent {
         Js.setAttr(el, "spellcheck", "false");
         Js.setAttr(el, "autocomplete", "off");
         Js.setValue(el, text);
+        // Every edit the browser makes (keys, paste or cut with the mouse, the phone keyboard, autofill) reaches the document.
+        Js.listen(el, "input", e -> {
+            TextChange change = TextChange.between(text, Js.getValue(el));
+            text = Js.getValue(el);
+            if (change != null) {
+                Edt.post(() -> fireChange(change.offset, change.removed, change.inserted));
+            }
+        });
         return el;
     }
 
@@ -117,9 +154,51 @@ public class TJTextField extends TJComponent {
     }
 
     public void setText(String t) {
+        int old = getText().length();
         text = t == null ? "" : t;
         if (hasElement()) {
             Js.setValue(element(), text);
+        }
+        // As in Swing: the old text is removed, then the new one inserted, each heard only when not empty.
+        fireChange(0, old, text.length());
+    }
+
+    public TDocument getDocument() {
+        return document;
+    }
+
+    private void fireChange(int offset, int removed, int inserted) {
+        if (removed > 0) {
+            fireDocument(offset, removed, false);
+        }
+        if (inserted > 0) {
+            fireDocument(offset, inserted, true);
+        }
+    }
+
+    private void fireDocument(int offset, int length, boolean insert) {
+        TDocumentEvent e = new TDocumentEvent() {
+            @Override
+            public TDocument getDocument() {
+                return document;
+            }
+
+            @Override
+            public int getOffset() {
+                return offset;
+            }
+
+            @Override
+            public int getLength() {
+                return length;
+            }
+        };
+        for (TDocumentListener l : new ArrayList<>(documentListeners)) {
+            if (insert) {
+                l.insertUpdate(e);
+            } else {
+                l.removeUpdate(e);
+            }
         }
     }
 

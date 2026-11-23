@@ -33,8 +33,8 @@ class PrintoutPage extends Page {
 	@Override
 	void paint(Graphics2D g, int w, int h) {
 		text(g, "What the original program prints", TITLE, INK, 20, 32);
-		text(g, "Main still prints these lines to the console when it starts, before this window opens.", TEXT, PENCIL, 20, 54);
-		int top = 70;
+		int top = paragraph(g, "Main still prints these lines to the console when it starts, before this window opens.", TEXT, PENCIL,
+				20, 54, w - 40, 0, 16, 2);
 		g.setColor(new Color(24, 28, 36));
 		g.fillRoundRect(20, top, w - 40, h - top - 12, 12, 12);
 		List<String> shown = shown();

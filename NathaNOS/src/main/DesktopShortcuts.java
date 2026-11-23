@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -74,6 +75,15 @@ final class DesktopShortcuts {
       this.screen.settings.places.clear();
       this.screen.saveSettings();
       this.placeAll();
+   }
+
+   /** The part of the desktop the icons cover (their cells' bounds), which new windows keep clear of when they can. */
+   Rectangle area() {
+      Rectangle area = null;
+      for (Shortcut shortcut : this.shortcuts) {
+         area = area == null ? shortcut.getBounds() : area.union(shortcut.getBounds());
+      }
+      return area;
    }
 
    /** Adds an icon for each new picture and drops those of deleted ones; the rest just repaint their thumbnails. */
@@ -181,6 +191,9 @@ final class DesktopShortcuts {
 
    private void select(Shortcut shortcut) {
       Shortcut previous = this.selected;
+      if (previous != shortcut) {
+         this.screen.iconTip.hideTip();
+      }
       this.selected = shortcut;
       if (previous != null) {
          previous.repaint();
@@ -205,6 +218,11 @@ final class DesktopShortcuts {
       }
 
       @Override
+      void showTip(IconTip tip) {
+         tip.showApp(this.getBounds(), DesktopShortcuts.this.launcher.icon(this.app), this.key, this::open);
+      }
+
+      @Override
       void paintImage(Graphics g, int x, int y) {
          AppIcon.paint(g, DesktopShortcuts.this.launcher.icon(this.app), this.key, x, y, ICON);
       }
@@ -222,6 +240,11 @@ final class DesktopShortcuts {
       @Override
       void open() {
          DesktopShortcuts.this.launcher.openPicture(this.picture, this);
+      }
+
+      @Override
+      void showTip(IconTip tip) {
+         tip.showPicture(this.getBounds(), this.picture.name, this::open);
       }
 
       @Override
@@ -250,6 +273,8 @@ final class DesktopShortcuts {
       private int pressY;
       private boolean pressed;
       private boolean dragging;
+      /** Whether the last press became a drag, so the click that ends it opens no card. */
+      private boolean dragged;
 
       Shortcut(String key, String label) {
          this.key = key;
@@ -263,6 +288,7 @@ final class DesktopShortcuts {
                DesktopShortcuts.this.screen.desktopMenu.hideMenu();
                DesktopShortcuts.this.screen.calendar.hideMenu();
                Shortcut.this.pressed = e.getButton() == MouseEvent.BUTTON1;
+               Shortcut.this.dragged = false;
                Shortcut.this.pressX = e.getX();
                Shortcut.this.pressY = e.getY();
             }
@@ -275,6 +301,8 @@ final class DesktopShortcuts {
                }
                if (!shortcut.dragging && Math.abs(e.getX() - shortcut.pressX) + Math.abs(e.getY() - shortcut.pressY) >= DRAG_START) {
                   shortcut.dragging = true;
+                  shortcut.dragged = true;
+                  DesktopShortcuts.this.screen.iconTip.hideTip();
                   DesktopShortcuts.this.ghost.carry(shortcut);
                   shortcut.repaint();
                }
@@ -299,8 +327,14 @@ final class DesktopShortcuts {
 
             @Override
             public void mouseClicked(MouseEvent e) {
-               if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1) {
+               if (e.getButton() != MouseEvent.BUTTON1 || Shortcut.this.dragged) {
+                  return;
+               }
+               if (e.getClickCount() >= 2) {
+                  DesktopShortcuts.this.screen.iconTip.hideTip();
                   Shortcut.this.open();
+               } else {
+                  Shortcut.this.showTip(DesktopShortcuts.this.screen.iconTip);
                }
             }
 
@@ -321,6 +355,9 @@ final class DesktopShortcuts {
       }
 
       abstract void open();
+
+      /** Opens the card that says what this icon is, beside it. */
+      abstract void showTip(IconTip tip);
 
       /** The ICON-sized picture above the label, its top-left corner at (x, y). */
       abstract void paintImage(Graphics g, int x, int y);
@@ -355,7 +392,7 @@ final class DesktopShortcuts {
          this.paintImage(g, (width - ICON) / 2, 8);
          g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
          FontMetrics metrics = g.getFontMetrics();
-         List<String> lines = wrap(this.label, metrics, width - 8);
+         List<String> lines = AppIcon.wrap(this.label, metrics, width - 8, 2);
          int y = 8 + ICON + 4 + metrics.getAscent();
          for (String line : lines) {
             int x = (width - metrics.stringWidth(line)) / 2;
@@ -400,25 +437,5 @@ final class DesktopShortcuts {
          g.fillRoundRect(2, 2, this.getWidth() - 4, TILE_HEIGHT - 4, 10, 10);
          this.carried.paintIcon(g);
       }
-   }
-
-   /** Up to two lines of words, the second cut with "..." if the rest does not fit. */
-   private static List<String> wrap(String text, FontMetrics metrics, int width) {
-      List<String> lines = new ArrayList<>();
-      String line = "";
-      String[] words = text.split(" ");
-      for (int i = 0; i < words.length; i++) {
-         String candidate = line.isEmpty() ? words[i] : line + " " + words[i];
-         if (line.isEmpty() || metrics.stringWidth(candidate) <= width) {
-            line = candidate;
-         } else if (lines.isEmpty()) {
-            lines.add(AppIcon.fit(line, metrics, width));
-            line = words[i];
-         } else {
-            line = candidate;
-         }
-      }
-      lines.add(AppIcon.fit(line, metrics, width));
-      return lines;
    }
 }

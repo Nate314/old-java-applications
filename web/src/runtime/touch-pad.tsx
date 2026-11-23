@@ -19,6 +19,8 @@ interface PadGroup {
   fireLabel?: string;
   piano?: string[];
   buttons?: { k: string; label: string; big?: boolean }[];
+  /** The app draws this group itself on a screen narrower than this (as the app decides it at start). */
+  ownBelow?: number;
 }
 
 // ---- touch controller ----
@@ -32,7 +34,8 @@ const PADS: Record<string, PadGroup[]> = {
     { buttons: [{ k: 'Z', label: 'Rewind' }, { k: 'C', label: 'Course' }, { k: 'P', label: 'Pause' }, { k: 'R', label: 'Reset' }] }
   ],
   DinoGame: [
-    { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'S', label: 'Duck' }] },
+    // DinoGame/Main.java: thumb pads of its own under the game below Runner.WIDTH + 24
+    { buttons: [{ k: 'Space', label: 'Jump', big: true }, { k: 'S', label: 'Duck' }], ownBelow: 744 },
     { buttons: [{ k: 'T', label: 'Whole run' }, { k: 'B', label: 'Bot' }, { k: 'X', label: 'Reset eye' }, { k: 'G', label: 'Ghost' }, { k: 'P', label: '2 players' }, { k: 'E', label: 'Evolve' }, { k: 'F', label: 'Speed' }, { k: 'M', label: 'Sound' }] }
   ],
   TankGame: [
@@ -73,6 +76,14 @@ export function fireKey(type: string, name: string) {
 }
 
 const PAD_KEY = 'oldjava.pad';
+
+/** The width the shim reports to the app as its screen (Js.viewportWidth): #desktop, else the window. */
+const screenWidth = () => (document.getElementById('desktop') || document.documentElement).clientWidth || innerWidth;
+
+/** Leaves out the groups the app draws on screen itself at screen width w, so a phone never shows two of a control. */
+export function notOwn(groups: PadGroup[], w: number) {
+  return groups.filter(g => !(g.ownBelow && w > 0 && w < g.ownBelow));
+}
 
 /** The controllers drawn, by the element they are in, with what takes each out again. */
 const drawn = new WeakMap<HTMLElement, () => void>();
@@ -152,11 +163,13 @@ let onPage: { shown: boolean; el: HTMLDivElement; redraw: () => void } | null = 
 /** Whether the app page's controller shows: Controls in the toolbar is pressed while it does. */
 export function padShown() { return !!onPage && onPage.shown; }
 
-export function padOnPage() {
+const fingerFirst = () => !!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches);
+
+export function padOnPage(groups = notOwn(PADS[appId()!], screenWidth())) {
   var light!: (which: number, down: boolean) => void;
-  openLayer(<PadOnPage onMount={(el, redraw, l) => { onPage = { shown: true, el: el, redraw: redraw }; light = l; }} />);
+  openLayer(<PadOnPage groups={groups} onMount={(el, redraw, l) => { onPage = { shown: true, el: el, redraw: redraw }; light = l; }} />);
   setPadLight(light);
-  showPad(pad.wanted(!!((window.matchMedia as typeof matchMedia | undefined) && matchMedia('(pointer: coarse)').matches)));
+  showPad(pad.wanted(fingerFirst()));
   addEventListener('resize', function () { if (onPage!.shown) showPad(true); });
   ['keydown', 'keyup'].forEach(function (type) {
     document.addEventListener(type, function (e) { if (e.isTrusted) light((e as KeyboardEvent).keyCode, type === 'keydown'); }, true);
@@ -175,21 +188,33 @@ export function togglePad() {
   pad.remember(onPage!.shown);
 }
 
-function PadOnPage({ onMount }: { onMount: (el: HTMLDivElement, redraw: () => void, light: (which: number, down: boolean) => void) => void }) {
+function PadOnPage({ groups, onMount }: { groups: PadGroup[]; onMount: (el: HTMLDivElement, redraw: () => void, light: (which: number, down: boolean) => void) => void }) {
   const el = useRef<HTMLDivElement>(null);
   const light = useRef<(which: number, down: boolean) => void>(null);
   const [, setTick] = useState(0);
   useLayoutEffect(() => { onMount(el.current!, () => flushSync(() => setTick(n => n + 1)), (w, d) => light.current!(w, d)); }, []);
   return (
     <div className="shim-pad" aria-label="Controller" hidden={!!onPage && !onPage.shown} ref={el}>
-      <Pad groups={PADS[appId()!]} send={fireKey} onMount={l => { light.current = l; }} />
+      <Pad groups={groups} send={fireKey} onMount={l => { light.current = l; }} />
     </div>
   );
+}
+
+// An embedded app outside the home page's player (the story's sheet, play.html, compare.html, a docked app) has no
+// controller around it, so on a touch screen it floats its own at the bottom of the frame, with only the groups
+// that play (a D-pad, a piano, a big button): the shortcut rows would take half a small frame. The player
+// docks its own under the screen (padInPlayer), so its frame draws none.
+export function padInFrame() {
+  var id = appId()!;
+  if (!PADS[id] || (window.frameElement && window.frameElement.id === 'player-frame') || !pad.wanted(fingerFirst())) return;
+  var play = notOwn(PADS[id], screenWidth()).filter(function (g) { return g.dpad || g.piano || (g.buttons || []).some(function (b) { return b.big; }); });
+  if (play.length) padOnPage(play);
 }
 
 // In the home page's player the controller lives on the home page: it sends presses here, and hears
 // about real key presses (which go to this frame) to light its buttons.
 export function padInPlayer() {
+  window.parent.postMessage({ oldjavaPadScreen: screenWidth() }, location.origin);
   window.addEventListener('message', function (e) {
     var m = e.data && e.data.oldjavaKey;
     if (e.origin !== location.origin || e.source !== window.parent || !m) return;
@@ -203,7 +228,14 @@ export function padInPlayer() {
   });
 }
 
+/** Redraws the home page's docked controller for the app's screen width, as the player's frame reports it. */
+let docked: ((w: number) => void) | null = null;
+
 export function init() {
+  window.addEventListener('message', function (e) {
+    var w = e.data && e.data.oldjavaPadScreen, f = document.getElementById('player-frame') as HTMLIFrameElement | null;
+    if (docked && typeof w === 'number' && e.origin === location.origin && f && e.source === f.contentWindow) docked(w);
+  });
   pad = window.oldjavaPad = {
     has: function (id) { return !!PADS[id]; },
     // Shown or not: the visitor's last choice, else `byDefault`.
@@ -217,10 +249,15 @@ export function init() {
     // Builds app `id`'s controller in `el` (in place of what it held). send(type, keyName) delivers each press and
     // release. Returns light(keyCode, down), which shows a real key press on the matching buttons.
     render: function (el, id, send) {
-      var was = drawn.get(el);
-      if (was) was();
       var light!: (which: number, down: boolean) => void;
-      drawn.set(el, openLayer(<Pad groups={PADS[id]} send={send} onMount={l => { light = l; }} />, el));
+      // Every group at first; the player's frame says how wide the app's screen is once it loads (padInPlayer).
+      function put(w: number) {
+        var was = drawn.get(el);
+        if (was) was();
+        drawn.set(el, openLayer(<Pad groups={notOwn(PADS[id], w)} send={send} onMount={l => { light = l; }} />, el));
+      }
+      put(0);
+      docked = put;
       return function (which, down) { light(which, down); };
     }
   };

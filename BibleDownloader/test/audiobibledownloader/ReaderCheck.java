@@ -79,12 +79,105 @@ public class ReaderCheck {
          }
       }
       check(words == 400 + 2 + 2, "every word placed once: " + words);
+      for (Layout.Page page : pages) {
+         for (int i = 0; i < page.runs.size(); i++) {
+            check(page.runs.get(i).kind != Layout.VERSE_NUMBER || page.runs.get(i + 1).line == page.runs.get(i).line,
+               "a verse number stays on its first word's line");
+         }
+      }
+      // Justified: every line but the chapter's last ends at the page's edge; the last stays ragged.
+      for (int p = 0; p < pages.size(); p++) {
+         int lastLine = p == pages.size() - 1 ? pages.get(p).runs.get(pages.get(p).runs.size() - 1).line : 99;
+         for (int ln = 0; ln < 14; ln++) {
+            int edge = rightEdge(pages.get(p), ln);
+            check(edge < 0 || (ln == lastLine ? edge < 320 : edge == 320), "page " + p + " line " + ln + " justified: " + edge);
+         }
+      }
+      // Hyphens: syllable breaks, cautious ones only, and a narrow page breaks long words or narrows gaps a little
+      // instead of spreading them.
+      String[][] hyphens = {
+         {"darkness", "dark-ness"}, {"people", "peo-ple"}, {"children", "chil-dren"}, {"kingdom", "king-dom"},
+         {"commandments", "com-mand-ments"}, {"betray", "be-tray"}, {"angry", "an-gry"}, {"(sanctified,", "(sanc-tified,"},
+         {"burnt-offering", "burnt--offering"}, {"returned", "returned"}, {"nothing", "nothing"}, {"knowledge", "knowledge"},
+         {"LORD's", "LORD's"}, {"Abraham", "Abraham"}, {"unto", "unto"}, {"word12", "word12"}, {"buckle", "buckle"}
+      };
+      for (String[] h : hyphens) {
+         StringBuilder shown = new StringBuilder(h[0]);
+         List<Integer> at = Hyphen.breaks(h[0]);
+         for (int k = at.size() - 1; k >= 0; k--) {
+            shown.insert((int) at.get(k), '-');
+         }
+         check(shown.toString().equals(h[1]), "hyphen breaks " + h[0] + ": " + shown);
+      }
+      String prologue = "In the beginning was the Word, and the Word was with God, and the Word was God. The same was in the beginning"
+         + " with God. All things were made through him. Without him was not anything made that has been made. In him was life,"
+         + " and the life was the light of men. The light shines in the darkness, and the darkness hasn't overcome it. There came"
+         + " a man, sent from God, whose name was John. The same came as a witness, that he might testify about the light,"
+         + " that all might believe through him. He was not the light, but was sent that he might testify about the light."
+         + " The true light that enlightens everyone was coming into the world. He was in the world, and the world was made"
+         + " through him, and the world didn't recognize him. He came to his own, and those who were his own didn't receive"
+         + " him. But as many as received him, to them he gave the right to become God's children, to those who believe in"
+         + " his name: who were born not of blood, nor of the desire of the flesh, nor of the desire of man, but of God."
+         + " Commandments, understanding, righteousness, everlasting congregation, wilderness, uncleanness, testimony.";
+      Chapter narrow = new Chapter(Books.find("JHN"), 2, "web", new int[]{1}, new String[]{prologue});
+      int hyphenated = 0;
+      StringBuilder joined = new StringBuilder();
+      for (Layout.Page page : Layout.paginate(narrow, body, metrics(new Font("SansSerif", Font.BOLD, 10)), metrics(new Font("Serif", Font.BOLD, 51)), 150, 14)) {
+         for (int i = 0; i < page.runs.size(); i++) {
+            Layout.Run run = page.runs.get(i);
+            if (run.kind != Layout.WORD) {
+               continue;
+            }
+            check(run.x + run.width <= 150, "hyphenated word inside the width");
+            boolean ends = i == page.runs.size() - 1 || page.runs.get(i + 1).line != run.line;
+            int gap = ends ? 99 : page.runs.get(i + 1).x - run.x - body.stringWidth(run.text);
+            check(gap * 3 >= body.stringWidth(" ") * 2, "a squeezed gap keeps two thirds of a space: " + gap);
+            if (ends && run.text.endsWith("-")) {
+               hyphenated++;
+               joined.append(run.text, 0, run.text.length() - 1);
+            } else {
+               joined.append(run.text).append(' ');
+            }
+         }
+      }
+      check(hyphenated > 0 && joined.toString().trim().equals(prologue), "a narrow page hyphenates, text kept: "
+         + hyphenated + " " + joined);
       check(pages.size() > 2, "a long chapter takes several pages");
       check(pages.get(0).runs.get(0).kind == Layout.TITLE, "chapter 1 opens with the book title");
       check(pages.get(0).firstVerse == 1 && pages.get(pages.size() - 1).lastVerse == 3, "first and last verse");
       int third = Layout.pageOf(pages, 3);
       check(pages.get(third).lastVerse >= 3 && (third == 0 || pages.get(third - 1).lastVerse < 3), "verse 3 is first shown on page " + third);
       check(Layout.pageOf(pages, 1) == 0 && Layout.pageOf(pages, 99) == pages.size() - 1, "page of a verse");
+
+      // Poetry: a poem's line breaks are kept, each verse's first line leads and its later lines stand in, a line too
+      // long for the page runs on further in, and prose after a poem starts a line of its own.
+      Chapter psalm23 = Chapter.parse(Books.find("PSA"), 23, "web", "{\"verses\":[{\"verse\":1,\"text\":\"" + long1.substring(0, 300).trim()
+         + "\\n\"},{\"verse\":2,\"text\":\"He makes me lie down:\\n  he leads  me.\\n\"},{\"verse\":3,\"text\":\"He restores my soul;\\n"
+         + "he guides me in the paths of righteousness, for his name's sake, all the long day and night.\\n\"},"
+         + "{\"verse\":4,\"text\":\"Then plain prose.\"}]}");
+      check(psalm23.lines[1].equals("He makes me lie down:\nhe leads me.") && psalm23.verses[1].equals("He makes me lie down: he leads me."),
+         "a poem's lines kept, folded for the rest: " + psalm23.lines[1]);
+      Chapter stray = Chapter.parse(Books.find("PSA"), 23, "kjv", "{\"verses\":[{\"verse\":1,\"text\":\"The LORD\\nis my shepherd\\n\"},"
+         + "{\"verse\":2,\"text\":\"He maketh me\"},{\"verse\":3,\"text\":\"for thou\\nart\"}]}");
+      check(stray.lines[0].equals("The LORD is my shepherd") && stray.lines[2].equals("for thou art"), "a lone break is no poem: " + stray.lines[0]);
+      List<Layout.Page> poem = Layout.paginate(psalm23, body, metrics(new Font("SansSerif", Font.BOLD, 10)), metrics(new Font("Serif", Font.BOLD, 51)), 320, 30);
+      int step = body.stringWidth(Layout.STEP);
+      int poemWords = 0;
+      for (Layout.Run run : poem.get(0).runs) {
+         poemWords += run.kind == Layout.WORD ? 1 : 0;
+         check(run.kind != Layout.WORD || run.x + run.width <= 320, "poem word inside the width");
+      }
+      check(poem.size() == 1 && poemWords == psalm23.verses[0].split(" ").length + 8 + 22 + 3, "every poem word placed once: " + poemWords);
+      check(startsLine(poem.get(0), "2", 0) && startsLine(poem.get(0), "he", step) && startsLine(poem.get(0), "3", 0)
+         && startsLine(poem.get(0), "4", 0), "verses lead, later lines stand in, prose after a poem on its own line");
+      Layout.Run turnover = null;
+      for (Layout.Run run : poem.get(0).runs) {
+         if (run.verse == 3 && turnover == null && run.line > firstLine(poem.get(0), 3) + 1) {
+            turnover = run;
+         }
+      }
+      check(turnover != null && turnover.x == body.stringWidth(Layout.HANG), "a long poem line runs on further in: " + (turnover == null ? "none" : turnover.x));
+      check(rightEdge(poem.get(0), firstLine(poem.get(0), 3) + 1) < 320, "poem lines stay ragged");
 
       // Side by side: two translations verse by verse. Pages come in pairs, each verse starts on the same line of
       // both pages, every word of both is placed once, and a verse only one translation has still gets its place.
@@ -115,6 +208,8 @@ public class ReaderCheck {
          }
       }
       check(placed[0] == 404 && placed[1] == 5 + 800 + 2, "every word of both placed once: " + placed[0] + " / " + placed[1]);
+      check(rightEdge(pairs.get(1), firstLine(pairs.get(1), 1)) < 320, "a short verse's only line stays ragged side by side");
+      check(rightEdge(pairs.get(0), firstLine(pairs.get(0), 1)) == 320, "a verse's full lines are justified side by side");
       check(pairs.get(0).runs.get(0).kind == Layout.TITLE && pairs.get(1).runs.get(0).kind == Layout.TITLE, "both open with the title");
       check(pairs.get(Layout.pageOf(pairs, 4)).lastVerse >= 4 && firstLine(pairs.get(pairs.size() - 1), 4) >= 0, "a verse in one translation only");
       List<Layout.Page> stacked = Layout.parallel(big, beside, body, small, numeral, 320, 14, metrics(new Font("Serif", Font.ITALIC, 17)));
@@ -316,7 +411,58 @@ public class ReaderCheck {
       check(!DownloadManager.chapterHtml(chapter, false).contains("<b>"), "verse numbers off");
       check(ReaderPanel.commas(1189).equals("1,189") && ReaderPanel.commas(42).equals("42"), "commas");
       pageTurns();
+      thumbIndex();
+      bookDepth();
       System.out.println("ReaderCheck: all checks passed");
+   }
+
+   /** The thumb index: down an edge of any height, every book in Bible order, each reachable, Genesis at the top and Revelation at the foot. */
+   private static void thumbIndex() {
+      for (int strip = 100; strip <= 1600; strip += 7) {
+         int n = ReaderPanel.tabs(strip);
+         check(n >= 1 && n <= 66 && (n == 66 || strip / n >= ReaderPanel.TAB_H), "tabs at least TAB_H tall: " + strip);
+         check(ReaderPanel.tabFirst(0, n) == 0 && ReaderPanel.tabFirst(n, n) == 66, "tabs cover the books: " + strip);
+         boolean[] seen = new boolean[66];
+         int previous = 0;
+         for (int dy = 0; dy < strip; dy++) {
+            int b = ReaderPanel.bookAtEdge(dy, strip);
+            check(b >= previous && b < 66, "books in order down the edge: " + strip + " at " + dy);
+            seen[b] = true;
+            previous = b;
+         }
+         for (int b = 0; b < 66; b++) {
+            check(seen[b], "every book has a place on the edge: " + Books.NAMES[b] + " at " + strip);
+         }
+         check(ReaderPanel.bookAtEdge(0, strip) == 0 && ReaderPanel.bookAtEdge(strip - 1, strip) == 65, "Genesis at the top, Revelation at the foot: " + strip);
+         check(ReaderPanel.bookAtEdge(-5, strip) == 0 && ReaderPanel.bookAtEdge(strip + 5, strip) == 65, "past the ends: " + strip);
+      }
+   }
+
+   /** The page blocks: as thick as the Bible either side of the place, and the pages bowing into the fold. */
+   private static void bookDepth() {
+      int[] genesis = ReaderPanel.stack(0);
+      int[] revelation = ReaderPanel.stack(Books.TOTAL - 1);
+      check(genesis[0] == 1 && genesis[1] == ReaderPanel.STACK, "Genesis 1: a thin left block, a full right one");
+      check(revelation[0] == ReaderPanel.STACK && revelation[1] == 1, "Revelation 22: a full left block, a thin right one");
+      int left = 0;
+      for (int o = 0; o < Books.TOTAL; o++) {
+         int[] s = ReaderPanel.stack(o);
+         check(s[0] >= left && s[0] >= 1 && s[1] >= 1 && s[0] + s[1] == ReaderPanel.STACK + 1, "blocks grow left as you read on: " + o);
+         left = s[0];
+      }
+      int[] luke = ReaderPanel.stack(Books.ordinal(Books.find("LUK"), 1));
+      check(luke[0] > luke[1], "Luke 1, past the Old Testament: more on the left " + luke[0] + "/" + luke[1]);
+      check(ReaderPanel.sag(100, 100, 50) == ReaderPanel.SAG && ReaderPanel.sag(150, 100, 50) == 0 && ReaderPanel.sag(40, 100, 50) == 0,
+         "pages dip most at the fold, not past the zone");
+      check(ReaderPanel.sag(80, 100, 50) == ReaderPanel.sag(120, 100, 50) && ReaderPanel.sag(80, 100, 50) < ReaderPanel.sag(90, 100, 50),
+         "the dip is even both sides and deepens toward the fold");
+      check(ReaderPanel.sag(100, Integer.MIN_VALUE, 0) == 0, "no dip on one page");
+      // A leaf's outline stays within its page widened and lowered by its step and the dip.
+      Rectangle sheet = new Rectangle(10, 20, 200, 300);
+      java.awt.geom.Rectangle2D box = ReaderPanel.leaf(sheet, 3, 0, 1.5, 210, 40).getBounds2D();
+      check(box.getMinX() == 7 && box.getMaxX() == 210 && box.getMinY() == 21.5 && box.getMaxY() == 321.5 + ReaderPanel.SAG, "a leaf's outline: " + box);
+      check(ReaderPanel.leaf(sheet, 0, 0, 0, 210, 40).contains(110, 170) && !ReaderPanel.leaf(sheet, 0, 0, 0, 210, 40).contains(209, 22),
+         "the page holds its middle and dips at the fold's top");
    }
 
    /** A page turn shows the old pages at its start, the new ones at its end, and the leaf over the spine between. */
@@ -339,6 +485,49 @@ public class ReaderCheck {
       check(turnAt(one, true, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 180) == blue
          && (turnAt(one, true, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 40) & 0xff) == 0, "one page folds away to the left");
       check(turnAt(one, false, new BufferedImage[]{solid(red)}, new BufferedImage[]{solid(blue)}, 0.5, 180) == red, "one page back unfolds from the left");
+
+      // A dragged page stays where the finger holds it, and let go short of over it falls back to where it was.
+      PageTurn held = new PageTurn(new javax.swing.JPanel());
+      BufferedImage wholeBefore = halves(red, green);
+      BufferedImage wholeAfter = halves(blue, yellow);
+      held.grab(true, wholeBefore, wholeAfter, two);
+      held.hold(0.25);
+      check(held.held() && held.running() && heldAt(held, two, after, 125) == turnAt(two, true, before, after, 0.25, 125), "held page at a quarter");
+      held.hold(7);
+      check(heldAt(held, two, after, 50) == blue && heldAt(held, two, after, 150) == yellow, "held page clamps at over");
+      held.hold(0.15);
+      int[] fell = {0};
+      held.let(false, () -> fell[0]++);
+      check(!held.held() && held.running() && fell[0] == 0, "let-go page falls back over time");
+      held.settle();
+      check(fell[0] == 1 && !held.running(), "a page falling back settles at once for the next turn");
+      held.grab(true, wholeBefore, wholeAfter, two);
+      held.hold(0.5);
+      held.let(true, () -> fell[0]++);
+      held.settle();
+      check(fell[0] == 1 && held.running(), "a page let go over finishes its turn");
+   }
+
+   /** A whole panel picture: the left half one colour and the right half another. */
+   private static BufferedImage halves(int left, int right) {
+      BufferedImage image = solid(left);
+      Graphics2D g = image.createGraphics();
+      g.setColor(new Color(right));
+      g.fillRect(image.getWidth() / 2, 0, image.getWidth() / 2, image.getHeight());
+      g.dispose();
+      return image;
+   }
+
+   /** The colour at (x, 25) of a held turn drawn over the new pages. */
+   private static int heldAt(PageTurn turn, Rectangle[] sheets, BufferedImage[] after, int x) {
+      BufferedImage frame = new BufferedImage(200, 50, BufferedImage.TYPE_INT_RGB);
+      Graphics2D g = frame.createGraphics();
+      for (int i = 0; i < sheets.length; i++) {
+         g.drawImage(after[i], sheets[i].x, sheets[i].y, sheets[i].width, sheets[i].height, null);
+      }
+      turn.paint(g, sheets);
+      g.dispose();
+      return frame.getRGB(x, 25) & 0xffffff;
    }
 
    /** The colour at (x, 25) of a turn frame drawn over the new pages. */
@@ -363,6 +552,28 @@ public class ReaderCheck {
    }
 
    /** The line a verse's first word or number is on, or -1 when the page does not show it. */
+   /** Where a line's last word ends, or -1 for an empty line. */
+   private static int rightEdge(Layout.Page page, int line) {
+      int edge = -1;
+      for (Layout.Run run : page.runs) {
+         if (run.line == line && (run.kind == Layout.WORD || run.kind == Layout.VERSE_NUMBER || run.kind == Layout.ALT_WORD)) {
+            edge = Math.max(edge, run.x + run.width);
+         }
+      }
+      return edge;
+   }
+
+   /** Whether some run with this text is the first on its line, at x. */
+   private static boolean startsLine(Layout.Page page, String text, int x) {
+      for (int i = 0; i < page.runs.size(); i++) {
+         Layout.Run run = page.runs.get(i);
+         if (run.text.equals(text) && run.x == x && (i == 0 || page.runs.get(i - 1).line != run.line)) {
+            return true;
+         }
+      }
+      return false;
+   }
+
    private static int firstLine(Layout.Page page, int verse) {
       for (Layout.Run run : page.runs) {
          if (run.verse == verse && (run.kind == Layout.WORD || run.kind == Layout.VERSE_NUMBER)) {

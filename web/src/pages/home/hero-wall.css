@@ -1,7 +1,7 @@
 /* The hero's wall of apps (HeroWall.tsx): only where the lead leaves room beside it. */
 .hero-wall { display: none; }
 @media (min-width: 1024px) {
-  main:has(> .hero-wall) { position: relative; }
+  main:has(.hero-wall) { position: relative; }
   .hero-wall { position: absolute; top: 0; right: 16px; width: 330px; height: 204px; display: flex; gap: 10px;
                justify-content: center; overflow: hidden; pointer-events: none;
                -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 70%, transparent),

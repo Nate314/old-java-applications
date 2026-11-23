@@ -35,6 +35,25 @@ public class GameCheck {
 		check(Level.commas(1000000).equals("1,000,000") && Level.commas(100).equals("100") && Level.commas(1000).equals("1,000"), "commas");
 		check(Level.THOUSAND.label().equals("1-1,000"), "label");
 
+		// Board size: wide on a roomy screen, narrow and as tall as fits on an upright phone (short ones too), wide again when too short.
+		java.awt.Dimension wide = new java.awt.Dimension(Board.WIDTH, Board.HEIGHT);
+		check(Board.boardSize(1280, 720).equals(wide), "wide board");
+		check(Board.boardSize(400, 735).equals(new java.awt.Dimension(376, 506)), "tall phone board");
+		check(Board.boardSize(375, 495).equals(new java.awt.Dimension(351, 415)), "short phone board");
+		check(Board.boardSize(320, 480).equals(new java.awt.Dimension(340, Board.NARROW_MIN_HEIGHT)), "shortest phone board");
+		check(Board.boardSize(375, 470).equals(wide) && Board.boardSize(660, 400).equals(wide), "too short for narrow");
+		// Chips: all of them when they fit, else the latest ones (three of 44 px make a row of 150 px).
+		int[] chips = { 44, 44, 44, 44, 44, 44, 44 };
+		check(Board.firstChip(chips, 0, 150, 3) == 0 && Board.firstChip(chips, 0, 150, 2) == 1 && Board.firstChip(chips, 0, 150, 1) == 4, "latest chips stay");
+		check(Board.firstChip(new int[0], 0, 150, 1) == 0, "no chips");
+		// The zoomed line: settled on 21-49, each of the 29 numbers owns its slice; mid-zoom (still showing 1-100) a click lands on what is left.
+		java.awt.Rectangle line = new java.awt.Rectangle(20, 0, 290, 36);
+		for (int n = 21; n <= 49; n++) {
+			check(Board.numberOn(20 + (n - 21) * 10, line, 20, 49, 21, 49) == n && Board.numberOn(29 + (n - 21) * 10, line, 20, 49, 21, 49) == n, "zoomed line slice " + n);
+		}
+		check(Board.numberOn(20, line, 0, 100, 21, 49) == 21 && Board.numberOn(309, line, 0, 100, 21, 49) == 49
+				&& Board.numberOn(20 + 29 * 29 / 10 + 1, line, 0, 100, 21, 49) == 30, "mid-zoom clicks stay in what is left");
+
 		Game game = new Game(Level.HUNDRED, 40);
 		check(game.guess(0) == Game.Verdict.OUT_OF_RANGE && game.guess(101) == Game.Verdict.OUT_OF_RANGE, "out of range");
 		check(game.getGuesses() == 0, "out of range not counted");
@@ -181,6 +200,7 @@ public class GameCheck {
 		check(again.best(Level.TEN) == 3 && again.best(Level.HUNDRED) == 5 && again.totalStars() == 6, "saved and read back");
 
 		checkDuels(file);
+		checkHidingGrid(file);
 		System.out.println("GameCheck: all checks passed");
 	}
 
@@ -299,6 +319,28 @@ public class GameCheck {
 			}
 		}
 		check(Warmth.par(10) == 5 && Warmth.par(Warmth.MAX) == Warmth.PAR, "hot and cold par");
+	}
+
+	/** Duel's hiding grid: every number is a cell a click finds, inside the duel's area on wide, tall and short boards. */
+	private static void checkHidingGrid(File file) {
+		Records records = Records.load(file);
+		// The duel's area on the wide board, a tall phone's and the shortest phone's.
+		java.awt.Rectangle[] areas = { new java.awt.Rectangle(20, 122, 600, 216), new java.awt.Rectangle(20, 122, 336, 306),
+				new java.awt.Rectangle(20, 122, 300, 200) };
+		for (java.awt.Rectangle area : areas) {
+			DuelView view = new DuelView(() -> { });
+			Duel duel = new Duel(new Random(3), 40);
+			java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(area.x * 2 + area.width, 520, java.awt.image.BufferedImage.TYPE_INT_RGB);
+			view.paint(image.createGraphics(), duel, records, area);
+			java.awt.Rectangle grid = DuelView.hidingGrid(area);
+			check(grid.y + grid.height <= area.y + area.height - 14 && grid.height / (grid.width >= 500 ? 5 : 10) >= 16, "hiding grid fits " + area.width + "x" + area.height);
+			for (int number = 1; number <= Duel.MAX; number++) {
+				java.awt.Rectangle cell = DuelView.cellOf(grid, area.width >= 500 ? 20 : 10, number);
+				check(cell.width >= 28 && view.numberAt(duel, (int) cell.getCenterX(), (int) cell.getCenterY()) == number
+						&& view.numberAt(duel, cell.x, cell.y) == number && view.numberAt(duel, cell.x + cell.width - 1, cell.y + cell.height - 1) == number,
+						"a click on " + number + " in the hiding grid hides it");
+			}
+		}
 	}
 
 	private static void check(boolean condition, String what) {

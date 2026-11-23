@@ -6,6 +6,9 @@ import { SKIN_SCRIPT } from './shared/skin';
 import { EarlyScript, RuntimeScript } from './shared/EarlyScript';
 import { SITE, ShareTags } from './shared/ShareTags';
 import apps from './shared/apps.json';
+import { EarlyPoster, Lead, PosterPicture } from './pages/home/Lead';
+import { Hero, TopBar } from './pages/story/Hero';
+import { Intro } from './pages/compare/Intro';
 
 export interface Route {
   /** The file the build writes, at the site root. */
@@ -14,13 +17,15 @@ export interface Route {
   entry: string;
   /** What goes in <head>, before the page's own stylesheet, which the build adds. */
   head: ReactNode;
-  /** Shown in #root until the page's module replaces it. */
+  /** Shown in #root until the page's module replaces it (the home page's module renders inside its own instead). */
   placeholder?: ReactNode;
   /** Served at any depth (the lost page): the build inlines its styles and loads its module from the site root. */
   anyDepth?: boolean;
 }
 
 const ICON = <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />;
+// boot.js links the manifest on its pages; the story, compare.html and play.html register the worker without it, so they link it here (installable from them too).
+const MANIFEST = <link rel="manifest" href="manifest.webmanifest" />;
 const skin = <script dangerouslySetInnerHTML={{ __html: SKIN_SCRIPT }} />;
 const homeDescription = 'Java Swing and AWT programs recovered from old jars, compiled to JavaScript with TeaVM: play ' +
   apps.length + ' of them in the browser, installed as an app or offline.';
@@ -34,7 +39,7 @@ export const ROUTES: Route[] = [
   // The home page: the player, Your arcade and the gallery. boot.js (the site's shared runtime, as on every app
   // page) runs before it (its module imports it first), and What's new (src/runtime/lazy/news.ts) after it. The share tags point at the card web/cards.ps1
   // renders, as the app pages' do (src/pages/app/AppPage.tsx); -Dsite.url makes og:url and og:image absolute
-  // (web/apps/pom.xml).
+  // (web/pages/pom.xml).
   {
     file: 'index.html',
     entry: 'src/pages/home/main.tsx',
@@ -45,6 +50,8 @@ export const ROUTES: Route[] = [
         <title>{SITE}</title>
         <meta name="description" content={homeDescription} />
         <ShareTags title={SITE} description={homeDescription} url="index.html" {...homeCard} />
+        {/* The player's poster, the first screen's largest picture, asked for ahead of the stylesheets (Lead.tsx). */}
+        <PosterPicture />
         <link rel="stylesheet" href="shim.css" />
         {/* The first frame waits for the player, so an app page's stage can shrink into it (see boot.js, one machine). */}
         <link rel="expect" href="#player-frame" blocking="render" />
@@ -52,6 +59,9 @@ export const ROUTES: Route[] = [
         <RuntimeScript src="/src/runtime/main.ts" />
       </>
     ),
+    // The title and lead are in the page itself, so a phone paints them while the scripts load (vite/pages.ts,
+    // Painted early); the page's module renders the rest after them, into #home-root, and never replaces them.
+    placeholder: <main><Lead /><EarlyPoster /><div id="home-root" style={{ display: 'contents' }} /></main>,
   },
   // The embeddable player: play.html?app=<App> goes in an iframe on any other site (the Share panel's "Put it on
   // your site" writes the tag, see embed.js and web/README.md, Embed). It shows a poster first (the app's
@@ -74,6 +84,7 @@ export const ROUTES: Route[] = [
             its script, which link previews do not run), so it shows the home page's card. */}
         <ShareTags title={'Play an old Java app: ' + SITE} description={homeDescription} url="play.html" {...homeCard} />
         {ICON}
+        {MANIFEST}
       </>
     ),
   },
@@ -98,8 +109,17 @@ export const ROUTES: Route[] = [
         <ShareTags type="article" title="Twenty old programs, brought back to play" description={storyDescription} url="story.html"
           image="cards/story.jpg" alt="Flappy Bird's decompiled class b beside the same code renamed to class Bird" />
         {ICON}
+        {MANIFEST}
         <link rel="stylesheet" href="shim.css" />
         {skin}
+      </>
+    ),
+    // The top bar and the hero (the page's largest text) are in the page itself, so a phone paints them while React and
+    // the story's module load and render; the module takes the bar over (hydrates it) and adds the chapters after the hero.
+    placeholder: (
+      <>
+        <div id="story-top" style={{ display: 'contents' }}><TopBar at={null} /></div>
+        <main><Hero /><div id="story-rest" style={{ display: 'contents' }} /></main>
       </>
     ),
   },
@@ -116,10 +136,14 @@ export const ROUTES: Route[] = [
         <title>{'Then and now: ' + SITE}</title>
         <meta name="description" content="An old Java app as it was first restored and as it is today, both playable side by side, with every change in between." />
         {ICON}
+        {MANIFEST}
         <link rel="stylesheet" href="shim.css" />
         {skin}
       </>
     ),
+    // The top bar, title and lead (the largest text on a phone) are in the page itself, so a phone paints them while
+    // React and the page's module load; the module renders the players and the changes after them, into #compare-rest.
+    placeholder: <Intro />,
   },
   // Lost and found: the page GitHub Pages (and any host that serves a 404.html) shows for an address with nothing
   // at it. Short links: an address that names an app sends the visitor straight to it, keeping the query and the

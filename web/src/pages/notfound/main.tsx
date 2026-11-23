@@ -3,6 +3,7 @@
 import { mount } from '../../shared/dom';
 import { NotFound } from './NotFound';
 import { LOST_APPS, destination } from './match';
+import { registerAfterLoad } from '../../sw/register';
 
 declare global { interface Window { oldjavaLostRoot?: string } }
 
@@ -22,4 +23,5 @@ if (to) {
 } else {
   document.title = 'Not found: /' + missing + ' - Old Java Applications';
   mount(<NotFound root={base} missing={missing.replace(/\/+$/, '')} finding={null} />);
+  registerAfterLoad(base);   // a visit that starts on a mistyped link plays offline later, and keeps this page for one
 }

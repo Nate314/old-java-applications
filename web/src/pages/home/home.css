@@ -14,12 +14,12 @@ p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
                     letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
 .player-bar .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
                             box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
-.player-bar h3 { margin: 0; font-size: 17px; }
+.player-bar #player-name { margin: 0; font-size: 17px; color: inherit; text-shadow: none; }   /* not the page's h2 look */
 /* Then | Now: the app as first restored, or today's (web/README.md, Then and now). */
 .era[hidden] { display: none; }
 .era button { padding: 2px 12px; border: 0; background: transparent; color: inherit; font: 600 13px/1.5 inherit;
               font-family: inherit; cursor: pointer; }
-.era button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.era button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink, #fff); }
 .era button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .player-bar .hint { flex: 1 1 260px; min-width: 0; font-size: 14px; opacity: 0.75; }
 .player-bar .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
@@ -30,11 +30,23 @@ p.lead { margin: 0 0 20px; opacity: 0.8; max-width: 720px; }
        background: transparent; color: inherit; font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1.5;
        text-decoration: none; cursor: pointer; white-space: nowrap; }
 .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .screen { position: relative; overflow: hidden; background: var(--desk); }
 /* The iframe keeps a desktop-sized viewport (the apps size their windows from it) and is scaled to fit. */
 .screen iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: transparent; }
+/* Blank until the demo starts (player.ts calmStart): a press falls through to the screen, which starts it. */
+.screen iframe[src="about:blank"] { pointer-events: none; }
+/* The app's picture over its screen while the page loads (player.ts H.poster); presses pass through to the screen. */
+.screen .poster { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; object-fit: scale-down;
+                  transform-origin: 0 0; pointer-events: none; transition: opacity .3s ease-out; }
+.screen .poster[data-gone] { opacity: 0; visibility: hidden; transition: opacity .3s ease-out, visibility 0s .3s; }
+@media (prefers-reduced-motion: reduce) { .screen .poster, .screen .poster[data-gone] { transition: none; } }
+/* The poster painted with the title on a phone (Lead.tsx EarlyPoster), the screen's box until React draws the player
+   over it (early-poster.ts); the live poster shows at once while it is there, not fading in over it. */
+#early-poster { position: absolute; left: 17px; right: 17px; background: var(--desk); }
+#early-poster img { width: 100%; height: 100%; object-fit: scale-down; }
+#early-poster ~ #home-root .screen .poster { transition: none; }
 /* Skip past the app: out of sight until the keyboard reaches it, then over the screen's corner. */
 .screen .skip-app { position: absolute; z-index: 2; top: 8px; left: 8px; background: var(--card-bg); }
 .screen .skip-app:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); border: 0; }
@@ -75,7 +87,7 @@ body.locked { overflow: hidden; }
   p.lead { margin-bottom: 12px; font-size: 14px; }
   p.lead .tech { display: none; }
   .player-bar { gap: 4px 10px; padding: 8px 10px 6px; }
-  .player-bar h3 { font-size: 16px; }
+  .player-bar #player-name { font-size: 16px; }
   .player-bar .hint { flex: 1 1 100%; font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical;
                       -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; cursor: pointer; }
   .player-bar .hint.open { display: block; }
@@ -100,14 +112,29 @@ body.locked { overflow: hidden; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
 .filters button { padding: 4px 14px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-bg);
                   color: inherit; font: 600 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer; }
-.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-/* Find (boot.js, find.js): looks like a search field, opens the site's Find box. */
+.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+/* The filter field (typing filters the cards), with Find's button (boot.js, find.js) at its end. */
 .find-bar { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; margin: 0 0 16px; padding: 9px 14px;
             border: 1px solid var(--card-border); border-radius: 12px; background: var(--card-bg); color: inherit; text-align: left;
             font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: text; }
 .find-bar:hover { border-color: var(--accent); }
 .find-bar .glass { font-size: 20px; line-height: 1; color: var(--accent); }
-.find-bar .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; }
+.find-bar .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.find-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.find-bar input { border: 0; padding: 0; margin: 0; background: none; color: inherit; font: inherit; outline: none; }
+.find-bar input::placeholder { color: inherit; opacity: 0.65; }
+.find-bar .said { flex: none; font-size: 13px; opacity: 0.75; white-space: nowrap; }
+.find-bar .said:empty { display: none; }
+.find-bar .find-all { flex: none; display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border: 0; border-left: 1px solid var(--card-border);
+                      background: none; color: inherit; font: 600 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer; }
+.find-bar .find-all:hover { color: var(--accent); }
+.filters .count { opacity: 0.7; font-weight: 400; }
+.no-match { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
+@media (max-width: 640px) {
+  .find-bar { flex-wrap: wrap; row-gap: 4px; }
+  .find-bar .said { order: 3; flex-basis: 100%; padding-left: 30px; }
+  .find-bar .find-all kbd { display: none; }
+}
 .find-bar kbd { padding: 0 6px; border: 1px solid var(--card-border); border-radius: 4px; font: 600 11px/18px system-ui, sans-serif; opacity: 0.8; }
 :root[data-skin="classic"] .find-bar { border-radius: 0; border-color: var(--field-border); background: var(--field-bg); }
 :root[data-skin="arcade"] .find-bar { border-color: #00e5ff; box-shadow: 0 0 10px rgba(0, 229, 255, 0.25); }
@@ -138,6 +165,26 @@ ul.apps span { opacity: 0.8; font-size: 14px; flex: 1; }
 ul.apps .actions { display: flex; gap: 8px; }
 @media (hover: hover) {
   ul.apps li:not(.text):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); }
+}
+/* ---- pocket gallery: on a phone the cards sit two to a row as tiles (about a quarter of the scrolling of one
+   column), each with a two-line hint and one big Play. The player's own Full page button takes over the
+   card's, and the picture still plays the app too. */
+@media (max-width: 640px) {
+  ul.apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  ul.apps li { border-radius: 10px; }
+  ul.apps a.thumb img { max-width: calc(100% - 12px); max-height: calc(100% - 12px); }
+  ul.apps .badge, ul.apps .saved, ul.apps li.updated a.thumb::after { top: 5px; padding: 0 6px; font-size: 10.5px; }
+  ul.apps .badge { left: 5px; }
+  ul.apps .saved, ul.apps li.updated a.thumb::after { right: 5px; }
+  ul.apps li[data-clip] a.thumb .clip-cue { left: 5px; bottom: 5px; font-size: 11px; }
+  ul.apps .body { gap: 4px; padding: 8px 9px 9px; }
+  ul.apps strong { font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; }
+  ul.apps .body > span { font-size: 12.5px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical;
+                         -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  ul.apps p.record { padding: 3px 6px; font-size: 12px; }
+  ul.apps .actions .btn:not(.play) { display: none; }
+  ul.apps .actions .play { flex: 1; min-height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+  .player-bar .era button { min-height: 32px; }
 }
 
 .player-bar .btn[hidden] { display: none; }
@@ -287,7 +334,7 @@ section.arcade { margin-top: 28px; }
 .arcade-tabs [role="tab"][aria-selected="true"] { opacity: 1; border-color: var(--card-border); background: var(--card-bg);
                                                   box-shadow: inset 0 3px 0 var(--accent); }
 .arcade-tabs [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.arcade-tabs .badge { min-width: 8px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: #fff;
+.arcade-tabs .badge { min-width: 8px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink, #fff);
                       font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
 .arcade-tabs .badge.new { background: #f59e0b; }
 .arcade-tabs .badge[hidden] { display: none; }

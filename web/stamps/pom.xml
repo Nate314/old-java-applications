@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.nate314.oldjava</groupId>
+    <artifactId>web</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>stamps</artifactId>
+  <packaging>pom</packaging>
+  <name>Program stamps on the app pages</name>
+
+  <dependencies>
+    <!-- Build order only (a test-scoped pom puts nothing on any classpath): web/.mvn builds modules in parallel, and the stamps must come after every app page (pages) and every classes.js and then.js is written. A new module that writes a page or a program needs a line here. -->
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>pages</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>apps-js-1</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>apps-js-2</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>apps-js-3</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>apps-js-4</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>nathanos</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>then-js-1</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>then-js-2</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>then-js-3</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.nate314.oldjava</groupId>
+      <artifactId>then-nathanos</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <!-- Each app page loads its program as ?v=<content hash> (web/vite/stamp-programs.mjs), so a cache never mixes builds. -->
+          <execution>
+            <id>program-stamps</id>
+            <phase>package</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <exec executable="node" failonerror="true">
+                  <arg file="${project.basedir}/../vite/stamp-programs.mjs"/>
+                  <arg file="${site.dir}"/>
+                </exec>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

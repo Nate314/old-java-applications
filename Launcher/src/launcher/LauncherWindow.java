@@ -10,9 +10,11 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -25,6 +27,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,7 +58,7 @@ import javax.swing.event.DocumentListener;
  */
 public final class LauncherWindow extends JFrame {
    private static final int TILE_MIN_W = 170;
-   private static final int TILE_H = 206;
+   private static final int TILE_H = 228;   // room for the pitch line and the record line
    private static final int GAP = 14;
    private static final int PAD = 22;
    private static final String[][] FILTERS = {
@@ -74,6 +77,12 @@ public final class LauncherWindow extends JFrame {
    private final Thumbs thumbs = new Thumbs();
    private final Random random = new Random();
    private final Set<String> running = new HashSet<>();
+   // Each launch's PowerShell, when it began and where it has got to, by key(app, old): read while it runs.
+   private final Map<String, ProcessHandle> shells = new HashMap<>();
+   private final Map<String, Long> began = new HashMap<>();
+   private final Map<String, Runner.Phase> phases = new HashMap<>();
+   private final javax.swing.Timer pulse = new javax.swing.Timer(40, e -> pulse());
+   private int beat;   // pulse ticks, for the sweep
    private final List<Tile> tiles = new ArrayList<>();
    private final Map<String, Ui.FlatButton> chips = new LinkedHashMap<>();
 
@@ -89,6 +98,13 @@ public final class LauncherWindow extends JFrame {
    private Catalog.App selected;
    private History history = History.NONE;
    private boolean then;   // Play runs the apps as first restored
+   // A selection move: the ring slides from the last card, the picture flies into the pane and its tone washes in.
+   // shortcut: always moves (the JDK reads no reduced-motion setting on the desktop); add a switch if anyone asks.
+   private final javax.swing.Timer glide = new javax.swing.Timer(15, e -> glideStep());
+   private long glideStart;
+   private Rectangle ringFrom;   // in the grid, null for none to slide from
+   private Rectangle flyFrom;    // in the root pane, null for no flight
+   private Color toneFrom;
 
    public LauncherWindow(List<Catalog.App> apps, PlayLog log, Runner runner, Runner thenRunner, Path root,
          LongSupplier clock, StartMenu start) {
@@ -126,6 +142,7 @@ public final class LauncherWindow extends JFrame {
       content.add(detailScroll, BorderLayout.EAST);
       content.add(statusBar(), BorderLayout.SOUTH);
       setContentPane(content);
+      setGlassPane(new Flight());
       wireKeys();
 
       setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -391,6 +408,7 @@ public final class LauncherWindow extends JFrame {
    }
 
    void select(Catalog.App app, boolean reveal) {
+      if (app != null && app != selected && isDisplayable()) glideFrom(app);
       selected = app;
       detail.show(app);
       for (Tile t : tiles) t.repaint();
@@ -404,6 +422,70 @@ public final class LauncherWindow extends JFrame {
                }
             }
          });
+      }
+   }
+
+   /** Starts a selection move to {@code app} from wherever the ring, picture and tone are now (mid-move too). */
+   private void glideFrom(Catalog.App app) {
+      ringFrom = ring();
+      toneFrom = selected == null ? null : detail.tone();
+      flyFrom = null;
+      Tile t = tileOf(app);
+      Rectangle pic = t == null ? null : t.picture();
+      // Only from a card in view: one scrolled away would fly in over the header or the status line.
+      if (pic != null && t.isVisible() && t.isDisplayable() && t.getVisibleRect().contains(pic) && !then) {
+         flyFrom = SwingUtilities.convertRectangle(t, pic, getRootPane());
+         getGlassPane().setVisible(true);
+      }
+      glideStart = System.currentTimeMillis();
+      glide.start();
+   }
+
+   private double glideAt(int ms) {
+      return glide.isRunning() ? Glide.at(System.currentTimeMillis() - glideStart, ms) : 1;
+   }
+
+   private void glideStep() {
+      Rectangle was = ring();
+      boolean done = System.currentTimeMillis() - glideStart >= Glide.FLY_MS;
+      if (done) {
+         glide.stop();
+         ringFrom = null;
+         flyFrom = null;
+         toneFrom = null;
+         getGlassPane().setVisible(false);
+      }
+      Rectangle now = ring();
+      if (was != null && now != null) grid.repaint(was.union(now));   // only where the ring was and is
+      detail.repaint();
+      getGlassPane().repaint();
+   }
+
+   /** Where the selection ring is drawn in the grid now, or null with no card selected. */
+   private Rectangle ring() {
+      Tile t = tileOf(selected);
+      if (t == null || !t.isVisible()) return null;
+      Rectangle to = t.getBounds();
+      return ringFrom == null ? to : Glide.between(ringFrom, to, glideAt(Glide.RING_MS));
+   }
+
+   private Tile tileOf(Catalog.App app) {
+      for (Tile t : tiles) if (t.app == app) return t;
+      return null;
+   }
+
+   /** Over the window while a picture flies: it draws the picture on its way from the card to the detail pane. */
+   private final class Flight extends JComponent {
+      @Override
+      protected void paintComponent(Graphics g) {
+         Rectangle to = detail.pictureBox();
+         if (flyFrom == null || to == null) return;
+         Graphics2D g2 = Ui.smooth(g);
+         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+         Rectangle r = Glide.between(flyFrom, SwingUtilities.convertRectangle(detail.picture, to, getRootPane()),
+            glideAt(Glide.FLY_MS));
+         g2.drawImage(thumbs.original(selected), r.x, r.y, r.width, r.height, null);
+         g2.dispose();
       }
    }
 
@@ -510,8 +592,11 @@ public final class LauncherWindow extends JFrame {
          if (answer != JOptionPane.OK_OPTION) return;
       }
       CompletableFuture<Integer> done;
+      String key = key(app, old);
       try {
-         done = (old ? thenRunner : runner).start(app.id);
+         done = (old ? thenRunner : runner).start(app.id, h -> SwingUtilities.invokeLater(() -> {
+            if (running.contains(key)) shells.put(key, h);
+         }));
       } catch (IOException e) {
          status("Could not start " + name + ": " + e.getMessage());
          return;
@@ -519,13 +604,19 @@ public final class LauncherWindow extends JFrame {
       History.Story story = history.of(app.id);
       long started = clock.getAsLong();
       if (!old) log.launched(app.id, started, story == null ? null : story.newest());
-      running.add(key(app, old));
+      running.add(key);
+      began.put(key, started);
+      phases.put(key, Runner.Phase.READY);
+      pulse.start();
       status(old ? "Starting " + name + ": the first time, its code is unpacked from git history into out/then;"
             + " that commit's run.ps1 compiles it."
          : "Starting " + app.name + ": run.ps1 compiles it, then its window opens. You can start others meanwhile.");
       refresh();
       done.whenComplete((code, err) -> SwingUtilities.invokeLater(() -> {
-         running.remove(key(app, old));
+         running.remove(key);
+         shells.remove(key);
+         began.remove(key);
+         phases.remove(key);
          Throwable why = err != null && err.getCause() != null ? err.getCause() : err;
          if (why != null) status(name + " could not be started: " + why.getMessage());
          else if (code != 0) status(name + " stopped with exit code " + code + ". The console that started the launcher says why.");
@@ -546,6 +637,63 @@ public final class LauncherWindow extends JFrame {
          }
          refresh();
       }));
+   }
+
+   /**
+    * While apps run: every tick moves the starting cards' sweep and the running clocks; every tenth reads each
+    * launch's processes in the background (a process snapshot takes tens of ms on Windows), and a launch that
+    * moved on (built, window opening, running) says so.
+    */
+   private void pulse() {
+      if (running.isEmpty()) {
+         pulse.stop();
+         return;
+      }
+      if (++beat % 10 == 0 && !reading && !shells.isEmpty()) {
+         reading = true;
+         Map<String, ProcessHandle> now = new HashMap<>(shells);
+         CompletableFuture.supplyAsync(() -> {
+            Map<String, Runner.Phase> read = new HashMap<>();
+            now.forEach((k, h) -> read.put(k, Runner.phase(h, System.currentTimeMillis())));
+            return read;
+         }).whenComplete((read, err) -> SwingUtilities.invokeLater(() -> {
+            reading = false;
+            if (read != null) read.forEach(this::moved);
+         }));
+      }
+      for (Tile t : tiles) if (isRunning(t.app.id)) t.repaint();
+      detail.live();
+   }
+
+   private boolean reading;   // a background read of the launches' processes is under way
+
+   /** A launch read to be at {@code now}: if that is further on (never back: a short java mid-build), say so. */
+   private void moved(String key, Runner.Phase now) {
+      Runner.Phase was = phases.get(key);
+      if (was == null || now.compareTo(was) <= 0) return;   // closed meanwhile, or no further
+      phases.put(key, now);
+      String id = key.replace(" then", "");
+      String name = apps.stream().filter(a -> a.id.equals(id)).findFirst().map(a -> a.name).orElse(id);
+      status(now == Runner.Phase.BUILDING ? "Building " + name + ": javac compiles its source, as run.ps1 does."
+         : now == Runner.Phase.OPENING ? name + " is built. Its window is opening..."
+         : name + " is running. Close its window to finish; you can start others meanwhile.");
+      refresh();
+   }
+
+   /** How long the launch (by key(app, old)) has run, as "0:07", "3:12" or "1:02:03". */
+   private String clockOf(String key) {
+      Long t = began.get(key);
+      return t == null ? "" : elapsed(clock.getAsLong() - t);
+   }
+
+   static String elapsed(long millis) {
+      long s = Math.max(0, millis) / 1000;
+      return s >= 3600 ? String.format("%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String.format("%d:%02d", s / 60, s % 60);
+   }
+
+   /** The sweep's place, 0..1, crossing about once a second. */
+   private float sweepAt() {
+      return beat % 30 / 30f;
    }
 
    private void refresh() {
@@ -640,6 +788,19 @@ public final class LauncherWindow extends JFrame {
          g2.dispose();
       }
 
+      /** The selection ring, over the cards so it can slide between them. */
+      @Override
+      protected void paintChildren(Graphics g) {
+         super.paintChildren(g);
+         Rectangle r = ring();
+         if (r == null) return;
+         Graphics2D g2 = Ui.smooth(g);
+         g2.setColor(Ui.ACCENT);
+         g2.setStroke(new BasicStroke(2.5f));
+         g2.drawRoundRect(r.x + 1, r.y + 1, r.width - 3, r.height - 3, 16, 16);
+         g2.dispose();
+      }
+
       @Override
       public Dimension getPreferredScrollableViewportSize() {
          return getPreferredSize();
@@ -669,6 +830,7 @@ public final class LauncherWindow extends JFrame {
    /** One app's card: picture, name, category and how often it was played. Click selects, double-click plays. */
    private final class Tile extends JComponent {
       final Catalog.App app;
+      private static final int PH = 124;   // the picture well's height
       private boolean hover;
 
       Tile(Catalog.App app) {
@@ -705,13 +867,17 @@ public final class LauncherWindow extends JFrame {
          g2.setColor(hover || sel ? Ui.TILE_HOVER : Ui.TILE);
          g2.fillRoundRect(0, 0, w, h, 16, 16);
          // picture well
-         int ph = 124;
-         g2.setColor(new Color(0x171a21));
-         g2.fillRoundRect(6, 6, w - 12, ph, 12, 12);
+         int ph = PH;
+         thumbs.drawGlow(g2, app, 6, 6, w - 12, ph, 12);   // the well takes on the picture's own colors
          thumbs.draw(g2, app, 14, 12, w - 28, ph - 12);
          List<History.Change> fresh = then ? List.of() : news(app);
          // badge on the picture
-         if (isRunning(app.id)) badge(g2, w, running.contains(app.id) ? "RUNNING" : "RUNNING THEN", Ui.GO);
+         String k = running.contains(app.id) ? app.id : app.id + " then";   // today's launch first
+         Runner.Phase phase = phases.get(k);
+         boolean starting = phase != null && phase != Runner.Phase.RUNNING;
+         if (starting) Ui.sweep(g2, new java.awt.geom.RoundRectangle2D.Float(6, 6, w - 12, ph, 12, 12), sweepAt());
+         if (starting) badge(g2, w, phase.badge, Ui.ACCENT);
+         else if (phase != null) badge(g2, w, (k.equals(app.id) ? "RUNNING " : "RUNNING THEN ") + clockOf(k), Ui.GO);
          else if (log.count(app.id) == 0 && !then) badge(g2, w, "NEW", Ui.ACCENT);
          else if (!fresh.isEmpty()) badge(g2, w, fresh.size() == 1 ? "1 UPDATE" : fresh.size() + " UPDATES", Ui.FRESH);
          // words
@@ -722,19 +888,26 @@ public final class LauncherWindow extends JFrame {
          if (app.pressesKeys()) Ui.chip(g2, x + 6, ph + 40, "Real keys", Ui.WARN);
          g2.setFont(Ui.font(Font.PLAIN, 12f));
          History.Story story = then ? history.of(app.id) : null;
-         g2.setColor(isRunning(app.id) ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
-         String line = isRunning(app.id) ? "Running now"
+         String line = phase != null ? phase.line
             : story != null ? growth(story)
             : !fresh.isEmpty() ? "New: " + tidy(app, fresh.get(0).subject)
             : order.equals("most") && log.total(app.id) > 0 ? PlayLog.duration(log.total(app.id)) + " played"
-            : log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault());
-         g2.drawString(fit(g2, line, w - 24), 12, h - 12);
-         if (sel) {
-            g2.setColor(Ui.ACCENT);
-            g2.setStroke(new BasicStroke(2.5f));
-            g2.drawRoundRect(1, 1, w - 3, h - 3, 16, 16);
+            : log.count(app.id) > 0 ? log.describe(app.id, clock.getAsLong(), ZoneId.systemDefault())
+            : null;   // not launched yet: the NEW badge says so, and the pitch gets both lines
+         // What the app is, from its hint, so a first look at the cards says what each one does.
+         g2.setColor(Ui.SOFT);
+         List<String> pitch = lines(g2.getFontMetrics(), app.hint, w - 24, line == null ? 2 : 1);
+         for (int i = 0; i < pitch.size(); i++) g2.drawString(pitch.get(i), 12, h - 28 + i * 16);
+         if (line != null) {
+            g2.setColor(starting ? Ui.ACCENT : phase != null ? Ui.GO : story != null ? Ui.THEN : !fresh.isEmpty() ? Ui.FRESH : Ui.MUTED);
+            g2.drawString(fit(g2, line, w - 24), 12, h - 12);
          }
          g2.dispose();
+      }
+
+      /** Where the card's picture sits in it: where a flight to the detail pane starts. */
+      Rectangle picture() {
+         return thumbs.fit(app, 14, 12, getWidth() - 28, PH - 12);
       }
 
       private void badge(Graphics2D g2, int w, String text, Color c) {
@@ -754,10 +927,32 @@ public final class LauncherWindow extends JFrame {
    }
 
    private static String fit(Graphics2D g, String s, int w) {
-      FontMetrics fm = g.getFontMetrics();
+      return fit(g.getFontMetrics(), s, w);
+   }
+
+   private static String fit(FontMetrics fm, String s, int w) {
       if (fm.stringWidth(s) <= w) return s;
       while (s.length() > 1 && fm.stringWidth(s + "...") > w) s = s.substring(0, s.length() - 1);
       return s.trim() + "...";
+   }
+
+   /** Up to {@code max} lines of {@code s} wrapped at words to width {@code w}, the last cut with "..." if more is left. */
+   static List<String> lines(FontMetrics fm, String s, int w, int max) {
+      List<String> out = new ArrayList<>();
+      String rest = s.trim();
+      while (!rest.isEmpty() && out.size() < max - 1) {
+         int end = rest.length();
+         while (fm.stringWidth(rest.substring(0, end)) > w) {
+            int space = rest.lastIndexOf(' ', end - 1);
+            if (space <= 0) break;   // one word wider than the line: the last line's "..." cuts it
+            end = space;
+         }
+         if (end == rest.length() || fm.stringWidth(rest.substring(0, end)) > w) break;
+         out.add(rest.substring(0, end));
+         rest = rest.substring(end).trim();
+      }
+      if (!rest.isEmpty()) out.add(fit(fm, rest, w));
+      return out;
    }
 
    // ---- the detail pane -----------------------------------------------------------------------------------
@@ -765,17 +960,24 @@ public final class LauncherWindow extends JFrame {
    /** The selected app: a big picture, its name, origin, hint, any warning, its record and Play. */
    private final class Detail extends JPanel implements Scrollable {
       private static final int W = 340;
+      private static final int WASH = 360;   // how far down the app's tone fades into the pane
       private Catalog.App app;
       private final JComponent picture = new JComponent() {
          @Override
          protected void paintComponent(Graphics g) {
             if (app == null || getHeight() < 60) return;   // squeezed out by a short window: a sliver would look broken
             Graphics2D g2 = Ui.smooth(g);
-            g2.setColor(new Color(0x12141a));
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
             History.Story s = then ? history.of(app.id) : null;
-            if (s != null) thenCard(g2, s, getWidth(), getHeight());
-            else thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
+            if (s != null) {
+               g2.setColor(new Color(0x12141a));
+               g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+               thenCard(g2, s, getWidth(), getHeight());
+            } else {
+               double t = flyFrom == null ? 1 : glideAt(Glide.FLY_MS);   // mid-flight its glow fades in, the picture lands
+               g2.setComposite(java.awt.AlphaComposite.SrcOver.derive((float) t));
+               thumbs.drawGlow(g2, app, 0, 0, getWidth(), getHeight(), 16);
+               if (t >= 1) thumbs.draw(g2, app, 12, 12, getWidth() - 24, getHeight() - 24);
+            }
             g2.dispose();
          }
       };
@@ -795,9 +997,9 @@ public final class LauncherWindow extends JFrame {
             g2.dispose();
          }
       };
-      private final JTextArea hint = wrapping();
+      private final KeyCaps hint = new KeyCaps(W - 41);
       private final JTextArea warning = wrapping();
-      private final JTextArea whatsNew = wrapping();   // in the hint's place, for an app changed since you played
+      private final KeyCaps whatsNew = new KeyCaps(W - 41);   // in the hint's place, for an app changed since you played
       private final JLabel record = new JLabel();
       private final Ui.FlatButton play = new Ui.FlatButton("Play", true);
       private final Ui.FlatButton readme = new Ui.FlatButton("Read me", false);
@@ -900,6 +1102,29 @@ public final class LauncherWindow extends JFrame {
          add(startRow);
       }
 
+      /** The pane is washed from the top in the selected app's tone, so picking a card recolors it. */
+      @Override
+      protected void paintComponent(Graphics g) {
+         super.paintComponent(g);
+         if (app == null) return;
+         Graphics2D g2 = (Graphics2D) g.create();
+         g2.setPaint(new GradientPaint(0, 0, tone(), 0, WASH, Ui.PANEL));
+         g2.fillRect(1, 0, getWidth() - 1, WASH);   // right of the pane's 1 px line
+         g2.dispose();
+      }
+
+      /** The wash's color now: the app's tone, or partway there from the last app's while the selection moves. */
+      Color tone() {
+         Color c = thumbs.tone(app);
+         return toneFrom == null ? c : Glide.between(toneFrom, c, glideAt(Glide.FLY_MS));
+      }
+
+      /** Where the picture lands in the well (in the well), or null while the well is squeezed out or shows Then. */
+      Rectangle pictureBox() {
+         if (app == null || !picture.isVisible() || picture.getHeight() < 60 || then) return null;
+         return thumbs.fit(app, 12, 12, picture.getWidth() - 24, picture.getHeight() - 24);
+      }
+
       /** As tall as it can shrink to: the picture's full height is spare room, not a reason to scroll. */
       @Override
       public Dimension getPreferredSize() {
@@ -948,7 +1173,8 @@ public final class LauncherWindow extends JFrame {
          boolean playsOld = playsThen(a);
          String warn = playsOld ? s.warning : a.warning;
          name.setText(a.name);
-         hint.setText(s != null ? "As first restored: " + History.sentences(s.about, 2) : a.hint);
+         // The old READMEs name notes and coordinates ("C to C", "X, Y") that would read as keys.
+         hint.setText(s != null ? "As first restored: " + History.sentences(s.about, 2) : a.hint, s == null);
          String word = s == null ? whatsNew(a, news(a), clock.getAsLong(), ZoneId.systemDefault()) : null;
          hint.setVisible(word == null);
          whatsNew.setVisible(word != null);
@@ -962,12 +1188,14 @@ public final class LauncherWindow extends JFrame {
          old.setSelected(then);
          boolean on = running.contains(key(a, playsOld));
          record.setForeground(s != null ? Ui.THEN : Ui.MUTED);
-         record.setText(on ? "Running now. Close its window to finish."
+         record.setText(on ? (phases.get(key(a, playsOld)) == Runner.Phase.RUNNING ? "Running now. Close its window to finish."
+               : "Starting: the bars on Play show each step.")
             : s == null ? recordLine(a)
             : !s.changed ? "Its code has not changed since: Play runs today's."
             : changeCount(s) + " since then. History (Alt+H) lists them.");
-         play.setText(on ? "Running..." : playsOld ? "Play it as first restored" : "Play " + a.name);
+         play.setText(playsOld ? "Play it as first restored" : "Play " + a.name);
          play.setEnabled(!on);
+         live();
          play.setFill(warn != null ? new Color(0xc9822a) : playsOld ? Ui.THEN_FILL : Ui.ACCENT);
          startRow.setVisible(start != null && StartMenu.allowed(a));
          if (start != null) {
@@ -985,6 +1213,19 @@ public final class LauncherWindow extends JFrame {
          }
          revalidate();
          repaint();
+      }
+
+      /** While the shown app's launch runs, Play says where it has got to (a sweep while starting) or for how long. */
+      void live() {
+         String k = app == null ? null : key(app, playsThen(app));
+         Runner.Phase p = k == null ? null : phases.get(k);
+         if (p == null) {
+            play.clearLaunch();
+            return;
+         }
+         boolean on = p == Runner.Phase.RUNNING;
+         play.setText(on ? "Running for " + clockOf(k) : p.line);
+         play.setLaunch(p.ordinal(), Runner.Phase.RUNNING.ordinal(), sweepAt(), on);
       }
 
       /** "Played 3 times, last yesterday", with the time played under it once there is some. */
