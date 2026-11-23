@@ -102,6 +102,8 @@ public final class CircleCreatorWindow extends JFrame {
    private final List<CircleSliceWindow> slices = new ArrayList<>();
    private final List<Rectangle> pending = new ArrayList<>();
    private final List<Color> pendingColors = new ArrayList<>();
+   /** The box of the shape being built, which its light is stretched over. */
+   private Rectangle pendingLight;
    private final Random random = new Random();
    private final Timer buildTimer = new Timer(FRAME_MILLIS, event -> this.buildStep());
    private final Timer scatterTimer = new Timer(FRAME_MILLIS, event -> this.scatterStep());
@@ -616,6 +618,10 @@ public final class CircleCreatorWindow extends JFrame {
       }
       this.pending.addAll(pieces);
       this.pendingColors.addAll(this.colors(pieces, this.builtShape));
+      this.pendingLight = new Rectangle(pieces.get(0));
+      for (Rectangle r : pieces) {
+         this.pendingLight.add(r);
+      }
       this.built = 0;
       this.status.setText("Building...");
       this.buildTimer.start();
@@ -641,7 +647,7 @@ public final class CircleCreatorWindow extends JFrame {
       this.pending.clear();
       this.pendingColors.clear();
       this.morph = new Morph(this.slices, pieces, this.colors(pieces, this.builtShape), frames, this.ticking,
-         (bounds, color) -> new CircleSliceWindow(bounds, color, "", this.onTopBox.isSelected(), this.hand));
+         (bounds, color) -> new CircleSliceWindow(bounds, color, null, "", this.onTopBox.isSelected(), this.hand));
       if (frames > DRAW_FRAMES && !this.ticking) {
          this.status.setText("Changing into " + this.shapeName() + "...");
       }
@@ -704,7 +710,7 @@ public final class CircleCreatorWindow extends JFrame {
       int perFrame = Math.max(1, (this.pending.size() + BUILD_FRAMES - 1) / BUILD_FRAMES);
       for (int i = 0; i < perFrame && this.built < this.pending.size(); i++, this.built++) {
          this.slices.add(new CircleSliceWindow(this.pending.get(this.built), this.pendingColors.get(this.built),
-            String.valueOf(this.built + 1), this.onTop(this.built), this.hand));
+            this.pendingLight, String.valueOf(this.built + 1), this.onTop(this.built), this.hand));
       }
       if (this.built >= this.pending.size()) {
          this.buildTimer.stop();
