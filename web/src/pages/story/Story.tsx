@@ -5,6 +5,7 @@ import { ChainShow, EraPanel, PickLink, RenamePanel, Tape } from './panels';
 import { ShareStory } from './ShareStory';
 import { StoryPlay } from './StoryPlay';
 import { PlayHere } from '../../shared/PlayHere';
+import { Deeper } from './Deeper';
 
 // Where each app came from (HISTORY.md, The recovery).
 const FROM: Record<string, string> = {
@@ -234,7 +235,8 @@ export function Story() {
             </ol>
           </div>
           <div className="show">
-            <div className="panel">
+            <Deeper />
+            <div className="panel" style={{ marginTop: "14px" }}>
               <div className="panel-head"><strong>Who worked when</strong><a href="continued-timeline.svg">Full size</a></div>
               <a className="timeline" href="continued-timeline.svg">
                 <img src="continued-timeline.svg" width="1200" height="640" loading="lazy" alt="Timeline from November 15 to 16, 2026: 38 rounds of four builders (two in the last) and an integrator, with the output tokens of each pull request, all on Claude Opus 5.5" />
