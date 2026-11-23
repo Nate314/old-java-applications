@@ -366,7 +366,9 @@ final class DeskPanel extends JPanel {
          Market.Stock stock = market.stock(symbol);
          double price = stock.path[market.minute];
          out.append(symbol).append(' ').append(Money.dollars(price)).append(", ").append(Money.percent(stock.open(), price))
-            .append(" today").append(desk.portfolio.shares(symbol) > 0 ? ", you hold " + desk.portfolio.shares(symbol) + ". " : ". ");
+            .append(" today");
+         int held = desk.portfolio.shares(symbol);
+         out.append(held > 0 ? ", you hold " + held + ", " + Money.change(held * (price - paid(symbol))) + " on what you paid. " : ". ");
          if (tab == DAYS) {
             out.append("Days tab: ").append(daysChange(bars(symbol))).append(". ");
          } else if (tab == CHART && hindsight && !market.closed()) {
@@ -839,24 +841,37 @@ final class DeskPanel extends JPanel {
                text(g, name, SMALL, MUTED, x - w / 2, box.y + box.height + 14);
             }
          }
-         // The fill under the line.
-         int[] xs = new int[now + 3];
-         int[] ys = new int[now + 3];
-         for (int m = 0; m <= now; m++) {
+         // The fill under the line, up to the minute you bought it when you hold it (your stake is shaded from there).
+         int since = desk.portfolio.heldSince(stock.symbol);
+         int filled = since >= 0 ? since : now;
+         int[] xs = new int[filled + 3];
+         int[] ys = new int[filled + 3];
+         for (int m = 0; m <= filled; m++) {
             xs[m] = xOf.applyAsInt(m);
             ys[m] = yOf.applyAsInt(stock.path[m]);
          }
-         xs[now + 1] = xOf.applyAsInt(now);
-         ys[now + 1] = box.y + box.height;
-         xs[now + 2] = box.x;
-         ys[now + 2] = box.y + box.height;
-         g.setColor(withAlpha(line, 40));
-         g.fillPolygon(xs, ys, now + 3);
+         xs[filled + 1] = xOf.applyAsInt(filled);
+         ys[filled + 1] = box.y + box.height;
+         xs[filled + 2] = box.x;
+         ys[filled + 2] = box.y + box.height;
+         g.setColor(withAlpha(line, since >= 0 ? 20 : 40));
+         g.fillPolygon(xs, ys, filled + 3);
          // Each headline that moved this stock (its own or the market's): a faint band over the minutes it has pushed so far.
          for (Market.Headline news : newsOf(stock.symbol)) {
             int x1 = xOf.applyAsInt(news.minute);
             g.setColor(withAlpha(news.up ? UP : DOWN, 28));
             g.fillRect(x1, box.y, Math.max(2, xOf.applyAsInt(Math.min(now, news.minute + news.length)) - x1), box.height);
+         }
+         // Your stake: from the minute you bought, the gap between the price and what you paid, green above it, red below.
+         if (since >= 0) {
+            double paid = paid(stock.symbol);
+            int paidY = yOf.applyAsInt(paid);
+            for (int m = since; m <= now; m++) {
+               int x1 = xOf.applyAsInt(m);
+               int y = yOf.applyAsInt(stock.path[m]);
+               g.setColor(withAlpha(stock.path[m] >= paid ? UP : DOWN, 110));
+               g.fillRect(x1, Math.min(y, paidY), Math.max(1, xOf.applyAsInt(m + 1) - x1), Math.max(1, Math.abs(y - paidY)));
+            }
          }
       }
 
@@ -932,6 +947,31 @@ final class DeskPanel extends JPanel {
          if (hindsight) {
             paintHindsight(g, stock, now, xOf, yOf, box);
          }
+         int held = desk.portfolio.shares(stock.symbol);
+         if (held > 0) {
+            double paid = paid(stock.symbol);
+            orderLine(g, box, yOf.applyAsInt(paid), accent, "You paid " + Money.dollars(paid), 230, false);
+            // On the price scale at the price now, what your shares have made or lost since you paid for them,
+            // with a dotted line over to it from the price.
+            double gain = held * (stock.path[now] - paid);
+            String tag = Money.change(gain);
+            Color color = gain >= -0.005 ? UP : DOWN;
+            // The scale's column is 70 px wide: a big gain goes in the small font.
+            Font font = width(g, tag, BOLD) + 10 <= 66 ? BOLD : SMALL;
+            int w = Math.min(66, width(g, tag, font) + 10);
+            int y = yOf.applyAsInt(stock.path[now]);
+            int left = box.x + box.width + 2;
+            int top = Math.max(box.y - 2, Math.min(box.y + box.height - 16, y - 9));
+            g.setColor(withAlpha(color, 150));
+            for (int x = xOf.applyAsInt(now) + 6; x < left; x += 5) {
+               g.drawLine(x, y, Math.min(x + 1, left), y);
+            }
+            g.setColor(new Color(10, 16, 40, 235));
+            g.fillRoundRect(left, top, w, 18, 9, 9);
+            g.setColor(color);
+            g.drawRoundRect(left, top, w, 18, 9, 9);
+            text(g, tag, font, color, left + 5, top + 13);
+         }
          paintOrders(g, stock.symbol, box);
          // While the chart is heard, a playhead at the minute playing, with its time and price.
          int heard = ear.minute();
@@ -949,6 +989,12 @@ final class DeskPanel extends JPanel {
             }
          }
       }
+   }
+
+   /** What a share of {@code symbol} cost you on average, or 0 when you hold none. */
+   private double paid(String symbol) {
+      int held = desk.portfolio.shares(symbol);
+      return held > 0 ? desk.portfolio.holdings.get(symbol).cost / held : 0;
    }
 
    /** The headlines so far today that moved {@code symbol}: its own and the market-wide ones, oldest first. */
@@ -1040,12 +1086,17 @@ final class DeskPanel extends JPanel {
          high = Math.max(high, stock.path[m]);
       }
       if (orders) {
-         // Keep every order line on the chart.
+         // Keep every order line on the chart, and what you paid.
          for (Desk.Order order : desk.orders) {
             if (order.symbol.equals(stock.symbol)) {
                low = Math.min(low, order.price);
                high = Math.max(high, order.price);
             }
+         }
+         double paid = paid(stock.symbol);
+         if (paid > 0) {
+            low = Math.min(low, paid);
+            high = Math.max(high, paid);
          }
       }
       // At least a 1% range, so a quiet morning is not drawn as wild swings.
@@ -1185,8 +1236,7 @@ final class DeskPanel extends JPanel {
       x += width(g, Money.dollars(price), BIG) + 10;
       text(g, fitOr(g, daysChange(bars), daysChange(bars).split(" ")[0], PLAIN, tabsX() - 8 - x), PLAIN, price >= first ? UP : DOWN, x, card.y + 24);
 
-      int held = desk.portfolio.shares(symbol);
-      double paid = held > 0 ? desk.portfolio.holdings.get(symbol).cost / held : 0;
+      double paid = paid(symbol);
       double low = paid > 0 ? Math.min(first, paid) : first;
       double high = paid > 0 ? Math.max(first, paid) : first;
       for (double[] bar : bars) {
