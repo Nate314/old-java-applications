@@ -158,6 +158,13 @@ public final class Js {
     @JSBody(params = { "el", "type", "cb" }, script = "el.addEventListener(type, cb);")
     public static native void listen(JSObject el, String type, EventCallback cb);
 
+    /** Whether doc is where the app's desktop is now (the page's, or Pop out's window's while popped out). */
+    @JSBody(params = "doc", script = "return (window.__shimDoc || document) === doc;")
+    public static native boolean isShimDoc(JSObject doc);
+
+    @JSBody(params = "doc", script = "return !doc.hidden && doc.hasFocus();")
+    public static native boolean shownAndFocused(JSObject doc);
+
     /** The window a document belongs to: the page's own, or Pop out's Picture-in-Picture window. */
     @JSBody(params = "doc", script = "return doc.defaultView;")
     public static native JSObject viewOf(JSObject doc);

@@ -1,6 +1,7 @@
 import { appId } from './catalog';
 import { embedded } from './skin';
 import { APPS, hold, real } from './slow-mo';
+import { popped } from './pop-out';
 
 // ---- An app in a frame nobody can see waits where it is ----
 // compare.html on a phone shows one pane at a time, so an embedded app can sit in a frame that is display: none (or
@@ -8,6 +9,9 @@ import { APPS, hold, real } from './slow-mo';
 // back. Now, while the frame (or any frame around
 // it) is not rendered, the page's clock, timers and frames hold (slow-mo.tsx hold) and pick up where they stopped
 // once it shows again. Only the apps that move on their own; a clock or a tool keeps its own time.
+// The same goes for a whole page nobody can see: a phone visitor switching to a message, a locked screen, another
+// tab, a minimised window. A hidden page's game played on unseen at the browser's slowed timer pace; now it waits, and the shim tells the app its window lost the keyboard (TankGame pauses). A popped out
+// app is still in sight, whatever its page.
 
 /** Whether this page's frame, or a frame around it, is not rendered (display: none, visibility: hidden, no size). */
 export function unseen(): boolean {
@@ -22,9 +26,12 @@ export function unseen(): boolean {
 }
 
 export function init() {
-  if (!embedded || window.parent === window || APPS.indexOf(appId() || '') < 0) return;
+  if (APPS.indexOf(appId() || '') < 0) return;
+  function check() { hold(!popped && (document.hidden || unseen())); }
+  check();   // wraps the timers now, before the app's main sets any
+  document.addEventListener('visibilitychange', check);
+  if (!embedded || window.parent === window) return;
   // shortcut: polled four times a second (a hidden frame gets no layout events to hear), so a game runs on up to a
   // quarter second unseen; a message from the host page would make it instant, if a host ever needs that.
-  hold(unseen());   // wraps the timers now, before the app's main sets any
-  real.setInterval(function () { hold(unseen()); }, 250);
+  real.setInterval(check, 250);
 }

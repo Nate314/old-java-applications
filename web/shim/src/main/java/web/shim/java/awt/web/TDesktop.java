@@ -277,6 +277,12 @@ public final class TDesktop {
         JSObject view = Js.viewOf(doc);
         Js.listen(view, "blur", e -> pageFocus(false));
         Js.listen(view, "focus", e -> pageFocus(true));
+        // A phone switching apps, a locked screen, a hidden tab: often no blur comes, but the visitor is gone all the same.
+        Js.listen(doc, "visibilitychange", e -> {
+            if (Js.isShimDoc(doc)) { // the page's own document no longer counts while the app is popped out
+                pageFocus(Js.shownAndFocused(doc));
+            }
+        });
         // boot.js changed window.__shimRender (the desktop was zoomed up or back): paint everything again on
         // canvases of the new resolution.
         Js.listen(doc, "shimrender", e -> Edt.post(TRepaint::repaintAll));
@@ -584,7 +590,8 @@ public final class TDesktop {
     }
 
     /**
-     * The browser window (the tab, the app's frame on another page, Pop out's window) lost or got back the keyboard.
+     * The browser window (the tab, the app's frame on another page, Pop out's window) lost or got back the keyboard,
+     * or the page was hidden (another phone app, a locked screen, another tab) or shown again.
      * As when Swing's window is deactivated, the focus owner loses the focus for a while (hasFocus() is false, its
      * focus box goes, focus listeners hear a temporary FOCUS_LOST), and every key still held is let go: the browser
      * sends its keyup elsewhere, so a held arrow, note or Space would otherwise stay down. A held mouse button or
@@ -605,6 +612,9 @@ public final class TDesktop {
                     dispatchKey(new TKeyEvent((TComponent) k.getSource(), TKeyEvent.KEY_RELEASED, when, 0,
                             k.getKeyCode(), k.getKeyChar()));
                 }
+                // Heard even when the page is back before this runs (a held clock, hidden-hold.ts), as Swing's
+                // listeners hear a deactivated window's temporary FOCUS_LOST however soon it comes back.
+                TKeyboardFocusManager.getCurrentKeyboardFocusManager().focusMovedTo(null);
             });
         }
         if (active != null) {
