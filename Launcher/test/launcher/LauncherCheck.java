@@ -332,12 +332,33 @@ public class LauncherCheck {
          && landed.x == 12 + (275 - landed.width) / 2 && landed.y == 12 + (176 - landed.height) / 2,
          "the picture lands where the pane draws it: " + landed);
 
+      // Keycaps: the keys a hint names, not its articles, numbers or dates.
+      check(caps("W A S D and Q drive, arrow keys and M green. P pauses (A turns it off), Win+E, Space.")
+         .equals("[W, A, S, D, Q, arrow keys, M, P, A, Win+E, Space]"), "keys found");
+      check(caps("A dinosaur runner. I like it, from 1 to 100 (4 days ago), 3 things new, A* and Ao5").equals("[]"),
+         "no false keys");
+      check(caps("press 9, (0), I for hindsight, or D for night").equals("[9, 0, I, D]"), "digit and I keys by context");
+      check(caps(find(apps, "TankGame").hint).contains("arrow keys"), "TankGame's hint names its keys");
+      KeyCaps text = new KeyCaps(200);
+      text.setText("Space flaps");
+      int one = text.getPreferredSize().height;
+      text.setText("Space flaps\nZ rewinds");
+      check(text.getPreferredSize().width == 200 && text.getPreferredSize().height == 2 * one, "a line per \\n");
+      text.setText(find(apps, "TankGame").hint);
+      check(text.getPreferredSize().height > 4 * one, "long text wraps at the width");
+
       System.out.println("LauncherCheck: all checks passed");
    }
 
    private static Catalog.App find(List<Catalog.App> apps, String id) {
       for (Catalog.App a : apps) if (a.id.equals(id)) return a;
       throw new AssertionError("no app " + id);
+   }
+
+   private static String caps(String s) {
+      List<String> keys = new java.util.ArrayList<>();
+      for (int[] k : KeyCaps.find(s)) keys.add(s.substring(k[0], k[1]));
+      return keys.toString();
    }
 
    private static void check(boolean ok, String what) {

@@ -997,9 +997,9 @@ public final class LauncherWindow extends JFrame {
             g2.dispose();
          }
       };
-      private final JTextArea hint = wrapping();
+      private final KeyCaps hint = new KeyCaps(W - 41);
       private final JTextArea warning = wrapping();
-      private final JTextArea whatsNew = wrapping();   // in the hint's place, for an app changed since you played
+      private final KeyCaps whatsNew = new KeyCaps(W - 41);   // in the hint's place, for an app changed since you played
       private final JLabel record = new JLabel();
       private final Ui.FlatButton play = new Ui.FlatButton("Play", true);
       private final Ui.FlatButton readme = new Ui.FlatButton("Read me", false);
@@ -1173,7 +1173,8 @@ public final class LauncherWindow extends JFrame {
          boolean playsOld = playsThen(a);
          String warn = playsOld ? s.warning : a.warning;
          name.setText(a.name);
-         hint.setText(s != null ? "As first restored: " + History.sentences(s.about, 2) : a.hint);
+         // The old READMEs name notes and coordinates ("C to C", "X, Y") that would read as keys.
+         hint.setText(s != null ? "As first restored: " + History.sentences(s.about, 2) : a.hint, s == null);
          String word = s == null ? whatsNew(a, news(a), clock.getAsLong(), ZoneId.systemDefault()) : null;
          hint.setVisible(word == null);
          whatsNew.setVisible(word != null);
