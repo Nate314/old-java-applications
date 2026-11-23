@@ -31,7 +31,7 @@ function shell(bundle: string[]) {
   const files = ['./', 'index.html', 'history.txt', 'manifest.webmanifest', 'icons/icon.svg',
                  'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'apps.json', 'assets/files.json'];
   files.push(...bundle);
-  files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg', 'continued-timeline.svg');   // the story page and what it shows
+  files.push('story.html', 'play.html', 'StockChecker/stockCheck.csv', 'agents-timeline.svg', 'continued-timeline.svg', 'third-timeline.svg');   // the story page and what it shows
   files.push('compare.html');   // Then and now side by side (its frames are play.html)
   APPS.forEach(a => files.push(a.shot, webp(a.shot), webp(a.shot, true)));
   return files.map(abs);

@@ -99,7 +99,7 @@ select { font: inherit; font-size: 13px; padding: 2px 6px; border-radius: 6px; b
 .phases li::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
 .phases b { display: block; }
 
-/* 5. the run in numbers and 6. the continued run: the timeline graphics (agents-timeline.svg, continued-timeline.svg, dark in every skin) */
+/* 5. the run in numbers, 6. the continued run and 7. the third run: the timeline graphics (agents-timeline.svg, continued-timeline.svg, third-timeline.svg, dark in every skin) */
 .timeline { display: block; background: #12162a; }
 .timeline img { display: block; width: 100%; height: auto; }
 .usage { margin: 0; padding: 0; list-style: none; font-size: 14px; }
