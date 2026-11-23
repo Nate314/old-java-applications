@@ -71,6 +71,8 @@ public final class PianoPanel extends JPanel {
    private int heard = -1;
    /** Whether the keys are labelled with their chords (chord keys on) rather than their notes. */
    private boolean chords;
+   /** The octave number of the low C (4 for middle C), shown in the note names. */
+   private int octave = 4;
    /** The song shown falling, or null when there is no lesson (the keys then fill the panel). */
    private Song song;
    /** The note drawn in gold, the one on the keys. */
@@ -139,6 +141,11 @@ public final class PianoPanel extends JPanel {
          this.hint = key;
          this.repaint();
       }
+   }
+
+   public void setOctave(int octave) {
+      this.octave = octave;
+      this.repaint();
    }
 
    public void setChords(boolean on) {
@@ -562,7 +569,7 @@ public final class PianoPanel extends JPanel {
       int letterHeight = metrics.getAscent();
       g.setFont(noteFont);
       metrics = g.getFontMetrics();
-      String name = this.chords ? Chord.name(key) : Song.noteName(key);
+      String name = this.chords ? Chord.name(key) : Song.noteName(key) + (this.octave + key / 12);
       g.setColor(note);
       g.drawString(name, x + (keyWidth - metrics.stringWidth(name)) / 2, baseline - letterHeight - 4);
    }

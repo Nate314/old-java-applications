@@ -22,7 +22,25 @@ public final class LessonCheck {
       checkBacking();
       checkSoundButton();
       checkFinder();
+      checkRange();
       System.out.println("LessonCheck: all checks passed");
+   }
+
+   /** The range strip: the arrows at its ends, a press on the small keys centres the octave frame there, clamped to the reach. */
+   private static void checkRange() {
+      RangeStrip range = new RangeStrip();
+      range.setSize(40 + 710 + 40, RangeStrip.HEIGHT);
+      // The small keys run from x = 40, 10 px per white key: C4 (white 35) to C5 (white 42) is the unshifted frame.
+      assert range.arrowAt(10) == -1 && range.arrowAt(780) == 1 && range.arrowAt(400) == 0 : "arrows at the ends";
+      assert range.shiftAt(40 + 390) == 0 : "a press on G4 frames C4 to C5";
+      assert range.shiftAt(40 + 460) == 1 && range.shiftAt(40 + 320) == -1 : "a press an octave up or down moves the frame an octave";
+      assert range.shiftAt(0) == RangeStrip.LOWEST && range.shiftAt(790) == RangeStrip.HIGHEST : "the frame stops at the reach's ends";
+      assert RangeStrip.name(0).equals("C4") && RangeStrip.name(RangeStrip.LOWEST).equals("C-1") && RangeStrip.name(RangeStrip.HIGHEST).equals("C8");
+      range.setHeld(new int[]{-3, 60, 127});
+      java.awt.image.BufferedImage strip = paint(range);
+      assert (strip.getRGB(388, 14) & 0xffffff) == 0xffc43c : "the gold frame's left side sits at C4";
+      assert (strip.getRGB(394, 22) & 0xffffff) == 0x6e96f0 : "a held middle C is lit on the strip";
+      assert brightness(strip, 384, 22) < brightness(strip, 404, 22) : "keys outside the frame are dimmer";
    }
 
    private static void checkBacking() {
@@ -164,7 +182,7 @@ public final class LessonCheck {
       piano.setFound(false);
    }
 
-   private static java.awt.image.BufferedImage paint(PianoPanel piano) {
+   private static java.awt.image.BufferedImage paint(javax.swing.JComponent piano) {
       java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(piano.getWidth(), piano.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
       piano.paint(image.getGraphics());
       return image;
