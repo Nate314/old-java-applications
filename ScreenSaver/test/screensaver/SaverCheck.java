@@ -30,6 +30,20 @@ public class SaverCheck {
       check(tiles.revealedCount() == tiles.tileCount(), "full after one step per tile");
       tiles.tick(250.0 * 10);
       check(tiles.revealedCount() == tiles.tileCount() - 10, "then emptying");
+      // Tiles spring in with a bounce and shrink away rather than blinking.
+      Tiles spring = new Tiles(Tiles.GREEN_CIRCLES);
+      spring.reset(900, 600, new Random(1));
+      spring.tick(250);
+      check(spring.revealedCount() == 1 && spring.scale(0) < 1e-9 && litPixels(shot(spring)) == 0, "a new tile starts from nothing");
+      spring.tick(Tiles.IN_MILLIS / 2);
+      check(spring.scale(0) > 1 && litPixels(shot(spring)) > 0, "halfway in it overshoots: " + spring.scale(0));
+      spring.tick(Tiles.IN_MILLIS);
+      check(spring.scale(0) == 1, "then sits at its size");
+      spring.tick(250.0 * spring.tileCount() - Tiles.IN_MILLIS * 1.5 + 100);
+      int last = spring.revealedCount();
+      check(last == spring.tileCount() - 1 && spring.scale(last) > 0 && spring.scale(last) < 1, "a leaving tile shrinks: " + spring.scale(last));
+      spring.tick(Tiles.OUT_MILLIS);
+      check(spring.scale(last) == 0, "and is gone once shrunk");
       tiles.setSize(5);
       check(tiles.size() == Tiles.MIN_SIZE && tiles.revealedCount() == 0, "size floor, and a new cycle");
 
