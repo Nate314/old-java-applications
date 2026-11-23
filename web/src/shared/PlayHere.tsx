@@ -29,7 +29,8 @@ export function PlayHere({ root = '', back }: { root?: string; back: string }) {
     // The page's scroll while the sheet is open (scroll anchoring may move it): closing to an entry whose address names
     // a chapter (#continued) would otherwise jump to that chapter's top, since the page's entry restores manually.
     let keepY = scrollY, up = false;   // up: this page has shown the sheet since its last close
-    const onScroll = () => { if (dialog.current?.open) keepY = scrollY; };
+    // from open() on, not just once the dialog shows: the page can grow (and move) between pushState and showModal
+    const onScroll = () => { if (up) keepY = scrollY; };
     /** Show a, on a new history entry, or on the sheet's own one when it is already open (an exit screen's pick). */
     function open(a: App) {
       const url = location.pathname + location.search + '#play=' + a.id;
