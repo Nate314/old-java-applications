@@ -12,7 +12,8 @@ import { hush } from './midi';
 // once it shows again. Only the apps that move on their own; a clock or a tool keeps its own time.
 // The same goes for a whole page nobody can see: a phone visitor switching to a message, a locked screen, another
 // tab, a minimised window. A hidden page's game played on unseen at the browser's slowed timer pace; now it waits, and the shim tells the app its window lost the keyboard (TankGame pauses). A popped out
-// app is still in sight, whatever its page.
+// app is still in sight, whatever its page. Every other app (a synth, a music drill) keeps its own time, but its
+// sound stops too: held notes are let go and the page comes back quiet.
 
 /** Whether this page's frame, or a frame around it, is not rendered (display: none, visibility: hidden, no size). */
 export function unseen(): boolean {
@@ -27,11 +28,12 @@ export function unseen(): boolean {
 }
 
 export function init() {
-  if (APPS.indexOf(appId() || '') < 0) return;
+  // every app goes quiet unseen (midi.ts hush); only the movers also hold their clock
+  var moves = APPS.indexOf(appId() || '') >= 0;
   function check() {
     var on = !popped && (document.hidden || unseen());
-    hold(on);
-    hush(on);   // its sound too
+    if (moves) hold(on);
+    hush(on, moves);
   }
   check();   // wraps the timers now, before the app's main sets any
   document.addEventListener('visibilitychange', check);
