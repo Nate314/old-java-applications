@@ -71,8 +71,7 @@ final class StopwatchView implements Tab {
       long elapsed = watch.elapsed(now);
       long lap = watch.currentLap(now);
       int best = watch.bestLap();
-      g.setColor(Ui.FACE);
-      g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+      Ui.face(g, cx, cy, r);
 
       // The lap under way, at most one turn of it.
       double lapStart = (elapsed - lap) % MINUTE / (double) MINUTE;
@@ -99,8 +98,7 @@ final class StopwatchView implements Tab {
          int y = cy - (int) Math.round(r * 0.69 * Math.cos(angle));
          Ui.center(g, String.valueOf(second), numbers, new Rectangle(x - size, y - size / 2, size * 2, size));
       }
-      g.setStroke(new BasicStroke(stroke));
-      g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+      Ui.rim(g, cx, cy, r, stroke * 2);
       if (best >= 0) {
          paceMark(g, cx, cy, r, lapStart + watch.lapTime(best) % MINUTE / (double) MINUTE);
       }
@@ -137,11 +135,15 @@ final class StopwatchView implements Tab {
       }
 
       // The hand, right across the dial, with a short tail and a cap.
-      g.setColor(Ui.HAND);
       g.setStroke(new BasicStroke(Math.max(1.5f, r / 60f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+      int shadow = Math.max(2, r / 40);
+      g.setColor(Ui.SHADOW);
+      spoke(g, cx + shadow / 2, cy + shadow, elapsed % MINUTE / (double) MINUTE, -r * 0.2, r * 0.9);
+      g.setColor(Ui.HAND);
       spoke(g, cx, cy, elapsed % MINUTE / (double) MINUTE, -r * 0.2, r * 0.9);
       int cap = Math.max(3, r / 22);
       g.fillOval(cx - cap, cy - cap, 2 * cap, 2 * cap);
+      Ui.glass(g, cx, cy, r);
    }
 
    /** A line along the radius at {@code turn} (from 12 o'clock, clockwise), from {@code from} to {@code to} out. */
