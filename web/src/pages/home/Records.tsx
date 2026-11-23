@@ -4,7 +4,8 @@
 // It renders inside <section id="records">, which stays in Home.tsx: the arcade tabs (tabs.ts) show and hide that
 // section, and badge the Records tab with the count it reports (onCount).
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { APPS, webp } from '../../shared/catalog';
+import { APPS } from '../../shared/catalog';
+import { Trophy, WaitingShelf } from './RecordShelf';
 import { qr, type QrCode as Code } from '../../shared/qr';
 import { QrCode } from '../../shared/QrCode';
 import { byId } from '../../shared/dom';
@@ -15,7 +16,6 @@ const MAX_QR_VERSION = 30;   // bigger codes are too dense to scan from a screen
 
 const nameOf = (store: string) =>
   (APPS.find(a => a.id === store.split('.')[0])?.name ?? store.split('.')[0]) + (/\.then$/.test(store) ? ' (Then)' : '');
-const shotOf = (store: string) => APPS.find(a => a.id === store.split('.')[0])?.shot;
 const line = (store: string, files: Files) =>
   window.oldjavaRecords.line(store, files) || 'Saved: ' + Object.keys(files).map(p => p.split('/').pop()).join(', ');
 const kb = (bytes: number) => bytes < 1024 ? bytes + ' bytes' : (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
@@ -187,21 +187,11 @@ export function Records({ onCount }: { onCount?: (n: number) => void }) {
         </div>
       </div>
       <p className="empty" id="records-empty" hidden={!empty}>
-        Play an app and what it keeps (Minesweeper's best times, your FlappyBird best, Rubik's Cube stars) shows up here.
+        Play an app and what it keeps shows up here, like these three:
       </p>
-      <ul className="record-list" id="records-list">
-        {stores.map(store => {
-          const shot = shotOf(store);
-          return (
-            <li key={store}>
-              <button type="button" title={'Play ' + nameOf(store)}
-                      onClick={() => { const open = window.oldjavaPassport.open; if (open) open(store.split('.')[0]); }}>
-                {shot && <img src={webp(shot, true)} alt="" loading="lazy" />}
-                <span><strong>{nameOf(store)}</strong><span>{line(store, saves[store])}</span></span>
-              </button>
-            </li>
-          );
-        })}
+      {empty && <WaitingShelf />}
+      <ul className="record-list shelf" id="records-list">
+        {stores.map(store => <Trophy key={store} id={store.split('.')[0]} name={nameOf(store)} line={line(store, saves[store])} />)}
       </ul>
       <p className="desktop">
         {"On the desktop: "}

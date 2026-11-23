@@ -1,0 +1,38 @@
+/* ---- your records as a shelf of trophies (RecordShelf.tsx): the app's picture on a wash of its own colors, then
+   what it keeps in small capitals and the record itself large, so a best time reads as a best time ---- */
+.record-list.shelf { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.record-list .trophy button { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden;
+                              border-radius: 12px; background: var(--card-bg); transition: transform 0.15s ease, border-color 0.15s ease; }
+.record-list .trophy .pic { position: relative; isolation: isolate; display: block; height: 92px; overflow: hidden; }
+.record-list .trophy .pic img { display: block; width: 100%; height: 100%; object-fit: contain; padding: 10px 0; box-sizing: border-box; }
+.record-list .trophy .pic img.tone { position: absolute; z-index: -1; inset: -20px; width: calc(100% + 40px); height: calc(100% + 40px);
+                                     padding: 0; object-fit: cover; filter: blur(22px) saturate(1.6); opacity: 0.85; }
+.record-list .trophy .words { display: flex; flex-direction: column; gap: 1px; padding: 9px 12px 12px; min-width: 0; }
+.record-list .trophy strong { font-size: 13px; opacity: 0.85; }
+.record-list .trophy .what { margin-top: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+                             color: var(--accent); opacity: 1; }
+.record-list .trophy .record { font-size: 19px; font-weight: 800; line-height: 1.2; opacity: 1; overflow-wrap: anywhere; }
+.record-list .trophy .rest { margin-top: 3px; font-size: 12px; opacity: 0.7; display: -webkit-box; -webkit-line-clamp: 2;
+                             -webkit-box-orient: vertical; overflow: hidden; }
+@media (hover: hover) { .record-list .trophy button:hover { transform: translateY(-2px); } }
+/* A place still waiting for its record: the picture in grey until the app is played. */
+.record-list .trophy.waiting .pic img { filter: grayscale(1); opacity: 0.55; }
+.record-list .trophy.waiting .pic img.tone { filter: blur(22px) grayscale(1); opacity: 0.4; }
+.record-list .trophy.waiting .record { opacity: 0.55; }
+.record-list .trophy.waiting button { border-style: dashed; }
+.record-list .trophy.waiting button:hover .pic img:not(.tone) { filter: none; opacity: 1; }
+@media (max-width: 480px) {
+  .record-list.shelf { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .record-list .trophy .pic { height: 72px; }
+  .record-list .trophy .record { font-size: 16px; }
+}
+:root[data-skin="classic"] .record-list .trophy .pic img.tone { display: none; }
+:root[data-skin="classic"] .record-list .trophy .pic { background: var(--desk); }
+:root[data-skin="classic"] .record-list .trophy button { border-radius: 0; }
+:root[data-skin="arcade"] .record-list .trophy .record { color: #fff; text-shadow: 0 0 8px rgba(255, 43, 214, 0.7); }
+:root[data-skin="arcade"] .record-list .trophy .what { color: #7df9ff; }
+@media (hover: hover) {
+  :root[data-skin="arcade"] .record-list .trophy button:hover { border-color: #ff2bd6; box-shadow: 0 0 18px rgba(255, 43, 214, 0.45); }
+}
+@media (prefers-reduced-motion: reduce) { .record-list .trophy button { transition: none; } .record-list .trophy button:hover { transform: none; } }
+@media (forced-colors: active) { .record-list .trophy .pic img.tone { display: none; } }
